@@ -7,6 +7,10 @@
   for the latest run. CandidateReport terminal heartbeats include runtime and
   throughput; the orchestrator uses that headroom to scan 5/6/8 history and
   fast-check sources without raising the 20-minute runtime guardrail.
+- **Region Talk / terminal heartbeat recovery**: CandidateReport recreates its
+  lightweight YDB heartbeat pool after the heavy state-write/retention phase
+  and retries the terminal write once, preventing a COMPLETE Kaggle run from
+  leaving stale `report_write_started` telemetry after `ResourceExhausted`.
 - **Region Talk / honest Gemini budget metric**: orchestrator stats now report
   reserved/remaining calls for the latest active budget and keep historical
   reservations separate, instead of summing multiple daily 100-call budgets

@@ -146,6 +146,9 @@ Telegram Monitoring and Guide monitoring:
 - exact latest Candidate/BGE/Image heartbeat rows included in every metric
   snapshot with `run_id`, event, phase, status, timestamp and sequence, so an
   active Kaggle status cannot be attributed to an older YDB run;
+  CandidateReport recreates its lightweight YDB heartbeat pool after the heavy
+  snapshot/retention write and retries once, so a completed kernel is not left
+  displaying `report_write_started` after a transient `ResourceExhausted`;
 - LLM budget metrics expose the latest active budget id, its reserved and
   remaining calls, plus a separate historical reserved total. Daily budget
   rows are never summed into a fictitious `remaining` capacity above the

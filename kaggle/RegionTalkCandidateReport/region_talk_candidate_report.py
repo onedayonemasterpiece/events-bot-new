@@ -13215,6 +13215,11 @@ async def amain() -> int:
     payload = build_report(seeds, source_rows, posts, run_id, out_dir, status=status)
     summary = payload.get('summary', {})
     terminal_status = 'partial' if str(payload.get('status') or summary.get('status') or '').lower() == 'partial' else 'done'
+    # State-write retention/prune traffic may leave the long-lived YDB session
+    # pool exhausted even though the report itself completed. Recreate that
+    # lightweight pool before the terminal heartbeat so the orchestrator does
+    # not see a stale `report_write_started` event for a COMPLETE kernel.
+    close_region_talk_business_heartbeat()
     status.event('report_written', phase='report', status=terminal_status, run_id=run_id, posts_fetched=summary.get('posts_fetched'), posts_scored=summary.get('posts_scored'), posts_deferred_by_runtime_budget=summary.get('posts_deferred_by_runtime_budget'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')), state_backend=summary.get('state_backend'), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), ydb_state_mode=summary.get('ydb_state_mode'), vk_wall_probe_status=summary.get('vk_wall_probe_status'), sources_history_fetched_ok=summary.get('sources_history_fetched_ok'), history_fetch_runtime_seconds=summary.get('history_fetch_runtime_seconds'), source_count_scanned=summary.get('source_count_scanned'), current_run_reviewable_candidates=summary.get('current_run_reviewable_candidates'), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), partial_reason=summary.get('partial_reason'))
     close_region_talk_runtime_clients(status)
     return 0
