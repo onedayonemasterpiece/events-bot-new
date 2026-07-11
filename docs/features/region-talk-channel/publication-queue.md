@@ -152,6 +152,13 @@ also takes a local exclusive lock. After Telegram acceptance it records chat,
 random id, message id and timestamps both in the delivery ledger and candidate
 row. Finalizer/CandidateReport writers preserve these sent markers.
 
+Before delivery, the notifier reconstructs the authoritative source with the
+same monotonic merge semantics as the finalizer: scan/KO/candidate counters use
+their maximum and terminal local/spam classification cannot be erased by a
+later sparse `source_status_item` or `online_source_item`. Otherwise a valid
+Gemini-confirmed row can fail its source fingerprint check merely because a
+live progress overlay contains zero counters.
+
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
 expected numeric peer and fail closed on a wrong target; the prepared chat is

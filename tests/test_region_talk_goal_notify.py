@@ -76,6 +76,35 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             mod.authoritative_source_fingerprint({**external, "posts_scanned": 9, "ko_posts_found": 2}),
         )
 
+    def test_live_source_merge_does_not_erase_queue_counters_with_status_overlay(self) -> None:
+        mod = load_module()
+        publication = {"canonical_source_key": "telegram:twodaystrip"}
+        queue = {
+            "canonical_source_key": "telegram:twodaystrip",
+            "source_queue_status": "processed_found_ko_candidate",
+            "posts_scanned": 13,
+            "ko_posts_found": 3,
+            "candidate_posts_found": 7,
+        }
+        expected = mod.authoritative_source_fingerprint(queue)
+        mod.attach_live_source_fingerprints([publication], [
+            queue,
+            {
+                "canonical_source_key": "telegram:twodaystrip",
+                "fetch_status": "ok",
+                "posts_scanned": 13,
+                "ko_posts_found": 0,
+                "candidate_posts_found": 0,
+            },
+            {
+                "canonical_source_key": "telegram:twodaystrip",
+                "posts_scanned": 0,
+                "ko_posts_found": 0,
+                "candidate_posts_found": 0,
+            },
+        ])
+        self.assertEqual(publication["_live_authoritative_source_fingerprint"], expected)
+
     def test_delivery_identity_is_stable_per_canonical_post_and_chat(self) -> None:
         mod = load_module()
         first = {"post_url": "https://telegram.me/TravelCase/10?single=1"}

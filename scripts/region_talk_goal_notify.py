@@ -212,8 +212,29 @@ def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_r
     sources: dict[str, dict[str, Any]] = {}
     for source in source_rows:
         key = canonical_source_key_for_row(source)
-        if key:
-            sources[key] = {**sources.get(key, {}), **source}
+        if not key:
+            continue
+        current = dict(sources.get(key) or {})
+        for field, value in source.items():
+            if value in (None, ""):
+                continue
+            if field in {"posts_scanned", "ko_posts_found", "candidate_posts_found"}:
+                try:
+                    current[field] = max(int(float(current.get(field) or 0)), int(float(value or 0)))
+                except (TypeError, ValueError):
+                    current[field] = value
+                continue
+            if field == "source_queue_status":
+                existing = str(current.get(field) or "")
+                incoming = str(value or "")
+                if existing.startswith("rejected_") and not incoming.startswith("rejected_"):
+                    continue
+            if field in {"source_scope", "source_geo_class", "source_quick_class"}:
+                local_values = {"local_region", "kaliningrad_local", "local_region_source"}
+                if str(current.get(field) or "") in local_values and str(value or "") not in local_values:
+                    continue
+            current[field] = value
+        sources[key] = current
     for row in publications:
         source = sources.get(canonical_source_key_for_row(row))
         row["_live_authoritative_source_fingerprint"] = authoritative_source_fingerprint(source)

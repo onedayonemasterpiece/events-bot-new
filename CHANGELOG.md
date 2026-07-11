@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / confirmed-candidate delivery**: the Telegram notifier now
+  merges live source overlays monotonically like the finalizer, preventing
+  sparse status rows with zero counters from invalidating an unchanged source
+  fingerprint and silently suppressing a Gemini-confirmed candidate.
 - **Region Talk / resolved local-source titles**: Telegram's resolved channel
   title now overrides username-shaped queue placeholders during the local
   source filter, so attribution sources such as a resolved `Фотограф
