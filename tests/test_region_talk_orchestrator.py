@@ -124,6 +124,35 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE"] = old_size
 
+    def test_cached_exact_backlog_expands_safe_candidate_batch(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "post_link_queue_exact_ready_total": 12,
+                "post_link_queue_entity_cache_hit_total": 9,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        main = next(action for action in actions if action["action"] == "launch_candidate_report")
+        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "8")
+        self.assertIn("drain up to 8 exact KO links first", main["reason"])
+        self.assertEqual(main["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
+
+    def test_orchestrator_polls_faster_while_downstream_backlog_exists(self) -> None:
+        mod = load_module()
+        self.assertEqual(
+            mod.orchestrator_poll_sleep_seconds({}, normal_seconds=180, downstream_seconds=60),
+            180,
+        )
+        self.assertEqual(
+            mod.orchestrator_poll_sleep_seconds(
+                {"bge_pending_sample_total": 33}, normal_seconds=180, downstream_seconds=60,
+            ),
+            60,
+        )
+
     def test_bge_batch_limit_respects_external_cpu_runtime_capacity(self) -> None:
         mod = load_module()
         with mock.patch.dict(os.environ, {

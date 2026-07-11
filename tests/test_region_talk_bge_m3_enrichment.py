@@ -5,6 +5,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 BGE_MODULE_PATH = ROOT / "kaggle" / "RegionTalkBgeM3Enrichment" / "region_talk_bge_m3_enrichment.py"
@@ -100,6 +101,34 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         }
         rows = mod.collect_text_rows({"text_vector_enrichment_item": {"text_vector_enrichment_item:p-bge:bge": bge_row}}, existing_pks=set(), limit=5)
         self.assertEqual(rows, [])
+
+    def test_collect_text_rows_reserves_priority_and_fifo_capacity(self) -> None:
+        mod = load_bge_module()
+        items = {"text_vector_enrichment_item": {}}
+        for index in range(10):
+            text = f"Пост {index} о поездке в Калининградскую область и личных впечатлениях."
+            row = {
+                "post_id": f"p{index}",
+                "post_url": f"https://t.me/src/{index}",
+                "model_id": "intfloat/multilingual-e5-base",
+                "model_short": "e5",
+                "text_hash": mod.text_hash(text),
+                "text_excerpt": text,
+                "post_date": f"2026-07-{index + 1:02d}T00:00:00+00:00",
+            }
+            if index < 8:
+                row.update({
+                    "discovery_method": "exact_post_link_queue",
+                    "post_link_priority": 0,
+                    "priority_reason": "global_keyword_search_exact_post",
+                })
+            items["text_vector_enrichment_item"][f"e5:{index}"] = row
+        with mock.patch.dict(os.environ, {"REGION_TALK_BGE_PRIORITY_SHARE_PERCENT": "80"}):
+            rows = mod.collect_text_rows(items, existing_pks=set(), limit=5)
+        self.assertEqual(len(rows), 5)
+        # Four product-priority rows (fresh-first) plus one oldest FIFO row.
+        self.assertEqual([row["post_id"] for row in rows[:4]], ["p7", "p6", "p5", "p4"])
+        self.assertEqual(rows[4]["post_id"], "p8")
 
     def test_build_enrichment_payload_contains_geo_and_antivector_fields(self) -> None:
         mod = load_bge_module()

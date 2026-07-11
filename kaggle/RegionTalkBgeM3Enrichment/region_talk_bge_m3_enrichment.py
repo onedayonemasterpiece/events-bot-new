@@ -714,8 +714,52 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
                 rr["_paired_e5_enrichment_id"] = row.get("text_vector_enrichment_id") or str(row.get("_ydb_pk") or "").replace("text_vector_enrichment_item:", "")
             rr["_enrichment_pk"] = pk
             candidates.append((priority.get(kind, 9), str(row.get("post_date") or row.get("published_at") or ""), rr))
-    candidates.sort(key=lambda item: (item[0], item[1]), reverse=False)
-    for _priority, _date, row in candidates[:max(1, limit)]:
+
+    def is_product_priority(item: tuple[int, str, dict[str, Any]]) -> bool:
+        row = item[2]
+        method = str(row.get("discovery_method") or "").lower()
+        reason = str(row.get("priority_reason") or "").lower()
+        try:
+            exact_priority = int(row.get("post_link_priority")) == 0
+        except (TypeError, ValueError):
+            exact_priority = False
+        return bool(
+            exact_priority
+            or method == "exact_post_link_queue"
+            or row.get("keyword_hit_query")
+            or row.get("keyword_hit_hashtag")
+            or "keyword" in reason
+            or "fast_check" in reason
+        )
+
+    def post_timestamp(item: tuple[int, str, dict[str, Any]]) -> float:
+        raw = str(item[1] or "").strip()
+        if not raw:
+            return 0.0
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.timestamp()
+        except (TypeError, ValueError):
+            return 0.0
+
+    # High-confidence exact KO links should not sit behind an old generic E5
+    # backlog, but a FIFO reserve prevents continuous keyword inflow from
+    # starving ordinary discovery. Priority rows are fresh-first; the reserve
+    # remains oldest-first.
+    product = sorted((item for item in candidates if is_product_priority(item)), key=lambda item: (item[0], -post_timestamp(item)))
+    fifo = sorted((item for item in candidates if not is_product_priority(item)), key=lambda item: (item[0], post_timestamp(item)))
+    target = max(1, limit)
+    share = min(100, max(0, getenv_int("REGION_TALK_BGE_PRIORITY_SHARE_PERCENT", 80)))
+    product_cap = min(len(product), max(1, int(round(target * share / 100.0)))) if product else 0
+    fifo_cap = min(len(fifo), target - product_cap)
+    selected = product[:product_cap] + fifo[:fifo_cap]
+    if len(selected) < target:
+        selected.extend(product[product_cap:product_cap + (target - len(selected))])
+    if len(selected) < target:
+        selected.extend(fifo[fifo_cap:fifo_cap + (target - len(selected))])
+    for _priority, _date, row in selected:
         rows.append(row)
     return rows
 

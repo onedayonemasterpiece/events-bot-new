@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / attribution, exact-post latency and BGE catch-up**: Telegram
+  rich-text media credits now preserve their public URL and enter source
+  discovery as `media_attribution` edges; VK/MAX channel footers and media
+  credits are explicitly neutral in Gemini ad classification. Cached exact KO
+  intake expands from three to at most eight posts without increasing username
+  resolves, while BGE prioritizes those rows with a FIFO reserve and the
+  orchestrator polls downstream backlog faster until dual enrichment catches
+  up.
 - **Region Talk / honest discovery-to-publication metrics and video review**:
   fast-check keyword matches are now separated from exact-post fetch, dual
   vectorization, strict text acceptance, media and publication conversion;

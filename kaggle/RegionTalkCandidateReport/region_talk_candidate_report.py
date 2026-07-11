@@ -1773,6 +1773,7 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "media_count", "text_hash", "text_excerpt_hash", "text_excerpt", "short_summary", "source_url", "handle",
     "fetch_status", "post_observation_status", "discovery_method", "discovery_priority",
     "keyword_hit_query", "keyword_hit_hashtag", "ydb_candidate_link_kind", "ydb_candidate_link_pk",
+    "embedded_links_json",
     "drop_gate", "rejection_reason", "rejection_reason_primary", "rejection_reason_details",
     "vector_content_type", "vector_rejection_reason", "text_vector_fusion_status",
     "media_kind", "manual_media_review_required", "video_manual_review_eligible",
@@ -2715,6 +2716,12 @@ def build_e5_text_vector_enrichment_rows(
             "source_title": post.get("source_title") or "",
             "source_url": post.get("source_url") or post.get("canonical_url") or "",
             "post_date": post.get("post_date") or post.get("published_at") or "",
+            "discovery_method": post.get("discovery_method") or "",
+            "discovery_priority": post.get("discovery_priority") or "",
+            "post_link_priority": post.get("post_link_priority") if post.get("post_link_priority") not in (None, "") else "",
+            "priority_reason": post.get("priority_reason") or "",
+            "keyword_hit_query": post.get("keyword_hit_query") or post.get("matched_query") or "",
+            "keyword_hit_hashtag": post.get("keyword_hit_hashtag") or post.get("matched_hashtag") or "",
             "text_hash": text_sha,
             "text_excerpt": text[:getenv_int("REGION_TALK_TEXT_VECTOR_TEXT_EXCERPT_CHARS", 3000)],
             "text_source_fields": ["text_embedding_input_for_post"],
@@ -4644,6 +4651,80 @@ def extract_urls_and_handles(text: str) -> list[dict[str, Any]]:
     return out
 
 
+def telegram_message_embedded_links(message: Any) -> list[dict[str, Any]]:
+    """Return rich-text link targets that are absent from ``message.message``.
+
+    Telethon exposes ``MessageEntityTextUrl.url`` separately from the visible
+    caption.  Reading only ``message.message`` therefore turns
+    ``Видео: [moresvobod](https://t.me/moresvobod)`` into ``Видео:
+    moresvobod`` and silently loses a high-value source-discovery edge.
+    """
+    text = str(getattr(message, "message", None) or "")
+    low = text.lower()
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entity in getattr(message, "entities", None) or []:
+        raw_url = str(getattr(entity, "url", None) or "").strip()
+        if not raw_url:
+            continue
+        normalized = "https:" + raw_url if raw_url.startswith("//") else raw_url
+        if not normalized.startswith(("http://", "https://")):
+            continue
+        normalized = normalized.rstrip(').,;!?:»”')
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        handle = ""
+        match = re.search(r"(?:t\.me|telegram\.me)/(@?[A-Za-z0-9_]{4,})", normalized, flags=re.I)
+        if match:
+            handle = "@" + match.group(1).lstrip("@")
+        display_token = handle.lstrip("@").lower()
+        display_index = low.find(display_token) if display_token else -1
+        context = low[max(0, display_index - 48):display_index + len(display_token) + 24] if display_index >= 0 else ""
+        link_context = "post_text_link"
+        if re.search(r"(?:видео|фото|снимок|кадр|источник|автор)\s*[:—-]", context, flags=re.I):
+            link_context = "media_attribution"
+        elif re.search(r"(?:мы\s+вконтакте|мы\s+в\s*max|наш\s+(?:vk|вк|max|сайт))", context, flags=re.I):
+            link_context = "channel_crosslink"
+        rows.append({
+            "raw_url": raw_url,
+            "normalized_url": normalized,
+            "extracted_handle": handle,
+            "link_context": link_context,
+        })
+    return rows
+
+
+def serialize_embedded_links(rows: list[dict[str, Any]], *, max_chars: int = 800) -> str:
+    """Serialize a bounded, always-valid public-link evidence list."""
+    kept: list[dict[str, Any]] = []
+    for row in rows[:20]:
+        candidate = kept + [row]
+        encoded = json.dumps(candidate, ensure_ascii=False, separators=(",", ":"))
+        if len(encoded) > max(64, max_chars):
+            break
+        kept = candidate
+    return json.dumps(kept, ensure_ascii=False, separators=(",", ":"))
+
+
+def text_for_semantic_analysis(text: str) -> str:
+    """Remove only a narrow cross-platform signature from semantic evidence.
+
+    A channel footer such as ``Мы ВКонтакте | Мы в MAX`` and a media credit
+    are not commercial evidence.  The media credit is intentionally retained
+    because it is useful authorship/source evidence; only the trailing
+    self-crosslink signature is removed.
+    """
+    value = str(text or "")
+    value = re.sub(
+        r"(?:\s*[🇷🇺\u200d️]*)?\s*мы\s+вконтакте\s*\|\s*мы\s+в\s*max\s*$",
+        "",
+        value,
+        flags=re.I,
+    )
+    return value.strip()
+
+
 def classify_platform_url(url: str) -> tuple[str, str]:
     low = (url or "").lower()
     if "t.me/" in low:
@@ -4669,25 +4750,43 @@ def discover_links_for_post(post: dict[str, Any], run_id: str) -> tuple[list[dic
     post_id = str(post.get("post_id") or "")
     post_url = str(post.get("post_url") or "")
     items = extract_urls_and_handles(str(post.get("text") or ""))
+    embedded_links = post.get("embedded_links") or []
+    if not embedded_links and post.get("embedded_links_json"):
+        try:
+            embedded_links = json.loads(str(post.get("embedded_links_json") or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            embedded_links = []
+    if isinstance(embedded_links, dict):
+        embedded_links = [embedded_links]
+    if isinstance(embedded_links, list):
+        items.extend(item for item in embedded_links if isinstance(item, dict))
     if post.get("forwarded_from_url"):
         items.append({"raw_url": str(post.get("forwarded_from_url")), "normalized_url": str(post.get("forwarded_from_url")), "extracted_handle": str(post.get("forwarded_from_handle") or "")})
+    seen_normalized: set[str] = set()
     for i, item in enumerate(items, start=1):
-        normalized = item["normalized_url"]
+        normalized = str(item.get("normalized_url") or "").strip()
+        if not normalized or normalized in seen_normalized:
+            continue
+        seen_normalized.add(normalized)
         link_type, platform = classify_platform_url(normalized)
-        edge_type = "forward_origin" if normalized == post.get("forwarded_from_url") else "post_text_link"
+        link_context = str(item.get("link_context") or "")
+        edge_type = "forward_origin" if normalized == post.get("forwarded_from_url") else (
+            link_context if link_context in {"media_attribution", "channel_crosslink"} else "post_text_link"
+        )
+        confidence = 0.92 if edge_type == "media_attribution" else 0.85 if edge_type == "forward_origin" else 0.65 if edge_type == "channel_crosslink" else 0.55
         cand_id = "src_cand_" + stable_hash(platform, normalized)
         edge_id = "edge_" + stable_hash(from_source, post_id, normalized, edge_type)
         rows.append({
             "source_candidate_id": cand_id, "discovered_from_source": source_title, "discovered_from_post_url": post_url,
-            "discovered_from_comment_hash": "", "discovery_type": "forwarded_from" if edge_type == "forward_origin" else "post_text",
+            "discovered_from_comment_hash": "", "discovery_type": "forwarded_from" if edge_type == "forward_origin" else edge_type,
             "edge_type": edge_type, "raw_url": item["raw_url"], "normalized_url": normalized, "platform_guess": link_type,
-            "candidate_source_status": "source_frontier", "confidence": 0.85 if edge_type == "forward_origin" else 0.55,
+            "candidate_source_status": "source_frontier", "confidence": confidence,
         })
         edges.append({
             "edge_id": edge_id, "from_source_id": from_source, "from_source_title": source_title, "from_post_id": post_id,
             "to_source_candidate_id": cand_id, "to_source_title": item.get("extracted_handle") or normalized, "edge_type": edge_type,
             "evidence_url": normalized, "evidence_context_short": make_summary(str(post.get("text_excerpt") or post.get("text") or ""))[:240],
-            "confidence": 0.85 if edge_type == "forward_origin" else 0.55, "discovery_depth": 1, "run_id": run_id,
+            "confidence": confidence, "discovery_depth": 1, "run_id": run_id,
         })
     return rows, edges
 
@@ -8162,6 +8261,36 @@ def _telegram_public_web_post_text(block: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
 
 
+def _telegram_public_web_embedded_links(block: str) -> list[dict[str, Any]]:
+    """Preserve public anchor targets separately from rendered plain text."""
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for match in re.finditer(r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.I | re.S):
+        raw_url = html.unescape(match.group(1)).strip()
+        if raw_url.startswith("//"):
+            raw_url = "https:" + raw_url
+        if not raw_url.startswith(("http://", "https://")) or raw_url in seen:
+            continue
+        seen.add(raw_url)
+        label = re.sub(r"<.*?>", "", match.group(2), flags=re.S)
+        label = html.unescape(label).strip()
+        before = re.sub(r"<.*?>", " ", block[max(0, match.start() - 120):match.start()], flags=re.S)
+        context = html.unescape(before + " " + label).lower()
+        link_context = "post_text_link"
+        if re.search(r"(?:видео|фото|снимок|кадр|источник|автор)\s*[:—-]", context, flags=re.I):
+            link_context = "media_attribution"
+        elif re.search(r"(?:мы\s+вконтакте|мы\s+в\s*max|наш\s+(?:vk|вк|max|сайт))", context, flags=re.I):
+            link_context = "channel_crosslink"
+        handle_match = re.search(r"(?:t\.me|telegram\.me)/(@?[A-Za-z0-9_]{4,})", raw_url, flags=re.I)
+        rows.append({
+            "raw_url": raw_url,
+            "normalized_url": raw_url,
+            "extracted_handle": ("@" + handle_match.group(1).lstrip("@")) if handle_match else "",
+            "link_context": link_context,
+        })
+    return rows
+
+
 def _telegram_public_web_first_image_url(block: str) -> str:
     urls = re.findall(r"background-image:url\(([^)]+)\)", block, flags=re.I)
     if not urls:
@@ -8241,6 +8370,8 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
                     "post_date": post_date_raw,
                     "text": text,
                     "text_excerpt": re.sub(r"\s+", " ", text)[:500],
+                    "embedded_links": _telegram_public_web_embedded_links(block),
+                    "embedded_links_json": serialize_embedded_links(_telegram_public_web_embedded_links(block)),
                     "has_media": bool(image_url),
                     "media_count": 1 if image_url else 0,
                     "primary_media_path": image_url,
@@ -8664,6 +8795,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
             has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
             title = str(getattr(entity, "title", None) or row.get("source_title") or handle)
             post_date = dt.isoformat() if dt else str(row.get("post_date") or "")
+            embedded_links = telegram_message_embedded_links(msg)
             post_row = {
                 "post_id": "post_" + stable_hash("telegram_ydb_link", handle, mid),
                 "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
@@ -8676,6 +8808,8 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                 "post_date": post_date,
                 "text": text,
                 "text_excerpt": re.sub(r"\s+", " ", text)[:500],
+                "embedded_links": embedded_links,
+                "embedded_links_json": serialize_embedded_links(embedded_links),
                 "has_media": has_media,
                 "media_count": 1 if has_media else 0,
                 "primary_media_path": "",
@@ -8697,6 +8831,8 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                 "ydb_candidate_link_pk": row.get("_pk") or "",
                 "discovery_method": "exact_post_link_queue" if str(row.get("_kind") or "") == "post_link_queue_item" else "ydb_candidate_link",
                 "discovery_priority": "0" if str(row.get("_kind") or "") == "post_link_queue_item" else "2",
+                "post_link_priority": row.get("post_link_priority") if row.get("post_link_priority") not in (None, "") else (0 if str(row.get("_kind") or "") == "post_link_queue_item" else 2),
+                "priority_reason": row.get("priority_reason") or "",
                 "keyword_hit_query": row.get("matched_query") or "",
                 "keyword_hit_hashtag": row.get("matched_hashtag") or "",
             }
@@ -9094,7 +9230,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                                 forwarded_from_confidence = 0.7
                             elif from_name:
                                 forwarded_from_confidence = 0.45
-                        post_row = {"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""}
+                        embedded_links = telegram_message_embedded_links(msg)
+                        post_row = {"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "embedded_links": embedded_links, "embedded_links_json": serialize_embedded_links(embedded_links), "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""}
                         source_post_rows.append(post_row)
                         if len(seen) >= max_posts:
                             break
@@ -9209,12 +9346,12 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
     ):
         value = str(post.get(key) or "").strip()
         if value:
-            parts.append(f"{key}: " + re.sub(r"\s+", " ", value))
+            parts.append(f"{key}: " + re.sub(r"\s+", " ", text_for_semantic_analysis(value)))
     text = "\n".join(parts)
     return text[:max(300, limit)]
 
 
-REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v3"
+REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v4"
 
 
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
@@ -9239,17 +9376,18 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
         if evidence.get(key) not in (None, "")
     }
     payload = {
-        "task": "Return JSON: final Region Talk verifier for one Telegram/VK post.",
+        "task": "Return JSON for one Region Talk post.",
         "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "rules": [
-            "accept only when Kaliningrad Oblast is the main subject",
-            "reject ads, news/events/trash and multi-region roundups",
-            "require a firsthand visit or attributed subscriber report",
-            "require personal emotion/review and one memorable or useful detail",
-            "reject generic cards, coordinates, official routes and impersonal promotion",
-            "needs_review when text or authorship evidence is insufficient",
-            "a single-location KO card still needs experience and story value",
-            "operator_video_review: judge text only; missing image scores are allowed and video quality is unverified",
+            "accept only if Kaliningrad Oblast is the main subject",
+            "reject commercial CTA/price/booking/promo, news/trash and multi-region roundups",
+            "require firsthand visit or attributed subscriber report",
+            "require emotion/review and a memorable/useful detail",
+            "reject generic cards/coordinates/official routes/impersonal promotion",
+            "VK/MAX footer + Фото/Видео/Источник media credit != ad; credit != visit proof",
+            "needs_review if text/authorship is insufficient",
+            "single-location cards still need story value",
+            "operator_video_review: text only; image scores optional; video quality unverified",
         ],
         "evidence": slim_evidence,
         "post": {

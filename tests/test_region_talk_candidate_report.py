@@ -2100,12 +2100,55 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertNotIn("large_unused_debug", prompt)
             self.assertNotIn("debug_blob", prompt)
             self.assertEqual(data["prompt_version"], mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION)
-            self.assertTrue(any("personal emotion" in rule for rule in data["rules"]))
+            self.assertTrue(any("emotion/review" in rule for rule in data["rules"]))
+            self.assertTrue(any("VK/MAX footer" in rule and "!= ad" in rule for rule in data["rules"]))
+            self.assertTrue(any("media credit" in rule and "!= visit proof" in rule for rule in data["rules"]))
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS", None)
             else:
                 os.environ["REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS"] = old
+
+    def test_rich_text_media_attribution_is_discovered_and_persistable(self) -> None:
+        mod = load_module()
+        message = types.SimpleNamespace(
+            message="Цветение маков в Калининградской области.\nВидео: moresvobod\n🇷🇺 Мы ВКонтакте | Мы в MAX",
+            entities=[types.SimpleNamespace(url="https://t.me/moresvobod")],
+        )
+        embedded = mod.telegram_message_embedded_links(message)
+        self.assertEqual(embedded[0]["normalized_url"], "https://t.me/moresvobod")
+        self.assertEqual(embedded[0]["link_context"], "media_attribution")
+        post = {
+            "post_id": "p8853",
+            "source_id": "src_big",
+            "source_title": "Большая Страна",
+            "post_url": "https://t.me/bolshayastrana/8853",
+            "text": message.message,
+            "text_excerpt": message.message,
+            "embedded_links_json": json.dumps(embedded, ensure_ascii=False),
+        }
+        discovered, edges = mod.discover_links_for_post(post, "unit")
+        matching = [row for row in discovered if row.get("normalized_url") == "https://t.me/moresvobod"]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["edge_type"], "media_attribution")
+        self.assertEqual(next(row for row in edges if row.get("evidence_url") == "https://t.me/moresvobod")["confidence"], 0.92)
+        compact = mod._online_post_payload(post, run_id="unit", stage="fetch")
+        self.assertIn("moresvobod", compact["embedded_links_json"])
+
+    def test_public_web_anchor_preserves_media_attribution_url(self) -> None:
+        mod = load_module()
+        block = '<div class="tgme_widget_message_text js-message_text">Видео: <a href="https://t.me/moresvobod">moresvobod</a></div>'
+        self.assertEqual(mod._telegram_public_web_post_text(block), "Видео: moresvobod")
+        links = mod._telegram_public_web_embedded_links(block)
+        self.assertEqual(links[0]["normalized_url"], "https://t.me/moresvobod")
+        self.assertEqual(links[0]["link_context"], "media_attribution")
+
+    def test_semantic_text_strips_only_cross_platform_footer(self) -> None:
+        mod = load_module()
+        text = "Полезный маршрут по Калининградской области. Видео: moresvobod 🇷🇺 Мы ВКонтакте | Мы в MAX"
+        cleaned = mod.text_for_semantic_analysis(text)
+        self.assertIn("Видео: moresvobod", cleaned)
+        self.assertNotIn("Мы ВКонтакте", cleaned)
 
     def test_ad_promo_rubrika_is_not_ruble_price(self) -> None:
         mod = load_module()

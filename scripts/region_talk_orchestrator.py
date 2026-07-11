@@ -2317,14 +2317,26 @@ def build_decision_plan(
     # that stops when the publication goal is reached. ``include_main`` remains
     # accepted for CLI/API compatibility, but can no longer disable this lane.
     goal_reached = int(metrics.get("publication_sent_total") or 0) >= target_confirmed or int(metrics.get("publication_confirmed_total") or 0) >= target_confirmed
+    exact_ready = int(metrics.get("post_link_queue_exact_ready_total") or 0)
+    exact_cache_hits = int(metrics.get("post_link_queue_entity_cache_hit_total") or 0)
+    # Three is the conservative baseline. When the queue already has private
+    # entities, a larger exact batch only adds paced get_messages calls and does
+    # not increase the dangerous username-resolve budget (which remains one).
+    exact_fetch_limit = 3
+    if exact_ready > 3 and exact_cache_hits > 3:
+        exact_fetch_limit = min(8, exact_ready, exact_cache_hits)
+    candidate_env = {
+        **MAIN_DISCOVERY_YDB_BUDGET_ENV,
+        "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": str(max(1, exact_fetch_limit)),
+    }
     actions.append(_action(
         "launch_candidate_report",
         ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"],
-        "continue exact-link intake and all discovery methods" + (" after publication goal" if goal_reached else ""),
+        f"drain up to {exact_fetch_limit} exact KO links first, then continue all discovery methods" + (" after publication goal" if goal_reached else ""),
         resource="telegram:DISCOVERY1",
         parallel_safe=True,
         timeout_seconds=300,
-        env=MAIN_DISCOVERY_YDB_BUDGET_ENV,
+        env=candidate_env,
     ))
 
     if int(metrics.get("image_pending_vk_without_url_total") or 0) > 0:
@@ -2485,6 +2497,18 @@ def run_orchestrator_cycle(args: argparse.Namespace, *, allow_yc_fallback: bool,
     return result
 
 
+def orchestrator_poll_sleep_seconds(metrics: dict[str, Any], *, normal_seconds: int, downstream_seconds: int) -> int:
+    normal = max(5, int(normal_seconds or 180))
+    if any(int(metrics.get(key) or 0) > 0 for key in (
+        "bge_pending_sample_total",
+        "image_pending_total",
+        "finalizer_pending_url_total",
+        "publication_unsent_confirmed_total",
+    )):
+        return min(normal, max(5, int(downstream_seconds or 60)))
+    return normal
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Region Talk YDB orchestrator dry-run")
     parser.add_argument("--env-file", default=str(ROOT / ".env"))
@@ -2503,6 +2527,7 @@ def main() -> int:
     parser.add_argument("--allow-unverified-kaggle-status", action="store_true", help="allow Kaggle launches even when a Region Talk kernel status cannot be verified")
     parser.add_argument("--loop", action="store_true", help="keep polling YDB/Kaggle and launching ready work until target/limits")
     parser.add_argument("--cycle-sleep-seconds", type=int, default=180, help="sleep between loop cycles")
+    parser.add_argument("--downstream-backlog-poll-seconds", type=int, default=60, help="poll faster while actionable BGE/image/finalizer work remains")
     parser.add_argument("--max-cycles", type=int, default=0, help="maximum loop cycles; 0 means unlimited until other limits")
     parser.add_argument("--max-runtime-minutes", type=int, default=0, help="maximum wall-clock loop runtime; 0 disables")
     parser.add_argument("--no-progress-cycles", type=int, default=8, help="stop loop after this many idle no-progress cycles with no active kernels")
@@ -2607,7 +2632,12 @@ def main() -> int:
             return 0
         if int(args.no_progress_cycles or 0) and idle_no_progress >= int(args.no_progress_cycles or 0):
             return 0
-        time.sleep(max(5, int(args.cycle_sleep_seconds or 180)))
+        sleep_seconds = orchestrator_poll_sleep_seconds(
+            metrics,
+            normal_seconds=int(args.cycle_sleep_seconds or 180),
+            downstream_seconds=int(args.downstream_backlog_poll_seconds or 60),
+        )
+        time.sleep(sleep_seconds)
     return 0
 
 

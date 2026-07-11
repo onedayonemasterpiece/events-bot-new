@@ -11,6 +11,15 @@ must not reach the review chat merely because their image is attractive. The
 prompt version is part of the durable request fingerprint so a tightened policy
 cannot replay an older, weaker verdict.
 
+Advertising is judged from commercial evidence in the main content. A trailing
+channel signature such as `Мы ВКонтакте | Мы в MAX` is cross-platform
+navigation, and `Фото:` / `Видео:` / `Источник:` is media attribution; neither
+is advertising by itself. Price, booking/purchase CTA, sponsorship, promo code
+or another commercial call remains ad evidence. Attribution also does not by
+itself prove a firsthand visit or a subscriber report, so an impersonal route
+card may still be rejected for missing story/emotion without being falsely
+labelled advertising. This contract is `region_talk_final_verifier_v4`.
+
 ## Product criteria
 
 A post can enter `publication_candidate_item` only when all of the following are true:

@@ -74,6 +74,16 @@ Extract:
 - mentions in text;
 - “source/photo author” lines.
 
+Telegram rich-text targets are source evidence even when the visible caption
+contains only an unprefixed label. CandidateReport reads public
+`MessageEntityTextUrl.url` values (and public HTML anchor targets in the
+disabled fallback implementation), stores a bounded `embedded_links_json`, and
+emits `edge_type=media_attribution` for `Фото:`, `Видео:` and `Источник:`
+credits. This prevents a credit such as
+`Видео: [moresvobod](https://t.me/moresvobod)` from degrading to the
+non-discoverable plain word `moresvobod`. Only public URLs/labels are persisted;
+Telegram private entity identifiers remain in the separate private cache.
+
 ### 4. Cross-platform identity
 
 Link likely same source identity across platforms using same title/handle and explicit description links such as “YouTube, VK, RUTUBE, MAX”. Keep links as evidence; do not merge destructively without confidence.
@@ -196,7 +206,10 @@ Implementation invariants:
   lost: CandidateReport writes it as `post_link_queue_item`, and the next normal
   CandidateReport run first refetches a bounded batch of these exact links
   (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`) before spending history-scan
-  budget; fetched links then pass the normal E5+BGE/text/image/LLM funnel;
+  budget; the baseline is three links, but the orchestrator raises the batch to
+  at most eight when the actionable queue already has cached
+  `channel_id/access_hash`, without raising the one-username-resolve budget;
+  fetched links then pass the normal E5+BGE/text/image/LLM funnel;
 - every keyword/hashtag/fast-check priority change is persisted as
   `priority_lane=ko_keyword_or_fast_check` in the same YDB source ledger.
   Neither immutable `queue_seq` nor legacy `queue_order` is rewritten merely
@@ -205,8 +218,9 @@ Implementation invariants:
 Debug-run budget after the 2026-07-09 long-run incident:
 
 - CandidateReport orchestrator launches use `--max-sources 6`,
-  `REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=1200`, 20 posts/source, at most three
-  exact post-link refetches, four global keyword/hashtag queries and three
+  `REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=1200`, 20 posts/source, three exact
+  post-link refetches by default (adaptive cached-only ceiling eight), four
+  global keyword/hashtag queries and three
   similar-channel seeds;
 - the run should reach exact post-link fetch, fast-check-KO, a small history
   scan, E5 write and source-queue handoff, then stop before heavy report tail;

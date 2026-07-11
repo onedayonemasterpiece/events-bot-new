@@ -192,6 +192,14 @@ Important invariants:
   but the scorecard also reports actionable coverage and E5 rows excluded below
   `REGION_TALK_BGE_MIN_TEXT_CHARS` (default 24); ultra-short captions must not
   masquerade as a runnable BGE backlog or be hidden from the raw metric.
+- This is the current dual-vector normalizer: at most one BGE kernel may run at
+  once, but while actionable E5-without-BGE rows remain the loop polls in the
+  shorter downstream interval (60 seconds by default) and relaunches BGE after
+  the previous kernel completes. CandidateReport continues bounded discovery
+  in parallel; the normalizer never drops either model or disables discovery.
+  The BGE batch reserves 80% of bounded capacity for exact keyword/fast-check
+  posts (fresh-first) and 20% for generic FIFO backlog, filling unused capacity
+  from either side. This reduces known-KO latency without starving breadth.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
@@ -246,6 +254,12 @@ Important invariants:
   written as `rejected_spam_source` before Telegram resolve/history calls.
   Normal uncertain sources are not rejected by regex; they stay in the vector
   pipeline.
+- Exact KO post URLs are a post-level priority lane, not an exclusive global
+  stop-the-world mode. Every CandidateReport run consumes them before history
+  scans; when more than three ready links already have cached Telegram private
+  entities, the orchestrator raises the paced batch up to eight while keeping
+  the uncached username-resolve allowance at one. Lower-probability discovery
+  then receives its bounded share in the same run, preserving source growth.
 - Keyword/hashtag discovery is higher product priority than similar-channel
   exploration because it can directly produce a source with a concrete
   Kaliningrad Oblast post. In the default orchestrated run, keyword discovery
