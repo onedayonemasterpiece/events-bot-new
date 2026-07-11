@@ -1,0 +1,60 @@
+# Site user identity and profile linking
+
+> Status: **partial/design**. Yandex login/logout exists in the authorized-search surface; verified-email identity and durable profile linking are not production-complete.
+
+## Scope
+
+Owns the global identity contract shared by search, personalization, favorites/calendar and email:
+
+- device-local anonymous profile before server materialization;
+- Yandex OAuth identity;
+- verified-email identity by code/link;
+- session restore and logout;
+- anonymous-to-auth profile linking;
+- unlink, reset, account/profile deletion and audit.
+
+Search-specific UI remains in [authorized event search](../unsigned-personalization/authorized-event-search.md). Ranking/profile schemas remain in [unsigned personalization](../unsigned-personalization/README.md).
+
+## Product rules
+
+- Supabase Auth is the identity provider/system of record.
+- A verified-email user is a real Supabase identity, not a second subscription-only account system.
+- Local `anon_id` is not proof of ownership. Server materialization requires a device-bound credential and current consent.
+- Linking is idempotent and auditable. Repeating callback/login cannot duplicate profile/favorites/subscriptions.
+- Authenticated explicit actions win merge conflicts over inferred/local state.
+- Logout ends the session but does not split the durable profile.
+- Reset/unlink/delete are explicit operations with clear scope.
+- Identity/email presence never grants recommendation-email consent.
+
+## Required states
+
+- `anonymous_local`
+- `anonymous_materialized`
+- `email_verification_pending`
+- `authenticated_email`
+- `authenticated_yandex`
+- `link_pending`
+- `linked`
+- `unlink_pending`
+- `deleted_or_purging`
+
+The exact schema belongs to a dedicated implementation task, but one identity must never own multiple competing current profiles.
+
+## Linking acceptance
+
+- current personalization consent required before importing local behavior;
+- merge is transactionally idempotent;
+- favorites/calendar saved state is deduplicated by event id;
+- negative/explicit actions retain priority and timestamps;
+- raw browsing history is not copied blindly;
+- result is visible to the user and reset/unlink remains available;
+- session expiry/callback failure restores a usable anonymous static page;
+- deletion propagates to profile-owned Supabase rows and eligible YDB raw/history projections.
+
+## Data ownership
+
+See [personalization data ownership](../../architecture/personalization-data-ownership.md). Supabase owns identity/profile/linking; YDB may receive de-identified analytics only.
+
+## Open product decisions
+
+See the umbrella [global product decisions](../static-personal-announcements/global-product-decisions.md), especially verified-email UX and profile-link consent.

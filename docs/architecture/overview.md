@@ -1,5 +1,16 @@
 # Architecture
 
+## Static personal announcements data boundary
+
+The static-site release uses four deliberately separate owners:
+
+- Fly SQLite — canonical events/sources/lifecycle/publication state;
+- personalization Supabase/Postgres — identity, current user profile, consent, favorites/subscriptions and email control plane;
+- YDB — service-only analytics/history and independent comment-feedback sidecar;
+- Object Storage/CDN — generated public/personal artifacts.
+
+Canonical decision: [personalization data ownership](personalization-data-ownership.md).
+
 The bot is built with **aiogram 3** and runs on Fly.io using a webhook.
 
 - **Web Server** – aiohttp application that receives updates on `/webhook`.

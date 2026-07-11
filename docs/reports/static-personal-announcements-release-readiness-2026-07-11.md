@@ -54,7 +54,7 @@
 | **F1** | Smart Update effect → rebuild через 15 минут | **Partial / Blocked** | Код coalesced `static_site_build` и Kaggle runner существует | Включить prod env; исправить running/deferred/stale semantics; atomic CDN promotion; prove two updates during one long build |
 | **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
 | **F3** | Умный поиск | **Partial** | Search UI/Edge source/canary preview; unauth Edge request fail-closed | Production `/poisk/`, Yandex provider/Edge deploy, live mobile login→search E2E, quota/alert/fallback evidence |
-| **F4** | Email: 3 предложения + персональная static page | **Designed** | Полная docs-first ветка существует отдельно | Merge storage/identity decision; subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
+| **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
 | **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; отдельная UX V3 branch активна | Design freeze + owner sign-off; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
 | **F6** | Views/list/detail/social-action personalization telemetry | **Partial** | Local profile/actions/served-list contract; remote browser writes запрещены/не включены | Consent-safe remote ingest, RLS/grants, bot/rate/dedupe/retention, list/detail/dwell/CTA/calendar/share/like/hide row evidence |
 | **F7** | Auth или verified-email user | **Partial** | Yandex PKCE login/logout code; email-only path design exists | Global identity layer; one-use email code/link with TTL/replay/rate limits; real-device proof |
@@ -112,7 +112,7 @@ Read-only срез на 2026-07-11:
 
 | Surface | Branch snapshot | Документ/код | Интеграционный риск |
 |---|---|---|---|
-| F4 personal email/page | `origin/agent/personal-email-announcements-docs` (21 behind / 6 ahead) | `docs/features/personal-email-announcements/README.md` | Design-only; storage ownership conflict |
+| F4 personal email/page | `origin/agent/personal-email-announcements-docs` (21 behind / 6 ahead) | прежний `docs/features/personal-email-announcements/README.md` | Superseded ownership design; port to a new main-based v2 branch only |
 | F8 transactional email foundation | `origin/feature/event-email-notifications-static-20260702` (677 behind) | `docs/features/event-email-notifications/README.md`, `email_notifications/` | Very stale; dry-run; no bounce callback |
 | F5 UI V3 | `origin/feature/event-page-ux-lab-v3-20260710` (69 behind / 15 ahead) | event-page decision/onboarding lab | UI not frozen; requires clean rebase and visual acceptance |
 | F11 transport | `origin/integration/event-transport-schedule` (1 behind / 9 ahead) | `docs/features/static-site-pages/event-transport-schedule.md` | Closest to merge; nightly refresh still P0-open |
@@ -126,11 +126,11 @@ Read-only срез на 2026-07-11:
 | IDs | Состояние ветки/документации |
 |---|---|
 | F1, F2, F3, F13 | Основные slices уже находятся в `origin/main` внутри parent features `static-site-pages` и `unsigned-personalization`; отдельная незамерженная feature branch не требуется, но production integration остаётся незакрытой задачей. |
-| F4 | Есть только отдельная docs-first branch; в `origin/main` нет canonical feature home/route и реализации. |
+| F4 | Canonical v2 home/route подготовлены в release-doc branch; реализация требует новой main-based feature branch. Старая YDB-owned docs branch superseded. |
 | F5 | Есть активная UX V3 branch, но UI не frozen и branch отстаёт от main. |
-| F6, F7, F10 | Документация и части кода находятся в общих personalization/search docs в main; отдельных завершённых feature branches для remote telemetry, verified-email identity и profile merge нет. |
+| F6, F7, F10 | Parent personalization docs и новый canonical `site-user-identity` home подготовлены; отдельных завершённых implementation branches для remote telemetry, verified-email identity и profile merge нет. |
 | F8 | Есть очень старая transactional-email branch; она не закрывает recommendation email/deliverability целиком и не может быть слита без rebase/review. |
-| F9 | Отдельной feature branch и canonical feature doc для durable favorites не найдено. |
+| F9 | Canonical `event-favorites-calendar` home подготовлен; implementation branch/schema/API всё ещё отсутствуют. |
 | F11 | Есть близкая к main integration branch, но nightly production refresh остаётся P0-open. |
 | F12 | ICS находится в main; отдельной branch для product contract “calendar = favorite” нет. |
 | F14 | Есть старая probe branch; production collection/YDB/Astro feature не оформлены как merge-ready implementation. |
@@ -147,7 +147,7 @@ Read-only срез на 2026-07-11:
 | Static pages/build/CDN | Высокая | `README.md` смешивает current contract, preview diary и historical decisions | Оставить current contract + gates; version diary вынести в reports |
 | Vector related/search | Высокая | `routes.yml`/README statuses не отражают capability-by-capability stage | Ввести status matrix: infra / canary / prod / operations |
 | Anonymous personalization | Высокая design, низкая prod | README одновременно говорит anonymous-only и содержит authorized search | Разделить identity/search/telemetry/feed, сохранить один parent index |
-| Personal email/page | Высокая design, branch-only | Нет canonical route в main; storage owner противоречит dual-DB policy | Закрыть ADR по Supabase vs YDB, затем merge docs-first feature home |
+| Personal email/page | Canonical design v2 подготовлен | Реализация отсутствует; старая branch назначала неверного владельца | Новый main-based feature branch по принятому Supabase control-plane ADR |
 | Email delivery | Средняя, branch-only | Transactional follow и recommendation digest смешиваются концептуально | Разделить transactional/reminder и recommendation marketing streams |
 | UI/share/focus | Средняя/высокая | Решения разбросаны по длинным preview/UI review docs | Зафиксировать единственный release UI contract + visual baselines |
 | Transport | Хорошая branch spec | Нет main route; coverage намного уже требования | Merge как отдельную feature; city/provider/source matrix и ops runbook |
@@ -234,7 +234,7 @@ Smart Update является владельцем семантического 
 
 ### Stage 4 — Identity, telemetry, favorites, calendar
 
-- [ ] Выбран один identity/profile ownership contract; secrets stay server-side.
+- [x] Выбран один identity/profile ownership contract: personalization Supabase/Postgres; secrets stay server-side. См. ADR.
 - [ ] No consent = no local profile mutation and no trusted remote telemetry.
 - [ ] Remote telemetry write path passes RLS/grant/body/rate/dedupe/bot/retention tests.
 - [ ] Valid impressions, detail views, dwell, card click, ticket/calendar/share/like/hide contain surface/rank/layout context.
@@ -309,7 +309,7 @@ Smart Update является владельцем семантического 
 ## 10. Открытые продуктовые и архитектурные решения
 
 1. **Scope:** полный релиз всех F1–F17 или staged release; что именно показывается на публичной презентации?
-2. **Personalization storage:** Supabase/Postgres по dual-DB policy или YDB из personal-email design; нельзя оставить два competing profile owners.
+2. **Personalization storage — решено:** Supabase/Postgres owns current identity/profile/favorites/subscriptions/email control plane; YDB owns analytics/history and the independent comment-feedback sidecar. См. `docs/architecture/personalization-data-ownership.md`.
 3. **Identity:** что может email-only user без Supabase Auth session; как связываются anonymous/browser, verified email и Yandex identity?
 4. **Favorites:** favorite, like и calendar-follow — одна сущность или три связанные сущности?
 5. **Email:** cadence/quiet hours/fatigue, transactional vs recommendation classification, sender subdomains and legal unsubscribe policy.
@@ -327,7 +327,7 @@ Smart Update является владельцем семантического 
 3. **P0 — vector/search integration:** F2/F3, prod `/poisk/`, whole-catalog sync, golden review.
 4. **P0 — UI release freeze:** F5 plus clean preview contract and real-device/a11y evidence.
 5. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12.
-6. **P1 — email recommendations/deliverability:** F4/F8 after storage/identity ADR.
+6. **P1 — email recommendations/deliverability:** F4/F8 after identity/consent foundation, using the accepted storage ADR.
 7. **P1 — admin repair loop:** F17 after idempotency/poller contract.
 8. **P1 — media quality/share:** F15/F16.
 9. **P2 — transport:** F11 after nightly source pipeline is production-safe.

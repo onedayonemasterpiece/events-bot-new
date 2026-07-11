@@ -1,0 +1,115 @@
+# Personalization data ownership
+
+> Status: **accepted release architecture** (2026-07-11).
+> Scope: static-site identity, personalization, favorites/calendar, email recommendations, transactional event email, analytics and comment-feedback sidecars.
+
+## Decision
+
+The project has one current user/profile and email control-plane system of record:
+
+- **Fly SQLite `/data/db.sqlite`** owns canonical events, sources, lifecycle, publication state, event-bound scheduler/outbox state and static-page generation metadata tied to an event.
+- **Personalization Supabase/Postgres** owns identity, consent, durable user/profile state, favorites/follows, subscriptions, email send-control state, active recommendation issues and personal-page token metadata.
+- **YDB** owns service-only high-volume/history/analytics projections and the independent event-comment-feedback sidecar. YDB is **not** a second user-profile or email-control-plane owner.
+- **Object Storage/CDN** owns generated HTML/JSON/media artifacts. It does not own consent, profile, subscription, send state or token validity.
+
+This decision follows the implementation already present in `origin/main`: Supabase Auth/Yandex, pgvector search, reaction counters and the personalization project boundary. There is no production YDB user-profile write path to migrate.
+
+## Entity ownership
+
+| Entity | Canonical owner | Allowed projection |
+|---|---|---|
+| Yandex identity and sessions | Supabase Auth | Opaque/HMAC subject id in YDB analytics |
+| Verified email-only identity | Supabase Auth email OTP/magic-link | Keyed email HMAC in YDB analytics |
+| Anonymous device/identity link | Private Supabase schema after server materialization | HMAC subject id in YDB |
+| Current anonymous/auth profile | Private Supabase schema | Sanitized immutable Kaggle export; de-identified YDB analytics |
+| Browser `localStorage` profile | Local cache/offline projection, never SOR | None |
+| Profile merge/link audit | Supabase | De-identified audit projection in YDB |
+| Consent and consent evidence | Supabase | Aggregate consent metrics in YDB |
+| Favorites, event follows and calendar-save state | Supabase | Aggregate event/action metrics in YDB |
+| Transactional/recommendation subscriptions | Supabase, with separate purposes | Aggregate subscription metrics in YDB |
+| Verified email, preferences and suppressions | Supabase | Keyed HMAC and aggregates only in YDB |
+| Recommendation issue/cards | Supabase | De-identified issue metrics in YDB |
+| Personal-page token hashes/metadata | Supabase | Rendered artifact in Object Storage/CDN |
+| Email outbox, send guard, rate state | Supabase | Terminal/aggregate delivery projection in YDB |
+| Provider delivery events | Supabase for send-critical evidence | Append-only analytics projection in YDB |
+| Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
+| Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
+| Strong-action current state/profile inputs | Supabase | Analytics event in YDB |
+| Raw TG/VK comments, embeddings and matches | YDB comment-feedback sidecar | Sanitized static manifest in Object Storage |
+| Canonical event data | Fly SQLite | Bounded card/vector projection in Supabase |
+
+## Profile materialization rule
+
+Before consent/server sync, browser state is device-local and not a durable identity claim. After materialization, the current durable profile belongs to Supabase. The project must not maintain competing `visitor_profile_snapshot`/`profile_revision` rows in Supabase and `pa_profile_snapshot` rows in YDB with unclear precedence.
+
+## Required flows
+
+### Views and actions
+
+1. Static HTML remains useful without Supabase/YDB.
+2. After consent, a same-origin endpoint validates actor, device credential, schema, payload and idempotency.
+3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
+4. An asynchronous outbox projects de-identified analytics to YDB.
+5. YDB failure never blocks CTA/navigation or rolls back a user action.
+
+### Login and profile linking
+
+1. Yandex or verified-email auth creates/recovers a Supabase Auth identity.
+2. Anonymous-to-auth linking is explicit in the product contract and idempotent in storage.
+3. Supabase stores `profile_identity_link` and merge audit state.
+4. Merge compact snapshots/current state, not raw browsing history.
+5. Authenticated explicit actions win conflicts.
+6. Logout does not split the durable profile. Unlink/reset/delete are separate explicit operations.
+
+### Personal email announcement
+
+1. Planner reads due subscription and profile state from Supabase.
+2. Kaggle receives only a sanitized immutable profile/event snapshot.
+3. Recommendation issue/cards and personal-page token metadata are persisted in Supabase.
+4. HTML/JSON is published to Object Storage/CDN.
+5. Only after artifact publication succeeds may the Supabase outbox row become sendable.
+6. Sender rechecks subscription, consent and suppression before Postbox send.
+7. Provider callbacks update delivery/suppression in Supabase; YDB receives asynchronous analytics.
+
+### Event comment feedback
+
+The comment pipeline reads canonical event/source snapshots from Fly SQLite, keeps raw comments and processing state in the YDB sidecar, and exports a safe static manifest. Comment-feedback state does not become a competing user profile and cannot directly rewrite Smart Update facts or user interests.
+
+## Forbidden designs
+
+- YDB-owned user profile alongside a Supabase-owned profile.
+- Parallel YDB and Supabase subscription/suppression/outbox systems.
+- Cross-database transactions in the send-critical path.
+- YDB analytics used for send eligibility.
+- Browser direct writes to YDB or raw/private Supabase profile tables.
+- Plain email, bearer tokens or raw profile vectors in YDB analytics.
+- Plain/unsalted SHA for email or bearer-token lookup.
+- `anon_id` alone treated as proof of profile ownership.
+- Full canonical event copies in Supabase/YDB.
+- Comment sentiment directly applied to a user profile without a separate product/ranking contract.
+
+## Security gates
+
+- RLS on every exposed Supabase table; ownership predicates use `auth.uid()`.
+- Browser cannot set `email_verified`, consent proof, suppression or send state.
+- Authorization never trusts `user_metadata`.
+- Emails are stored only where sending requires them; lookup uses keyed HMAC.
+- Bearer tokens have at least 128 bits of entropy and are stored only as keyed hashes; page, click, unsubscribe and feedback tokens are separate.
+- YDB is service-credential-only, with TTL and minimized HMAC subject identifiers.
+- Account/profile deletion emits a purge request for eligible YDB raw/history state; irreversibly anonymized aggregates follow a documented retention policy.
+
+## Consequences for existing branches
+
+- `agent/personal-email-announcements-docs` is superseded as an ownership design: its YDB profile/subscription/outbox ownership must not be merged.
+- `feature/event-email-notifications-static-20260702` is directionally closer, but must be ported to a fresh branch and hardened against legacy Supabase env fallback, ordinary SHA email lookup, client-trusted event snapshots and broad grants.
+- Event-comment-feedback keeps YDB ownership for its independent sidecar.
+- No production profile migration is required because the conflicting YDB profile path was never enabled.
+
+## Related documentation
+
+- [Anonymous/static-site personalization](../features/unsigned-personalization/README.md)
+- [Personal email announcements](../features/personal-email-announcements/README.md)
+- [Site user identity](../features/site-user-identity/README.md)
+- [Favorites and calendar](../features/event-favorites-calendar/README.md)
+- [Email delivery operations](../operations/email-delivery.md)
+- [Event comment feedback](../features/event-comment-feedback/README.md)
