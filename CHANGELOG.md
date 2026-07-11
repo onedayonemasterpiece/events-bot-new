@@ -26,7 +26,10 @@
   Source-queue sequence repairs now scope transient repair markers to the
   current run, preventing stale flags from rewriting thousands of rows.
   Publication rows now cap retained verifier text at 700 characters; full
-  source post bodies remain outside YDB.
+  source post bodies remain outside YDB. Terminal publication rows now drop the
+  verifier text completely, and every successful BGE write prunes the already
+  consumed excerpt from its paired E5 row while preserving both models' scores,
+  hashes and dual-fusion contract.
   Repeated Kaggle `CreateDataset` failures now trigger bounded six-hour-TTL
   cleanup of leaked Region Talk no-wait input datasets before one final retry.
   Image/publication eligibility now fail-closes semantic contradictions where

@@ -298,7 +298,35 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["publication_eligibility_gate_version"], "publication-source-gate-v3")
         self.assertEqual(payload["attempt_count"], 1)
         self.assertEqual(payload["finalizer_state_version"], mod.PUBLICATION_FINALIZER_STATE_VERSION)
-        self.assertEqual(len(payload["text"]), 700)
+        self.assertNotIn("text", payload)
+
+    def test_retryable_publication_keeps_only_bounded_text_for_next_attempt(self) -> None:
+        mod = self.mod
+        row = candidate_row(
+            text="x" * 2000,
+            publication_status="gemini_error",
+            publication_candidate_status="llm_error",
+            finalization_status="retryable",
+            llm_gate_status="error",
+            llm_decision="",
+        )
+        captured = {}
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        def capture(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+
+        with (
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T10:01:00+00:00"),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=capture),
+        ):
+            self.assertEqual(mod.write_publication_rows(Pool(), object(), "table", [row], "run-1"), 1)
+        self.assertEqual(len(captured["items"][0][2]["text"]), 700)
 
     def test_unknown_local_and_spam_fail_closed_without_gemini_and_revoke_prior_accept(self) -> None:
         mod = self.mod

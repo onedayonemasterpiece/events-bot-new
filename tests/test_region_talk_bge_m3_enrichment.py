@@ -197,11 +197,27 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual(payload["bge_m3_positive_class"], "ko_visit_impression")
         self.assertEqual(payload["bge_m3_ko_geo_top"], "Куршская коса")
         self.assertEqual(payload["bge_m3_external_geo_top"], "Сочи")
+        self.assertNotIn("text_excerpt", payload)
         self.assertNotIn("embedding_vector", payload)
         self.assertEqual(payload["embedding_vector_encoding"], "f16_le_base64")
         decoded = mod.decode_dense_vector_f16(payload["embedding_vector_f16_b64"], 3)
         self.assertEqual(len(decoded), 3)
         self.assertAlmostEqual(decoded[0], 0.1, places=3)
+
+    def test_compact_paired_e5_payload_drops_consumed_text_only(self) -> None:
+        mod = load_bge_module()
+        compact = mod.compact_paired_e5_payload({
+            "_ydb_pk": "text_vector_enrichment_item:e5",
+            "model_id": "intfloat/multilingual-e5-base",
+            "text_excerpt": "x" * 3000,
+            "text_hash": "hash",
+            "semantic_scores_by_class": {"ko_visit_impression": 0.7},
+        }, pruned_at="2026-07-11T00:00:00+00:00")
+        self.assertNotIn("text_excerpt", compact)
+        self.assertNotIn("_ydb_pk", compact)
+        self.assertEqual(compact["text_hash"], "hash")
+        self.assertEqual(compact["semantic_scores_by_class"]["ko_visit_impression"], 0.7)
+        self.assertTrue(compact["text_payload_pruned_after_bge"])
 
 
 if __name__ == "__main__":

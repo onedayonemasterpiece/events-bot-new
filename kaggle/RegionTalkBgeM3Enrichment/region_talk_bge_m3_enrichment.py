@@ -915,7 +915,6 @@ def build_enrichment_payload(
         "source_url": row.get("source_url") or row.get("canonical_url") or "",
         "post_date": row.get("post_date") or row.get("published_at") or "",
         "text_hash": text_sha,
-        "text_excerpt": text[:500],
         "text_source_fields": row.get("_embedding_text_fields") or [],
         "paired_e5_text_hash": row.get("_paired_e5_text_hash") or "",
         "paired_e5_enrichment_id": row.get("_paired_e5_enrichment_id") or "",
@@ -950,17 +949,54 @@ def build_enrichment_payload(
     return payload
 
 
+def compact_paired_e5_payload(row: dict[str, Any], *, pruned_at: str) -> dict[str, Any]:
+    """Drop the transient BGE input text after the matching BGE row exists.
+
+    The E5 row remains the durable owner of semantic scores and pairing metadata;
+    only the text payload that BGE has already consumed is removed. This keeps
+    dual-vector scoring intact without retaining thousands of 3k-character
+    excerpts indefinitely.
+    """
+    out = {k: v for k, v in row.items() if not str(k).startswith("_")}
+    for field in ("text", "full_text", "text_excerpt", "raw", "why_keep_in_memory", "why_this_is_about_kaliningrad"):
+        out.pop(field, None)
+    out["text_payload_pruned_after_bge"] = True
+    out["text_payload_pruned_at"] = pruned_at
+    return out
+
+
 def write_result_rows(rows: list[dict[str, Any]], summary: dict[str, Any]) -> int:
     ydb, driver, cfg = ydb_connect()
     table_path = ydb_kv_table_path(cfg)
     pool = ydb.SessionPool(driver)
     now = utc_now_iso()
     run_id = str(summary.get("run_id") or "")
-    ydb_rows = [(str(row.get("_pk") or "text_vector_enrichment_item:" + row["text_vector_enrichment_id"]), "text_vector_enrichment_item", {k: v for k, v in row.items() if k != "_pk"}) for row in rows]
+    ydb_rows = [
+        (
+            str(row.get("_pk") or "text_vector_enrichment_item:" + row["text_vector_enrichment_id"]),
+            "text_vector_enrichment_item",
+            {k: v for k, v in row.items() if not str(k).startswith("_")},
+        )
+        for row in rows
+    ]
+    paired_e5_rows = [
+        (str(row["_paired_e5_pk"]), "text_vector_enrichment_item", dict(row["_paired_e5_payload"]))
+        for row in rows
+        if row.get("_paired_e5_pk") and isinstance(row.get("_paired_e5_payload"), dict)
+    ]
 
     def op(session: Any) -> int:
         ensure_ydb_kv_table(ydb, session, table_path)
         written = ydb_upsert_json_many(session, ydb, table_path, ydb_rows, now, chunk_size=getenv_int("REGION_TALK_BGE_YDB_UPSERT_CHUNK_SIZE", 25))
+        pruned = ydb_upsert_json_many(
+            session,
+            ydb,
+            table_path,
+            paired_e5_rows,
+            now,
+            chunk_size=getenv_int("REGION_TALK_BGE_YDB_UPSERT_CHUNK_SIZE", 25),
+        )
+        summary["e5_text_payloads_pruned"] = pruned
         final_summary = {**summary, "rows_written": written, "ydb_write_status": "ok"}
         result_payload = {
             "summary": final_summary,
@@ -1085,6 +1121,10 @@ def run_bge_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
                 row_index=idx + 1,
             )
             payload["_pk"] = str(row.get("_enrichment_pk") or "text_vector_enrichment_item:" + payload["text_vector_enrichment_id"])
+            paired_e5_pk = str(row.get("_ydb_pk") or "").strip()
+            if paired_e5_pk and row.get("_source_kind") == "text_vector_enrichment_item" and _is_e5_text_vector_row(row):
+                payload["_paired_e5_pk"] = paired_e5_pk
+                payload["_paired_e5_payload"] = compact_paired_e5_payload(row, pruned_at=utc_now_iso())
             result_rows.append(payload)
         vectors_done = len(result_rows)
         emit_event("bge_batch_done", phase="vectorize", status="running", run_id=run_id, texts_done=vectors_done, texts_total=len(texts), bge_batch_size=len(batch_texts), progress_label=f"BGE {vectors_done}/{len(texts)}")
@@ -1123,7 +1163,14 @@ def run_bge_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
         summary["error"] = f"{type(exc).__name__}: {str(exc)[:500]}"
         emit_event("bge_ydb_write_failed", phase="write_ydb", status="error", run_id=run_id, error=summary["error"])
 
-    public_rows = [{k: v for k, v in row.items() if k not in {"embedding_vector", "embedding_vector_f16_b64", "_pk"}} for row in result_rows]
+    public_rows = [
+        {
+            k: v
+            for k, v in row.items()
+            if not str(k).startswith("_") and k not in {"embedding_vector", "embedding_vector_f16_b64"}
+        }
+        for row in result_rows
+    ]
     (output_dir / "bge_m3_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": public_rows}, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "bge_m3_enrichment_rows.jsonl").write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in public_rows) + ("\n" if public_rows else ""), encoding="utf-8")
     (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": summary["status"], "summary": summary}, ensure_ascii=False, indent=2), encoding="utf-8")

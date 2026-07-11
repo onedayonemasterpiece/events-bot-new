@@ -955,9 +955,18 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
     ]
     items = []
     for row in rows:
+        durable_row = dict(row)
+        terminal_text = bool(
+            str(row.get("sent_to_chat") or "").lower() == "true"
+            or str(row.get("finalization_status") or "").lower() == "terminal"
+            or str(row.get("llm_decision") or "").lower() in {"accept", "reject"}
+            or str(row.get("publication_status") or "").lower().startswith(("gemini_accept", "gemini_reject", "operator_rejected"))
+        )
+        if terminal_text:
+            durable_row.pop("text", None)
         payload = rt.compact_record(
             {
-                **row,
+                **durable_row,
                 "run_id": run_id,
                 "updated_at": now,
                 "last_seen_run_id": run_id,

@@ -278,6 +278,13 @@ Region Talk must keep row-level product state compact:
   duplicate it as `post_live_item`; the old kind is read-only migration input;
 - BGE dense vectors are stored as `f16_le_base64` plus `embedding_dim`, not a
   JSON list of decimal floats. Semantic scores and E5+BGE fusion remain intact;
+- E5 may retain the bounded source excerpt only while its paired BGE row is
+  missing. A successful BGE write removes that transient excerpt from the E5
+  row, and the BGE row itself stores scores/vector/hash rather than another text
+  copy. This is lifecycle compaction, not a single-model shortcut;
+- publication candidates retain at most 700 characters only while a Gemini
+  retry is possible. Accepted, rejected, operator-rejected and sent terminal
+  rows keep URL/hash/summary/verdict evidence but no full verifier text;
 - BGE run-result rows contain only compact summary/sample references and are
   retention-limited; they never duplicate the full enrichment rows;
 - `latest_state` and `run_state_snapshot` use checkpoint-v4 and therefore stay
@@ -313,8 +320,9 @@ Region Talk must keep row-level product state compact:
 The 2026-07-11 live audit measured 644 MB physical storage for only ~171 MiB of
 live JSON. The main cause was write amplification: two full 15.9 MB snapshots
 per run plus occasional full 7k-row queue rewrites. The validated LZ4 target has
-52,286 product/operational rows, 77.4 MB logical JSON and 42.1 MB physical
-storage while preserving all critical-kind row counts. A new
+52,286 product/operational rows and 77.4 MB logical JSON at cutover; after the
+acceptance runs it held 56,368 rows / 45.8 MB physical while preserving all
+critical-kind row counts. A new
 `run_funnel_metrics` payload in every `run_metrics` row provides a reliable
 daily grain; mutable entity `run_id` fields must not be used to reconstruct
 historical daily throughput.
