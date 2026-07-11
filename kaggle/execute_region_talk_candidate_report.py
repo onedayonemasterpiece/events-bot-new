@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -135,6 +136,73 @@ def slugify(value: str, *, max_len: int = 48) -> str:
     return (slug or uuid.uuid4().hex[:8])[:max_len].rstrip("-")
 
 
+REGION_TALK_TEMP_DATASET_PREFIXES = (
+    "region-talk-config-",
+    "rt-secret-bundle-",
+    "rt-bge-config-",
+    "rt-bge-secret-",
+    "rt-img-diag-",
+)
+
+
+def cleanup_stale_region_talk_input_datasets(
+    client: Any,
+    *,
+    protected_refs: set[str] | None = None,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Bounded emergency GC for leaked no-wait Kaggle input datasets.
+
+    Normal launches retain private inputs while a remote kernel is running. If
+    dataset creation fails twice, only inputs older than the safety TTL are
+    eligible, so datasets of active (<6h by default) Region Talk kernels remain
+    protected.
+    """
+    protected = {str(ref) for ref in (protected_refs or set())}
+    ttl_seconds = max(3600, int(os.getenv("REGION_TALK_KAGGLE_INPUT_DATASET_TTL_SECONDS") or "21600"))
+    max_delete = max(1, int(os.getenv("REGION_TALK_KAGGLE_INPUT_GC_MAX_DELETE") or "75"))
+    api = getattr(client, "api", None)
+    if api is None or not hasattr(api, "dataset_list"):
+        return {"listed": 0, "eligible": 0, "deleted": 0, "failed": 0}
+    now = now or datetime.now(timezone.utc)
+    candidates: dict[str, datetime] = {}
+    for page in range(1, 51):
+        rows = api.dataset_list(mine=True, search="region-talk", page=page) or []
+        if not rows:
+            break
+        for item in rows:
+            data = item.to_dict() if hasattr(item, "to_dict") else {}
+            ref = str(data.get("ref") or getattr(item, "ref", "") or "")
+            slug = ref.split("/", 1)[-1]
+            if not ref or not slug.startswith(REGION_TALK_TEMP_DATASET_PREFIXES):
+                continue
+            updated = str(data.get("lastUpdated") or getattr(item, "last_updated", "") or "")
+            try:
+                parsed = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            candidates[ref] = parsed.astimezone(timezone.utc)
+    eligible = [
+        ref for ref, updated in sorted(candidates.items(), key=lambda pair: pair[1])
+        if ref not in protected and (now - updated).total_seconds() >= ttl_seconds
+    ][:max_delete]
+    deleted = failed = 0
+    for ref in eligible:
+        try:
+            client.delete_dataset(ref)
+            deleted += 1
+        except Exception:
+            failed += 1
+    print(
+        f"[region-talk-kaggle] stale input dataset GC listed={len(candidates)} "
+        f"eligible={len(eligible)} deleted={deleted} failed={failed}",
+        flush=True,
+    )
+    return {"listed": len(candidates), "eligible": len(eligible), "deleted": deleted, "failed": failed}
+
+
 def create_or_replace_dataset(client: Any, username: str, slug: str, title: str, writer) -> str:
     dataset_ref = f"{username}/{slug}"
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -151,7 +219,14 @@ def create_or_replace_dataset(client: Any, username: str, slug: str, title: str,
                 client.delete_dataset(dataset_ref)
             except Exception:
                 pass
-            client.create_dataset(folder, public=False, quiet=True, convert_to_csv=False, dir_mode="zip")
+            try:
+                client.create_dataset(folder, public=False, quiet=True, convert_to_csv=False, dir_mode="zip")
+            except Exception:
+                # Two equivalent CreateDataset failures indicate account-level
+                # temporary-input accumulation, not a payload contract guess.
+                # Run bounded TTL GC before the final documented create retry.
+                cleanup_stale_region_talk_input_datasets(client, protected_refs={dataset_ref})
+                client.create_dataset(folder, public=False, quiet=True, convert_to_csv=False, dir_mode="zip")
     return dataset_ref
 
 

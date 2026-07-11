@@ -548,6 +548,11 @@ for audit, but must not consume Gemini again or increment `accepted_new`.
 `queue_seq_repair_run_id`. It is cleared while reconstructing the queue and only
 rows marked by the current build may be bulk-upserted as a sequence repair.
 
+Kaggle `--no-wait` inputs are temporary private datasets, not durable state. If
+creation fails twice, the launcher may delete only Region Talk input datasets
+older than the six-hour safety TTL (bounded per attempt), protect the current
+ref, and then make one final create retry.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;

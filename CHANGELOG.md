@@ -27,6 +27,8 @@
   current run, preventing stale flags from rewriting thousands of rows.
   Publication rows now cap retained verifier text at 700 characters; full
   source post bodies remain outside YDB.
+  Repeated Kaggle `CreateDataset` failures now trigger bounded six-hour-TTL
+  cleanup of leaked Region Talk no-wait input datasets before one final retry.
   Per-run funnel metrics are durable, and E5 isolation defaults
   to `spawn` after a real forked worker SIGSEGV deferred 31 of 39 fetched posts.
 - **Region Talk / durable post identity and capacity hygiene**: processed-post

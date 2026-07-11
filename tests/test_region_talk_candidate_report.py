@@ -4297,6 +4297,38 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual([row["post_url"] for row in selected], ["https://t.me/ready/99"])
         self.assertIn(("post_link_queue_item", 5000), calls)
 
+    def test_dataset_create_failure_runs_bounded_stale_input_gc_before_final_retry(self) -> None:
+        mod = load_runner_module()
+        class Item:
+            def __init__(self, ref, updated): self.ref, self.updated = ref, updated
+            def to_dict(self): return {"ref": self.ref, "lastUpdated": self.updated}
+        class Api:
+            def dataset_list(self, **kwargs):
+                return [
+                    Item("zigomaro/region-talk-config-old", "2026-07-10T00:00:00Z"),
+                    Item("zigomaro/unrelated", "2026-07-10T00:00:00Z"),
+                ] if kwargs.get("page") == 1 else []
+        class Client:
+            api = Api()
+            def __init__(self): self.creates = 0; self.deleted = []
+            def create_dataset(self, *_args, **_kwargs):
+                self.creates += 1
+                if self.creates < 3: raise RuntimeError("quota")
+            def delete_dataset(self, ref): self.deleted.append(ref)
+        client = Client()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_KAGGLE_INPUT_DATASET_TTL_SECONDS": "3600",
+            "REGION_TALK_KAGGLE_INPUT_GC_MAX_DELETE": "10",
+        }):
+            ref = mod.create_or_replace_dataset(
+                client, "zigomaro", "region-talk-config-current", "current",
+                lambda folder: (folder / "payload.json").write_text("{}"),
+            )
+        self.assertEqual(ref, "zigomaro/region-talk-config-current")
+        self.assertEqual(client.creates, 3)
+        self.assertIn("zigomaro/region-talk-config-old", client.deleted)
+        self.assertNotIn("zigomaro/unrelated", client.deleted)
+
     def test_source_queue_sequence_repair_bypasses_live_handoff_cap(self) -> None:
         mod = load_module()
         rows = [
