@@ -321,6 +321,9 @@ launch must read the complete row-level population. Current orchestrator floors
 are 20,000 processed posts, 20,000 text-vector rows, 5,000 candidate/image rows
 and 20,000 source rows. A lower debug read cap is not allowed in a production
 write run: it could create a correct-looking checkpoint from incomplete state.
+The separate BGE reader uses the same 20,000-row floor for the shared vector
+kind; batch size limits model CPU work, while scan limit guarantees queue
+visibility.
 
 
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the

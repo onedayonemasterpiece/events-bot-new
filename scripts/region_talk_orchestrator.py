@@ -2760,7 +2760,10 @@ def build_decision_plan(
             env={
                 "REGION_TALK_BGE_E5_ONLY": "1",
                 "REGION_TALK_BGE_INPUT_KINDS": "text_vector_enrichment_item",
-                "REGION_TALK_BGE_YDB_SCAN_LIMIT": "6000",
+                # The shared kind already exceeds 6k rows; a prefix-limited
+                # scan can permanently starve newer E5 rows whose PK sorts
+                # after that window.
+                "REGION_TALK_BGE_YDB_SCAN_LIMIT": "20000",
                 "REGION_TALK_BGE_BATCH_SIZE": "4",
             },
         ))

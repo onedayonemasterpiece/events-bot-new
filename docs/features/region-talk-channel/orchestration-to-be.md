@@ -532,6 +532,10 @@ CandidateReport therefore uses full row-level read floors (`posts=20000`,
 `vectors=20000`, `candidates=5000`, `sources=20000`) even when per-run scoring
 and discovery batches remain small. These read limits are state-integrity
 limits, not work-batch limits, and must not be reduced to shorten a run.
+The BGE worker independently scans at least 20,000 `text_vector_enrichment_item`
+rows. A 6,000-row prefix window is invalid once the shared E5+BGE kind exceeds
+that size: newer E5 PKs can otherwise remain invisible and actionable dual
+backlog will never drain.
 
 Suggested stop/trigger counters:
 
