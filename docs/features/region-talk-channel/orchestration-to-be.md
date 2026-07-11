@@ -673,6 +673,10 @@ its own posts are not external visitor evidence. A live profile found 15 KO
 posts in 16 scanned posts and otherwise wasted dual-vector fusion on 14 memory
 rows (6 accepts, 8 rejects), while the downstream image gate correctly kept
 them out. The source-level classification must prevent that work earlier.
+The live YDB source writer must preserve the full terminal evidence
+(`source_geo_class`, topic/quick class, filter version/reason/hits and
+`next_action`), not only the generic queue status and scope; otherwise sparse
+online overlays make the classification appear incomplete.
 
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and

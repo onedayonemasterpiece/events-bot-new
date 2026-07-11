@@ -4,7 +4,8 @@
 - **Region Talk / local POI institutions**: source surface classification now
   routes `Музей Мирового Океана` / `world_ocean_museum` to the local-region
   monitoring list before its institutional posts consume external-candidate
-  dual-vector and image work.
+  dual-vector and image work; online YDB source rows now retain the complete
+  local/spam classification evidence and terminal next action.
 - **Region Talk / workload-aware transaction tail**: CandidateReport now
   budgets E5 work from actual post volume, reserves queue/YDB completion time,
   bulk-upserts independent queue rows, moves YDB retention cleanup out of the
