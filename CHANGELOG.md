@@ -11,6 +11,7 @@
 ### Added
 
 - **Email infrastructure / inbound core**: added isolated Yandex Mail Trigger intake and YMQ delivery Cloud Function contracts with keyed idempotency, private normalized-envelope pointers, HMAC-authenticated minimized backend receipts, PII-safe logging, retry/DLQ fixtures, and a conservative plan-by-default desired-state reconciler that never touches Fly or mutates secretful/live traffic resources implicitly.
+- **Email control plane / production-disabled foundation**: added a CLI-generated additive Supabase migration for verified identity, purpose consent, an atomic 200-user recommendation cap, suppression, exactly-three/published-page enqueue gates, fixed-provider outbox/send guards and deduplicated provider evidence; added Postbox API and NotiSend individual-message adapters that require real provider IDs, never cross-fallback and remain disabled/dry-run by default, with deterministic contract tests and an explicit live migration-history apply blocker.
 
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 

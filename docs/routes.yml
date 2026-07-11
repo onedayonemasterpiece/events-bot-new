@@ -432,6 +432,10 @@ features:
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_personalization: docs/features/unsigned-personalization/README.md
     planned_successor_branch: feature/personal-email-announcements-v2
+    control_plane_package: email_control/
+    control_plane_migration: supabase/migrations/20260711203940_email_control_plane_v1.sql
+    control_plane_sql_contract: supabase/tests/email_control_plane_contract.sql
+    control_plane_tests: email_control/tests/test_control_plane.py
 
   event_email_notifications:
     status: prototype_clean_port_required
@@ -440,6 +444,8 @@ features:
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_favorites: docs/features/event-favorites-calendar/README.md
     superseded_branch: feature/event-email-notifications-static-20260702
+    shared_control_plane_package: email_control/
+    shared_control_plane_migration: supabase/migrations/20260711203940_email_control_plane_v1.sql
 
   event_transport:
     status: branch_candidate_refresh_blocked_by_wip

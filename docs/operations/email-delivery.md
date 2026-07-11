@@ -29,6 +29,21 @@ Providers are not interchangeable. Postbox must not be used as a hidden fallback
 
 See [personalization data ownership](../architecture/personalization-data-ownership.md).
 
+## Production-disabled control-plane foundation
+
+The implementation candidate on `agent/email-infrastructure/control-plane` is deliberately disabled and has not been applied to the live personalization project. It adds:
+
+- an additive private `email_control` Supabase schema for synchronized verified identities, purpose consent/audit, the atomic 200-user recommendation admission row, suppression, recommendation issue/items, outbox attempts and provider-event deduplication;
+- authenticated preference RPCs plus service-only stage/publish/enqueue/claim/finalize/event-ingest RPCs with no raw table grants to browser roles;
+- fixed provider routing (`transactional -> postbox`, `recommendation -> notisend`) enforced by both SQL and runtime adapters;
+- Postbox API sending that requires the real returned `MessageId`;
+- NotiSend individual-message API sending with `payment=subscriber` and the real returned message `id`;
+- disabled DB/process switches and dry-run defaults.
+
+The live Supabase migration history is currently not a trustworthy apply base: the repository contains migration files whose objects exist in production but whose versions are absent from `supabase_migrations.schema_migrations`. Before this email migration is applied, an operator must take a database backup, compare live DDL with every repository migration, reconcile/repair history deliberately, and prove a clean local/staging reset. **Do not run a blind `supabase db push` and do not apply the email migration directly to production.**
+
+Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. Postbox Data Streams events are ingested through the IAM-authenticated consumer and deduplicated by provider `eventId`.
+
 ## Address and DNS contract
 
 - Authoritative DNS remains in Yandex Cloud DNS; do not move nameservers to SpaceWeb or NotiSend.
