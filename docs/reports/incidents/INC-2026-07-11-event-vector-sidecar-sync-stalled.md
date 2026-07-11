@@ -1,6 +1,6 @@
 # INC-2026-07-11 Event vector sidecar sync stalled
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: event search / related-event vector sidecar
 Opened: 2026-07-11
@@ -79,7 +79,9 @@ Production Supabase sidecar stopped receiving new event search documents and emb
 
 ## Immediate Mitigation
 
-Implemented a dedicated full-catalog projection lane and prepared a compensating production reconciliation after deploy.
+Implemented and deployed a dedicated full-catalog projection lane. Compensating
+run `ops_run=3559` reconciled 335 current documents and both 335-vector kinds;
+the immediate idempotency rerun `ops_run=3561` made zero provider calls.
 
 ## Corrective Actions
 
@@ -100,11 +102,15 @@ Implemented a dedicated full-catalog projection lane and prepared a compensating
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `412b0311212e05b941b4a40be99ad8fdf160365d` (incident base fix `643444db376fdd072ed406cdb6ad3c0a804e59a4`)
+- deploy path: manual `flyctl deploy --remote-only` from a clean worktree; SHA reachable from `origin/main`
+- regression checks: 101 incident/relevant tests passed; full-suite collection remains blocked by pre-existing NumPy and `main_part2.VkActor` defects recorded below
+- post-deploy verification: `/healthz` ready; Fly machine version 1620; production env enables the three-hour sync; `ops_run=3559` success with 335 docs, 344 changed/missing embeddings, 326 unchanged, 291 stale rows removed, zero cap remainder; post-check has 334/334 actionable and 275/275 strict-future coverage for both kinds, zero hash-contract issues; `ops_run=3561` completed in 8.043 s with 670 unchanged skips and zero provider calls
+- pending closure gate: bounded Telegram-UI VK import and new-event vector follow-up; E2E account requires an explicitly approved temporary superadmin grant
 
 ## Prevention
 
-Pending implementation and validation.
+- PR CI now compiles the incident-critical modules and runs vector/static/VK regression tests.
+- Regular projection no longer depends on a manual preview or remote image probes.
+- Durable `ops_run` evidence separates persistent coverage from ephemeral audits.
+- VK runs with failed rows are no longer marked successful and carry end-to-end correlation identifiers.

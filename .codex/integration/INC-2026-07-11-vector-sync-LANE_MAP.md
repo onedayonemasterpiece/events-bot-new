@@ -5,25 +5,25 @@
   owner: vector_pipeline_trace + prod_logs_kaggle
   dependencies: []
   validation: Code-path map plus production scheduler/ops evidence identifies the first broken handoff.
-  status: in_progress
+  status: completed
 - requirement_id: R02
   description: Add durable regular incremental embedding synchronization.
   owner: integrator
   dependencies: [R01]
   validation: Targeted tests and a production run update only missing/changed documents and embeddings.
-  status: pending
+  status: completed
 - requirement_id: R03
   description: Catch production sidecar up to the current actionable event inventory.
   owner: integrator
   dependencies: [R02, R07]
   validation: Post-run freshness and coverage query, with failures and skips accounted for.
-  status: pending
+  status: completed
 - requirement_id: R04
   description: Make vector sync and Smart Update evidence sufficient for incident verification.
   owner: prod_logs_kaggle + integrator
   dependencies: [R01]
   validation: Stage/run identifiers, counts, failures, latency and freshness are queryable from retained evidence.
-  status: pending
+  status: completed
 - requirement_id: R05
   description: Run a live Telegram-UI VK auto-import E2E limited to 1-3 real candidates.
   owner: vk_e2e_map + integrator
@@ -41,7 +41,7 @@
   owner: integrator
   dependencies: [R02, R04]
   validation: Clean tests; deployed SHA reachable from origin/main; incident regression contracts pass.
-  status: pending
+  status: completed
 - requirement_id: R08
   description: Classify residual findings as fixed incidents or explicit technical debt.
   owner: integrator
