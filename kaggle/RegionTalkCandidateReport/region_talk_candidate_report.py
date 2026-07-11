@@ -5339,8 +5339,8 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
     re-loading BGE or requiring the original source post to be fetched again.
     """
     if not getenv_bool("REGION_TALK_ENABLE_EXTERNAL_BGE_M3_MEMORY_PROMOTION", True):
-        return {"checked": 0, "promoted": 0, "rejected": 0, "missing": 0}
-    stats = {"checked": 0, "promoted": 0, "rejected": 0, "missing": 0}
+        return {"checked": 0, "promoted": 0, "rejected": 0, "missing": 0, "source_blocked": 0}
+    stats = {"checked": 0, "promoted": 0, "rejected": 0, "missing": 0, "source_blocked": 0}
     for row in rows:
         vector_status = str(row.get("vector_gate_status") or "")
         pending = (
@@ -5351,6 +5351,18 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
         if not pending:
             continue
         stats["checked"] += 1
+        source_terminal = source_local_region_terminal_fields(row)
+        terminal_status = str(source_terminal.get("source_queue_status") or "")
+        if terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS}:
+            row.update(source_terminal)
+            row["external_bge_m3_fusion_changed_this_run"] = "true"
+            row["external_bge_m3_status"] = "skipped_source_terminal"
+            row["current_stage"] = "dropped_local_source" if terminal_status == LOCAL_REGION_SOURCE_STATUS else "dropped_spam_source"
+            row["current_lifecycle_status"] = "source_terminal_excluded_before_bge_fusion"
+            row["why_not_publication_ready"] = str(source_terminal.get("monitoring_exclusion_reason") or terminal_status)
+            row["next_action"] = str(source_terminal.get("next_action") or "skip_external_bge_fusion_for_terminal_source")
+            stats["source_blocked"] += 1
+            continue
         text_sha = str(row.get("pending_bge_m3_text_hash") or "")
         e5_row, _e5_mode = find_text_vector_enrichment_for_post(e5_index, row, text_hash=text_sha)
         bge_row, bge_mode = find_text_vector_enrichment_for_post(bge_index, row, text_hash=text_sha)

@@ -678,6 +678,12 @@ The live YDB source writer must preserve the full terminal evidence
 `next_action`), not only the generic queue status and scope; otherwise sparse
 online overlays make the classification appear incomplete.
 
+The delayed candidate-memory fusion pass repeats the same terminal source
+guard before looking up E5/BGE rows. Pending posts from a recognizably local or
+spam source are marked `dropped_local_source` / `dropped_spam_source` and do
+not consume fusion work or create misleading image-fetch retries. The
+`bge_m3_memory_source_blocked` heartbeat counter makes that saved work visible.
+
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with

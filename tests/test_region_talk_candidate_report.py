@@ -611,6 +611,21 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(payload["source_quick_class"], "local_region_source")
         self.assertEqual(payload["next_action"], "route_to_local_region_source_list_no_external_scan")
 
+        pending = {
+            "post_url": "https://t.me/world_ocean_museum/11667",
+            "source_title": "Музей Мирового Океана",
+            "source_url": "https://t.me/world_ocean_museum",
+            "vector_gate_status": "vector_defer_wait_bge_m3",
+            "current_stage": "dual_model_vector_enrichment_pending",
+        }
+        stats = mod.apply_external_bge_m3_fusion_to_candidate_memory(
+            [pending], e5_index={}, bge_index={}, lexicon=[]
+        )
+        self.assertEqual(stats["source_blocked"], 1)
+        self.assertEqual(stats["missing"], 0)
+        self.assertEqual(pending["current_stage"], "dropped_local_source")
+        self.assertEqual(pending["external_bge_m3_status"], "skipped_source_terminal")
+
     def test_image_queue_blocks_dom_kitoboya_source(self) -> None:
         mod = load_module()
         reason = mod.image_queue_product_gate_reason({
