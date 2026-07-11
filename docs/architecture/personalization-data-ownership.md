@@ -40,7 +40,7 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Email outbox, send guard, rate state | Supabase | Terminal/aggregate delivery projection in YDB |
 | Provider delivery events | Supabase for send-critical evidence | Append-only analytics projection in YDB |
 | Human mailbox and retained inbound correspondence | SpaceWeb | Forwarded automation copy through Yandex Mail Trigger |
-| Raw inbound automation payload/attachments | Private Yandex Object Storage under an approved retention policy | Normalized processing result in the existing backend |
+| Normalized inbound trigger payload/attachments | Private Yandex Object Storage under an approved retention policy | Minimized signed metadata/reference receipt in the existing backend |
 | Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
 | Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
 | Strong-action current state/profile inputs | Supabase | Analytics event in YDB |
@@ -95,7 +95,7 @@ Postbox is not a recommendation fallback, and NotiSend is not a transactional fa
 
 1. Internet mail is accepted by SpaceWeb MX and retained in `info@kenigevents.ru` for human webmail/IMAP use.
 2. SpaceWeb forwards a copy, while preserving the mailbox copy, to the technical address assigned to Yandex Cloud Mail Trigger.
-3. A minimal Function/Container validates and normalizes the trigger event, stores raw MIME/attachments only in private storage with bounded retention, and hands a metadata/reference envelope to the existing backend.
+3. A minimal Function validates and normalizes the trigger event, stores the allowlisted trigger payload and attachment references only in private storage with bounded retention, and hands a minimized signed metadata/reference envelope to the existing backend. Yandex Mail Trigger does not expose raw MIME; the retained SpaceWeb mailbox copy remains the authoritative original.
 4. Idempotency prevents forwarding/retry duplicates; bounded retry and a DLQ retain failures for controlled replay.
 5. Automation must not auto-reply or Bcc `info@kenigevents.ru` until explicit loop prevention exists. `dmarc@kenigevents.ru` is not forwarded into this pipeline.
 

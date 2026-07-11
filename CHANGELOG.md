@@ -10,6 +10,8 @@
 
 ### Added
 
+- **Email infrastructure / inbound core**: added isolated Yandex Mail Trigger intake and YMQ delivery Cloud Function contracts with keyed idempotency, private normalized-envelope pointers, HMAC-authenticated minimized backend receipts, PII-safe logging, retry/DLQ fixtures, and a conservative plan-by-default desired-state reconciler that never touches Fly or mutates secretful/live traffic resources implicitly.
+
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.

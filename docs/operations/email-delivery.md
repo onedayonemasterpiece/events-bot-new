@@ -45,9 +45,12 @@ Before a DNS change, store a sanitized before-snapshot in ignored `artifacts/cod
 
 1. Internet mail is delivered by SpaceWeb MX and retained in `info@kenigevents.ru`.
 2. SpaceWeb forwards a copy to the technical address assigned by Yandex Cloud Mail Trigger. The original remains readable through SpaceWeb webmail/IMAP.
-3. A minimal Function/Container validates the trigger envelope, assigns a correlation/idempotency key, normalizes headers and stores raw MIME/attachments only in a dedicated private bucket with bounded retention.
-4. The handler passes only normalized metadata and private object references to the existing backend; message bodies, credentials and attachments are not written to ordinary logs.
-5. Transient failures use bounded retries; exhausted events enter a DLQ for deliberate replay. Replay must preserve the same idempotency key.
+3. A minimal Python 3.12 Function validates the trigger envelope, assigns a keyed-HMAC correlation/idempotency key, allowlists headers and stores deterministic normalized JSON plus Yandex-managed attachment references in a dedicated private KMS-encrypted bucket with 30-day retention.
+4. Yandex Mail Trigger exposes normalized headers/body and attachment object keys, not raw MIME. The retained SpaceWeb mailbox copy remains the authoritative original; if exact raw MIME processing becomes mandatory, this pipeline must be replaced or supplemented by an authenticated SpaceWeb IMAP puller.
+5. The intake Function passes only a small metadata/reference pointer through a standard YMQ queue. A separate delivery Function sends the minimized receipt to the existing backend over HTTPS with timestamped HMAC authentication; plaintext addresses, subject, body and attachment keys never enter YMQ or ordinary logs.
+6. Native Mail Trigger failure and processing failure use separate DLQs because their payloads require different replay logic. Retries are bounded, and replay must preserve the same idempotency key.
+
+The current Cloud Functions trigger-message limit is 230 KB including service metadata. Intake therefore caps the trigger body at 220 KB and never copies it into YMQ; large-message behavior must be proven by live canary, while the SpaceWeb mailbox remains the loss-prevention fallback.
 
 Loop guards are mandatory before any automatic response. Do not Bcc automated outbound mail to `info@kenigevents.ru`, and do not forward `dmarc@kenigevents.ru` into Mail Trigger.
 
@@ -105,6 +108,7 @@ The initial service has a hard ceiling of **200 actively consented recommendatio
 - idempotency under trigger retry/duplicate delivery;
 - DLQ failure and controlled replay test;
 - auto-reply/Bcc loop prevention.
+- supported `python312` runtime, production function tags instead of `$latest`, and an isolated Yandex folder so any queue-trigger permission fallback cannot reach site/CDN resources.
 
 ## Live E2E and debugging order
 
