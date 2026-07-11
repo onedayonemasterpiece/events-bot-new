@@ -8,14 +8,16 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 ## Presentation transport preview — 2026-07-11
 
-Public focus preview `preview-20260711-event-transport-presentation-v3` replaces the campaign-like rail copy with neutral travel help, adds one calendar file/reminder per train, estimated end-time handling, an explicit no-return state and the official-Avtovokzal-backed Romanovo bus/walking-map example. The initial v1 stale-event link and v2 rail-only preview are superseded.
+Public focus preview `preview-20260711-event-transport-compact-v4` supersedes the v3 presentation draft. Rail matching now accepts arrivals 20–90 minutes before the event, inflects the event type in `К началу …`, removes schedule-verification links from the page and transport `.ics`, and never guesses an unknown end from a category duration. For unknown ends it shows the factual last same-day train plus night/first-next-day service; every displayed train can be added to a calendar.
 
-The 400-event focus fixture built 421 pages and 87 transport `.ics` files and passed `npm run check:preview`. Public checks returned `200` for all three demo pages, the local Romanovo map and a transport ICS with `text/calendar`; mobile rail/no-return/bus and desktop bus screenshots are stored under ignored `artifacts/codex/site-presentation-transport/visual-v3/`. The presentation candidate is governed by [presentation-release-checklist.md](presentation-release-checklist.md); the scheduled Kaggle refresh remains a P0 blocker before production promotion.
+The Romanovo example now uses compact rounded departure chips for all useful `118/118А/119` options in both directions, adds an estimated `Северный вокзал = автовокзал + 15 минут` line to outbound chips, uses the CC0 SVG Repo bus icon, and eagerly loads a bundled map with a visible pedestrian route plus interactive map links.
 
-- Real rail event `6510`: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
-- Real late concert `6397`, estimated end and no return train: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/>
-- Real production Romanovo event `6710`, bus/walking map: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/slet-babok-ezhek-romanovo-6710/>
-- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/__preview/>
+The 400-event focus fixture built 421 HTML pages and 169 transport `.ics` files and passed `npm run check:preview`. Public checks returned `200` for all three demo pages, the SVG icon, route map and transport ICS with `text/calendar`; desktop/mobile selector screenshots and no-overflow/image-load metrics are stored under ignored `artifacts/codex/site-presentation-transport/visual-v4/`. The optional personalization feed RPC returned `404` in anonymous browser QA; transport HTML, images and calendar files were unaffected, but the broader presentation release keeps its separate final-browser gate. The presentation candidate is governed by [presentation-release-checklist.md](presentation-release-checklist.md); the scheduled Kaggle refresh remains a P0 blocker before production promotion.
+
+- Real rail event `6510`, explicit `17:00–18:10` duration and two trains each way: <https://kenigevents.ru/preview-20260711-event-transport-compact-v4/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
+- Real late concert `6397`, factual `22:40` last train / no night service / `06:25` first next-day train: <https://kenigevents.ru/preview-20260711-event-transport-compact-v4/sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/>
+- Real production Romanovo event `6710`, compact buses and drawn walking route: <https://kenigevents.ru/preview-20260711-event-transport-compact-v4/sobytiya/slet-babok-ezhek-romanovo-6710/>
+- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-compact-v4/__preview/>
 - Canonical behavior/data contract: [event-transport-schedule.md](event-transport-schedule.md)
 
 The prefix is published without rewriting stable `/ics/<event_id>.ics` objects.
