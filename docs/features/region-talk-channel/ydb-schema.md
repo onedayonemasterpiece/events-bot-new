@@ -321,7 +321,7 @@ The 2026-07-11 live audit measured 644 MB physical storage for only ~171 MiB of
 live JSON. The main cause was write amplification: two full 15.9 MB snapshots
 per run plus occasional full 7k-row queue rewrites. The validated LZ4 target has
 52,286 product/operational rows and 77.4 MB logical JSON at cutover; after the
-acceptance runs it held 56,368 rows / 45.8 MB physical while preserving all
+acceptance runs and lifecycle text pruning it held about 56.4k logical rows / 44.5 MB physical while preserving all
 critical-kind row counts. A new
 `run_funnel_metrics` payload in every `run_metrics` row provides a reliable
 daily grain; mutable entity `run_id` fields must not be used to reconstruct
