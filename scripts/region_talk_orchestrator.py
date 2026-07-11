@@ -291,6 +291,21 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('heuristic_ko_latest_run_publication_total')}/"
             f"{value('heuristic_ko_latest_run_sent_total')}"
         ),
+        (
+            "Latest yields heuristic-per-post/text-per-heuristic/publication-per-heuristic: "
+            f"{value('latest_candidate_heuristic_ko_hit_rate_percent')}%/"
+            f"{value('latest_candidate_heuristic_to_text_accept_rate_percent')}%/"
+            f"{value('latest_candidate_heuristic_to_publication_rate_percent')}%"
+        ),
+        (
+            "Latest source scan sources/KO/yield; fast-check sources/hits/yield: "
+            f"{value('source_latest_scan_run_sources_total')}/"
+            f"{value('source_latest_scan_run_ko_sources_total')}/"
+            f"{value('source_latest_scan_run_ko_source_yield_percent')}%; "
+            f"{value('fast_check_latest_run_sources_total')}/"
+            f"{value('fast_check_latest_run_hit_sources_total')}/"
+            f"{value('fast_check_latest_run_hit_rate_percent')}%"
+        ),
         f"Heuristic KO latest outcomes: {top_latest_outcomes}",
         f"Candidate memory: {value('candidate_memory_total')}",
         (
@@ -2398,6 +2413,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if latest_source_scan_run and str(r.get("last_scan_run_id") or "") == latest_source_scan_run and _source_has_scan_evidence(r)
     ]
     latest_source_scan_posts = sum(_safe_int(r.get("posts_scanned")) for r in latest_source_scan_rows)
+    latest_source_scan_ko_rows = [row for row in latest_source_scan_rows if _source_has_ko_candidate(row)]
+    latest_fast_check_rows = [
+        row for row in fast_check_rows
+        if latest_candidate_run_id and str(row.get("run_id") or row.get("last_seen_run_id") or "") == latest_candidate_run_id
+    ]
+    latest_fast_check_hit_rows = [row for row in latest_fast_check_rows if str(row.get("fast_check_status") or "") == "ko_hit"]
     history_depth_rows = [r for r in source_rows if _safe_float(r.get("history_avg_post_age_days")) is not None]
     latest_history_run = max([str(r.get("last_scan_run_id") or r.get("run_id") or "") for r in history_depth_rows] or [""])
     latest_history_depth_rows = [
@@ -2466,6 +2487,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "source_latest_scan_run_sources_total": len(latest_source_scan_rows),
         "source_latest_scan_run_posts_total": latest_source_scan_posts,
         "source_latest_scan_run_posts_per_source_avg": round(latest_source_scan_posts / len(latest_source_scan_rows), 2) if latest_source_scan_rows else 0,
+        "source_latest_scan_run_ko_sources_total": len(latest_source_scan_ko_rows),
+        "source_latest_scan_run_ko_source_yield_percent": int(round((len(latest_source_scan_ko_rows) / len(latest_source_scan_rows)) * 100)) if latest_source_scan_rows else 0,
+        "fast_check_latest_run_sources_total": len(latest_fast_check_rows),
+        "fast_check_latest_run_hit_sources_total": len(latest_fast_check_hit_rows),
+        "fast_check_latest_run_hit_rate_percent": int(round((len(latest_fast_check_hit_rows) / len(latest_fast_check_rows)) * 100)) if latest_fast_check_rows else 0,
         "history_depth_sources_total": len(history_depth_rows),
         "history_depth_latest_run_sources_total": len(latest_history_depth_rows),
         "history_avg_post_age_days_avg": _avg_numeric(history_depth_rows, "history_avg_post_age_days"),
@@ -2505,6 +2531,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **vector_pair_metrics,
         **regex_vector_metrics,
         **heuristic_ko_funnel_metrics,
+        "latest_candidate_heuristic_ko_hit_rate_percent": int(round((heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0) / len(processed_post_latest_run_unique_keys)) * 100)) if processed_post_latest_run_unique_keys else 0,
+        "latest_candidate_heuristic_to_text_accept_rate_percent": int(round((heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_text_accepted_total", 0) / heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0)) * 100)) if heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0) else 0,
+        "latest_candidate_heuristic_to_publication_rate_percent": int(round((heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_publication_total", 0) / heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0)) * 100)) if heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0) else 0,
         "bge_pending_sample_total": len(bge_pending_rows),
         "bge_pending_sample_limit": bge_sample_limit,
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),

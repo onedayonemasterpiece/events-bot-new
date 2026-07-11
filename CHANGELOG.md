@@ -6,7 +6,9 @@
   every regex KO hit one mutually exclusive product outcome cumulatively and
   for the latest run. CandidateReport terminal heartbeats include runtime and
   throughput; the orchestrator uses that headroom to scan 5/6/8 history and
-  fast-check sources without raising the 20-minute runtime guardrail.
+  fast-check sources without raising the 20-minute runtime guardrail. Latest
+  source/fast-check/heuristic/text/publication conversion rates are reported
+  explicitly rather than treating raw post volume as success.
 - **Region Talk / terminal heartbeat recovery**: CandidateReport recreates its
   lightweight YDB heartbeat pool after the heavy state-write/retention phase
   and retries the terminal write once, preventing a COMPLETE Kaggle run from

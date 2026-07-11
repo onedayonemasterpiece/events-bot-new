@@ -162,6 +162,10 @@ Telegram Monitoring and Guide monitoring:
   news/low-substance, dual-vector pending, media outcome, Gemini rejection,
   confirmed or sent). Both cumulative and latest-run reason maps are reported,
   so high scan volume cannot hide real KO movement or its drop-off reason;
+- latest-run conversion rates are first-class metrics: heuristic KO hits per
+  unique processed post, text accepts/publications per heuristic KO hit,
+  KO-bearing sources per scanned source, and fast-check hits per checked
+  source. These rates control breadth tuning; raw post volume alone does not;
 - `image_queue_total` retained as the transparent raw/audit row count, plus
   `image_product_eligible_total` for rows accepted by the current strict gate;
   `--target-image-queue` follows the eligible delta rather than rejected rows
