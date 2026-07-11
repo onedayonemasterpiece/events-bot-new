@@ -77,7 +77,7 @@ for (const marker of [
   'onboarding-pattern-inline',
   'onboarding-pattern-micro',
   'one-hint-per-session',
-  '.ics, «Мои события» и письма об изменениях',
+  '.ics откроется сразу',
   '600–1 500 ₽',
   'Бесплатно',
   'ул. Канта, 1',

@@ -57,7 +57,7 @@ The consultant acceptance ranking remains useful historical evidence, but the 20
 2. **V3-D / Ticket Cluster** — selected for its calm transaction hierarchy; its bare action row now includes a personalized one-at-a-time onboarding probe.
 3. Keep V3-B as the safe fallback and V3-C as the explicit free-event state test.
 
-The onboarding contract, calendar `.ics` + private save + email-follow target, current limitations and Pinterest research are canonical in `event-action-onboarding.md`.
+The onboarding contract, calendar `.ics` + private save + email-follow target, current limitations and Pinterest research are canonical in `event-action-onboarding.md`. After visual product feedback, D’s calendar education was moved below the unchanged icon row, renamed back to the exact action `Добавить в календарь`, and restyled as a light playful pointer callout rather than a graphite decision block.
 
 ## QA evidence
 

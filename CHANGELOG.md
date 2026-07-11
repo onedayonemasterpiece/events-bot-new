@@ -26,6 +26,7 @@
 
 ### Changed
 
+- **Static site pages / action onboarding placement**: moved V3-D contextual education below the unchanged icon row so taught controls keep a stable visual position, restored the exact `Добавить в календарь` action name, and replaced the aggressive graphite coachmark with a light playful upward-pointer callout and neutral saved-section wording.
 - **Static site pages / action onboarding lab**: narrowed the event-page product shortlist to V3-A/V3-D and added Pinterest-derived, one-at-a-time contextual onboarding probes for D’s icon-only calendar/like/share row; documented the target calendar action as `.ics` + private «Мои события» save + consented email follow while explicitly keeping the current branch marked `.ics`-only until authenticated follow and real email delivery leave dry-run.
 - **Static site pages / event decision-block lab V3**: rebuilt `/lab/event-decision-block/` from 120 Pinterest references plus Gemini 3.1 Pro/a-opus design and rendered acceptance reviews, adding four mobile hero-overlap candidates with compact strong dates, exact addresses, truthful price/free states, accessible calendar/share/like icon+count controls, large horizontal medallions and the prior V2 layout as a preserved control.
 - **Static site pages / event decision-block lab V2**: reworked `/lab/event-decision-block/` around the approved hero-overlap contract after Gemini Pro and a-opus review, restoring title-inside-sheet, mandatory buy/calendar/share/like icon actions, large medallion shelves and zero-medallion safety variants.

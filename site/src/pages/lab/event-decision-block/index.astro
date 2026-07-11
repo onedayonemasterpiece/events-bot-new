@@ -202,14 +202,15 @@ const supersededMarkers = [
                   <a href="#review"><Icon name="ticket" /><span>{sample.primaryCta}</span></a>
                 </div>
                 <div class="decision-action-onboarding" data-onboarding-user-state="calendar-unused">
-                  <aside id="d-calendar-onboarding" class="action-coachmark" role="note" data-onboarding-for="calendar">
-                    <button type="button" class="action-coachmark__close" data-onboarding-dismiss aria-label="Закрыть подсказку">×</button>
-                    <strong>Сохраните событие себе</strong>
-                    <span>.ics, «Мои события» и письма об изменениях — одним действием.</span>
-                  </aside>
                   <div class="decision-metrics decision-metrics--bare action-metric-row" aria-label="Действия и показатели события">
                     {metrics.map((metric) => <button type="button" class={metric.icon === 'calendar' ? 'is-onboarding-target' : undefined} aria-label={metric.label} aria-describedby={metric.icon === 'calendar' ? 'd-calendar-onboarding' : undefined} title={metric.label}><Icon name={metric.icon} /><strong>{metric.value}</strong></button>)}
                   </div>
+                  <aside id="d-calendar-onboarding" class="action-coachmark" role="note" data-onboarding-for="calendar">
+                    <span class="action-coachmark__spark" aria-hidden="true"><Icon name="spark" /></span>
+                    <button type="button" class="action-coachmark__close" data-onboarding-dismiss aria-label="Закрыть подсказку">×</button>
+                    <strong>Добавить в календарь</strong>
+                    <span>.ics откроется сразу. После входа сохраним событие на сайте и пришлём изменения на почту.</span>
+                  </aside>
                 </div>
               </section>
               <div class="decision-medallions large-medallion-strip"><MedallionStrip items={medallions} mode="large" /></div>
@@ -252,36 +253,37 @@ const supersededMarkers = [
           <div class="decision-lab__section-head">
             <p class="eyebrow">Pinterest onboarding pass · 80 reviewed · one hint at a time</p>
             <h2>Как обучить icon-only действия в варианте D</h2>
-            <p>Подсказка появляется только после короткой задержки, когда action-row уже виден, и привязана к одному действию. Полноэкранный tour, затемнение страницы и одновременные три подсказки запрещены.</p>
+            <p>Подсказка раскрывается только <strong>под неподвижным action-row</strong> после короткой задержки и указывает вверх на одно действие. Так пользователь запоминает постоянное положение иконок. Полноэкранный tour, затемнение страницы и одновременные три подсказки запрещены.</p>
           </div>
 
           <div class="onboarding-pattern-grid" aria-label="Варианты персонального onboarding действий">
             <article class="onboarding-pattern onboarding-pattern-coachmark">
               <p class="onboarding-persona"><span>O1 · рекомендуемый</span><strong>Новый пользователь · календарь ещё не использовал</strong></p>
               <div class="onboarding-demo-surface">
-                <aside class="action-coachmark action-coachmark--demo" role="note" data-onboarding-for="calendar">
-                  <button type="button" class="action-coachmark__close" data-onboarding-dismiss aria-label="Закрыть подсказку">×</button>
-                  <strong>Сохраните событие себе</strong>
-                  <span>.ics, «Мои события» и письма об изменениях — одним действием.</span>
-                </aside>
                 <div class="decision-metrics decision-metrics--bare action-metric-row">
                   {metrics.map((metric) => <button type="button" class={metric.icon === 'calendar' ? 'is-onboarding-target' : undefined} aria-label={metric.label}><Icon name={metric.icon} /><strong>{metric.value}</strong></button>)}
                 </div>
+                <aside class="action-coachmark action-coachmark--demo" role="note" data-onboarding-for="calendar">
+                  <span class="action-coachmark__spark" aria-hidden="true"><Icon name="spark" /></span>
+                  <button type="button" class="action-coachmark__close" data-onboarding-dismiss aria-label="Закрыть подсказку">×</button>
+                  <strong>Добавить в календарь</strong>
+                  <span>.ics откроется сразу. После входа сохраним событие на сайте и пришлём изменения на почту.</span>
+                </aside>
               </div>
-              <p><strong>Почему:</strong> лучше всего связывает пользу с конкретной иконкой и оставляет всю страницу доступной.</p>
+              <p><strong>Почему:</strong> action-row не меняет позицию; лёгкое облачко раскрывается вниз, а указатель ведёт обратно к календарю.</p>
             </article>
 
             <article class="onboarding-pattern onboarding-pattern-inline">
               <p class="onboarding-persona"><span>O2 · спокойный</span><strong>Календарь освоен · лайк ещё не использовался</strong></p>
               <div class="onboarding-demo-surface">
+                <div class="decision-metrics decision-metrics--bare action-metric-row">
+                  {metrics.map((metric) => <button type="button" class={metric.icon === 'heart' ? 'is-onboarding-target is-onboarding-target--like' : undefined} aria-label={metric.label}><Icon name={metric.icon} /><strong>{metric.value}</strong></button>)}
+                </div>
                 <aside class="action-inline-hint" role="note" data-onboarding-for="like">
                   <Icon name="heart" />
                   <span><strong>Нравится?</strong> Лайк улучшает ваши рекомендации и поддерживает событие.</span>
                   <button type="button" data-onboarding-dismiss aria-label="Закрыть подсказку">×</button>
                 </aside>
-                <div class="decision-metrics decision-metrics--bare action-metric-row">
-                  {metrics.map((metric) => <button type="button" class={metric.icon === 'heart' ? 'is-onboarding-target is-onboarding-target--like' : undefined} aria-label={metric.label}><Icon name={metric.icon} /><strong>{metric.value}</strong></button>)}
-                </div>
               </div>
               <p><strong>Почему:</strong> вмещает более длинное объяснение, но требует иконки-связки, иначе выглядит общей справкой.</p>
             </article>
@@ -289,10 +291,10 @@ const supersededMarkers = [
             <article class="onboarding-pattern onboarding-pattern-micro">
               <p class="onboarding-persona"><span>O3 · самый тихий</span><strong>Календарь и лайк освоены · share ещё не использовался</strong></p>
               <div class="onboarding-demo-surface onboarding-demo-surface--micro">
-                <span class="action-micro-label" data-onboarding-for="share">Отправить друзьям</span>
                 <div class="decision-metrics decision-metrics--bare action-metric-row">
                   {metrics.map((metric) => <button type="button" class={metric.icon === 'share' ? 'is-onboarding-target is-onboarding-target--share' : undefined} aria-label={metric.label}><Icon name={metric.icon} /><strong>{metric.value}</strong></button>)}
                 </div>
+                <span class="action-micro-label" data-onboarding-for="share">Поделиться с друзьями</span>
               </div>
               <p><strong>Почему:</strong> почти не добавляет шума. Подходит возвращающемуся пользователю, но недостаточен для сложного calendar-follow.</p>
             </article>
@@ -425,15 +427,17 @@ const supersededMarkers = [
   .decision-metrics .icon { inline-size:21px; block-size:21px; flex:0 0 auto; }
   .decision-metrics strong { font-size:.88rem; font-variant-numeric:tabular-nums; }
   .decision-metrics--bare button { background:transparent; border-color:transparent; }
-  .decision-action-onboarding { display:grid; gap:8px; }
-  .action-coachmark { position:relative; display:grid; gap:3px; padding:12px 44px 12px 14px; border-radius:17px; background:var(--deep); color:#fff9f0; box-shadow:0 12px 28px rgba(40,31,25,.18); font-size:.78rem; line-height:1.35; }
-  .action-coachmark::after { content:''; position:absolute; left:calc(16.666% - 6px); bottom:-6px; inline-size:12px; block-size:12px; transform:rotate(45deg); border-radius:2px; background:var(--deep); }
-  .action-coachmark strong { color:var(--gold); font-size:.84rem; }
-  .action-coachmark span { color:rgba(255,249,240,.82); }
-  .action-coachmark__close { position:absolute; top:0; right:0; inline-size:44px; block-size:44px; border:0; background:transparent; color:rgba(255,249,240,.72); font:inherit; font-size:1.15rem; cursor:pointer; }
-  .decision-metrics--bare button.is-onboarding-target { background:#fff0d9; border-color:rgba(182,72,29,.18); box-shadow:0 0 0 4px rgba(224,189,103,.2); }
-  .decision-metrics--bare button.is-onboarding-target--like { background:#f8e5e4; box-shadow:0 0 0 4px rgba(182,72,29,.12); }
-  .decision-metrics--bare button.is-onboarding-target--share { background:#e9eee9; box-shadow:0 0 0 4px rgba(39,115,73,.1); }
+  .decision-action-onboarding { display:grid; gap:10px; }
+  .action-coachmark { position:relative; display:grid; gap:3px; padding:12px 44px 12px 43px; border:1px solid rgba(210,151,45,.28); border-radius:13px 23px 23px 21px; background:radial-gradient(circle at 92% 84%,rgba(224,189,103,.24) 0 5px,transparent 6px),linear-gradient(135deg,#fff1bd,#fff9df 72%); color:#51463d; box-shadow:0 9px 22px rgba(151,102,36,.1); font-size:.76rem; line-height:1.38; }
+  .action-coachmark::before { content:''; position:absolute; left:calc(16.666% - 7px); top:-7px; inline-size:13px; block-size:13px; transform:rotate(45deg); border-left:1px solid rgba(210,151,45,.28); border-top:1px solid rgba(210,151,45,.28); border-radius:2px; background:#fff1bd; }
+  .action-coachmark strong { color:#9a3d19; font-size:.84rem; }
+  .action-coachmark span { color:#65564b; }
+  .action-coachmark__spark { position:absolute; left:13px; top:14px; display:grid; place-items:center; inline-size:22px; block-size:22px; color:#bd6b1f!important; }
+  .action-coachmark__spark .icon { inline-size:21px; block-size:21px; }
+  .action-coachmark__close { position:absolute; top:0; right:0; inline-size:44px; block-size:44px; border:0; background:transparent; color:#8b7869; font:inherit; font-size:1.15rem; cursor:pointer; }
+  .decision-metrics--bare button.is-onboarding-target { background:rgba(255,244,210,.5); border-color:rgba(210,151,45,.16); box-shadow:0 0 0 2px rgba(224,189,103,.2); }
+  .decision-metrics--bare button.is-onboarding-target--like { background:rgba(248,229,228,.45); box-shadow:0 0 0 2px rgba(182,72,29,.1); }
+  .decision-metrics--bare button.is-onboarding-target--share { background:rgba(233,238,233,.5); box-shadow:0 0 0 2px rgba(39,115,73,.09); }
   .ticket-cluster { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.35fr); gap:9px; padding:10px; border:1px solid rgba(182,72,29,.14); border-radius:21px; background:rgba(182,72,29,.065); }
   .ticket-cluster p { margin:0; display:grid; align-content:center; gap:2px; padding-left:5px; }
   .ticket-cluster p span { color:var(--muted); font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; }
@@ -463,14 +467,15 @@ const supersededMarkers = [
   .onboarding-demo-surface { min-height:174px; display:grid; align-content:end; gap:10px; overflow:hidden; border:1px solid rgba(96,63,42,.11); border-radius:20px; background:linear-gradient(180deg,#fffdf8,#f5eadb); padding:12px; }
   .onboarding-demo-surface .decision-metrics { min-width:0; }
   .onboarding-demo-surface .action-coachmark { font-size:.73rem; }
-  .action-inline-hint { display:grid; grid-template-columns:auto minmax(0,1fr) 36px; align-items:center; gap:9px; border:1px solid rgba(182,72,29,.15); border-radius:17px; background:#fff1df; color:#55463c; padding:9px 7px 9px 11px; font-size:.74rem; line-height:1.35; }
+  .action-inline-hint { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) 36px; align-items:center; gap:9px; border:1px solid rgba(182,72,29,.15); border-radius:17px; background:#fff1df; color:#55463c; padding:9px 7px 9px 11px; font-size:.74rem; line-height:1.35; }
+  .action-inline-hint::before { content:''; position:absolute; right:calc(16.666% - 6px); top:-6px; inline-size:11px; block-size:11px; transform:rotate(45deg); border-left:1px solid rgba(182,72,29,.15); border-top:1px solid rgba(182,72,29,.15); background:#fff1df; }
   .action-inline-hint>.icon { inline-size:21px; block-size:21px; color:var(--accent); }
   .action-inline-hint span { min-width:0; }
   .action-inline-hint strong { color:var(--ink); }
   .action-inline-hint button { min-width:36px; min-height:44px; border:0; background:transparent; color:var(--muted); font:inherit; font-size:1.05rem; }
-  .onboarding-demo-surface--micro { position:relative; padding-top:54px; }
-  .action-micro-label { position:absolute; top:20px; left:50%; transform:translateX(-50%); border-radius:999px; background:var(--deep); color:#fff9f0; padding:7px 10px; font-size:.7rem; font-weight:820; white-space:nowrap; box-shadow:0 8px 18px rgba(40,31,25,.15); }
-  .action-micro-label::after { content:''; position:absolute; left:50%; bottom:-5px; inline-size:10px; block-size:10px; transform:translateX(-50%) rotate(45deg); border-radius:2px; background:var(--deep); }
+  .onboarding-demo-surface--micro { position:relative; }
+  .action-micro-label { position:relative; justify-self:center; border:1px solid rgba(39,115,73,.15); border-radius:999px; background:#eef5e8; color:#315d42; padding:7px 11px; font-size:.7rem; font-weight:820; white-space:nowrap; box-shadow:0 7px 16px rgba(39,115,73,.08); }
+  .action-micro-label::before { content:''; position:absolute; left:50%; top:-5px; inline-size:9px; block-size:9px; transform:translateX(-50%) rotate(45deg); border-left:1px solid rgba(39,115,73,.15); border-top:1px solid rgba(39,115,73,.15); background:#eef5e8; }
   .onboarding-rule-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:16px; }
   .onboarding-rule-grid article { min-width:0; display:grid; grid-template-columns:30px minmax(0,1fr); gap:3px 8px; align-items:center; border:1px solid var(--line); border-radius:19px; background:rgba(255,255,255,.62); padding:11px; }
   .onboarding-rule-grid article>span { grid-row:1/3; inline-size:30px; block-size:30px; display:grid; place-items:center; border-radius:50%; background:var(--deep); color:var(--gold); font-weight:900; }

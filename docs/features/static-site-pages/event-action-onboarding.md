@@ -86,7 +86,7 @@ The 2026-07-11 research pass collected and visually reviewed `80` candidates acr
 
 Active patterns in the lab:
 
-1. **O1 Anchored coachmark — recommended for calendar.** Two short lines and a pointer to the calendar icon. The rest of the page remains interactive.
+1. **O1 Below-row playful callout — recommended for calendar.** The action row keeps its exact position; a light callout opens below it and points upward to the calendar icon. The rest of the page remains interactive.
 2. **O2 Inline contextual strip — suitable for like.** Carries slightly longer value copy; includes the same heart icon to preserve a visible connection to the target.
 3. **O3 Micro-label + halo — suitable for share/returning users.** Lowest visual noise but insufficient for teaching the compound calendar-follow outcome.
 4. **Toast — post-action confirmation only.** It confirms what happened; it is not the first-use explanation.
@@ -94,6 +94,8 @@ Active patterns in the lab:
 Rejected:
 
 - full-screen onboarding carousels;
+- hints inserted above the icon row that move the taught controls downward;
+- dark/high-contrast onboarding cards that visually imitate the page’s main decision blocks;
 - dimmed spotlight overlays;
 - three simultaneous bubbles;
 - animated pulsing that persists after the first impression;
@@ -102,10 +104,13 @@ Rejected:
 
 ## Recommended copy
 
-Calendar coachmark:
+Calendar callout (the action name must stay exact):
 
-> Сохраните событие себе  
-> .ics, «Мои события» и письма об изменениях — одним действием.
+> **Добавить в календарь**
+>
+> .ics откроется сразу. После входа сохраним событие на сайте и пришлём изменения на почту.
+
+The personal-section product name is not fixed yet. Candidates are `Мои события` and the conventional `Избранное`. Do not silently rename the action itself and do not hard-code either section name into the first-use callout until the navigation naming decision is accepted.
 
 Like inline hint:
 
@@ -126,6 +131,7 @@ Expanded share explanation, if needed:
 - The target control uses `aria-describedby` while its hint is visible.
 - Dismiss has an explicit accessible label and never triggers the action.
 - Keyboard focus is not moved into the hint automatically.
+- The icon row never changes position when the hint appears; the hint consumes space only below it.
 - The hint does not block the primary ticket CTA or sibling action controls.
 - No essential meaning depends on animation; reduced-motion users see the same static hierarchy.
 
