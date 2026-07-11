@@ -100,6 +100,20 @@ for (const marker of [
   if (!eventDecisionLabHtml.includes(marker)) throw new Error(`Event decision-block lab misses marker: ${marker}`);
 }
 
+const genericFaviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
+if (!genericFaviconSvg.includes('viewBox="160 230 970 820"') || !genericFaviconSvg.includes('left-monogram') || !genericFaviconSvg.includes('brand-k-mark') || !genericFaviconSvg.includes('heart-block') || !genericFaviconSvg.includes('#2d3035') || !genericFaviconSvg.includes('#af481f') || genericFaviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(genericFaviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');
+const genericEvent = eventsData.events.find((event) => !event.end_date || event.end_date === event.start_date) || eventsData.events[0];
+if (!genericEvent) throw new Error('Preview fixture must contain at least one event');
+const genericEventHtml = readFileSync(join(root, `sobytiya/${genericEvent.slug}/index.html`), 'utf8');
+if (!genericEventHtml.includes('/favicon.svg') || !genericEventHtml.includes('sizes="any"')) throw new Error('Real event page misses scalable favicon link');
+const personalFeedRpcEnabled = ['1', 'true', 'yes', 'on'].includes(String(process.env.PUBLIC_PERSONAL_FEED_RPC_ENABLED || '').trim().toLowerCase());
+if (!personalFeedRpcEnabled && genericEventHtml.includes('data-personal-feed-supabase-url=')) throw new Error('Static page must not call the undeployed personal-feed RPC unless explicitly enabled');
+if (String(process.env.PUBLIC_EVENT_PAGE_DECISION_VARIANT || '').trim().toLowerCase() === 'ticket-cluster') {
+  if (!genericEventHtml.includes('data-event-decision-variant="ticket-cluster"') || !genericEventHtml.includes('event-hero__transaction') || !genericEventHtml.includes('event-hero__metric-row')) throw new Error('Real-event ticket-cluster preview is not enabled');
+  if (!genericEventHtml.includes('data-action-onboarding-root') || !genericEventHtml.includes('data-action-onboarding-hint="calendar"') || !genericEventHtml.includes('Добавить в календарь') || !genericEventHtml.includes('Сейчас откроется .ics')) throw new Error('Real-event ticket-cluster preview misses truthful calendar onboarding');
+  if (!genericEventHtml.includes('hydrateEventActionOnboarding') || genericEventHtml.includes('пришлём изменения на почту')) throw new Error('Real-event onboarding state/copy contract is invalid');
+}
+
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {
   if (!eventsData.events.length) throw new Error('Preview fixture must contain at least one event');
@@ -162,8 +176,15 @@ if (controlHtml.includes('mobile-discovery-menu__brand-icon') || controlHtml.inc
 if (!controlHtml.includes('mobile-discovery-menu__label') || !controlHtml.includes('hydrateMobileBrandSway') || !controlHtml.includes('--brand-sway-x') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and the calculated title-sway label contract');
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
-if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
-if (!controlVisibleHtml.includes('event-hero__date-card') || !controlVisibleHtml.includes('event-hero__date-weekday') || !controlVisibleHtml.includes('event-hero__date-time')) throw new Error('Event hero must expose a strong date/week/time block');
+const ticketClusterTrial = controlVisibleHtml.includes('data-event-decision-variant="ticket-cluster"');
+if (ticketClusterTrial) {
+  if (!controlVisibleHtml.includes('event-hero__decision-kicker') || !controlVisibleHtml.includes('event-hero__transaction') || !controlVisibleHtml.includes('event-hero__metric-row')) throw new Error('Ticket-cluster trial must keep compact date, transaction and icon-metric rows');
+  if (!controlVisibleHtml.includes('data-action-onboarding-root') || !controlVisibleHtml.includes('data-action-onboarding-hint="calendar"') || !controlVisibleHtml.includes('Добавить в календарь') || !controlVisibleHtml.includes('Сейчас откроется .ics')) throw new Error('Ticket-cluster trial misses truthful below-row calendar onboarding');
+  if (controlVisibleHtml.includes('пришлём изменения на почту')) throw new Error('Real-event trial must not promise email delivery before unified follow rollout');
+} else {
+  if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
+  if (!controlVisibleHtml.includes('event-hero__date-card') || !controlVisibleHtml.includes('event-hero__date-weekday') || !controlVisibleHtml.includes('event-hero__date-time')) throw new Error('Event hero must expose a strong date/week/time block');
+}
 if (controlVisibleHtml.indexOf('data-event-hero') > controlVisibleHtml.indexOf('crumbs--after-hero')) throw new Error('Hero must render before mobile/after-hero breadcrumbs in event HTML');
 let checkedMediaRegressionEvents = 0;
 for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [4913, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
@@ -233,9 +254,9 @@ if (!controlHtml.includes('data-discovery-feed') || controlHtml.includes('data-p
 if (!controlHtml.includes('ke_personalization_profile') || controlHtml.includes('ke_profile_id_v1') || controlHtml.includes('anon-${')) throw new Error('Control page must use compatible UUID personalization profile, not legacy/prefixed ids');
 if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankEventDetailRelated') || !controlHtml.includes('served_list_id') || !controlHtml.includes('createServedListSummary')) throw new Error('Control page misses event_detail_related local-rerank/served-list contract');
 if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
-if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
+if (!controlHtml.includes('/favicon.svg') || !controlHtml.includes('sizes="any"')) throw new Error('Control page misses scalable favicon link');
 const faviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
-if (!faviconSvg.includes('brand-k-mark') || !faviconSvg.includes('signal-bar-high') || !faviconSvg.includes('heart-block') || !faviconSvg.includes('#2d3035') || !faviconSvg.includes('#af481f') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the warm two-color PK monogram vector SVG without embedded raster');
+if (!faviconSvg.includes('viewBox="160 230 970 820"') || !faviconSvg.includes('left-monogram') || !faviconSvg.includes('brand-k-mark') || !faviconSvg.includes('heart-block') || !faviconSvg.includes('#2d3035') || !faviconSvg.includes('#af481f') || faviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');
 const footerSocialUrls = [
   'https://t.me/kenigevents',
   'https://t.me/kldevents',

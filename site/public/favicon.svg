@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" role="img" aria-labelledby="title desc">
-  <title id="title">Полюбить Калининград Анонсы — логотип</title>
-  <desc id="desc">Двухцветный знак с монограммой, буквой К, сердцем и сигнальными полосами в графитовом и терракотовом цветах.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="160 230 970 820" width="32" height="32" role="img" aria-labelledby="title desc">
+  <title id="title">Полюбить Калининград Анонсы — знак</title>
+  <desc id="desc">Крупный прозрачный favicon без фоновой плашки: монограмма, К, сердце и сигнальные полосы.</desc>
   <defs>
     <style>
       .ink { fill: #2d3035; }
       .brand { fill: #af481f; }
     </style>
   </defs>
-  <rect x="54" y="54" width="1146" height="1146" rx="172" fill="#fff6ea"/>
   <path id="left-monogram" class="ink" d="
     M 209 254
     H 642

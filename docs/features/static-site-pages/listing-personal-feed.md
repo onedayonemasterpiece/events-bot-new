@@ -14,9 +14,9 @@ This keeps SEO-safe deterministic listing content first, then adds a personal co
 2. JS looks for a cached `ke_listing_personal_feed_cache_v1` manifest in `localStorage`.
 3. Cache is shared across listing pages and has a short TTL of 30 minutes.
 4. If cache is valid for the current compatible profile hash, the personal section renders immediately without another network call.
-5. If there is no cache and public Supabase RPC config is present, the page makes one RPC request for up to 30 card projections.
+5. If there is no cache, public Supabase RPC config is present **and** `PUBLIC_PERSONAL_FEED_RPC_ENABLED=1`, the page makes one RPC request for up to 30 card projections.
 6. While browsing across listing pages, the same localStorage list is reused; “Обновить ленту” can force a refresh when backend config exists.
-7. If backend/RPC is absent or fails, the section remains hidden; static listing UX is not degraded.
+7. Until the RPC is actually deployed and granted through the Data API, keep `PUBLIC_PERSONAL_FEED_RPC_ENABLED=0` (the default). This prevents known 404 requests while preserving Yandex Auth/search, and the section remains hidden without degrading static listing UX.
 
 ## Why localStorage cache
 

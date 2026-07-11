@@ -21,6 +21,7 @@ const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefin
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
+const personalFeedRpcEnabled = ['1', 'true', 'yes', 'on'].includes(String(import.meta.env.PUBLIC_PERSONAL_FEED_RPC_ENABLED || '').trim().toLowerCase());
 
 const FOOTER_SOCIAL_LINKS = [
   { network: 'Telegram', label: 'Анонсы', href: 'https://t.me/kenigevents', icon: 'telegram' },
@@ -51,7 +52,7 @@ const FOOTER_SOCIAL_LINKS = [
     {ogImageWidth && <meta property="og:image:width" content={String(ogImageWidth)} />}
     {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
-    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" />
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
     {structuredData.map((item) => (
@@ -531,6 +532,103 @@ const FOOTER_SOCIAL_LINKS = [
       .event-hero__meta-line { margin: -0.18rem 0 0; color: #5b493e; font-size: 0.96rem; font-weight: 780; line-height: 1.32; overflow-wrap: anywhere; }
       .event-hero__actions { margin-top: 0.1rem; }
       .event-hero__summary { margin: 0.05rem 0 0; max-width: 62ch; color: #4f4339; font-size: clamp(0.98rem, 2.6vw, 1.08rem); line-height: 1.48; }
+      .event-hero__decision--ticket-cluster { gap: 0.72rem; }
+      .event-hero__decision-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.26rem 0.8rem;
+        margin: 0;
+        color: var(--primary-strong);
+        font-size: 0.76rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        line-height: 1.25;
+        text-transform: uppercase;
+      }
+      .event-hero__decision-kicker > span { color: #6d6259; font-weight: 760; }
+      .event-hero__decision-kicker time { margin-left: auto; color: var(--primary); font-variant-numeric: tabular-nums; text-align: right; }
+      .event-hero__decision-kicker time strong { font-weight: 950; }
+      .event-hero__decision-place { display: grid; grid-template-columns: 1.15rem minmax(0, 1fr); align-items: start; gap: 0.55rem; margin: 0; color: #594c43; line-height: 1.27; }
+      .event-hero__decision-place .icon { margin-top: 0.16rem; color: var(--primary); }
+      .event-hero__decision-place span { min-width: 0; display: grid; gap: 0.1rem; }
+      .event-hero__decision-place strong { font-size: 0.96rem; font-weight: 880; overflow-wrap: anywhere; }
+      .event-hero__decision-place small { color: #75675c; font-size: 0.8rem; font-weight: 720; overflow-wrap: anywhere; }
+      .event-hero__transaction {
+        display: grid;
+        grid-template-columns: minmax(6.35rem, 0.78fr) minmax(8.5rem, 1.22fr);
+        gap: 0.5rem;
+        padding: 0.55rem;
+        border: 1px solid rgba(165, 72, 33, 0.17);
+        border-radius: 20px;
+        background: rgba(165, 72, 33, 0.065);
+      }
+      .event-hero__transaction--single { grid-template-columns: 1fr; }
+      .event-hero__transaction .cta-button { width: 100%; min-width: 0; padding-inline: 0.62rem; }
+      .event-hero__transaction-price { min-width: 0; display: grid; align-content: center; gap: 0.12rem; margin: 0; padding: 0.08rem 0.2rem 0.08rem 0.34rem; }
+      .event-hero__transaction-price span { color: #7c6c5f; font-size: 0.66rem; font-weight: 760; letter-spacing: 0.08em; line-height: 1.15; text-transform: uppercase; }
+      .event-hero__transaction-price strong { color: var(--primary); font-size: clamp(0.94rem, 4vw, 1.12rem); font-weight: 950; font-variant-numeric: tabular-nums; line-height: 1.08; overflow-wrap: anywhere; }
+      .event-hero__transaction-price--free strong { color: #176743; }
+      .event-hero__action-onboarding { display: grid; gap: 0.62rem; }
+      .event-hero__metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr)); gap: 0.36rem; }
+      .event-hero__metric-action {
+        min-width: 0;
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.34rem;
+        padding: 0.42rem 0.55rem;
+        border: 1px solid transparent;
+        border-radius: 14px;
+        background: transparent;
+        color: #4f4339;
+        box-shadow: none;
+        font: inherit;
+        text-decoration: none;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .event-hero__metric-row .event-hero__metric-action { min-height: 48px; border-color: transparent; border-radius: 14px; background: transparent; color: #4f4339; box-shadow: none; }
+      .event-hero__metric-action:hover { color: var(--primary-strong); background: rgba(121,48,20,0.065); }
+      .event-hero__metric-action .icon { width: 1.36rem; height: 1.36rem; }
+      .event-hero__metric-action strong,
+      .event-hero__metric-action .feedback-count { display: inline; min-width: 0; color: inherit; font-size: 0.9rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+      .event-hero__metric-action.feedback-button--like { color: #6d514b; }
+      .event-hero__metric-action.feedback-button--like[aria-pressed="true"] { color: #c93434; background: rgba(201,52,52,0.09); border-color: transparent; }
+      .calendar-link__plus { color: var(--primary); font-size: 1rem; font-weight: 950; line-height: 1; }
+      .event-hero__metric-action.is-onboarding-target { background: rgba(255,244,210,0.56); border-color: rgba(210,151,45,0.2); box-shadow: 0 0 0 2px rgba(224,189,103,0.18); }
+      .event-hero__action-hint {
+        position: relative;
+        display: grid;
+        gap: 0.16rem;
+        padding: 0.72rem 2.75rem 0.72rem 2.65rem;
+        border: 1px solid rgba(210,151,45,0.28);
+        border-radius: 13px 23px 23px 21px;
+        background: radial-gradient(circle at 92% 84%, rgba(224,189,103,0.24) 0 5px, transparent 6px), linear-gradient(135deg, #fff1bd, #fff9df 72%);
+        color: #65564b;
+        box-shadow: 0 9px 22px rgba(151,102,36,0.1);
+        font-size: 0.76rem;
+        line-height: 1.38;
+      }
+      .event-hero__action-hint::before {
+        content: "";
+        position: absolute;
+        left: calc(16.666% - 7px);
+        top: -7px;
+        width: 13px;
+        height: 13px;
+        transform: rotate(45deg);
+        border-left: 1px solid rgba(210,151,45,0.28);
+        border-top: 1px solid rgba(210,151,45,0.28);
+        border-radius: 2px;
+        background: #fff1bd;
+      }
+      .event-hero__action-hint > strong { color: #9a3d19; font-size: 0.84rem; }
+      .event-hero__action-hint-spark { position: absolute; left: 0.78rem; top: 0.82rem; display: grid; place-items: center; width: 1.4rem; height: 1.4rem; color: #bd6b1f; }
+      .event-hero__action-hint-spark .icon { width: 1.3rem; height: 1.3rem; }
+      .event-hero__action-hint-close { position: absolute; top: 0; right: 0; width: 44px; height: 44px; border: 0; background: transparent; color: #8b7869; font: inherit; font-size: 1.15rem; cursor: pointer; }
       .event-hero__gallery-hint {
         position: absolute;
         right: max(0.78rem, env(safe-area-inset-right));
@@ -1872,7 +1970,7 @@ const FOOTER_SOCIAL_LINKS = [
       }
     </style>
   </head>
-  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-personal-feed-supabase-url={personalFeedRpcEnabled ? personalizationSupabaseUrl || undefined : undefined} data-personal-feed-supabase-key={personalFeedRpcEnabled ? personalizationSupabaseKey || undefined : undefined} data-personal-feed-rpc-name={personalFeedRpcEnabled ? personalFeedRpcName : undefined}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
@@ -3100,12 +3198,13 @@ const FOOTER_SOCIAL_LINKS = [
               const title = card.dataset.eventTitle || 'событие';
               button.setAttribute('aria-label', total > 0 ? `${current.liked ? 'Убрать лайк' : 'Поставить лайк'}: ${title}. Сейчас ${total}` : `${current.liked ? 'Убрать лайк' : 'Поставить лайк'}: ${title}`);
               const count = button.querySelector('[data-feedback-count]');
-              if (count) count.textContent = formatCount(total);
+              if (count) count.textContent = count.closest('.event-hero__metric-row') ? String(total) : formatCount(total);
             });
             card.querySelectorAll('[data-share-count]').forEach((count) => {
               const shareButton = count.closest('[data-native-share]');
               const base = Number(shareButton?.dataset.shareBaseCount || '0');
-              count.textContent = formatCount(base + Number(current.shares || 0));
+              const total = base + Number(current.shares || 0);
+              count.textContent = count.closest('.event-hero__metric-row') ? String(total) : formatCount(total);
             });
             card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
               button.setAttribute('aria-pressed', current.not_interested ? 'true' : 'false');
@@ -4037,6 +4136,108 @@ const FOOTER_SOCIAL_LINKS = [
           });
         }
 
+        function hydrateEventActionOnboarding() {
+          const roots = Array.from(document.querySelectorAll('[data-action-onboarding-root]'));
+          if (!roots.length) return;
+          const storageKey = 'ke_event_action_onboarding_v1';
+          const sessionKey = 'ke_event_action_onboarding_session_v1';
+          const forceCalendar = new URLSearchParams(window.location.search).get('onboarding') === 'calendar';
+          const now = Date.now();
+          const blankAction = () => ({ used_at: null, seen_count: 0, dismissed_until: null });
+          const readState = () => {
+            const stored = readJson(storageKey, {});
+            return {
+              action_onboarding_version: 1,
+              calendar: { ...blankAction(), ...(stored.calendar || {}) },
+              like: { ...blankAction(), ...(stored.like || {}) },
+              share: { ...blankAction(), ...(stored.share || {}) },
+            };
+          };
+          const writeState = (state) => writeJson(storageKey, state);
+          const sessionAlreadyTaught = (() => {
+            try { return sessionStorage.getItem(sessionKey) === 'shown'; } catch (_) { return false; }
+          })();
+
+          const hideHint = (root, action, { dismissed = false } = {}) => {
+            const hint = root.querySelector(`[data-action-onboarding-hint="${action}"]`);
+            const target = root.querySelector(`[data-onboarding-action="${action}"]`);
+            if (hint) hint.hidden = true;
+            if (target) {
+              target.classList.remove('is-onboarding-target');
+              target.removeAttribute('aria-describedby');
+            }
+            if (!dismissed || forceCalendar) return;
+            const state = readState();
+            state[action].dismissed_until = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+            writeState(state);
+          };
+
+          roots.forEach((root) => {
+            root.querySelectorAll('[data-onboarding-action]').forEach((control) => {
+              const action = control.dataset.onboardingAction;
+              if (!action || !['calendar', 'like', 'share'].includes(action)) return;
+              control.addEventListener('click', () => {
+                const state = readState();
+                state[action].used_at = new Date().toISOString();
+                state[action].dismissed_until = null;
+                writeState(state);
+                hideHint(root, action);
+              }, { capture: true });
+            });
+            root.querySelectorAll('[data-action-onboarding-dismiss]').forEach((button) => {
+              button.addEventListener('click', () => {
+                const hint = button.closest('[data-action-onboarding-hint]');
+                const action = hint?.dataset.actionOnboardingHint;
+                if (action) hideHint(root, action, { dismissed: true });
+              });
+            });
+          });
+
+          const state = readState();
+          const calendarState = state.calendar;
+          const dismissedUntil = Date.parse(calendarState.dismissed_until || '');
+          const calendarEligible = forceCalendar || (
+            !calendarState.used_at
+            && Number(calendarState.seen_count || 0) < 2
+            && (!Number.isFinite(dismissedUntil) || dismissedUntil <= now)
+            && !sessionAlreadyTaught
+          );
+          if (!calendarEligible) return;
+          const root = roots.find((candidate) => candidate.querySelector('[data-action-onboarding-hint="calendar"]'));
+          if (!root) return;
+          const hint = root.querySelector('[data-action-onboarding-hint="calendar"]');
+          const target = root.querySelector('[data-onboarding-action="calendar"]');
+          if (!hint || !target) return;
+
+          let showTimer = 0;
+          const show = () => {
+            if (!forceCalendar && document.body.classList.contains('has-hero-gallery-open')) return;
+            hint.hidden = false;
+            target.classList.add('is-onboarding-target');
+            if (hint.id) target.setAttribute('aria-describedby', hint.id);
+            if (!forceCalendar) {
+              const nextState = readState();
+              nextState.calendar.seen_count = Number(nextState.calendar.seen_count || 0) + 1;
+              writeState(nextState);
+              try { sessionStorage.setItem(sessionKey, 'shown'); } catch (_) {}
+            }
+          };
+          const schedule = () => {
+            window.clearTimeout(showTimer);
+            showTimer = window.setTimeout(show, forceCalendar ? 180 : 950);
+          };
+          if (!('IntersectionObserver' in window)) {
+            schedule();
+            return;
+          }
+          const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.72)) return;
+            observer.disconnect();
+            schedule();
+          }, { threshold: [0.72] });
+          observer.observe(root.querySelector('.event-hero__metric-row') || root);
+        }
+
         hydrateImmersiveHeader();
         hydrateMobileBrandSway();
         hydrateMobileDiscoveryMenu();
@@ -4044,6 +4245,7 @@ const FOOTER_SOCIAL_LINKS = [
         updatePersonalizationResetStatus();
         hydrateHeroParallax();
         hydrateHeroGallery();
+        hydrateEventActionOnboarding();
         applyFeedbackState();
       })();
     </script>

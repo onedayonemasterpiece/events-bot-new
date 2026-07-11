@@ -2,10 +2,30 @@
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
 import { eventCalendarHref, isCalendarEligible } from '../lib/events';
-interface Props { event: PreviewEvent; className?: string; label?: string }
-const { event, className = 'secondary-button', label = 'В календарь' } = Astro.props;
+interface Props {
+  event: PreviewEvent;
+  className?: string;
+  label?: string;
+  compact?: boolean;
+  describedBy?: string;
+}
+const { event, className = 'secondary-button', label = 'В календарь', compact = false, describedBy } = Astro.props;
 const canAddToCalendar = isCalendarEligible(event);
+const resolvedClassName = [className, compact ? 'calendar-link--compact' : ''].filter(Boolean).join(' ');
 ---
 {canAddToCalendar && (
-  <a class={className} href={eventCalendarHref(event)} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>{label}</span></a>
+  <a
+    class={resolvedClassName}
+    href={eventCalendarHref(event)}
+    type="text/calendar"
+    aria-label={`Добавить в календарь: ${event.title}`}
+    aria-describedby={describedBy}
+    data-calendar-action
+    data-event-id={event.id}
+    data-onboarding-action={compact ? 'calendar' : undefined}
+  >
+    <Icon name="calendar" />
+    <span class={compact ? 'sr-only' : undefined}>{label}</span>
+    {compact && <span class="calendar-link__plus" aria-hidden="true">+</span>}
+  </a>
 )}

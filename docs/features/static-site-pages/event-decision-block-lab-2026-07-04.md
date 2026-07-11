@@ -10,7 +10,8 @@ The date is evaluated inside the whole mobile decision space below the approved 
 - First broad A–F exploration: `preview-20260704t-decision-block-ab`.
 - Corrected hero-overlap V2: `preview-20260705t-decision-block-v2` at commit `63e88020`.
 - Current V3 review target: `preview-20260710t-event-page-ux-v3`.
-- The lab uses page-local mock HTML/CSS. It does not mutate production `EventHero.astro`, medallion manifests, auth, analytics, share, like or calendar behavior.
+- The lab itself uses page-local mock HTML/CSS. The real-event implementation is isolated behind the explicit build flag, so the default `EventHero.astro` output and existing auth/share/like/calendar behavior remain the rollback baseline.
+- Opt-in real-data trial: `preview-20260711t-real-events-ticket-cluster-d`, compiled with `PUBLIC_EVENT_PAGE_DECISION_VARIANT=ticket-cluster` from a fresh 2026-07-11 Fly SQLite snapshot. The flag leaves the default event-page layout available as rollback and is not a production promotion.
 
 ## Immutable product constraints
 
@@ -75,6 +76,9 @@ The lab phone is nested inside the documentation page padding, so its measured i
 
 - A lab preference is not a production rollout. Real `EventHero.astro` must preserve current Yandex/auth session handling, first-party like state/counts, native-share behavior, ICS calendar behavior and analytics.
 - Numeric calendar/share/like values must come from truthful existing counters or an explicitly defined backend field; do not fabricate social proof.
+- The real-event trial therefore shows truthful share/like totals including `0`, but uses a calendar-plus affordance without a number because no public calendar-save count exists yet.
 - Stress-test long Russian title, three-line address, unknown time, free, known price range, paid-unknown, counts from one to four digits, zero medallions and four-plus medallions.
 - Keep `/lab/date-block/`, the V2 control and regression markers until the production event-page implementation is accepted and rollback is no longer needed.
 - For V3-D, follow the one-hint-per-session policy in `event-action-onboarding.md`; do not promise email delivery while the unified calendar follow remains incomplete/dry-run.
+
+Real-data acceptance matrix for `preview-20260711t-real-events-ticket-cluster-d` covers known price + phone CTA, explicit free state, paid/unknown price → `Узнать цену`, long title, zero and non-zero counters, with/without medallions, `320px` and `390px`, plus forced onboarding. The fixed row measured `0px` absolute movement after dismiss; controls measured `48px`; no page-level horizontal overflow, failed requests or browser-console errors were observed locally.

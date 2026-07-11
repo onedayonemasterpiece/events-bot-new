@@ -6,6 +6,7 @@
 
 
 ### Added
+- **Static site pages / V3-D real-event trial**: added the build-gated `ticket-cluster` decision sheet to real noindex event pages with exact date/week/time and address, truthful price/free/unknown-price CTA states, stable icon+count actions, browser-local one-hint-per-session onboarding, 14-day dismiss cooldown and an explicit review override.
 - **Static site pages / event decision-block lab**: added a preserved-baseline A/B lab for the whole below-hero mobile decision space (`/lab/event-decision-block/`), comparing P03/P01/P04/baseline/zero-medallion/utility-stack layouts with Gemini Pro and a-opus critical review summaries.
 
 - **Static site pages / date-block Pinterest lab**: expanded `/lab/date-block/` with a 130-reference Pinterest research funnel, a 14-pattern comparison table, Gemini Pro/a-opus critical votes, and HTML candidates for the P13 date-square facts-rail direction plus alternatives.
@@ -26,6 +27,7 @@
 
 ### Changed
 
+- **Static site pages / transparent large favicon**: removed the cream backing plate and outer whitespace from the graphite/terracotta PK-monogram favicon, added a tight transparent SVG crop plus `sizes="any"`, and extended preview checks to guard its optical tab-size and transparent background contract.
 - **Static site pages / action onboarding placement**: moved V3-D contextual education below the unchanged icon row so taught controls keep a stable visual position, restored the exact `Добавить в календарь` action name, and replaced the aggressive graphite coachmark with a light playful upward-pointer callout and neutral saved-section wording.
 - **Static site pages / action onboarding lab**: narrowed the event-page product shortlist to V3-A/V3-D and added Pinterest-derived, one-at-a-time contextual onboarding probes for D’s icon-only calendar/like/share row; documented the target calendar action as `.ics` + private «Мои события» save + consented email follow while explicitly keeping the current branch marked `.ics`-only until authenticated follow and real email delivery leave dry-run.
 - **Static site pages / event decision-block lab V3**: rebuilt `/lab/event-decision-block/` from 120 Pinterest references plus Gemini 3.1 Pro/a-opus design and rendered acceptance reviews, adding four mobile hero-overlap candidates with compact strong dates, exact addresses, truthful price/free states, accessible calendar/share/like icon+count controls, large horizontal medallions and the prior V2 layout as a preserved control.
@@ -52,6 +54,7 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- **Static site pages / undeployed personal-feed RPC guard**: stopped auth-enabled static pages from calling the documented-but-not-yet-deployed `get_listing_personal_feed_v1` endpoint by default; the RPC now requires explicit `PUBLIC_PERSONAL_FEED_RPC_ENABLED=1`, while Yandex Auth/search remain available.
 - **Static site pages / Tretyakovka medallion**: rebuilt the gold `Т` as a clean non-overlapping SVG path so the previous stair-step defect in the stem is no longer visible.
 - **Incident / event 6045 static defect (INC-2026-07-03)**:
   Telegram Monitoring no longer treats vinyl/record metadata such as

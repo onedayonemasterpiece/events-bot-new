@@ -1,6 +1,6 @@
 # Event-page action onboarding and unified calendar follow
 
-Status: **product/design contract; onboarding lab implemented; unified calendar follow not yet production-complete** (2026-07-11).
+Status: **product/design contract; onboarding lab plus opt-in real-event preview implemented; unified calendar follow not yet production-complete** (2026-07-11).
 
 Canonical UI surface: `/lab/event-decision-block/`, shortlisted layouts V3-A and V3-D.
 
@@ -14,7 +14,8 @@ V3-D intentionally removes visible words from calendar/share/like controls and l
 
 - `CalendarLink.astro` is a normal static link to the generated event `.ics` file.
 - Like/share state on the static-site preview is local-browser personalization state; first-party persistence/live counter hydration remains a separate rollout.
-- The action onboarding shown in `/lab/event-decision-block/` is a design/interaction lab. It does not write user state to Supabase.
+- The action onboarding shown in `/lab/event-decision-block/` remains the design comparison. A real-event noindex trial can be compiled with `PUBLIC_EVENT_PAGE_DECISION_VARIANT=ticket-cluster`; the default event-page build stays unchanged until acceptance.
+- The real-event trial stores anonymous suppression/use state in `ke_event_action_onboarding_v1` and one-hint-per-session state in `sessionStorage`. It does not write onboarding state to Supabase and therefore is browser-local rather than authenticated cross-device state.
 - Email-follow foundation exists in parallel unfinished work, and its worker is documented as dry-run. The current production event page must not promise a sent email until that integration is merged, deployed and verified.
 
 ### Target unified calendar action
@@ -110,6 +111,12 @@ Calendar callout (the action name must stay exact):
 >
 > .ics откроется сразу. После входа сохраним событие на сайте и пришлём изменения на почту.
 
+The real-event trial must use truthful current-state copy instead of the target promise:
+
+> **Добавить в календарь**
+>
+> Сейчас откроется .ics. Сохранение на сайте и письма об изменениях — следующий этап.
+
 The personal-section product name is not fixed yet. Candidates are `Мои события` and the conventional `Избранное`. Do not silently rename the action itself and do not hard-code either section name into the first-use callout until the navigation naming decision is accepted.
 
 Like inline hint:
@@ -134,6 +141,15 @@ Expanded share explanation, if needed:
 - The icon row never changes position when the hint appears; the hint consumes space only below it.
 - The hint does not block the primary ticket CTA or sibling action controls.
 - No essential meaning depends on animation; reduced-motion users see the same static hierarchy.
+
+## Real-event preview behavior
+
+- Build flag: `PUBLIC_EVENT_PAGE_DECISION_VARIANT=ticket-cluster`.
+- Review-only override: `?onboarding=calendar` forces the calendar hint without mutating impression/cooldown state.
+- Normal eligibility waits until the row is at least about `72%` visible, then holds it stable for about `950ms`.
+- Successful calendar/share/like use stores `used_at`; dismiss suppresses that action for `14` days; calendar receives at most two unsolicited impressions.
+- The hint opens below the row. Dismissal removes only the hint and target halo; absolute row coordinates must remain unchanged.
+- Share/like show truthful numeric zero in this trial so the icon row remains spatially stable. Calendar has no persisted public count field yet and uses a plus affordance rather than fabricated social proof.
 
 ## Production rollout dependencies
 
