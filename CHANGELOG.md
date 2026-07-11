@@ -8,7 +8,7 @@
 
 ### Added
 
-- **«Тема дня — Калининград» / docs-first design**: documented a separate-project `0..1`-per-day source-aware digest that reads the compact Region Talk/YDB source contract, clusters the previous day with paired E5+BGE recall plus LLM verification, assigns evidence-grounded author roles, normalizes visible engagement, checks published-topic novelty, renders Telegram Bento/VK multi-photo assets with a direct original-post link on every reused source photo, and runs through a compact YDB + orchestrated Kaggle publication contract; no channel, database rows, kernels, tokens or publications were created.
+- **«Тема дня — Калининград» / docs-first design**: documented a separate-project `0..1`-per-day source-aware digest that reads the compact Region Talk/YDB source contract, counts official bodies/organizers as ownership-deduped voices, clusters the previous day with paired E5+BGE recall plus LLM verification, assigns evidence-grounded author roles, normalizes visible engagement, checks published-topic novelty, allows public source photos with a direct original-post link rendered on every reused image, requires payload-bound manual approval before each publication, and runs through a compact YDB + orchestrated Kaggle publication contract; no channel, database rows, kernels, tokens or publications were created.
 
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 

@@ -133,7 +133,7 @@ TTL, например 30–90 дней:
 | `publish-report.json` | redacted per-target result | постоянно |
 | `source-metric-baselines.parquet` | rolling medians/cohorts и sample sizes | rolling 120 дней |
 
-YDB хранит только URI, SHA-256, schema version и ключевой summary. Retention уточняется после оценки legal/audit требований. Media bytes с неизвестными правами удаляются раньше и не становятся publication assets.
+YDB хранит только URI, SHA-256, schema version и ключевой summary. Media bytes non-winning candidates удаляются по короткому retention. Победившее фото из публичного source post может стать publication asset только при проверяемом original URL, обязательном link overlay и safety/identity pass.
 
 ## 5. Changed-only и бюджет записей
 
@@ -208,6 +208,8 @@ MVP может использовать один Kaggle notebook только п
 ```
 
 Callback token передаётся отдельно по существующему signed status contract; в server state хранится только hash.
+
+Для реального publish `publish_enabled=true` допустим только вместе с действующим `manual_approval_id`, `approved_at`, `approved_by` и неизменившимся `payload_hash`. Изменение текста, ссылок или assets после approve аннулирует approval и возвращает выпуск на просмотр.
 
 ## 8. Status contract
 
