@@ -1,5 +1,7 @@
 # Desktop event-page variants — integration report
 
+Implementation commit: `869bd0b7`.
+
 ## Requirement closure
 
 | ID | Status | Evidence |

@@ -81,5 +81,5 @@ lanes:
     expected_output: committed preview implementation
     verification_scope: full_local
     effort: extra-high
-    status: spawned
+    status: committed
 ```

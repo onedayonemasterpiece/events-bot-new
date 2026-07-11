@@ -1,7 +1,7 @@
 # Lane L4-integrator Results
 
 ## Status
-ready-to-commit
+committed
 
 ## Requirement IDs
 - R02
@@ -12,6 +12,7 @@ ready-to-commit
 - `integration/event-page-desktop-variants-20260711`
 - `/home/dev/.codex/worktrees/events-bot-new/event-page-desktop-v1`
 - base `e9966bb1`
+- head `869bd0b7`
 
 ## Files changed
 - Event CTA/calendar/onboarding/media export components and checks.
