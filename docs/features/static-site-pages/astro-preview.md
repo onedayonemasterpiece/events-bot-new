@@ -6,15 +6,17 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
-## КППК event transport preview — 2026-07-11
+## КППК event transport preview — 2026-07-11 (real event correction)
 
-Public focus preview `preview-20260711-event-transport-kppk-v1` adds the disclosed train module after event descriptions for Светлогорск/Зеленоградск. The 399-event fixture built 420 pages and passed `npm run check:preview`; strict public `GET` checks returned `200` for the preview index, event page, Lastochka WebP and hashed Astro CSS. Mobile Pixel 7 and desktop 1440px Playwright screenshots confirmed that the supplied train art, outbound/return pair and live schedule links stay readable without breaking the existing detail-page hierarchy.
+Public focus preview `preview-20260711-event-transport-real-v2` adds the disclosed train module after event descriptions for Светлогорск/Зеленоградск. Its focus page is the real active Янтарь холл event `6510` on 12 July 2026, independently listed by the regional tourism portal; the source explicitly gives a 1 hour 10 minute duration. The initial v1 link to the stale fixture event `6538` is superseded and must not be used as product acceptance evidence.
 
-- Regression event `6538`, `Танцующий лес`, with `15:43 → 16:29` out and `22:40 → 23:35` back: <https://kenigevents.ru/preview-20260711-event-transport-kppk-v1/sobytiya/tantsuyuschiy-les-svetlogorsk-6538/>
-- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-kppk-v1/__preview/>
+The corrected 399-event fixture built 420 pages and passed `npm run check:preview`. Public `GET` checks returned `200` for the preview index, real event page and Lastochka WebP; the rendered HTML contains the verified event identity, one outbound and two return rows. Pixel 7 and 1440px Playwright screenshots are stored uncommitted under `artifacts/codex/event-transport-schedule/visual-real/`.
+
+- Real event `6510`, with `15:43 → 16:29` out and `18:54 → 19:48` / `19:33 → 20:19` back: <https://kenigevents.ru/preview-20260711-event-transport-real-v2/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
+- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-real-v2/__preview/>
 - Canonical behavior/data contract: [event-transport-schedule.md](event-transport-schedule.md)
 
-The prefix was uploaded without rewriting stable `/ics/<event_id>.ics` objects. Visual evidence stays uncommitted under `artifacts/codex/event-transport-schedule/visual/`.
+The prefix was uploaded without rewriting stable `/ics/<event_id>.ics` objects.
 
 ## Public URLs
 

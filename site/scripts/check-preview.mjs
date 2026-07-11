@@ -335,12 +335,15 @@ if (!popularHtml.includes('Популярное') || !popularHtml.includes('list
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 
-const transportDemoEvent = eventsData.events.find((event) => event.id === 6538);
-if (!transportDemoEvent) throw new Error('Missing event 6538 transport schedule regression event');
+const transportDemoEvent = eventsData.events.find((event) => event.id === 6510);
+if (!transportDemoEvent) throw new Error('Missing real event 6510 transport schedule regression event');
+if (transportDemoEvent.start_date !== '2026-07-12' || transportDemoEvent.start_time !== '17:00' || transportDemoEvent.time_range_end !== '18:10') throw new Error('Event 6510 must retain its source-verified 2026-07-12 17:00 start and 1h10m duration');
+if (!transportDemoEvent.title.includes('Муслиму Магомаеву') || !transportDemoEvent.title.includes('Анне Герман') || transportDemoEvent.ticket?.href !== 'https://янтарьхолл.рф/afisha/kontsertnaya-programma-khity-lyubimykh-artistov%2012%2007/') throw new Error('Event 6510 must remain connected to the real Yantar Hall event and ticket page');
 const transportDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${transportDemoEvent.slug}/index.html`), 'utf8'));
-if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="1"') || !transportDemoHtml.includes('data-return-count="1"')) throw new Error('Event 6538 must expose one exact outbound/return pair for the 17:00–22:00 event window');
-if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<time[^>]*>15:43<\/time>[\s\S]*?<time[^>]*>16:29<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6538 outbound suggestion must be train 7213, 15:43→16:29 (31 minutes before start)');
-if (!/data-transport-direction="return"[^>]*data-train-number="6730"[\s\S]*?<time[^>]*>22:40<\/time>[\s\S]*?<time[^>]*>23:35<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6538 return suggestion must be train 6730, 22:40→23:35 after the stated end');
+if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="1"') || !transportDemoHtml.includes('data-return-count="2"')) throw new Error('Event 6510 must expose one outbound and two return options for its real 17:00–18:10 window');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<time[^>]*>15:43<\/time>[\s\S]*?<time[^>]*>16:29<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 outbound suggestion must be train 7213, 15:43→16:29 (31 minutes before start)');
+if (!/data-transport-direction="return"[^>]*data-train-number="6722"[\s\S]*?<time[^>]*>18:54<\/time>[\s\S]*?<time[^>]*>19:48<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 first return suggestion must be train 6722, 18:54→19:48');
+if (!/data-transport-direction="return"[^>]*data-train-number="7220"[\s\S]*?<time[^>]*>19:33<\/time>[\s\S]*?<time[^>]*>20:19<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second return suggestion must be train 7220, 19:33→20:19');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

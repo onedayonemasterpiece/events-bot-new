@@ -23,7 +23,7 @@ This city rule is an explicit MVP campaign decision, not a partner inferred from
 2. Require a single-day event with a reliable start time; a multi-day event has no unambiguous travel date.
 3. Keep only trains operating on `event.start_date` whose destination arrival is **20–40 minutes before** the event start.
 4. Rank the closest arrival to a 30-minute buffer and return no more than two options.
-5. Calculate the trip back only from the explicit `time_range_end`; do not guess event duration.
+5. Calculate the trip back from an explicit `time_range_end`. If the time range is absent, the production exporter may derive it only from a source-labeled `Продолжительность: …` value; free-form duration guesses are forbidden.
 6. Keep the first two return trains departing within three hours after the stated end. The selector checks both the event date and the following calendar date.
 7. If the start/end or a matching service is absent, render an honest empty state instead of inventing a train.
 
@@ -45,9 +45,9 @@ On 2026-07-11 the accessible YC YDB databases (`events-bot-acq-discovery`, `post
 
 ## Acceptance example
 
-Event `6538`, `Танцующий лес`, Светлогорск, `2026-07-04 17:00–22:00` is the deterministic regression page:
+Real active event `6510`, `Хиты любимых артистов: Концерт-посвящение Муслиму Магомаеву и Анне Герман`, Янтарь холл, Светлогорск, `2026-07-12 17:00–18:10` is the deterministic regression page. The `18:10` end is derived from the source's explicit `Продолжительность: 1 час 10 мин.`, not from a category default:
 
 - outbound: train `7213`, `15:43 → 16:29` (arrival 31 minutes before start);
-- return: train `6730`, `22:40 → 23:35` (40 minutes after the stated end).
+- return: trains `6722`, `18:54 → 19:48`, and `7220`, `19:33 → 20:19`.
 
-`site/scripts/check-preview.mjs` guards those rows, placement after the description, the supplied artwork/disclosure and absence of the block on a Kaliningrad event.
+`tests/test_static_site_preview_duration.py` guards the narrow labeled-duration extractor. `site/scripts/check-preview.mjs` guards the real event identity/ticket link, those train rows, placement after the description, the supplied artwork/disclosure and absence of the block on a Kaliningrad event.
