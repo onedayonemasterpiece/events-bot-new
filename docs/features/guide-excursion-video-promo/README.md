@@ -9,6 +9,10 @@ Canonical local reference video is stored next to this feature so it is not lost
 
 - `docs/features/guide-excursion-video-promo/reference/VID_20260708_142351.mp4`
 
+The old ad-hoc copy under `docs/reference/` may still exist in a developer
+workspace as the original source file, but it is not the canonical feature
+reference. New work should open the feature-local path above.
+
 Reference facts:
 
 - 576×1280 vertical MP4, about 6.6 seconds, 30 fps, with audio.
@@ -122,7 +126,9 @@ After the approved opening, transition into the reference-inspired carousel:
 4. Top headline appears above the stack; it can stay fixed or subtly update once when the final card arrives.
 5. If there are exactly 2 photos:
    - photo 1 = normal carousel card;
-   - photo 2 = final CTA card background.
+   - photo 2 = normal carousel card;
+   - a **third, separate CTA card** is appended after the photos and becomes
+     the final focus card. Do not turn the second photo itself into the CTA.
 6. If there are more than 2 photos:
    - use 1–4 photo cards before the final card;
    - the last selected photo becomes the final CTA card background.
