@@ -42,7 +42,7 @@
 3. В coalesce-коде есть риск потери обновления во время долгого static build: running follow-up не создаётся для `static_site_build`, а общий stale threshold `600s` конфликтует с разрешённым runtime до `5400s`.
 4. Публичный root всё ещё `noindex`; production `/poisk/` не опубликован. Последний полный preview отстаёт от текущего каталога.
 5. Значительная часть заявленного функционала находится только в side branches либо остаётся design-only: персональное письмо/страница, transport refresh, comment feedback, admin→ArtKodex, durable favorites, verified-email identity, personalization merge.
-6. Event-quality audits дают сильные точечные результаты, но ещё нет постоянного pre-projection quality gate, incident-rate SLO и trend dashboard.
+6. Smart Update остаётся владельцем предотвращения дублей и ошибок фактов, но перед релизом ещё не формализован регулярный контроль его результата: cadence аудитов, incident-rate trend/SLO, обязательное заведение инцидентов и подтверждённое закрытие root causes до устойчиво низкого уровня дефектов.
 7. Локальная release-проверка текущего WIP 2026-07-11: Astro собрал `110` страниц, но `npm run check:preview` упал из-за рассинхронизации UI (`Смотрите дальше`) и contract assertion (`Вам могут быть интересны`). Это не дефект `origin/main`, но доказательство, что активный WIP не является чистым RC.
 
 ## 3. Матрица требований
@@ -50,7 +50,7 @@
 | ID | Требование | Статус | Текущее доказательство | Главный release gate |
 |---|---|---|---|---|
 | **G1** | Публичная надёжность и доступность | **Partial / Blocked** | Static-first fallback, CDN и rollback protocol описаны; root/preview/CDN отвечают `200` | Atomic promotion, last-good rollback, monitoring/SLO, clean `origin/main` RC, security/a11y/load/real-device evidence |
-| **G2** | Сокращены инциденты: дубли, локации, даты/время | **Partial / Blocked** | Bounded audits 305/305 и 308/308, repairs и regression incidents | Постоянный source-grounded quality decision по current hashes до любой projection; daily trend/SLO; закрытие ключевых incident gates |
+| **G2** | Сокращены инциденты: дубли, локации, даты/время | **Partial / Blocked** | Bounded audits 305/305 и 308/308, repairs и regression incidents | Smart Update root-cause prevention; регулярный аудит новых/изменённых и всего active/future inventory; incident burn-down/trend/SLO; closure-grade replay для повторяющихся классов дефектов |
 | **F1** | Smart Update effect → rebuild через 15 минут | **Partial / Blocked** | Код coalesced `static_site_build` и Kaggle runner существует | Включить prod env; исправить running/deferred/stale semantics; atomic CDN promotion; prove two updates during one long build |
 | **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
 | **F3** | Умный поиск | **Partial** | Search UI/Edge source/canary preview; unauth Edge request fail-closed | Production `/poisk/`, Yandex provider/Edge deploy, live mobile login→search E2E, quota/alert/fallback evidence |
@@ -119,6 +119,27 @@ Read-only срез на 2026-07-11:
 | F14 comment feedback | `origin/agent/event-comment-feedback-kaggle-runner` (724 behind / 10 ahead) | `docs/features/event-comment-feedback/README.md`, runner/kernel/tests | Architecture/code may be stale; no public UI/YDB path |
 | F17 admin issue reporting | `origin/feature/event-issue-report-artkodex-20260703` (69 behind / 12 ahead) | `docs/features/event-issue-reporting/README.md`, UI/Edge/migration | Mixed branch; no DB-level double-start guard/poller proof |
 
+### Есть ли отдельная корректная feature branch для каждого требования
+
+Нет. Requirement ID — это release capability, а не всегда отдельная ветка. Текущая карта:
+
+| IDs | Состояние ветки/документации |
+|---|---|
+| F1, F2, F3, F13 | Основные slices уже находятся в `origin/main` внутри parent features `static-site-pages` и `unsigned-personalization`; отдельная незамерженная feature branch не требуется, но production integration остаётся незакрытой задачей. |
+| F4 | Есть только отдельная docs-first branch; в `origin/main` нет canonical feature home/route и реализации. |
+| F5 | Есть активная UX V3 branch, но UI не frozen и branch отстаёт от main. |
+| F6, F7, F10 | Документация и части кода находятся в общих personalization/search docs в main; отдельных завершённых feature branches для remote telemetry, verified-email identity и profile merge нет. |
+| F8 | Есть очень старая transactional-email branch; она не закрывает recommendation email/deliverability целиком и не может быть слита без rebase/review. |
+| F9 | Отдельной feature branch и canonical feature doc для durable favorites не найдено. |
+| F11 | Есть близкая к main integration branch, но nightly production refresh остаётся P0-open. |
+| F12 | ICS находится в main; отдельной branch для product contract “calendar = favorite” нет. |
+| F14 | Есть старая probe branch; production collection/YDB/Astro feature не оформлены как merge-ready implementation. |
+| F15 | Preview implementation находится в main, production share-asset generator остаётся debt без отдельной завершённой ветки. |
+| F16 | Renderer contract находится в main; producer focal/face metadata и его feature branch не найдены. |
+| F17 | Есть side branch, но она mixed/stale и не закрывает idempotent ArtKodex poller/result E2E. |
+
+Следовательно, документацию нельзя считать полностью и корректно оформленной по всем F1–F17. Корректная цель — один canonical feature home на capability/связную feature family, актуальный status matrix, routes, operations/tests и явная связь с implementation branch; создавать искусственную ветку на каждый ID необязательно.
+
 ## 6. Аудит полноты документации
 
 | Область | Полнота | Проблема консолидации | Требуемое действие |
@@ -132,7 +153,7 @@ Read-only срез на 2026-07-11:
 | Transport | Хорошая branch spec | Нет main route; coverage намного уже требования | Merge как отдельную feature; city/provider/source matrix и ops runbook |
 | Comment feedback | Сильная design/probe | Старая ветка; нет main feature home/public implementation | Rebase architecture, отдельно storage/probe/UI/operations stages |
 | Admin incident report | Хорошая product prose | Документ переоценивает готовность ArtKodex poller/idempotency | Явно разделить UI, DB queue, poller, repair result, E2E statuses |
-| Event quality | Сильные incident records | `routes.yml` не перечисляет свежие Jul-7/9/10/11 contracts; нет SLO dashboard | Добавить routes; отдельный quality release gate/runbook/dashboard |
+| Event quality / Smart Update | Сильные incident records | `routes.yml` не перечисляет свежие Jul-7/9/10/11 contracts; нет единого cadence/SLO/dashboard и release burn-down | Добавить routes; закрепить Smart Update как prevention owner; описать регулярный audit → incident → root-cause fix → replay → monitoring workflow |
 
 Дополнительные найденные дефекты документации/contract hygiene:
 
@@ -160,16 +181,19 @@ Read-only срез на 2026-07-11:
 - [ ] Зафиксировать UI release version и data/schema versions.
 - [ ] Закрыть продуктовые решения из раздела 10.
 
-### Stage 1 — Event-quality gate до публичной индексации
+### Stage 1 — Стабилизация качества Smart Update и incident burn-down
 
-- [ ] Заморозить exact active/future catalog на release cutoff.
-- [ ] 100% строк имеют current-hash vector coverage **и** current source-grounded semantic verdict; missing/stale/provider-error = fail-closed.
-- [ ] Ввести append-only `quality_decision(canonical_hash, source_bundle_hash)` либо эквивалентный enforcement перед static/TG/VK/Telegraph/ICS projection.
-- [ ] Прогнать mandatory replay pack: duplicate doors/start, two vendors, venue aliases, prose/person venue, default-venue offsite, compact/hashtag dates, recurring occurrence/season, exhibition duplicates, valid multi-session no-merge.
-- [ ] Статический exporter quarantines invalid ISO dates, prompt/comment leakage, prose/emoji venue и exact normalized duplicates.
-- [ ] `silent`, merged/review/cancelled/inactive rows fail closed across listings, sitemap, related, search snapshots and ICS.
-- [ ] Выполнить direct public-surface sample: static pages + latest Telegram + authenticated VK + Telegraph + ICS.
-- [ ] Назначить owner и daily dashboard для duplicate/wrong-location/wrong-date-time counts and rates.
+Smart Update является владельцем семантического предотвращения дублей, неверных локаций, дат и времени. Предрелизный контур не должен переносить эту ответственность в static exporter или отдельный широкоформатный regex/keyword gate.
+
+- [ ] Утвердить cadence: ежедневный аудит всех новых/изменённых событий и регулярный полный аудит active/future inventory до релиза.
+- [ ] Для каждого подтверждённого дефекта создавать/обновлять incident record, классифицировать failure family и фиксировать затронутые публичные поверхности.
+- [ ] Для повторяемого класса находить root cause в extractor/import/Smart Update match-merge/writer/reference layer, а не ограничиваться repair строки или страницы.
+- [ ] Каждый root-cause fix проходит closure-grade replay через реальный production import boundary и `smart_event_update.py` на snapshot/shadow DB, затем проверяется на Telegram/VK/Telegraph/static/ICS surfaces.
+- [ ] Прогнать обязательный regression pack: duplicate doors/start, two vendors, venue aliases, prose/person venue, default-venue offsite, compact/hashtag dates, recurring occurrence/season, exhibition duplicates, valid multi-session no-merge.
+- [ ] На release cutoff выполнить полный аудит exact active/future catalog и устранить все подтверждённые high-impact дефекты.
+- [ ] `silent`, merged/review/cancelled/inactive и структурно невалидные rows fail closed across listings, sitemap, related, search snapshots and ICS; это узкий projection safety net, а не замена Smart Update semantics.
+- [ ] Вести dashboard/trend: абсолютное число и rate дублей, wrong-location и wrong-date-time по import batch/day; отдельно new incidents, reopened incidents и root causes closed with replay.
+- [ ] Перед GO показать согласованное стабильное окно без новых критических повторов и с “почти нулевым” уровнем дефектов; длительность окна и числовые пороги утверждаются владельцем продукта.
 
 Обязательные regression contracts:
 
@@ -299,7 +323,7 @@ Read-only срез на 2026-07-11:
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
 1. **P0 — static release platform:** F1/F13/G1, coalesce race, atomic promotion/rollback/monitoring.
-2. **P0 — event quality release gate:** G2, current-hash decision store, replay pack, dashboard/SLO.
+2. **P0 — Smart Update quality stabilization:** G2, регулярные аудиты, incident burn-down, root-cause fixes, closure-grade replay, dashboard/SLO.
 3. **P0 — vector/search integration:** F2/F3, prod `/poisk/`, whole-catalog sync, golden review.
 4. **P0 — UI release freeze:** F5 plus clean preview contract and real-device/a11y evidence.
 5. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12.
@@ -316,7 +340,7 @@ Read-only срез на 2026-07-11:
 | ID | Результат аудита | Статус |
 |---|---|---|
 | G1 | Надёжность разложена на build/promotion/rollback/SLO/security/canary gates | **Done (planning only)** |
-| G2 | Активные incident families и постоянные quality gates перечислены | **Done (planning only)** |
+| G2 | Активные incident families, Smart Update ownership и регулярный audit/incident/root-cause/replay workflow перечислены | **Done (planning only)** |
 | F1–F17 | Каждое исходное требование имеет отдельный статус, evidence class и gate | **Done (planning only)** |
 | Документация | Main docs и side-branch feature homes разведены; gaps перечислены | **Done (planning only)** |
 | Реализация | В этой задаче намеренно не менялась | **Not in scope** |
