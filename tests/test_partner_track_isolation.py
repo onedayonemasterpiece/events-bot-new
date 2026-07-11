@@ -124,6 +124,7 @@ def test_partner_mode_is_popular_review_so_business_resolution_runs():
     assert params["mode"] == POPULAR_REVIEW_PROFILE
     assert params["partner_track_id"] == PARTNER_ECO_NATURE.track_id
     assert params["partner_profile_key"] == PARTNER_ECO_NATURE.profile_key
+    assert params["allow_empty_ocr"] is True
     assert story_publish_module._business_targets_allowed_for_mode(params) is True
 
 
@@ -141,6 +142,7 @@ def test_konb_selection_params_use_test_story_target_not_business():
     )
     assert params["mode"] == POPULAR_REVIEW_PROFILE
     assert params["partner_track_id"] == PARTNER_KONB_LIBRARY.track_id
+    assert params["allow_empty_ocr"] is False
     assert params["partner_publish_mode"] == "test"
     assert params["story_targets_override"][0]["peer"] == "@keniggpt"
     assert params["story_targets_override"][0]["transport"] == "telegram_chat"
