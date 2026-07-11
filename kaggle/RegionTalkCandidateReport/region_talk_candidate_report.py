@@ -1828,7 +1828,7 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
     "platform_post_key", "source_url", "source_scope", "source_geo_class", "source_topic_class",
-    "source_quick_class", "source_surface_filter_reason", "monitoring_exclusion_reason",
+    "source_quick_class", "source_queue_status", "fetch_status", "source_surface_filter_reason", "monitoring_exclusion_reason",
     "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
     "publication_story_score", "nonlocal_value_score", "manual_decision", "last_seen_run_id",
     "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
@@ -1843,6 +1843,7 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "aesthetic_score", "image_publication_ready", "image_reviewable",
     "why_not_publication_ready", "media_kind", "manual_media_review_required",
     "video_manual_review_eligible",
+    "candidate_memory_source_cleanup_status", "candidate_memory_source_cleanup_reason",
 ]
 PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
@@ -1871,6 +1872,55 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
 PUBLICATION_CONFIRMED_STATUSES = {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
 
 
+def durable_processed_post_key(row: dict[str, Any]) -> str:
+    """Return a fetch-path-independent identity for a durable post row.
+
+    ``post_id`` historically included the fetch backend (Telethon, public web,
+    exact YDB link), so the same Telegram post could be written several times.
+    Prefer the platform identity and derive it from the canonical post URL when
+    an older row has no ``platform_post_key``.
+    """
+    platform_key = str(row.get("platform_post_key") or "").strip()
+    match = re.fullmatch(r"(?:tg|telegram):@?([^:]+):(\d+)", platform_key, flags=re.I)
+    if match:
+        return f"tg:{match.group(1).lower()}:{match.group(2)}"
+    match = re.fullmatch(r"vk:([^:]+):(\d+)", platform_key, flags=re.I)
+    if match:
+        return f"vk:{match.group(1).lower()}:{match.group(2)}"
+    if platform_key:
+        return platform_key.lower()
+
+    post_url = str(row.get("post_url") or "").strip().split("?", 1)[0].rstrip("/")
+    match = re.search(r"(?:https?://)?(?:t|telegram)\.me/(?:s/)?(?!c/)([a-z0-9_]+)/(\d+)$", post_url, flags=re.I)
+    if match:
+        return f"tg:{match.group(1).lower()}:{match.group(2)}"
+    match = re.search(r"(?:https?://)?vk\.com/wall(-?\d+)_(\d+)$", post_url, flags=re.I)
+    if match:
+        return f"vk:{match.group(1)}:{match.group(2)}"
+    return str(row.get("post_id") or post_url or "").strip()
+
+
+def merge_durable_post_records(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """Merge duplicate observations without erasing richer non-empty fields."""
+    merged = dict(previous or {})
+    for key, value in (current or {}).items():
+        if value not in (None, "", [], {}):
+            merged[key] = value
+        elif key not in merged:
+            merged[key] = value
+    return merged
+
+
+def rekey_processed_posts(rows: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    durable: dict[str, dict[str, Any]] = {}
+    for original_key, value in rows.items():
+        if not isinstance(value, dict):
+            continue
+        key = durable_processed_post_key(value) or str(original_key)
+        durable[key] = merge_durable_post_records(durable.get(key, {}), value)
+    return durable
+
+
 def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     """Keep only durable, valuable state in YDB; no raw post text or media bytes.
 
@@ -1897,11 +1947,11 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     max_posts = getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000)
     max_sources = getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000)
     max_candidates = getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000)
-    compact_posts = {
+    compact_posts = rekey_processed_posts({
         str(k): compact_record(v, POST_STATE_FIELDS, max_len=700)
         for k, v in list(posts.items())[-max_posts:]
         if isinstance(v, dict)
-    }
+    })
     compact_sources = {
         str(k): compact_record(v, SOURCE_STATE_FIELDS, max_len=700)
         for k, v in list(sources.items())[-max_sources:]
@@ -2398,7 +2448,7 @@ def write_region_talk_online_post_item(row: dict[str, Any], *, run_id: str, stag
         return
     try:
         payload = _online_post_payload(row, run_id=run_id, stage=stage, status=status)
-        key = str(payload.get("post_id") or payload.get("platform_post_key") or payload.get("post_url") or "")
+        key = durable_processed_post_key(payload)
         if not key:
             return
         updated_at = str(payload.get("updated_at") or utc_now_iso())
@@ -2469,6 +2519,9 @@ def candidate_memory_rows_for_ydb_write(
             changed.append(row)
             continue
         if str(row.get("external_bge_m3_fusion_changed_this_run") or "").lower() == "true":
+            changed.append(row)
+            continue
+        if str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true":
             changed.append(row)
             continue
         if str(row.get("last_refetched_run_id") or "") == run_id:
@@ -2779,6 +2832,13 @@ def build_e5_text_vector_enrichment_rows(
         neg_class, neg_score = max(((label, scores.get(label, 0.0)) for label in negative_labels), key=lambda x: x[1])
         top_class, top_score = max(scores.items(), key=lambda x: x[1])
         pk = text_vector_enrichment_pk(post_id, post_url, text_sha, E5_TEXT_MODEL_ID)
+        source_terminal = source_local_region_terminal_fields(post)
+        source_terminal_status = str(
+            source_terminal.get("source_queue_status")
+            or post.get("source_queue_status")
+            or post.get("fetch_status")
+            or ""
+        )
         rows.append({
             "_pk": pk,
             "text_vector_enrichment_id": pk.replace("text_vector_enrichment_item:", ""),
@@ -2791,6 +2851,14 @@ def build_e5_text_vector_enrichment_rows(
             "source_id": post.get("source_id") or "",
             "source_title": post.get("source_title") or "",
             "source_url": post.get("source_url") or post.get("canonical_url") or "",
+            "source_queue_status": source_terminal_status,
+            "source_scope": source_terminal.get("source_scope") or post.get("source_scope") or "",
+            "source_geo_class": source_terminal.get("source_geo_class") or post.get("source_geo_class") or "",
+            "source_topic_class": source_terminal.get("source_topic_class") or post.get("source_topic_class") or "",
+            "source_quick_class": source_terminal.get("source_quick_class") or post.get("source_quick_class") or "",
+            "source_surface_filter_reason": source_terminal.get("source_surface_filter_reason") or post.get("source_surface_filter_reason") or "",
+            "monitoring_exclusion_reason": source_terminal.get("monitoring_exclusion_reason") or post.get("monitoring_exclusion_reason") or "",
+            "source_terminal_excluded": source_terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS},
             "post_date": post.get("post_date") or post.get("published_at") or "",
             "discovery_method": post.get("discovery_method") or "",
             "discovery_priority": post.get("discovery_priority") or "",
@@ -3416,11 +3484,11 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                     data0["ydb_row_level_source_queue_items_truncated"] = str(source_items_truncated).lower()
                     if post_items:
                         p = data0.get("processed_posts") if isinstance(data0.get("processed_posts"), dict) else {}
-                        p = dict(p)
+                        p = rekey_processed_posts(dict(p))
                         for _pk, item in post_items.items():
-                            key = str(item.get("post_id") or item.get("platform_post_key") or item.get("post_url") or _pk.replace("processed_post_item:", ""))
+                            key = durable_processed_post_key(item) or _pk.replace("processed_post_item:", "")
                             if key:
-                                p[key] = {**p.get(key, {}), **item}
+                                p[key] = merge_durable_post_records(p.get(key, {}), item)
                         data0["processed_posts"] = p
                         data0["ydb_row_level_processed_post_items_loaded"] = len(post_items)
                     if candidate_items:
@@ -3680,7 +3748,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                             row_items.append(("image_queue_item:" + key, "image_queue_item", item))
                 for item in (compact.get("processed_posts") or {}).values():
                     if isinstance(item, dict):
-                        key = str(item.get("post_id") or item.get("platform_post_key") or item.get("post_url") or "")
+                        key = durable_processed_post_key(item)
                         if key:
                             row_items.append(("processed_post_item:" + key, "processed_post_item", item))
                 for item in (compact.get("candidate_memory") or {}).values():
@@ -5330,6 +5398,52 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
     for r in region_excluded:
         deltas.append({**r, "delta_bucket": "excluded_by_hard_region_gate", "current_run_id": run_id})
     return rows, not_refetched, deltas
+
+
+def apply_terminal_source_cleanup_to_candidate_memory(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Make local/spam memory rows audit-only before any downstream work.
+
+    Candidate memory intentionally retains history, but terminal source rows
+    must not remain operationally active or consume BGE/image/LLM capacity.
+    """
+    stats = {"checked": 0, "local": 0, "spam": 0, "changed": 0, "already_terminal": 0}
+    for row in rows:
+        stats["checked"] += 1
+        decision = source_local_region_terminal_fields(row)
+        terminal_status = str(
+            decision.get("source_queue_status")
+            or row.get("source_queue_status")
+            or row.get("fetch_status")
+            or ""
+        )
+        if terminal_status not in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS}:
+            continue
+        kind = "local" if terminal_status == LOCAL_REGION_SOURCE_STATUS else "spam"
+        stats[kind] += 1
+        stage = "dropped_local_source" if kind == "local" else "dropped_spam_source"
+        lifecycle = "source_terminal_local_audit_only" if kind == "local" else "source_terminal_spam_audit_only"
+        already_terminal = (
+            str(row.get("current_stage") or "") == stage
+            and str(row.get("current_lifecycle_status") or "") == lifecycle
+        )
+        row.update({key: value for key, value in decision.items() if value not in (None, "", [], {})})
+        row["source_queue_status"] = terminal_status
+        row["current_stage"] = stage
+        row["current_lifecycle_status"] = lifecycle
+        row["candidate_memory_source_cleanup_status"] = "audit_only_terminal_source"
+        row["candidate_memory_source_cleanup_reason"] = str(
+            row.get("monitoring_exclusion_reason") or row.get("source_surface_filter_reason") or terminal_status
+        )
+        row["why_not_publication_ready"] = row["candidate_memory_source_cleanup_reason"]
+        row["next_action"] = (
+            "keep_in_local_region_source_audit_list" if kind == "local" else "do_not_rescan_spam_source"
+        )
+        if already_terminal:
+            stats["already_terminal"] += 1
+        else:
+            row["candidate_memory_source_cleanup_changed_this_run"] = "true"
+            stats["changed"] += 1
+    return stats
 
 
 def apply_external_bge_m3_fusion_to_candidate_memory(
@@ -11824,6 +11938,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     report_event("source_frontier_build_done", phase="queue_assembly", status="running", source_frontier_unique=len(source_frontier_unique), active_frontier_tg_vk=len(active_frontier_tg_vk), external_links_quarantine=len(external_links_quarantine), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     report_event("candidate_memory_build_started", phase="queue_assembly", status="running", previous_candidate_memory=len(previous_state.get("candidate_memory") or {}) if isinstance(previous_state.get("candidate_memory"), dict) else 0, new_posts=len(new_posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
+    candidate_memory_source_cleanup_stats = apply_terminal_source_cleanup_to_candidate_memory(candidate_memory_rows)
+    report_event(
+        "candidate_memory_terminal_source_cleanup_done",
+        phase="queue_assembly",
+        status="running",
+        **{f"candidate_memory_source_cleanup_{k}": v for k, v in candidate_memory_source_cleanup_stats.items()},
+        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+    )
     bge_memory_fusion_stats = apply_external_bge_m3_fusion_to_candidate_memory(
         candidate_memory_rows,
         e5_index=e5_enrichment_index,

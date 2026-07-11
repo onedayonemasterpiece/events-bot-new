@@ -148,7 +148,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800})["history_sources"], 8)
         self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 960})["history_sources"], 6)
         self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 1100})["history_sources"], 5)
-        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 60})["history_sources"], 6)
+        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 36})["history_sources"], 6)
+        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 60})["history_sources"], 5)
         failed_tail = mod.candidate_adaptive_budget({
             "candidate_heartbeat_runtime_elapsed_seconds": 0,
             "candidate_heartbeat_event_name": "state_write_started",
@@ -306,6 +307,23 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["candidate_memory_rows"], 9)
         self.assertEqual(metrics["publication_queue_total"], 3)
 
+    def test_stats_message_exposes_candidate_audit_and_bge_capacity(self) -> None:
+        mod = load_module()
+        message = mod.build_orchestrator_stats_message({
+            "candidate_memory_total": 100,
+            "candidate_memory_operational_total": 70,
+            "candidate_memory_terminal_local_audit_total": 25,
+            "candidate_memory_terminal_spam_audit_total": 5,
+            "candidate_memory_dual_pending_total": 12,
+            "candidate_memory_image_wait_total": 8,
+            "bge_pending_sample_total": 36,
+            "bge_capacity_rows": 48,
+            "bge_backlog_capacity_percent": 75,
+            "bge_source_terminal_skipped_sample_total": 9,
+        })
+        self.assertIn("100/70/25/5/12/8", message)
+        self.assertIn("36/48/75%/9", message)
+
     def test_loop_goal_progress_tracks_delta_targets(self) -> None:
         mod = load_module()
         baseline = {"publics_total": 10, "processed_posts_unique_total": 20, "publics_with_ko_candidates_total": 2}
@@ -398,6 +416,23 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["text_vector_current_version_bge_pair_lag_seconds_max"], 120)
         self.assertEqual(metrics["text_vector_current_version_bge_pending_lag_seconds_max"], 10800)
         self.assertEqual(metrics["text_vector_stale_version_e5_rows_total"], 1)
+
+    def test_current_vector_actionable_backlog_excludes_terminal_sources(self) -> None:
+        mod = load_module()
+        e5 = [{
+            "post_url": "https://t.me/local/1",
+            "text_hash": "h1",
+            "text_excerpt": "Подробный локальный пост о Калининградской области и музее",
+            "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT,
+            "semantic_bank_version": "v1",
+            "created_at": "2026-07-10T10:00:00Z",
+            "source_queue_status": "rejected_local_region_source",
+            "source_terminal_excluded": True,
+        }]
+        metrics = mod._text_vector_pair_metrics(e5, [])
+        self.assertEqual(metrics["text_vector_current_version_e5_without_bge_total"], 1)
+        self.assertEqual(metrics["text_vector_current_version_e5_without_bge_source_terminal_total"], 1)
+        self.assertEqual(metrics["text_vector_current_version_e5_without_bge_actionable_total"], 0)
 
     def test_post_link_queue_states_head_blocking_integrity_and_entity_cache(self) -> None:
         mod = load_module()

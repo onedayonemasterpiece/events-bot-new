@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / durable post identity and capacity hygiene**: processed-post
+  YDB rows now use stable Telegram/VK platform keys instead of fetch-path
+  `post_id`, with a dry-run-first bounded normalizer for legacy duplicates.
+  Local/spam candidate-memory rows remain available for audit but leave the
+  operational funnel; E5 propagates that terminal source decision so BGE skips
+  wasted CPU rows. Orchestrator stats now expose candidate-memory breakdown and
+  actionable BGE backlog versus one-run CPU capacity, and adapt discovery
+  breadth at 75%/100% capacity without disabling discovery or dual fusion.
 - **Region Talk / local POI institutions**: source surface classification now
   routes `Музей Мирового Океана` / `world_ocean_museum` to the local-region
   monitoring list before its institutional posts consume external-candidate

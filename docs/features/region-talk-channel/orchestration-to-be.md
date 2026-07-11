@@ -220,12 +220,20 @@ Important invariants:
   The BGE batch reserves 80% of bounded capacity for exact keyword/fast-check
   posts (fresh-first) and 20% for generic FIFO backlog, filling unused capacity
   from either side. This reduces known-KO latency without starving breadth.
+- E5 rows carry the durable source terminal decision. The BGE selector excludes
+  rows already classified as local-region or spam and reports
+  `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but
+  does not change the E5+BGE requirement for eligible external posts.
+- The normalizer reports actionable backlog, one-run CPU capacity (currently 48
+  rows), capacity load percentage and whether one next BGE launch can drain the
+  backlog. Candidate discovery continues in parallel.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
-- Candidate breadth is runtime-adaptive while the 20-minute notebook guardrail
-  remains unchanged. A completed run below 15 minutes and BGE backlog at or
-  below one 48-row batch permits eight history and eight fast-check sources;
-  15-17.5 minutes or excess BGE backlog uses six; above 17.5 minutes uses five.
+- Candidate breadth is runtime- and backlog-adaptive while the 20-minute
+  notebook guardrail remains unchanged. A completed run below 15 minutes and
+  BGE backlog below 75% of one 48-row batch permits eight history and eight
+  fast-check sources; 15-17.5 minutes or 75-100% BGE load uses six; above 17.5
+  minutes or above one-run BGE capacity uses five.
   This spends measured headroom on scanning more publics, not on deeper history.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5

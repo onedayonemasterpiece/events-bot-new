@@ -321,14 +321,30 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('fast_check_latest_run_hit_rate_percent')}%"
         ),
         f"Heuristic KO latest outcomes: {top_latest_outcomes}",
-        f"Candidate memory: {value('candidate_memory_total')}",
+        (
+            "Candidate memory total/operational/local-audit/spam-audit/dual-pending/image-wait: "
+            f"{value('candidate_memory_total')}/"
+            f"{value('candidate_memory_operational_total')}/"
+            f"{value('candidate_memory_terminal_local_audit_total')}/"
+            f"{value('candidate_memory_terminal_spam_audit_total')}/"
+            f"{value('candidate_memory_dual_pending_total')}/"
+            f"{value('candidate_memory_image_wait_total')}"
+        ),
         (
             "Current E5/BGE raw/actionable coverage: "
             f"{value('text_vector_current_version_dual_coverage_percent')}%/"
             f"{value('text_vector_current_version_dual_actionable_coverage_percent')}% "
             f"(raw pending {value('text_vector_current_version_e5_without_bge_total')}; "
             f"actionable {value('text_vector_current_version_e5_without_bge_actionable_total')}; "
-            f"short excluded {value('text_vector_current_version_e5_below_bge_min_text_total')})"
+            f"short excluded {value('text_vector_current_version_e5_below_bge_min_text_total')}; "
+            f"terminal-source excluded {value('text_vector_current_version_e5_without_bge_source_terminal_total')})"
+        ),
+        (
+            "BGE actionable/capacity/load/terminal-skipped: "
+            f"{value('bge_pending_sample_total')}/"
+            f"{value('bge_capacity_rows')}/"
+            f"{value('bge_backlog_capacity_percent')}%/"
+            f"{value('bge_source_terminal_skipped_sample_total')}"
         ),
         (
             "Images pending/actual/strong>=0.70: "
@@ -844,6 +860,18 @@ def _vector_row_timestamp(row: dict[str, Any]) -> datetime | None:
     return _parse_iso_datetime(row.get("created_at") or row.get("_ydb_updated_at") or row.get("updated_at"))
 
 
+def _vector_source_terminal_excluded(row: dict[str, Any]) -> bool:
+    return bool(
+        row.get("source_terminal_excluded") is True
+        or str(row.get("source_terminal_excluded") or "").lower() in {"1", "true", "yes"}
+        or str(row.get("source_queue_status") or row.get("fetch_status") or "")
+        in {"rejected_local_region_source", "rejected_spam_source"}
+        or str(row.get("source_scope") or "") in {"local_region", "spam"}
+        or str(row.get("source_geo_class") or "") == "kaliningrad_local"
+        or str(row.get("source_quick_class") or "") in {"local_region_source", "spam_source_reject"}
+    )
+
+
 def _text_vector_pair_metrics(
     e5_vectors: list[dict[str, Any]],
     bge_vectors: list[dict[str, Any]],
@@ -938,9 +966,19 @@ def _text_vector_pair_metrics(
                 parts.append(value)
         return len(re.sub(r"\s+", " ", ". ".join(parts)).strip())
 
-    actionable_e5_rows = [row for row in latest_e5_by_post.values() if bge_input_text_length(row) >= bge_min_text_chars]
-    actionable_pending_rows = [row for row in pending if bge_input_text_length(row) >= bge_min_text_chars]
-    below_bge_min_rows = [row for row in pending if bge_input_text_length(row) < bge_min_text_chars]
+    source_terminal_pending_rows = [row for row in pending if _vector_source_terminal_excluded(row)]
+    actionable_e5_rows = [
+        row for row in latest_e5_by_post.values()
+        if not _vector_source_terminal_excluded(row) and bge_input_text_length(row) >= bge_min_text_chars
+    ]
+    actionable_pending_rows = [
+        row for row in pending
+        if not _vector_source_terminal_excluded(row) and bge_input_text_length(row) >= bge_min_text_chars
+    ]
+    below_bge_min_rows = [
+        row for row in pending
+        if not _vector_source_terminal_excluded(row) and bge_input_text_length(row) < bge_min_text_chars
+    ]
     actionable_paired = len(actionable_e5_rows) - len(actionable_pending_rows)
     metrics.update({
         "text_vector_current_version_e5_unique_posts_total": current_total,
@@ -950,6 +988,7 @@ def _text_vector_pair_metrics(
         "text_vector_current_version_semantic_bank_mismatch_total": semantic_version_mismatch,
         "text_vector_current_version_dual_coverage_percent": int(round((current_paired / current_total) * 100)) if current_total else 0,
         "text_vector_current_version_e5_below_bge_min_text_total": len(below_bge_min_rows),
+        "text_vector_current_version_e5_without_bge_source_terminal_total": len(source_terminal_pending_rows),
         "text_vector_current_version_e5_without_bge_actionable_total": len(actionable_pending_rows),
         "text_vector_current_version_dual_actionable_coverage_percent": int(round((actionable_paired / len(actionable_e5_rows)) * 100)) if actionable_e5_rows else 0,
         "text_vector_current_version_bge_pair_lag_seconds_avg": int(round(sum(paired_lags) / len(paired_lags))) if paired_lags else 0,
@@ -2154,6 +2193,7 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     """Use measured runtime headroom without extending the 20-minute guardrail."""
     runtime_seconds = _safe_float(metrics.get("candidate_heartbeat_runtime_elapsed_seconds")) or 0.0
     bge_backlog = _safe_int(metrics.get("bge_pending_sample_total"))
+    bge_capacity = max(1, _safe_int(metrics.get("bge_capacity_rows")) or _env_int("REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS", 48))
     heartbeat_event = str(metrics.get("candidate_heartbeat_event_name") or "").strip().lower()
     heartbeat_phase = str(metrics.get("candidate_heartbeat_phase") or "").strip().lower()
     heartbeat_status = str(metrics.get("candidate_heartbeat_status") or "").strip().lower()
@@ -2162,9 +2202,9 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
         or heartbeat_event in {"state_write_started", "report_write_started"}
         or heartbeat_phase in {"state_write", "report_write"}
     )
-    if runtime_seconds > 1050 or incomplete_late_tail:
+    if runtime_seconds > 1050 or incomplete_late_tail or bge_backlog > bge_capacity:
         history_sources = 5
-    elif runtime_seconds > 900 or bge_backlog > 48:
+    elif runtime_seconds > 900 or bge_backlog >= int(round(bge_capacity * 0.75)):
         history_sources = 6
     else:
         # Two profiled production runs completed in about 13-14 minutes with
@@ -2178,6 +2218,8 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     return {
         "history_sources": history_sources,
         "fast_check_sources": fast_check_sources,
+        "bge_capacity_rows": bge_capacity,
+        "bge_backlog_capacity_percent": int(round((bge_backlog / bge_capacity) * 100)),
         "runtime_seconds_observed": int(round(runtime_seconds)),
         "incomplete_late_tail_observed": int(incomplete_late_tail),
     }
@@ -2277,6 +2319,32 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         existing_pks={str(v.get("_ydb_pk") or "") for v in vectors},
         limit=bge_sample_limit,
     )
+    bge_collect_stats = dict(getattr(bge_mod, "LAST_COLLECT_STATS", {}) or {})
+    bge_capacity_rows = max(1, _env_int("REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS", 48))
+    candidate_memory_terminal_local = [
+        row for row in candidates
+        if str(row.get("source_queue_status") or row.get("fetch_status") or "") == "rejected_local_region_source"
+        or str(row.get("source_scope") or "") == "local_region"
+        or str(row.get("source_geo_class") or "") == "kaliningrad_local"
+        or str(row.get("current_lifecycle_status") or "") == "source_terminal_local_audit_only"
+    ]
+    candidate_memory_terminal_spam = [
+        row for row in candidates
+        if str(row.get("source_queue_status") or row.get("fetch_status") or "") == "rejected_spam_source"
+        or str(row.get("source_scope") or "") == "spam"
+        or str(row.get("source_quick_class") or "") == "spam_source_reject"
+        or str(row.get("current_lifecycle_status") or "") == "source_terminal_spam_audit_only"
+    ]
+    candidate_memory_dual_pending = [
+        row for row in candidates
+        if str(row.get("vector_gate_status") or "") == "vector_defer_wait_bge_m3"
+        or str(row.get("current_stage") or "") == "dual_model_vector_enrichment_pending"
+        or str(row.get("text_vector_fusion_status") or "") == "missing_bge_m3_enrichment"
+    ]
+    candidate_memory_image_wait = [
+        row for row in candidates
+        if str(row.get("current_lifecycle_status") or "") in {"text_candidate_pending_image", "image_fetch_retry_needed", "image_reviewable"}
+    ]
 
     image_pending = [r for r in images if str(r.get("image_queue_status") or "") in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}]
     image_pending_vk_without_url = [
@@ -2531,6 +2599,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "processed_posts_unique_latest_candidate_run_total": len(processed_post_latest_run_unique_keys),
         "processed_post_duplicate_identity_rows_latest_candidate_run_total": max(0, len(processed_post_latest_run_rows) - len(processed_post_latest_run_unique_keys)),
         "candidate_memory_total": len(candidates),
+        "candidate_memory_terminal_local_audit_total": len(candidate_memory_terminal_local),
+        "candidate_memory_terminal_spam_audit_total": len(candidate_memory_terminal_spam),
+        "candidate_memory_dual_pending_total": len(candidate_memory_dual_pending),
+        "candidate_memory_image_wait_total": len(candidate_memory_image_wait),
+        "candidate_memory_operational_total": max(0, len(candidates) - len({str(row.get("_ydb_pk") or id(row)) for row in candidate_memory_terminal_local + candidate_memory_terminal_spam})),
         "image_queue_total": len(images),
         "image_product_eligible_total": len(image_product_eligible),
         "image_pending_total": len(image_pending),
@@ -2559,6 +2632,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "latest_candidate_heuristic_to_publication_rate_percent": int(round((heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_publication_total", 0) / heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0)) * 100)) if heuristic_ko_funnel_metrics.get("heuristic_ko_latest_run_raw_posts_total", 0) else 0,
         "bge_pending_sample_total": len(bge_pending_rows),
         "bge_pending_sample_limit": bge_sample_limit,
+        "bge_capacity_rows": bge_capacity_rows,
+        "bge_backlog_capacity_percent": int(round((len(bge_pending_rows) / bge_capacity_rows) * 100)),
+        "bge_backlog_within_next_run_capacity": int(len(bge_pending_rows) <= bge_capacity_rows),
+        "bge_source_terminal_skipped_sample_total": _safe_int(bge_collect_stats.get("source_terminal_skipped")),
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
         **_heartbeat_metric_fields("bge", latest_rows.get("latest_business_heartbeat:bge_m3_enrichment")),
         **_heartbeat_metric_fields("image", latest_rows.get("latest_business_heartbeat:image_diagnostic")),
@@ -2673,7 +2750,7 @@ def build_decision_plan(
                 "--batch-size", str(max(1, bge_batch_size)),
                 "--no-wait",
             ],
-            "pending E5 text-vector rows need paired BGE enrichment immediately after main E5",
+            f"pending E5 text-vector rows need paired BGE enrichment immediately after main E5 ({bge_backlog}/{external_cpu_capacity} CPU-row capacity)",
             resource="kaggle:bge_m3",
             parallel_safe=True,
             timeout_seconds=300,

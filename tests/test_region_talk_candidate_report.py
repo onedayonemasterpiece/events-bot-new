@@ -296,6 +296,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             rows[0]["external_bge_m3_fusion_changed_this_run"] = "true"
             selected_after_row_bge_change = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1", bge_memory_fusion_stats={"promoted": 1, "rejected": 0})
             self.assertEqual([r["candidate_memory_id"] for r in selected_after_row_bge_change], ["old", "fresh", "new"])
+            rows[0].pop("external_bge_m3_fusion_changed_this_run")
+            rows[0]["candidate_memory_source_cleanup_changed_this_run"] = "true"
+            selected_after_source_cleanup = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1")
+            self.assertEqual([r["candidate_memory_id"] for r in selected_after_source_cleanup], ["old", "fresh", "new"])
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", None)
@@ -656,6 +660,58 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "kaliningrad_mention_role": "main_subject",
         })
         self.assertEqual(reason, "local_kaliningrad_source_for_separate_monitoring")
+
+    def test_terminal_source_cleanup_makes_old_candidate_memory_audit_only(self) -> None:
+        mod = load_module()
+        rows = [
+            {
+                "candidate_memory_id": "local",
+                "source_title": "Музей Мирового океана",
+                "source_url": "https://t.me/world_ocean_museum",
+                "current_stage": "dual_model_vector_enrichment_pending",
+                "current_lifecycle_status": "source_not_refetched_this_run",
+                "not_refetched_this_run": "true",
+            },
+            {
+                "candidate_memory_id": "external",
+                "source_title": "Большая страна",
+                "source_url": "https://t.me/bolshayastrana",
+                "current_stage": "image_fetch_retry_needed",
+                "current_lifecycle_status": "image_fetch_retry_needed",
+            },
+        ]
+        stats = mod.apply_terminal_source_cleanup_to_candidate_memory(rows)
+        self.assertEqual(stats["local"], 1)
+        self.assertEqual(stats["changed"], 1)
+        self.assertEqual(rows[0]["current_lifecycle_status"], "source_terminal_local_audit_only")
+        self.assertEqual(rows[0]["candidate_memory_source_cleanup_changed_this_run"], "true")
+        self.assertEqual(rows[1]["current_lifecycle_status"], "image_fetch_retry_needed")
+
+    def test_durable_processed_post_key_is_fetch_path_independent(self) -> None:
+        mod = load_module()
+        observations = [
+            {"post_id": "post_history", "platform_post_key": "tg:DaVosDV:57778", "post_url": "https://t.me/DaVosDV/57778"},
+            {"post_id": "post_public_web", "platform_post_key": "telegram:@davOSdv:57778"},
+            {"post_id": "post_exact", "post_url": "https://t.me/davosdv/57778?single=1"},
+        ]
+        self.assertEqual({mod.durable_processed_post_key(row) for row in observations}, {"tg:davosdv:57778"})
+        compact = mod.compact_region_talk_state_for_ydb({
+            "run_id": "unit",
+            "posts": {str(index): row for index, row in enumerate(observations)},
+        })
+        self.assertEqual(list(compact["processed_posts"]), ["tg:davosdv:57778"])
+
+    def test_e5_row_carries_terminal_source_decision_for_bge_skip(self) -> None:
+        mod = load_module()
+        text = "Калининград и Музей Мирового океана"
+        rows = mod.build_e5_text_vector_enrichment_rows(
+            [{"post_id": "p1", "post_url": "https://t.me/world_ocean_museum/1", "source_title": "Музей Мирового океана", "text": text}],
+            [{"semantic_scores_by_class": {"ko_visit_impression": 0.8, "ad_or_promo": 0.1}}],
+            [text],
+            run_id="unit",
+        )
+        self.assertEqual(rows[0]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertTrue(rows[0]["source_terminal_excluded"])
 
     def test_source_queue_local_signal_overrides_processed_candidate_status(self) -> None:
         mod = load_module()

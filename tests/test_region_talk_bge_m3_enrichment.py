@@ -102,6 +102,28 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         rows = mod.collect_text_rows({"text_vector_enrichment_item": {"text_vector_enrichment_item:p-bge:bge": bge_row}}, existing_pks=set(), limit=5)
         self.assertEqual(rows, [])
 
+    def test_collect_text_rows_skips_terminal_local_and_spam_e5_rows(self) -> None:
+        mod = load_bge_module()
+        rows_by_pk = {}
+        for index, status in enumerate(("rejected_local_region_source", "rejected_spam_source", ""), start=1):
+            text = f"Личный рассказ {index} о поездке в Калининградскую область и впечатлениях."
+            rows_by_pk[f"e5:{index}"] = {
+                "post_id": f"p{index}",
+                "post_url": f"https://t.me/source/{index}",
+                "model_id": "intfloat/multilingual-e5-base",
+                "model_short": "e5",
+                "text_hash": mod.text_hash(text),
+                "text_excerpt": text,
+                "source_queue_status": status,
+            }
+        rows = mod.collect_text_rows(
+            {"text_vector_enrichment_item": rows_by_pk},
+            existing_pks=set(),
+            limit=5,
+        )
+        self.assertEqual([row["post_id"] for row in rows], ["p3"])
+        self.assertEqual(mod.LAST_COLLECT_STATS["source_terminal_skipped"], 2)
+
     def test_collect_text_rows_reserves_priority_and_fifo_capacity(self) -> None:
         mod = load_bge_module()
         items = {"text_vector_enrichment_item": {}}

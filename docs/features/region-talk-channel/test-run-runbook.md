@@ -15,6 +15,9 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
 - `kaggle/RegionTalkQwen3Embedding06BEnrichment/region_talk_qwen3_embedding_06b_enrichment.py` — no-Telegram Qwen3-Embedding-0.6B research vectorization worker over the same live YDB rows.
 - `kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py` — Kaggle launcher for Qwen3/EmbeddingGemma research batches; it writes separate research rows such as `qwen3_embedding_0_6b_enrichment_item` or `embeddinggemma_300m_enrichment_item` and does not feed production fusion.
 - `scripts/region_talk_embedding_quality_compare.py` — local live-YDB comparison of BGE and Qwen research rows against confident candidate/image/publication labels.
+- `scripts/region_talk_post_row_normalize.py` — dry-run-first maintenance for
+  historical `processed_post_item` duplicates caused by fetch-path-dependent
+  post IDs; execute in bounded groups and re-read metrics after every batch.
 - `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
 
 Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic, and only the E2E human session for local Saved Messages delivery. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
@@ -168,6 +171,18 @@ YDB mode must be one of:
 
 - configured dev/test namespace through `REGION_TALK_YDB_*`; or
 - explicit dry-run JSON namespace under `artifacts/region-talk/runs/{run_id}/dry-run-state/`.
+
+Legacy post-row normalization:
+
+```bash
+# inspect only (default), no YDB mutation
+python3 scripts/region_talk_post_row_normalize.py \
+  --env-file /home/dev/projects/events-bot-new/.env --max-groups 200
+
+# after reviewing the artifact; stable row is written before old keys are deleted
+python3 scripts/region_talk_post_row_normalize.py \
+  --env-file /home/dev/projects/events-bot-new/.env --max-groups 200 --execute
+```
 
 
 For z8 product-acceleration runs, prefer explicit state settings. Use `REGION_TALK_STATE_BACKEND=ydb` only when the YDB env set is provisioned; otherwise run with fallback intentionally visible (`REGION_TALK_STATE_BACKEND=ydb`, `REGION_TALK_REQUIRE_YDB_STATE=0`) and require the XLSX to show `state_backend=json_fallback`, `state_fallback_used=true` and the YDB fail reason. A production-like acceptance run must not silently use JSON state.

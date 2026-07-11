@@ -20,6 +20,7 @@ MODEL_SHORT = "bge_m3"
 ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
 RUN_STARTED_AT = datetime.now(timezone.utc)
 RUN_STARTED_MONOTONIC = time.monotonic()
+LAST_COLLECT_STATS: dict[str, int] = {}
 
 
 def apply_runtime_env_defaults() -> None:
@@ -660,8 +661,33 @@ def _is_bge_text_vector_row(row: dict[str, Any]) -> bool:
     return str(row.get("model_short") or "") == MODEL_SHORT or str(row.get("model_id") or "") == MODEL_ID
 
 
+def _source_terminal_excluded(row: dict[str, Any]) -> bool:
+    return bool(
+        row.get("source_terminal_excluded") is True
+        or str(row.get("source_terminal_excluded") or "").lower() in {"1", "true", "yes"}
+        or str(row.get("source_queue_status") or row.get("fetch_status") or "")
+        in {"rejected_local_region_source", "rejected_spam_source"}
+        or str(row.get("source_scope") or "") in {"local_region", "spam"}
+        or str(row.get("source_geo_class") or "") == "kaliningrad_local"
+        or str(row.get("source_quick_class") or "") in {"local_region_source", "spam_source_reject"}
+        or str(row.get("source_topic_class") or "")
+        in {"local_region_source_surface", "spam_or_commercial_hashtag_source"}
+    )
+
+
 def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, existing_pks: set[str], limit: int, include_existing: bool = False) -> list[dict[str, Any]]:
+    global LAST_COLLECT_STATS
     rows: list[dict[str, Any]] = []
+    stats = {
+        "input_rows": 0,
+        "source_terminal_skipped": 0,
+        "non_e5_skipped": 0,
+        "short_text_skipped": 0,
+        "existing_skipped": 0,
+        "duplicate_skipped": 0,
+        "eligible_rows": 0,
+        "selected_rows": 0,
+    }
     seen_text_or_url: set[str] = set()
     e5_only = getenv_bool("REGION_TALK_BGE_E5_ONLY", True)
     priority = {
@@ -677,21 +703,29 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
         for _pk, row in items.items():
             if not isinstance(row, dict):
                 continue
+            stats["input_rows"] += 1
             if kind == "text_vector_enrichment_item":
                 # BGE is the external consumer of E5 rows.  Never re-process
                 # BGE rows as input, otherwise the table accumulates BGE-on-BGE
                 # duplicates and raw BGE totals become larger than E5 totals.
                 if _is_bge_text_vector_row(row):
+                    stats["non_e5_skipped"] += 1
                     continue
                 if e5_only and not _is_e5_text_vector_row(row):
+                    stats["non_e5_skipped"] += 1
                     continue
             elif e5_only:
                 # Production dual-model mode is E5 -> BGE.  Historical direct
                 # candidate/image/post rows can still be enabled explicitly for
                 # research via REGION_TALK_BGE_E5_ONLY=0.
+                stats["non_e5_skipped"] += 1
+                continue
+            if _source_terminal_excluded(row):
+                stats["source_terminal_skipped"] += 1
                 continue
             text, used = text_from_row(row)
             if len(text) < getenv_int("REGION_TALK_BGE_MIN_TEXT_CHARS", 24):
+                stats["short_text_skipped"] += 1
                 continue
             post_url = str(row.get("post_url") or "").strip()
             post_id = str(row.get("post_id") or row.get("candidate_memory_id") or row.get("publication_candidate_id") or "").strip()
@@ -699,9 +733,11 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
             sha = source_text_hash or text_hash(text)
             pk = enrichment_pk(post_id, post_url, sha)
             if not include_existing and pk in existing_pks:
+                stats["existing_skipped"] += 1
                 continue
             dedupe_key = post_url or sha
             if dedupe_key in seen_text_or_url:
+                stats["duplicate_skipped"] += 1
                 continue
             seen_text_or_url.add(dedupe_key)
             rr = dict(row)
@@ -714,6 +750,7 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
                 rr["_paired_e5_enrichment_id"] = row.get("text_vector_enrichment_id") or str(row.get("_ydb_pk") or "").replace("text_vector_enrichment_item:", "")
             rr["_enrichment_pk"] = pk
             candidates.append((priority.get(kind, 9), str(row.get("post_date") or row.get("published_at") or ""), rr))
+    stats["eligible_rows"] = len(candidates)
 
     def is_product_priority(item: tuple[int, str, dict[str, Any]]) -> bool:
         row = item[2]
@@ -761,6 +798,8 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
         selected.extend(fifo[fifo_cap:fifo_cap + (target - len(selected))])
     for _priority, _date, row in selected:
         rows.append(row)
+    stats["selected_rows"] = len(rows)
+    LAST_COLLECT_STATS = stats
     return rows
 
 
@@ -785,6 +824,7 @@ def load_ydb_rows(limit: int, *, include_existing: bool = False) -> tuple[list[d
             "loaded_by_kind": {kind: len(items_by_kind.get(kind) or {}) for kind in kinds},
             "existing_text_vector_enrichment_items": len(existing_pks),
             "e5_only": getenv_bool("REGION_TALK_BGE_E5_ONLY", True),
+            "collect_stats": dict(LAST_COLLECT_STATS),
         }
         return rows, meta
 
@@ -925,7 +965,7 @@ def run_bge_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
     if not rows and getenv_bool("REGION_TALK_BGE_ALLOW_FALLBACK_TEXTS", False):
         rows = make_fallback_rows(limit)
         ydb_meta["fallback_texts_used"] = True
-    emit_event("bge_text_rows_loaded", phase="load_ydb", status="running", run_id=run_id, texts_loaded=len(rows), texts_total=len(rows), progress_label=f"BGE rows loaded {len(rows)}")
+    emit_event("bge_text_rows_loaded", phase="load_ydb", status="running", run_id=run_id, texts_loaded=len(rows), texts_total=len(rows), source_terminal_skipped=int((ydb_meta.get("collect_stats") or {}).get("source_terminal_skipped") or 0), progress_label=f"BGE rows loaded {len(rows)}")
     if not rows:
         summary = {
             "ok": True,

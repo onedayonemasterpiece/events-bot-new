@@ -43,6 +43,13 @@ media_id     = stable hash(post_id + media_url_or_phash)
 candidate_id = stable hash(post_id + semantic_bank_version + selected_media_fingerprint)
 ```
 
+The current row-level KV projection uses the readable durable post key whenever
+possible: `tg:<lowercase_handle>:<message_id>` or
+`vk:<owner_id>:<post_id>`. `post_id` is payload metadata only and must not be
+the YDB PK because its historical value included the fetch path (Telethon
+history, public web, exact-link fetch). Online writes, snapshot writes and state
+loading re-key by the platform identity and merge non-empty fields.
+
 Dedupe requirements:
 
 - canonicalize URLs before hashing;
@@ -50,6 +57,16 @@ Dedupe requirements:
 - store `text_hash` for posts and perceptual hash for images;
 - run semantic duplicate checks for near-identical reposts;
 - repeated source/post observations update cumulative state (`first_seen_run_id`, `last_seen_run_id`, `seen_run_count`) instead of creating duplicate candidates.
+- legacy `processed_post_item:post_hash_*` duplicates are normalized only by
+  the dry-run-first `scripts/region_talk_post_row_normalize.py`: it UPSERTs the
+  merged stable row before deleting redundant keys.
+
+`candidate_memory_item` remains an audit/history layer. Rows whose source is
+durably local-region or spam are retained but moved to
+`source_terminal_local_audit_only` / `source_terminal_spam_audit_only`; they are
+excluded from operational candidate, BGE, image and Gemini capacity. Metrics
+must expose total, operational, local-audit, spam-audit, dual-pending and
+image-wait populations separately.
 
 ## Table overview
 
