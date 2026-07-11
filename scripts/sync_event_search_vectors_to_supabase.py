@@ -550,6 +550,45 @@ def upsert_embeddings(rows: list[dict[str, Any]], *, chunk_size: int = 50) -> in
     return sent
 
 
+def fetch_indexed_event_ids() -> set[int]:
+    out: set[int] = set()
+    page_size = 1000
+    offset = 0
+    while True:
+        rows = supabase_request(
+            "GET",
+            f"event_search_documents?select=event_id&order=event_id.asc&limit={page_size}&offset={offset}",
+        ) or []
+        out.update(int(row["event_id"]) for row in rows if row.get("event_id") is not None)
+        if len(rows) < page_size:
+            return out
+        offset += page_size
+
+
+def delete_stale_events(event_ids: Iterable[int], *, chunk_size: int = 80) -> int:
+    """Remove sidecar projections absent from the authoritative full fixture.
+
+    Embeddings are deleted explicitly before documents so this remains safe if a
+    deployment has not applied the FK cascade from the canonical migration.
+    """
+
+    stale = sorted({int(event_id) for event_id in event_ids})
+    for start in range(0, len(stale), max(1, int(chunk_size))):
+        chunk = stale[start : start + max(1, int(chunk_size))]
+        in_list = ",".join(str(event_id) for event_id in chunk)
+        supabase_request("DELETE", f"event_embeddings?event_id=in.({in_list})", timeout=45.0)
+        supabase_request("DELETE", f"event_search_documents?event_id=in.({in_list})", timeout=45.0)
+    return len(stale)
+
+
+def write_report(report: dict[str, Any], path: str) -> None:
+    if not path:
+        return
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def retry_delay_seconds(exc: urllib.error.HTTPError, attempt: int) -> float:
     retry_after = exc.headers.get("Retry-After") if exc.headers else None
     if retry_after:
@@ -634,6 +673,17 @@ def main() -> int:
     parser.add_argument("--sleep-seconds", type=float, default=0.0)
     parser.add_argument("--upsert-chunk-size", type=int, default=20)
     parser.add_argument("--force", action="store_true", help="Regenerate embeddings even when text_hash matches.")
+    parser.add_argument(
+        "--prune-missing",
+        action="store_true",
+        help="Delete sidecar rows absent from this authoritative full-catalog fixture.",
+    )
+    parser.add_argument(
+        "--require-complete",
+        action="store_true",
+        help="Exit non-zero when the provider-call cap leaves any requested embedding missing.",
+    )
+    parser.add_argument("--report-json", default="", help="Write the final structured run report to this path.")
     parser.add_argument("--apply", action="store_true", help="Write documents/embeddings to Supabase. Without this, only prints a plan.")
     parser.add_argument("--dry-run", action="store_true", help="Explicit no-op alias for the default planning mode.")
     args = parser.parse_args()
@@ -678,6 +728,7 @@ def main() -> int:
             }
             for doc in docs[:5]
         ]
+        write_report(report, args.report_json)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
 
@@ -749,15 +800,33 @@ def main() -> int:
         upserted_embeddings += upsert_embeddings(rows)
     skipped_total = sum(skipped_by_kind.values())
     expected_embeddings = len(docs) * len(document_kinds)
+    not_embedded_due_call_cap = max(0, expected_embeddings - skipped_total - provider_calls)
+    stale_event_ids: list[int] = []
+    if args.prune_missing:
+        indexed_ids = fetch_indexed_event_ids()
+        fixture_ids = {doc.event_id for doc in docs}
+        stale_event_ids = sorted(indexed_ids - fixture_ids)
+        delete_stale_events(stale_event_ids)
     report.update({
         "documents_upserted": upserted_docs,
         "embeddings_upserted": upserted_embeddings,
         "embeddings_skipped_unchanged": skipped_total,
         "embeddings_skipped_by_kind": skipped_by_kind,
         "provider_calls": provider_calls,
-        "not_embedded_due_call_cap": max(0, expected_embeddings - skipped_total - provider_calls),
+        "not_embedded_due_call_cap": not_embedded_due_call_cap,
+        "stale_events_deleted": len(stale_event_ids),
+        "stale_event_ids": stale_event_ids,
+        "complete": not_embedded_due_call_cap == 0,
+        "elapsed_seconds": round(time.monotonic() - started_at, 3),
     })
+    write_report(report, args.report_json)
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if args.require_complete and not_embedded_due_call_cap:
+        print(
+            f"vector sync incomplete: {not_embedded_due_call_cap} embeddings left by provider-call cap",
+            file=sys.stderr,
+        )
+        return 2
     return 0
 
 

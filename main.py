@@ -14207,13 +14207,17 @@ async def enqueue_job(
                 # Instead, ensure a single deferred *coalesced* follow-up exists and push its
                 # next_run_at further on every change (15 minutes after the last update).
                 if (
-                    task in {JobTask.month_pages, JobTask.weekend_pages}
-                    and job.event_id != event_id
+                    task in {JobTask.month_pages, JobTask.weekend_pages, JobTask.event_vector_sync}
+                    and (job.event_id != event_id or task == JobTask.event_vector_sync)
                     and job.coalesce_key
                 ):
                     deferred_time = next_run_at
                     if not deferred_time or deferred_time <= now:
-                        deferred_time = datetime.now(timezone.utc) + timedelta(minutes=15)
+                        deferred_time = datetime.now(timezone.utc) + (
+                            timedelta(seconds=90)
+                            if task == JobTask.event_vector_sync
+                            else timedelta(minutes=15)
+                        )
 
                     existing_followup = (
                         await session.execute(
@@ -15393,8 +15397,29 @@ async def schedule_event_update_tasks(
             results[JobTask.festival_pages] = await enqueue_job(
                 db, eid, JobTask.festival_pages
             )
+        if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {"1", "true", "yes", "on"}:
+            results[JobTask.static_site_build] = await enqueue_job(
+                db,
+                eid,
+                JobTask.static_site_build,
+                payload={"reason": "smart_update", "event_id": eid},
+                coalesce_key="static_site_build:prod",
+                next_run_at=deferred_time,
+            )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
+    if (os.getenv("ENABLE_EVENT_VECTOR_SYNC") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        vector_sync_at = datetime.now(timezone.utc) + timedelta(
+            seconds=max(0, int((os.getenv("EVENT_VECTOR_SYNC_DEBOUNCE_SECONDS") or "90").strip() or "90"))
+        )
+        results[JobTask.event_vector_sync] = await enqueue_job(
+            db,
+            eid,
+            JobTask.event_vector_sync,
+            payload={"reason": "smart_update", "event_id": eid},
+            coalesce_key="event_vector_sync:prod",
+            next_run_at=vector_sync_at,
+        )
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:
         await _drain_nav_tasks(db, eid)
@@ -17010,6 +17035,8 @@ JOB_TTL: dict[JobTask, int] = {
     JobTask.month_pages: 3600,
     JobTask.week_pages: 3600,
     JobTask.weekend_pages: 3600,
+    JobTask.event_vector_sync: 10800,
+    JobTask.static_site_build: 7200,
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
@@ -17021,6 +17048,8 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.month_pages: 180,
     JobTask.week_pages: 180,
     JobTask.weekend_pages: 180,
+    JobTask.event_vector_sync: 7200,
+    JobTask.static_site_build: 5400,
 }
 
 DEFAULT_JOB_TTL = 3600
@@ -17347,6 +17376,8 @@ async def _run_due_jobs_once_locked(
         JobTask.week_pages: 1,
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
+        JobTask.event_vector_sync: 2,
+        JobTask.static_site_build: 3,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
     tg_event_post_id: dict[int, int | None] = {}
@@ -21474,6 +21505,198 @@ async def festivals_fix_nav(
 festivals_nav_dedup = festivals_fix_nav
 rebuild_festival_pages_nav = festivals_fix_nav
 
+from event_vector_sync import job_event_vector_sync
+
+def _static_site_status_callback_url() -> str:
+    explicit = (
+        os.getenv("STATIC_SITE_STATUS_CALLBACK_URL")
+        or os.getenv("KAGGLE_STATUS_CALLBACK_URL")
+        or ""
+    ).strip()
+    if explicit:
+        return explicit
+    webhook = (os.getenv("WEBHOOK_URL") or "").strip()
+    if webhook:
+        return webhook.rstrip("/") + "/internal/kaggle/run-event"
+    fly_app = (os.getenv("FLY_APP_NAME") or "events-bot-new-wngqia").strip()
+    return f"https://{fly_app}.fly.dev/internal/kaggle/run-event"
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = (os.getenv(name) or "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    return int(raw)
+
+
+def _first_env(*names: str, default: str = "") -> str:
+    for name in names:
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    return default
+
+
+def _static_site_build_kaggle_command(
+    *,
+    db_path: str,
+    build_id: str,
+    limit: int,
+    current_date: str,
+    script_path: str,
+    status_callback_url: str,
+) -> list[str]:
+    related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
+    if related_mode not in {"sparse", "pgvector"}:
+        raise ValueError(f"unsupported STATIC_SITE_RELATED_MODE={related_mode!r}")
+    cmd = [
+        sys.executable,
+        script_path,
+        "--db",
+        db_path,
+        "--status-db",
+        db_path,
+        "--status-callback-url",
+        status_callback_url,
+        "--limit",
+        str(limit),
+        "--current-date",
+        current_date,
+        "--build-id",
+        build_id,
+        "--public-site-origin",
+        _first_env("STATIC_SITE_PUBLIC_SITE_ORIGIN", "PUBLIC_SITE_ORIGIN", default="https://kenigevents.ru"),
+        "--asset-base-url",
+        _first_env("STATIC_SITE_ASSET_BASE_URL", "PUBLIC_ASSET_BASE_URL"),
+        "--astro-asset-base-url",
+        _first_env("STATIC_SITE_ASTRO_ASSET_BASE_URL", "PUBLIC_ASTRO_ASSET_BASE_URL"),
+        "--ics-base-url",
+        _first_env("STATIC_SITE_ICS_BASE_URL", "PUBLIC_ICS_BASE_URL"),
+        "--public-personalization-supabase-url",
+        _first_env(
+            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL",
+            "PUBLIC_PERSONALIZATION_SUPABASE_URL",
+            "PERSONALIZATION_SUPABASE_URL",
+        ),
+        "--public-personalization-supabase-publishable-key",
+        _first_env(
+            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+            "PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+            "PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+        ),
+        "--public-yandex-auth-provider",
+        _first_env("STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER", "PUBLIC_YANDEX_AUTH_PROVIDER", default="custom:yandex"),
+        "--export-in-kaggle",
+        "--related-cache",
+        (os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json").strip(),
+        "--related-mode",
+        related_mode,
+        "--pgvector-embedding-model",
+        (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2").strip(),
+        "--pgvector-embedding-key-env",
+        (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+        "--pgvector-max-provider-calls",
+        str(_env_int("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", 1000)),
+        "--gemma-related-model",
+        (os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it").strip(),
+        "--gemma-related-key-env",
+        (os.getenv("STATIC_SITE_GEMMA_RELATED_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+        "--gemma-related-max-anchors",
+        str(_env_int("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS", 0)),
+        "--timeout-minutes",
+        str(_env_int("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES", 60)),
+        "--poll-interval",
+        str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
+        "--download-output",
+    ]
+    if _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"):
+        cmd.append("--sync-pgvector-vectors")
+    if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
+        cmd.append("--gemma-related-verify")
+    if _env_flag("STATIC_SITE_KEEP_SECRET_DATASETS"):
+        cmd.append("--keep-secret-datasets")
+    return cmd
+
+
+async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool:
+    """Coalesced static-site build after Smart Update.
+
+    Heavy Astro build work runs on Kaggle CPU; Fly only exports data, pushes the
+    kernel and receives a tar.gz artifact. The Kaggle status dataset/ledger is
+    intentionally the same contract CherryFlash uses, so operators see
+    heartbeat/progress from inside the kernel instead of opaque failed runs.
+    """
+
+    enabled = (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        logging.info("static_site_build: skipped because ENABLE_STATIC_SITE_KAGGLE_BUILDER is off")
+        return False
+    # Production builds own the whole actionable catalog; bounded preview
+    # canaries must opt into a smaller limit explicitly.
+    limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
+    now_local = datetime.now(LOCAL_TZ)
+    current_date = (os.getenv("STATIC_SITE_CURRENT_DATE") or now_local.date().isoformat()).strip()
+    build_id = (
+        os.getenv("STATIC_SITE_BUILD_ID")
+        or f"preview-{now_local.strftime('%Y%m%d%H%M')}-event-pages-prod{limit}-kaggle"
+    ).strip()
+    script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
+    cmd = _static_site_build_kaggle_command(
+        db_path=db.path,
+        build_id=build_id,
+        limit=limit,
+        current_date=current_date,
+        script_path=script_path,
+        status_callback_url=_static_site_status_callback_url(),
+    )
+    logging.info(
+        "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
+        event_id,
+        build_id,
+        limit,
+        (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
+        _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
+        _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
+    )
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=os.path.dirname(__file__),
+        env=os.environ.copy(),
+    )
+    assert proc.stdout is not None
+    tail: list[str] = []
+    while True:
+        line = await proc.stdout.readline()
+        if not line:
+            break
+        text = line.decode("utf-8", errors="replace").rstrip()
+        if text:
+            logging.info("static_site_build: %s", text)
+            tail.append(text)
+            if len(tail) > 80:
+                tail.pop(0)
+    code = await proc.wait()
+    if code != 0:
+        raise RuntimeError(
+            f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
+        )
+    logging.info("static_site_build: done build_id=%s", build_id)
+    return True
+
 
 JOB_HANDLERS = {
     "telegraph_build": update_telegraph_event_page,
@@ -21487,6 +21710,8 @@ JOB_HANDLERS = {
     "weekend_pages": job_weekend_pages_debounced,
     "festival_pages": update_festival_pages_for_event,
     "fest_nav:update_all": update_all_festival_nav,
+    "event_vector_sync": job_event_vector_sync,
+    "static_site_build": job_static_site_build_kaggle,
 }
 
 

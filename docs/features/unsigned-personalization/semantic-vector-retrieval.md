@@ -313,6 +313,21 @@ Evidence from 2026-06-29 UTC:
 3. Kaggle StaticSiteBuilder runs on CPU from a production SQLite snapshot.
 4. Static exporter emits compact preview events and search documents.
 5. Vector sync upserts changed `event_search_documents` and only changed/missing `event_embeddings` into personalization Supabase.
+
+### Durable production projection
+
+Production ownership is independent of static preview builds. With
+`ENABLE_EVENT_VECTOR_SYNC=1`, every completed Smart Update enqueues one
+coalesced `event_vector_sync:prod` outbox job (default debounce: 90 seconds),
+and APScheduler performs a full actionable-catalog reconciliation every
+`EVENT_VECTOR_SYNC_INTERVAL_MINUTES` (default: 180). The job exports the whole
+current catalogue, projects both document kinds by hash, removes stale sidecar
+rows, fails/retries on an incomplete provider-call cap, and persists structured
+counts/errors in `ops_run(kind='event_vector_sync')`.
+
+StaticSiteBuilder remains a build consumer and may explicitly refresh vectors
+for a preview, but it no longer owns regular production ingestion. Ephemeral
+audit embeddings never count as persistent sidecar coverage.
 6. Related graph is recomputed for the whole active/future set, not only changed anchors: a new event can become the best related candidate for older events.
 7. Gemma 4 26B verifier reranks/rejects already retrieved candidates; strict publication must not label raw pgvector candidates as similar when Gemma verification fails.
 8. Astro builds HTML/JSON/ICS from the static manifest.

@@ -1272,6 +1272,7 @@ class JobTask(str, Enum):
     week_pages = "week_pages"
     festival_pages = "festival_pages"
     static_site_build = "static_site_build"
+    event_vector_sync = "event_vector_sync"
     fest_nav_update_all = "fest_nav:update_all"
 
 

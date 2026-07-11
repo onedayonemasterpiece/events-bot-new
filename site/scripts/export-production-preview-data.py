@@ -2292,6 +2292,11 @@ def main() -> int:
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
     parser.add_argument("--gemma-related-max-anchors", type=int, default=0, help="0 = no cap for enabled audit")
+    parser.add_argument(
+        "--skip-related",
+        action="store_true",
+        help="Export preview-events.json only; used by the dedicated vector projection lane.",
+    )
     args = parser.parse_args()
 
     con = sqlite3.connect(args.db)
@@ -2331,6 +2336,11 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.skip_related:
+        print(f"Exported {len(events)} events to {out_dir}")
+        print("IDs:", ",".join(str(event["id"]) for event in events))
+        print("Related: skipped")
+        return 0
     if args.related_mode == "pgvector" and args.sync_pgvector_vectors:
         sync_event_vectors_to_supabase(
             preview_events_json=preview_events_path,

@@ -1,8 +1,8 @@
 """Event identity candidate documents and Supabase vector recall helpers.
 
-This module is intentionally not wired into Smart Update yet.  It only provides
-server-side/backend primitives that can be called by future Smart Update lanes
-with an injected service-role Supabase client.
+Smart Update uses these backend primitives for vector-first identity recall.
+Vectors retrieve candidates only; LLM/source-grounded gates make the final
+match/create decision.
 """
 
 from __future__ import annotations
@@ -250,68 +250,25 @@ def build_identity_candidate_document(
     labels: list[str] = ["doc.kind"]
     truncated = False
 
+    # Keep the incoming vector in the same semantic space as persisted
+    # ``related_v1``. Raw source/OCR, URLs, ticket logistics and image hashes are
+    # valuable adjudication evidence, but embedding them here makes the query
+    # document asymmetric and lets sponsor/venue noise swamp event identity.
     for label, name in (
         ("candidate.title", "title"),
-        ("candidate.date", "date"),
-        ("candidate.time", "time"),
-        ("candidate.end_date", "end_date"),
-        ("candidate.location_name", "location_name"),
-        ("candidate.location_address", "location_address"),
-        ("candidate.city", "city"),
         ("candidate.event_type", "event_type"),
-        ("candidate.festival", "festival"),
-        ("candidate.ticket_status", "ticket_status"),
-        ("candidate.ticket_link", "ticket_link"),
-        ("candidate.source_type", "source_type"),
-        ("candidate.source_url", "source_url"),
         ("candidate.search_digest", "search_digest"),
-        ("candidate.raw_excerpt", "raw_excerpt"),
+        ("candidate.short_description", "short_description"),
+        ("candidate.description", "description"),
+        ("candidate.location_name", "location_name"),
+        ("candidate.city", "city"),
+        ("candidate.festival", "festival"),
     ):
         truncated |= _append_line(
             lines,
             labels,
             label,
             _read_attr(candidate, name),
-            max_chars=field_max_chars,
-        )
-
-    # Source text is identity-useful, but also the biggest field; give it its own
-    # tighter budget to keep embedding costs predictable.
-    truncated |= _append_line(
-        lines,
-        labels,
-        "candidate.source_text",
-        _read_attr(candidate, "source_text"),
-        max_chars=source_text_max_chars,
-    )
-
-    poster_titles = _poster_values(candidate, "ocr_title")
-    if poster_titles:
-        truncated |= _append_line(
-            lines,
-            labels,
-            "candidate.posters.ocr_title",
-            poster_titles,
-            max_chars=field_max_chars,
-        )
-    poster_texts = _poster_values(candidate, "ocr_text", max_items=2)
-    if poster_texts:
-        truncated |= _append_line(
-            lines,
-            labels,
-            "candidate.posters.ocr_text",
-            poster_texts,
-            max_chars=field_max_chars,
-        )
-    poster_hashes = _poster_values(candidate, "phash") or list(
-        _read_attr(candidate, "poster_scope_hashes", []) or []
-    )[:4]
-    if poster_hashes:
-        truncated |= _append_line(
-            lines,
-            labels,
-            "candidate.posters.phash",
-            poster_hashes,
             max_chars=field_max_chars,
         )
 

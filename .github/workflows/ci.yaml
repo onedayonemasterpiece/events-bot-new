@@ -13,4 +13,21 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      # ... ваши шаги тестов/линта
+      - name: Compile incident-critical pipelines
+        run: >-
+          python -m py_compile
+          event_vector_sync.py
+          event_identity.py
+          smart_event_update.py
+          vk_auto_queue.py
+          scheduling.py
+          main.py
+          scripts/sync_event_search_vectors_to_supabase.py
+          site/scripts/export-production-preview-data.py
+      - name: Run incident regression tests
+        run: >-
+          python -m pytest -q
+          tests/test_event_vector_sync.py
+          tests/test_event_identity.py
+          tests/test_static_site_build_handoff.py
+          tests/test_vk_auto_queue_import.py

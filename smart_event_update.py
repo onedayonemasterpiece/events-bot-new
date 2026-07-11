@@ -3948,6 +3948,12 @@ def _looks_like_promo_or_congrats(*texts: str | None) -> bool:
 _RU_MONTHS_GENITIVE_RE = (
     "января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря"
 )
+_DATE_SIGNAL_RE = re.compile(
+    rf"(?iu)\b(?:"
+    rf"\d{{1,2}}[./-]\d{{1,2}}(?:[./-](?:19|20)\d{{2}})?|"
+    rf"\d{{1,2}}\s+(?:{_RU_MONTHS_GENITIVE_RE})"
+    rf")\b"
+)
 _DEADLINE_RE = re.compile(
     rf"(?i)\b(?:до|дедлайн|срок(?:\s+подачи)?|успеть)\s+"
     rf"(?:\d{{1,2}}[./]\d{{1,2}}(?:[./](?:19|20)\d{{2}})?|\d{{1,2}}\s+(?:{_RU_MONTHS_GENITIVE_RE}))\b"
@@ -14509,6 +14515,11 @@ async def _smart_event_update_impl(
         shortlist = filtered
 
     llm_create_bundle: dict[str, Any] | None = None
+    # Deterministic match branches do not call the LLM matcher, but the shared
+    # title-safety guard below still consumes these values. Keep their evidence
+    # explicitly neutral instead of leaving function-local state unbound.
+    match_id: int | None = None
+    confidence = 0.0
 
     if not shortlist:
         match_event = None

@@ -272,6 +272,12 @@ async def test_vk_auto_import_marks_row_failed_on_timeout(tmp_path, monkeypatch)
     assert any("таймаут обработки поста" in text for _, text in bot.messages)
 
     async with db.raw_conn() as conn:
+        ops_cur = await conn.execute(
+            "SELECT status FROM ops_run WHERE kind='vk_auto_import' ORDER BY id DESC LIMIT 1"
+        )
+        ops_row = await ops_cur.fetchone()
+        assert ops_row is not None
+        assert ops_row[0] == "failed"
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE id=1")
         row = await cur.fetchone()
         assert row is not None

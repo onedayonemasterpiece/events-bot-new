@@ -23,7 +23,7 @@ class Poster:
     phash: str | None = None
 
 
-def test_identity_candidate_document_has_hash_truncation_and_provenance_labels():
+def test_identity_candidate_document_uses_canonical_semantics_not_raw_evidence():
     candidate = {
         "title": "Большой концерт",
         "date": "2026-07-10",
@@ -31,6 +31,7 @@ def test_identity_candidate_document_has_hash_truncation_and_provenance_labels()
         "location_name": "Дом искусств",
         "city": "Калининград",
         "event_type": "concert",
+        "search_digest": "Симфонический концерт для всей семьи",
         "source_type": "telegram",
         "source_url": "https://t.me/example/42",
         "source_text": "афиша " + ("очень длинный текст " * 80),
@@ -43,15 +44,25 @@ def test_identity_candidate_document_has_hash_truncation_and_provenance_labels()
     assert doc.kind == IDENTITY_CANDIDATE_DOC_KIND
     assert doc.sha256 == doc_again.sha256
     assert len(doc.sha256) == 64
-    assert doc.truncated is True
+    assert doc.truncated is False
     assert doc.char_count <= 520
     assert doc.embedding_model == "gemini-embedding-2"
     assert doc.embedding_dim == 768
     assert "[candidate.title] Большой концерт" in doc.text
-    assert "[candidate.source_text]" in doc.text
-    assert "[candidate.posters.ocr_title]" in doc.text
+    assert "[candidate.search_digest] Симфонический концерт для всей семьи" in doc.text
     assert "candidate.location_name" in doc.provenance_labels
-    assert "candidate.posters.phash" in doc.provenance_labels
+    for forbidden in (
+        "candidate.source_text",
+        "candidate.raw_excerpt",
+        "candidate.source_url",
+        "candidate.ticket_link",
+        "candidate.posters.ocr_title",
+        "candidate.posters.ocr_text",
+        "candidate.posters.phash",
+        "https://t.me/example/42",
+        "abc123",
+    ):
+        assert forbidden not in doc.text
 
 
 class _RpcResult:

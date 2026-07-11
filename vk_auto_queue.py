@@ -690,6 +690,8 @@ class VkAutoImportReport:
     cancelled: bool = False
     created_event_ids: list[int] = field(default_factory=list)
     updated_event_ids: list[int] = field(default_factory=list)
+    inbox_ids: list[int] = field(default_factory=list)
+    source_urls: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
@@ -1568,6 +1570,8 @@ async def run_vk_auto_import(
                 source_url = _vk_wall_url(
                     post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
                 )
+                report.inbox_ids.append(int(post.id))
+                report.source_urls.append(source_url)
                 total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else "?"
                 progress_mid: int | None = None
                 if send_progress and (current_no % progress_every == 0):
@@ -1600,6 +1604,7 @@ async def run_vk_auto_import(
                         progress_current_no=current_no,
                         progress_total_txt=total_txt,
                         prefetched=prefetched_row,
+                        ops_run_id=ops_run_id,
                     )
                 )
 
@@ -1662,6 +1667,8 @@ async def run_vk_auto_import(
                 source_url = _vk_wall_url(
                     post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
                 )
+                report.inbox_ids.append(int(post.id))
+                report.source_urls.append(source_url)
                 total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else str(int(limit_int))
                 progress_mid = None
                 if send_progress and (current_no % progress_every == 0):
@@ -1694,6 +1701,7 @@ async def run_vk_auto_import(
                         progress_current_no=current_no,
                         progress_total_txt=total_txt,
                         prefetched=prefetched_row,
+                        ops_run_id=ops_run_id,
                     )
                 )
 
@@ -1753,10 +1761,19 @@ async def run_vk_auto_import(
         logger.exception("vk_auto: failed to send summary")
 
     _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
+    terminal_status = (
+        "canceled"
+        if report.cancelled
+        else "partial"
+        if report.inbox_failed > 0 and report.inbox_processed > report.inbox_failed
+        else "failed"
+        if report.inbox_failed > 0
+        else "success"
+    )
     await finish_ops_run(
         db,
         run_id=ops_run_id,
-        status="canceled" if report.cancelled else "success",
+        status=terminal_status,
         metrics={
             "inbox_processed": int(report.inbox_processed),
             "inbox_imported": int(report.inbox_imported),
@@ -1774,7 +1791,30 @@ async def run_vk_auto_import(
         details={
             "batch_id": batch_id,
             "run_id": run_id,
+            "inbox_ids": list(dict.fromkeys(report.inbox_ids)),
+            "source_urls": list(dict.fromkeys(report.source_urls)),
+            "created_event_ids": sorted(set(report.created_event_ids)),
+            "updated_event_ids": sorted(set(report.updated_event_ids)),
             "errors": list(report.errors or [])[:40],
+        },
+    )
+    logger.info(
+        "vk_auto_import terminal ops_run_id=%s run_id=%s batch_id=%s status=%s inbox_ids=%s source_urls=%s created_event_ids=%s updated_event_ids=%s metrics=%s",
+        ops_run_id,
+        run_id,
+        batch_id,
+        terminal_status,
+        list(dict.fromkeys(report.inbox_ids)),
+        list(dict.fromkeys(report.source_urls)),
+        sorted(set(report.created_event_ids)),
+        sorted(set(report.updated_event_ids)),
+        {
+            "processed": report.inbox_processed,
+            "imported": report.inbox_imported,
+            "rejected": report.inbox_rejected,
+            "failed": report.inbox_failed,
+            "deferred": report.inbox_deferred,
+            "duration_sec": round(float(took), 3),
         },
     )
     return report
@@ -1796,6 +1836,7 @@ async def _process_vk_inbox_row(
     progress_current_no: int,
     progress_total_txt: str,
     prefetched: VkInboxPrefetch | None = None,
+    ops_run_id: int | None = None,
 ) -> None:
     import main as main_mod
 
@@ -1814,18 +1855,21 @@ async def _process_vk_inbox_row(
     def _log_row_timing(*, drafts_count: int, ok_value: bool) -> None:
         took_total = time.monotonic() - start_ts
         slow_log_due = took_total >= slow_log_sec if slow_log_sec > 0 else True
-        if not (timings_on or slow_log_due or not ok_value):
-            return
         try:
             logger.info(
-                "timing vk_auto_import_row inbox_id=%s group_id=%s post_id=%s drafts=%s ok=%s took_sec=%.3f stages=%s",
+                "timing vk_auto_import_row ops_run_id=%s batch_id=%s inbox_id=%s group_id=%s post_id=%s source_url=%s drafts=%s ok=%s took_sec=%.3f stages=%s created_event_ids=%s updated_event_ids=%s",
+                ops_run_id,
+                batch_id,
                 int(getattr(post, "id", 0) or 0),
                 int(getattr(post, "group_id", 0) or 0),
                 int(getattr(post, "post_id", 0) or 0),
+                source_url,
                 int(drafts_count),
                 1 if ok_value else 0,
                 float(took_total),
                 {k: round(v, 3) for k, v in sorted(t_stage.items())},
+                sorted(set(report.created_event_ids)),
+                sorted(set(report.updated_event_ids)),
             )
         except Exception:
             pass

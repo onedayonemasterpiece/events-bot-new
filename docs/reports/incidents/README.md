@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-11-event-vector-sidecar-sync-stalled.md`
+  - Scope: regular incremental event-vector synchronization, production sidecar freshness/coverage, Smart Update/VK-import follow-up and sufficient run evidence.
+  - Must not regress: ephemeral audit embeddings must not be reported as persistent production coverage; current imported events must reach both `search_v3` and `related_v1`, with freshness/coverage failures visible and attributable.
 - `INC-2026-07-10-future-event-semantic-audit.md`
   - Scope: exact future canonical inventory audits, vector-first recall with LLM source/date-role adjudication, deadline/historical non-events, wrong-time/date duplicates, merge contamination, venue drift and all managed public projections.
   - Must not regress: vector similarity/identity approval must never count as semantic quality evidence; every audited row needs a current source-grounded LLM verdict, provider/missing-evidence cases fail closed, and destructive repair requires a source-confirmed survivor plus backups.

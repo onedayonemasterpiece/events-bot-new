@@ -54,6 +54,11 @@ Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_buck
 
 Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`) and the date-focus controls `--current-datetime`, `--focus-date-from`, `--focus-date-to`. This means the coalesced `static_site_build` job can reproduce the v59-style vector sync/retrieval/Gemma strict-verification process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
 
+`INC-2026-07-11-event-vector-sidecar-sync-stalled` restored this optional
+handoff after a merge dropped it. Regular production vector ingestion is owned
+by the separate full-catalog `event_vector_sync` lane; do not enable a coupled
+preview build merely to keep search vectors fresh.
+
 Static related publication policy:
 
 - Astro generation consumes cached strict related manifests and does not call Supabase/LLM on page view;

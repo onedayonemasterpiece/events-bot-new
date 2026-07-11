@@ -3244,6 +3244,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "nightly_page_sync",
     "telegraph_cache_sanitize",
     "vk_post_prune",
+    "event_vector_sync",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
@@ -4592,6 +4593,44 @@ def startup(
         )
     else:
         logging.info("SCHED skipping exhibition_duplicate_audit (ENABLE_EXHIBITION_DUPLICATE_AUDIT!=1)")
+
+    if _env_enabled("ENABLE_EVENT_VECTOR_SYNC", default=False):
+        from event_vector_sync import run_event_vector_sync
+
+        async def event_vector_sync_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            await run_event_vector_sync(
+                db_obj,
+                trigger="scheduled",
+                scheduler_run_id=run_id,
+            )
+
+        vector_interval = max(
+            15,
+            int((os.getenv("EVENT_VECTOR_SYNC_INTERVAL_MINUTES") or "180").strip() or "180"),
+        )
+        _register_job(
+            "event_vector_sync",
+            _job_wrapper(
+                "event_vector_sync",
+                event_vector_sync_scheduler,
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="event_vector_sync",
+            minutes=vector_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=1800,
+        )
+    else:
+        logging.info("SCHED skipping event_vector_sync (ENABLE_EVENT_VECTOR_SYNC!=1)")
 
     enable_general_stats = _env_enabled("ENABLE_GENERAL_STATS", default=False)
     if enable_general_stats:
