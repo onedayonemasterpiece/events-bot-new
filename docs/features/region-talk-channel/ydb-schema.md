@@ -125,6 +125,9 @@ Full post text, normalized full text and raw Telegram/VK API payloads are not
 stored in YDB. Non-candidate/invalid posts are represented only by per-source
 cursors and aggregate counters; if a human needs the content again, it must be
 re-fetched by `post_url`/platform key.
+Verifier/publication rows retain at most 700 characters of text for audit; the
+canonical durable fields are `post_url`, platform post key, `text_hash`, compact
+summary, gate evidence and decision.
 
 Unique/index: `(platform, platform_post_key)`.
 

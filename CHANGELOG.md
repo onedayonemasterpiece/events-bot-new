@@ -25,6 +25,8 @@
   to the operator chat, and `accepted_new` now excludes historical re-accepts.
   Source-queue sequence repairs now scope transient repair markers to the
   current run, preventing stale flags from rewriting thousands of rows.
+  Publication rows now cap retained verifier text at 700 characters; full
+  source post bodies remain outside YDB.
   Per-run funnel metrics are durable, and E5 isolation defaults
   to `spawn` after a real forked worker SIGSEGV deferred 31 of 39 fetched posts.
 - **Region Talk / durable post identity and capacity hygiene**: processed-post

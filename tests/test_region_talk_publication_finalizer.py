@@ -276,6 +276,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(result[0]["publication_eligibility_gate_version"], "publication-source-gate-v3")
         self.assertEqual(json.loads(result[0]["publication_eligibility_evidence"])["source_policy"], "eligible")
 
+        result[0]["text"] = "x" * 2000
         captured = {}
 
         class Pool:
@@ -297,6 +298,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["publication_eligibility_gate_version"], "publication-source-gate-v3")
         self.assertEqual(payload["attempt_count"], 1)
         self.assertEqual(payload["finalizer_state_version"], mod.PUBLICATION_FINALIZER_STATE_VERSION)
+        self.assertEqual(len(payload["text"]), 700)
 
     def test_unknown_local_and_spam_fail_closed_without_gemini_and_revoke_prior_accept(self) -> None:
         mod = self.mod

@@ -965,7 +965,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
                 "post_url": normalize_post_url(str(row.get("post_url") or "")),
             },
             fields,
-            max_len=1800,
+            max_len=700,
         )
         key = payload.get("post_url") or payload.get("image_queue_id") or str(row.get("publication_rank"))
         if key:
