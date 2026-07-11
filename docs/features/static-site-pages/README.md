@@ -2,13 +2,13 @@
 
 > **Status:** Astro SSG preview implemented; production rollout pending  
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
-> **Out of scope for MVP:** экскурсии как отдельный домен, авторизация, перенос core event DB в Supabase, полная миграция всех Telegraph surfaces.
+> **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 
 ## Implementation status
 
 В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
 
-Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: committed production-like fixture → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий шаг — заменить fixture на регулярный export из Fly SQLite/static page manifest и включить production canonical после canary-gate.
+Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать `image_text_mode` из существующего OCR/media-контура. В hero `ocr_text`/`unknown` идут в `poster-stage` (full poster on solid slab), `visual_only` — в `photo-cover`; в discovery cards `ocr_text`/`unknown` рендерятся в натуральном соотношении без crop/backdrop, `visual_only` допускает cover-кроп в вертикальной 4:5 карточке; date-listing thumbnails (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) являются компактным навигационным preview и используют crop в левой колонке, при этом detail page остаётся источником полного постера. Astro build сам OCR не запускает.
 
 
@@ -154,13 +154,20 @@ Runtime policy: `ocr_text`/`unknown` stay `contain`/natural-ratio no-crop; `visu
 
 - Домен: `kenigevents.ru`.
 - Публикуем только **будущие активные события**.
-- Авторизации в MVP нет.
-- Anonymous personalization допустима с простым consent/banner: пользователь подтверждает “ОК”, после чего включается аналитика/персонализация.
+- Публичный static fallback не требует авторизации; optional authorized search/identity surfaces do not change crawlable HTML availability.
+- Anonymous local personalization допустима только после consent; remote telemetry/profile materialization remains a separate gated capability.
 - Telegraph остаётся временным compatibility/fallback layer примерно на **1 месяц** после включения статических страниц.
 - Доступы к Yandex Cloud/Object Storage будут выданы отдельным шагом; до этого проектируем контракт и пайплайн без привязки к конкретным credentials.
 
 ## Связанные документы
 
+- Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
+- Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
+- Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
+- Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
+- Event transport: `docs/features/event-transport/README.md`.
+- Event comment feedback: `docs/features/event-comment-feedback/README.md`.
+- Admin issue reporting: `docs/features/event-issue-reporting/README.md`.
 - Astro SSG preview runbook and public URLs: `docs/features/static-site-pages/astro-preview.md`.
 - CDN asset delivery: `docs/features/static-site-pages/cdn-asset-delivery.md`.
 - Listing personal feed: `docs/features/static-site-pages/listing-personal-feed.md`.

@@ -8,6 +8,7 @@ entrypoints:
 sections:
   architecture:
     overview: docs/architecture/overview.md
+    personalization_data_ownership: docs/architecture/personalization-data-ownership.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
@@ -16,6 +17,8 @@ sections:
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
+    event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
+    email_delivery: docs/operations/email-delivery.md
     telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
       docs: docs/operations/cron.md
@@ -94,8 +97,19 @@ sections:
       - docs/backlog/linear/EVE-55-gemma-integration.md
   reports:
     index: docs/reports/README.md
+    static_personal_announcements_release_readiness_2026_07_11: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
+    static_personal_announcements_branch_refresh_2026_07_11: docs/reports/static-personal-announcements-branch-refresh-2026-07-11.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_event_vector_sidecar_sync_stalled_2026_07_11: docs/reports/incidents/INC-2026-07-11-event-vector-sidecar-sync-stalled.md
+    incident_future_event_semantic_audit_2026_07_10: docs/reports/incidents/INC-2026-07-10-future-event-semantic-audit.md
+    incident_zoo_ticket_validity_non_event_2026_07_10: docs/reports/incidents/INC-2026-07-10-zoo-ticket-validity-non-event.md
+    incident_recurring_occurrence_date_drift_2026_07_09: docs/reports/incidents/INC-2026-07-09-recurring-occurrence-date-drift.md
+    incident_new_event_quality_degradation_2026_07_07: docs/reports/incidents/INC-2026-07-07-new-event-quality-degradation.md
+    incident_exhibition_duplicates_static_site_2026_07_02: docs/reports/incidents/INC-2026-07-02-exhibition-duplicates-static-site.md
+    incident_future_event_date_default_venue_regressions_2026_06_24: docs/reports/incidents/INC-2026-06-24-future-event-date-default-venue-regressions.md
+    incident_tg_location_prose_still_extracted_2026_06_18: docs/reports/incidents/INC-2026-06-18-tg-location-prose-still-extracted.md
+    incident_active_duplicate_events_recall_gate_2026_05_30: docs/reports/incidents/INC-2026-05-30-active-duplicate-events-recall-gate.md
     incident_cherryflash_eco_retry_storm_2026_07_11: docs/reports/incidents/INC-2026-07-11-cherryflash-eco-retry-storm.md
     incident_vk_story_forward_wall_first_2026_06_05: docs/reports/incidents/INC-2026-06-05-vk-story-forward-wall-first.md
     incident_vk_posts_personal_author_2026_05_19: docs/reports/incidents/INC-2026-05-19-vk-posts-personal-author.md
@@ -137,6 +151,16 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  static_personal_announcements:
+    status: release_planning
+    docs: docs/features/static-personal-announcements/README.md
+    global_product_decisions: docs/features/static-personal-announcements/global-product-decisions.md
+    release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
+    architecture: docs/architecture/personalization-data-ownership.md
+    data_routing_skill: .codex/skills/events-bot-dual-db/SKILL.md
+    event_quality_operations: docs/operations/event-quality-release-monitoring.md
+    email_operations: docs/operations/email-delivery.md
+
   digests:
     status: implemented
     docs: docs/features/digests/README.md
@@ -262,6 +286,12 @@ features:
     astro_preview: docs/features/static-site-pages/astro-preview.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
+    event_sharing: docs/features/static-site-pages/event-sharing.md
+    image_framing: docs/features/static-site-pages/image-framing.md
+    related_event_transport: docs/features/event-transport/README.md
+    related_event_comment_feedback: docs/features/event-comment-feedback/README.md
+    related_event_issue_reporting: docs/features/event-issue-reporting/README.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
@@ -273,7 +303,20 @@ features:
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
     preview_url: https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/
+    capabilities:
+      static_ssg_preview: preview
+      smart_update_build_handoff: code_only_production_disabled
+      production_atomic_promotion: missing
+      catalog_freshness: partial_blocked
+      release_ui: candidate_signoff_pending
+      sharing: preview_canvas_offline_generator_missing
+      image_framing: renderer_preview_metadata_producer_missing
     entrypoints:
+      - main.py
+      - smart_event_update.py
+      - scripts/run_static_site_builder_kaggle.py
+      - kaggle/StaticSiteBuilder/static_site_builder.py
+      - site/scripts/export-production-preview-data.py
       - site/package.json
       - site/astro.config.mjs
       - site/src/pages/[preview]/index.astro
@@ -299,8 +342,12 @@ features:
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
       - site/scripts/deploy-preview-yc.mjs
+    tests:
+      - tests/test_static_site_build_handoff.py
+      - tests/test_static_site_public_gate.py
+      - site/scripts/check-preview.mjs
   unsigned_personalization:
-    status: design
+    status: mixed_partial
     docs: docs/features/unsigned-personalization/README.md
     research: docs/features/unsigned-personalization/alanytics.md
     model_selection: docs/features/unsigned-personalization/model-selection.md
@@ -314,6 +361,10 @@ features:
     semantic_vector_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
     production_integration: docs/features/unsigned-personalization/production-integration.md
+    data_ownership: docs/architecture/personalization-data-ownership.md
+    related_identity: docs/features/site-user-identity/README.md
+    related_favorites_calendar: docs/features/event-favorites-calendar/README.md
+    related_personal_email: docs/features/personal-email-announcements/README.md
     gemini_review_2026_06_26: docs/features/unsigned-personalization/gemini-review-2026-06-26.md
     gemini_review_2026_06_27: docs/features/unsigned-personalization/gemini-review-2026-06-27.md
     opus_review_2026_06_27: docs/features/unsigned-personalization/opus-review-2026-06-27.md
@@ -331,9 +382,88 @@ features:
     related_static_site: docs/features/static-site-pages/README.md
     sample_manifest: docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json
     probe_script: scripts/probe_event_detail_related.py
+    capabilities:
+      local_anonymous_profile: preview
+      related_pgvector: canary_partial
+      authorized_search: canary_partial
+      remote_telemetry_ingest: design
+      durable_profile: design
+      profile_merge: design
     entrypoints:
       - static_site/personalization/personalization.js
       - static_site/personalization/demo.html
+      - event_vector_sync.py
+      - scripts/sync_event_search_vectors_to_supabase.py
+      - site/src/components/AuthorizedEventSearch.astro
+      - supabase/functions/event-search/index.ts
+      - scripts/check_authorized_search_readiness.py
+      - scripts/smoke_authorized_search_ui.py
+    tests:
+      - tests/test_event_vector_sync.py
+      - tests/test_static_site_pgvector_export.py
+      - tests/e2e/features/static_site_personalization.feature
+      - tests/playwright/static_personalization_contract.spec.ts
+  site_user_identity:
+    status: partial_design
+    docs: docs/features/site-user-identity/README.md
+    data_ownership: docs/architecture/personalization-data-ownership.md
+    related_search: docs/features/unsigned-personalization/authorized-event-search.md
+    related_favorites: docs/features/event-favorites-calendar/README.md
+    capabilities:
+      yandex_login_logout: partial
+      verified_email_identity: design
+      profile_linking: design
+
+  event_favorites_calendar:
+    status: design_with_ics_preview
+    docs: docs/features/event-favorites-calendar/README.md
+    related_identity: docs/features/site-user-identity/README.md
+    related_static_site: docs/features/static-site-pages/README.md
+    related_transactional_email: docs/features/event-email-notifications/README.md
+    capabilities:
+      ics_export: preview
+      durable_favorite: design
+      calendar_favorite_atomic_state: design
+
+  personal_email_announcements:
+    status: design_v2
+    docs: docs/features/personal-email-announcements/README.md
+    operations: docs/operations/email-delivery.md
+    data_ownership: docs/architecture/personalization-data-ownership.md
+    related_personalization: docs/features/unsigned-personalization/README.md
+    planned_successor_branch: feature/personal-email-announcements-v2
+
+  event_email_notifications:
+    status: prototype_port_required
+    docs: docs/features/event-email-notifications/README.md
+    operations: docs/operations/email-delivery.md
+    related_favorites: docs/features/event-favorites-calendar/README.md
+    superseded_branch: feature/event-email-notifications-static-20260702
+
+  event_transport:
+    status: branch_candidate_refresh_blocked_by_wip
+    docs: docs/features/event-transport/README.md
+    related_static_site: docs/features/static-site-pages/README.md
+    implementation_branch: integration/event-transport-schedule
+
+  event_comment_feedback:
+    status: design_probe_port_required
+    docs: docs/features/event-comment-feedback/README.md
+    ydb_schema: docs/features/event-comment-feedback/ydb-schema.md
+    static_site_contract: docs/features/event-comment-feedback/static-site-contract.md
+    llm_verifier_contract: docs/features/event-comment-feedback/llm-verifier-contract.md
+    phrase_bank: docs/features/event-comment-feedback/phrase-bank-v1.md
+    probe_plan: docs/features/event-comment-feedback/probe-plan.md
+    data_ownership: docs/architecture/personalization-data-ownership.md
+    docs_source_branch: origin/docs/event-comment-feedback-docs
+    superseded_runner_branch: agent/event-comment-feedback-kaggle-runner
+
+  event_issue_reporting:
+    status: prototype_clean_port_required
+    docs: docs/features/event-issue-reporting/README.md
+    related_incident_management: docs/operations/incident-management.md
+    data_ownership: docs/architecture/personalization-data-ownership.md
+    superseded_mixed_branch: feature/event-issue-report-artkodex-20260703
   telegram_monitoring:
     status: implemented
     docs: docs/features/telegram-monitoring/README.md
