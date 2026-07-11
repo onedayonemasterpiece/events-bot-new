@@ -17,9 +17,11 @@ before rendering a video, while the persisted partner watchdog continued to
 consider the daily slot missing and retried until its 22:00 local deadline.
 
 The actual first failure was not the visible LLM warning and not `missing video
-output`. Kaggle failed while building the intro because the runtime selection
-manifest was unavailable/empty at the renderer boundary; the renderer silently
-switched to an obsolete static April design fixture and then raised
+output`. The Eco event-date recall selected event `6651`, whose poster image was
+renderable but whose `EventPoster.ocr_text` was empty. The poster-overlay pass
+dropped both scenes because the partner profile still set `allow_empty_ocr=false`.
+That produced an empty derived selection manifest at the renderer boundary; the
+renderer silently switched to an obsolete static April fixture and then raised
 `FileNotFoundError` for fixture poster `event_id=3292` / `3292.jpg`.
 `missing video output` was the downstream symptom after that render failure.
 
@@ -55,20 +57,26 @@ switched to an obsolete static April design fixture and then raised
 
 Two gaps combined into the incident:
 
-1. The production intro renderer treated the derived
+1. Eco event-date recall can add a current/future renderable event after the
+   base OCR-filtered popularity stage, but the partner profile retained
+   `allow_empty_ocr=false`. The later poster-overlay pass therefore removed all
+   primary scenes for event `6651` instead of using its existing canonical
+   title/date/location overlay fallback.
+2. The production intro renderer treated the derived
    `assets/cherryflash_selection.json` as its only live selection input. When
    that file was unavailable or empty at the runtime boundary, it silently
    loaded a local design-time April fixture rather than reconstructing the
    selection from required root-level `payload.json` or failing closed. The
    fixture referenced `3292.jpg`, which is not part of a live session bundle.
-2. The partner-track watchdog had a time deadline but no persisted failure
+3. The partner-track watchdog had a time deadline but no persisted failure
    count. Every terminal `FAILED` session reopened the daily slot, so the
    ten-minute watchdog launched another deterministic failure until 22:00.
 
-The exact reason the derived manifest was unavailable in the deleted private
-session dataset can no longer be inspected: after terminal handling its dataset
-API returns `403`. This does not block prevention because `payload.json` is the
-canonical required render input and now supplies the recovery path.
+The first seven private session datasets were deleted after terminal handling
+and their APIs return `403`, but the post-deploy fail-fast catch-up `#881`
+reproduced the upstream boundary directly: `poster_overlay` logged `dropped=2`
+and dataset validation rejected `CherryFlash selection manifest has no primary
+event scenes` before Kaggle upload.
 
 ## Contributing Factors
 
@@ -144,6 +152,9 @@ canonical required render input and now supplies the recovery path.
 ## Corrective Actions
 
 - Added a persisted cap of two failed partner sessions per profile/date.
+- Enabled the existing canonical metadata-overlay fallback for Eco recall
+  events with a renderable poster but no persisted OCR, so selected scenes are
+  not removed after final text generation.
 - Added `payload.json` recovery for missing/empty derived selection manifests
   and prohibited live `CHERRYFLASH_ROOT` runs from silently using the fixture.
 - Added a redundant root-level selection manifest and fail-fast empty-selection validation.

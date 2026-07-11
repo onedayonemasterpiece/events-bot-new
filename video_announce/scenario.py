@@ -1925,7 +1925,12 @@ class VideoAnnounceScenario:
             "render_scene_limit": POPULAR_REVIEW_MAX_EVENTS,
             "selected_required_period": None,
             "random_order": False,
-            "allow_empty_ocr": False,
+            # Eco event-date recall can legitimately recover a renderable
+            # current/future event whose poster image exists but whose
+            # EventPoster OCR was never persisted.  The renderer already
+            # creates a canonical title/date/location overlay for this case;
+            # dropping every scene here produces an empty live payload.
+            "allow_empty_ocr": partner_track.track_id == "partner_eco_nature_001",
             "story_publish_enabled": True,
             "story_publish_mode": "video",
             "story_upload_profile": "telegram_story_native_hevc_720p_v1",
