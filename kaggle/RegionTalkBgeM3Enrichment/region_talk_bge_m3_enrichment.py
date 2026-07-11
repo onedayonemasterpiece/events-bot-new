@@ -1014,6 +1014,16 @@ def run_bge_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
         }
         (output_dir / "bge_m3_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": []}, ensure_ascii=False, indent=2), encoding="utf-8")
         (Path.cwd() / "output.json").write_text(json.dumps({"ok": True, "status": "no_rows", "run_id": run_id, "summary": summary}, ensure_ascii=False, indent=2), encoding="utf-8")
+        emit_event(
+            "bge_enrichment_done",
+            phase="write_ydb",
+            status="no_rows",
+            run_id=run_id,
+            texts_done=0,
+            texts_total=0,
+            bge_rows_written=0,
+            elapsed_seconds=summary["elapsed_seconds"],
+        )
         return {"ok": True, "status": "no_rows", "summary": summary, "rows": []}
 
     encoder = BgeEncoder()

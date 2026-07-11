@@ -19,6 +19,8 @@
   and the production namespace defaults to `region_talk_compact` across the
   Candidate/BGE/Image/finalizer launch path. BGE's YDB visibility window is now
   20k rows so newer E5 work cannot starve behind the former 6k PK prefix.
+  Empty BGE runs now emit a terminal `bge_enrichment_done/no_rows` heartbeat
+  instead of leaving the last visible stage at `bge_text_rows_loaded`.
   Per-run funnel metrics are durable, and E5 isolation defaults
   to `spawn` after a real forked worker SIGSEGV deferred 31 of 39 fetched posts.
 - **Region Talk / durable post identity and capacity hygiene**: processed-post

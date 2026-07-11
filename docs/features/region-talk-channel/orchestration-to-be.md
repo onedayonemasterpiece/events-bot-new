@@ -536,6 +536,9 @@ The BGE worker independently scans at least 20,000 `text_vector_enrichment_item`
 rows. A 6,000-row prefix window is invalid once the shared E5+BGE kind exceeds
 that size: newer E5 PKs can otherwise remain invisible and actionable dual
 backlog will never drain.
+Even an empty BGE pass must finish with
+`bge_enrichment_done(status=no_rows)` so the orchestrator can distinguish a
+clean empty queue from a worker stuck after YDB loading.
 
 Suggested stop/trigger counters:
 

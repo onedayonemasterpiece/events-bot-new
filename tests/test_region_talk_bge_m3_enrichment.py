@@ -4,6 +4,7 @@ import importlib.util
 import os
 import sys
 import unittest
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest import mock
 
@@ -151,6 +152,22 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         # Four product-priority rows (fresh-first) plus one oldest FIFO row.
         self.assertEqual([row["post_id"] for row in rows[:4]], ["p7", "p6", "p5", "p4"])
         self.assertEqual(rows[4]["post_id"], "p8")
+
+    def test_no_rows_emits_terminal_done_heartbeat(self) -> None:
+        mod = load_bge_module()
+        events: list[tuple[str, dict]] = []
+        with TemporaryDirectory() as tmpdir, mock.patch.object(
+            mod, "load_ydb_rows", return_value=([], {"collect_stats": {}})
+        ), mock.patch.object(
+            mod, "emit_event", side_effect=lambda name, **payload: events.append((name, payload))
+        ), mock.patch.object(
+            mod.Path, "cwd", return_value=Path(tmpdir)
+        ):
+            result = mod.run_bge_enrichment("unit-no-rows", Path(tmpdir) / "output")
+        self.assertEqual(result["status"], "no_rows")
+        self.assertEqual(events[-1][0], "bge_enrichment_done")
+        self.assertEqual(events[-1][1]["status"], "no_rows")
+        self.assertEqual(events[-1][1]["bge_rows_written"], 0)
 
     def test_build_enrichment_payload_contains_geo_and_antivector_fields(self) -> None:
         mod = load_bge_module()
