@@ -1,0 +1,70 @@
+---
+import { getEventBusSuggestion } from '../lib/eventBusTransport';
+import type { PreviewEvent } from '../lib/types';
+
+interface Props { event: PreviewEvent; }
+const { event } = Astro.props;
+const suggestion = getEventBusSuggestion(event);
+const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
+---
+{suggestion && (
+  <aside class="event-bus" data-event-bus-schedule data-bus-route={suggestion.id} aria-labelledby={headingId}>
+    <header class="event-bus__header">
+      <div>
+        <h2 id={headingId}>Как добраться на автобусе</h2>
+        <p>{suggestion.originStop} → {suggestion.venueName}</p>
+      </div>
+      <span class="event-bus__symbol" aria-hidden="true">А</span>
+    </header>
+
+    <div class="event-bus__options">
+      {suggestion.outbound.map((option) => (
+        <section class="event-bus__option" data-bus-number={option.route}>
+          <p class="event-bus__route">№ {option.route}{option.alsoRoute && <span> / № {option.alsoRoute}</span>}</p>
+          <div class="event-bus__time"><time>{option.departure}</time><span>→</span><strong>≈ {option.estimatedVenueArrival}</strong></div>
+          <p>Отправление с автовокзала · до {option.arrivalStop}: ≈ {option.rideEstimateMinutes} мин</p>
+          <p>Затем пешком ≈ {option.walkDistanceKm.toLocaleString('ru-RU')} км / {option.walkEstimateMinutes} мин.</p>
+          <small>{option.note}</small>
+          <a href={option.walkMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть пеший маршрут</a>
+        </section>
+      ))}
+    </div>
+
+    <section class="event-bus__return" data-bus-return>
+      <p class="event-bus__route">Обратно · № {suggestion.returnOption.route}</p>
+      <h3>{suggestion.returnOption.estimatedDeparture} → {suggestion.returnOption.arrivalKaliningrad}</h3>
+      <p>{suggestion.returnOption.note}</p>
+    </section>
+
+    <div class="event-bus__map">
+      <iframe src={suggestion.mapEmbedUrl} title={`Карта: ${suggestion.venueName}`} loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть площадку на карте</a>
+    </div>
+
+    <footer><p>Расчётные промежуточные времена сверяйте с <a href={suggestion.sourceUrl} target="_blank" rel="noopener noreferrer nofollow">расписанием Автовокзала</a>.</p></footer>
+  </aside>
+)}
+
+<style>
+  .event-bus { margin: 1.4rem 0 0; overflow: hidden; border: 1px solid rgba(35,83,102,0.18); border-radius: 26px; background: linear-gradient(145deg,#f3fafc,#fffdf8); box-shadow: 0 18px 42px rgba(38,75,90,0.08); }
+  .event-bus__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.1rem; }
+  .event-bus__header h2 { margin: 0; font-size: clamp(1.4rem,4vw,2.05rem); color: #273941; }
+  .event-bus__header p { margin: 0.3rem 0 0; color: var(--muted); font-weight: 760; }
+  .event-bus__symbol { display: grid; flex: 0 0 3.2rem; width: 3.2rem; height: 3.2rem; place-items: center; border-radius: 16px; color: #fff; background: #277d97; font-size: 1.45rem; font-weight: 950; }
+  .event-bus__options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.72rem; padding: 1rem 1.1rem; border-top: 1px solid rgba(35,83,102,0.12); }
+  .event-bus__option { padding: 0.88rem; border: 1px solid rgba(35,83,102,0.12); border-radius: 18px; background: rgba(255,255,255,0.82); }
+  .event-bus__route { margin: 0; color: #1f708a; font-size: 0.78rem; font-weight: 920; letter-spacing: 0.06em; text-transform: uppercase; }
+  .event-bus__time { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.35rem; color: #273941; font-variant-numeric: tabular-nums; }
+  .event-bus__time time,.event-bus__time strong { font-size: 1.3rem; font-weight: 950; }
+  .event-bus__option p:not(.event-bus__route) { margin: 0.34rem 0 0; color: #374a52; font-size: 0.84rem; }
+  .event-bus__option small { display: block; margin-top: 0.52rem; color: var(--muted); line-height: 1.35; }
+  .event-bus__option a,.event-bus__map a,footer a { display: inline-block; margin-top: 0.55rem; color: #1f708a; font-weight: 850; }
+  .event-bus__return { margin: 0 1.1rem 1rem; padding: 0.9rem; border-radius: 18px; color: #374a52; background: rgba(39,125,151,0.08); }
+  .event-bus__return h3 { margin: 0.28rem 0; color: #273941; font-size: 1.12rem; }
+  .event-bus__return p:last-child { margin: 0; font-size: 0.84rem; line-height: 1.4; }
+  .event-bus__map { padding: 0 1.1rem 1rem; }
+  .event-bus__map iframe { display: block; width: 100%; height: 250px; border: 0; border-radius: 18px; background: #e9eff1; }
+  .event-bus footer { padding: 0.8rem 1.1rem 1rem; border-top: 1px solid rgba(35,83,102,0.12); color: var(--muted); font-size: 0.8rem; }
+  .event-bus footer p { margin: 0; }
+  @media(max-width:720px){ .event-bus__options{grid-template-columns:1fr}.event-bus__map iframe{height:220px} }
+</style>

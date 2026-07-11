@@ -6,6 +6,8 @@
 
 ## Implementation status
 
+Кандидат к официальной презентации сайта ведётся по единому [presentation release checklist](presentation-release-checklist.md). Транспорт к событию входит в этот релиз как один из демонстрационных пользовательских сценариев, а не как отдельная промокампания.
+
 В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: committed production-like fixture → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий шаг — заменить fixture на регулярный export из Fly SQLite/static page manifest и включить production canonical после canary-gate.
@@ -23,7 +25,7 @@ The live static announcement site root (`https://static.kenigevents.ru/`, bucket
 
 ### Расписание транспорта к событию
 
-Event-detail MVP теперь показывает после описания отдельный явно маркированный блок `Партнёрский маршрут · АО «КППК»` для событий в Светлогорске и Зеленоградске. Build-time selector берёт не больше двух поездов из `Калининград-Северный`, оставляет только прибытие за 20–40 минут до начала и считает обратный путь только при достоверном `time_range_end`; неизвестную длительность события не угадывает. Страница использует статический service-calendar snapshot и всегда ведёт на live-проверку расписания. Это явное city-scoped campaign rule текущего MVP, а не вывод партнёра из названия события. Полный контракт, источник/не-YDB boundary и regression event `6538`: [event-transport-schedule.md](event-transport-schedule.md).
+Event-detail MVP после описания нейтрально показывает, как приехать к событию и вернуться: электрички для Светлогорска/Зеленоградска и автобусный пример для Сказочного Холмогорья в Романово. Поезда можно добавить в календарь с напоминанием; при неизвестном окончании используется явно подписанный типовой ориентир, а отсутствие обратного рейса показывается как отдельный результат. Публичный блок не называется партнёрским и упоминает перевозчика только одной строкой внизу. Полный контракт, источники, bus first/last mile и tech debt автоматического Kaggle-обновления: [event-transport-schedule.md](event-transport-schedule.md).
 
 
 ### Kaggle CPU build handoff

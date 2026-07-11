@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const repoRoot = resolve(siteDir, '..');
@@ -74,10 +74,10 @@ if (existsSync(astroAssetsDir)) {
 // Ensure calendar endpoints have the right metadata for clients that care about content-type.
 const eventsBySlug = loadPreviewEventsBySlug();
 let stableIcsUploaded = 0;
-const find = spawnSync('find', [sourceDir, '-name', 'event.ics', '-type', 'f'], { encoding: 'utf8' });
+const find = spawnSync('find', [sourceDir, '-name', '*.ics', '-type', 'f'], { encoding: 'utf8' });
 for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
   const rel = file.slice(sourceDir.length + 1);
-  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'inline; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="${basename(file)}"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
   const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(rel);
   const slugEventId = match ? /-(\d+)$/u.exec(match[1])?.[1] : null;
@@ -99,7 +99,7 @@ const verifyTargets = [
   [`http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`, 'website-endpoint preview index'],
 ];
 if (stableIcsUploaded) {
-  const firstIcs = find.stdout.split(/\r?\n/).find(Boolean);
+  const firstIcs = find.stdout.split(/\r?\n/).find((file) => /\/event\.ics$/u.test(file));
   const match = firstIcs ? /^sobytiya\/([^/]+)\/event\.ics$/u.exec(firstIcs.slice(sourceDir.length + 1)) : null;
   const eventId = match ? eventsBySlug.get(match[1]) || /-(\d+)$/u.exec(match[1])?.[1] : null;
   if (eventId && env.PUBLIC_ICS_BASE_URL) {

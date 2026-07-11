@@ -1,0 +1,57 @@
+{
+  "schema_version": "event_bus_transport_v1",
+  "generated_at": "2026-07-11T14:00:00Z",
+  "source": {
+    "name": "АО «Автовокзал»",
+    "url": "https://avl39.ru/routes/reg/kaliningrad/",
+    "effective_from": "2026-07-01",
+    "retrieved_at": "2026-07-11"
+  },
+  "routes": [
+    {
+      "id": "romanovo-holmogorye",
+      "cities": ["Романово", "пос. Романово"],
+      "venues": ["Холмогорье", "Сказочное Холмогорье"],
+      "event_start": "11:00",
+      "event_end": "16:00",
+      "origin_stop": "Автовокзал Калининград",
+      "venue_name": "Сказочное Холмогорье",
+      "venue_coordinates": [54.8817051, 20.2792613],
+      "venue_map_url": "https://yandex.ru/maps/?pt=20.279261,54.881705&z=16&l=map",
+      "map_embed_url": "https://www.openstreetmap.org/export/embed.html?bbox=20.245%2C54.872%2C20.292%2C54.904&layer=mapnik&marker=54.8817051%2C20.2792613",
+      "outbound": [
+        {
+          "route": "118А",
+          "also_route": "118",
+          "departure": "08:40",
+          "arrival_stop": "Романовский поворот",
+          "ride_estimate_minutes": 65,
+          "walk_estimate_minutes": 52,
+          "walk_distance_km": 3.9,
+          "estimated_venue_arrival": "10:37",
+          "walk_map_url": "https://yandex.ru/maps/?rtext=54.8799274%2C20.2555919~54.8817051%2C20.2792613&rtt=pd",
+          "note": "Выйти на «Романовском повороте», затем идти к площадке по карте. Время после поворота расчётное."
+        },
+        {
+          "route": "119",
+          "also_route": null,
+          "departure": "08:10",
+          "arrival_stop": "Романово",
+          "ride_estimate_minutes": 46,
+          "walk_estimate_minutes": 27,
+          "walk_distance_km": 2.0,
+          "estimated_venue_arrival": "09:23",
+          "walk_map_url": "https://yandex.ru/maps/?rtext=54.8958609%2C20.2759337~54.8817051%2C20.2792613&rtt=pd",
+          "note": "Автобус заезжает в посёлок. От остановки «Романово» — по Школьной, Офицерской и Озёрной улицам."
+        }
+      ],
+      "return": {
+        "route": "119",
+        "event_end": "16:00",
+        "estimated_departure": "около 18:30",
+        "arrival_kaliningrad": "19:40",
+        "note": "После 27-минутного пути до остановки ближайший надёжный вариант приходится ждать. Время посадки в Романово расчётное; 19:40 — официальное прибытие рейса в Калининград."
+      }
+    }
+  ]
+}

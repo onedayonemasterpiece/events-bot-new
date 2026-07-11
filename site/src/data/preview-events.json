@@ -9,7 +9,7 @@
     "focus_date_from": null,
     "focus_date_to": null,
     "notes": [
-      "bounded production slice: 399 real events",
+      "bounded production slice: 400 real events",
       "source social likes/views are compact latest-metric aggregates",
       "service likes remain 0 until first-party backend ingest is enabled"
     ]
@@ -42282,6 +42282,86 @@
       "source_views_count": 105,
       "source_engagement_sources_count": 1,
       "shares_count": 2
+    },
+    {
+      "id": 6710,
+      "source_prod_id": 6710,
+      "title": "Слёт бабок Ёжек",
+      "slug": "slet-babok-ezhek-romanovo-6710",
+      "event_type": "фестиваль",
+      "festival": "Сказки тридевятого царства",
+      "status_label": "По записи",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-25T11:00:00+02:00",
+      "start_date": "2026-07-25",
+      "start_time": "11:00",
+      "end_date": null,
+      "end_at": "2026-07-25T16:00:00+02:00",
+      "time_range_end": "16:00",
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-25",
+      "display_time": "11:00–16:00",
+      "city": "Романово",
+      "venue_name": "Сказочное Холмогорье",
+      "address": "Озёрная 12а",
+      "map_query": "Романово, Озёрная 12а, Сказочное Холмогорье",
+      "ticket": {
+        "kind": "phone",
+        "label": "Позвонить организатору",
+        "href": "tel:+79210051679",
+        "status": null,
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "source_url": "https://vk.com/wall-146688375_7675",
+      "source_urls": [
+        "https://vk.com/wall-146688375_7675",
+        "https://vk.com/wall-231920894_6348"
+      ],
+      "source_count": 2,
+      "telegraph_url": "https://telegra.ph/Slyot-babok-YOzhek-07-06",
+      "image_url": "https://static.kenigevents.ru/p/dh16/34/3427926716c7204b32e9986b99499449866408651921336b52c112918e30201b.webp",
+      "image_alt": "Афиша события «Слёт бабок Ёжек»",
+      "image_text_mode": "visual_only",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/34/3427926716c7204b32e9986b99499449866408651921336b52c112918e30201b.webp",
+          "width": 2560,
+          "height": 1703,
+          "alt": "Афиша события «Слёт бабок Ёжек»",
+          "image_text_mode": "visual_only",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "quality_score": 15.5
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": true,
+      "summary": "Тематический слёт сказочных персонажей в рамках фестиваля «Сказки тридевятого царства».",
+      "meta_description": "Слёт бабок Ёжек в Сказочном Холмогорье 25 июля с 11:00 до 16:00.",
+      "description_html": "<p>В Сказочном Холмогорье пройдёт тематический слёт бабок Ёжек в рамках большого фестиваля «Сказки тридевятого царства». На праздник съедутся сказочные персонажи со всего региона.</p><h3>Участники</h3><p>К участию приглашаются Ягуськи с собственными образами. Организаторы рекомендуют заранее уточнить детали по телефону.</p>",
+      "topics": [
+        "THEATRE_MODERN",
+        "KIDS_SCHOOL",
+        "FAMILY",
+        "ACTIVE"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-06 16:47:32.470996",
+      "likes_count": 0,
+      "source_likes_count": 0,
+      "service_likes_count": 0,
+      "source_views_count": 0,
+      "source_engagement_sources_count": 0,
+      "shares_count": 0
     }
   ]
 }

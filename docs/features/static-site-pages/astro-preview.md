@@ -6,17 +6,19 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
-## КППК event transport preview — 2026-07-11 (real event correction)
+## Presentation transport preview — 2026-07-11
 
-Public focus preview `preview-20260711-event-transport-real-v2` adds the disclosed train module after event descriptions for Светлогорск/Зеленоградск. Its focus page is the real active Янтарь холл event `6510` on 12 July 2026, independently listed by the regional tourism portal; the source explicitly gives a 1 hour 10 minute duration. The initial v1 link to the stale fixture event `6538` is superseded and must not be used as product acceptance evidence.
+Public focus preview `preview-20260711-event-transport-presentation-v3` replaces the campaign-like rail copy with neutral travel help, adds one calendar file/reminder per train, estimated end-time handling, an explicit no-return state and the official-Avtovokzal-backed Romanovo bus/walking-map example. The initial v1 stale-event link and v2 rail-only preview are superseded.
 
-The corrected 399-event fixture built 420 pages and passed `npm run check:preview`. Public `GET` checks returned `200` for the preview index, real event page and Lastochka WebP; the rendered HTML contains the verified event identity, one outbound and two return rows. Pixel 7 and 1440px Playwright screenshots are stored uncommitted under `artifacts/codex/event-transport-schedule/visual-real/`.
+The 400-event focus fixture built 421 pages and 87 transport `.ics` files and passed `npm run check:preview`. The presentation candidate is governed by [presentation-release-checklist.md](presentation-release-checklist.md); the scheduled Kaggle refresh remains a P0 blocker before production promotion.
 
-- Real event `6510`, with `15:43 → 16:29` out and `18:54 → 19:48` / `19:33 → 20:19` back: <https://kenigevents.ru/preview-20260711-event-transport-real-v2/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
-- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-real-v2/__preview/>
+- Real rail event `6510`: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
+- Real late concert `6397`, estimated end and no return train: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/>
+- Real production Romanovo event `6710`, bus/walking map: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/slet-babok-ezhek-romanovo-6710/>
+- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/__preview/>
 - Canonical behavior/data contract: [event-transport-schedule.md](event-transport-schedule.md)
 
-The prefix was uploaded without rewriting stable `/ics/<event_id>.ics` objects.
+The prefix is published without rewriting stable `/ics/<event_id>.ics` objects.
 
 ## Public URLs
 

@@ -1,5 +1,6 @@
 ---
-import { getEventTransportSuggestion, type EventTrainOption } from '../lib/eventTransport';
+import Icon from './Icon.astro';
+import { eventTransportCalendarPath, getEventTransportSuggestion, type EventTrainOption, type EventTransportDirection } from '../lib/eventTransport';
 import { withBase } from '../lib/events';
 import type { PreviewEvent } from '../lib/types';
 
@@ -17,6 +18,14 @@ const formatWait = (option: EventTrainOption) => {
   if (typeof wait !== 'number') return '';
   return wait === 0 ? 'сразу после окончания' : `через ${wait} мин после окончания`;
 };
+const formatTypicalDuration = (minutes: number | null) => {
+  if (!minutes) return '';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} минут`;
+  return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
+};
+const calendarHref = (direction: EventTransportDirection, train: EventTrainOption) => withBase(eventTransportCalendarPath(event, direction, train));
 ---
 {suggestion && (
   <aside
@@ -25,12 +34,12 @@ const formatWait = (option: EventTrainOption) => {
     data-event-city={suggestion.city}
     data-outbound-count={suggestion.outbound.length}
     data-return-count={suggestion.returns.length}
+    data-event-end-basis={suggestion.eventEndBasis}
     aria-labelledby={headingId}
   >
     <header class="event-transport__header">
       <div class="event-transport__intro">
-        <p class="event-transport__partner">Партнёрский маршрут · <a href="https://www.kppk39.ru/" target="_blank" rel="noopener noreferrer nofollow">АО «КППК»</a></p>
-        <h2 id={headingId}>На поезде к событию</h2>
+        <h2 id={headingId}>Как добраться на электричке</h2>
         <p>{suggestion.originStation} → {suggestion.destinationStation}</p>
       </div>
       <img
@@ -38,7 +47,7 @@ const formatWait = (option: EventTrainOption) => {
         src={withBase('/assets/transport/kppk-lastochka.webp')}
         width="500"
         height="101"
-        alt="Поезд «Ласточка» Калининградской пригородной пассажирской компании"
+        alt="Поезд «Ласточка»"
         loading="lazy"
         decoding="async"
       />
@@ -55,12 +64,13 @@ const formatWait = (option: EventTrainOption) => {
             {suggestion.outbound.map((train) => (
               <li class="event-transport__train-row" data-transport-direction="outbound" data-train-number={train.number}>
                 <div class="event-transport__times">
-                  <time datetime={`${train.serviceDate}T${train.departure}:00+02:00`}>{train.departure}</time>
+                  <time datetime={train.departureIso}>{train.departure}</time>
                   <span aria-hidden="true">→</span>
-                  <time datetime={`${train.serviceDate}T${train.arrival}:00+02:00`}>{train.arrival}</time>
+                  <time datetime={train.arrivalIso}>{train.arrival}</time>
                 </div>
                 <p>{suggestion.originStation} → {suggestion.destinationStation}</p>
                 <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatLead(train.minutesBeforeEvent)}</small>
+                <a class="event-transport__calendar" href={calendarHref('outbound', train)} type="text/calendar" aria-label={`Добавить электричку ${train.departure} в календарь`}><Icon name="calendar" /> <span>В календарь</span></a>
               </li>
             ))}
           </ol>
@@ -72,33 +82,36 @@ const formatWait = (option: EventTrainOption) => {
       <section class="event-transport__direction" aria-labelledby={`event-transport-return-${event.id}`}>
         <div class="event-transport__direction-heading">
           <p class="event-transport__step">Обратно</p>
-          <h3 id={`event-transport-return-${event.id}`}>{suggestion.eventEnd ? `После окончания в ${suggestion.eventEnd}` : 'После события'}</h3>
+          <h3 id={`event-transport-return-${event.id}`}>{suggestion.eventEndBasis === 'event_type_default' ? `Ориентировочно после ${suggestion.eventEnd}` : suggestion.eventEnd ? `После окончания в ${suggestion.eventEnd}` : 'После события'}</h3>
         </div>
+        {suggestion.eventEndBasis === 'event_type_default' && (
+          <p class="event-transport__estimate">Для события типа «{suggestion.eventEndTypeLabel}» используем типовую длительность {formatTypicalDuration(suggestion.eventEndDurationMinutes)}.</p>
+        )}
         {!suggestion.eventEnd ? (
-          <p class="event-transport__empty">Организатор не указал время окончания — обратный поезд не рассчитываем наугад.</p>
+          <p class="event-transport__empty">Время окончания неизвестно, а для этого формата пока нет типового ориентира.</p>
         ) : suggestion.returns.length > 0 ? (
           <ol class="event-transport__trains">
             {suggestion.returns.map((train) => (
               <li class="event-transport__train-row" data-transport-direction="return" data-train-number={train.number}>
                 <div class="event-transport__times">
-                  <time datetime={`${train.serviceDate}T${train.departure}:00+02:00`}>{train.departure}</time>
+                  <time datetime={train.departureIso}>{train.departure}</time>
                   <span aria-hidden="true">→</span>
-                  <time datetime={`${train.serviceDate}T${train.arrival}:00+02:00`}>{train.arrival}</time>
+                  <time datetime={train.arrivalIso}>{train.arrival}</time>
                 </div>
                 <p>{suggestion.destinationStation} → {suggestion.originStation}</p>
                 <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatWait(train)}{train.nextDay ? ' · на следующий день' : ''}</small>
+                <a class="event-transport__calendar" href={calendarHref('return', train)} type="text/calendar" aria-label={`Добавить электричку ${train.departure} в календарь`}><Icon name="calendar" /> <span>В календарь</span></a>
               </li>
             ))}
           </ol>
         ) : (
-          <p class="event-transport__empty">В течение {Math.round(suggestion.maxReturnWaitMinutes / 60)} часов после окончания подходящего поезда нет.</p>
+          <p class="event-transport__empty event-transport__empty--warning">После {suggestion.eventEndBasis === 'event_type_default' ? 'расчётного ' : ''}окончания в течение {Math.round(suggestion.maxReturnWaitMinutes / 60)} часов подходящего поезда в Калининград нет.</p>
         )}
       </section>
     </div>
 
     <footer class="event-transport__footer">
-      <p>Расписание может меняться. <a href={suggestion.outboundLiveUrl} target="_blank" rel="noopener noreferrer nofollow">Проверить поезд туда</a><span aria-hidden="true"> · </span><a href={suggestion.returnLiveUrl} target="_blank" rel="noopener noreferrer nofollow">обратно</a></p>
-      <p class="event-transport__source">Источник: {suggestion.scheduleSource}. Срез от <time datetime={suggestion.scheduleRetrievedAt}>{suggestion.scheduleRetrievedAt.slice(8, 10)}.{suggestion.scheduleRetrievedAt.slice(5, 7)}.{suggestion.scheduleRetrievedAt.slice(0, 4)}</time>.</p>
+      <p>Перевозчик — <a href="https://www.kppk39.ru/" target="_blank" rel="noopener noreferrer nofollow">КППК</a>. Перед поездкой проверьте расписание: <a href={suggestion.outboundLiveUrl} target="_blank" rel="noopener noreferrer nofollow">туда</a><span aria-hidden="true"> · </span><a href={suggestion.returnLiveUrl} target="_blank" rel="noopener noreferrer nofollow">обратно</a>.</p>
     </footer>
   </aside>
 )}
@@ -123,8 +136,6 @@ const formatWait = (option: EventTrainOption) => {
   }
   .event-transport__intro h2 { margin: 0.28rem 0; font-size: clamp(1.45rem, 4vw, 2.15rem); line-height: 1.02; color: #2d3035; }
   .event-transport__intro > p:last-child { margin: 0; color: var(--muted); font-weight: 760; }
-  .event-transport__partner { margin: 0; color: #96352e; font-size: 0.78rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
-  .event-transport__partner a { color: inherit; text-decoration-thickness: 0.08em; text-underline-offset: 0.14em; }
   .event-transport__train { display: block; width: 100%; height: auto; max-height: 110px; object-fit: contain; object-position: center; }
   .event-transport__directions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(121,48,20,0.12); }
   .event-transport__direction { min-width: 0; padding: 1rem 1.1rem 1.1rem; }
@@ -138,12 +149,14 @@ const formatWait = (option: EventTrainOption) => {
   .event-transport__times span { color: #96352e; }
   .event-transport__train-row p { margin: 0.22rem 0 0; color: #2d3035; font-size: 0.84rem; font-weight: 790; }
   .event-transport__train-row small { display: block; margin-top: 0.22rem; color: var(--muted); line-height: 1.32; }
+  .event-transport__calendar { display: inline-flex; align-items: center; gap: 0.34rem; margin-top: 0.62rem; padding: 0.42rem 0.64rem; border: 1px solid rgba(121,48,20,0.16); border-radius: 999px; color: #793014; background: #fffaf1; font-size: 0.78rem; font-weight: 880; text-decoration: none; }
+  .event-transport__calendar :global(.icon) { width: 1rem; height: 1rem; }
+  .event-transport__estimate { margin: 0.52rem 0 0; padding: 0.62rem 0.74rem; border-radius: 14px; color: #5f554e; background: rgba(255,255,255,0.7); font-size: 0.78rem; line-height: 1.35; }
   .event-transport__empty { min-height: 5rem; margin: 0.7rem 0 0; padding: 0.8rem; border-radius: 18px; background: rgba(45,48,53,0.05); color: var(--muted); font-weight: 730; }
+  .event-transport__empty--warning { color: #78342f; background: rgba(151,53,46,0.08); }
   .event-transport__footer { padding: 0.85rem 1.1rem 1rem; border-top: 1px solid rgba(121,48,20,0.12); color: var(--muted); font-size: 0.82rem; }
   .event-transport__footer p { margin: 0; }
-  .event-transport__footer p + p { margin-top: 0.3rem; }
   .event-transport__footer a { color: #793014; font-weight: 850; }
-  .event-transport__source { font-size: 0.75rem; }
   @media (max-width: 720px) {
     .event-transport__header { grid-template-columns: 1fr; min-height: 0; }
     .event-transport__train { width: min(100%, 500px); margin: 0.2rem auto 0; }
