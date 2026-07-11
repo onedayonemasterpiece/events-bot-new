@@ -184,6 +184,11 @@ python3 scripts/region_talk_post_row_normalize.py \
   --env-file /home/dev/projects/events-bot-new/.env --max-groups 200 --execute
 ```
 
+Large maintenance uses YDB `BulkUpsert` and parameterized
+`DELETE ... ON SELECT pk FROM AS_TABLE($rows)` in 500-row chunks. Do not replace
+this with per-key transaction calls: network round trips make a full legacy
+migration take tens of minutes and obscure progress.
+
 
 For z8 product-acceleration runs, prefer explicit state settings. Use `REGION_TALK_STATE_BACKEND=ydb` only when the YDB env set is provisioned; otherwise run with fallback intentionally visible (`REGION_TALK_STATE_BACKEND=ydb`, `REGION_TALK_REQUIRE_YDB_STATE=0`) and require the XLSX to show `state_backend=json_fallback`, `state_fallback_used=true` and the YDB fail reason. A production-like acceptance run must not silently use JSON state.
 

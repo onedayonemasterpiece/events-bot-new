@@ -13,7 +13,8 @@
   latest-run attribution and preventing legacy PK resurrection; vector totals
   now use a complete metric window instead of a misleading shared 6k cap. The
   normalizer also migrates legacy singleton PKs before they can form a future
-  duplicate pair.
+  duplicate pair, using YDB BulkUpsert and parameterized 500-key bulk deletes
+  instead of one network transaction call per row.
 - **Region Talk / local POI institutions**: source surface classification now
   routes `Музей Мирового Океана` / `world_ocean_museum` to the local-region
   monitoring list before its institutional posts consume external-candidate

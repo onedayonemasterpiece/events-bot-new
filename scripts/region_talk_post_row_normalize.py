@@ -102,7 +102,7 @@ def read_rows(pool: Any, ydb: Any, table_path: str, *, limit: int) -> list[dict[
     return list(pool.retry_operation_sync(op) or [])
 
 
-def execute_plan(pool: Any, ydb: Any, table_path: str, plan: dict[str, Any]) -> dict[str, int]:
+def execute_plan(pool: Any, ydb: Any, table_path: str, plan: dict[str, Any], *, driver: Any | None = None) -> dict[str, int]:
     operations = list(plan.get("operations") or [])
     if not operations:
         return {"upserted": 0, "deleted": 0}
@@ -112,22 +112,30 @@ def execute_plan(pool: Any, ydb: Any, table_path: str, plan: dict[str, Any]) -> 
         for op in operations
     ]
 
-    def write_op(session: Any) -> int:
-        rt.ensure_ydb_kv_table(ydb, session, table_path)
-        return rt.ydb_upsert_json_many(session, ydb, table_path, upserts, now, chunk_size=50, timeout_seconds=12)
-
-    upserted = int(pool.retry_operation_sync(write_op) or 0)
+    if driver is not None:
+        upserted = int(rt.ydb_bulk_upsert_json_many(driver, ydb, table_path, upserts, now, chunk_size=500) or 0)
+    else:
+        def write_op(session: Any) -> int:
+            rt.ensure_ydb_kv_table(ydb, session, table_path)
+            return rt.ydb_upsert_json_many(session, ydb, table_path, upserts, now, chunk_size=50, timeout_seconds=12)
+        upserted = int(pool.retry_operation_sync(write_op) or 0)
     delete_pks = [pk for op in operations for pk in op.get("delete_pks") or []]
 
     def delete_op(session: Any) -> int:
-        query = session.prepare(f"DECLARE $pk AS Utf8; DELETE FROM `{table_path}` WHERE pk = $pk;")
+        query = session.prepare(f"""
+DECLARE $rows AS List<Struct<pk:Utf8>>;
+DELETE FROM `{table_path}` ON
+SELECT pk FROM AS_TABLE($rows);
+""")
         deleted = 0
-        for start in range(0, len(delete_pks), 50):
-            tx = session.transaction(ydb.SerializableReadWrite())
-            for pk in delete_pks[start:start + 50]:
-                tx.execute(query, {"$pk": pk}, commit_tx=False)
-                deleted += 1
-            tx.commit()
+        for start in range(0, len(delete_pks), 500):
+            batch = delete_pks[start:start + 500]
+            session.transaction(ydb.SerializableReadWrite()).execute(
+                query,
+                {"$rows": [{"pk": pk} for pk in batch]},
+                commit_tx=True,
+            )
+            deleted += len(batch)
         return deleted
 
     deleted = int(pool.retry_operation_sync(delete_op) or 0) if delete_pks else 0
@@ -157,7 +165,7 @@ def main() -> int:
     try:
         rows = read_rows(pool, ydb, table_path, limit=max(1, args.scan_limit))
         plan = normalize_plan(rows, max_groups=max(0, args.max_groups))
-        result = execute_plan(pool, ydb, table_path, plan) if args.execute else {"upserted": 0, "deleted": 0}
+        result = execute_plan(pool, ydb, table_path, plan, driver=driver) if args.execute else {"upserted": 0, "deleted": 0}
         output = {
             "mode": "execute" if args.execute else "dry_run",
             "generated_at": datetime.now(timezone.utc).isoformat(),
