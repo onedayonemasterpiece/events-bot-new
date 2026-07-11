@@ -11,11 +11,13 @@ User-requested transactional mail for a saved/followed event:
 - cancellation;
 - reschedule or material date/time/location change.
 
-This is distinct from [personal recommendation email](../personal-email-announcements/README.md). The two streams share delivery primitives but not consent purpose, cadence or content rules.
+This is distinct from [personal recommendation email](../personal-email-announcements/README.md). The streams share the Supabase email control plane and suppression evidence, but not provider, consent purpose, cadence or content rules.
 
 ## Ownership
 
 Supabase owns authenticated email profile, follow/favorite relation, transactional consent, outbox, idempotency/send guard, suppression and provider delivery evidence. YDB may receive de-identified statistics only. Event facts/lifecycle come from Fly SQLite and must be revalidated server-side.
+
+Yandex Cloud Postbox is the exclusive transactional transport, with the intended sender `Kenig Events <notify@kenigevents.ru>` and `Reply-To: info@kenigevents.ru` after identity/DNS verification. NotiSend is reserved for opt-in personal recommendations and must not be a transactional fallback.
 
 ## Porting status
 

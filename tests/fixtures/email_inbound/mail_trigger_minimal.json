@@ -1,0 +1,17 @@
+{
+  "messages": [
+    {
+      "received_at": "2026-07-11 20:30:00.123 +0000 UTC m=+1.0",
+      "headers": [
+        {"name": "From", "values": ["Release Test <sender@example.test>"]},
+        {"name": "To", "values": ["info@kenigevents.ru"]},
+        {"name": "Subject", "values": ["KE-MAIL-E2E fixture"]},
+        {"name": "Message-Id", "values": ["<fixture-1@example.test>"]},
+        {"name": "Content-Type", "values": ["text/plain; charset=utf-8"]},
+        {"name": "Received", "values": ["must not be persisted"]}
+      ],
+      "attachments": {},
+      "message": "Inbound fixture body."
+    }
+  ]
+}

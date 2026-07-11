@@ -1,0 +1,45 @@
+{
+  "schema": "kenigevents.email_inbound.yc_desired_state.v1",
+  "cloud_id": "${EMAIL_INBOUND_YC_CLOUD_ID}",
+  "folder": {
+    "name": "kenigevents-email-prod",
+    "description": "Isolated KenigEvents inbound email infrastructure"
+  },
+  "service_accounts": [
+    "email-mail-trigger",
+    "email-intake-runtime",
+    "email-queue-trigger",
+    "email-delivery-runtime",
+    "email-adapter-runtime",
+    "email-imap-collector"
+  ],
+  "kms_keys": [
+    "email-inbound-storage"
+  ],
+  "buckets": [
+    "${EMAIL_INBOUND_BUCKET_NAME}"
+  ],
+  "functions": [
+    "kenigevents-email-intake",
+    "kenigevents-email-delivery",
+    "kenigevents-email-adapter",
+    "kenigevents-email-imap-collector"
+  ],
+  "lockbox_secrets": [
+    "email-inbound-intake-aws",
+    "email-inbound-idempotency",
+    "email-inbound-adapter-signing",
+    "email-inbound-supabase-api",
+    "spaceweb-info-mailbox"
+  ],
+  "queues": [
+    "kenigevents-email-processing",
+    "kenigevents-email-intake-dlq",
+    "kenigevents-email-processing-dlq"
+  ],
+  "triggers": [
+    "kenigevents-email-mail-trigger",
+    "kenigevents-email-processing-trigger",
+    "kenigevents-email-imap-poll"
+  ]
+}

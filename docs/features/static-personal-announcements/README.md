@@ -16,11 +16,11 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 | F1 | Smart Update effect → coalesced static rebuild | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production disabled |
 | F2 | Vector-based related events | [Semantic retrieval](../unsigned-personalization/semantic-vector-retrieval.md) | canary / partial |
 | F3 | Smart authorized search | [Authorized search](../unsigned-personalization/authorized-event-search.md) | canary / production root pending |
-| F4 | Email with exactly three recommendations + personal page | [Personal email announcements](../personal-email-announcements/README.md) | design |
+| F4 | Email with exactly three recommendations + published personal page, delivered through NotiSend to at most 200 actively consented users at launch | [Personal email announcements](../personal-email-announcements/README.md) | design / provider routing accepted |
 | F5 | Frozen public release UI | [Release UI contract](../static-site-pages/release-ui-contract.md) | candidate / sign-off pending |
 | F6 | List/detail/action personalization telemetry | [Unsigned personalization](../unsigned-personalization/README.md), [production integration](../unsigned-personalization/production-integration.md) | local preview; remote ingest design |
 | F7 | Yandex or verified-email identity | [Site user identity](../site-user-identity/README.md) | partial/design |
-| F8 | Sender domains, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md) | design / dry-run foundation branch |
+| F8 | SpaceWeb retained mailbox, read-only Yandex IMAP copy pipeline, direct Mail Trigger canary, Postbox transactional delivery, NotiSend recommendation delivery, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md) | inbound live / outbound production gated |
 | F9 | Durable favorites | [Favorites and calendar](../event-favorites-calendar/README.md) | design |
 | F10 | Login/logout and profile linking | [Site user identity](../site-user-identity/README.md) | login partial; merge design |
 | F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md) | implementation branch / refresh blocker |
