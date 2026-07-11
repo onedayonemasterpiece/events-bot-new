@@ -3,7 +3,9 @@
 This package implements only the Yandex Cloud ingress boundary:
 
 ```text
-Mail Trigger → private Object Storage → intake → YMQ → delivery → signed adapter
+SpaceWeb IMAP (read-only) ─┐
+                          ├→ private Object Storage → YMQ → delivery → signed adapter → Supabase receipt
+direct Mail Trigger ──────┘
 ```
 
 It is intentionally independent from the Fly application. Importing this package has
@@ -89,6 +91,44 @@ delete a YMQ message:
 Every other response, including all `4xx`, is retryable from the function's point
 of view and eventually moves to the processing DLQ. Incoming email content can
 never enable a test/failure mode.
+
+## Public adapter environment
+
+The adapter is a public-invoker Yandex Function only because the delivery Function
+uses ordinary HTTPS. Public invocation does not authorize a receipt: the adapter
+requires the timestamped HMAC above, rejects requests outside five minutes, and
+checks the raw-body SHA-256 before JSON parsing or any Supabase network call.
+
+| Name | Secret | Purpose |
+|---|---:|---|
+| `EMAIL_INBOUND_ADAPTER_PATH` | no | Exact `/<adapter-function-id>` path signed by delivery. |
+| `EMAIL_INBOUND_ADAPTER_KEY_ID` | no | Current rotation ID. |
+| `EMAIL_INBOUND_ADAPTER_SECRET` | yes | Current HMAC secret from Lockbox. |
+| `EMAIL_INBOUND_ADAPTER_PREVIOUS_KEY_ID` | no | Optional previous rotation ID. |
+| `EMAIL_INBOUND_ADAPTER_PREVIOUS_SECRET` | yes | Optional previous HMAC secret. |
+| `PERSONALIZATION_SUPABASE_URL` | no | Personalization project URL. |
+| `PERSONALIZATION_SUPABASE_SECRET_KEY` | yes | Backend-only `sb_secret_` key sent only as `apikey`; never as a Bearer token. |
+
+The service-only RPC stores no plaintext sender, recipient, subject or body. A
+conflicting duplicate `inbound_id` fails closed instead of overwriting evidence.
+
+## SpaceWeb IMAP collector environment
+
+SpaceWeb mailbox destination modes are mutually exclusive, so changing `info@` to
+`Forwarding` would remove the human mailbox. Production therefore keeps the
+mailbox in `Mail` mode and polls only new IMAP UIDs with `BODY.PEEK[]`.
+
+| Name | Secret | Purpose |
+|---|---:|---|
+| `EMAIL_INBOUND_IMAP_HOST` / `EMAIL_INBOUND_IMAP_PORT` | no | Encrypted SpaceWeb IMAP endpoint (`993`). |
+| `EMAIL_INBOUND_IMAP_LOGIN` / `EMAIL_INBOUND_IMAP_PASSWORD` | yes | `info@` mailbox credentials from Lockbox. |
+| `EMAIL_INBOUND_IMAP_STATE_KEY` | no | Private UIDVALIDITY/last-UID cursor object. |
+| `EMAIL_INBOUND_IMAP_BATCH_LIMIT` | no | Bounded messages per run, maximum 50. |
+
+On first invocation or UIDVALIDITY change, the collector records the current UID
+without replaying the mailbox. For each later UID it builds the same normalized
+envelope/pointer as intake and advances the cursor only after S3 and YMQ succeed.
+The original SpaceWeb item and its read/unread state are untouched.
 
 ## Build
 

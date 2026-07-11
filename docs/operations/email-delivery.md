@@ -1,6 +1,6 @@
 # Email infrastructure, delivery and deliverability
 
-> Status: accepted release architecture; provider provisioning and production sending remain gated.
+> Status: inbound/mailbox foundation live; outbound providers remain production-gated.
 
 ## Scope
 
@@ -18,7 +18,8 @@ Product content, consent purpose and cadence remain separate. DNS, secrets, deli
 | Surface | Provider / owner | Contract |
 |---|---|---|
 | Human/inbound mailbox | SpaceWeb | MX target and durable mailbox for `info@kenigevents.ru`; manual webmail/IMAP/SMTP correspondence. |
-| Automated inbound copy | Yandex Cloud Mail Trigger → Function/Container | Receives a forwarded copy without deleting the SpaceWeb original; private attachments, bounded retry and DLQ. |
+| Automated inbound copy | Read-only SpaceWeb IMAP collector → Yandex Functions/YMQ | Polls only new IMAP UIDs without setting `Seen` or changing the mailbox purpose; private normalized envelopes, bounded batches and processing DLQ. |
+| Direct inbound canary | Yandex Cloud Mail Trigger → intake Function | Keeps an isolated technical address for direct trigger/schema/DLQ canaries. It is not the SpaceWeb mailbox destination. |
 | Transactional outbound | Yandex Cloud Postbox | Critical account and saved/followed-event lifecycle messages only; intended From `Kenig Events <notify@kenigevents.ru>`, `Reply-To: info@kenigevents.ru`. |
 | Recommendation outbound | NotiSend | Opt-in personal recommendations/announcements only; intended From `Kenig Events <events@news.kenigevents.ru>`, `Reply-To: info@kenigevents.ru`. |
 | Identity and send control | Personalization Supabase/Postgres | Verified email, purpose-specific consent/subscription, hard admission cap, preferences, suppression, outbox, send guard and provider evidence. |
@@ -29,20 +30,54 @@ Providers are not interchangeable. Postbox must not be used as a hidden fallback
 
 See [personalization data ownership](../architecture/personalization-data-ownership.md).
 
-## Production-disabled control-plane foundation
+## Live disabled-by-default control-plane foundation
 
-The implementation candidate on `agent/email-infrastructure/control-plane` is deliberately disabled and has not been applied to the live personalization project. It adds:
+The additive foundation is applied to the live personalization project, but all
+outbound switches remain disabled and dry-run-only. It provides:
 
 - an additive private `email_control` Supabase schema for synchronized verified identities, purpose consent/audit, the atomic 200-user recommendation admission row, suppression, recommendation issue/items, outbox attempts and provider-event deduplication;
 - authenticated preference RPCs plus service-only stage/publish/enqueue/claim/finalize/event-ingest RPCs with no raw table grants to browser roles;
 - fixed provider routing (`transactional -> postbox`, `recommendation -> notisend`) enforced by both SQL and runtime adapters;
 - Postbox API sending that requires the real returned `MessageId`;
 - NotiSend individual-message API sending with `payment=subscriber` and the real returned message `id`;
-- disabled DB/process switches and dry-run defaults.
+- disabled DB/process switches and dry-run defaults;
+- an idempotent metadata-only inbound receipt boundary; message bodies and open
+  addresses remain in the private Yandex envelope/SpaceWeb mailbox, not Supabase.
 
-The live Supabase migration history is currently not a trustworthy apply base: the repository contains migration files whose objects exist in production but whose versions are absent from `supabase_migrations.schema_migrations`. Before this email migration is applied, an operator must take a database backup, compare live DDL with every repository migration, reconcile/repair history deliberately, and prove a clean local/staging reset. **Do not run a blind `supabase db push` and do not apply the email migration directly to production.**
+On 2026-07-11 the previous Supabase history drift was reconciled before applying
+email migrations: a restorable logical backup was taken, all prior migration-owned
+functions/indexes/RLS policies and semantic table columns were hash-compared with a
+clean PostgreSQL 17 + pgvector replay, duplicate legacy filenames were assigned
+unique CLI-compatible versions, four probe-only history rows were reverted, and a
+session-pooler dry run proved that only the email migrations would apply. The live
+history now matches all repository versions. Continue to use the session pooler on
+port 5432 for migration operations; the transaction pooler produced a prepared
+statement collision during the guarded first attempt.
 
-Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. Postbox Data Streams events are ingested through the IAM-authenticated consumer and deduplicated by provider `eventId`.
+Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. Postbox Data Streams events must eventually be ingested through an IAM-authenticated consumer and deduplicated by provider `eventId`; no event destination is attached yet, so transactional production sending remains disabled.
+
+## Live provider state (2026-07-11)
+
+- SpaceWeb retains `info@kenigevents.ru` and `dmarc@kenigevents.ru`; public MX,
+  combined root SPF, SpaceWeb DKIM and monitoring DMARC resolve without changing
+  the authoritative Yandex nameservers or existing site/CDN records.
+- The isolated Yandex inbound folder, KMS-encrypted private bucket, three YMQ
+  queues, four production-tagged Functions and three triggers are active. Both a
+  direct Mail Trigger canary and a retained-mailbox IMAP canary sent from
+  `info@kgd80.ru` produced one idempotent Supabase receipt with empty DLQs; the
+  retained SpaceWeb item remained present and unread.
+- The Postbox `kenigevents.ru` identity and transactional configuration are
+  verified. A seed from `notify@kenigevents.ru` returned a real provider message
+  id and reached the SpaceWeb mailbox, but landed in Spam and no event destination
+  is attached. Keep transactional sending disabled pending warm-up, event ingest
+  and suppression/alert proof.
+- NotiSend verifies `news.kenigevents.ru` and the
+  `events@news.kenigevents.ru` sender. The account remains on the free 200-contact
+  plan and API activation is still pending; no contacts were imported and no
+  campaign was sent. Keep recommendation sending disabled.
+- The live Supabase control plane has a 200-user admission capacity with zero
+  active recommendation users. Global, transactional and recommendation switches
+  are off and `dry_run_only` is on.
 
 ## Address and DNS contract
 
@@ -59,11 +94,26 @@ Before a DNS change, store a sanitized before-snapshot in ignored `artifacts/cod
 ## Inbound flow
 
 1. Internet mail is delivered by SpaceWeb MX and retained in `info@kenigevents.ru`.
-2. SpaceWeb forwards a copy to the technical address assigned by Yandex Cloud Mail Trigger. The original remains readable through SpaceWeb webmail/IMAP.
-3. A minimal Python 3.12 Function validates the trigger envelope, assigns a keyed-HMAC correlation/idempotency key, allowlists headers and stores deterministic normalized JSON plus Yandex-managed attachment references in a dedicated private KMS-encrypted bucket with 30-day retention.
-4. Yandex Mail Trigger exposes normalized headers/body and attachment object keys, not raw MIME. The retained SpaceWeb mailbox copy remains the authoritative original; if exact raw MIME processing becomes mandatory, this pipeline must be replaced or supplemented by an authenticated SpaceWeb IMAP puller.
-5. The intake Function passes only a small metadata/reference pointer through a standard YMQ queue. A separate delivery Function sends the minimized receipt to the existing backend over HTTPS with timestamped HMAC authentication; plaintext addresses, subject, body and attachment keys never enter YMQ or ordinary logs.
-6. Native Mail Trigger failure and processing failure use separate DLQs because their payloads require different replay logic. Retries are bounded, and replay must preserve the same idempotency key.
+2. SpaceWeb exposes mailbox destination modes (`Mail`, `Forwarding`, `Distribution`)
+   as mutually exclusive settings. Switching `info@` to `Forwarding` would remove
+   the retained mailbox contract, so production deliberately keeps `Mail` and does
+   **not** enable panel forwarding.
+3. `kenigevents-email-imap-poll` invokes a read-only Python 3.12 IMAP collector every
+   two minutes. It uses `BODY.PEEK[]`, never changes `Seen`, and advances a private
+   UIDVALIDITY/UID cursor only after the envelope and queue pointer are stored.
+4. Intake assigns a keyed-HMAC idempotency key, allowlists headers and stores a
+   deterministic normalized envelope in a dedicated private KMS-encrypted bucket
+   with 30-day retention. The SpaceWeb message remains the authoritative original,
+   including attachments; the IMAP copy does not execute or expose attachments.
+5. A small metadata/reference pointer passes through a standard YMQ queue. A
+   delivery Function calls the public Yandex adapter with a timestamped HMAC; the
+   adapter writes only an idempotent metadata receipt through a service-only
+   Supabase RPC. Invalid/expired signatures fail before any Supabase request.
+6. The direct Mail Trigger address remains active for isolated trigger and attachment
+   canaries. Its normalized-envelope limit is 220 KB below the current 230 KB trigger
+   limit; it is not configured as the SpaceWeb mailbox destination.
+7. Processing retries use the YMQ redrive policy (five receives) and a dedicated
+   processing DLQ. Direct Mail Trigger failures use a separate intake DLQ.
 
 The current Cloud Functions trigger-message limit is 230 KB including service metadata. Intake therefore caps the trigger body at 220 KB and never copies it into YMQ; large-message behavior must be proven by live canary, while the SpaceWeb mailbox remains the loss-prevention fallback.
 
@@ -117,8 +167,8 @@ The initial service has a hard ceiling of **200 actively consented recommendatio
 ### Inbound-only
 
 - SpaceWeb webmail and encrypted IMAP/SMTP access proven;
-- original retained after forwarding;
-- Mail Trigger authentication/schema validation;
+- original retained and still unread after the read-only IMAP copy;
+- IMAP UID cursor/idempotency plus direct Mail Trigger schema validation;
 - private storage and lifecycle policy;
 - idempotency under trigger retry/duplicate delivery;
 - DLQ failure and controlled replay test;
@@ -132,7 +182,7 @@ Use a unique correlation marker such as `KE-MAIL-E2E-<UTC timestamp>-<random>` a
 1. authoritative/public MX, SPF, DKIM and DMARC resolution;
 2. SpaceWeb TLS webmail/IMAP/SMTP;
 3. inbound test sent **from the existing `info@kgd80.ru` Postbox identity** to `info@kenigevents.ru` without modifying or deleting kgd80.ru resources;
-4. one retained SpaceWeb mailbox copy and one Mail Trigger invocation;
+4. one retained/unseen SpaceWeb mailbox copy and one IMAP collector invocation;
 5. private attachment/object references, normalized envelope and one idempotent backend result;
 6. forced test-only handler failure → bounded retry → DLQ → controlled replay without a duplicate business event;
 7. Postbox transactional seed message, real provider message id and delivery event;

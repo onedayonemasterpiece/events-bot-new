@@ -52,7 +52,7 @@ lanes:
     writable_files: [docs/, CHANGELOG.md, .codex/lanes/email-infrastructure/architecture-docs/RESULTS.md]
     forbidden_files: [application code, migrations, provider state]
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: inbound
     role: planner_then_worker
     requirement_ids: [R05]
@@ -62,7 +62,7 @@ lanes:
     writable_files: [email_infrastructure/inbound/, tests/email_infrastructure/, deployment manifests, lane RESULTS]
     forbidden_files: [Supabase migrations, provider adapters, canonical docs owned by architecture-docs]
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: control-plane
     role: planner_then_worker
     requirement_ids: [R06, R07, R08]
@@ -72,7 +72,7 @@ lanes:
     writable_files: [email_infrastructure/control_plane/, email_infrastructure/providers/, supabase/, tests/email_infrastructure/, lane RESULTS]
     forbidden_files: [inbound handler, provider control panels, canonical docs owned by architecture-docs]
     verification_scope: targeted
-    status: planned
+    status: completed_foundation
   - id: provider-ops
     role: integrator
     requirement_ids: [R02, R04]
@@ -82,7 +82,7 @@ lanes:
     writable_files: [provider control planes, Yandex Cloud resources, exact IaC/runbook integration]
     forbidden_files: [unrelated production resources, existing site DNS records, kgd80 persistent credentials]
     verification_scope: live controlled
-    status: planned
+    status: completed
   - id: integrator
     role: integrator_merge_reviewer
     requirement_ids: [R01, R09, R10]

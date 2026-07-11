@@ -1,7 +1,7 @@
 # Yandex inbound email desired state
 
 This directory describes the isolated infrastructure for the automated copy of
-`info@kenigevents.ru`. It does not manage SpaceWeb forwarding, DNS, Postbox,
+`info@kenigevents.ru`. It does not change SpaceWeb mailbox purpose, DNS, Postbox,
 NotiSend, Supabase schema, or Fly.
 
 ## Safety model
@@ -76,7 +76,8 @@ idempotent. The reconciler never updates or deletes an existing resource.
 5. Create separate random idempotency and adapter-signing secrets. Do not reuse
    mailbox, AWS, Postbox or NotiSend secrets.
 6. Build the function ZIPs and create untagged `python312` versions. Intake uses
-   256 MB / 15 seconds; delivery uses 128 MB / 20 seconds. Inject Lockbox values
+   256 MB / 15 seconds; delivery and adapter use 128 MB; the IMAP collector uses
+   256 MB / 30 seconds. Inject Lockbox values
    with `--secret`, never plaintext `--environment`.
 7. Invoke each version directly using `tests/fixtures/email_inbound/`.
 8. Move the `prod` tag to the tested versions.
@@ -85,18 +86,23 @@ idempotent. The reconciler never updates or deletes an existing resource.
 10. Create the Mail Trigger with batch size `1`, cutoff `1s`, five retries at 30s,
     the private attachment bucket, intake DLQ, and intake tag `prod`.
 11. Send a direct canary from `info@kgd80.ru` to the generated trigger address.
-12. Only after direct-canary and DLQ replay evidence enable SpaceWeb forwarding
-    while preserving the original mailbox copy.
+12. Keep the SpaceWeb `info@` purpose as `Mail`: the panel's `Forwarding` purpose is
+    mutually exclusive and would violate retention. Bootstrap the read-only IMAP
+    collector at the current UID, then enable its two-minute timer.
+13. Send a real canary from `info@kgd80.ru` to `info@kenigevents.ru`; prove the
+    SpaceWeb UID remains present and unseen while the metadata receipt reaches
+    Supabase and all processing/DLQ depths return to zero.
 
 Do not reuse one DLQ for both triggers: Mail Trigger failure payloads and processing
 pointer payloads have different replay contracts.
 
 ## Rollback
 
-1. Disable SpaceWeb forwarding.
+1. Suspend the IMAP timer (there is no SpaceWeb forwarding to undo).
 2. Suspend the Mail Trigger.
 3. Suspend the YMQ trigger.
-4. Move function `prod` tags back if needed.
-5. Keep the SpaceWeb mailbox and queued/private retained data intact.
+4. Remove public invocation from the HMAC adapter if its key is suspect.
+5. Move function `prod` tags back if needed.
+6. Keep the SpaceWeb mailbox and queued/private retained data intact.
 
 Resource deletion, queue purge and access-key deletion are never rollback steps.

@@ -15,7 +15,7 @@ The project has one current user/profile and email control-plane system of recor
 Email providers are transports and ingress surfaces, not additional systems of record:
 
 - **SpaceWeb** owns the durable human/inbound mailbox `info@kenigevents.ru` and manual webmail/IMAP/SMTP access.
-- **Yandex Cloud Mail Trigger** receives a forwarded copy for automated inbound processing; its Function/Container, private attachment storage and DLQ do not become identity, consent or subscription owners.
+- **Yandex serverless inbound pipeline** polls the retained SpaceWeb mailbox read-only by UID; its direct Mail Trigger address is canary-only. Functions, private storage and DLQs do not become identity, consent or subscription owners.
 - **Yandex Cloud Postbox** sends transactional account/event-lifecycle mail only.
 - **NotiSend** sends personal recommendations/announcements only, with a hard launch ceiling of 200 actively consented users.
 
@@ -39,7 +39,7 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Personal-page token hashes/metadata | Supabase | Rendered artifact in Object Storage/CDN |
 | Email outbox, send guard, rate state | Supabase | Terminal/aggregate delivery projection in YDB |
 | Provider delivery events | Supabase for send-critical evidence | Append-only analytics projection in YDB |
-| Human mailbox and retained inbound correspondence | SpaceWeb | Forwarded automation copy through Yandex Mail Trigger |
+| Human mailbox and retained inbound correspondence | SpaceWeb | Read-only UID copy through Yandex Functions; direct Mail Trigger canary only |
 | Normalized inbound trigger payload/attachments | Private Yandex Object Storage under an approved retention policy | Minimized signed metadata/reference receipt in the existing backend |
 | Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
 | Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
@@ -94,9 +94,9 @@ Postbox is not a recommendation fallback, and NotiSend is not a transactional fa
 ### Inbound email
 
 1. Internet mail is accepted by SpaceWeb MX and retained in `info@kenigevents.ru` for human webmail/IMAP use.
-2. SpaceWeb forwards a copy, while preserving the mailbox copy, to the technical address assigned to Yandex Cloud Mail Trigger.
-3. A minimal Function validates and normalizes the trigger event, stores the allowlisted trigger payload and attachment references only in private storage with bounded retention, and hands a minimized signed metadata/reference envelope to the existing backend. Yandex Mail Trigger does not expose raw MIME; the retained SpaceWeb mailbox copy remains the authoritative original.
-4. Idempotency prevents forwarding/retry duplicates; bounded retry and a DLQ retain failures for controlled replay.
+2. SpaceWeb keeps `info@` in `Mail` mode. Its panel cannot combine retention with the mutually-exclusive `Forwarding` mode, so a timer Function reads only UIDs after a private cursor using `BODY.PEEK[]` and never changes `Seen`.
+3. Intake stores an allowlisted normalized envelope only in private KMS-backed storage, then hands a minimized signed metadata/reference pointer through YMQ to an HMAC adapter and service-only Supabase receipt RPC. The retained SpaceWeb mailbox remains the authoritative original.
+4. Keyed idempotency prevents IMAP/timer/queue duplicates; bounded batches, YMQ redrive and a DLQ retain failures for controlled replay. The separate Mail Trigger technical address remains available for direct trigger/attachment canaries.
 5. Automation must not auto-reply or Bcc `info@kenigevents.ru` until explicit loop prevention exists. `dmarc@kenigevents.ru` is not forwarded into this pipeline.
 
 ### Event comment feedback

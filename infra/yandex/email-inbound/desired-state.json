@@ -9,7 +9,9 @@
     "email-mail-trigger",
     "email-intake-runtime",
     "email-queue-trigger",
-    "email-delivery-runtime"
+    "email-delivery-runtime",
+    "email-adapter-runtime",
+    "email-imap-collector"
   ],
   "kms_keys": [
     "email-inbound-storage"
@@ -19,12 +21,16 @@
   ],
   "functions": [
     "kenigevents-email-intake",
-    "kenigevents-email-delivery"
+    "kenigevents-email-delivery",
+    "kenigevents-email-adapter",
+    "kenigevents-email-imap-collector"
   ],
   "lockbox_secrets": [
     "email-inbound-intake-aws",
     "email-inbound-idempotency",
-    "email-inbound-adapter-signing"
+    "email-inbound-adapter-signing",
+    "email-inbound-supabase-api",
+    "spaceweb-info-mailbox"
   ],
   "queues": [
     "kenigevents-email-processing",
@@ -33,6 +39,7 @@
   ],
   "triggers": [
     "kenigevents-email-mail-trigger",
-    "kenigevents-email-processing-trigger"
+    "kenigevents-email-processing-trigger",
+    "kenigevents-email-imap-poll"
   ]
 }
