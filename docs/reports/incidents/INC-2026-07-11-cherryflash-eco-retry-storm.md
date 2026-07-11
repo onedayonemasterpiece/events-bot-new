@@ -1,6 +1,6 @@
 # INC-2026-07-11 CherryFlash Eco Render Retry Storm
 
-Status: monitoring
+Status: mitigated
 Severity: sev2
 Service: CherryFlash partner track `partner_eco_nature_001` / Kaggle / scheduler watchdog
 Opened: 2026-07-11
@@ -52,6 +52,11 @@ renderer silently switched to an obsolete static April fixture and then raised
 - `2026-07-11`: temporary containment moved
   `V_PARTNER_TRACK_ECO_TIME_LOCAL` to `23:59`, preventing further same-day
   watchdog launches while the code fix was prepared.
+- `12:08 UTC`: first post-deploy fail-fast catch-up session `#881` proved the
+  upstream empty-OCR scene drop before any Kaggle upload.
+- `12:18`–`12:58 UTC`: fixed catch-up session `#882` selected event `6651`,
+  mounted both selection manifests plus two prefetched posters, completed
+  Kaggle render and published Telegram Business story `#1350`.
 
 ## Root Cause
 
@@ -93,7 +98,7 @@ event scenes` before Kaggle upload.
 ## Incident Control Block
 
 - **Incident ID:** `INC-2026-07-11-cherryflash-eco-retry-storm`
-- **Current status:** monitoring after containment; code fix pending release evidence.
+- **Current status:** mitigated and production-verified by catch-up session `#882`.
 - **Affected surfaces:** partner watchdog, CherryFlash session bundle and intro
   selection loader, Kaggle status/output handling, Fly `/tmp`.
 - **Target behavior:** one scheduled attempt plus at most one persisted recovery
@@ -170,8 +175,36 @@ event scenes` before Kaggle upload.
 ## Release And Closure Evidence
 
 - temporary containment: Fly secret `V_PARTNER_TRACK_ECO_TIME_LOCAL=23:59`.
-- code release: pending.
-- compensating catch-up: pending.
+- code release:
+  - code commits `c51a95cf13b37c9666127516bb11a00f27705ecc` and
+    `f9a79fcc4ae7a657f93f223d7ee9dfef1ce22ff0`;
+  - merged through PRs `#21` and `#22`; deployed source is reachable from
+    `origin/main` merge SHA `71ba9ae045a043ffb50b7942c3bba175a25df946`;
+  - Fly release `v1624`, image
+    `events-bot-new-wngqia:deployment-01KX8HE4V250HS252YE64TT0ZM`, machine
+    `2860d45f312248` healthy.
+- regression checks:
+  - focused scheduler/CherryFlash/Kaggle suite: `99 passed`;
+  - expanded partner/selection/scheduler/renderer/Kaggle suite: `119 passed`;
+    two promo-placement assertions also fail unchanged on the pre-fix
+    `origin/main` baseline and are not caused by this incident fix;
+  - `py_compile` and `git diff --check` passed.
+- production checks:
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, no issues;
+  - SQLite `PRAGMA quick_check=ok`;
+  - `ENABLE_RUNTIME_FILE_LOGGING=0`; temporary Eco schedule override removed;
+  - root overlay recovered to about `7.4G` free after deleting terminal output
+    directory `/tmp/videoannounce-882` (`1,284,544,952` bytes); `/data` had
+    about `241M` free; `/tmp` write probe passed.
+- compensating catch-up:
+  - session `#882`, dataset `zigomaro/cherryflash-session-882-1783772298`,
+    kernel `zigomaro/cherryflash`;
+  - session terminal status `PUBLISHED_TEST`, `error=NULL`, published at
+    `2026-07-11 12:58:29 UTC`;
+  - Business target report `ok=true`, connection hash `09729df38ffe`, story id
+    `1350`;
+  - no automatic retry session was created after the failed-session cap; the
+    deliberate catch-up was the only post-fix launch.
 
 ## Prevention
 
