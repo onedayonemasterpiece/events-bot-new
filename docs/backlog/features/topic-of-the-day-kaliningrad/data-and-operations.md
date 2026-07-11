@@ -203,16 +203,20 @@ MVP может использовать один Kaggle notebook только п
   "policy_versions": {"cluster": "...", "roles": "...", "anti_repeat": "..."},
   "targets": ["telegram", "vk"],
   "publish_enabled": false,
+  "publication_mode": "manual_canary|green_auto|full_auto",
   "manual_approval_id": null,
+  "automation_policy_version": null,
   "resource_leases": ["topic_day:2026-07-10"]
 }
 ```
 
 Callback token передаётся отдельно по существующему signed status contract; в server state хранится только hash.
 
-Для реального publish `publish_enabled=true` допустим только вместе с действующим `manual_approval_id`, `approved_at`, `approved_by` и неизменившимся `payload_hash`. Изменение текста, ссылок или assets после approve аннулирует approval и возвращает выпуск на просмотр.
+Для `publication_mode=manual_canary` реальный `publish_enabled=true` допустим только вместе с действующим `manual_approval_id`, `approved_at`, `approved_by` и неизменившимся `payload_hash`. Изменение текста, ссылок или assets после approve аннулирует approval и возвращает выпуск на просмотр.
 
-Manual approval приходит только из allowlisted закрытого Telegram admin-чата. Callback data содержит `edition_id`, action и короткий payload-hash fingerprint; server заново читает полный state, проверяет Telegram user id, chat id, актуальный `payload_hash` и одноразовый decision state. Callback не доверяет присланному тексту/URL и не содержит секретов.
+Для `green_auto|full_auto` вместо approval обязательны `automation_policy_version`, immutable gate report, подтверждённый activation state и тот же `payload_hash`. Режим не может включиться только env-флагом без сохранённого activation decision/evidence.
+
+Manual approval на canary-этапе приходит только из allowlisted закрытого Telegram admin-чата и только от одного configured admin user id; одного approve достаточно. Callback data содержит `edition_id`, action и короткий payload-hash fingerprint; server заново читает полный state, проверяет Telegram user id, chat id, актуальный `payload_hash` и одноразовый decision state. Callback не доверяет присланному тексту/URL и не содержит секретов.
 
 ## 8. Status contract
 
@@ -268,7 +272,8 @@ Telegram и VK независимы. `telegram=sent, vk=failed` даёт `editio
 - recovery проверяет materialized Kaggle handoff и per-target delivery, а не только факт старта cron;
 - свежий heartbeat означает «ждать», а не запускать дубль;
 - `no_topic` считается осознанно обработанным слотом и отправляет операторский отчёт;
-- отсутствие approve к 10:00 не превращается в автопубликацию; edition остаётся `draft_ready|awaiting_approval` до отдельного решения о late cutoff;
+- на manual canary отсутствие approve к 10:00 оставляет edition в `awaiting_approval`; approve позже 10:00 запускает публикацию сразу, без переноса на следующий день;
+- после включения full auto green-gate edition публикуется в 10:00 без approval row; admin decision требуется только для явно сохранённых manual-fallback классов;
 - пропущенный сегодняшний слот после фикса требует compensating run и проверки результата.
 
 | Найденное состояние | Recovery |
