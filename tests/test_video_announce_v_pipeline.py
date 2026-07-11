@@ -985,8 +985,12 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
     selection_manifest = json.loads(
         (snapshot_dir / "assets" / "cherryflash_selection.json").read_text(encoding="utf-8")
     )
+    root_selection_manifest = json.loads(
+        (snapshot_dir / "cherryflash_selection.json").read_text(encoding="utf-8")
+    )
     assert selection_manifest["story_publish_enabled"] is True
     assert selection_manifest["story_publish_mode"] == "video"
+    assert root_selection_manifest == selection_manifest
 
 
 @pytest.mark.asyncio

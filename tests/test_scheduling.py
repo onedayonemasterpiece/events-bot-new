@@ -352,7 +352,13 @@ async def _insert_video_session(
             (
                 status,
                 profile_key,
-                json.dumps({"target_date": target_date, "mode": "popular_review"}),
+                json.dumps(
+                    {
+                        "target_date": target_date,
+                        "mode": "popular_review",
+                        "trigger": "scheduled",
+                    }
+                ),
                 created_at,
                 kaggle_dataset,
                 kaggle_kernel_ref,
@@ -1272,6 +1278,56 @@ async def test_partner_track_watchdog_retries_failed_remote_handoff(
     assert calls == [
         ("partner_konb_library_001", {"startup_catchup": False})
     ]
+
+
+@pytest.mark.asyncio
+async def test_partner_track_watchdog_stops_after_two_failed_sessions(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(
+        scheduling,
+        "datetime",
+        type(
+            "_FixedPartnerTrackDatetime",
+            (datetime,),
+            {
+                "now": classmethod(
+                    lambda cls, tz=None: (
+                        datetime(2026, 4, 12, 11, 0, tzinfo=timezone.utc).astimezone(tz)
+                        if tz is not None
+                        else datetime(2026, 4, 12, 11, 0)
+                    )
+                )
+            },
+        ),
+    )
+    for suffix in (635, 636):
+        await _insert_video_session(
+            db,
+            status="FAILED",
+            profile_key="popular_review_konb",
+            target_date="2026-04-12",
+            created_at=f"2026-04-12 10:{suffix - 600:02d}:22",
+            kaggle_dataset=f"zigomaro/cherryflash-session-{suffix}",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            error="missing video output",
+        )
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_run(_db, _bot, partner_track_id, **kwargs):
+        calls.append((partner_track_id, kwargs))
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_partner_track", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_partner_track_watchdog(
+        db, bot=object(), partner_track_id="partner_konb_library_001"
+    )
+
+    assert dispatched is False
+    assert calls == []
 
 
 @pytest.mark.asyncio
