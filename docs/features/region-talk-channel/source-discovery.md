@@ -95,6 +95,13 @@ same one-resolve quota and human-like delay. Initializing the governor earlier
 silently reduced the effective quota to zero and left high-value attribution
 sources unscanned despite reporting that a lane had been selected.
 
+After a successful Telegram resolve, the canonical `resolved_title` takes
+precedence over a queue placeholder/username for source-surface locality. This
+prevents a source added from a media credit under a bare username from escaping
+the local-source route when Telegram identifies it as, for example,
+`Фотограф Калининград`. Local rows remain stored for future local monitoring,
+but their posts are ineligible for the external publication funnel.
+
 ### 4. Cross-platform identity
 
 Link likely same source identity across platforms using same title/handle and explicit description links such as “YouTube, VK, RUTUBE, MAX”. Keep links as evidence; do not merge destructively without confidence.

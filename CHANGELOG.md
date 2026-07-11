@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / resolved local-source titles**: Telegram's resolved channel
+  title now overrides username-shaped queue placeholders during the local
+  source filter, so attribution sources such as a resolved `Фотограф
+  Калининград` are retained in the local-source list and excluded from the
+  external publication funnel.
 - **Region Talk / controlled resolve lane execution**: CandidateReport now
   initializes its Telegram request governor after unified source selection, so
   the single human-like uncached resolve allowance is actually applied to the

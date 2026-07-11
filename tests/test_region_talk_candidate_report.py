@@ -1531,6 +1531,18 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotEqual(decision["source_quick_class"], "spam_source_reject")
         self.assertNotIn("ставк", decision.get("source_spam_hits", ""))
 
+    def test_resolved_telegram_title_overrides_username_placeholder_for_local_filter(self) -> None:
+        mod = load_module()
+        decision = mod.source_local_region_terminal_fields({
+            "source_title": "moresvobod",
+            "resolved_title": "Фотограф Калининград",
+            "handle": "@moresvobod",
+            "posts_scanned": 15,
+        })
+        self.assertEqual(decision["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(decision["source_scope"], "local_region")
+        self.assertEqual(decision["source_geo_class"], "kaliningrad_local")
+
     def test_source_selection_prioritizes_pending_travel_sources(self) -> None:
         mod = load_module()
         travel = mod.Seed(

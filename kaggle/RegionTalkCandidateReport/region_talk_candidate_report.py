@@ -1379,9 +1379,12 @@ def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
     semantic/vector pipeline.
     """
     title = str(
-        row.get("source_title")
+        # Telegram's resolved title is authoritative. Queue placeholders often
+        # contain only a username (for example ``moresvobod``), which must not
+        # hide a resolved local title such as ``Фотограф Калининград``.
+        row.get("resolved_title")
+        or row.get("source_title")
         or row.get("recommended_title")
-        or row.get("resolved_title")
         or row.get("title_guess")
         or row.get("seed_channel_title")
         or ""
