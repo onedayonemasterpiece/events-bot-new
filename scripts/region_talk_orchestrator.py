@@ -2154,7 +2154,15 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     """Use measured runtime headroom without extending the 20-minute guardrail."""
     runtime_seconds = _safe_float(metrics.get("candidate_heartbeat_runtime_elapsed_seconds")) or 0.0
     bge_backlog = _safe_int(metrics.get("bge_pending_sample_total"))
-    if runtime_seconds > 1050:
+    heartbeat_event = str(metrics.get("candidate_heartbeat_event_name") or "").strip().lower()
+    heartbeat_phase = str(metrics.get("candidate_heartbeat_phase") or "").strip().lower()
+    heartbeat_status = str(metrics.get("candidate_heartbeat_status") or "").strip().lower()
+    incomplete_late_tail = runtime_seconds <= 0 and (
+        heartbeat_status in {"error", "failed"}
+        or heartbeat_event in {"state_write_started", "report_write_started"}
+        or heartbeat_phase in {"state_write", "report_write"}
+    )
+    if runtime_seconds > 1050 or incomplete_late_tail:
         history_sources = 5
     elif runtime_seconds > 900 or bge_backlog > 48:
         history_sources = 6
@@ -2171,6 +2179,7 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
         "history_sources": history_sources,
         "fast_check_sources": fast_check_sources,
         "runtime_seconds_observed": int(round(runtime_seconds)),
+        "incomplete_late_tail_observed": int(incomplete_late_tail),
     }
 
 

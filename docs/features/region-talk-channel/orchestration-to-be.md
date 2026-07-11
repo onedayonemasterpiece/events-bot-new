@@ -704,6 +704,11 @@ deferred low-priority posts do not displace keyword/fast-check evidence. The
 limit; `source_queue_build_done.source_queue_handoff_write_seconds` exposes the
 actual queue-write cost.
 
+If the latest Candidate heartbeat stops in `state_write_started` or
+`report_write_started` without a terminal runtime, the next orchestrator cycle
+must treat it as a near-limit failure and select the conservative five-source
+budget. A missing runtime is not interpreted as unlimited headroom.
+
 Transient YDB failures (`ConnectionLost`, deadline/timeout) close the cached
 driver and retry on the next write, but must not disable all online writes for
 the rest of the notebook. Only authentication/authorization failures disable

@@ -149,6 +149,14 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 960})["history_sources"], 6)
         self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 1100})["history_sources"], 5)
         self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 60})["history_sources"], 6)
+        failed_tail = mod.candidate_adaptive_budget({
+            "candidate_heartbeat_runtime_elapsed_seconds": 0,
+            "candidate_heartbeat_event_name": "state_write_started",
+            "candidate_heartbeat_phase": "state_write",
+            "candidate_heartbeat_status": "running",
+        })
+        self.assertEqual(failed_tail["history_sources"], 5)
+        self.assertEqual(failed_tail["incomplete_late_tail_observed"], 1)
 
 
     def test_bge_batch_limit_is_configurable_for_backlog_catchup(self) -> None:

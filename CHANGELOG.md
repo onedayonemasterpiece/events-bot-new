@@ -5,7 +5,8 @@
   budgets E5 work from actual post volume, reserves queue/YDB completion time,
   bulk-upserts independent queue rows, moves YDB retention cleanup out of the
   live run, and exposes scoring and queue-write timing heartbeats to prevent
-  final `DeadlineExceed` failures.
+  final `DeadlineExceed` failures; an incomplete late-tail heartbeat now
+  selects the conservative next-run breadth instead of looking like zero load.
 - **Region Talk / KO drop-off transparency and adaptive breadth**: metrics now
   deduplicate processed posts, expose raw/duplicate YDB identities, and assign
   every regex KO hit one mutually exclusive product outcome cumulatively and
