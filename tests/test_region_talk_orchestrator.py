@@ -24,6 +24,15 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_latest_llm_budget_is_not_summed_across_daily_rows(self) -> None:
+        mod = load_module()
+        latest = mod._latest_llm_budget_row([
+            {"budget_id": "region-talk-debug-20260710", "reserved_total": 8, "remaining": 92, "updated_at": "2026-07-10T23:44:58+00:00"},
+            {"budget_id": "region-talk-debug-20260711", "reserved_total": 1, "remaining": 99, "updated_at": "2026-07-11T09:34:41+00:00"},
+        ])
+        self.assertEqual(latest["budget_id"], "region-talk-debug-20260711")
+        self.assertEqual(latest["remaining"], 99)
+
     def test_decision_prioritizes_notifier_finalizer_bge_image(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(

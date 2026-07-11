@@ -146,6 +146,10 @@ Telegram Monitoring and Guide monitoring:
 - exact latest Candidate/BGE/Image heartbeat rows included in every metric
   snapshot with `run_id`, event, phase, status, timestamp and sequence, so an
   active Kaggle status cannot be attributed to an older YDB run;
+- LLM budget metrics expose the latest active budget id, its reserved and
+  remaining calls, plus a separate historical reserved total. Daily budget
+  rows are never summed into a fictitious `remaining` capacity above the
+  configured 100-call ceiling;
 - `image_queue_total` retained as the transparent raw/audit row count, plus
   `image_product_eligible_total` for rows accepted by the current strict gate;
   `--target-image-queue` follows the eligible delta rather than rejected rows

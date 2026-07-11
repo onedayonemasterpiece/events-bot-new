@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / honest Gemini budget metric**: orchestrator stats now report
+  reserved/remaining calls for the latest active budget and keep historical
+  reservations separate, instead of summing multiple daily 100-call budgets
+  into an impossible remaining capacity above 100.
 - **Region Talk / confirmed-candidate delivery**: the Telegram notifier now
   merges live source overlays monotonically like the finalizer, preventing
   sparse status rows with zero counters from invalidating an unchanged source

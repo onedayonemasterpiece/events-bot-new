@@ -520,6 +520,15 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _latest_llm_budget_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return the active/latest product budget instead of summing daily limits."""
+    return max(
+        (row for row in rows if isinstance(row, dict)),
+        key=lambda row: (str(row.get("updated_at") or ""), str(row.get("budget_id") or "")),
+        default={},
+    )
+
+
 def _safe_float(value: Any) -> float | None:
     try:
         if value in (None, ""):
@@ -2193,6 +2202,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         r for r in history_depth_rows
         if latest_history_run and str(r.get("last_scan_run_id") or r.get("run_id") or "") == latest_history_run
     ]
+    latest_llm_budget = _latest_llm_budget_row(llm_budgets)
 
     metrics = {
         "metric_read_any_truncated": int(bool(truncated_kinds)),
@@ -2276,8 +2286,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **publication_metrics,
         "publication_delivery_rows_total": len(deliveries),
         "publication_delivery_completed_total": sum(1 for row in deliveries if str(row.get("status") or "") == "delivered"),
-        "publication_llm_budget_reserved_total": sum(int(float(row.get("reserved_total") or 0)) for row in llm_budgets),
-        "publication_llm_budget_remaining_total": sum(int(float(row.get("remaining") or 0)) for row in llm_budgets),
+        "publication_llm_budget_id": str(latest_llm_budget.get("budget_id") or ""),
+        "publication_llm_budget_reserved_total": _safe_int(latest_llm_budget.get("reserved_total")),
+        "publication_llm_budget_remaining_total": _safe_int(latest_llm_budget.get("remaining")),
+        "publication_llm_budget_historical_reserved_total": sum(_safe_int(row.get("reserved_total")) for row in llm_budgets),
+        "publication_llm_budget_rows_total": len(llm_budgets),
         "text_vector_enrichment_total": len(vectors),
         "text_vector_e5_total": len(e5_vectors),
         "text_vector_bge_m3_total": len(bge_vectors),
