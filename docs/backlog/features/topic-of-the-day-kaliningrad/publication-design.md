@@ -46,6 +46,25 @@
 
 Если текст не помещается, writer сокращает сводку и число ролей; отправка второго сообщения не является автоматическим fallback, потому что нарушает one-post contract.
 
+### Закрытый Telegram admin preview
+
+До публикации в открытый канал bot отправляет в allowlisted admin-чат:
+
+- финальную Bento-карточку;
+- точный Telegram caption и VK text;
+- source day, planned slot `10:00 Europe/Kaliningrad`;
+- coverage, выбранную тему и ближайшую альтернативу;
+- список авторов/ролей, original links и finalist metrics;
+- предупреждения anti-repeat, sensitive-scope и media checks;
+- короткий immutable `payload_hash` fingerprint.
+
+Минимальные inline-кнопки:
+
+- `✅ Одобрить к публикации` — создаёт payload-bound approval; до 10:00 он ставит выпуск в разрешённое ожидание слота, но не вызывает public API прямо из callback;
+- `❌ Отклонить выпуск` — фиксирует решение и запрещает публикацию этого payload.
+
+Повторное нажатие идемпотентно. После принятого решения кнопки заменяются статусом, а изменение текста, links или assets требует нового preview и нового approve.
+
 ## 3. Media selection
 
 Для каждого finalist post рассматриваются все media items в ограниченном альбоме, а не только первая картинка.

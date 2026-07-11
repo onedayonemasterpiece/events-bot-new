@@ -63,7 +63,7 @@ topic_day_state
 Постоянная запись:
 
 - `source_day`, timezone, input cutoff и source-catalog version;
-- состояние `planned|running|draft_ready|publishing|published|partial|no_topic|failed|unknown`;
+- состояние `planned|running|draft_ready|awaiting_approval|approved|rejected|publishing|published|partial|no_topic|failed|unknown`;
 - compact coverage/counter summary;
 - выбранный topic fingerprint и scores;
 - top candidate summaries (обычно 3, без raw corpus);
@@ -195,6 +195,7 @@ MVP может использовать один Kaggle notebook только п
   "edition_id": "topic-day:2026-07-10",
   "source_day": "2026-07-10",
   "timezone": "Europe/Kaliningrad",
+  "target_publish_time_local": "10:00",
   "cutoff": "2026-07-11T00:00:00+02:00",
   "source_catalog_version": "...",
   "corpus_manifest_sha256": "...",
@@ -210,6 +211,8 @@ MVP может использовать один Kaggle notebook только п
 Callback token передаётся отдельно по существующему signed status contract; в server state хранится только hash.
 
 Для реального publish `publish_enabled=true` допустим только вместе с действующим `manual_approval_id`, `approved_at`, `approved_by` и неизменившимся `payload_hash`. Изменение текста, ссылок или assets после approve аннулирует approval и возвращает выпуск на просмотр.
+
+Manual approval приходит только из allowlisted закрытого Telegram admin-чата. Callback data содержит `edition_id`, action и короткий payload-hash fingerprint; server заново читает полный state, проверяет Telegram user id, chat id, актуальный `payload_hash` и одноразовый decision state. Callback не доверяет присланному тексту/URL и не содержит секретов.
 
 ## 8. Status contract
 
@@ -258,12 +261,14 @@ Telegram и VK независимы. `telegram=sent, vk=failed` даёт `editio
 Точные часы остаются product decision, но operational contract фиксирован:
 
 - один `edition_id` на local `source_day`;
+- целевой public slot — `10:00 Europe/Kaliningrad`;
 - extended scheduler misfire grace;
 - startup catch-up;
 - live watchdog до editorial deadline;
 - recovery проверяет materialized Kaggle handoff и per-target delivery, а не только факт старта cron;
 - свежий heartbeat означает «ждать», а не запускать дубль;
 - `no_topic` считается осознанно обработанным слотом и отправляет операторский отчёт;
+- отсутствие approve к 10:00 не превращается в автопубликацию; edition остаётся `draft_ready|awaiting_approval` до отдельного решения о late cutoff;
 - пропущенный сегодняшний слот после фикса требует compensating run и проверки результата.
 
 | Найденное состояние | Recovery |

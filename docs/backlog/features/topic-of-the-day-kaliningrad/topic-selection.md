@@ -88,7 +88,10 @@ LLM возвращает строгое JSON-представление:
 
 ```json
 {
-  "topic_type": "event|decision|incident|phenomenon|public_discussion|other",
+  "topic_type": "event|decision|phenomenon|public_discussion|heritage_change|other",
+  "editorial_scope": "allowed_general|allowed_local_history_exception|excluded_sensitive",
+  "sensitive_flags": ["incident", "politics"],
+  "local_history_basis": ["cultural_heritage_object", "historic_building"],
   "canonical_subject": "...",
   "action_or_change": "...",
   "entities": ["..."],
@@ -105,6 +108,22 @@ LLM возвращает строгое JSON-представление:
 
 Deterministic code не переопределяет смысл этого fingerprint; оно валидирует schema, ссылки, даты, counts и evidence coverage.
 
+### Sensitive-topic gate и краеведческое исключение
+
+По умолчанию из shortlist исключаются темы, где центральный предмет — происшествие, преступление, политический конфликт, война/военная повестка, скандал или шок-контент.
+
+Узкое исключение `allowed_local_history_exception` допускается, когда:
+
+- центральный предмет — конкретное местное историко-культурное наследие;
+- речь идёт о сносе, повреждении, перестройке, реставрации, статусе охраны, утрате или обнаружении ОКН, исторического здания, памятника, археологического объекта, топонима, музейного/архивного материала;
+- краеведческий смысл подтверждён фактами и несколькими независимыми ownership-группами;
+- текст можно написать без криминальной сенсационности, партийной полемики и эксплуатации пострадавших;
+- выпуск прошёл ручной approve.
+
+Пример допустимой формы: «снесли здание — объект культурного наследия» с фокусом на истории здания, охранном статусе, подтверждённых обстоятельствах и последствиях для городской среды. Простого упоминания старого дома внутри обычного происшествия недостаточно для исключения.
+
+`excluded_sensitive` не может победить topic ranking независимо от просмотров и числа постов. LLM принимает смысловое решение; deterministic guard проверяет наличие structured scope, heritage basis и evidence, но не подменяет классификацию keyword-списком.
+
 ## 5. Выбор одной темы
 
 Сначала hard gates:
@@ -113,6 +132,7 @@ Deterministic code не переопределяет смысл этого finge
 - cluster coherence и LLM confidence выше порога;
 - ни одна группа не доминирует evidence;
 - факты достаточно подтверждены или аккуратно атрибутированы;
+- `editorial_scope` равен `allowed_general` или проверенному `allowed_local_history_exception`;
 - пройден anti-repeat gate;
 - source coverage позволяет редакционную формулировку;
 - нет safety/legal blocker.
