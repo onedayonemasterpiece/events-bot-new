@@ -453,6 +453,54 @@ def test_render_scene_frames_uses_short_brand_outro_duration(
     ]
 
 
+def test_render_scene_frames_uses_approved_true3d_guide_sequence(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    raw_dir = tmp_path / "raw"
+    preview_dir = tmp_path / "preview"
+    true3d_dir = tmp_path / "true3d"
+    raw_dir.mkdir()
+    preview_dir.mkdir()
+    true3d_dir.mkdir()
+    for idx, color in enumerate(((255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255)), start=1):
+        _write_frame(true3d_dir / f"frame_{idx:05d}.png", color)
+
+    monkeypatch.setattr(full, "RAW_FRAMES_DIR", raw_dir)
+    monkeypatch.setattr(full, "PREVIEW_FRAMES_DIR", preview_dir)
+    monkeypatch.setattr(full, "INTRO_END_FRAME", 0)
+    monkeypatch.setattr(full, "GUIDE_EXCURSION_TRUE3D_FRAME_COUNT", 3)
+    monkeypatch.setattr(full, "_render_guide_excursion_true3d_frames", lambda scene, scene_idx: sorted(true3d_dir.glob("*.png")))
+    monkeypatch.setattr(
+        full,
+        "_render_scene_frame",
+        lambda scene, local_t, blocks: (_ for _ in ()).throw(AssertionError("legacy guide renderer must not be used")),
+    )
+
+    scene = full.RenderScene(
+        index=1,
+        variant="guide_excursion_promo",
+        title="Экскурсия",
+        date_line="10 июля 16:00",
+        location_line="",
+        description="",
+        image_path=true3d_dir / "frame_00001.png",
+        image_paths=(true3d_dir / "frame_00001.png",),
+        start_local=0.0,
+        guide_excursion={"contact": "@guide", "palette": "prussian_cream", "icon_kind": "building"},
+    )
+
+    final_frame = full._render_scene_frames([scene])
+
+    assert final_frame == 3
+    assert sorted(path.name for path in raw_dir.glob("*.png")) == [
+        "frame_0001.png",
+        "frame_0002.png",
+        "frame_0003.png",
+    ]
+    assert Image.open(raw_dir / "frame_0001.png").getpixel((0, 0)) == (255, 0, 0, 255)
+
+
 def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
     monkeypatch,
     tmp_path: Path,
