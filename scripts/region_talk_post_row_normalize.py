@@ -51,16 +51,17 @@ def normalize_plan(rows: list[dict[str, Any]], *, max_groups: int = 0) -> dict[s
         durable_key = rt.durable_processed_post_key(row)
         if durable_key:
             grouped.setdefault(durable_key, []).append(row)
-    duplicate_groups = [
-        (key, values)
-        for key, values in grouped.items()
-        if len({str(value.get("_ydb_pk") or "") for value in values}) > 1
-    ]
-    duplicate_groups.sort(key=lambda item: item[0])
+    migration_groups: list[tuple[str, list[dict[str, Any]]]] = []
+    for key, values in grouped.items():
+        source_pks = {str(value.get("_ydb_pk") or "") for value in values if value.get("_ydb_pk")}
+        canonical_pk = "processed_post_item:" + key
+        if len(source_pks) > 1 or (source_pks and source_pks != {canonical_pk}):
+            migration_groups.append((key, values))
+    migration_groups.sort(key=lambda item: item[0])
     if max_groups > 0:
-        duplicate_groups = duplicate_groups[:max_groups]
+        migration_groups = migration_groups[:max_groups]
     operations: list[dict[str, Any]] = []
-    for durable_key, values in duplicate_groups:
+    for durable_key, values in migration_groups:
         values = sorted(
             values,
             key=lambda row: (
@@ -83,8 +84,14 @@ def normalize_plan(rows: list[dict[str, Any]], *, max_groups: int = 0) -> dict[s
     return {
         "rows_total": len(rows),
         "unique_durable_posts_total": len(grouped),
-        "duplicate_groups_selected": len(operations),
+        "migration_groups_selected": len(operations),
+        "duplicate_groups_selected": sum(1 for op in operations if len(op["source_pks"]) > 1),
+        "legacy_singleton_groups_selected": sum(
+            1 for op in operations
+            if len(op["source_pks"]) == 1 and op["source_pks"][0] != op["canonical_pk"]
+        ),
         "duplicate_rows_selected": sum(len(op["source_pks"]) - 1 for op in operations),
+        "legacy_rows_to_delete_selected": sum(len(op["delete_pks"]) for op in operations),
         "operations": operations,
     }
 

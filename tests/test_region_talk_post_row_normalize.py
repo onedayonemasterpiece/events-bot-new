@@ -26,6 +26,7 @@ class RegionTalkPostRowNormalizeTests(unittest.TestCase):
             },
         ]
         plan = mod.normalize_plan(rows)
+        self.assertEqual(plan["migration_groups_selected"], 1)
         self.assertEqual(plan["duplicate_groups_selected"], 1)
         operation = plan["operations"][0]
         self.assertEqual(operation["canonical_pk"], "processed_post_item:tg:example:42")
@@ -41,6 +42,20 @@ class RegionTalkPostRowNormalizeTests(unittest.TestCase):
             "post_url": "https://t.me/example/42",
         }])
         self.assertEqual(plan["duplicate_groups_selected"], 0)
+        self.assertEqual(plan["migration_groups_selected"], 0)
+
+    def test_plan_migrates_legacy_singleton_before_it_can_duplicate(self) -> None:
+        plan = mod.normalize_plan([{
+            "_ydb_pk": "processed_post_item:post_old_fetch_hash",
+            "post_id": "post_old_fetch_hash",
+            "platform_post_key": "tg:example:43",
+            "post_url": "https://t.me/example/43",
+        }])
+        self.assertEqual(plan["migration_groups_selected"], 1)
+        self.assertEqual(plan["duplicate_groups_selected"], 0)
+        self.assertEqual(plan["legacy_singleton_groups_selected"], 1)
+        self.assertEqual(plan["operations"][0]["canonical_pk"], "processed_post_item:tg:example:43")
+        self.assertEqual(plan["operations"][0]["delete_pks"], ["processed_post_item:post_old_fetch_hash"])
 
 
 if __name__ == "__main__":

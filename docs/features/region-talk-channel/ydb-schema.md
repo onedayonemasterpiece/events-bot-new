@@ -63,7 +63,9 @@ Dedupe requirements:
 - repeated source/post observations update cumulative state (`first_seen_run_id`, `last_seen_run_id`, `seen_run_count`) instead of creating duplicate candidates.
 - legacy `processed_post_item:post_hash_*` duplicates are normalized only by
   the dry-run-first `scripts/region_talk_post_row_normalize.py`: it UPSERTs the
-  merged stable row before deleting redundant keys.
+  merged stable row before deleting redundant keys. The same maintenance pass
+  also migrates a legacy singleton before a later online observation can create
+  its canonical twin.
 
 `candidate_memory_item` remains an audit/history layer. Rows whose source is
 durably local-region or spam are retained but moved to
