@@ -150,6 +150,15 @@ Telegram Monitoring and Guide monitoring:
   remaining calls, plus a separate historical reserved total. Daily budget
   rows are never summed into a fictitious `remaining` capacity above the
   configured 100-call ceiling;
+- processed-post throughput exposes raw YDB rows, canonical unique posts and
+  duplicate-identity rows separately, both cumulatively and for the latest
+  CandidateReport run. `processed_posts_unique_total` is deduplicated by post
+  identity and must not count the online write plus final snapshot twice;
+- every lexical/regex KO hit receives one mutually exclusive latest product
+  outcome (`source_local`, `source_spam`, stale, vector not-KO/multiregion/ad/
+  news/low-substance, dual-vector pending, media outcome, Gemini rejection,
+  confirmed or sent). Both cumulative and latest-run reason maps are reported,
+  so high scan volume cannot hide real KO movement or its drop-off reason;
 - `image_queue_total` retained as the transparent raw/audit row count, plus
   `image_product_eligible_total` for rows accepted by the current strict gate;
   `--target-image-queue` follows the eligible delta rather than rejected rows
@@ -206,6 +215,11 @@ Important invariants:
   from either side. This reduces known-KO latency without starving breadth.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
+- Candidate breadth is runtime-adaptive while the 20-minute notebook guardrail
+  remains unchanged. A completed run below 15 minutes and BGE backlog at or
+  below one 48-row batch permits eight history and eight fast-check sources;
+  15-17.5 minutes or excess BGE backlog uses six; above 17.5 minutes uses five.
+  This spends measured headroom on scanning more publics, not on deeper history.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and a 7-query lexicon-driven Telegram global-search

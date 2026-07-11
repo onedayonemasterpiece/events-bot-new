@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / KO drop-off transparency and adaptive breadth**: metrics now
+  deduplicate processed posts, expose raw/duplicate YDB identities, and assign
+  every regex KO hit one mutually exclusive product outcome cumulatively and
+  for the latest run. CandidateReport terminal heartbeats include runtime and
+  throughput; the orchestrator uses that headroom to scan 5/6/8 history and
+  fast-check sources without raising the 20-minute runtime guardrail.
 - **Region Talk / honest Gemini budget metric**: orchestrator stats now report
   reserved/remaining calls for the latest active budget and keep historical
   reservations separate, instead of summing multiple daily 100-call budgets

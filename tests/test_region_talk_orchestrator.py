@@ -24,6 +24,45 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_heuristic_ko_funnel_uses_exclusive_product_outcomes(self) -> None:
+        mod = load_module()
+        run_id = "region-talk-orchestrator-candidate-report-unit"
+        common = {
+            "text": "Побывали в Калининграде, особенно запомнилась прогулка и красивый маршрут",
+            "run_id": run_id,
+        }
+        rows = [
+            {**common, "post_url": "https://t.me/local/1", "canonical_source_key": "telegram:local"},
+            {**common, "post_url": "https://t.me/ad/2", "canonical_source_key": "telegram:ad", "vector_gate_status": "vector_reject_ad_promo"},
+            {**common, "post_url": "https://t.me/pending/3", "canonical_source_key": "telegram:pending", "vector_gate_status": "vector_defer_wait_bge_m3"},
+            {**common, "post_url": "https://t.me/sent/4", "canonical_source_key": "telegram:sent", "vector_gate_status": "vector_accept_candidate", "publication_candidate_status": "sent_to_chat"},
+        ]
+        metrics = mod._heuristic_ko_funnel_metrics(
+            rows,
+            [{"canonical_source_key": "telegram:local", "source_queue_status": "rejected_local_region_source"}],
+            latest_candidate_run_id=run_id,
+        )
+        self.assertEqual(metrics["heuristic_ko_raw_posts_total"], 4)
+        self.assertEqual(metrics["heuristic_ko_classified_total"], 4)
+        self.assertEqual(metrics["heuristic_ko_outcome_counts"], {
+            "dual_vector_pending": 1,
+            "publication_sent": 1,
+            "source_local": 1,
+            "vector_ad_promo": 1,
+        })
+        self.assertEqual(metrics["heuristic_ko_latest_run_raw_posts_total"], 4)
+        self.assertEqual(metrics["heuristic_ko_latest_run_sent_total"], 1)
+
+    def test_post_source_merge_key_prefers_canonical_source_over_synthetic_id(self) -> None:
+        mod = load_module()
+        self.assertEqual(
+            mod._post_source_merge_key({
+                "source_id": "src_synthetic",
+                "canonical_source_key": "telegram:travel",
+            }),
+            "telegram:travel",
+        )
+
     def test_latest_llm_budget_is_not_summed_across_daily_rows(self) -> None:
         mod = load_module()
         latest = mod._latest_llm_budget_row([
@@ -74,7 +113,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS"], "1200")
         self.assertEqual(main["env"]["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"], "1")
         self.assertEqual(main["env"]["REGION_TALK_MAX_POSTS_PER_SOURCE"], "20")
-        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "6")
+        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "8")
         self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")
         self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
         self.assertEqual(main["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "1")
@@ -87,7 +126,10 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
         self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
         self.assertIn("--max-sources", main["cmd"])
-        self.assertIn("6", main["cmd"])
+        self.assertIn("8", main["cmd"])
+        self.assertEqual(main["env"]["REGION_TALK_HISTORY_SOURCES_TARGET"], "8")
+        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "8")
+        self.assertEqual(main["env"]["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"], "8")
         self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
         self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN"], "3")
         self.assertEqual(main["env"]["REGION_TALK_TELEGRAM_QUERY_SOURCE"], "place_lexicon")
@@ -95,6 +137,13 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"], "2")
         self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"], "2")
         self.assertEqual(main["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "300")
+
+    def test_candidate_adaptive_budget_reduces_breadth_near_runtime_limit(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800})["history_sources"], 8)
+        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 960})["history_sources"], 6)
+        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 1100})["history_sources"], 5)
+        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 60})["history_sources"], 6)
 
 
     def test_bge_batch_limit_is_configurable_for_backlog_catchup(self) -> None:

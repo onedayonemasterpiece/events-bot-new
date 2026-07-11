@@ -219,6 +219,13 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
 def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
     """Render one coherent stats surface from the already-read metric snapshot."""
     value = lambda key: _safe_int(metrics.get(key))
+    latest_outcomes = metrics.get("heuristic_ko_latest_run_outcome_counts") or {}
+    if not isinstance(latest_outcomes, dict):
+        latest_outcomes = {}
+    top_latest_outcomes = ", ".join(
+        f"{reason}={count}"
+        for reason, count in sorted(latest_outcomes.items(), key=lambda item: (-_safe_int(item[1]), str(item[0])))[:8]
+    ) or "none"
     return "\n".join([
         "📊 Region Talk live YDB stats",
         f"Источников в canonical population: {value('publics_total')}",
@@ -262,7 +269,28 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('post_link_queue_entity_wait_total')}/"
             f"{value('post_link_queue_fetched_total')}"
         ),
-        f"Processed posts: {value('processed_posts_unique_total')}",
+        (
+            "Processed posts unique/raw/duplicate rows: "
+            f"{value('processed_posts_unique_total')}/"
+            f"{value('processed_post_rows_total')}/"
+            f"{value('processed_post_duplicate_identity_rows_total')}"
+        ),
+        (
+            "Latest Candidate posts unique/raw/duplicate rows: "
+            f"{value('processed_posts_unique_latest_candidate_run_total')}/"
+            f"{value('processed_post_rows_latest_candidate_run_total')}/"
+            f"{value('processed_post_duplicate_identity_rows_latest_candidate_run_total')}"
+        ),
+        (
+            "Heuristic KO latest raw/vector/text/image/publication/sent: "
+            f"{value('heuristic_ko_latest_run_raw_posts_total')}/"
+            f"{value('heuristic_ko_latest_run_vector_evaluated_total')}/"
+            f"{value('heuristic_ko_latest_run_text_accepted_total')}/"
+            f"{value('heuristic_ko_latest_run_image_queue_total')}/"
+            f"{value('heuristic_ko_latest_run_publication_total')}/"
+            f"{value('heuristic_ko_latest_run_sent_total')}"
+        ),
+        f"Heuristic KO latest outcomes: {top_latest_outcomes}",
         f"Candidate memory: {value('candidate_memory_total')}",
         (
             "Current E5/BGE raw/actionable coverage: "
@@ -416,10 +444,10 @@ def _source_merge_key(row: dict[str, Any]) -> str:
 
 def _post_source_merge_key(row: dict[str, Any]) -> str:
     raw = (
-        row.get("source_id")
-        or row.get("canonical_source_key")
+        row.get("canonical_source_key")
         or row.get("source_url")
         or row.get("canonical_url")
+        or row.get("source_id")
         or ""
     )
     key = str(raw or "").strip().rstrip("/")
@@ -1062,6 +1090,133 @@ def _regex_vector_comparison_metrics(rows: list[dict[str, Any]]) -> dict[str, in
         "regex_filtered_without_vector_posts_total": len(regex_filtered_keys - vector_keys),
         "vector_without_regex_filtered_posts_total": len(vector_keys - regex_filtered_keys),
         "regex_to_vector_filtered_ratio_percent": int(round((len(regex_filtered_keys) / len(vector_keys)) * 100)) if vector_keys else 0,
+    }
+
+
+def _heuristic_ko_outcome(row: dict[str, Any], diagnostic: dict[str, Any], source: dict[str, Any]) -> str:
+    """Assign one final, mutually exclusive product outcome to a lexical KO hit."""
+    source_status = str(source.get("source_queue_status") or source.get("fetch_status") or "")
+    source_scope = str(source.get("source_scope") or row.get("source_scope") or "")
+    source_geo = str(source.get("source_geo_class") or row.get("source_geo_class") or "")
+    if source_status == "rejected_local_region_source" or source_scope == "local_region" or source_geo == "kaliningrad_local":
+        return "source_local"
+    if source_status == "rejected_spam_source" or source_scope == "spam":
+        return "source_spam"
+
+    rejection = str(row.get("rejection_reason") or row.get("memory_product_exclusion_reason") or "")
+    if rejection == "reject_stale_or_missing_date" or str(row.get("fresh_enough") or "").lower() in {"0", "false", "no"}:
+        return "stale"
+
+    publication_status = str(row.get("publication_status") or "")
+    publication_candidate_status = str(row.get("publication_candidate_status") or "")
+    if publication_candidate_status == "sent_to_chat" or str(row.get("sent_to_chat") or "").lower() == "true":
+        return "publication_sent"
+    if publication_candidate_status in {"llm_confirmed", "accepted_for_publication"} or publication_status == "gemini_accept":
+        return "publication_confirmed"
+    if publication_candidate_status in {"llm_rejected", "tombstoned_reject", "rejected_local_source_after_operator_audit"} or publication_status in {"gemini_reject", "eligibility_reject_tombstone", "operator_rejected_local_source"}:
+        return "publication_rejected"
+
+    vector_status = str(row.get("vector_gate_status") or "")
+    vector_reason = {
+        "vector_reject_not_kaliningrad_oblast": "vector_not_ko",
+        "vector_reject_multi_region_roundup": "vector_multi_region",
+        "vector_reject_roundup": "vector_multi_region",
+        "vector_reject_ad_promo": "vector_ad_promo",
+        "vector_reject_news_event": "vector_news_event",
+        "vector_reject_low_substance": "vector_low_substance",
+    }.get(vector_status)
+    if vector_reason:
+        return vector_reason
+    if vector_status.startswith("vector_defer") or str(row.get("current_stage") or "") == "dual_model_vector_enrichment_pending":
+        return "dual_vector_pending"
+
+    text_accepted = bool(
+        vector_status == "vector_accept_candidate"
+        or str(row.get("text_region_confirmation_status") or "") == "text_confirmed_ko_only_for_image_analysis"
+    )
+    image_status = str(row.get("image_queue_status") or "")
+    current_stage = str(row.get("current_stage") or "")
+    if text_accepted:
+        if str(row.get("media_review_mode") or "") == "operator_video_review" or _is_video_manual_review_row(row):
+            return "video_manual_review"
+        if image_status in {"not_reviewable_no_media"}:
+            return "no_media"
+        if image_status in {"not_reviewable_unsupported_media"}:
+            return "unsupported_media"
+        if current_stage == "image_fetch_retry_needed" or image_status in {"needs_actual_image_fetch", "selected_for_next_image_batch", "image_analysis_in_progress"}:
+            return "image_pending_or_fetch"
+        if current_stage == "good_text_weak_media" or image_status in {"rejected_low_score", "rejected_image_quality"}:
+            return "weak_image"
+        if image_status == "actual_scored":
+            return "image_scored_waiting_finalization"
+        return "text_accepted_waiting_downstream"
+
+    if diagnostic.get("regex_is_multi_region") or diagnostic.get("regex_has_external_geo"):
+        return "heuristic_multi_region"
+    if diagnostic.get("regex_is_ad_or_promo"):
+        return "heuristic_ad_promo"
+    if diagnostic.get("regex_is_news_or_event"):
+        return "heuristic_news_event"
+    if not diagnostic.get("regex_has_substance"):
+        return "heuristic_low_substance"
+    return "unclassified_pending"
+
+
+def _heuristic_ko_funnel_metrics(
+    rows: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
+    *,
+    latest_candidate_run_id: str = "",
+) -> dict[str, Any]:
+    source_by_key = {_source_merge_key(row): row for row in source_rows if _source_merge_key(row)}
+    heuristic_rows: list[tuple[dict[str, Any], dict[str, Any], str]] = []
+    for row in rows:
+        text = _row_text_for_regex(row)
+        if not text:
+            continue
+        diagnostic = _regex_ko_diagnostic(text)
+        if not diagnostic.get("regex_ko_raw"):
+            continue
+        source = source_by_key.get(_post_source_merge_key(row), {})
+        heuristic_rows.append((row, diagnostic, _heuristic_ko_outcome(row, diagnostic, source)))
+
+    def belongs_to_run(row: dict[str, Any]) -> bool:
+        if not latest_candidate_run_id:
+            return False
+        return latest_candidate_run_id in {
+            str(row.get("run_id") or ""),
+            str(row.get("last_seen_run_id") or ""),
+            str(row.get("current_run_id") or ""),
+        }
+
+    latest_rows = [item for item in heuristic_rows if belongs_to_run(item[0])]
+
+    def summarize(items: list[tuple[dict[str, Any], dict[str, Any], str]], prefix: str) -> dict[str, Any]:
+        reason_counts: dict[str, int] = {}
+        for _row, _diagnostic, reason in items:
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        total = len(items)
+        text_accepted = sum(
+            1 for row, _diagnostic, _reason in items
+            if _is_vector_ko_candidate(row)
+        )
+        return {
+            f"{prefix}_raw_posts_total": total,
+            f"{prefix}_vector_evaluated_total": sum(1 for row, _diagnostic, _reason in items if str(row.get("vector_gate_status") or "") and not str(row.get("vector_gate_status") or "").startswith("vector_defer")),
+            f"{prefix}_dual_vector_pending_total": reason_counts.get("dual_vector_pending", 0),
+            f"{prefix}_text_accepted_total": text_accepted,
+            f"{prefix}_image_queue_total": sum(1 for row, _diagnostic, _reason in items if str(row.get("image_queue_status") or "")),
+            f"{prefix}_publication_total": sum(1 for row, _diagnostic, _reason in items if str(row.get("publication_status") or row.get("publication_candidate_status") or "")),
+            f"{prefix}_sent_total": reason_counts.get("publication_sent", 0),
+            f"{prefix}_outcome_counts": dict(sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))),
+            f"{prefix}_classified_total": sum(reason_counts.values()),
+            f"{prefix}_classification_coverage_percent": int(round((sum(reason_counts.values()) / total) * 100)) if total else 0,
+        }
+
+    return {
+        **summarize(heuristic_rows, "heuristic_ko"),
+        **summarize(latest_rows, "heuristic_ko_latest_run"),
+        "heuristic_ko_latest_run_id": latest_candidate_run_id,
     }
 
 
@@ -1912,6 +2067,12 @@ def _heartbeat_metric_fields(prefix: str, row: dict[str, Any] | None) -> dict[st
         f"{prefix}_heartbeat_status": str(payload.get("status") or ""),
         f"{prefix}_heartbeat_created_at": str(payload.get("created_at") or payload.get("updated_at") or ""),
         f"{prefix}_heartbeat_event_seq": _safe_int(payload.get("event_seq")),
+        f"{prefix}_heartbeat_runtime_elapsed_seconds": _safe_float(payload.get("runtime_elapsed_seconds") or payload.get("elapsed_seconds")) or 0,
+        f"{prefix}_heartbeat_posts_fetched": _safe_int(payload.get("posts_fetched")),
+        f"{prefix}_heartbeat_posts_scored": _safe_int(payload.get("posts_scored") or payload.get("texts_done")),
+        f"{prefix}_heartbeat_sources_history_fetched_ok": _safe_int(payload.get("sources_history_fetched_ok")),
+        f"{prefix}_heartbeat_history_fetch_runtime_seconds": _safe_float(payload.get("history_fetch_runtime_seconds")) or 0,
+        f"{prefix}_heartbeat_reviewable_candidates": _safe_int(payload.get("current_run_reviewable_candidates")),
     }
 
 
@@ -1957,6 +2118,30 @@ def loop_goal_progress(metrics: dict[str, Any], baseline: dict[str, Any], target
 
 def _has_active_region_talk_kernel(kaggle_statuses: dict[str, str]) -> bool:
     return any(str(status or "").upper() in ACTIVE_KERNEL_STATUSES for status in kaggle_statuses.values())
+
+
+def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
+    """Use measured runtime headroom without extending the 20-minute guardrail."""
+    runtime_seconds = _safe_float(metrics.get("candidate_heartbeat_runtime_elapsed_seconds")) or 0.0
+    bge_backlog = _safe_int(metrics.get("bge_pending_sample_total"))
+    if runtime_seconds > 1050:
+        history_sources = 5
+    elif runtime_seconds > 900 or bge_backlog > 48:
+        history_sources = 6
+    else:
+        # Two profiled production runs completed in about 13-14 minutes with
+        # six sources. Use part of the measured headroom for breadth, not depth.
+        history_sources = 8
+    history_sources = max(4, min(10, _env_int("REGION_TALK_ORCHESTRATOR_HISTORY_SOURCES", history_sources)))
+    fast_check_sources = max(
+        5,
+        min(10, _env_int("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES", history_sources)),
+    )
+    return {
+        "history_sources": history_sources,
+        "fast_check_sources": fast_check_sources,
+        "runtime_seconds_observed": int(round(runtime_seconds)),
+    }
 
 
 def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_yc_fallback: bool = False) -> dict[str, Any]:
@@ -2080,6 +2265,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         publications,
     )
     regex_vector_metrics = _regex_vector_comparison_metrics(diagnostic_post_rows)
+    latest_candidate_run_id = str((latest_rows.get("latest_business_heartbeat") or {}).get("run_id") or "")
+    heuristic_ko_funnel_metrics = _heuristic_ko_funnel_metrics(
+        diagnostic_post_rows,
+        source_rows,
+        latest_candidate_run_id=latest_candidate_run_id,
+    )
     source_statuses = [str(r.get("source_queue_status") or r.get("queue_status") or r.get("fetch_status") or "") for r in source_rows]
     source_terminal = [
         r for r, status in zip(source_rows, source_statuses)
@@ -2098,6 +2289,16 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if status and status != "pending_scan"
     ]
     processed_post_rows = rows_by_kind["processed_post_item"]
+    processed_post_unique_keys = {_post_merge_key(row) for row in processed_post_rows if _post_merge_key(row)}
+    processed_post_latest_run_rows = [
+        row for row in processed_post_rows
+        if latest_candidate_run_id and latest_candidate_run_id in {
+            str(row.get("run_id") or ""), str(row.get("last_seen_run_id") or ""), str(row.get("current_run_id") or "")
+        }
+    ]
+    processed_post_latest_run_unique_keys = {
+        _post_merge_key(row) for row in processed_post_latest_run_rows if _post_merge_key(row)
+    }
     processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
     source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
     source_with_posts_count = max(len(source_with_posts), len(processed_post_source_keys))
@@ -2188,7 +2389,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     fast_check_local_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "local_region_source"]
     fast_check_spam_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "spam_source_reject"]
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
-    processed_posts_unique_total = len(processed_post_rows)
+    processed_posts_unique_total = len(processed_post_unique_keys)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
     latest_source_scan_run = max([str(r.get("last_scan_run_id") or "") for r in source_rows if str(r.get("last_scan_run_id") or "").strip()] or [""])
     latest_source_scan_rows = [
@@ -2273,6 +2474,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "history_latest_run_newest_post_age_days_min": _min_numeric(latest_history_depth_rows, "history_newest_post_age_days"),
         "history_latest_run_oldest_post_age_days_max": _max_numeric(latest_history_depth_rows, "history_oldest_post_age_days"),
         "processed_posts_unique_total": processed_posts_unique_total,
+        "processed_post_rows_total": len(processed_post_rows),
+        "processed_post_duplicate_identity_rows_total": max(0, len(processed_post_rows) - processed_posts_unique_total),
+        "processed_posts_latest_candidate_run_id": latest_candidate_run_id,
+        "processed_post_rows_latest_candidate_run_total": len(processed_post_latest_run_rows),
+        "processed_posts_unique_latest_candidate_run_total": len(processed_post_latest_run_unique_keys),
+        "processed_post_duplicate_identity_rows_latest_candidate_run_total": max(0, len(processed_post_latest_run_rows) - len(processed_post_latest_run_unique_keys)),
         "candidate_memory_total": len(candidates),
         "image_queue_total": len(images),
         "image_product_eligible_total": len(image_product_eligible),
@@ -2296,6 +2503,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "text_vector_bge_m3_total": len(bge_vectors),
         **vector_pair_metrics,
         **regex_vector_metrics,
+        **heuristic_ko_funnel_metrics,
         "bge_pending_sample_total": len(bge_pending_rows),
         "bge_pending_sample_limit": bge_sample_limit,
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
@@ -2338,14 +2546,23 @@ def build_decision_plan(
     exact_fetch_limit = 3
     if exact_ready > 3 and exact_cache_hits > 3:
         exact_fetch_limit = min(8, exact_ready, exact_cache_hits)
+    candidate_budget = candidate_adaptive_budget(metrics)
     candidate_env = {
         **MAIN_DISCOVERY_YDB_BUDGET_ENV,
         "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": str(max(1, exact_fetch_limit)),
+        "REGION_TALK_HISTORY_SOURCES_TARGET": str(candidate_budget["history_sources"]),
+        "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": str(candidate_budget["history_sources"]),
+        "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": str(candidate_budget["fast_check_sources"]),
     }
     actions.append(_action(
         "launch_candidate_report",
-        ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"],
-        f"drain up to {exact_fetch_limit} exact KO links first, then continue all discovery methods" + (" after publication goal" if goal_reached else ""),
+        ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", str(candidate_budget["history_sources"]), "--no-wait"],
+        (
+            f"drain up to {exact_fetch_limit} exact KO links first; then history={candidate_budget['history_sources']} "
+            f"and fast-check={candidate_budget['fast_check_sources']} from measured runtime={candidate_budget['runtime_seconds_observed']}s; "
+            "continue keyword/similar discovery"
+            + (" after publication goal" if goal_reached else "")
+        ),
         resource="telegram:DISCOVERY1",
         parallel_safe=True,
         timeout_seconds=300,
