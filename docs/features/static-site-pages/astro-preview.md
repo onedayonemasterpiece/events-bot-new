@@ -6,6 +6,16 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
+## КППК event transport preview — 2026-07-11
+
+Public focus preview `preview-20260711-event-transport-kppk-v1` adds the disclosed train module after event descriptions for Светлогорск/Зеленоградск. The 399-event fixture built 420 pages and passed `npm run check:preview`; strict public `GET` checks returned `200` for the preview index, event page, Lastochka WebP and hashed Astro CSS. Mobile Pixel 7 and desktop 1440px Playwright screenshots confirmed that the supplied train art, outbound/return pair and live schedule links stay readable without breaking the existing detail-page hierarchy.
+
+- Regression event `6538`, `Танцующий лес`, with `15:43 → 16:29` out and `22:40 → 23:35` back: <https://kenigevents.ru/preview-20260711-event-transport-kppk-v1/sobytiya/tantsuyuschiy-les-svetlogorsk-6538/>
+- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-kppk-v1/__preview/>
+- Canonical behavior/data contract: [event-transport-schedule.md](event-transport-schedule.md)
+
+The prefix was uploaded without rewriting stable `/ics/<event_id>.ics` objects. Visual evidence stays uncommitted under `artifacts/codex/event-transport-schedule/visual/`.
+
 ## Public URLs
 
 Required URLs for the current preview:
