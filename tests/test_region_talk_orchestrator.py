@@ -252,6 +252,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertGreaterEqual(mod._orchestrator_kind_limit("processed_post_item", 6000), 20000)
         self.assertGreaterEqual(mod._orchestrator_kind_limit("post_live_item", 6000), 20000)
         self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 6000), 20000)
+        self.assertEqual(mod._orchestrator_kind_limit("text_vector_enrichment_item", 100), 20000)
 
     def test_cursor_metric_prefers_highest_position_over_stale_history(self) -> None:
         mod = load_module()

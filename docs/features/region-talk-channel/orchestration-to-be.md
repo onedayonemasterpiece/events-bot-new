@@ -157,6 +157,9 @@ Telegram Monitoring and Guide monitoring:
   duplicate-identity rows separately, both cumulatively and for the latest
   CandidateReport run. `processed_posts_unique_total` is deduplicated by post
   identity and must not count the online write plus final snapshot twice;
+- text-vector totals use a full 20k row metric window rather than the former
+  shared 6k cap; otherwise adding BGE rows could make the displayed E5 total
+  fall even though no E5 data was removed;
 - every lexical/regex KO hit receives one mutually exclusive latest product
   outcome (`source_local`, `source_spam`, stale, vector not-KO/multiregion/ad/
   news/low-substance, dual-vector pending, media outcome, Gemini rejection,

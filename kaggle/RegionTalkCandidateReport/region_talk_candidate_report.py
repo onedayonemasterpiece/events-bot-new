@@ -1921,6 +1921,19 @@ def rekey_processed_posts(rows: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return durable
 
 
+def processed_post_snapshot_row_items(compact: dict[str, Any], *, skip_row_rewrite: bool) -> list[tuple[str, str, dict[str, Any]]]:
+    if skip_row_rewrite:
+        return []
+    items: list[tuple[str, str, dict[str, Any]]] = []
+    for item in (compact.get("processed_posts") or {}).values():
+        if not isinstance(item, dict):
+            continue
+        key = durable_processed_post_key(item)
+        if key:
+            items.append(("processed_post_item:" + key, "processed_post_item", item))
+    return items
+
+
 def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     """Keep only durable, valuable state in YDB; no raw post text or media bytes.
 
@@ -3651,8 +3664,19 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
             if not isinstance(data, dict) or not data:
                 meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path})
                 return {}, meta
-            if "posts" not in data and isinstance(data.get("processed_posts"), dict):
-                data["posts"] = data.get("processed_posts") or {}
+            # ``posts`` in older compact snapshots may still be keyed by a
+            # fetch-path post_id while row-level processed rows are already
+            # canonical. Always rebuild both aliases from the merged durable
+            # population; merely filling a missing alias lets legacy keys leak
+            # back into the next snapshot.
+            durable_posts_source = (
+                data.get("processed_posts")
+                if isinstance(data.get("processed_posts"), dict)
+                else (data.get("posts") if isinstance(data.get("posts"), dict) else {})
+            )
+            durable_posts = rekey_processed_posts(dict(durable_posts_source or {}))
+            data["processed_posts"] = durable_posts
+            data["posts"] = durable_posts
             if "region_talk_sources" not in data and isinstance(data.get("sources"), dict):
                 data["region_talk_sources"] = data.get("sources") or {}
             raw = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -3746,11 +3770,16 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         key = str(item.get("image_queue_id") or item.get("post_url") or "")
                         if key:
                             row_items.append(("image_queue_item:" + key, "image_queue_item", item))
-                for item in (compact.get("processed_posts") or {}).values():
-                    if isinstance(item, dict):
-                        key = durable_processed_post_key(item)
-                        if key:
-                            row_items.append(("processed_post_item:" + key, "processed_post_item", item))
+                processed_snapshot_items = processed_post_snapshot_row_items(
+                    compact,
+                    skip_row_rewrite=skip_row_rewrite,
+                )
+                # New/refetched posts are already written online with run_id,
+                # stage and text hashes. Rewriting every compact post here
+                # strips that observability and historically resurrected
+                # fetch-path PKs from an old snapshot. Full row rewrite remains
+                # available only for explicit maintenance.
+                row_items.extend(processed_snapshot_items)
                 for item in (compact.get("candidate_memory") or {}).values():
                     if isinstance(item, dict) and should_write_candidate_memory_item(item):
                         key = str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or "")
@@ -3792,6 +3821,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                             row_items.append(("queue_cursor:" + str(name), "queue_cursor", item))
                     row_items.append(("queue_metrics:latest", "queue_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "queue_cursors": compact.get("queue_cursors") or {}, "source_queue_total": len(compact.get("unified_source_queue") or {}), "image_queue_total": len(compact.get("image_candidate_queue") or {})}))
                 compact["_ydb_row_level_publication_candidate_items_written"] = len(compact.get("publication_candidate_queue") or {})
+                compact["_ydb_row_level_processed_post_items_written"] = len(processed_snapshot_items)
                 compact["_ydb_row_level_items_written"] = ydb_bulk_upsert_json_many(
                     driver,
                     ydb,
@@ -3804,7 +3834,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op, retry_settings=state_retry_settings)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -5246,7 +5276,9 @@ def is_candidate_memory_row(row: dict[str, Any]) -> bool:
 
 def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[dict[str, Any]], source_rows: list[dict[str, Any]], run_id: str, run_now: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     previous_memory = previous_state.get("candidate_memory") if isinstance(previous_state.get("candidate_memory"), dict) else {}
-    previous_posts = previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    previous_posts = rekey_processed_posts(
+        previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    )
     memory: dict[str, dict[str, Any]] = {str(k): dict(v) for k, v in previous_memory.items() if isinstance(v, dict)}
     # Bootstrap legacy candidate memory from pre-z4 post state.
     for pid, prev in previous_posts.items():
@@ -11018,7 +11050,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     llm_calls_used = 0
     llm_supabase_unavailable = llm_limit_snapshot.get("llm_limit_source") == "supabase_required_unavailable"
     previous_state, state_meta = load_region_talk_state(output_dir)
-    previous_posts = previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    previous_posts = rekey_processed_posts(
+        previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    )
     previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
     previous_image_scores_by_url = {str(r.get("post_url") or ""): r for r in previous_image_queue_rows if str(r.get("post_url") or "")}
     bge_m3_enrichment_index = build_text_vector_enrichment_index(previous_state, model="bge_m3") if external_bge_m3_fusion_enabled() else {}
@@ -11509,7 +11543,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         row.pop("place_matches", None)
         new_posts.append(row)
         write_region_talk_online_post_item(row, run_id=run_id, stage="post_scored", status=current_stage)
-        previous_post = previous_posts.get(str(p["post_id"])) if isinstance(previous_posts, dict) else None
+        post_state_key = durable_processed_post_key(p) or str(p["post_id"])
+        previous_post = previous_posts.get(post_state_key) if isinstance(previous_posts, dict) else None
         previous_stage = str((previous_post or {}).get("current_stage") or "")
         previous_score = (previous_post or {}).get("candidate_score_current", "")
         previous_media = (previous_post or {}).get("media_score_current", "")
@@ -11527,7 +11562,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         except Exception:
             media_delta = ""
         increment.append({"entity_type":"post", "entity_id":p["post_id"], "source_title":p.get("source_title"), "post_url":p.get("post_url"), "first_seen_run_id":first_seen_run, "previous_run_id":str((previous_post or {}).get("last_seen_run_id") or ""), "current_run_id":run_id, "first_seen_at":str((previous_post or {}).get("first_seen_at") or run_now), "last_seen_at":run_now, "seen_run_count":seen_count, "previous_stage":previous_stage, "current_stage":current_stage, "stage_transition":("new→"+current_stage if not previous_post else previous_stage+"→"+current_stage), "new_this_run":"yes" if not previous_post else "no", "changed_this_run":str(changed).lower(), "change_reason":rejection or ("first_seen" if not previous_post else ("stage_or_score_changed" if changed else "unchanged")), "candidate_score_previous":previous_score, "candidate_score_current":score, "candidate_score_delta":score_delta, "media_score_previous":previous_media, "media_score_current":ms["overall_media_score"], "media_score_delta":media_delta, "manual_review_status":"unreviewed", "next_action":row["suggested_action"]})
-        updated_posts_state[str(p["post_id"])] = {
+        updated_posts_state.pop(str(p["post_id"]), None)
+        updated_posts_state[post_state_key] = {
             "first_seen_run_id": first_seen_run,
             "first_seen_at": str((previous_post or {}).get("first_seen_at") or run_now),
             "last_seen_run_id": run_id,

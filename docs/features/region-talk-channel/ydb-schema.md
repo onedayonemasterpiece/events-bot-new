@@ -49,6 +49,10 @@ possible: `tg:<lowercase_handle>:<message_id>` or
 the YDB PK because its historical value included the fetch path (Telethon
 history, public web, exact-link fetch). Online writes, snapshot writes and state
 loading re-key by the platform identity and merge non-empty fields.
+Normal CandidateReport snapshots do not rewrite row-level processed posts:
+online post writes own those rows and retain `run_id`/stage/text-hash
+observability. Snapshot row rewriting is explicit maintenance only. This avoids
+both resurrecting legacy keys and erasing latest-run attribution.
 
 Dedupe requirements:
 

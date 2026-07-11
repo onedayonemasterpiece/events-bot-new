@@ -8,6 +8,7 @@ interrupted run can leave duplicates but cannot lose the post.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import sys
@@ -19,13 +20,26 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from kaggle.RegionTalkCandidateReport import region_talk_candidate_report as rt  # noqa: E402
 from scripts.region_talk_goal_notify import (  # noqa: E402
     ensure_ydb_module,
     load_env,
     ydb_credentials,
     ydb_endpoint_database,
 )
+
+
+def load_candidate_module() -> Any:
+    path = ROOT / "kaggle" / "RegionTalkCandidateReport" / "region_talk_candidate_report.py"
+    spec = importlib.util.spec_from_file_location("region_talk_candidate_report_post_normalize", path)
+    if not spec or not spec.loader:
+        raise RuntimeError(f"cannot load CandidateReport module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+rt = load_candidate_module()
 
 def clean_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if not key.startswith("_ydb_")}

@@ -191,7 +191,7 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "image_queue_item": 2500,
     "publication_candidate_item": 2500,
     "post_link_queue_item": 2500,
-    "text_vector_enrichment_item": 6000,
+    "text_vector_enrichment_item": 20000,
     "processed_post_item": 20000,
     "post_live_item": 20000,
     "source_queue_item": 20000,
@@ -221,7 +221,7 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
     if kind in {
         "processed_post_item", "post_live_item", "source_queue_item",
         "source_status_item", "online_source_item", "source_candidate_item",
-        "source_edge_item", "telegram_entity_cache_item",
+        "source_edge_item", "telegram_entity_cache_item", "text_vector_enrichment_item",
     }:
         # Processed/live post totals are goal metrics. They must not be silently
         # flattened by a low source/frontier debug --limit, otherwise the loop

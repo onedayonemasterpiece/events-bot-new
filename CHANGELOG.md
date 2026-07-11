@@ -9,6 +9,9 @@
   wasted CPU rows. Orchestrator stats now expose candidate-memory breakdown and
   actionable BGE backlog versus one-run CPU capacity, and adapt discovery
   breadth at 75%/100% capacity without disabling discovery or dual fusion.
+  Compact snapshots no longer overwrite online processed-post rows, preserving
+  latest-run attribution and preventing legacy PK resurrection; vector totals
+  now use a complete metric window instead of a misleading shared 6k cap.
 - **Region Talk / local POI institutions**: source surface classification now
   routes `Музей Мирового Океана` / `world_ocean_museum` to the local-region
   monitoring list before its institutional posts consume external-candidate
