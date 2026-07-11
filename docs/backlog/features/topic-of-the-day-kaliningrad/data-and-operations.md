@@ -203,9 +203,14 @@ MVP может использовать один Kaggle notebook только п
   "policy_versions": {"cluster": "...", "roles": "...", "anti_repeat": "..."},
   "targets": ["telegram", "vk"],
   "publish_enabled": false,
-  "publication_mode": "manual_canary|green_auto|full_auto",
+  "publication_mode": "manual_canary|full_auto",
   "manual_approval_id": null,
   "automation_policy_version": null,
+  "automation_activation": {
+    "reviewed_editions_required": 10,
+    "critical_defects_allowed": 0,
+    "live_e2e_required": true
+  },
   "resource_leases": ["topic_day:2026-07-10"]
 }
 ```
@@ -214,7 +219,7 @@ Callback token передаётся отдельно по существующе
 
 Для `publication_mode=manual_canary` реальный `publish_enabled=true` допустим только вместе с действующим `manual_approval_id`, `approved_at`, `approved_by` и неизменившимся `payload_hash`. Изменение текста, ссылок или assets после approve аннулирует approval и возвращает выпуск на просмотр.
 
-Для `green_auto|full_auto` вместо approval обязательны `automation_policy_version`, immutable gate report, подтверждённый activation state и тот же `payload_hash`. Режим не может включиться только env-флагом без сохранённого activation decision/evidence.
+Для `full_auto` вместо approval обязательны `automation_policy_version`, immutable gate report, подтверждённый activation state и тот же `payload_hash`. Activation state подтверждает 10 подряд рассмотренных editions без критических дефектов и зелёный live E2E. Режим не может включиться только env-флагом без сохранённого activation decision/evidence.
 
 Manual approval на canary-этапе приходит только из allowlisted закрытого Telegram admin-чата и только от одного configured admin user id; одного approve достаточно. Callback data содержит `edition_id`, action и короткий payload-hash fingerprint; server заново читает полный state, проверяет Telegram user id, chat id, актуальный `payload_hash` и одноразовый decision state. Callback не доверяет присланному тексту/URL и не содержит секретов.
 
@@ -273,7 +278,8 @@ Telegram и VK независимы. `telegram=sent, vk=failed` даёт `editio
 - свежий heartbeat означает «ждать», а не запускать дубль;
 - `no_topic` считается осознанно обработанным слотом и отправляет операторский отчёт;
 - на manual canary отсутствие approve к 10:00 оставляет edition в `awaiting_approval`; approve позже 10:00 запускает публикацию сразу, без переноса на следующий день;
-- после включения full auto green-gate edition публикуется в 10:00 без approval row; admin decision требуется только для явно сохранённых manual-fallback классов;
+- после включения full auto прошедший все gates edition публикуется в 10:00 без approval row; непрошедший edition автоматически становится `no_topic`, без manual fallback;
+- успешный full-auto run не отправляет предварительный или post-success admin message; durable edition/publication rows и audit artifact всё равно записываются для idempotency и расследований;
 - пропущенный сегодняшний слот после фикса требует compensating run и проверки результата.
 
 | Найденное состояние | Recovery |

@@ -92,12 +92,11 @@ Full auto — зафиксированный целевой режим, а не 
 
 Самый быстрый безопасный rollout:
 
-1. **Manual canary:** несколько реальных выпусков через две кнопки, проверка exactly-once и критических ошибок.
-2. **Green auto:** общий `allowed_general` выпуск автоматически публикуется в 10:00, если все hard gates зелёные; ambiguity превращается в `no_topic` или manual fallback, а не в рискованный пост.
-3. **Heritage auto:** `allowed_local_history_exception` подключается к автомату после отдельных корректных примеров по ОКН/историческим объектам.
-4. **Full auto:** все разрешённые policy classes идут без обязательного preview; admin получает report/alert, но не является blocking gate.
+1. **Manual canary:** 10 подряд рассмотренных editions через две кнопки, проверка exactly-once и критических ошибок.
+2. **Full auto:** `allowed_general` и `allowed_local_history_exception` одновременно переходят в автомат. Прошедший все hard gates выпуск публикуется в 10:00; ambiguity автоматически становится `no_topic`, а не уходит на ручное рассмотрение.
+3. **Silent success:** нет обязательного preview, предварительного admin alert/cancel window или success-report message. Успешный run просто создаёт публичную публикацию.
 
-Предлагаемый быстрый activation gate, требующий подтверждения владельца: **5 подряд рассмотренных editions, 0 критических дефектов и зелёный live E2E**; затем включить Green auto. Это не требует ждать 30 календарных дней или заполнения всего golden set.
+Зафиксированный activation gate: **10 подряд рассмотренных editions, 0 критических дефектов и зелёный live E2E**; затем включить full auto сразу для `allowed_general` и `allowed_local_history_exception`. Это не требует ждать 30 календарных дней или заполнения всего golden set.
 
 Автопубликация допустима только для high-confidence editions:
 
@@ -110,7 +109,7 @@ Full auto — зафиксированный целевой режим, а не 
 - healthy callback/lease/publication ledger;
 - отсутствие unresolved `unknown` прошлого target.
 
-Все остальные выпуски остаются manual/no-topic.
+Все остальные выпуски автоматически становятся `no_topic`; постоянной manual-fallback очереди после activation нет.
 
 ## 3. Golden set
 
@@ -208,9 +207,9 @@ Golden set содержит минимум 30 разных историческ�
 | YDB разрастается | ~4 rows/day, artifacts+TTL, changed-only, no post embeddings in DB |
 | Upstream растёт, выпусков нет | feedback control: остановить discovery и устранить bottleneck |
 
-## 8. Операторский daily report
+## 8. Внутренний daily audit artifact
 
-Даже при automation сохраняется компактный отчёт:
+Даже при automation сохраняется компактный внутренний отчёт:
 
 - source coverage и failures;
 - число eligible posts/ownership groups;
@@ -223,18 +222,17 @@ Golden set содержит минимум 30 разных историческ�
 - Telegram/VK payload hashes и platform ids;
 - final status `published|partial|no_topic|failed|unknown`.
 
-Это артефакт, а не серия отдельных YDB rows.
+Это артефакт, а не серия отдельных YDB rows и не обязательное Telegram-сообщение администратору. При успешном full-auto run отдельный preview, alert или post-success report в admin-чат не отправляется.
 
 ## 9. Открытые продуктовые решения
 
-Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру. Уже решены: `0..1`, один Telegram administrator, только две кнопки, late approve → publish immediately, slot 10:00, любые публичные source photos со ссылкой, полноценный голос официальных источников, sensitive-topic policy с heritage exception и быстрый переход к full auto.
+Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру. Уже решены: `0..1`, один Telegram administrator, только две кнопки, late approve → publish immediately, slot 10:00, любые публичные source photos со ссылкой, полноценный голос официальных источников, sensitive-topic policy с heritage exception, 10-edition activation gate, одновременный heritage auto и отсутствие full-auto alerts.
 
-1. Подтверждаем предложенный green-auto gate: 5 подряд рассмотренных editions без критических ошибок?
-2. Краеведческие sensitive exceptions переводить в auto одновременно с обычными темами или оставить manual ещё на несколько примеров?
-3. В full auto нужен ли в admin-чате предварительный alert с коротким окном отмены, например 15 минут, или только отчёт после публикации?
-4. Какие источники объединяются в одну ownership group?
-5. Нужен ли Telegram album/video в первом релизе или начинаем с одной Bento-карточки?
-6. Как называются и кем администрируются новый Telegram channel и VK community?
+1. Какие источники объединяются в одну ownership group?
+2. Нужен ли Telegram album/video в первом релизе или начинаем с одной Bento-карточки?
+3. Как называются и кем администрируются новый Telegram channel и VK community?
+4. Нужно ли уведомлять администратора при `no_topic`/пропуске дня или сохранять полностью тихий режим?
+5. При `Telegram=published`, `VK=failed` автоматически повторять только VK или ждать ручного решения?
 
 ## 10. Definition of Done для будущей реализации
 
