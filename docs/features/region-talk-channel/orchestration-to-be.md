@@ -703,6 +703,11 @@ guard before looking up E5/BGE rows. Pending posts from a recognizably local or
 spam source are marked `dropped_local_source` / `dropped_spam_source` and do
 not consume fusion work or create misleading image-fetch retries. The
 `bge_m3_memory_source_blocked` heartbeat counter makes that saved work visible.
+Candidate-memory online persistence is bounded, but rows whose terminal
+local/spam source cleanup changed in the current run are ordered before BGE
+fusion changes and ordinary refreshed rows. This prevents the live-write cap
+from being occupied by the same healthy rows while already identified local or
+spam candidates remain incorrectly operational across repeated cycles.
 
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and

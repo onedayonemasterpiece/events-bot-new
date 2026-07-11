@@ -14,7 +14,9 @@
   now use a complete metric window instead of a misleading shared 6k cap. The
   normalizer also migrates legacy singleton PKs before they can form a future
   duplicate pair, using YDB BulkUpsert and parameterized 500-key bulk deletes
-  instead of one network transaction call per row.
+  instead of one network transaction call per row. Bounded candidate-memory
+  writes now prioritize terminal local/spam cleanup over ordinary refreshed
+  rows, preventing the online cap from starving funnel cleanup across cycles.
 - **Region Talk / image-worker empty-poll efficiency**: orchestrated image runs
   now use a two-minute initial YDB lease window, 30-second polling and no idle
   post-drain wait, replacing the previous ten-minute empty CPU notebook when a

@@ -300,6 +300,22 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             rows[0]["candidate_memory_source_cleanup_changed_this_run"] = "true"
             selected_after_source_cleanup = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1")
             self.assertEqual([r["candidate_memory_id"] for r in selected_after_source_cleanup], ["old", "fresh", "new"])
+
+            # The online writer caps its input. Cleanup rows must precede
+            # ordinary refreshed rows so the cap cannot starve terminal local
+            # or spam cleanup across repeated runs.
+            capped_order_rows = [
+                {"candidate_memory_id": "fresh-1", "not_refetched_this_run": "false"},
+                {"candidate_memory_id": "cleanup-1", "not_refetched_this_run": "true", "candidate_memory_source_cleanup_changed_this_run": "true"},
+                {"candidate_memory_id": "fresh-2", "not_refetched_this_run": "false"},
+                {"candidate_memory_id": "bge-1", "not_refetched_this_run": "true", "external_bge_m3_fusion_changed_this_run": "true"},
+                {"candidate_memory_id": "cleanup-2", "not_refetched_this_run": "false", "candidate_memory_source_cleanup_changed_this_run": "true"},
+            ]
+            prioritized = mod.candidate_memory_rows_for_ydb_write(capped_order_rows, run_id="run-1")
+            self.assertEqual(
+                [r["candidate_memory_id"] for r in prioritized],
+                ["cleanup-1", "cleanup-2", "bge-1", "fresh-1", "fresh-2"],
+            )
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", None)

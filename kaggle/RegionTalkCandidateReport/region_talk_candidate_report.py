@@ -2526,24 +2526,30 @@ def candidate_memory_rows_for_ydb_write(
 ) -> list[dict[str, Any]]:
     if not getenv_bool("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", True):
         return rows
-    changed: list[dict[str, Any]] = []
-    for row in rows:
+    changed: list[tuple[int, int, dict[str, Any]]] = []
+    for row_index, row in enumerate(rows):
+        source_cleanup_changed = str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true"
+        bge_fusion_changed = str(row.get("external_bge_m3_fusion_changed_this_run") or "").lower() == "true"
+        # The online writer applies a bounded row cap. Put terminal source
+        # cleanup first so refreshed ordinary rows cannot repeatedly occupy
+        # that cap and leave known local/spam rows in the operational funnel.
+        priority = 0 if source_cleanup_changed else (1 if bge_fusion_changed else 2)
         if str(row.get("not_refetched_this_run") or "").lower() != "true":
-            changed.append(row)
+            changed.append((priority, row_index, row))
             continue
-        if str(row.get("external_bge_m3_fusion_changed_this_run") or "").lower() == "true":
-            changed.append(row)
+        if bge_fusion_changed:
+            changed.append((priority, row_index, row))
             continue
-        if str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true":
-            changed.append(row)
+        if source_cleanup_changed:
+            changed.append((priority, row_index, row))
             continue
         if str(row.get("last_refetched_run_id") or "") == run_id:
-            changed.append(row)
+            changed.append((priority, row_index, row))
             continue
         if str(row.get("first_candidate_run_id") or "") == run_id:
-            changed.append(row)
+            changed.append((priority, row_index, row))
             continue
-    return changed
+    return [row for _priority, _row_index, row in sorted(changed, key=lambda item: (item[0], item[1]))]
 
 
 def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: str, id_fields: list[str], fields: list[str], run_id: str, stage: str) -> int:
