@@ -10,6 +10,8 @@
 
 ### Added
 
+- **Static-site bus transport directory**: added versioned JSON topology and venue-access references for 30 active events across 14 non-Kaliningrad/non-rail localities and 21 logical venues, plus prepared Chernyakhovsk/Zalesye/Nekrasovo candidates; tied the reviewed Romanovo schedule to stable locality/venue/corridor ids and added safety validation for aliases, blocked venue points, official intermediate-time gaps and the two different Ushakovo corridors.
+
 - **Static event pages / transport schedule**: added the Lastochka travel block after descriptions for Светлогорск/Зеленоградск events, with exact Калининград-Северный departure/arrival pairs, a 20–90 minute arrival window, explicit-end return matching or factual unknown-end service boundaries, the supplied train artwork, calendar files and real-event regression coverage.
 
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.

@@ -35,6 +35,8 @@ The selector and calendar files are static. Public UI and `.ics` descriptions do
 
 ## Bus example: Сказочное Холмогорье
 
+The build-time coverage/topology and venue last-mile reference is maintained separately in [bus-transport-directory.md](bus-transport-directory.md). It currently inventories 30 active events across 14 logical localities and 21 venues; this does **not** automatically enable the public block. A locality needs reviewed target-stop times, a service calendar and a safe venue access leg before it can move into `busTransportSchedules.json`.
+
 `site/src/data/busTransportSchedules.json` and `site/src/lib/eventBusTransport.ts` activate only for a source-backed `11:00–16:00` event at `Холмогорье / Сказочное Холмогорье`, Романово:
 
 - the official route registry shows that `118`, `118А` and `119` share the same corridor from the Kaliningrad bus terminal through `Северный вокзал` and up to `Романовский поворот`; the public UI therefore uses one shared `около 1 часа в автобусе` estimate and one shared `Северный — примерно через 10–15 минут` note instead of different per-route or per-chip estimates;

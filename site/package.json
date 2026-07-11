@@ -10,6 +10,7 @@
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
     "build:preview": "node scripts/build-preview.mjs",
+    "check:bus-directory": "node scripts/check-bus-transport-directory.mjs",
     "check:preview": "node scripts/check-preview.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
     "astro": "astro"

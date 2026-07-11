@@ -185,7 +185,12 @@
       "map_portrait_image_url": "/assets/transport/romanovo-holmogorye-route-portrait.png",
       "outbound_min_arrival_lead_minutes": 20,
       "outbound_max_arrival_lead_minutes": 90,
-      "return_min_visit_minutes": 75
+      "return_min_visit_minutes": 75,
+      "route_directory_locality_id": "romanovo",
+      "venue_access_id": "romanovo-holmogorye",
+      "route_corridor_ids": [
+        "pionersky-romanovo"
+      ]
     }
   ]
 }
