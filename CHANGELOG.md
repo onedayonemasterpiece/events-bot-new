@@ -9,7 +9,7 @@
 
 ### Added
 
-- **Guide excursion video promo**: added a draft feature spec and preserved the carousel-card reference video for a standalone excursion promo activity that will render one daily photo-led video for VK/Telegram.
+- **Guide excursion video promo**: added a draft feature spec, preserved the carousel-card reference video, and recorded product decisions for avatar/contact/photo gates, LLM-only headlines, guide-digest publication surfaces and readable card timing.
 
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 
