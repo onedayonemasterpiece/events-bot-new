@@ -94,7 +94,6 @@ export function buildTransportIcs(
   const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
   const from = direction === 'outbound' ? suggestion.originStation : suggestion.destinationStation;
   const to = direction === 'outbound' ? suggestion.destinationStation : suggestion.originStation;
-  const liveUrl = direction === 'outbound' ? suggestion.outboundLiveUrl : suggestion.returnLiveUrl;
   const directionLabel = direction === 'outbound' ? 'К событию' : 'Обратно после события';
   const safeNumber = train.number.replace(/[^a-zа-я0-9]+/giu, '-');
   const lines = [
@@ -109,7 +108,7 @@ export function buildTransportIcs(
     `DTSTART:${formatUtcDateTime(train.departureIso)}`,
     `DTEND:${formatUtcDateTime(train.arrivalIso)}`,
     `SUMMARY:${escapeIcsText(`${directionLabel}: электричка ${train.departure}, ${from} → ${to}`)}`,
-    `DESCRIPTION:${escapeIcsText([`Событие: ${event.title}`, `${train.trainType} № ${train.number}`, `Прибытие: ${train.arrival}`, `Проверить расписание: ${liveUrl}`].join('\n'))}`,
+    `DESCRIPTION:${escapeIcsText([`Событие: ${event.title}`, `${train.trainType} № ${train.number}`, `Прибытие: ${train.arrival}`].join('\n'))}`,
     `LOCATION:${escapeIcsText(from)}`,
     `URL:${eventAbsoluteUrl(event)}`,
     'BEGIN:VALARM',

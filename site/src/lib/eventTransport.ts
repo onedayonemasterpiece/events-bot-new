@@ -52,7 +52,7 @@ export interface EventTrainOption {
 }
 
 export type EventTransportDirection = 'outbound' | 'return';
-export type EventEndBasis = 'explicit' | 'event_type_default' | 'unknown';
+export type EventEndBasis = 'explicit' | 'schedule_cutoff';
 
 export interface EventTransportSuggestion {
   city: string;
@@ -63,10 +63,13 @@ export interface EventTransportSuggestion {
   eventStart: string;
   eventEnd: string | null;
   eventEndBasis: EventEndBasis;
-  eventEndDurationMinutes: number | null;
-  eventEndTypeLabel: string | null;
+  eventTypeGenitive: string;
   outbound: EventTrainOption[];
   returns: EventTrainOption[];
+  lastSameDayReturn: EventTrainOption | null;
+  firstNightReturn: EventTrainOption | null;
+  firstNextDayReturn: EventTrainOption | null;
+  returnCalendarCovered: boolean;
   arrivalWindow: { min: number; max: number };
   maxReturnWaitMinutes: number;
   scheduleSource: string;
@@ -76,28 +79,28 @@ export interface EventTransportSuggestion {
 
 const schedules = scheduleData as TransportScheduleData;
 
-const DEFAULT_EVENT_DURATION_MINUTES: Record<string, number> = {
-  'выставка': 120,
-  'концерт': 120,
-  'concert': 120,
-  'спектакль': 150,
-  'театр': 150,
-  'лекция': 90,
-  'встреча': 90,
-  'презентация': 90,
-  'кинопоказ': 150,
-  'movie': 150,
-  'мастер класс': 120,
-  'дегустация': 120,
-  'therapy': 120,
-  'экскурсия': 120,
-  'virtual excursion': 120,
-  'вечеринка': 240,
-  'фестиваль': 360,
-  'ярмарка': 360,
-  'спорт': 180,
-  'турнир': 180,
-  'интенсив': 180,
+const EVENT_TYPE_GENITIVE: Record<string, string> = {
+  'выставка': 'выставки',
+  'концерт': 'концерта',
+  'concert': 'концерта',
+  'спектакль': 'спектакля',
+  'театр': 'спектакля',
+  'лекция': 'лекции',
+  'встреча': 'встречи',
+  'презентация': 'презентации',
+  'кинопоказ': 'кинопоказа',
+  'movie': 'кинопоказа',
+  'мастер класс': 'мастер-класса',
+  'дегустация': 'дегустации',
+  'therapy': 'занятия',
+  'экскурсия': 'экскурсии',
+  'virtual excursion': 'экскурсии',
+  'вечеринка': 'вечеринки',
+  'фестиваль': 'фестиваля',
+  'ярмарка': 'ярмарки',
+  'спорт': 'спортивного события',
+  'турнир': 'турнира',
+  'интенсив': 'интенсива',
 };
 
 function normalizeCity(value: string | null | undefined): string {
@@ -133,14 +136,20 @@ function normalizeEventType(value: string | null | undefined): string {
     .trim();
 }
 
-function formatMinutes(value: number): string {
-  const normalized = ((value % (24 * 60)) + 24 * 60) % (24 * 60);
-  return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
-}
-
 function localIso(serviceDate: string, time: string, dayOffset = 0): string {
   const targetDate = addIsoDays(serviceDate, dayOffset) || serviceDate;
   return `${targetDate}T${time}:00+02:00`;
+}
+
+function calendarCovers(trains: TransportTrainRecord[], serviceDate: string | null): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(serviceDate || ''));
+  if (!match) return false;
+  const month = `${match[1]}-${match[2]}`;
+  const dayIndex = Number(match[3]) - 1;
+  return trains.some((train) => {
+    const bits = train.calendar[month];
+    return Boolean(bits && dayIndex >= 0 && dayIndex < bits.length);
+  });
 }
 
 function serviceRunsOn(train: TransportTrainRecord, serviceDate: string): boolean {
@@ -213,13 +222,31 @@ export function getEventTransportSuggestion(
     .slice(0, optionLimit)
     .map(({ train, lead }) => toOption(train, event.start_date, false, { minutesBeforeEvent: lead }));
 
-  const eventEndRaw = timeToMinutes(event.time_range_end);
   const normalizedType = normalizeEventType(event.event_type);
-  const defaultDuration = eventEndRaw === null ? DEFAULT_EVENT_DURATION_MINUTES[normalizedType] || null : null;
-  const eventEndBasis: EventEndBasis = eventEndRaw !== null ? 'explicit' : defaultDuration ? 'event_type_default' : 'unknown';
-  let eventEndMinutes = eventEndRaw !== null ? eventEndRaw : defaultDuration ? eventStartMinutes + defaultDuration : null;
+  const eventEndRaw = timeToMinutes(event.time_range_end);
+  const eventEndBasis: EventEndBasis = eventEndRaw !== null ? 'explicit' : 'schedule_cutoff';
+  let eventEndMinutes = eventEndRaw;
   if (eventEndMinutes !== null && eventEndMinutes < eventStartMinutes) eventEndMinutes += 24 * 60;
   const nextDate = addIsoDays(event.start_date, 1);
+  const sameDayCovered = calendarCovers(route.return, event.start_date);
+  const nextDayCovered = calendarCovers(route.return, nextDate);
+  const returnCalendarCovered = sameDayCovered && nextDayCovered;
+  const sameDayRunning = route.return
+    .filter((train) => serviceRunsOn(train, event.start_date))
+    .map((train) => ({ train, departureMinutes: timeToMinutes(train.departure) }))
+    .filter((item): item is { train: TransportTrainRecord; departureMinutes: number } => item.departureMinutes !== null)
+    .sort((left, right) => left.departureMinutes - right.departureMinutes);
+  const nextDayRunning = nextDate ? route.return
+    .filter((train) => serviceRunsOn(train, nextDate))
+    .map((train) => ({ train, departureMinutes: timeToMinutes(train.departure) }))
+    .filter((item): item is { train: TransportTrainRecord; departureMinutes: number } => item.departureMinutes !== null)
+    .sort((left, right) => left.departureMinutes - right.departureMinutes) : [];
+  const lastSameDayRecord = sameDayRunning.at(-1) || null;
+  const firstNightRecord = nextDayRunning.find((item) => item.departureMinutes < 3 * 60) || null;
+  const firstNextDayRecord = nextDayRunning[0] || null;
+  const lastSameDayReturn = lastSameDayRecord ? toOption(lastSameDayRecord.train, event.start_date, false, {}) : null;
+  const firstNightReturn = firstNightRecord && nextDate ? toOption(firstNightRecord.train, nextDate, true, {}) : null;
+  const firstNextDayReturn = firstNextDayRecord && nextDate ? toOption(firstNextDayRecord.train, nextDate, true, {}) : null;
   const returnCandidates: Array<{ train: TransportTrainRecord; serviceDate: string; departureMinutes: number; nextDay: boolean }> = [];
   if (eventEndMinutes !== null) {
     for (const train of route.return) {
@@ -241,6 +268,8 @@ export function getEventTransportSuggestion(
       .slice(0, optionLimit)
       .map(({ train, serviceDate, nextDay: isNextDay, wait }) => toOption(train, serviceDate, isNextDay, { waitAfterEventMinutes: wait }));
 
+  if (outbound.length === 0 && returns.length === 0) return null;
+
   return {
     city: route.city,
     originStation: route.origin_station,
@@ -248,12 +277,15 @@ export function getEventTransportSuggestion(
     outboundLiveUrl: route.outbound_live_url,
     returnLiveUrl: route.return_live_url,
     eventStart: event.start_time || '',
-    eventEnd: eventEndMinutes === null ? null : formatMinutes(eventEndMinutes),
+    eventEnd: event.time_range_end || null,
     eventEndBasis,
-    eventEndDurationMinutes: defaultDuration,
-    eventEndTypeLabel: defaultDuration ? (event.event_type || null) : null,
+    eventTypeGenitive: EVENT_TYPE_GENITIVE[normalizedType] || 'события',
     outbound,
     returns,
+    lastSameDayReturn,
+    firstNightReturn,
+    firstNextDayReturn,
+    returnCalendarCovered,
     arrivalWindow: { min: minArrivalLead, max: maxArrivalLead },
     maxReturnWaitMinutes: schedules.selection.max_return_wait_minutes,
     scheduleSource: schedules.source.schedule,

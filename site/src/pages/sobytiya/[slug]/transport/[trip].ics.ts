@@ -24,8 +24,12 @@ export function getStaticPaths() {
     const entries: Array<{ direction: EventTransportDirection; train: EventTrainOption }> = [
       ...suggestion.outbound.map((train) => ({ direction: 'outbound' as const, train })),
       ...suggestion.returns.map((train) => ({ direction: 'return' as const, train })),
+      ...[suggestion.lastSameDayReturn, suggestion.firstNightReturn, suggestion.firstNextDayReturn]
+        .filter((train): train is EventTrainOption => Boolean(train))
+        .map((train) => ({ direction: 'return' as const, train })),
     ];
-    return entries.map(({ direction, train }) => ({
+    const unique = new Map(entries.map((entry) => [eventTransportTripKey(entry.direction, entry.train), entry]));
+    return [...unique.values()].map(({ direction, train }) => ({
       params: { slug: event.slug, trip: eventTransportTripKey(direction, train) },
       props: { event, suggestion, direction, train } satisfies TransportIcsProps,
     }));

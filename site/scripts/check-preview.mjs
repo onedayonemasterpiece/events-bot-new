@@ -22,7 +22,12 @@ const required = [
   'robots.txt',
   'favicon.svg',
   'assets/transport/kppk-lastochka.webp',
+  'assets/transport/bus-svgrepo-337651.svg',
   'assets/transport/romanovo-holmogorye-map.png',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/outbound-2026-07-12-6725.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/return-2026-07-12-6730.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/return-2026-07-13-6700.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/outbound-2026-07-12-6717.ics',
   'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/outbound-2026-07-12-7213.ics',
   'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/return-2026-07-12-6722.ics',
   'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/return-2026-07-12-7220.ics',
@@ -70,10 +75,12 @@ if (control.slug !== 'pesni-sssr-svetlogorsk-5878') throw new Error(`Unexpected 
 const controlHtml = readFileSync(join(root, `sobytiya/${control.slug}/index.html`), 'utf8');
 const stripGeneratedCode = (html) => html.replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<style[\s\S]*?<\/style>/giu, '');
 const controlVisibleHtml = stripGeneratedCode(controlHtml);
-if (!controlVisibleHtml.includes('data-event-transport-schedule') || !controlVisibleHtml.includes('data-event-city="Светлогорск"')) throw new Error('Svetlogorsk control event misses the event transport partnership block');
+if (!controlVisibleHtml.includes('data-event-transport-schedule') || !controlVisibleHtml.includes('data-event-city="Светлогорск"')) throw new Error('Svetlogorsk control event misses the event transport block');
 if (!controlVisibleHtml.includes('/assets/transport/kppk-lastochka.webp') || !controlVisibleHtml.includes('Как добраться на электричке')) throw new Error('Event transport block misses supplied Lastochka artwork or neutral heading');
 if (controlVisibleHtml.includes('Партнёрский маршрут') || controlVisibleHtml.includes('АО «КППК»')) throw new Error('Event transport block must not present the schedule as a partner route');
 if ((controlVisibleHtml.match(/>КППК<\/a>/gu) || []).length !== 1) throw new Error('Event transport block must mention КППК exactly once in the laconic footer');
+if (controlVisibleHtml.includes('Проверить расписание') || controlVisibleHtml.includes('rasp.yandex')) throw new Error('Event transport block must not expose schedule verification links');
+if (!controlVisibleHtml.includes('К началу концерта в 21:30')) throw new Error('Transport heading must inflect the public event type');
 if (controlVisibleHtml.indexOf('data-event-transport-schedule') > controlVisibleHtml.indexOf('>Коротко</h2>')) throw new Error('Event transport block must render immediately after the description and before “Коротко”');
 if (!controlHtml.includes('noindex,nofollow,noarchive')) throw new Error('Missing preview robots meta');
 if (controlHtml.includes('https://kenigevents.ru/sobytiya/pesni-sssr-svetlogorsk-5878/')) throw new Error('Production canonical leaked into preview page');
@@ -346,11 +353,13 @@ if (!transportDemoEvent) throw new Error('Missing real event 6510 transport sche
 if (transportDemoEvent.start_date !== '2026-07-12' || transportDemoEvent.start_time !== '17:00' || transportDemoEvent.time_range_end !== '18:10') throw new Error('Event 6510 must retain its source-verified 2026-07-12 17:00 start and 1h10m duration');
 if (!transportDemoEvent.title.includes('Муслиму Магомаеву') || !transportDemoEvent.title.includes('Анне Герман') || transportDemoEvent.ticket?.href !== 'https://янтарьхолл.рф/afisha/kontsertnaya-programma-khity-lyubimykh-artistov%2012%2007/') throw new Error('Event 6510 must remain connected to the real Yantar Hall event and ticket page');
 const transportDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${transportDemoEvent.slug}/index.html`), 'utf8'));
-if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="1"') || !transportDemoHtml.includes('data-return-count="2"')) throw new Error('Event 6510 must expose one outbound and two return options for its real 17:00–18:10 window');
+if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="2"') || !transportDemoHtml.includes('data-return-count="2"')) throw new Error('Event 6510 must expose two outbound and two return options for its real 17:00–18:10 window');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="6717"[\s\S]*?<time[^>]*>15:11<\/time>[\s\S]*?<time[^>]*>16:05<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second outbound suggestion must be train 6717, 15:11→16:05 (55 minutes before start)');
 if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<time[^>]*>15:43<\/time>[\s\S]*?<time[^>]*>16:29<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 outbound suggestion must be train 7213, 15:43→16:29 (31 minutes before start)');
 if (!/data-transport-direction="return"[^>]*data-train-number="6722"[\s\S]*?<time[^>]*>18:54<\/time>[\s\S]*?<time[^>]*>19:48<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 first return suggestion must be train 6722, 18:54→19:48');
 if (!/data-transport-direction="return"[^>]*data-train-number="7220"[\s\S]*?<time[^>]*>19:33<\/time>[\s\S]*?<time[^>]*>20:19<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second return suggestion must be train 7220, 19:33→20:19');
 for (const [trip, expected] of [
+  ['outbound-2026-07-12-6717', ['UID:transport-6510-outbound-2026-07-12-6717@kenigevents.ru', 'DTSTART:20260712T131100Z', 'DTEND:20260712T140500Z', 'TRIGGER:-PT30M']],
   ['outbound-2026-07-12-7213', ['UID:transport-6510-outbound-2026-07-12-7213@kenigevents.ru', 'DTSTART:20260712T134300Z', 'DTEND:20260712T142900Z', 'TRIGGER:-PT30M', 'LOCATION:Калининград-Северный']],
   ['return-2026-07-12-6722', ['UID:transport-6510-return-2026-07-12-6722@kenigevents.ru', 'DTSTART:20260712T165400Z', 'TRIGGER:-PT30M']],
   ['return-2026-07-12-7220', ['UID:transport-6510-return-2026-07-12-7220@kenigevents.ru', 'DTSTART:20260712T173300Z', 'TRIGGER:-PT30M']],
@@ -359,24 +368,35 @@ for (const [trip, expected] of [
   if (!transportDemoHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6510 misses calendar CTA for ${trip}`);
   const tripIcs = readFileSync(join(root, href.slice(1)), 'utf8');
   for (const needle of expected) if (!tripIcs.includes(needle)) throw new Error(`Transport ICS ${trip} missing ${needle}`);
+  if (tripIcs.includes('Проверить расписание') || tripIcs.includes('rasp.yandex')) throw new Error(`Transport ICS ${trip} must not expose a schedule verification link`);
 }
 
-const noReturnEvent = eventsData.events.find((event) => event.id === 6397);
-if (!noReturnEvent) throw new Error('Missing real event 6397 estimated-end/no-return regression event');
-const noReturnHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${noReturnEvent.slug}/index.html`), 'utf8'));
-if (!noReturnHtml.includes('data-event-end-basis="event_type_default"') || !noReturnHtml.includes('data-return-count="0"')) throw new Error('Event 6397 must use the concert default and expose no return train');
-if (!noReturnHtml.includes('Ориентировочно после 23:30') || !noReturnHtml.includes('типовую длительность 2 ч')) throw new Error('Event 6397 must label its calculated concert end as an estimate');
-if (!noReturnHtml.includes('расчётного') || !noReturnHtml.includes('подходящего поезда в Калининград нет')) throw new Error('Event 6397 must show the explicit no-return-train state');
+const cutoffEvent = eventsData.events.find((event) => event.id === 6397);
+if (!cutoffEvent) throw new Error('Missing real event 6397 schedule-cutoff regression event');
+const cutoffHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${cutoffEvent.slug}/index.html`), 'utf8'));
+if (!cutoffHtml.includes('data-event-end-basis="schedule_cutoff"') || !cutoffHtml.includes('data-outbound-count="1"') || !cutoffHtml.includes('data-return-count="0"')) throw new Error('Event 6397 must expose one outbound train and a factual schedule cutoff');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="6725"[\s\S]*?<time[^>]*>19:26<\/time>[\s\S]*?<time[^>]*>20:23<\/time>/u.test(cutoffHtml)) throw new Error('Event 6397 outbound must be 6725, 19:26→20:23 (67 minutes before start)');
+for (const needle of ['Обратно после события', 'Последний поезд в день события — в 22:40', '22:40 → 23:35', 'Ночных рейсов нет', 'Первый поезд 13 июля — в 06:25', 'Уточните время окончания у организатора']) {
+  if (!cutoffHtml.includes(needle)) throw new Error(`Event 6397 schedule-cutoff block missing ${needle}`);
+}
+for (const trip of ['outbound-2026-07-12-6725', 'return-2026-07-12-6730', 'return-2026-07-13-6700']) {
+  const href = `/sobytiya/${cutoffEvent.slug}/transport/${trip}.ics`;
+  if (!cutoffHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6397 misses calendar CTA for ${trip}`);
+  const tripIcs = readFileSync(join(root, href.slice(1)), 'utf8');
+  if (!tripIcs.includes('BEGIN:VCALENDAR') || tripIcs.includes('Проверить расписание') || tripIcs.includes('rasp.yandex')) throw new Error(`Event 6397 transport ICS ${trip} is invalid or leaks a verification link`);
+}
+if (cutoffHtml.includes('типовую длительность') || cutoffHtml.includes('Ориентировочно после 23:30') || cutoffHtml.includes('подходящего поезда в Калининград нет')) throw new Error('Event 6397 must not infer a no-return state from a default duration');
 
 const busDemoEvent = eventsData.events.find((event) => event.id === 6710);
 if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regression event');
 const busDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8'));
 if (!busDemoHtml.includes('data-event-bus-schedule') || !busDemoHtml.includes('data-bus-route="romanovo-holmogorye"')) throw new Error('Event 6710 must expose the Romanovo bus block');
 if (busDemoHtml.includes('data-event-transport-schedule')) throw new Error('Romanovo event 6710 must not expose a train block');
-for (const needle of ['data-bus-number="118А"', '№ 118', '08:40', '10:37', 'data-bus-number="119"', '08:10', '09:23', 'около 18:30', '19:40', 'rtt=pd', 'https://avl39.ru/routes/reg/kaliningrad/']) {
+for (const needle of ['bus-svgrepo-337651.svg', 'data-bus-number="118/118А"', '06:00', '08:40', 'Северный ≈ 08:55', 'data-bus-number="119"', '08:10', 'Северный ≈ 08:25', 'data-bus-return-number="118/118А"', '≈ 17:15', '≈ 22:35', 'data-bus-return-number="119"', '≈ 18:35', '≈ 21:55', 'rtt=pd']) {
   if (!busDemoHtml.includes(needle)) throw new Error(`Event 6710 bus block missing ${needle}`);
 }
-if (!busDemoHtml.includes('/assets/transport/romanovo-holmogorye-map.png') || !busDemoHtml.includes('Открыть площадку на карте')) throw new Error('Event 6710 bus block must include a local venue map and external map link');
+if (!busDemoHtml.includes('/assets/transport/romanovo-holmogorye-map.png') || !busDemoHtml.includes('loading="eager"') || !busDemoHtml.includes('Пешеходный маршрут') || !busDemoHtml.includes('Точка на карте')) throw new Error('Event 6710 bus block must eagerly include a local walking-route map and external map links');
+if (busDemoHtml.includes('avl39.ru/routes/reg/kaliningrad/')) throw new Error('Event 6710 bus block must not expose a schedule verification link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

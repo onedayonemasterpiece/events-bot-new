@@ -9,7 +9,7 @@
   },
   "selection": {
     "arrival_before_event_min_minutes": 20,
-    "arrival_before_event_max_minutes": 40,
+    "arrival_before_event_max_minutes": 90,
     "max_return_wait_minutes": 180,
     "max_options_per_direction": 2
   },

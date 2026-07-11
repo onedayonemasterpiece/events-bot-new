@@ -10,6 +10,14 @@
 
 ## `romanovo-holmogorye-map.png`
 
-- Static Yandex Maps preview generated on 2026-07-11 for venue coordinates `54.881705, 20.279261` using `static-maps.yandex.ru/1.x`; the image contains Yandex attribution.
-- 450×250 PNG, SHA-256 `19c82247898d598cac5369c0e9b127675118dffa41c63f5a149aa9b20ef22147`.
+- A pedestrian route was calculated on 2026-07-11 from the central `Романово` stop (`54.8958609, 20.2759337`) to the venue (`54.8817051, 20.2792613`): about `2.0 km / 26 min`.
+- The decoded route geometry is drawn as a blue polyline over a Yandex Static Maps preview with start/end pins and Yandex attribution.
+- 650×300 PNG, SHA-256 `badfef93456abdc683a632c8d32ce36b3c5fb0a39d3a0f5ba15ef825015c4065`.
 - Runtime path: `site/public/assets/transport/romanovo-holmogorye-map.png`; the page also links interactive Yandex pedestrian routes from both relevant bus stops.
+
+## `bus-svgrepo-337651.svg`
+
+- SVG Repo asset `Tour Bus` (`337651`): <https://www.svgrepo.com/svg/337651/tour-bus>.
+- License: CC0; copied from the shared local SVG Repo library on 2026-07-11.
+- SHA-256 `62ab427900ef1829cc88066e9e3a8cd92e74fbed7c07b8af9cec89be1f629bb2`.
+- Runtime path: `site/public/assets/transport/bus-svgrepo-337651.svg`; used as the decorative bus-mode icon instead of a text letter.

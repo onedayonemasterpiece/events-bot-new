@@ -15,57 +15,88 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
         <h2 id={headingId}>Как добраться на автобусе</h2>
         <p>{suggestion.originStop} → {suggestion.venueName}</p>
       </div>
-      <span class="event-bus__symbol" aria-hidden="true">А</span>
+      <span class="event-bus__symbol">
+        <img src={withBase('/assets/transport/bus-svgrepo-337651.svg')} width="34" height="34" alt="" aria-hidden="true" />
+      </span>
     </header>
 
-    <div class="event-bus__options">
-      {suggestion.outbound.map((option) => (
-        <section class="event-bus__option" data-bus-number={option.route}>
-          <p class="event-bus__route">№ {option.route}{option.alsoRoute && <span> / № {option.alsoRoute}</span>}</p>
-          <div class="event-bus__time"><time>{option.departure}</time><span>→</span><strong>≈ {option.estimatedVenueArrival}</strong></div>
-          <p>Отправление с автовокзала · до {option.arrivalStop}: ≈ {option.rideEstimateMinutes} мин</p>
-          <p>Затем пешком ≈ {option.walkDistanceKm.toLocaleString('ru-RU')} км / {option.walkEstimateMinutes} мин.</p>
-          <small>{option.note}</small>
-          <a href={option.walkMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть пеший маршрут</a>
-        </section>
-      ))}
-    </div>
+    <div class="event-bus__directions">
+      <section class="event-bus__direction" data-bus-outbound>
+        <p class="event-bus__step">Туда · к началу в {event.start_time}</p>
+        {suggestion.outboundGroups.map((group) => (
+          <div class="event-bus__group" data-bus-number={group.routes}>
+            <div class="event-bus__group-head">
+              <h3>№ {group.routes}</h3>
+              <p>{group.rideEstimateLabel} до «{group.arrivalStop}» · затем {group.walkDistanceKm.toLocaleString('ru-RU')} км / {group.walkEstimateMinutes} мин пешком</p>
+              <a href={group.walkMapUrl} target="_blank" rel="noopener noreferrer nofollow">Пеший маршрут</a>
+            </div>
+            <div class="event-bus__times" aria-label={`Отправления автобуса ${group.routes}`}>
+              {group.departures.map((departure) => (
+                <div class="event-bus__time-chip">
+                  <time>{departure.terminal}</time>
+                  <small>Северный ≈ {departure.northEstimated}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
 
-    <section class="event-bus__return" data-bus-return>
-      <p class="event-bus__route">Обратно · № {suggestion.returnOption.route}</p>
-      <h3>{suggestion.returnOption.estimatedDeparture} → {suggestion.returnOption.arrivalKaliningrad}</h3>
-      <p>{suggestion.returnOption.note}</p>
-    </section>
+      <section class="event-bus__direction" data-bus-return>
+        <p class="event-bus__step">Обратно · после {event.time_range_end}</p>
+        {suggestion.returnGroups.map((group) => (
+          <div class="event-bus__group" data-bus-return-number={group.routes}>
+            <div class="event-bus__group-head">
+              <h3>№ {group.routes} · «{group.departureStop}»</h3>
+              <p>{group.rideEstimateLabel} до Калининграда</p>
+            </div>
+            <div class="event-bus__times event-bus__times--return" aria-label={`Обратные отправления автобуса ${group.routes}`}>
+              {group.departures.map((departure) => <time class="event-bus__time-chip event-bus__time-chip--single">{group.isEstimated ? '≈ ' : ''}{departure}</time>)}
+            </div>
+          </div>
+        ))}
+      </section>
+    </div>
 
     <div class="event-bus__map">
-      <img src={withBase(suggestion.mapImageUrl)} width="450" height="250" alt={`Карта: ${suggestion.venueName}`} loading="lazy" />
-      <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть площадку на карте</a>
+      <img src={withBase(suggestion.mapImageUrl)} width="650" height="300" alt="Пешеходный маршрут от остановки Романово до Сказочного Холмогорья" loading="eager" decoding="async" />
+      <div class="event-bus__map-links">
+        {suggestion.outboundGroups.map((group) => <a href={group.walkMapUrl} target="_blank" rel="noopener noreferrer nofollow">От «{group.arrivalStop}»</a>)}
+        <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Точка на карте</a>
+      </div>
     </div>
 
-    <footer><p>Расчётные промежуточные времена сверяйте с <a href={suggestion.sourceUrl} target="_blank" rel="noopener noreferrer nofollow">расписанием Автовокзала</a>.</p></footer>
+    <footer><p>Время с символом ≈ — расчётное. Для Северного вокзала добавлено около 15 минут к отправлению с автовокзала.</p></footer>
   </aside>
 )}
 
 <style>
   .event-bus { margin: 1.4rem 0 0; overflow: hidden; border: 1px solid rgba(35,83,102,0.18); border-radius: 26px; background: linear-gradient(145deg,#f3fafc,#fffdf8); box-shadow: 0 18px 42px rgba(38,75,90,0.08); }
-  .event-bus__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.1rem; }
+  .event-bus__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; }
   .event-bus__header h2 { margin: 0; font-size: clamp(1.4rem,4vw,2.05rem); color: #273941; }
-  .event-bus__header p { margin: 0.3rem 0 0; color: var(--muted); font-weight: 760; }
-  .event-bus__symbol { display: grid; flex: 0 0 3.2rem; width: 3.2rem; height: 3.2rem; place-items: center; border-radius: 16px; color: #fff; background: #277d97; font-size: 1.45rem; font-weight: 950; }
-  .event-bus__options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.72rem; padding: 1rem 1.1rem; border-top: 1px solid rgba(35,83,102,0.12); }
-  .event-bus__option { padding: 0.88rem; border: 1px solid rgba(35,83,102,0.12); border-radius: 18px; background: rgba(255,255,255,0.82); }
-  .event-bus__route { margin: 0; color: #1f708a; font-size: 0.78rem; font-weight: 920; letter-spacing: 0.06em; text-transform: uppercase; }
-  .event-bus__time { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.35rem; color: #273941; font-variant-numeric: tabular-nums; }
-  .event-bus__time time,.event-bus__time strong { font-size: 1.3rem; font-weight: 950; }
-  .event-bus__option p:not(.event-bus__route) { margin: 0.34rem 0 0; color: #374a52; font-size: 0.84rem; }
-  .event-bus__option small { display: block; margin-top: 0.52rem; color: var(--muted); line-height: 1.35; }
-  .event-bus__option a,.event-bus__map a,footer a { display: inline-block; margin-top: 0.55rem; color: #1f708a; font-weight: 850; }
-  .event-bus__return { margin: 0 1.1rem 1rem; padding: 0.9rem; border-radius: 18px; color: #374a52; background: rgba(39,125,151,0.08); }
-  .event-bus__return h3 { margin: 0.28rem 0; color: #273941; font-size: 1.12rem; }
-  .event-bus__return p:last-child { margin: 0; font-size: 0.84rem; line-height: 1.4; }
-  .event-bus__map { padding: 0 1.1rem 1rem; }
-  .event-bus__map img { display: block; width: 100%; height: auto; border: 0; border-radius: 18px; background: #e9eff1; }
-  .event-bus footer { padding: 0.8rem 1.1rem 1rem; border-top: 1px solid rgba(35,83,102,0.12); color: var(--muted); font-size: 0.8rem; }
+  .event-bus__header p { margin: 0.24rem 0 0; color: var(--muted); font-size: 0.88rem; font-weight: 760; }
+  .event-bus__symbol { display: grid; flex: 0 0 3.2rem; width: 3.2rem; height: 3.2rem; place-items: center; border: 1px solid rgba(35,83,102,0.12); border-radius: 15px; background: #eaf5f7; }
+  .event-bus__symbol img { width: 2.15rem; height: 2.15rem; }
+  .event-bus__directions { border-top: 1px solid rgba(35,83,102,0.12); }
+  .event-bus__direction { padding: 0.9rem 1.1rem 0.45rem; }
+  .event-bus__direction + .event-bus__direction { border-top: 1px solid rgba(35,83,102,0.12); }
+  .event-bus__step { margin: 0 0 0.62rem; color: #1f708a; font-size: 0.76rem; font-weight: 920; letter-spacing: 0.07em; text-transform: uppercase; }
+  .event-bus__group { padding: 0.68rem 0; }
+  .event-bus__group + .event-bus__group { border-top: 1px solid rgba(35,83,102,0.1); }
+  .event-bus__group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.22rem 0.65rem; }
+  .event-bus__group-head h3 { margin: 0; color: #273941; font-size: 0.96rem; }
+  .event-bus__group-head p { flex: 1 1 18rem; margin: 0; color: var(--muted); font-size: 0.78rem; }
+  .event-bus__group-head a { color: #1f708a; font-size: 0.76rem; font-weight: 850; }
+  .event-bus__times { display: flex; flex-wrap: wrap; gap: 0.42rem; margin-top: 0.56rem; }
+  .event-bus__time-chip { display: grid; min-width: 5.9rem; padding: 0.42rem 0.55rem; border: 1px solid rgba(35,83,102,0.12); border-radius: 12px; color: #273941; background: rgba(255,255,255,0.88); font-variant-numeric: tabular-nums; }
+  .event-bus__time-chip time,.event-bus__time-chip--single { font-size: 0.92rem; font-weight: 930; }
+  .event-bus__time-chip small { margin-top: 0.08rem; color: #60727a; font-size: 0.62rem; white-space: nowrap; }
+  .event-bus__time-chip--single { display: inline-flex; min-width: 0; padding: 0.46rem 0.62rem; }
+  .event-bus__map { padding: 0.75rem 1.1rem 1rem; border-top: 1px solid rgba(35,83,102,0.12); }
+  .event-bus__map img { display: block; width: 100%; height: auto; border: 0; border-radius: 16px; background: #e9eff1; }
+  .event-bus__map-links { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; margin-top: 0.55rem; }
+  .event-bus__map-links a { color: #1f708a; font-size: 0.78rem; font-weight: 850; }
+  .event-bus footer { padding: 0.72rem 1.1rem 0.85rem; border-top: 1px solid rgba(35,83,102,0.12); color: var(--muted); font-size: 0.74rem; }
   .event-bus footer p { margin: 0; }
-  @media(max-width:720px){ .event-bus__options{grid-template-columns:1fr} }
+  @media(max-width:720px){ .event-bus__time-chip{min-width:calc(33.333% - 0.3rem);box-sizing:border-box}.event-bus__group-head p{flex-basis:100%} }
 </style>

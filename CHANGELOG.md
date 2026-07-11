@@ -3,14 +3,14 @@
 ## [Unreleased]
 
 ### Changed
-- **Static-site presentation / event transport**: made rail guidance neutral (no partner-route banner, one terse carrier footer), added per-train ICS reminders, event-type end estimates and an explicit no-return state, added the official-Avtovokzal-backed Romanovo bus/walking-map demo, and consolidated all scenarios plus the Kaggle refresh debt into the official site presentation release checklist.
+- **Static-site presentation / event transport**: widened the rail arrival window to 20–90 minutes, removed public schedule-verification links and guessed event-type durations, added inflected event headings plus factual last/night/next-day return boundaries and per-train ICS reminders; redesigned the official-Avtovokzal-backed Romanovo example into compact outbound/return time chips with estimated Северный-вокзал times, an SVG Repo bus icon, a visibly drawn walking route and map links; synchronized the presentation checklist and Kaggle-refresh debt.
 - **Static event pages / КППК preview correction**: replaced the stale event `6538` acceptance example with real active Янтарь холл event `6510` on 2026-07-12 and taught the preview exporter to derive the return window only from an explicitly labeled source duration (`Продолжительность: 1 час 10 мин.`), with regression coverage for the resulting `18:10` end and real outbound/return trains.
 - **Social links / Max public channel**: updated the shared «Полюбить Калининград Анонсы» Max URL to the public channel `https://max.ru/channel_kenigevents` across Telegraph footers, the static-site footer/checks and related publishing docs/tests; legacy join-footers remain recognized for idempotent cleanup.
 - CherryFlash guide-excursion promo now uses the v4 Blender-style depth background treatment in the production renderer and formats guide promo dates as `10 июля 16:00` instead of numeric `10.07 16:00`.
 
 ### Added
 
-- **Static event pages / КППК transport schedule**: added a disclosed Lastochka transport block after descriptions for Светлогорск/Зеленоградск events, with exact Калининград-Северный departure/arrival pairs, a 20–40 minute arrival buffer, return matching from explicit event end times, the supplied train artwork, live schedule verification links and regression coverage for event `6538`.
+- **Static event pages / transport schedule**: added the Lastochka travel block after descriptions for Светлогорск/Зеленоградск events, with exact Калининград-Северный departure/arrival pairs, a 20–90 minute arrival window, explicit-end return matching or factual unknown-end service boundaries, the supplied train artwork, calendar files and real-event regression coverage.
 
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 

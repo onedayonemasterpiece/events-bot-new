@@ -1,17 +1,26 @@
 import data from '../data/busTransportSchedules.json';
 import type { PreviewEvent } from './types';
 
-export interface EventBusOption {
-  route: string;
-  alsoRoute: string | null;
-  departure: string;
+export interface EventBusOutboundGroup {
+  routes: string;
+  departureStop: string;
+  northStop: string;
+  northOffsetMinutes: number;
   arrivalStop: string;
-  rideEstimateMinutes: number;
+  rideEstimateLabel: string;
   walkEstimateMinutes: number;
   walkDistanceKm: number;
-  estimatedVenueArrival: string;
   walkMapUrl: string;
-  note: string;
+  departures: Array<{ terminal: string; northEstimated: string }>;
+}
+
+export interface EventBusReturnGroup {
+  routes: string;
+  departureStop: string;
+  destinationStop: string;
+  rideEstimateLabel: string;
+  isEstimated: boolean;
+  departures: string[];
 }
 
 export interface EventBusSuggestion {
@@ -20,14 +29,8 @@ export interface EventBusSuggestion {
   venueName: string;
   venueMapUrl: string;
   mapImageUrl: string;
-  outbound: EventBusOption[];
-  returnOption: {
-    route: string;
-    eventEnd: string;
-    estimatedDeparture: string;
-    arrivalKaliningrad: string;
-    note: string;
-  };
+  outboundGroups: EventBusOutboundGroup[];
+  returnGroups: EventBusReturnGroup[];
   sourceName: string;
   sourceUrl: string;
   sourceEffectiveFrom: string;
@@ -39,6 +42,12 @@ function normalize(value: string | null | undefined): string {
     .replace(/ё/gu, 'е')
     .replace(/[^а-яa-z0-9]+/gu, ' ')
     .trim();
+}
+
+function addMinutes(value: string, minutes: number): string {
+  const [hours, mins] = value.split(':').map(Number);
+  const total = (hours * 60 + mins + minutes) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_name' | 'start_time' | 'time_range_end'>): EventBusSuggestion | null {
@@ -57,25 +66,26 @@ export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_
     venueName: route.venue_name,
     venueMapUrl: route.venue_map_url,
     mapImageUrl: route.map_image_url,
-    outbound: route.outbound.map((option) => ({
-      route: option.route,
-      alsoRoute: option.also_route,
-      departure: option.departure,
-      arrivalStop: option.arrival_stop,
-      rideEstimateMinutes: option.ride_estimate_minutes,
-      walkEstimateMinutes: option.walk_estimate_minutes,
-      walkDistanceKm: option.walk_distance_km,
-      estimatedVenueArrival: option.estimated_venue_arrival,
-      walkMapUrl: option.walk_map_url,
-      note: option.note,
+    outboundGroups: route.outbound_groups.map((group) => ({
+      routes: group.routes,
+      departureStop: group.departure_stop,
+      northStop: group.north_stop,
+      northOffsetMinutes: group.north_offset_minutes,
+      arrivalStop: group.arrival_stop,
+      rideEstimateLabel: group.ride_estimate_label,
+      walkEstimateMinutes: group.walk_estimate_minutes,
+      walkDistanceKm: group.walk_distance_km,
+      walkMapUrl: group.walk_map_url,
+      departures: group.departures.map((terminal) => ({ terminal, northEstimated: addMinutes(terminal, group.north_offset_minutes) })),
     })),
-    returnOption: {
-      route: route.return.route,
-      eventEnd: route.return.event_end,
-      estimatedDeparture: route.return.estimated_departure,
-      arrivalKaliningrad: route.return.arrival_kaliningrad,
-      note: route.return.note,
-    },
+    returnGroups: route.return_groups.map((group) => ({
+      routes: group.routes,
+      departureStop: group.departure_stop,
+      destinationStop: group.destination_stop,
+      rideEstimateLabel: group.ride_estimate_label,
+      isEstimated: group.is_estimated,
+      departures: group.departures,
+    })),
     sourceName: data.source.name,
     sourceUrl: data.source.url,
     sourceEffectiveFrom: data.source.effective_from,

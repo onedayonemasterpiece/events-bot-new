@@ -18,14 +18,19 @@ const formatWait = (option: EventTrainOption) => {
   if (typeof wait !== 'number') return '';
   return wait === 0 ? 'сразу после окончания' : `через ${wait} мин после окончания`;
 };
-const formatTypicalDuration = (minutes: number | null) => {
-  if (!minutes) return '';
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (!hours) return `${rest} минут`;
-  return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
-};
 const calendarHref = (direction: EventTransportDirection, train: EventTrainOption) => withBase(eventTransportCalendarPath(event, direction, train));
+const eventStartMinutes = Number(suggestion?.eventStart.slice(0, 2) || 0) * 60 + Number(suggestion?.eventStart.slice(3, 5) || 0);
+const lastReturnMinutes = suggestion?.lastSameDayReturn ? Number(suggestion.lastSameDayReturn.departure.slice(0, 2)) * 60 + Number(suggestion.lastSameDayReturn.departure.slice(3, 5)) : null;
+const formatServiceDate = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, day)));
+};
+const returnHeading = suggestion?.eventEnd ? `После окончания в ${suggestion.eventEnd}` : 'Обратно после события';
+const lastSameDaySummary = suggestion?.lastSameDayReturn
+  ? lastReturnMinutes !== null && lastReturnMinutes <= eventStartMinutes
+    ? `После начала ${suggestion.eventTypeGenitive} поездов в этот день больше нет.`
+    : `Последний поезд в день события — в ${suggestion.lastSameDayReturn.departure}.`
+  : '';
 ---
 {suggestion && (
   <aside
@@ -57,7 +62,7 @@ const calendarHref = (direction: EventTransportDirection, train: EventTrainOptio
       <section class="event-transport__direction" aria-labelledby={`event-transport-outbound-${event.id}`}>
         <div class="event-transport__direction-heading">
           <p class="event-transport__step">Туда</p>
-          <h3 id={`event-transport-outbound-${event.id}`}>К началу в {suggestion.eventStart}</h3>
+          <h3 id={`event-transport-outbound-${event.id}`}>К началу {suggestion.eventTypeGenitive} в {suggestion.eventStart}</h3>
         </div>
         {suggestion.outbound.length > 0 ? (
           <ol class="event-transport__trains">
@@ -75,20 +80,40 @@ const calendarHref = (direction: EventTransportDirection, train: EventTrainOptio
             ))}
           </ol>
         ) : (
-          <p class="event-transport__empty">Поезда с прибытием за {suggestion.arrivalWindow.min}–{suggestion.arrivalWindow.max} минут до начала нет.</p>
+          <p class="event-transport__empty">Поезда с прибытием за 20 минут — 1,5 часа до начала нет.</p>
         )}
       </section>
 
       <section class="event-transport__direction" aria-labelledby={`event-transport-return-${event.id}`}>
         <div class="event-transport__direction-heading">
           <p class="event-transport__step">Обратно</p>
-          <h3 id={`event-transport-return-${event.id}`}>{suggestion.eventEndBasis === 'event_type_default' ? `Ориентировочно после ${suggestion.eventEnd}` : suggestion.eventEnd ? `После окончания в ${suggestion.eventEnd}` : 'После события'}</h3>
+          <h3 id={`event-transport-return-${event.id}`}>{returnHeading}</h3>
         </div>
-        {suggestion.eventEndBasis === 'event_type_default' && (
-          <p class="event-transport__estimate">Для события типа «{suggestion.eventEndTypeLabel}» используем типовую длительность {formatTypicalDuration(suggestion.eventEndDurationMinutes)}.</p>
-        )}
-        {!suggestion.eventEnd ? (
-          <p class="event-transport__empty">Время окончания неизвестно, а для этого формата пока нет типового ориентира.</p>
+        {suggestion.eventEndBasis === 'schedule_cutoff' ? (
+          <div class="event-transport__cutoff" data-return-schedule-cutoff>
+            {suggestion.lastSameDayReturn && (
+              <div class="event-transport__cutoff-item" data-last-same-day-return={suggestion.lastSameDayReturn.departure}>
+                <p>{lastSameDaySummary}</p>
+                <strong>{suggestion.lastSameDayReturn.departure} → {suggestion.lastSameDayReturn.arrival}</strong>
+                <small>{suggestion.lastSameDayReturn.trainType} № {suggestion.lastSameDayReturn.number}</small>
+                <a class="event-transport__calendar" href={calendarHref('return', suggestion.lastSameDayReturn)} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
+              </div>
+            )}
+            {suggestion.firstNightReturn ? (
+              <div class="event-transport__cutoff-item">
+                <p>После полуночи есть рейс {formatServiceDate(suggestion.firstNightReturn.serviceDate)}.</p>
+                <strong>{suggestion.firstNightReturn.departure} → {suggestion.firstNightReturn.arrival}</strong>
+                <a class="event-transport__calendar" href={calendarHref('return', suggestion.firstNightReturn)} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
+              </div>
+            ) : suggestion.firstNextDayReturn && (
+              <div class="event-transport__cutoff-item event-transport__cutoff-item--muted">
+                <p>Ночных рейсов нет. Первый поезд {formatServiceDate(suggestion.firstNextDayReturn.serviceDate)} — в {suggestion.firstNextDayReturn.departure}.</p>
+                <strong>{suggestion.firstNextDayReturn.departure} → {suggestion.firstNextDayReturn.arrival}</strong>
+                <a class="event-transport__calendar" href={calendarHref('return', suggestion.firstNextDayReturn)} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
+              </div>
+            )}
+            <p class="event-transport__cutoff-note">Уточните время окончания у организатора.</p>
+          </div>
         ) : suggestion.returns.length > 0 ? (
           <ol class="event-transport__trains">
             {suggestion.returns.map((train) => (
@@ -104,14 +129,16 @@ const calendarHref = (direction: EventTransportDirection, train: EventTrainOptio
               </li>
             ))}
           </ol>
+        ) : suggestion.returnCalendarCovered ? (
+          <p class="event-transport__empty event-transport__empty--warning">После окончания события поездов в Калининград в этот вечер больше нет.</p>
         ) : (
-          <p class="event-transport__empty event-transport__empty--warning">После {suggestion.eventEndBasis === 'event_type_default' ? 'расчётного ' : ''}окончания в течение {Math.round(suggestion.maxReturnWaitMinutes / 60)} часов подходящего поезда в Калининград нет.</p>
+          <p class="event-transport__empty">Для обратной поездки нет подтверждённых данных.</p>
         )}
       </section>
     </div>
 
     <footer class="event-transport__footer">
-      <p>Перевозчик — <a href="https://www.kppk39.ru/" target="_blank" rel="noopener noreferrer nofollow">КППК</a>. Перед поездкой проверьте расписание: <a href={suggestion.outboundLiveUrl} target="_blank" rel="noopener noreferrer nofollow">туда</a><span aria-hidden="true"> · </span><a href={suggestion.returnLiveUrl} target="_blank" rel="noopener noreferrer nofollow">обратно</a>.</p>
+      <p>Перевозчик — <a href="https://www.kppk39.ru/" target="_blank" rel="noopener noreferrer nofollow">КППК</a>.</p>
     </footer>
   </aside>
 )}
@@ -151,7 +178,13 @@ const calendarHref = (direction: EventTransportDirection, train: EventTrainOptio
   .event-transport__train-row small { display: block; margin-top: 0.22rem; color: var(--muted); line-height: 1.32; }
   .event-transport__calendar { display: inline-flex; align-items: center; gap: 0.34rem; margin-top: 0.62rem; padding: 0.42rem 0.64rem; border: 1px solid rgba(121,48,20,0.16); border-radius: 999px; color: #793014; background: #fffaf1; font-size: 0.78rem; font-weight: 880; text-decoration: none; }
   .event-transport__calendar :global(.icon) { width: 1rem; height: 1rem; }
-  .event-transport__estimate { margin: 0.52rem 0 0; padding: 0.62rem 0.74rem; border-radius: 14px; color: #5f554e; background: rgba(255,255,255,0.7); font-size: 0.78rem; line-height: 1.35; }
+  .event-transport__cutoff { display: grid; gap: 0.58rem; margin-top: 0.7rem; }
+  .event-transport__cutoff-item { padding: 0.78rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 18px; background: rgba(255,255,255,0.82); }
+  .event-transport__cutoff-item p { margin: 0; color: #4f4640; font-size: 0.82rem; line-height: 1.38; }
+  .event-transport__cutoff-item strong { display: block; margin-top: 0.3rem; color: #2d3035; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .event-transport__cutoff-item small { display: block; margin-top: 0.18rem; color: var(--muted); }
+  .event-transport__cutoff-item--muted { background: rgba(45,48,53,0.05); }
+  .event-transport__cutoff-note { margin: 0; color: var(--muted); font-size: 0.78rem; }
   .event-transport__empty { min-height: 5rem; margin: 0.7rem 0 0; padding: 0.8rem; border-radius: 18px; background: rgba(45,48,53,0.05); color: var(--muted); font-weight: 730; }
   .event-transport__empty--warning { color: #78342f; background: rgba(151,53,46,0.08); }
   .event-transport__footer { padding: 0.85rem 1.1rem 1rem; border-top: 1px solid rgba(121,48,20,0.12); color: var(--muted); font-size: 0.82rem; }

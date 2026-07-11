@@ -21,15 +21,16 @@ This is a release feature of the event page, not a standalone campaign. It is in
 
 1. Normalize the event city and require exact `Светлогорск` or `Зеленоградск`.
 2. Require a single-day event with a reliable start time; a multi-day event has no unambiguous travel date.
-3. Keep only trains operating on `event.start_date` whose destination arrival is **20–40 minutes before** the event start.
+3. Keep only trains operating on `event.start_date` whose destination arrival is **20–90 minutes before** the event start.
 4. Rank the closest arrival to a 30-minute buffer and return no more than two options.
 5. Calculate the trip back from an explicit `time_range_end`. The exporter may derive that field only from a source-labeled `Продолжительность: …` value.
-6. If the source still has no end, use a presentation-safe event-type default **only inside the transport selector** and label it as an estimate. Do not write it into the canonical event or its event `.ics`.
-7. Type defaults: lecture/meeting/presentation `90m`; concert `120m`; play/theatre/movie `150m`; workshop/tasting/excursion `120m`; party `240m`; sport/tournament/intensive `180m`; festival/fair `360m`; exhibition `120m`.
-8. Keep the first two return trains departing within three hours. When none exists, say so explicitly rather than hiding the return column.
-9. Every rendered train links to its own static `.ics` containing departure, arrival, route and a `VALARM` 30 minutes before departure.
+6. If the source has no end, do not invent one from the event type. Show factual schedule boundaries instead: the last same-day return, whether a night service exists, and the first next-day return. Ask the visitor to confirm the organizer’s end time.
+7. Use the event type only to inflect the outbound heading (`К началу концерта / спектакля / мастер-класса …`), never to calculate time.
+8. With an explicit end, keep the first two return trains departing within three hours. A categorical no-return message is allowed only when the service calendar covers the relevant dates.
+9. Hide the whole block when neither a usable outbound option nor a matched return option exists. For an unknown end there is no matched return by definition, so a supported page needs at least one outbound train; schedule cutoffs enrich that block but do not make an otherwise empty block appear.
+10. Every rendered train, including a factual last/night return, links to its own static `.ics` containing departure, arrival, route and a `VALARM` 30 minutes before departure.
 
-The selector and calendar files are static. The visitor sees links to re-check operational changes.
+The selector and calendar files are static. Public UI and `.ics` descriptions do not contain schedule-verification links.
 
 ## Bus example: Сказочное Холмогорье
 
@@ -37,14 +38,15 @@ The selector and calendar files are static. The visitor sees links to re-check o
 
 - `119` enters the settlement: calculated `46m` ride to `Романово`, then about `2km / 27m` on foot;
 - `118/118А` stop at `Романовский поворот`: calculated `60–65m` ride, then about `3.9km / 52m` on foot;
-- each option distinguishes official endpoint departure from calculated intermediate/first-mile times and links a walking map;
-- return example shows the long wait for `119` after a `16:00` finish instead of fabricating a convenient bus.
+- outbound departures render as compact rounded time chips; every chip adds the estimated `Северный вокзал` time (`автовокзал + 15m`) because all three routes serve that stop;
+- return times render as compact chips grouped by `118/118А` and `119`; the `≈` marker is retained for calculated intermediate-stop times;
+- the bundled map visibly draws the pedestrian route, while links open walking directions from each stop and the venue point in Yandex Maps.
 
 Primary timetable: [official АО «Автовокзал» Kaliningrad route table](https://avl39.ru/routes/reg/kaliningrad/). Venue/map coordinates are checked against the regional tourism portal. The committed bus calculation is a demonstration snapshot, not a live journey planner.
 
 ## Schedule snapshot and source boundary
 
-The committed schedule is a compact service-calendar snapshot checked on **2026-07-11** against Yandex Расписания route pages that identify the carrier as АО «Калининградская ППК». Every service stores train number, departure, arrival, duration and per-month operating-day bitsets. Public rows include links to re-check live operational changes before travel.
+The committed schedule is a compact service-calendar snapshot checked on **2026-07-11** against Yandex Расписания route pages that identify the carrier as АО «Калининградская ППК». Every service stores train number, departure, arrival, duration and per-month operating-day bitsets. The source URL and retrieval metadata remain in the committed data/provenance contract but are not shown as public schedule-verification links.
 
 The earlier July prototype at `https://static.kenigevents.ru/reference/transport/lastochka-svetlogorsk-test.json` was an **Object Storage/CDN test fixture**, not YDB. It is not used here: it was marked test-only, contained departures without arrivals/service calendars, covered only Светлогорск and used `Калининград-Южный`.
 
@@ -60,15 +62,15 @@ On 2026-07-11 the accessible YC YDB databases (`events-bot-acq-discovery`, `post
 
 Real active event `6510`, `Хиты любимых артистов: Концерт-посвящение Муслиму Магомаеву и Анне Герман`, Янтарь холл, Светлогорск, `2026-07-12 17:00–18:10` is the deterministic regression page. The `18:10` end is derived from the source's explicit `Продолжительность: 1 час 10 мин.`, not from a category default:
 
-- outbound: train `7213`, `15:43 → 16:29` (arrival 31 minutes before start);
+- outbound: trains `6717`, `15:11 → 16:05` (55 minutes before), and `7213`, `15:43 → 16:29` (31 minutes before);
 - return: trains `6722`, `18:54 → 19:48`, and `7220`, `19:33 → 20:19`.
 
 `tests/test_static_site_preview_duration.py` guards the narrow labeled-duration extractor. `site/scripts/check-preview.mjs` guards the real event identity/ticket link, those train rows and calendar files, placement after the description, the supplied artwork/laconic footer and absence of the block on a Kaliningrad event.
 
 Additional release scenarios:
 
-- event `6397`, Светлогорск, `2026-07-12 21:30`: typical concert end `≈23:30`, then an explicit `no suitable train` state;
-- production event `6710`, Сказочное Холмогорье, `2026-07-25 11:00–16:00`: bus `118/118А/119`, estimated journey legs and maps. Re-confirm the organizer date before the official presentation because the venue's aggregate site has a conflicting day label.
+- event `6397`, Светлогорск, `2026-07-12 21:30`: train `6725` arrives at `20:23` (67 minutes before); because the end is unknown the page reports the factual last same-day train at `22:40`, absence of night service and first next-day train at `06:25`, without inferring a two-hour duration or claiming no return;
+- production event `6710`, Сказочное Холмогорье, `2026-07-25 11:00–16:00`: compact bus chips for `118/118А/119`, estimated journey legs, `Северный +15m`, a drawn walking route and interactive map links. Re-confirm the organizer date before the official presentation because the venue's aggregate site has a conflicting day label.
 
 ## TD-STATIC-TRANSPORT-001 — automated schedule refresh before presentation
 
@@ -82,6 +84,6 @@ The current committed rail/bus data is a reviewed snapshot. Before the official 
 4. Resolve or create an authoritative YDB current+history lane; the 2026-07-11 accessible databases had no transport table, so it must not be described as already YDB-backed.
 5. Publish atomically only after validation. Empty/partial output keeps last-known-good, records stale age and alerts an operator.
 6. A changed validated content hash exports the existing static JSON contract and enqueues one coalesced `static_site_build:prod`; release manifest records schedule snapshot ID/hash/fetched time.
-7. Acceptance covers rail, bus, estimated end, no-return, intermediate-stop inference, stale source, partial failure and public transport ICS MIME/alarms.
+7. Acceptance covers rail, bus, unknown-end schedule cutoffs, explicit-end no-return, intermediate-stop inference, stale source, partial failure and public transport ICS MIME/alarms.
 
-Until this debt is closed, presentation pages must keep live verification links and the release checklist remains blocked.
+Until this debt is closed, the release checklist remains blocked: the presentation candidate must be refreshed and validated manually, without adding public schedule-verification links.
