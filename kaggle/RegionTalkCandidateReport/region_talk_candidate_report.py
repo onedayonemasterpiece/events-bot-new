@@ -857,6 +857,8 @@ def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int
     row = queue_row if isinstance(queue_row, dict) else {}
     if _rt_bool(row.get("publication_source_evidence_priority")):
         return -1
+    if str(row.get("priority_lane") or "").strip().lower() == "media_attribution":
+        return -1
     # Fast-check hit sources should be scanned next.  Fast-check no-hit/error
     # sources are not terminal rejects, but they should not keep winning over
     # ordinary unscanned backlog just because a stage name contains "keyword".
@@ -866,10 +868,12 @@ def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int
     if fast_check_status in {"no_hit", "unresolved", "error"}:
         return 2
     haystack = " ".join(str(row.get(k) or "") for k in [
-        "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
+        "added_from", "insertion_policy", "discovery_type", "discovery_types", "edge_type", "edge_types_all", "frontier_reason",
         "matched_query", "matched_hashtag", "keyword_hit_post_url", "keyword_evidence_excerpt",
     ]).lower()
     if "keyword" in haystack or "hashtag" in haystack or "telegram_keyword_search" in haystack:
+        return 0
+    if "media_attribution" in haystack or "photo_credit" in haystack or "video_credit" in haystack:
         return 0
     return 1
 
@@ -1666,6 +1670,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "admitted_at", "admitted_run_id",
     "previous_queue_order", "queue_order_changed_this_run", "queue_order_changed_reason",
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
+    "discovery_type", "discovery_types", "edge_type", "edge_types_all",
     "keyword_discovery_status", "keyword_evidence_run_id", "keyword_evidence_at", "insertion_policy",
     "priority_lane", "priority_reason", "priority_updated_at",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
@@ -5409,7 +5414,7 @@ def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str 
     target_reason = target_source_url_reason(platform, url)
     if target_reason != "ok":
         return None
-    added_from = default_added_from or str(row.get("discovery_type") or row.get("edge_type") or row.get("source_kind") or row.get("source_type") or "unknown")
+    added_from = default_added_from or str(row.get("added_from") or row.get("discovery_type") or row.get("edge_type") or row.get("source_kind") or row.get("source_type") or "unknown")
     return {
         "canonical_source_key": ckey,
         "platform": platform,
@@ -5626,7 +5631,26 @@ def build_unified_source_queue(
             return False
         key = seed["canonical_source_key"]
         if key in entries:
-            entries[key].update({k: v for k, v in seed.items() if v not in ("", None)})
+            existing = entries[key]
+            # A routine monitored-source observation must not erase the
+            # original discovery provenance that controls priority. Merge
+            # graph evidence, while keeping the first durable added_from.
+            existing.update({k: v for k, v in seed.items() if k != "added_from" and v not in ("", None)})
+            if not existing.get("added_from"):
+                existing["added_from"] = seed.get("added_from") or added_from
+            for field in ("discovery_types", "edge_types_all"):
+                values = []
+                for raw in (existing.get(field), seed.get(field), row.get(field), row.get("discovery_type" if field == "discovery_types" else "edge_type")):
+                    values.extend(part.strip() for part in str(raw or "").split(";") if part.strip())
+                if values:
+                    existing[field] = "; ".join(dict.fromkeys(values))
+            provenance = " ".join(str(existing.get(field) or "") for field in ("added_from", "discovery_types", "edge_types_all")).lower()
+            if "media_attribution" in provenance:
+                existing.update({
+                    "priority_lane": "media_attribution",
+                    "priority_reason": "media_attribution_from_ko_post",
+                    "priority_updated_at": run_now,
+                })
             return False
         next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
         entries[key] = {
@@ -5640,6 +5664,13 @@ def build_unified_source_queue(
             "admitted_at": run_now,
             "admitted_run_id": run_id,
         }
+        provenance = " ".join(str(entries[key].get(field) or "") for field in ("added_from", "discovery_types", "edge_types_all")).lower()
+        if "media_attribution" in provenance:
+            entries[key].update({
+                "priority_lane": "media_attribution",
+                "priority_reason": "media_attribution_from_ko_post",
+                "priority_updated_at": run_now,
+            })
         return True
 
     for s in seeds:

@@ -4072,6 +4072,39 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(metrics2["source_queue_seq_duplicate_repaired_this_run"], 0)
         self.assertEqual(metrics2["source_queue_seq_missing_repaired_this_run"], 0)
 
+    def test_media_attribution_priority_survives_monitored_source_overlay(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue": {
+                "telegram:moresvobod": {
+                    "canonical_source_key": "telegram:moresvobod",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/moresvobod",
+                    "queue_order": 1,
+                    "queue_seq": 1,
+                    "source_queue_status": "pending_scan",
+                    "added_from": "media_attribution",
+                    "discovery_types": "media_attribution",
+                    "edge_types_all": "media_attribution",
+                },
+            },
+        }
+        monitored = [{
+            "canonical_source_key": "telegram:moresvobod",
+            "platform": "telegram",
+            "source_url": "https://t.me/moresvobod",
+            "source_title": "moresvobod",
+            "fetch_status": "selected_for_run",
+        }]
+        rows, _metrics = mod.build_unified_source_queue(
+            previous, [], monitored, [], [], [], [], {}, "run", "2026-07-11T00:00:00+00:00",
+        )
+        row = next(item for item in rows if item["canonical_source_key"] == "telegram:moresvobod")
+        self.assertEqual(row["added_from"], "media_attribution")
+        self.assertIn("media_attribution", row["edge_types_all"])
+        self.assertEqual(row["priority_lane"], "media_attribution")
+        self.assertEqual(mod.source_queue_priority_bucket(row), -1)
+
     def test_queue_seq_refuses_repair_from_truncated_ydb_read(self) -> None:
         mod = load_module()
         previous = {

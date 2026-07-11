@@ -83,6 +83,10 @@ credits. This prevents a credit such as
 `Видео: [moresvobod](https://t.me/moresvobod)` from degrading to the
 non-discoverable plain word `moresvobod`. Only public URLs/labels are persisted;
 Telegram private entity identifiers remain in the separate private cache.
+The canonical queue preserves `added_from`, `discovery_types` and
+`edge_types_all` across later monitored-source overlays; otherwise the next
+run would erase the attribution priority before an uncached source could reach
+the single controlled resolve lane.
 
 ### 4. Cross-platform identity
 
