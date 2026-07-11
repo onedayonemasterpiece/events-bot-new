@@ -392,7 +392,7 @@ if (cutoffHtml.includes('типовую длительность') || cutoffHtml
 const busDemoEvent = eventsData.events.find((event) => event.id === 6710);
 if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regression event');
 const busDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8'));
-if (!busDemoHtml.includes('data-event-bus-schedule') || !busDemoHtml.includes('data-bus-route="romanovo-holmogorye"')) throw new Error('Event 6710 must expose the Romanovo bus block');
+if (!busDemoHtml.includes('data-event-bus-schedule') || !busDemoHtml.includes('data-bus-route="romanovo-holmogorye"') || !busDemoHtml.includes('class="event-bus__body"')) throw new Error('Event 6710 must expose the compact Romanovo bus block');
 if (busDemoHtml.includes('data-event-transport-schedule')) throw new Error('Romanovo event 6710 must not expose a train block');
 for (const needle of ['<img class="event-bus__symbol"', 'bus-svgrepo-337651.svg', 'До Романово — около 1 часа в автобусе', 'От автовокзала до остановки «Северный вокзал» у всех маршрутов — ориентировочно 10–15 минут', 'data-bus-number="118/118А"', '07:40', '08:00', '08:40', 'data-bus-number="119"', '08:10', 'data-bus-return-number="118/118А"', '≈ 13:15', '≈ 17:55', 'data-bus-return-number="119"', '≈ 13:45', '≈ 16:05', 'после 1 ч 15 мин на площадке', 'Открыто по субботам с 11:00 до 16:00', 'romanovo-holmogorye-route-square.png', 'romanovo-holmogorye-route-portrait.png', 'rtt=pd']) {
   if (!busDemoHtml.includes(needle)) throw new Error(`Event 6710 bus block missing ${needle}`);
