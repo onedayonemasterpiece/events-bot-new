@@ -286,7 +286,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_KAGGLE_SECRET_NAMES": os.environ.get("REGION_TALK_KAGGLE_SECRET_NAMES", ""),
         "REGION_TALK_YDB_ENDPOINT": os.environ.get("REGION_TALK_YDB_ENDPOINT", ""),
         "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
-        "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk"),
+        "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk_compact"),
         "REGION_TALK_YDB_STATE_SNAPSHOT_FILE": os.environ.get("REGION_TALK_YDB_STATE_SNAPSHOT_FILE", ""),
         "REGION_TALK_YDB_MAX_POST_ROWS": os.environ.get("REGION_TALK_YDB_MAX_POST_ROWS", "20000"),
         "REGION_TALK_YDB_MAX_SOURCE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_SOURCE_ROWS", "5000"),

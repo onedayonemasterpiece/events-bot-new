@@ -165,7 +165,7 @@ def ensure_ydb_module() -> Any:
 
 
 def ydb_table_path(database: str) -> str:
-    namespace = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk").strip("_") or "region_talk"
+    namespace = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip() or "region_talk_compact").strip("_") or "region_talk_compact"
     return database.rstrip("/") + f"/{namespace}_state_kv"
 
 

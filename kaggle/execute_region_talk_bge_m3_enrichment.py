@@ -100,7 +100,7 @@ def build_config_dataset(client: Any, *, username: str, run_id: str, args: argpa
         "REGION_TALK_KAGGLE_SECRET_NAMES": os.environ.get("REGION_TALK_KAGGLE_SECRET_NAMES", ""),
         "REGION_TALK_YDB_ENDPOINT": os.environ.get("REGION_TALK_YDB_ENDPOINT", ""),
         "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
-        "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk"),
+        "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk_compact"),
         "REGION_TALK_YDB_SELECT_PAGE_SIZE": os.environ.get("REGION_TALK_YDB_SELECT_PAGE_SIZE", "200"),
         "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", "8"),
         "REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS", "20"),

@@ -258,7 +258,7 @@ def expose_publication_eligibility_counters(*, pending: int, blocked: int) -> No
     input_payload["publication_eligibility_blocked_count"] = max(0, int(blocked))
 
 def ydb_table_name(suffix: str = "state_kv") -> str:
-    ns = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk").strip("_") or "region_talk"
+    ns = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip() or "region_talk_compact").strip("_") or "region_talk_compact"
     return f"{ns}_{suffix}"
 
 def ydb_cfg():

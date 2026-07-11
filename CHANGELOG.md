@@ -12,7 +12,12 @@
   rows no longer duplicate enrichment payloads. The dry-run-first
   `region_talk_ydb_compact.py` migration produced a validated LZ4 target of
   52,286 rows / 77.4 MB logical / 42.1 MB physical with all critical-kind counts
-  unchanged. Per-run funnel metrics are now durable, and E5 isolation defaults
+  unchanged. Legacy/live post projections are reconciled by canonical platform
+  identity before removal, migration aborts on a changing source, and replacing
+  an existing target requires an explicit bootstrap acknowledgement. Compact
+  checkpoint launches now read the full row-level post/vector/candidate state,
+  and the production namespace defaults to `region_talk_compact` across the
+  Candidate/BGE/Image/finalizer launch path. Per-run funnel metrics are durable, and E5 isolation defaults
   to `spawn` after a real forked worker SIGSEGV deferred 31 of 39 fetched posts.
 - **Region Talk / durable post identity and capacity hygiene**: processed-post
   YDB rows now use stable Telegram/VK platform keys instead of fetch-path

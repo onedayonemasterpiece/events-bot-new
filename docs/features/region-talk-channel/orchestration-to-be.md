@@ -527,6 +527,12 @@ checkpoint payload bytes, actual row writes per kind and E5/BGE actionable
 backlog. A one-row queue-sequence repair writing thousands of source rows is a
 failure, not successful progress.
 
+Checkpoint-v4 has no embedded fallback collection. The orchestrated
+CandidateReport therefore uses full row-level read floors (`posts=20000`,
+`vectors=20000`, `candidates=5000`, `sources=20000`) even when per-run scoring
+and discovery batches remain small. These read limits are state-integrity
+limits, not work-batch limits, and must not be reduced to shorten a run.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;

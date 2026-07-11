@@ -126,7 +126,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
         self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "20000")
         self.assertEqual(main["env"]["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
-        self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "20000")
         self.assertIn("--max-sources", main["cmd"])
         self.assertIn("8", main["cmd"])
         self.assertEqual(main["env"]["REGION_TALK_HISTORY_SOURCES_TARGET"], "8")
@@ -255,6 +255,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertGreaterEqual(mod._orchestrator_kind_limit("post_live_item", 6000), 20000)
         self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 6000), 20000)
         self.assertEqual(mod._orchestrator_kind_limit("text_vector_enrichment_item", 100), 20000)
+
+    def test_checkpoint_v4_candidate_config_reads_complete_row_level_state(self) -> None:
+        mod = load_module()
+        self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_POST_ROWS"]), 20000)
+        self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"]), 20000)
+        self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_CANDIDATE_ROWS"]), 5000)
 
     def test_cursor_metric_prefers_highest_position_over_stale_history(self) -> None:
         mod = load_module()

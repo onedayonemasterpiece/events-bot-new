@@ -286,6 +286,14 @@ Region Talk must keep row-level product state compact:
   is `scripts/region_talk_ydb_compact.py`; it copies into a separate namespace,
   drops completed embedding-research rows and applies bounded retention without
   mutating the source table;
+- migration reconciles `processed_post_item` and legacy `post_live_item` by the
+  durable Telegram/VK post identity before removing the mirror. The live audit
+  proved 22,936 projection rows collapse to 11,331 canonical posts with no
+  legacy-only identity loss;
+- migration records the source `MAX(updated_at)` before and after its read and
+  aborts if writers changed the source. Replacing an existing target requires
+  both `--replace-target` and the explicit bootstrap data-loss acknowledgement;
+  normal online operation must never recreate the active compact namespace;
 - large `run_state_snapshot` rows are retention-limited
   (`REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST`, default `1`) because the durable
   source/post/image/candidate rows already carry the live product state;
@@ -307,6 +315,12 @@ storage while preserving all critical-kind row counts. A new
 `run_funnel_metrics` payload in every `run_metrics` row provides a reliable
 daily grain; mutable entity `run_id` fields must not be used to reconstruct
 historical daily throughput.
+
+Because checkpoint-v4 embeds no product collections, every CandidateReport
+launch must read the complete row-level population. Current orchestrator floors
+are 20,000 processed posts, 20,000 text-vector rows, 5,000 candidate/image rows
+and 20,000 source rows. A lower debug read cap is not allowed in a production
+write run: it could create a correct-looking checkpoint from incomplete state.
 
 
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the

@@ -179,6 +179,20 @@ LIMIT {max(1, int(page_size))};
     return pool.retry_operation_sync(op)
 
 
+def table_max_updated_at(ydb: Any, driver: Any, table_path: str) -> str:
+    pool = ydb.SessionPool(driver)
+
+    def op(session: Any) -> str:
+        result_sets = session.transaction(ydb.StaleReadOnly()).execute(
+            f"SELECT MAX(updated_at) AS max_updated_at FROM `{table_path}`;",
+            commit_tx=True,
+        )
+        rows = result_sets[0].rows if result_sets else []
+        return str(rows[0].max_updated_at or "") if rows else ""
+
+    return pool.retry_operation_sync(op)
+
+
 def slim_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
     source_queue = payload.get("unified_source_queue") if isinstance(payload.get("unified_source_queue"), dict) else {}
     image_queue = payload.get("image_candidate_queue") if isinstance(payload.get("image_candidate_queue"), dict) else {}
@@ -209,6 +223,33 @@ def f16_b64(vector: list[Any]) -> str:
     if not values:
         return ""
     return base64.b64encode(struct.pack("<" + ("e" * len(values)), *values)).decode("ascii")
+
+
+def durable_post_key(payload: dict[str, Any], fallback_pk: str = "") -> str:
+    platform_key = str(payload.get("platform_post_key") or "").strip()
+    match = re.fullmatch(r"(?:tg|telegram):@?([^:]+):(\d+)", platform_key, flags=re.I)
+    if match:
+        return f"tg:{match.group(1).lower()}:{match.group(2)}"
+    match = re.fullmatch(r"vk:([^:]+):(\d+)", platform_key, flags=re.I)
+    if match:
+        return f"vk:{match.group(1).lower()}:{match.group(2)}"
+    post_url = str(payload.get("post_url") or "").strip().split("?", 1)[0].rstrip("/")
+    match = re.search(r"(?:https?://)?(?:t|telegram)\.me/(?:s/)?(?!c/)([a-z0-9_]+)/(\d+)$", post_url, flags=re.I)
+    if match:
+        return f"tg:{match.group(1).lower()}:{match.group(2)}"
+    match = re.search(r"(?:https?://)?vk\.com/wall(-?\d+)_(\d+)$", post_url, flags=re.I)
+    if match:
+        return f"vk:{match.group(1)}:{match.group(2)}"
+    fallback = re.sub(r"^(?:processed_post_item|post_live_item):", "", fallback_pk)
+    return str(payload.get("post_id") or fallback or post_url).strip()
+
+
+def merge_nonempty(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(previous)
+    for key, value in current.items():
+        if value not in (None, "", [], {}) or key not in merged:
+            merged[key] = value
+    return merged
 
 
 def transform_vector(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -257,10 +298,33 @@ def transform_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], di
     transformed: list[dict[str, Any]] = []
     dropped = Counter()
     saved_vector_bytes = 0
+    # Reconcile both historical post projections before dropping the mirror.
+    # This proves that a legacy-only observation is carried into the sole
+    # ``processed_post_item`` representation instead of being discarded.
+    post_groups: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row["kind"] not in {"processed_post_item", "post_live_item"}:
+            continue
+        key = durable_post_key(row["payload"], row["pk"])
+        if not key:
+            continue
+        current = post_groups.get(key)
+        if current is None:
+            post_groups[key] = {**row, "pk": "processed_post_item:" + key, "kind": "processed_post_item"}
+        else:
+            newer = row if (row.get("updated_at") or "") >= (current.get("updated_at") or "") else current
+            older = current if newer is row else row
+            post_groups[key] = {
+                "pk": "processed_post_item:" + key,
+                "kind": "processed_post_item",
+                "payload": merge_nonempty(older["payload"], newer["payload"]),
+                "updated_at": max(str(current.get("updated_at") or ""), str(row.get("updated_at") or "")),
+            }
     for row in rows:
         kind = row["kind"]
-        if kind == "post_live_item":
-            dropped["duplicate_post_live_item"] += 1
+        if kind in {"processed_post_item", "post_live_item"}:
+            if kind == "post_live_item":
+                dropped["duplicate_post_live_item"] += 1
             continue
         if kind in RESEARCH_KINDS or kind.startswith("business_heartbeat_qwen3_") or kind.startswith("business_heartbeat_embeddinggemma_") or kind.startswith("business_heartbeat_e5_"):
             dropped["completed_embedding_research"] += 1
@@ -278,10 +342,26 @@ def transform_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], di
             summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
             payload = {"summary": summary, "row_count": payload.get("row_count") or summary.get("rows_written") or 0}
         transformed.append({**row, "payload": payload})
-    return transformed, {"dropped_rows_by_reason": dict(dropped), "estimated_vector_bytes_saved": saved_vector_bytes}
+    transformed.extend(post_groups.values())
+    return transformed, {
+        "dropped_rows_by_reason": dict(dropped),
+        "estimated_vector_bytes_saved": saved_vector_bytes,
+        "post_projection_source_rows": sum(1 for row in rows if row["kind"] in {"processed_post_item", "post_live_item"}),
+        "post_projection_canonical_rows": len(post_groups),
+    }
 
 
-def ensure_target_table(ydb: Any, driver: Any, table_path: str, *, replace: bool) -> None:
+def validate_target_replacement(*, exists: bool, replace: bool, bootstrap_ack: bool, table_path: str) -> None:
+    if exists and not replace:
+        raise RuntimeError(f"target table already exists: {table_path}; pass --replace-target")
+    if exists and not bootstrap_ack:
+        raise RuntimeError(
+            "refusing to replace an existing target without "
+            "--bootstrap-acknowledge-target-replacement"
+        )
+
+
+def ensure_target_table(ydb: Any, driver: Any, table_path: str, *, replace: bool, bootstrap_ack: bool) -> None:
     pool = ydb.SessionPool(driver)
 
     def op(session: Any) -> None:
@@ -290,8 +370,7 @@ def ensure_target_table(ydb: Any, driver: Any, table_path: str, *, replace: bool
             session.describe_table(table_path)
         except Exception:
             exists = False
-        if exists and not replace:
-            raise RuntimeError(f"target table already exists: {table_path}; pass --replace-target")
+        validate_target_replacement(exists=exists, replace=replace, bootstrap_ack=bootstrap_ack, table_path=table_path)
         if exists:
             session.drop_table(table_path)
         desc = (
@@ -348,18 +427,29 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def validate(source: list[dict[str, Any]], target: list[dict[str, Any]]) -> dict[str, Any]:
     source_counts = Counter(row["kind"] for row in source)
     target_counts = Counter(row["kind"] for row in target)
+    source_post_keys = {
+        durable_post_key(row["payload"], row["pk"])
+        for row in source if row["kind"] in {"processed_post_item", "post_live_item"}
+    }
+    target_post_keys = {
+        durable_post_key(row["payload"], row["pk"])
+        for row in target if row["kind"] == "processed_post_item"
+    }
     mismatches = {
         kind: {"source": source_counts[kind], "target": target_counts[kind]}
         for kind in sorted(CRITICAL_KINDS)
-        if source_counts[kind] != target_counts[kind]
+        if kind != "processed_post_item" and source_counts[kind] != target_counts[kind]
     }
     target_pks = {row["pk"] for row in target}
     required_pks = {"latest_state"}
     missing_required = sorted(required_pks - target_pks)
     return {
         "critical_kind_count_mismatches": mismatches,
+        "source_post_canonical_total": len(source_post_keys),
+        "target_post_canonical_total": len(target_post_keys),
+        "missing_post_canonical_keys": sorted(source_post_keys - target_post_keys)[:100],
         "missing_required_pks": missing_required,
-        "ok": not mismatches and not missing_required,
+        "ok": not mismatches and not missing_required and source_post_keys == target_post_keys,
     }
 
 
@@ -370,6 +460,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-namespace", default="region_talk_compact")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--replace-target", action="store_true")
+    parser.add_argument("--bootstrap-acknowledge-target-replacement", action="store_true")
     parser.add_argument("--page-size", type=int, default=500)
     parser.add_argument("--chunk-size", type=int, default=500)
     parser.add_argument("--report", default="artifacts/codex/region-talk-ydb-compact-report.json")
@@ -383,7 +474,14 @@ def main() -> int:
     source_table = namespace_table(database, args.source_namespace)
     target_table = namespace_table(database, args.target_namespace)
     try:
+        source_watermark_before = table_max_updated_at(ydb, driver, source_table)
         source_rows = read_all_rows(ydb, driver, source_table, page_size=args.page_size)
+        source_watermark_after = table_max_updated_at(ydb, driver, source_table)
+        if source_watermark_before != source_watermark_after:
+            raise RuntimeError(
+                "source table changed during migration read; stop writers and retry: "
+                f"before={source_watermark_before} after={source_watermark_after}"
+            )
         transformed, transform_meta = transform_rows(source_rows)
         report: dict[str, Any] = {
             "generated_at": utc_now_iso(),
@@ -393,9 +491,17 @@ def main() -> int:
             "source": summarize(source_rows),
             "planned_target": summarize(transformed),
             "transform": transform_meta,
+            "source_watermark_before": source_watermark_before,
+            "source_watermark_after": source_watermark_after,
         }
         if args.execute:
-            ensure_target_table(ydb, driver, target_table, replace=bool(args.replace_target))
+            ensure_target_table(
+                ydb,
+                driver,
+                target_table,
+                replace=bool(args.replace_target),
+                bootstrap_ack=bool(args.bootstrap_acknowledge_target_replacement),
+            )
             report["written_rows"] = bulk_write(ydb, driver, target_table, transformed, chunk_size=args.chunk_size)
             target_rows = read_all_rows(ydb, driver, target_table, page_size=args.page_size)
             report["actual_target"] = summarize(target_rows)
