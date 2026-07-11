@@ -19,7 +19,7 @@ export interface EventBusSuggestion {
   originStop: string;
   venueName: string;
   venueMapUrl: string;
-  mapEmbedUrl: string;
+  mapImageUrl: string;
   outbound: EventBusOption[];
   returnOption: {
     route: string;
@@ -56,7 +56,7 @@ export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_
     originStop: route.origin_stop,
     venueName: route.venue_name,
     venueMapUrl: route.venue_map_url,
-    mapEmbedUrl: route.map_embed_url,
+    mapImageUrl: route.map_image_url,
     outbound: route.outbound.map((option) => ({
       route: option.route,
       alsoRoute: option.also_route,

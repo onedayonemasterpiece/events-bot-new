@@ -1,5 +1,6 @@
 ---
 import { getEventBusSuggestion } from '../lib/eventBusTransport';
+import { withBase } from '../lib/events';
 import type { PreviewEvent } from '../lib/types';
 
 interface Props { event: PreviewEvent; }
@@ -37,7 +38,7 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
     </section>
 
     <div class="event-bus__map">
-      <iframe src={suggestion.mapEmbedUrl} title={`Карта: ${suggestion.venueName}`} loading="eager" referrerpolicy="no-referrer"></iframe>
+      <img src={withBase(suggestion.mapImageUrl)} width="450" height="250" alt={`Карта: ${suggestion.venueName}`} loading="lazy" />
       <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть площадку на карте</a>
     </div>
 
@@ -63,8 +64,8 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
   .event-bus__return h3 { margin: 0.28rem 0; color: #273941; font-size: 1.12rem; }
   .event-bus__return p:last-child { margin: 0; font-size: 0.84rem; line-height: 1.4; }
   .event-bus__map { padding: 0 1.1rem 1rem; }
-  .event-bus__map iframe { display: block; width: 100%; height: 250px; border: 0; border-radius: 18px; background: #e9eff1; }
+  .event-bus__map img { display: block; width: 100%; height: auto; border: 0; border-radius: 18px; background: #e9eff1; }
   .event-bus footer { padding: 0.8rem 1.1rem 1rem; border-top: 1px solid rgba(35,83,102,0.12); color: var(--muted); font-size: 0.8rem; }
   .event-bus footer p { margin: 0; }
-  @media(max-width:720px){ .event-bus__options{grid-template-columns:1fr}.event-bus__map iframe{height:220px} }
+  @media(max-width:720px){ .event-bus__options{grid-template-columns:1fr} }
 </style>

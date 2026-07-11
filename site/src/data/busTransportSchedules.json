@@ -18,7 +18,7 @@
       "venue_name": "Сказочное Холмогорье",
       "venue_coordinates": [54.8817051, 20.2792613],
       "venue_map_url": "https://yandex.ru/maps/?pt=20.279261,54.881705&z=16&l=map",
-      "map_embed_url": "https://www.openstreetmap.org/export/embed.html?bbox=20.245%2C54.872%2C20.292%2C54.904&layer=mapnik&marker=54.8817051%2C20.2792613",
+      "map_image_url": "/assets/transport/romanovo-holmogorye-map.png",
       "outbound": [
         {
           "route": "118А",

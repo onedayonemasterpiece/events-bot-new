@@ -22,6 +22,7 @@ const required = [
   'robots.txt',
   'favicon.svg',
   'assets/transport/kppk-lastochka.webp',
+  'assets/transport/romanovo-holmogorye-map.png',
   'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/outbound-2026-07-12-7213.ics',
   'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/return-2026-07-12-6722.ics',
   'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/return-2026-07-12-7220.ics',
@@ -375,7 +376,7 @@ if (busDemoHtml.includes('data-event-transport-schedule')) throw new Error('Roma
 for (const needle of ['data-bus-number="118А"', '№ 118', '08:40', '10:37', 'data-bus-number="119"', '08:10', '09:23', 'около 18:30', '19:40', 'rtt=pd', 'https://avl39.ru/routes/reg/kaliningrad/']) {
   if (!busDemoHtml.includes(needle)) throw new Error(`Event 6710 bus block missing ${needle}`);
 }
-if (!busDemoHtml.includes('<iframe') || !busDemoHtml.includes('Открыть площадку на карте')) throw new Error('Event 6710 bus block must include an embedded venue map and external map link');
+if (!busDemoHtml.includes('/assets/transport/romanovo-holmogorye-map.png') || !busDemoHtml.includes('Открыть площадку на карте')) throw new Error('Event 6710 bus block must include a local venue map and external map link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');
