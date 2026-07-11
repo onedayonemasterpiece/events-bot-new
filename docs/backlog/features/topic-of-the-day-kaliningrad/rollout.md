@@ -189,6 +189,7 @@ Golden set содержит минимум 30 разных историческ�
 9. platform API `unknown outcome` без blind retry;
 10. operator preview и manual approval expiry.
 11. sensitive topic rejected by default и разрешённый heritage/ОКН exception.
+12. transient retry budget (`1m/5m/15m`), permanent failure без retry и independent-target compensation.
 
 ## 7. Риски
 
@@ -228,12 +229,11 @@ Golden set содержит минимум 30 разных историческ�
 
 ## 9. Открытые продуктовые решения
 
-Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру. Уже решены: `0..1`, один Telegram administrator, только две кнопки, late approve → publish immediately, slot 10:00, любые публичные source photos со ссылкой, полноценный голос официальных источников, sensitive-topic policy с heritage exception, 10-edition activation gate, одновременный heritage auto, silent successful full auto, `no_topic` notification и независимые Telegram/VK targets. Названия каналов отложены.
+Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру. Уже решены: `0..1`, один Telegram administrator, только две кнопки, late approve → publish immediately, slot 10:00, любые публичные source photos со ссылкой, полноценный голос официальных источников, sensitive-topic policy с heritage exception, 10-edition activation gate, одновременный heritage auto, silent successful full auto, краткая причина в `no_topic`, независимые Telegram/VK targets, Bento-only Telegram и bounded class-aware retries. Названия каналов отложены.
 
 1. Какие источники объединяются в одну ownership group?
-2. Нужен ли Telegram album/video в первом релизе или начинаем с одной Bento-карточки?
-3. Что показывать в `no_topic` notification: только факт пропуска или ещё краткую причину и ближайшую отклонённую тему?
-4. Сколько автоматических попыток разрешено для упавшего target и до какого времени продолжать retry?
+2. Подтверждаем рекомендуемый retry budget: максимум 4 attempts на target по сетке `сразу / +1 / +5 / +15 минут`?
+3. После terminal failure отправлять admin error notification сразу или только если target не восстановился к заданному deadline?
 
 ## 10. Definition of Done для будущей реализации
 

@@ -19,7 +19,7 @@
 
 ## 2. Telegram text contract
 
-Предпочтительный MVP — **один `sendPhoto` с Bento-карточкой и компактным HTML caption**. Это проще для exactly-once и даёт один platform message id. Album с лучшими фото/видео добавляется после стабильного single-card rollout.
+Зафиксированный Telegram-формат — **один `sendPhoto` с Bento-карточкой и компактным HTML caption**. Он даёт один platform message id и остаётся единственным Telegram publication mode. Album и отдельные video/photo attachments не входят в roadmap без нового решения владельца. Сильное исходное видео может получить роль и ссылку в тексте/Bento, но само видео в Telegram-дайджест не прикрепляется.
 
 Структура:
 
@@ -44,7 +44,7 @@
 - HTML entities построены из offsets/escaped text, а не string concat без проверки;
 - итоговый `payload_hash` фиксируется до publication claim.
 
-Если текст не помещается, writer сокращает сводку и число ролей; отправка второго сообщения не является автоматическим fallback, потому что нарушает one-post contract.
+Если текст не помещается, writer сокращает сводку и число ролей; отправка второго сообщения, album или source video не являются fallback, потому что нарушают Bento-only contract.
 
 ### Закрытый Telegram admin preview
 

@@ -259,11 +259,49 @@ pending → claimed → prepared → sending
                            ↘ unknown
 ```
 
-Если timeout/обрыв произошёл во время `sendMessage`, `sendPhoto`, `sendMediaGroup` или `wall.post`, платформа могла принять запрос. Состояние — `unknown`; blind retry запрещён до reconcile по каналу/API. Это отдельный контракт от retriable failure до external side effect.
+Если timeout/обрыв произошёл во время Telegram `sendPhoto` или VK `wall.post`, платформа могла принять запрос. Состояние — `unknown`; blind retry запрещён до reconcile по каналу/API. Это отдельный контракт от retriable failure до external side effect.
 
 Для VK все изображения загружаются до `wall.post`; неполный upload блокирует post. После успешного `wall.post` ошибка записи в YDB не должна приводить к повторному `wall.post`: сначала выполняется API reconciliation.
 
 Telegram и VK — полностью независимые targets. Каждый имеет собственный claim, payload hash, attempts, outcome certainty, platform id и retry/reconcile state. Ошибка одного target не отменяет, не задерживает и не повторяет успешный другой. `telegram=sent, vk=failed` даёт `edition=partial`; automatic compensating run работает только с VK. Обратная ситуация симметрична.
+
+### Bounded retry policy
+
+Цель — пережить короткий сбой, но не «долбиться в закрытую дверь». Retry budget считается отдельно для Telegram и VK.
+
+#### Рекомендуемый default budget
+
+- максимум **4 target attempts всего**: исходная + до трёх повторов;
+- обычный transient backoff: `+1 мин → +5 мин → +15 мин` с небольшим jitter;
+- explicit provider delay имеет приоритет над этой сеткой;
+- один и тот же payload/idempotency key сохраняется во всех attempts;
+- после исчерпания budget target становится terminal `failed`, второй target продолжает жить независимо;
+- никакого бесконечного scheduler/watchdog requeue после terminal classification.
+
+#### Классы
+
+| Класс | Примеры | Действие |
+|---|---|---|
+| `transient_before_side_effect` | DNS/connect failure с доказанным отсутствием send, HTTP 5xx до platform acceptance, временный media upload | bounded retry |
+| `rate_limited` | Telegram `retry_after`; VK rate/flood/wait | ждать provider delay + jitter, затем считать это одним следующим attempt |
+| `permanent_config_or_access` | bad token, forbidden/access denied, bot не admin, target не существует, неверный payload/format | terminal сразу, без retry |
+| `human_challenge` | VK captcha/validation | terminal/manual repair, без автоматического retry |
+| `unknown_after_send` | timeout/reset во время `sendPhoto`/`wall.post` | не повторять send; выполнить reconcile |
+
+Telegram Bot API возвращает `ResponseParameters.retry_after` — число секунд до допустимого повтора при flood control; его надо соблюдать, а не опрашивать чаще: <https://core.telegram.org/bots/api#responseparameters>.
+
+Для VK исходная error taxonomy берётся из официальной [`vk-api-schema/errors.json`](https://github.com/VKCOM/vk-api-schema/blob/master/errors.json): `6` too many requests, `9` flood, `10` internal server error, `29` rate limit и `32` need wait рассматриваются как transient/rate-limited; `5` auth, `7` permission, `14` captcha, `15` access denied, `17` validation и `27` group authorization не получают циклический retry. Конкретный method/subcode может ужесточить классификацию до permanent.
+
+#### Stage-aware VK retries
+
+- `photos.getWallUploadServer → upload → photos.saveWallPhoto` выполняется до public side effect; для каждой картинки допустимо до трёх upload attempts с новым upload URL;
+- если хотя бы один обязательный Bento/VK slide не подготовлен, `wall.post` не вызывается;
+- после `wall.post` timeout выполняется API reconciliation, а не повторный `wall.post`;
+- подтверждённый existing post id завершает target как success даже если локальная финальная запись сначала упала.
+
+#### Reconcile unknown outcome
+
+Reconcile не является повторной публикацией. Он использует разрешённый platform read/reconciliation lane, а не повторный publisher call, проверяет target по stored payload hash/time window и делает до трёх read-only polls (`+30 сек`, `+2 мин`, `+5 мин`). Найденный platform id закрывает target как `sent/live`; доказанное отсутствие публикации может вернуть target в retry budget. Если read lane недоступен или результат остаётся неизвестным, state остаётся `unknown`, автопубликация этого target прекращается и admin получает error notification.
 
 ## 10. Расписание, watchdog и catch-up
 
@@ -276,7 +314,7 @@ Telegram и VK — полностью независимые targets. Кажды
 - live watchdog до editorial deadline;
 - recovery проверяет materialized Kaggle handoff и per-target delivery, а не только факт старта cron;
 - свежий heartbeat означает «ждать», а не запускать дубль;
-- `no_topic` считается осознанно обработанным слотом и отправляет в закрытый Telegram admin-чат служебное уведомление о пропуске дня;
+- `no_topic` считается осознанно обработанным слотом и отправляет в закрытый Telegram admin-чат короткое служебное уведомление: source day + один reason code + одно понятное предложение причины; полный cluster/evidence report остаётся artifact;
 - на manual canary отсутствие approve к 10:00 оставляет edition в `awaiting_approval`; approve позже 10:00 запускает публикацию сразу, без переноса на следующий день;
 - после включения full auto прошедший все gates edition публикуется в 10:00 без approval row; непрошедший edition автоматически становится `no_topic`, без manual fallback;
 - успешный full-auto run не отправляет предварительный или post-success admin message; durable edition/publication rows и audit artifact всё равно записываются для idempotency и расследований;
