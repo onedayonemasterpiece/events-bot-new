@@ -232,6 +232,11 @@ Important invariants:
   backlog. Candidate discovery continues in parallel.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
+- An orchestrated ImageDiagnostic launch waits at most 120 seconds for its
+  initial live-YDB lease and does not wait after draining an available batch.
+  The former 600-second empty poll burned a whole CPU notebook when the single
+  pending metric changed before the worker acquired it; later Candidate output
+  is picked up by the next short orchestrator cycle instead.
 - Candidate breadth is runtime- and backlog-adaptive while the 20-minute
   notebook guardrail remains unchanged. A completed run below 15 minutes and
   BGE backlog below 75% of one 48-row batch permits eight history and eight

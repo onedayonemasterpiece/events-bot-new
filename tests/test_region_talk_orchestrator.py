@@ -96,6 +96,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertTrue(main["parallel_safe"])
         self.assertTrue(bge["parallel_safe"])
         self.assertTrue(by_name["launch_image_diagnostic"]["parallel_safe"])
+        self.assertIn("120", by_name["launch_image_diagnostic"]["cmd"])
+        self.assertIn("--wait-after-drain-seconds", by_name["launch_image_diagnostic"]["cmd"])
         self.assertIn("--batch-limit", bge["cmd"])
         self.assertIn("48", bge["cmd"])
         self.assertIn("--batch-size", bge["cmd"])

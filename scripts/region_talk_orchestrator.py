@@ -2764,7 +2764,12 @@ def build_decision_plan(
     if int(metrics.get("image_pending_total") or 0) >= image_threshold:
         actions.append(_action(
             "launch_image_diagnostic",
-            ["python3", "kaggle/execute_region_talk_image_diagnostic.py", "--source", "ydb", "--max-items-per-run", "30", "--batch-size", "10", "--no-wait"],
+            [
+                "python3", "kaggle/execute_region_talk_image_diagnostic.py",
+                "--source", "ydb", "--max-items-per-run", "30", "--batch-size", "10",
+                "--wait-initial-seconds", "120", "--wait-after-drain-seconds", "0",
+                "--image-poll-interval-seconds", "30", "--no-wait",
+            ],
             "text-confirmed image queue has pending rows; uses DISCOVERY2",
             resource="telegram:DISCOVERY2",
             parallel_safe=True,

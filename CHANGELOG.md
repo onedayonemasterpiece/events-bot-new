@@ -15,6 +15,10 @@
   normalizer also migrates legacy singleton PKs before they can form a future
   duplicate pair, using YDB BulkUpsert and parameterized 500-key bulk deletes
   instead of one network transaction call per row.
+- **Region Talk / image-worker empty-poll efficiency**: orchestrated image runs
+  now use a two-minute initial YDB lease window, 30-second polling and no idle
+  post-drain wait, replacing the previous ten-minute empty CPU notebook when a
+  pending row was consumed or blocked before the worker started.
 - **Region Talk / local POI institutions**: source surface classification now
   routes `Музей Мирового Океана` / `world_ocean_museum` to the local-region
   monitoring list before its institutional posts consume external-candidate
