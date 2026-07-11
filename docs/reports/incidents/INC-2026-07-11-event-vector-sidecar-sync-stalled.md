@@ -32,6 +32,7 @@ Production Supabase sidecar stopped receiving new event search documents and emb
 - 2026-07-02 15:33 UTC — merge `7a21b4be` dropped the intended (but not production-enabled) Smart Update → StaticSiteBuilder handoff.
 - 2026-07-02 15:51–15:57 UTC — one-off manual preview/backfill wrote 399 documents through event 6613 and masked the missing production owner.
 - 2026-07-11 — gap detected; incident opened; root-cause investigation and catch-up started.
+- 2026-07-11 08:21 UTC — first catch-up exposed an additional full-export latency defect: static hero-image dimension probes blocked vector projection; the run was explicitly superseded before sidecar mutation and the vector fast path was changed to skip remote image probes.
 
 ## Root Cause
 

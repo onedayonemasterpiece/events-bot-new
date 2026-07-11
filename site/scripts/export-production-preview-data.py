@@ -496,6 +496,7 @@ def meaningful_ocr(value: Any) -> bool:
 
 
 IMAGE_DIMENSION_CACHE: dict[str, tuple[int | None, int | None]] = {}
+SKIP_IMAGE_PROBES = False
 
 
 def parse_png_dimensions(data: bytes) -> tuple[int, int] | None:
@@ -679,7 +680,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     first_width: int | None = None
     first_height: int | None = None
     needs_rescue_scan = False
-    if len(urls) > 1:
+    if len(urls) > 1 and not SKIP_IMAGE_PROBES:
         probed_width, probed_height = probe_image_dimensions(urls[0])
         first_width = int(probed_width or 0) or None
         first_height = int(probed_height or 0) or None
@@ -693,7 +694,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
         if index == 0:
             probed_width, probed_height = first_width, first_height
-        elif needs_rescue_scan:
+        elif needs_rescue_scan and not SKIP_IMAGE_PROBES:
             probed_width, probed_height = probe_image_dimensions(url)
         else:
             probed_width, probed_height = (None, None)
@@ -2297,7 +2298,15 @@ def main() -> int:
         action="store_true",
         help="Export preview-events.json only; used by the dedicated vector projection lane.",
     )
+    parser.add_argument(
+        "--skip-image-probes",
+        action="store_true",
+        help="Do not make remote image-dimension requests (vector projection fast path).",
+    )
     args = parser.parse_args()
+
+    global SKIP_IMAGE_PROBES
+    SKIP_IMAGE_PROBES = bool(args.skip_image_probes)
 
     con = sqlite3.connect(args.db)
     con.row_factory = sqlite3.Row

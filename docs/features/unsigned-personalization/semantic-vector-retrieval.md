@@ -323,7 +323,9 @@ and APScheduler performs a full actionable-catalog reconciliation every
 `EVENT_VECTOR_SYNC_INTERVAL_MINUTES` (default: 180). The job exports the whole
 current catalogue, projects both document kinds by hash, removes stale sidecar
 rows, fails/retries on an incomplete provider-call cap, and persists structured
-counts/errors in `ops_run(kind='event_vector_sync')`.
+counts/errors in `ops_run(kind='event_vector_sync')`. The vector-only export
+skips remote image-dimension probes; it reuses canonical media URLs/card facts
+without turning a semantic projection into a slow media-quality crawl.
 
 StaticSiteBuilder remains a build consumer and may explicitly refresh vectors
 for a preview, but it no longer owns regular production ingestion. Ephemeral

@@ -126,6 +126,7 @@ async def run_event_vector_sync(
                         "--include-ids",
                         "",
                         "--skip-related",
+                        "--skip-image-probes",
                     ],
                     stage="export",
                     run_id=ops_run_id,
@@ -217,4 +218,3 @@ async def run_event_vector_sync(
 async def job_event_vector_sync(event_id: int, db: Any, bot: Any) -> bool:
     result = await run_event_vector_sync(db, trigger="outbox", owner_event_id=event_id)
     return result.get("status") == "success"
-
