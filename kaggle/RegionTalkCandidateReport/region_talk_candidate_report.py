@@ -6575,6 +6575,11 @@ def image_queue_product_gate_reason(row: dict[str, Any]) -> str:
         return source_reason
     if str(row.get("is_ad_or_promo") or "").lower() in {"true", "1", "yes"}:
         return "post_ad_or_promo"
+    if any(
+        _rt_bool(row.get(field))
+        for field in ("is_multi_region_roundup", "is_multi_topic_digest", "is_digest_or_roundup")
+    ):
+        return "semantic_scope_contradiction_multi_region_or_digest"
     vector_status = str(row.get("vector_gate_status") or row.get("memory_vector_recheck_status") or "")
     if vector_status != "vector_accept_candidate":
         if vector_status.startswith("vector_reject"):

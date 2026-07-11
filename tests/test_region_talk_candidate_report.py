@@ -702,6 +702,21 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         })
         self.assertEqual(reason, "local_kaliningrad_source_for_separate_monitoring")
 
+    def test_image_queue_rejects_multi_region_digest_even_with_stale_ko_scope_true(self) -> None:
+        mod = load_module()
+        reason = mod.image_queue_product_gate_reason({
+            "post_url": "https://t.me/hotostay/15221",
+            "source_title": "to stay",
+            "source_url": "https://t.me/hotostay",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "kaliningrad_oblast_only_scope": "true",
+            "kaliningrad_mention_role": "main_subject",
+            "is_multi_region_roundup": "true",
+            "short_summary": "Подборка отелей Мурманской области",
+        })
+        self.assertEqual(reason, "semantic_scope_contradiction_multi_region_or_digest")
+
     def test_terminal_source_cleanup_makes_old_candidate_memory_audit_only(self) -> None:
         mod = load_module()
         rows = [

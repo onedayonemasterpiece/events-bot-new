@@ -553,6 +553,11 @@ creation fails twice, the launcher may delete only Region Talk input datasets
 older than the six-hour safety TTL (bounded per attempt), protect the current
 ref, and then make one final create retry.
 
+A semantic contradiction is fail-closed before image/Gemini capacity: any
+`is_multi_region_roundup`, `is_multi_topic_digest` or `is_digest_or_roundup`
+marker rejects the row even if an older `kaliningrad_oblast_only_scope=true`
+field survived in candidate memory.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;
