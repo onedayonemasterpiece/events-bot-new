@@ -21,6 +21,7 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'assets/transport/kppk-lastochka.webp',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -65,6 +66,9 @@ if (control.slug !== 'pesni-sssr-svetlogorsk-5878') throw new Error(`Unexpected 
 const controlHtml = readFileSync(join(root, `sobytiya/${control.slug}/index.html`), 'utf8');
 const stripGeneratedCode = (html) => html.replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<style[\s\S]*?<\/style>/giu, '');
 const controlVisibleHtml = stripGeneratedCode(controlHtml);
+if (!controlVisibleHtml.includes('data-event-transport-schedule') || !controlVisibleHtml.includes('data-event-city="Светлогорск"')) throw new Error('Svetlogorsk control event misses the event transport partnership block');
+if (!controlVisibleHtml.includes('/assets/transport/kppk-lastochka.webp') || !controlVisibleHtml.includes('Партнёрский маршрут') || !controlVisibleHtml.includes('АО «КППК»')) throw new Error('Event transport block misses supplied Lastochka artwork or explicit partner disclosure');
+if (controlVisibleHtml.indexOf('data-event-transport-schedule') > controlVisibleHtml.indexOf('>Коротко</h2>')) throw new Error('Event transport block must render immediately after the description and before “Коротко”');
 if (!controlHtml.includes('noindex,nofollow,noarchive')) throw new Error('Missing preview robots meta');
 if (controlHtml.includes('https://kenigevents.ru/sobytiya/pesni-sssr-svetlogorsk-5878/')) throw new Error('Production canonical leaked into preview page');
 if (!controlHtml.includes(`https://kenigevents.ru/${buildId}/sobytiya/pesni-sssr-svetlogorsk-5878/`)) throw new Error('Preview canonical missing for control page');
@@ -120,6 +124,7 @@ if (!tretyakovEvent) throw new Error('Missing 5370 ticket/paid regression event'
 if (!Array.isArray(tretyakovEvent.image_assets) || tretyakovEvent.image_assets.length < 5) throw new Error('Event 5370 must carry multi-image gallery assets for hero fullscreen review');
 const tretyakovHtml = readFileSync(join(root, `sobytiya/${tretyakovEvent.slug}/index.html`), 'utf8');
 const tretyakovVisibleHtml = stripGeneratedCode(tretyakovHtml);
+if (tretyakovVisibleHtml.includes('data-event-transport-schedule')) throw new Error('Kaliningrad event 5370 must not render a coastal train schedule block');
 const tretyakovEyebrow = (tretyakovVisibleHtml.match(/<p class="event-hero__eyebrow">([^<]*)<\/p>/u) || [null, ''])[1];
 if (!tretyakovEvent.ticket.is_free && tretyakovEvent.ticket.kind === 'ticket' && !tretyakovEvent.ticket.price_label) {
   if (/Билеты|Платный вход/u.test(tretyakovEyebrow)) throw new Error('Paid/generic admission copy must not be shown above the event title');
@@ -329,6 +334,13 @@ const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 if (!popularHtml.includes('Популярное') || !popularHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
+
+const transportDemoEvent = eventsData.events.find((event) => event.id === 6538);
+if (!transportDemoEvent) throw new Error('Missing event 6538 transport schedule regression event');
+const transportDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${transportDemoEvent.slug}/index.html`), 'utf8'));
+if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="1"') || !transportDemoHtml.includes('data-return-count="1"')) throw new Error('Event 6538 must expose one exact outbound/return pair for the 17:00–22:00 event window');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<time[^>]*>15:43<\/time>[\s\S]*?<time[^>]*>16:29<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6538 outbound suggestion must be train 7213, 15:43→16:29 (31 minutes before start)');
+if (!/data-transport-direction="return"[^>]*data-train-number="6730"[\s\S]*?<time[^>]*>22:40<\/time>[\s\S]*?<time[^>]*>23:35<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6538 return suggestion must be train 6730, 22:40→23:35 after the stated end');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

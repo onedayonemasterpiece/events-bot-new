@@ -2,6 +2,7 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
+import EventTransportSchedule from '../../components/EventTransportSchedule.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
@@ -93,6 +94,7 @@ const galleryCta = galleryCtaEvent ? {
         <div class="section-card__inner">
           <h2>Описание</h2>
           <div class="prose" set:html={event.description_html} />
+          <EventTransportSchedule event={event} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
           {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}

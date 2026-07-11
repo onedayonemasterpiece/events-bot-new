@@ -8,6 +8,8 @@
 
 ### Added
 
+- **Static event pages / КППК transport schedule**: added a disclosed Lastochka transport block after descriptions for Светлогорск/Зеленоградск events, with exact Калининград-Северный departure/arrival pairs, a 20–40 minute arrival buffer, return matching from explicit event end times, the supplied train artwork, live schedule verification links and regression coverage for event `6538`.
+
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.

@@ -1,0 +1,154 @@
+---
+import { getEventTransportSuggestion, type EventTrainOption } from '../lib/eventTransport';
+import { withBase } from '../lib/events';
+import type { PreviewEvent } from '../lib/types';
+
+interface Props {
+  event: PreviewEvent;
+}
+
+const { event } = Astro.props;
+const suggestion = getEventTransportSuggestion(event);
+const headingId = suggestion ? `event-transport-heading-${event.id}` : undefined;
+const formatDuration = (minutes: number) => `${minutes} мин`;
+const formatLead = (minutes: number | undefined) => typeof minutes === 'number' ? `за ${minutes} мин до начала` : '';
+const formatWait = (option: EventTrainOption) => {
+  const wait = option.waitAfterEventMinutes;
+  if (typeof wait !== 'number') return '';
+  return wait === 0 ? 'сразу после окончания' : `через ${wait} мин после окончания`;
+};
+---
+{suggestion && (
+  <aside
+    class="event-transport"
+    data-event-transport-schedule
+    data-event-city={suggestion.city}
+    data-outbound-count={suggestion.outbound.length}
+    data-return-count={suggestion.returns.length}
+    aria-labelledby={headingId}
+  >
+    <header class="event-transport__header">
+      <div class="event-transport__intro">
+        <p class="event-transport__partner">Партнёрский маршрут · <a href="https://www.kppk39.ru/" target="_blank" rel="noopener noreferrer nofollow">АО «КППК»</a></p>
+        <h2 id={headingId}>На поезде к событию</h2>
+        <p>{suggestion.originStation} → {suggestion.destinationStation}</p>
+      </div>
+      <img
+        class="event-transport__train"
+        src={withBase('/assets/transport/kppk-lastochka.webp')}
+        width="500"
+        height="101"
+        alt="Поезд «Ласточка» Калининградской пригородной пассажирской компании"
+        loading="lazy"
+        decoding="async"
+      />
+    </header>
+
+    <div class="event-transport__directions">
+      <section class="event-transport__direction" aria-labelledby={`event-transport-outbound-${event.id}`}>
+        <div class="event-transport__direction-heading">
+          <p class="event-transport__step">Туда</p>
+          <h3 id={`event-transport-outbound-${event.id}`}>К началу в {suggestion.eventStart}</h3>
+        </div>
+        {suggestion.outbound.length > 0 ? (
+          <ol class="event-transport__trains">
+            {suggestion.outbound.map((train) => (
+              <li class="event-transport__train-row" data-transport-direction="outbound" data-train-number={train.number}>
+                <div class="event-transport__times">
+                  <time datetime={`${train.serviceDate}T${train.departure}:00+02:00`}>{train.departure}</time>
+                  <span aria-hidden="true">→</span>
+                  <time datetime={`${train.serviceDate}T${train.arrival}:00+02:00`}>{train.arrival}</time>
+                </div>
+                <p>{suggestion.originStation} → {suggestion.destinationStation}</p>
+                <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatLead(train.minutesBeforeEvent)}</small>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="event-transport__empty">Поезда с прибытием за {suggestion.arrivalWindow.min}–{suggestion.arrivalWindow.max} минут до начала нет.</p>
+        )}
+      </section>
+
+      <section class="event-transport__direction" aria-labelledby={`event-transport-return-${event.id}`}>
+        <div class="event-transport__direction-heading">
+          <p class="event-transport__step">Обратно</p>
+          <h3 id={`event-transport-return-${event.id}`}>{suggestion.eventEnd ? `После окончания в ${suggestion.eventEnd}` : 'После события'}</h3>
+        </div>
+        {!suggestion.eventEnd ? (
+          <p class="event-transport__empty">Организатор не указал время окончания — обратный поезд не рассчитываем наугад.</p>
+        ) : suggestion.returns.length > 0 ? (
+          <ol class="event-transport__trains">
+            {suggestion.returns.map((train) => (
+              <li class="event-transport__train-row" data-transport-direction="return" data-train-number={train.number}>
+                <div class="event-transport__times">
+                  <time datetime={`${train.serviceDate}T${train.departure}:00+02:00`}>{train.departure}</time>
+                  <span aria-hidden="true">→</span>
+                  <time datetime={`${train.serviceDate}T${train.arrival}:00+02:00`}>{train.arrival}</time>
+                </div>
+                <p>{suggestion.destinationStation} → {suggestion.originStation}</p>
+                <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatWait(train)}{train.nextDay ? ' · на следующий день' : ''}</small>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="event-transport__empty">В течение {Math.round(suggestion.maxReturnWaitMinutes / 60)} часов после окончания подходящего поезда нет.</p>
+        )}
+      </section>
+    </div>
+
+    <footer class="event-transport__footer">
+      <p>Расписание может меняться. <a href={suggestion.outboundLiveUrl} target="_blank" rel="noopener noreferrer nofollow">Проверить поезд туда</a><span aria-hidden="true"> · </span><a href={suggestion.returnLiveUrl} target="_blank" rel="noopener noreferrer nofollow">обратно</a></p>
+      <p class="event-transport__source">Источник: {suggestion.scheduleSource}. Срез от <time datetime={suggestion.scheduleRetrievedAt}>{suggestion.scheduleRetrievedAt.slice(8, 10)}.{suggestion.scheduleRetrievedAt.slice(5, 7)}.{suggestion.scheduleRetrievedAt.slice(0, 4)}</time>.</p>
+    </footer>
+  </aside>
+)}
+
+<style>
+  .event-transport {
+    margin: 1.4rem 0 0;
+    overflow: hidden;
+    border: 1px solid rgba(145, 45, 36, 0.18);
+    border-radius: 26px;
+    background: linear-gradient(145deg, #fff9f0 0%, #fffdf8 54%, #f2f5f8 100%);
+    box-shadow: 0 18px 42px rgba(72, 45, 25, 0.09);
+  }
+  .event-transport__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 42%);
+    align-items: center;
+    gap: 1rem;
+    min-height: 160px;
+    padding: 1.1rem 1.1rem 0.85rem;
+    background: linear-gradient(110deg, rgba(255,255,255,0.92), rgba(242,245,248,0.76));
+  }
+  .event-transport__intro h2 { margin: 0.28rem 0; font-size: clamp(1.45rem, 4vw, 2.15rem); line-height: 1.02; color: #2d3035; }
+  .event-transport__intro > p:last-child { margin: 0; color: var(--muted); font-weight: 760; }
+  .event-transport__partner { margin: 0; color: #96352e; font-size: 0.78rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+  .event-transport__partner a { color: inherit; text-decoration-thickness: 0.08em; text-underline-offset: 0.14em; }
+  .event-transport__train { display: block; width: 100%; height: auto; max-height: 110px; object-fit: contain; object-position: center; }
+  .event-transport__directions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(121,48,20,0.12); }
+  .event-transport__direction { min-width: 0; padding: 1rem 1.1rem 1.1rem; }
+  .event-transport__direction + .event-transport__direction { border-left: 1px solid rgba(121,48,20,0.12); }
+  .event-transport__direction-heading { min-height: 3.5rem; }
+  .event-transport__direction h3 { margin: 0.1rem 0 0; font-size: 1rem; color: #2d3035; }
+  .event-transport__step { margin: 0; color: #96352e; font-size: 0.76rem; font-weight: 920; letter-spacing: 0.08em; text-transform: uppercase; }
+  .event-transport__trains { display: grid; gap: 0.62rem; margin: 0.7rem 0 0; padding: 0; list-style: none; }
+  .event-transport__train-row { padding: 0.78rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 18px; background: rgba(255,255,255,0.8); }
+  .event-transport__times { display: flex; align-items: center; gap: 0.5rem; color: #2d3035; font-size: 1.28rem; font-weight: 950; font-variant-numeric: tabular-nums; }
+  .event-transport__times span { color: #96352e; }
+  .event-transport__train-row p { margin: 0.22rem 0 0; color: #2d3035; font-size: 0.84rem; font-weight: 790; }
+  .event-transport__train-row small { display: block; margin-top: 0.22rem; color: var(--muted); line-height: 1.32; }
+  .event-transport__empty { min-height: 5rem; margin: 0.7rem 0 0; padding: 0.8rem; border-radius: 18px; background: rgba(45,48,53,0.05); color: var(--muted); font-weight: 730; }
+  .event-transport__footer { padding: 0.85rem 1.1rem 1rem; border-top: 1px solid rgba(121,48,20,0.12); color: var(--muted); font-size: 0.82rem; }
+  .event-transport__footer p { margin: 0; }
+  .event-transport__footer p + p { margin-top: 0.3rem; }
+  .event-transport__footer a { color: #793014; font-weight: 850; }
+  .event-transport__source { font-size: 0.75rem; }
+  @media (max-width: 720px) {
+    .event-transport__header { grid-template-columns: 1fr; min-height: 0; }
+    .event-transport__train { width: min(100%, 500px); margin: 0.2rem auto 0; }
+    .event-transport__directions { grid-template-columns: 1fr; }
+    .event-transport__direction + .event-transport__direction { border-left: 0; border-top: 1px solid rgba(121,48,20,0.12); }
+    .event-transport__direction-heading { min-height: 0; }
+  }
+</style>
