@@ -666,6 +666,14 @@ external-publication funnel. Such sources are routed to the future local-region
 monitoring list and blocked before image diagnostics/final Gemini publication
 verification.
 
+Kaliningrad-only POI institutions are also local source surfaces even when the
+city name is absent. For example `Музей Мирового Океана` /
+`world_ocean_museum` must be terminally routed to the local monitoring list;
+its own posts are not external visitor evidence. A live profile found 15 KO
+posts in 16 scanned posts and otherwise wasted dual-vector fusion on 14 memory
+rows (6 accepts, 8 rejects), while the downstream image gate correctly kept
+them out. The source-level classification must prevent that work earlier.
+
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with

@@ -97,6 +97,10 @@ SOURCE_LOCAL_TITLE_PATTERNS = [
     r"гвардейск", r"краснознаменск", r"полесск", r"правдинск", r"ладушкин",
     r"славск", r"багратионовск", r"оз[её]рск", r"куршск", r"балтика",
     r"дом\s+китобоя", r"domkitoboya", r"домкитобоя",
+    # A public named after a Kaliningrad-only POI/institution is local even
+    # when neither the city nor region number appears in its title. This must
+    # be decided before its own institutional posts consume dual-vector work.
+    r"музей\s+мирового\s+океана", r"world[_-]?ocean[_-]?museum",
 ]
 SOURCE_LOCAL_INSTITUTION_PROFILE_PATTERNS = [
     r"дом\s+китобоя", r"частн(?:ый|ого|ом)\s+калининградск(?:ий|ого|ом)\s+музе",

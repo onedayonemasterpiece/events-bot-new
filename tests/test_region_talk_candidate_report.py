@@ -582,6 +582,19 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(profile["source_scope"], "local_region")
         self.assertIn("local_institution_profile", profile["source_surface_filter_reason"])
 
+    def test_source_surface_filter_routes_world_ocean_museum_as_local_poi_institution(self) -> None:
+        mod = load_module()
+        decision = mod.source_local_region_terminal_fields({
+            "source_title": "Музей Мирового Океана",
+            "source_url": "https://t.me/world_ocean_museum",
+            "posts_scanned": 16,
+            "ko_posts_found": 15,
+        })
+        self.assertEqual(decision["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(decision["source_scope"], "local_region")
+        self.assertEqual(decision["source_geo_class"], "kaliningrad_local")
+        self.assertIn("музей", decision["source_local_hits"])
+
     def test_image_queue_blocks_dom_kitoboya_source(self) -> None:
         mod = load_module()
         reason = mod.image_queue_product_gate_reason({
