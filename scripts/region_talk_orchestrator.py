@@ -353,11 +353,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('image_strong_actual_ge_0_70_total')}"
         ),
         (
-            "Publication total/confirmed/sent/ready: "
+            "Publication queue/current-confirmed/sent-ledger/ready/deliveries-completed: "
             f"{value('publication_candidate_total')}/"
             f"{value('publication_confirmed_total')}/"
             f"{value('publication_sent_total')}/"
-            f"{value('publication_ready_total')}"
+            f"{value('publication_ready_total')}/"
+            f"{value('publication_delivery_completed_total')}"
         ),
         (
             "Finalizer actual-image/video inputs/pending: "

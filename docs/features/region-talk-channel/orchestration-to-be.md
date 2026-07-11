@@ -709,6 +709,12 @@ fusion changes and ordinary refreshed rows. This prevents the live-write cap
 from being occupied by the same healthy rows while already identified local or
 spam candidates remain incorrectly operational across repeated cycles.
 
+Publication telemetry distinguishes current-state and ledger counters. The
+human stats line labels `publication_confirmed_total` as current-confirmed,
+while sent rows and completed delivery records are displayed separately as
+`sent-ledger` and `deliveries-completed`; a finalizer cleanup may legitimately
+reduce current-confirmed without erasing historical delivery evidence.
+
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with

@@ -1029,11 +1029,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "publication_candidate_total": 19,
             "publication_confirmed_total": 7,
             "publication_sent_total": 7,
+            "publication_delivery_completed_total": 6,
         })
         self.assertIn("canonical population: 7055", text)
         self.assertIn("Sources with broad KO/candidate evidence (legacy): 91", text)
         self.assertIn("Exact ready/cooldown/entity-wait/fetched: 67/0/0/0", text)
-        self.assertIn("Publication total/confirmed/sent/ready: 19/7/7/0", text)
+        self.assertIn("Publication queue/current-confirmed/sent-ledger/ready/deliveries-completed: 19/7/7/0/6", text)
 
     def test_strong_source_attestation_backlog_schedules_bounded_priority_pass(self) -> None:
         mod = load_module()
