@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / controlled resolve lane execution**: CandidateReport now
+  initializes its Telegram request governor after unified source selection, so
+  the single human-like uncached resolve allowance is actually applied to the
+  highest-priority attribution/KO source instead of being silently reduced to
+  zero by stale initialization order.
 - **Region Talk / attribution, exact-post latency and BGE catch-up**: Telegram
   rich-text media credits now preserve their public URL and enter source
   discovery as `media_attribution` edges; VK/MAX channel footers and media

@@ -8925,7 +8925,6 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     history_scan_mode = (os.getenv("REGION_TALK_HISTORY_SCAN_MODE") or "primary_and_delta").strip().lower()
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     previous_state, _state_meta = load_region_talk_state(output_dir)
-    governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
     ydb_candidate_links_only = post_input_mode in {"ydb_candidate_links", "ydb_candidates", "candidate_links"}
     queue_selection_pool = max(
         max_sources,
@@ -8935,6 +8934,11 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         ),
     )
     queue_dynamic = [] if ydb_candidate_links_only else unified_queue_dynamic_seeds(previous_state, queue_selection_pool)
+    # Queue selection owns the single controlled uncached username-resolve lane.
+    # Construct the governor only after that selection has persisted its lane
+    # keys in the per-run runtime state; otherwise every selected uncached source
+    # is incorrectly treated as cached-only and the allowance is never used.
+    governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
     frontier_dynamic = [] if ydb_candidate_links_only else frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
     dynamic = [] if ydb_candidate_links_only else queue_dynamic + frontier_dynamic
     if queue_dynamic and getenv_bool("REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY", False):

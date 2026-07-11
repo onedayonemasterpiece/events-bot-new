@@ -88,6 +88,13 @@ The canonical queue preserves `added_from`, `discovery_types` and
 run would erase the attribution priority before an uncached source could reach
 the single controlled resolve lane.
 
+The Telegram request governor is initialized only after unified-queue
+selection. This ordering is part of the safety contract: queue selection first
+records the one allowed uncached username key, then the governor applies the
+same one-resolve quota and human-like delay. Initializing the governor earlier
+silently reduced the effective quota to zero and left high-value attribution
+sources unscanned despite reporting that a lane had been selected.
+
 ### 4. Cross-platform identity
 
 Link likely same source identity across platforms using same title/handle and explicit description links such as “YouTube, VK, RUTUBE, MAX”. Keep links as evidence; do not merge destructively without confidence.

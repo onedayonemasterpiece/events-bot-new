@@ -3880,6 +3880,69 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 else:
                     os.environ[name] = value
 
+    def test_fetch_constructs_governor_after_uncached_lane_selection(self) -> None:
+        mod = load_module()
+        env_names = [
+            "REGION_TALK_FETCH_TELEGRAM",
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN",
+            "REGION_TALK_MAX_SOURCES",
+        ]
+        old_env = {name: os.environ.get(name) for name in env_names}
+        old_values = {
+            name: getattr(mod, name)
+            for name in [
+                "load_region_talk_state",
+                "TelegramRequestGovernor",
+                "write_region_talk_online_source_item",
+                "write_region_talk_online_stats",
+                "append_source_row_online",
+            ]
+        }
+        captured: dict[str, object] = {}
+
+        class CapturingGovernor:
+            def __init__(self, run_id, output_dir, previous_state):
+                captured["lane_keys"] = list(
+                    mod._REGION_TALK_TELEGRAM_RUNTIME.get("source_queue_uncached_resolve_lane_keys") or []
+                )
+                self.max_history_sources = 1
+
+        try:
+            os.environ.update({
+                "REGION_TALK_FETCH_TELEGRAM": "0",
+                "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+                "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
+                "REGION_TALK_MAX_SOURCES": "1",
+            })
+            mod.load_region_talk_state = lambda output_dir: ({
+                "unified_source_queue": {
+                    "attribution": {
+                        "platform": "telegram",
+                        "source_url": "https://t.me/moresvobod",
+                        "queue_order": 1,
+                        "source_queue_status": "pending_scan",
+                        "added_from": "media_attribution",
+                    }
+                }
+            }, {})
+            mod.TelegramRequestGovernor = CapturingGovernor
+            mod.write_region_talk_online_source_item = lambda *args, **kwargs: None
+            mod.write_region_talk_online_stats = lambda *args, **kwargs: None
+            mod.append_source_row_online = lambda rows, row, **kwargs: rows.append(row)
+
+            asyncio.run(mod.fetch_telegram_posts([], mod.Status(), Path(tempfile.mkdtemp())))
+
+            self.assertEqual(captured["lane_keys"], ["telegram:username:moresvobod"])
+        finally:
+            for name, value in old_values.items():
+                setattr(mod, name, value)
+            for name, value in old_env.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
     def test_candidate_link_order_honors_next_attempt_and_cache(self) -> None:
         mod = load_module()
         now = mod.datetime(2026, 7, 10, tzinfo=mod.timezone.utc)
