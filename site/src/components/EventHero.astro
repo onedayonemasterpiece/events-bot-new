@@ -136,11 +136,13 @@ const heroGalleryTitleId = `${heroGalleryId}-title`;
 const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
 const galleryPhotoCount = galleryImages.length;
 const galleryHintLabel = galleryPhotoCount > 1 ? `Фото ${galleryPhotoCount}` : 'Открыть фото';
-const calendarPrimary = canAddToCalendar && (!ctaHref || event.ticket.kind === 'free');
+const requiresExplicitBooking = event.ticket.kind === 'registration' || event.ticket.kind === 'phone';
+const freeCalendarPrimary = canAddToCalendar && event.ticket.is_free && !requiresExplicitBooking;
+const calendarPrimary = canAddToCalendar && (!ctaHref || freeCalendarPrimary);
 const showTicketCta = Boolean(ctaHref);
 const isTicketClusterTrial = String(import.meta.env.PUBLIC_EVENT_PAGE_DECISION_VARIANT || '').trim().toLowerCase() === 'ticket-cluster';
 const decisionAdmissionLabel = event.ticket.is_free ? 'Бесплатно' : event.ticket.price_label;
-const decisionCtaLabel = !event.ticket.is_free && !event.ticket.price_label && showTicketCta ? 'Узнать цену' : ctaLabel;
+const decisionCtaLabel = !event.ticket.is_free && !event.ticket.price_label && showTicketCta ? 'Билеты' : ctaLabel;
 const decisionPlaceTitle = event.venue_name || event.city || 'Место уточняется';
 const decisionPlaceDetail = [event.address, event.city]
   .filter(Boolean)
@@ -201,10 +203,10 @@ const onboardingHintId = `event-calendar-onboarding-${event.id}`;
               <strong>{decisionAdmissionLabel}</strong>
             </p>
           )}
-          {showTicketCta ? (
-            <a class="cta-button" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />} {!ctaIsTelephone && <Icon name="ticket" />}<span>{decisionCtaLabel}</span></a>
-          ) : calendarPrimary ? (
+          {calendarPrimary ? (
             <CalendarLink event={event} className="cta-button" label="Добавить в календарь" />
+          ) : showTicketCta ? (
+            <a class="cta-button" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />} {!ctaIsTelephone && <Icon name="ticket" />}<span>{decisionCtaLabel}</span></a>
           ) : soldOut ? (
             <span class="cta-button cta-button--disabled" aria-disabled="true">{ctaLabel}</span>
           ) : (
@@ -213,7 +215,7 @@ const onboardingHintId = `event-calendar-onboarding-${event.id}`;
         </div>
         <div class="event-hero__action-onboarding event-main-actions" data-action-onboarding-root data-onboarding-user-state="calendar-unused">
           <div class="event-hero__metric-row" aria-label="Действия и показатели события">
-            {canAddToCalendar && <CalendarLink event={event} className="event-hero__metric-action" label="Добавить в календарь" compact describedBy={onboardingHintId} />}
+            {canAddToCalendar && <CalendarLink event={event} className="event-hero__metric-action" label="Добавить в календарь" compact />}
             <button type="button" class="event-hero__metric-action native-share-button" data-nosnippet data-native-share data-onboarding-action="share" data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}>
               <Icon name="share" />
               <span class="sr-only" data-share-label>Поделиться</span>

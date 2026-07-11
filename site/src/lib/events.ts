@@ -794,8 +794,8 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   if (ticket.price_label) return ticket.price_label;
   if (hasDonation) return 'За донат';
   if (ticket.kind === 'phone') return 'Запись по телефону';
-  if (ticket.kind === 'ticket') return 'По билетам';
-  if (/билет/u.test(statusText)) return 'По билетам';
+  if (ticket.kind === 'ticket') return 'Билеты';
+  if (/билет/u.test(statusText)) return 'Билеты';
   return event.status_label || ticket.label || 'Условия уточняются';
 }
 
@@ -807,7 +807,7 @@ export function eventTicketActionLabel(event: PreviewEvent): string {
     return 'Открыть пост организатора';
   }
   if (event.ticket.kind === 'free') {
-    return 'Открыть условия';
+    return 'Источник события';
   }
   if (event.ticket.kind === 'registration') {
     return 'Зарегистрироваться';

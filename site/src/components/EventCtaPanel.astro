@@ -22,7 +22,7 @@ const admissionPriceHref = !soldOut && !event.ticket.is_free && event.ticket.pri
 const hasReliableMap = Boolean(event.address && event.map_query);
 const ctaLabel = eventTicketActionLabel(event);
 const canAddToCalendar = isCalendarEligible(event);
-const calendarPrimary = canAddToCalendar && (!href || event.ticket.kind === 'free');
+const calendarPrimary = canAddToCalendar && (!href || (event.ticket.is_free && !['registration', 'phone'].includes(event.ticket.kind)));
 ---
 <aside class="section-card cta-panel" aria-label="Билеты и действия">
   <div class="cta-panel__top">

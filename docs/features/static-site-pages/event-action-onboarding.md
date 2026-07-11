@@ -1,6 +1,6 @@
 # Event-page action onboarding and unified calendar follow
 
-Status: **product/design contract; onboarding lab plus opt-in real-event preview implemented; unified calendar follow not yet production-complete** (2026-07-11).
+Status: **product/design contract; onboarding lab plus opt-in real-event preview implemented; default unsolicited display is off; unified calendar follow not yet production-complete** (2026-07-11).
 
 Canonical UI surface: `/lab/event-decision-block/`, shortlisted layouts V3-A and V3-D.
 
@@ -145,11 +145,12 @@ Expanded share explanation, if needed:
 ## Real-event preview behavior
 
 - Build flag: `PUBLIC_EVENT_PAGE_DECISION_VARIANT=ticket-cluster`.
+- Display mode: `PUBLIC_EVENT_ACTION_ONBOARDING_MODE=off|adaptive|calendar-first`; the default is `off`. `adaptive` waits until at least a later event-page view, while `calendar-first` explicitly allows the first stable eligible row.
 - Review-only override: `?onboarding=calendar` forces the calendar hint without mutating impression/cooldown state.
 - Normal eligibility waits until the row is at least about `72%` visible, then holds it stable for about `950ms`.
 - Successful calendar/share/like use stores `used_at`; dismiss suppresses that action for `14` days; calendar receives at most two unsolicited impressions.
 - The hint opens below the row. Dismissal removes only the hint and target halo; absolute row coordinates must remain unchanged.
-- Share/like show truthful numeric zero in this trial so the icon row remains spatially stable. Calendar has no persisted public count field yet and uses a plus affordance rather than fabricated social proof.
+- Share/like show truthful numeric zero in this trial so the icon row remains spatially stable. Calendar has no persisted public count field and therefore shows the shared calendar SVG with no `+` glyph and no fabricated social proof.
 
 ## Production rollout dependencies
 

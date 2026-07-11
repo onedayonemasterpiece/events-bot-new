@@ -42,7 +42,7 @@ const ogImageType = ogImage?.toLowerCase().includes('.webp') ? 'image/webp' : og
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = displayDateTime(event);
-const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || (event.ticket.is_free && !['registration', 'phone'].includes(event.ticket.kind)));
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));

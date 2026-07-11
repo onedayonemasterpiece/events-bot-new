@@ -1,0 +1,80 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import DesktopEventPrototype from '../../../components/lab/DesktopEventPrototype.astro';
+import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../lib/events';
+import { eventImageUrl } from '../../../lib/assets';
+
+const events = getEvents();
+const horizontalEvent = events.find((event) => event.id === 6510) || events.find((event) => event.image_text_mode === 'visual_only' && event.image_url) || events[0];
+const portraitEvent = events.find((event) => event.id === 6345) || events.find((event) => event.image_text_mode !== 'visual_only' && event.image_url) || events[0];
+const horizontalImage = eventImageUrl(horizontalEvent?.image_url) || 'https://storage.yandexcloud.net/kenigevents.ru/p/dh16/20/20204525610244030e032cd124db24c924cd16c90bd80025008000904200b22a.webp';
+const portraitImage = eventImageUrl(portraitEvent?.image_url) || 'https://storage.yandexcloud.net/kenigevents/p/dh16/11/11308390e60aec30d332d262e286e1c4a530cad29ac8f21cf33fc2ccdaa69aa4.webp';
+const canonicalUrl = absoluteUrl('/lab/event-desktop/');
+const title = `Desktop-варианты страницы события | ${SITE_NAME}`;
+const description = 'Шесть desktop-first компоновок для горизонтальных, квадратных и вертикальных OCR hero-изображений без изменения принятого мобильного hero-overlap.';
+
+const variants = [
+  { variant: 'h1' as const, family: 'horizontal' as const, image: horizontalImage, imageAlt: horizontalEvent?.image_alt || 'Квадратная афиша концерта', name: 'Editorial Slab', strapline: 'Полноширинный hero и два не дублирующихся владельца: факты в светлой плите, конверсионные действия в графитовом rail.', recommendation: 'Gemini: №1 horizontal' },
+  { variant: 'h2' as const, family: 'horizontal' as const, image: horizontalImage, imageAlt: horizontalEvent?.image_alt || 'Квадратная афиша концерта', name: 'Split Canvas', strapline: 'Изображение и решение занимают равные холсты. Самый предсказуемый вариант для длинного H1 и фиксированного первого экрана.' },
+  { variant: 'h3' as const, family: 'horizontal' as const, image: horizontalImage, imageAlt: horizontalEvent?.image_alt || 'Квадратная афиша концерта', name: 'Immersive Bottom Horizon', strapline: 'Максимальный визуальный удар: один нижний горизонт читабельных фактов и действий поверх hero, затем обычный поток страницы.' },
+  { variant: 'p1' as const, family: 'portrait' as const, image: portraitImage, imageAlt: portraitEvent?.image_alt || 'Вертикальная афиша Велодня', name: 'Gallery Exhibition', strapline: 'Постер как музейный экспонат слева, всё решение справа. `contain` и полезная высота без кропа OCR.', recommendation: 'Gemini: №1 portrait' },
+  { variant: 'p2' as const, family: 'portrait' as const, image: portraitImage, imageAlt: portraitEvent?.image_alt || 'Вертикальная афиша Велодня', name: 'Billboard + Action Rail', strapline: 'Большой нейтральный billboard для постера; узкий rail владеет только входом и действиями, поэтому ничего не повторяет.' },
+  { variant: 'p3' as const, family: 'portrait' as const, image: portraitImage, imageAlt: portraitEvent?.image_alt || 'Вертикальная афиша Велодня', name: 'Typographic Lead', strapline: 'Чистый HTML-заголовок и дата становятся главным графическим объектом, а полный OCR-постер держит правую колонку.' },
+];
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main" class="desktop-lab" data-desktop-event-lab>
+    <div class="page-shell desktop-lab__shell">
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event lab</span></nav>
+
+      <section class="section-card desktop-lab__intro" id="desktop-review">
+        <div class="section-card__inner">
+          <p class="eyebrow">desktop-only comparison · mobile baseline untouched</p>
+          <h1>Два семейства hero, шесть способов собрать страницу</h1>
+          <p class="lead">На desktop больше нет права повторять дату, место и CTA в двух карточках. В каждом варианте у факта и действия один владелец. Горизонтальные/квадратные изображения получают сильный широкий hero; вертикальные OCR-постеры всегда показаны целиком через <code>object-fit: contain</code>.</p>
+          <div class="desktop-lab__rules">
+            <article><strong>CTA</strong><span>Бесплатно без записи → «Добавить в календарь»; платно без цены → «Билеты».</span></article>
+            <article><strong>Действия</strong><span>Календарь, поделиться и лайк доступны; SVG 28–30px в целях от 48px, без плюса.</span></article>
+            <article><strong>Scroll</strong><span>Hero/sticky-композиция заканчивается до стандартного «Смотрите дальше».</span></article>
+            <article><strong>Mobile</strong><span>До 1024px это только review-страница; production mobile hero-overlap не переписан.</span></article>
+          </div>
+          <p class="desktop-lab__consultants"><strong>Gemini 3.1 Pro:</strong> выбрал H1 и P1. <strong>Opus:</strong> a-opus достиг лимита подписки; Claude Code Opus был запрошен отдельно, статус фиксируется в отчёте ветки и не подменяется другой моделью.</p>
+          <div class="desktop-lab__jump" aria-label="Перейти к варианту">
+            {variants.map((item) => <a href={`#variant-${item.variant}`}>{item.variant.toUpperCase()}</a>)}
+          </div>
+        </div>
+      </section>
+
+      <section class="desktop-lab__family-head"><p class="eyebrow">horizontal / square</p><h2>Сильный широкий hero</h2><p>Один и тот же реальный квадратный стресс-кейс с типографикой и длинным названием — чтобы сравнивать именно компоновку.</p></section>
+      {variants.filter((item) => item.family === 'horizontal').map((item) => <div id={`variant-${item.variant}`}><DesktopEventPrototype {...item} /></div>)}
+
+      <section class="desktop-lab__family-head"><p class="eyebrow">portrait OCR</p><h2>Вертикальный постер без кропа</h2><p>Во всех трёх вариантах один и тот же реальный 905×1280 постер показан целиком; меняется только иерархия колонок и действий.</p></section>
+      {variants.filter((item) => item.family === 'portrait').map((item) => <div id={`variant-${item.variant}`}><DesktopEventPrototype {...item} /></div>)}
+
+      <section class="section-card desktop-lab__vote">
+        <div class="section-card__inner"><p class="eyebrow">Что выбирать</p><h2>Сначала по одному фавориту из каждого семейства</h2><p>H1 — наиболее характерный editorial-вариант, H2 — безопасный контроль, H3 — смелый immersive. P1 — самый устойчивый, P2 — наиболее плакатный, P3 — лучший для очень длинного заголовка. После выбора одного H и одного P они переносятся на реальные страницы за desktop-only media query.</p></div>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .desktop-lab__shell { display: grid; gap: 4rem; padding-bottom: 5rem; }
+  .desktop-lab__intro h1 { max-width: 15ch; }
+  .desktop-lab__rules { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; margin-top: 1.5rem; }
+  .desktop-lab__rules article { display: grid; gap: .15rem; padding: 1rem; border-left: 4px solid #a54821; background: #f5e9da; }
+  .desktop-lab__rules span { color: #6d6259; }
+  .desktop-lab__consultants { margin: 1.2rem 0 0; color: #5d5047; }
+  .desktop-lab__jump { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+  .desktop-lab__jump a { min-width: 48px; min-height: 48px; display: grid; place-items: center; border: 1px solid rgba(121,48,20,.2); border-radius: 50%; background: #fff; color: #793014; font-weight: 900; text-decoration: none; }
+  .desktop-lab__family-head { display: grid; gap: .25rem; max-width: 60rem; margin-top: 2rem; }
+  .desktop-lab__family-head h2 { margin: 0; font-size: clamp(2rem,4vw,4rem); }
+  .desktop-lab__family-head p { margin: 0; }
+  .desktop-lab__vote { margin-top: 1rem; }
+  @media (max-width: 1023px) {
+    .desktop-lab__shell { gap: 2.5rem; }
+    .desktop-lab__rules { grid-template-columns: 1fr; }
+    .desktop-lab__intro::before { content: "Desktop-варианты лучше сравнивать при ширине от 1024px"; display: block; padding: .75rem 1rem; background: #2b2724; color: #fff; font-weight: 850; text-align: center; }
+  }
+</style>

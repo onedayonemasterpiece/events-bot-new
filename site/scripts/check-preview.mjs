@@ -25,12 +25,15 @@ const required = [
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
-  'lab/hero/review/5878-poster-billboard/index.html',
-  'lab/hero/review/5878-poster-attached-card/index.html',
-  'lab/hero/review/6322-photo-parallax-sheet/index.html',
+  ...(eventsData.events.some((event) => event.id === 5878) ? [
+    'lab/hero/review/5878-poster-billboard/index.html',
+    'lab/hero/review/5878-poster-attached-card/index.html',
+  ] : []),
+  ...(eventsData.events.some((event) => event.id === 6322) ? ['lab/hero/review/6322-photo-parallax-sheet/index.html'] : []),
   'lab/medallions/index.html',
   'lab/date-block/index.html',
   'lab/event-decision-block/index.html',
+  'lab/event-desktop/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -99,6 +102,28 @@ for (const marker of [
 ]) {
   if (!eventDecisionLabHtml.includes(marker)) throw new Error(`Event decision-block lab misses marker: ${marker}`);
 }
+const eventDesktopLabHtml = readFileSync(join(root, 'lab/event-desktop/index.html'), 'utf8');
+for (const marker of [
+  'data-desktop-event-lab',
+  'data-desktop-variant="h1"',
+  'data-desktop-variant="h2"',
+  'data-desktop-variant="h3"',
+  'data-desktop-variant="p1"',
+  'data-desktop-variant="p2"',
+  'data-desktop-variant="p3"',
+  'Editorial Slab',
+  'Split Canvas',
+  'Immersive Bottom Horizon',
+  'Gallery Exhibition',
+  'Billboard + Action Rail',
+  'Typographic Lead',
+  'Добавить в календарь',
+  'Билеты',
+  'Смотрите дальше',
+]) {
+  if (!eventDesktopLabHtml.includes(marker)) throw new Error(`Desktop event lab misses marker: ${marker}`);
+}
+if (eventDesktopLabHtml.includes('Узнать цену') || eventDesktopLabHtml.includes('Открыть условия') || eventDesktopLabHtml.includes('calendar-link__plus')) throw new Error('Desktop event lab leaks rejected CTA/icon copy');
 
 const genericFaviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
 if (!genericFaviconSvg.includes('viewBox="160 230 970 820"') || !genericFaviconSvg.includes('left-monogram') || !genericFaviconSvg.includes('brand-k-mark') || !genericFaviconSvg.includes('heart-block') || !genericFaviconSvg.includes('#2d3035') || !genericFaviconSvg.includes('#af481f') || genericFaviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(genericFaviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');
@@ -112,6 +137,11 @@ if (String(process.env.PUBLIC_EVENT_PAGE_DECISION_VARIANT || '').trim().toLowerC
   if (!genericEventHtml.includes('data-event-decision-variant="ticket-cluster"') || !genericEventHtml.includes('event-hero__transaction') || !genericEventHtml.includes('event-hero__metric-row')) throw new Error('Real-event ticket-cluster preview is not enabled');
   if (!genericEventHtml.includes('data-action-onboarding-root') || !genericEventHtml.includes('data-action-onboarding-hint="calendar"') || !genericEventHtml.includes('Добавить в календарь') || !genericEventHtml.includes('Сейчас откроется .ics')) throw new Error('Real-event ticket-cluster preview misses truthful calendar onboarding');
   if (!genericEventHtml.includes('hydrateEventActionOnboarding') || genericEventHtml.includes('пришлём изменения на почту')) throw new Error('Real-event onboarding state/copy contract is invalid');
+  if (genericEventHtml.includes('Узнать цену') || genericEventHtml.includes('Открыть условия') || genericEventHtml.includes('calendar-link__plus')) throw new Error('Real-event ticket cluster leaks rejected CTA/icon copy');
+  const onboardingMode = ['adaptive', 'calendar-first'].includes(String(process.env.PUBLIC_EVENT_ACTION_ONBOARDING_MODE || '').trim().toLowerCase())
+    ? String(process.env.PUBLIC_EVENT_ACTION_ONBOARDING_MODE).trim().toLowerCase()
+    : 'off';
+  if (!genericEventHtml.includes(`data-event-action-onboarding-mode="${onboardingMode}"`)) throw new Error('Real-event onboarding mode is not compiled explicitly');
 }
 
 const control = eventsData.events.find((event) => event.id === 5878);
@@ -149,7 +179,7 @@ if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Vi
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/event-card__media-shell--preserve[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('OCR-safe card media must use natural image ratio, not contain over a fixed frame');
-if (/Вход[\s\S]{0,180}Билеты(?:\s+доступны)?/u.test(controlVisibleHtml)) throw new Error('Bare ticket availability must not be rendered as an admission value');
+if (/По билетам/u.test(controlVisibleHtml)) throw new Error('Rejected generic “По билетам” admission copy leaked into the event page');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
 if (!controlVisibleHtml.includes('data-feed-card-variant="split-actions"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('Control event page must use split-actions baseline cards');
 if (controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Overlay-controls cards must not appear on normal event pages');
@@ -221,7 +251,7 @@ const tretyakovVisibleHtml = stripGeneratedCode(tretyakovHtml);
 const tretyakovEyebrow = (tretyakovVisibleHtml.match(/<p class="event-hero__eyebrow">([^<]*)<\/p>/u) || [null, ''])[1];
 if (!tretyakovEvent.ticket.is_free && tretyakovEvent.ticket.kind === 'ticket' && !tretyakovEvent.ticket.price_label) {
   if (/Билеты|Платный вход/u.test(tretyakovEyebrow)) throw new Error('Paid/generic admission copy must not be shown above the event title');
-  if (!tretyakovVisibleHtml.includes('По билетам')) throw new Error('Paid/ticketed event without exported price must show admission as “По билетам”, not “Платный вход” or “Вход Билеты”');
+  if (!tretyakovVisibleHtml.includes('Билеты') || tretyakovVisibleHtml.includes('По билетам')) throw new Error('Paid/ticketed event without exported price must use the neutral “Билеты” destination copy');
 }
 if (
   tretyakovEvent.ticket.is_free

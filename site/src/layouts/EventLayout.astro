@@ -22,6 +22,9 @@ const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPAB
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
 const personalFeedRpcEnabled = ['1', 'true', 'yes', 'on'].includes(String(import.meta.env.PUBLIC_PERSONAL_FEED_RPC_ENABLED || '').trim().toLowerCase());
+const eventActionOnboardingMode = ['adaptive', 'calendar-first'].includes(String(import.meta.env.PUBLIC_EVENT_ACTION_ONBOARDING_MODE || '').trim().toLowerCase())
+  ? String(import.meta.env.PUBLIC_EVENT_ACTION_ONBOARDING_MODE).trim().toLowerCase()
+  : 'off';
 
 const FOOTER_SOCIAL_LINKS = [
   { network: 'Telegram', label: 'Анонсы', href: 'https://t.me/kenigevents', icon: 'telegram' },
@@ -592,12 +595,11 @@ const FOOTER_SOCIAL_LINKS = [
       }
       .event-hero__metric-row .event-hero__metric-action { min-height: 48px; border-color: transparent; border-radius: 14px; background: transparent; color: #4f4339; box-shadow: none; }
       .event-hero__metric-action:hover { color: var(--primary-strong); background: rgba(121,48,20,0.065); }
-      .event-hero__metric-action .icon { width: 1.36rem; height: 1.36rem; }
+      .event-hero__metric-row .event-hero__metric-action .icon { width: 1.82rem; height: 1.82rem; stroke-width: 1.8; }
       .event-hero__metric-action strong,
-      .event-hero__metric-action .feedback-count { display: inline; min-width: 0; color: inherit; font-size: 0.9rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+      .event-hero__metric-action .feedback-count { display: inline; min-width: 0; color: inherit; font-size: 1.02rem; font-weight: 900; font-variant-numeric: tabular-nums; }
       .event-hero__metric-action.feedback-button--like { color: #6d514b; }
       .event-hero__metric-action.feedback-button--like[aria-pressed="true"] { color: #c93434; background: rgba(201,52,52,0.09); border-color: transparent; }
-      .calendar-link__plus { color: var(--primary); font-size: 1rem; font-weight: 950; line-height: 1; }
       .event-hero__metric-action.is-onboarding-target { background: rgba(255,244,210,0.56); border-color: rgba(210,151,45,0.2); box-shadow: 0 0 0 2px rgba(224,189,103,0.18); }
       .event-hero__action-hint {
         position: relative;
@@ -1970,7 +1972,7 @@ const FOOTER_SOCIAL_LINKS = [
       }
     </style>
   </head>
-  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-personal-feed-supabase-url={personalFeedRpcEnabled ? personalizationSupabaseUrl || undefined : undefined} data-personal-feed-supabase-key={personalFeedRpcEnabled ? personalizationSupabaseKey || undefined : undefined} data-personal-feed-rpc-name={personalFeedRpcEnabled ? personalFeedRpcName : undefined}>
+  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-event-action-onboarding-mode={eventActionOnboardingMode} data-personal-feed-supabase-url={personalFeedRpcEnabled ? personalizationSupabaseUrl || undefined : undefined} data-personal-feed-supabase-key={personalFeedRpcEnabled ? personalizationSupabaseKey || undefined : undefined} data-personal-feed-rpc-name={personalFeedRpcEnabled ? personalFeedRpcName : undefined}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
@@ -4142,12 +4144,15 @@ const FOOTER_SOCIAL_LINKS = [
           const storageKey = 'ke_event_action_onboarding_v1';
           const sessionKey = 'ke_event_action_onboarding_session_v1';
           const forceCalendar = new URLSearchParams(window.location.search).get('onboarding') === 'calendar';
+          const onboardingMode = document.body.dataset.eventActionOnboardingMode || 'off';
+          if (!forceCalendar && onboardingMode === 'off') return;
           const now = Date.now();
           const blankAction = () => ({ used_at: null, seen_count: 0, dismissed_until: null });
           const readState = () => {
             const stored = readJson(storageKey, {});
             return {
               action_onboarding_version: 1,
+              event_page_views: Number(stored.event_page_views || 0),
               calendar: { ...blankAction(), ...(stored.calendar || {}) },
               like: { ...blankAction(), ...(stored.like || {}) },
               share: { ...blankAction(), ...(stored.share || {}) },
@@ -4194,6 +4199,8 @@ const FOOTER_SOCIAL_LINKS = [
           });
 
           const state = readState();
+          state.event_page_views += 1;
+          writeState(state);
           const calendarState = state.calendar;
           const dismissedUntil = Date.parse(calendarState.dismissed_until || '');
           const calendarEligible = forceCalendar || (
@@ -4201,6 +4208,7 @@ const FOOTER_SOCIAL_LINKS = [
             && Number(calendarState.seen_count || 0) < 2
             && (!Number.isFinite(dismissedUntil) || dismissedUntil <= now)
             && !sessionAlreadyTaught
+            && (onboardingMode === 'calendar-first' || state.event_page_views >= 2)
           );
           if (!calendarEligible) return;
           const root = roots.find((candidate) => candidate.querySelector('[data-action-onboarding-hint="calendar"]'));

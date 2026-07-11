@@ -28,7 +28,7 @@ The date is evaluated inside the whole mobile decision space below the approved 
 - Generic `по билетам` is not valid production admission information:
   - known price/range → `от 600 ₽` or `600–1 500 ₽`;
   - free → explicit prominent `Бесплатно` and a registration/get-ticket CTA;
-  - paid but price unknown → admission slot disappears and CTA becomes `Узнать цену`.
+  - paid but price unknown with a real ticket URL → admission slot disappears and CTA becomes the neutral destination label `Билеты`; do not promise that a click will reveal a price.
 - Place renders venue plus the exact address when known. It may use up to three calm lines; do not force a destructive one-line truncation.
 
 ## Active V3 candidates
@@ -50,7 +50,7 @@ Artifacts are under `artifacts/codex/event-page-ux-v3-20260710/` and are intenti
 - Pinterest collection: `120` candidates from `12` diversified queries; Codex visually reviewed all and retained `19` (`15.8%`). Reusable mechanics were compact date tiles/rails, icon+count actions, exact-place fact stacks and one dominant booking CTA.
 - Gemini 3.1 Pro (Antigravity) and a-opus independently produced four implementable concepts from the same constraints.
 - After the HTML/CSS variants were rendered, both consultants reviewed the actual `390px` and `320px` contact sheets. Both ranked **B / Calm Date Bar** first and **A / Compact Date Tile** second.
-- Both also found calendar + bare count ambiguous and recommended `+N` or a calendar-plus SVG; V3 uses `+N` without changing the established calendar icon.
+- Both also found calendar + a bare numeric value ambiguous. The later real-event correction therefore removed the unsupported count and the `+` affordance entirely: calendar uses the established large SVG and an accessible name.
 
 The consultant acceptance ranking remains useful historical evidence, but the 2026-07-11 product shortlist is now:
 
@@ -76,9 +76,9 @@ The lab phone is nested inside the documentation page padding, so its measured i
 
 - A lab preference is not a production rollout. Real `EventHero.astro` must preserve current Yandex/auth session handling, first-party like state/counts, native-share behavior, ICS calendar behavior and analytics.
 - Numeric calendar/share/like values must come from truthful existing counters or an explicitly defined backend field; do not fabricate social proof.
-- The real-event trial therefore shows truthful share/like totals including `0`, but uses a calendar-plus affordance without a number because no public calendar-save count exists yet.
+- The real-event trial therefore shows truthful share/like totals including `0`, but renders calendar without a number or `+` because no public calendar-save count exists yet.
 - Stress-test long Russian title, three-line address, unknown time, free, known price range, paid-unknown, counts from one to four digits, zero medallions and four-plus medallions.
 - Keep `/lab/date-block/`, the V2 control and regression markers until the production event-page implementation is accepted and rollback is no longer needed.
 - For V3-D, follow the one-hint-per-session policy in `event-action-onboarding.md`; do not promise email delivery while the unified calendar follow remains incomplete/dry-run.
 
-Real-data acceptance matrix for `preview-20260711t-real-events-ticket-cluster-d` covers known price + phone CTA, explicit free state, paid/unknown price → `Узнать цену`, long title, zero and non-zero counters, with/without medallions, `320px` and `390px`, plus forced onboarding. The fixed row measured `0px` absolute movement after dismiss; controls measured `48px`; no page-level horizontal overflow, failed requests or browser-console errors were observed locally.
+Real-data acceptance matrix for the corrected successor preview covers known price + phone CTA, free/no-registration → `Добавить в календарь`, paid/unknown price → `Билеты`, long title, zero and non-zero counters, with/without medallions, `320px` and `390px`, optional/forced onboarding, and OCR poster containment. The earlier fixed row measured `0px` absolute movement after dismiss; the successor increases icon size without reducing the `48px+` targets.

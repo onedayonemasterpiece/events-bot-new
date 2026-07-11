@@ -6,6 +6,7 @@
 
 
 ### Added
+- **Static site pages / desktop event-page lab**: added a noindex six-variant desktop review surface for horizontal/square and portrait OCR hero families, with single-owner fact/action layouts and an explicit transition into the standard `Смотрите дальше` module.
 - **Static site pages / V3-D real-event trial**: added the build-gated `ticket-cluster` decision sheet to real noindex event pages with exact date/week/time and address, truthful price/free/unknown-price CTA states, stable icon+count actions, browser-local one-hint-per-session onboarding, 14-day dismiss cooldown and an explicit review override.
 - **Static site pages / event decision-block lab**: added a preserved-baseline A/B lab for the whole below-hero mobile decision space (`/lab/event-decision-block/`), comparing P03/P01/P04/baseline/zero-medallion/utility-stack layouts with Gemini Pro and a-opus critical review summaries.
 
@@ -26,6 +27,8 @@
 - **Static site pages / event medallion assets**: added the first local organizer avatar medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония and Остров Канта, with optimized WebP/PNG runtime assets, source originals/provenance and a `organizerMedallions.json` manifest; the филармония medallion uses the yellow harp background seen in its Telegram profile avatar.
 
 ### Changed
+- **Static site pages / fresh desktop-layout preview**: generated and published `preview-20260711t-desktop-event-layouts` from a fresh 2026-07-11 Fly snapshot with `312` active/future events through id `6832`, including CTA/media stress events `6345`, `6510`, `6678` and `6750`.
+- **Static site pages / event CTA and onboarding correction**: made free/no-registration events use `Добавить в календарь` as the primary action, renamed paid/unknown-price destinations to `Билеты`, removed the calendar `+`, enlarged event action icons, and made unsolicited onboarding explicitly opt-in (`off|adaptive|calendar-first`).
 
 - **Static site pages / transparent large favicon**: removed the cream backing plate and outer whitespace from the graphite/terracotta PK-monogram favicon, added a tight transparent SVG crop plus `sizes="any"`, and extended preview checks to guard its optical tab-size and transparent background contract.
 - **Static site pages / action onboarding placement**: moved V3-D contextual education below the unchanged icon row so taught controls keep a stable visual position, restored the exact `Добавить в календарь` action name, and replaced the aggressive graphite coachmark with a light playful upward-pointer callout and neutral saved-section wording.
@@ -54,6 +57,7 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- **Static site pages / OCR hero classifier override**: preserved the visibly typographic event `6510` poster with an exporter-side source-grounded OCR override so event hero rendering uses `contain` rather than crop while upstream OCR classification is repaired.
 - **Static site pages / undeployed personal-feed RPC guard**: stopped auth-enabled static pages from calling the documented-but-not-yet-deployed `get_listing_personal_feed_v1` endpoint by default; the RPC now requires explicit `PUBLIC_PERSONAL_FEED_RPC_ENABLED=1`, while Yandex Auth/search remain available.
 - **Static site pages / Tretyakovka medallion**: rebuilt the gold `Т` as a clean non-overlapping SVG path so the previous stair-step defect in the stem is no longer visible.
 - **Incident / event 6045 static defect (INC-2026-07-03)**:

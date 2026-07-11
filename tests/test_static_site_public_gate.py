@@ -114,3 +114,24 @@ def test_public_projection_gate_is_safe_for_old_schema_rows() -> None:
     rows = exporter.fetch_rows(con, limit=5, current_date="2026-07-01", include_ids=[10])
 
     assert [row["id"] for row in rows] == [10]
+
+
+def test_source_grounded_ocr_override_keeps_known_text_poster_uncropped(monkeypatch) -> None:
+    exporter = _load_exporter_module()
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        "create table eventposter(id integer primary key, event_id integer, supabase_url text, catbox_url text, ocr_text text)"
+    )
+    con.execute(
+        "insert into eventposter(event_id, supabase_url, catbox_url, ocr_text) values(?, ?, ?, ?)",
+        (6510, "https://example.test/text-poster.webp", None, None),
+    )
+    monkeypatch.setattr(exporter, "probe_image_dimensions", lambda _url: (1080, 1080))
+
+    primary, mode, assets = exporter.collect_images(con, 6510, "[]", "Хиты любимых артистов")
+
+    assert primary == "https://example.test/text-poster.webp"
+    assert mode == "ocr_text"
+    assert assets[0]["recommended_hero_fit"] == "contain"
+    assert assets[0]["safe_crop"] is False

@@ -50,6 +50,10 @@ RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
+# Source-grounded visual QA overrides for posters whose production OCR payload is
+# missing even though the selected hero visibly contains large event typography.
+# Preserve the whole poster until upstream OCR/classification is repaired.
+FORCE_OCR_IMAGE_MODE_IDS = {6510}
 TICKET_LINK_OVERRIDES = {
     # Production row currently points to the organiser chat, while the source
     # registration page is a first-party kgd80 URL provided by product QA.
@@ -690,7 +694,15 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             needs_rescue_scan = True
     for index, url in enumerate(urls[:12]):
         ocr = ocr_by_url.get(image_url_key(url), "")
-        mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
+        mode = (
+            "ocr_text"
+            if event_id in FORCE_OCR_IMAGE_MODE_IDS
+            else "visual_only"
+            if event_id in FORCE_VISUAL_IMAGE_MODE_IDS
+            else "ocr_text"
+            if meaningful_ocr(ocr)
+            else "visual_only"
+        )
         if index == 0:
             probed_width, probed_height = first_width, first_height
         elif needs_rescue_scan:
