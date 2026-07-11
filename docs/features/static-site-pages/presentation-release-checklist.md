@@ -13,10 +13,10 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
 
 ## 2. Demonstration scenarios
 
-- [x] **Done in focus preview** — real Светлогорск event `6510`: outbound/return trains, 20–90 minute arrival window and per-train calendar actions; no public schedule-verification links.
+- [x] **Done in focus preview** — real Светлогорск event `6510`: compact whole-row calendar links for outbound/return trains, a 20–90 minute arrival window and no public schedule-verification links.
 - [x] **Done in focus preview** — each suggested train has its own `.ics` with departure/arrival and a 30-minute reminder.
 - [x] **Done in focus preview** — real late Светлогорск concert `6397`: no guessed duration; the page shows the factual last same-day train, absence of night service and first next-day train.
-- [x] **Done in focus preview** — real production event `6710` at Сказочное Холмогорье: compact outbound/return chips for `118/118А/119`, estimated `Северный +15m`, journey times and a visibly drawn walking route with map links.
+- [x] **Done in focus preview** — real production event `6710` at Сказочное Холмогорье: compact outbound/return chips for `118/118А/119`, one verified shared corridor/Северный note, earlier hours-aware return options, a large unboxed bus icon and one visibly drawn preferred walking route.
 - [ ] **Partial** — re-confirm event `6710` with the organizer before the official presentation: its direct 2026-07-06 post says `25 July`, while the venue site separately lists the Baba Yaga day on `26 July`.
 - [x] **Done in checks** — a Kaliningrad/unsupported-location event renders no transport block.
 

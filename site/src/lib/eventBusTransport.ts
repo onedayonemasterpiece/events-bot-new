@@ -4,21 +4,16 @@ import type { PreviewEvent } from './types';
 export interface EventBusOutboundGroup {
   routes: string;
   departureStop: string;
-  northStop: string;
-  northOffsetMinutes: number;
   arrivalStop: string;
-  rideEstimateLabel: string;
   walkEstimateMinutes: number;
   walkDistanceKm: number;
-  walkMapUrl: string;
-  departures: Array<{ terminal: string; northEstimated: string }>;
+  departures: string[];
 }
 
 export interface EventBusReturnGroup {
   routes: string;
   departureStop: string;
   destinationStop: string;
-  rideEstimateLabel: string;
   isEstimated: boolean;
   departures: string[];
 }
@@ -29,6 +24,11 @@ export interface EventBusSuggestion {
   venueName: string;
   venueMapUrl: string;
   mapImageUrl: string;
+  walkMapUrl: string;
+  northStop: string;
+  northTravelEstimateLabel: string;
+  venueHoursLabel: string;
+  sharedRideEstimateLabel: string;
   outboundGroups: EventBusOutboundGroup[];
   returnGroups: EventBusReturnGroup[];
   sourceName: string;
@@ -44,10 +44,10 @@ function normalize(value: string | null | undefined): string {
     .trim();
 }
 
-function addMinutes(value: string, minutes: number): string {
-  const [hours, mins] = value.split(':').map(Number);
-  const total = (hours * 60 + mins + minutes) % (24 * 60);
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+function timeToMinutes(value: string | null | undefined): number | null {
+  const match = /^(\d{2}):(\d{2})$/u.exec(String(value || ''));
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_name' | 'start_time' | 'time_range_end'>): EventBusSuggestion | null {
@@ -66,26 +66,35 @@ export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_
     venueName: route.venue_name,
     venueMapUrl: route.venue_map_url,
     mapImageUrl: route.map_image_url,
+    walkMapUrl: route.walk_map_url,
+    northStop: route.north_stop,
+    northTravelEstimateLabel: route.north_travel_estimate_label,
+    venueHoursLabel: route.venue_hours_label,
+    sharedRideEstimateLabel: route.shared_ride_estimate_label,
     outboundGroups: route.outbound_groups.map((group) => ({
       routes: group.routes,
       departureStop: group.departure_stop,
-      northStop: group.north_stop,
-      northOffsetMinutes: group.north_offset_minutes,
       arrivalStop: group.arrival_stop,
-      rideEstimateLabel: group.ride_estimate_label,
       walkEstimateMinutes: group.walk_estimate_minutes,
       walkDistanceKm: group.walk_distance_km,
-      walkMapUrl: group.walk_map_url,
-      departures: group.departures.map((terminal) => ({ terminal, northEstimated: addMinutes(terminal, group.north_offset_minutes) })),
-    })),
-    returnGroups: route.return_groups.map((group) => ({
-      routes: group.routes,
-      departureStop: group.departure_stop,
-      destinationStop: group.destination_stop,
-      rideEstimateLabel: group.ride_estimate_label,
-      isEstimated: group.is_estimated,
       departures: group.departures,
     })),
+    returnGroups: route.return_groups.map((group) => {
+      const eventStart = timeToMinutes(event.start_time);
+      const eventEnd = timeToMinutes(event.time_range_end);
+      const earliest = eventStart === null ? null : eventStart + group.walk_from_venue_minutes;
+      const latest = eventEnd === null ? null : eventEnd + group.walk_from_venue_minutes + route.return_max_wait_minutes;
+      return {
+        routes: group.routes,
+        departureStop: group.departure_stop,
+        destinationStop: group.destination_stop,
+        isEstimated: group.is_estimated,
+        departures: group.departures.filter((departure) => {
+          const minutes = timeToMinutes(departure);
+          return minutes !== null && (earliest === null || minutes >= earliest) && (latest === null || minutes <= latest);
+        }),
+      };
+    }).filter((group) => group.departures.length > 0),
     sourceName: data.source.name,
     sourceUrl: data.source.url,
     sourceEffectiveFrom: data.source.effective_from,

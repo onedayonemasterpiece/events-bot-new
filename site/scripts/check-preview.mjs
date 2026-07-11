@@ -81,6 +81,7 @@ if (controlVisibleHtml.includes('Партнёрский маршрут') || cont
 if ((controlVisibleHtml.match(/>КППК<\/a>/gu) || []).length !== 1) throw new Error('Event transport block must mention КППК exactly once in the laconic footer');
 if (controlVisibleHtml.includes('Проверить расписание') || controlVisibleHtml.includes('rasp.yandex')) throw new Error('Event transport block must not expose schedule verification links');
 if (!controlVisibleHtml.includes('К началу концерта в 21:30')) throw new Error('Transport heading must inflect the public event type');
+if (!controlVisibleHtml.includes('Калининград-Северный ⇄ Светлогорск-2') || !controlVisibleHtml.includes('event-transport__train-link') || controlVisibleHtml.includes('class="event-transport__calendar"')) throw new Error('Train rows must be compact whole-card calendar links with one bidirectional route label');
 if (controlVisibleHtml.indexOf('data-event-transport-schedule') > controlVisibleHtml.indexOf('>Коротко</h2>')) throw new Error('Event transport block must render immediately after the description and before “Коротко”');
 if (!controlHtml.includes('noindex,nofollow,noarchive')) throw new Error('Missing preview robots meta');
 if (controlHtml.includes('https://kenigevents.ru/sobytiya/pesni-sssr-svetlogorsk-5878/')) throw new Error('Production canonical leaked into preview page');
@@ -392,10 +393,11 @@ if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regress
 const busDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8'));
 if (!busDemoHtml.includes('data-event-bus-schedule') || !busDemoHtml.includes('data-bus-route="romanovo-holmogorye"')) throw new Error('Event 6710 must expose the Romanovo bus block');
 if (busDemoHtml.includes('data-event-transport-schedule')) throw new Error('Romanovo event 6710 must not expose a train block');
-for (const needle of ['bus-svgrepo-337651.svg', 'data-bus-number="118/118А"', '06:00', '08:40', 'Северный ≈ 08:55', 'data-bus-number="119"', '08:10', 'Северный ≈ 08:25', 'data-bus-return-number="118/118А"', '≈ 17:15', '≈ 22:35', 'data-bus-return-number="119"', '≈ 18:35', '≈ 21:55', 'rtt=pd']) {
+for (const needle of ['<img class="event-bus__symbol"', 'bus-svgrepo-337651.svg', 'До Романово — около 1 часа в автобусе', 'От автовокзала до остановки «Северный вокзал» у всех маршрутов — ориентировочно 10–15 минут', 'data-bus-number="118/118А"', '06:00', '08:40', 'data-bus-number="119"', '08:10', 'data-bus-return-number="118/118А"', '≈ 11:55', '≈ 17:55', 'data-bus-return-number="119"', '≈ 12:35', '≈ 16:05', 'Открыто по субботам с 11:00 до 16:00', 'rtt=pd']) {
   if (!busDemoHtml.includes(needle)) throw new Error(`Event 6710 bus block missing ${needle}`);
 }
-if (!busDemoHtml.includes('/assets/transport/romanovo-holmogorye-map.png') || !busDemoHtml.includes('loading="eager"') || !busDemoHtml.includes('Пешеходный маршрут') || !busDemoHtml.includes('Точка на карте')) throw new Error('Event 6710 bus block must eagerly include a local walking-route map and external map links');
+if ((busDemoHtml.match(/Открыть пеший маршрут/gu) || []).length !== 1 || busDemoHtml.includes('Северный ≈') || busDemoHtml.includes('≈ 18:35') || busDemoHtml.includes('≈ 21:55') || busDemoHtml.includes('≈ 22:35') || busDemoHtml.includes('≈ 46 мин в автобусе')) throw new Error('Event 6710 bus block must avoid duplicated walking/North labels, unequal route estimates and pointless late returns');
+if (!busDemoHtml.includes('/assets/transport/romanovo-holmogorye-map.png') || !busDemoHtml.includes('loading="eager"') || !busDemoHtml.includes('Открыть пеший маршрут') || !busDemoHtml.includes('Точка на карте')) throw new Error('Event 6710 bus block must eagerly include a local walking-route map and one external route link');
 if (busDemoHtml.includes('avl39.ru/routes/reg/kaliningrad/')) throw new Error('Event 6710 bus block must not expose a schedule verification link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');

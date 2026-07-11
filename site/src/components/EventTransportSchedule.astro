@@ -19,6 +19,11 @@ const formatWait = (option: EventTrainOption) => {
   return wait === 0 ? 'сразу после окончания' : `через ${wait} мин после окончания`;
 };
 const calendarHref = (direction: EventTransportDirection, train: EventTrainOption) => withBase(eventTransportCalendarPath(event, direction, train));
+const calendarLabel = (direction: EventTransportDirection, train: EventTrainOption) => {
+  const from = direction === 'outbound' ? suggestion?.originStation : suggestion?.destinationStation;
+  const to = direction === 'outbound' ? suggestion?.destinationStation : suggestion?.originStation;
+  return `Добавить электричку ${from} — ${to}: ${train.departure}–${train.arrival} в календарь`;
+};
 const eventStartMinutes = Number(suggestion?.eventStart.slice(0, 2) || 0) * 60 + Number(suggestion?.eventStart.slice(3, 5) || 0);
 const lastReturnMinutes = suggestion?.lastSameDayReturn ? Number(suggestion.lastSameDayReturn.departure.slice(0, 2)) * 60 + Number(suggestion.lastSameDayReturn.departure.slice(3, 5)) : null;
 const formatServiceDate = (value: string) => {
@@ -45,7 +50,7 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
     <header class="event-transport__header">
       <div class="event-transport__intro">
         <h2 id={headingId}>Как добраться на электричке</h2>
-        <p>{suggestion.originStation} → {suggestion.destinationStation}</p>
+        <p>{suggestion.originStation} ⇄ {suggestion.destinationStation}</p>
       </div>
       <img
         class="event-transport__train"
@@ -68,14 +73,15 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
           <ol class="event-transport__trains">
             {suggestion.outbound.map((train) => (
               <li class="event-transport__train-row" data-transport-direction="outbound" data-train-number={train.number}>
-                <div class="event-transport__times">
-                  <time datetime={train.departureIso}>{train.departure}</time>
-                  <span aria-hidden="true">→</span>
-                  <time datetime={train.arrivalIso}>{train.arrival}</time>
-                </div>
-                <p>{suggestion.originStation} → {suggestion.destinationStation}</p>
-                <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatLead(train.minutesBeforeEvent)}</small>
-                <a class="event-transport__calendar" href={calendarHref('outbound', train)} type="text/calendar" aria-label={`Добавить электричку ${train.departure} в календарь`}><Icon name="calendar" /> <span>В календарь</span></a>
+                <a class="event-transport__train-link" href={calendarHref('outbound', train)} type="text/calendar" aria-label={calendarLabel('outbound', train)}>
+                  <div class="event-transport__times">
+                    <time datetime={train.departureIso}>{train.departure}</time>
+                    <span aria-hidden="true">→</span>
+                    <time datetime={train.arrivalIso}>{train.arrival}</time>
+                  </div>
+                  <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatLead(train.minutesBeforeEvent)}</small>
+                  <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
+                </a>
               </li>
             ))}
           </ol>
@@ -92,25 +98,31 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
         {suggestion.eventEndBasis === 'schedule_cutoff' ? (
           <div class="event-transport__cutoff" data-return-schedule-cutoff>
             {suggestion.lastSameDayReturn && (
-              <div class="event-transport__cutoff-item" data-last-same-day-return={suggestion.lastSameDayReturn.departure}>
-                <p>{lastSameDaySummary}</p>
-                <strong>{suggestion.lastSameDayReturn.departure} → {suggestion.lastSameDayReturn.arrival}</strong>
-                <small>{suggestion.lastSameDayReturn.trainType} № {suggestion.lastSameDayReturn.number}</small>
-                <a class="event-transport__calendar" href={calendarHref('return', suggestion.lastSameDayReturn)} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
-              </div>
+              <a class="event-transport__cutoff-item" data-last-same-day-return={suggestion.lastSameDayReturn.departure} href={calendarHref('return', suggestion.lastSameDayReturn)} type="text/calendar" aria-label={calendarLabel('return', suggestion.lastSameDayReturn)}>
+                <span class="event-transport__cutoff-copy">
+                  <p>{lastSameDaySummary}</p>
+                  <strong>{suggestion.lastSameDayReturn.departure} → {suggestion.lastSameDayReturn.arrival}</strong>
+                  <small>{suggestion.lastSameDayReturn.trainType} № {suggestion.lastSameDayReturn.number}</small>
+                </span>
+                <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
+              </a>
             )}
             {suggestion.firstNightReturn ? (
-              <div class="event-transport__cutoff-item">
-                <p>После полуночи есть рейс {formatServiceDate(suggestion.firstNightReturn.serviceDate)}.</p>
-                <strong>{suggestion.firstNightReturn.departure} → {suggestion.firstNightReturn.arrival}</strong>
-                <a class="event-transport__calendar" href={calendarHref('return', suggestion.firstNightReturn)} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
-              </div>
+              <a class="event-transport__cutoff-item" href={calendarHref('return', suggestion.firstNightReturn)} type="text/calendar" aria-label={calendarLabel('return', suggestion.firstNightReturn)}>
+                <span class="event-transport__cutoff-copy">
+                  <p>После полуночи есть рейс {formatServiceDate(suggestion.firstNightReturn.serviceDate)}.</p>
+                  <strong>{suggestion.firstNightReturn.departure} → {suggestion.firstNightReturn.arrival}</strong>
+                </span>
+                <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
+              </a>
             ) : suggestion.firstNextDayReturn && (
-              <div class="event-transport__cutoff-item event-transport__cutoff-item--muted">
-                <p>Ночных рейсов нет. Первый поезд {formatServiceDate(suggestion.firstNextDayReturn.serviceDate)} — в {suggestion.firstNextDayReturn.departure}.</p>
-                <strong>{suggestion.firstNextDayReturn.departure} → {suggestion.firstNextDayReturn.arrival}</strong>
-                <a class="event-transport__calendar" href={calendarHref('return', suggestion.firstNextDayReturn)} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
-              </div>
+              <a class="event-transport__cutoff-item event-transport__cutoff-item--muted" href={calendarHref('return', suggestion.firstNextDayReturn)} type="text/calendar" aria-label={calendarLabel('return', suggestion.firstNextDayReturn)}>
+                <span class="event-transport__cutoff-copy">
+                  <p>Ночных рейсов нет. Первый поезд {formatServiceDate(suggestion.firstNextDayReturn.serviceDate)} — в {suggestion.firstNextDayReturn.departure}.</p>
+                  <strong>{suggestion.firstNextDayReturn.departure} → {suggestion.firstNextDayReturn.arrival}</strong>
+                </span>
+                <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
+              </a>
             )}
             <p class="event-transport__cutoff-note">Уточните время окончания у организатора.</p>
           </div>
@@ -118,14 +130,15 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
           <ol class="event-transport__trains">
             {suggestion.returns.map((train) => (
               <li class="event-transport__train-row" data-transport-direction="return" data-train-number={train.number}>
-                <div class="event-transport__times">
-                  <time datetime={train.departureIso}>{train.departure}</time>
-                  <span aria-hidden="true">→</span>
-                  <time datetime={train.arrivalIso}>{train.arrival}</time>
-                </div>
-                <p>{suggestion.destinationStation} → {suggestion.originStation}</p>
-                <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatWait(train)}{train.nextDay ? ' · на следующий день' : ''}</small>
-                <a class="event-transport__calendar" href={calendarHref('return', train)} type="text/calendar" aria-label={`Добавить электричку ${train.departure} в календарь`}><Icon name="calendar" /> <span>В календарь</span></a>
+                <a class="event-transport__train-link" href={calendarHref('return', train)} type="text/calendar" aria-label={calendarLabel('return', train)}>
+                  <div class="event-transport__times">
+                    <time datetime={train.departureIso}>{train.departure}</time>
+                    <span aria-hidden="true">→</span>
+                    <time datetime={train.arrivalIso}>{train.arrival}</time>
+                  </div>
+                  <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatWait(train)}{train.nextDay ? ' · на следующий день' : ''}</small>
+                  <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
+                </a>
               </li>
             ))}
           </ol>
@@ -157,37 +170,40 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
     grid-template-columns: minmax(0, 1fr) minmax(210px, 42%);
     align-items: center;
     gap: 1rem;
-    min-height: 160px;
-    padding: 1.1rem 1.1rem 0.85rem;
+    min-height: 126px;
+    padding: 0.9rem 1rem 0.72rem;
     background: linear-gradient(110deg, rgba(255,255,255,0.92), rgba(242,245,248,0.76));
   }
   .event-transport__intro h2 { margin: 0.28rem 0; font-size: clamp(1.45rem, 4vw, 2.15rem); line-height: 1.02; color: #2d3035; }
   .event-transport__intro > p:last-child { margin: 0; color: var(--muted); font-weight: 760; }
-  .event-transport__train { display: block; width: 100%; height: auto; max-height: 110px; object-fit: contain; object-position: center; }
+  .event-transport__train { display: block; width: 100%; height: auto; max-height: 92px; object-fit: contain; object-position: center; }
   .event-transport__directions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(121,48,20,0.12); }
-  .event-transport__direction { min-width: 0; padding: 1rem 1.1rem 1.1rem; }
+  .event-transport__direction { min-width: 0; padding: 0.78rem 0.9rem 0.88rem; }
   .event-transport__direction + .event-transport__direction { border-left: 1px solid rgba(121,48,20,0.12); }
-  .event-transport__direction-heading { min-height: 3.5rem; }
+  .event-transport__direction-heading { min-height: 2.8rem; }
   .event-transport__direction h3 { margin: 0.1rem 0 0; font-size: 1rem; color: #2d3035; }
   .event-transport__step { margin: 0; color: #96352e; font-size: 0.76rem; font-weight: 920; letter-spacing: 0.08em; text-transform: uppercase; }
-  .event-transport__trains { display: grid; gap: 0.62rem; margin: 0.7rem 0 0; padding: 0; list-style: none; }
-  .event-transport__train-row { padding: 0.78rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 18px; background: rgba(255,255,255,0.8); }
-  .event-transport__times { display: flex; align-items: center; gap: 0.5rem; color: #2d3035; font-size: 1.28rem; font-weight: 950; font-variant-numeric: tabular-nums; }
+  .event-transport__trains { display: grid; gap: 0.42rem; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+  .event-transport__train-link { display: grid; grid-template-columns: minmax(0,1fr) 2.4rem; grid-template-areas: "times icon" "meta icon"; align-items: center; gap: 0.1rem 0.55rem; min-height: 4.15rem; padding: 0.58rem 0.68rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 14px; color: inherit; background: rgba(255,255,255,0.82); text-decoration: none; touch-action: manipulation; }
+  .event-transport__train-link:hover,.event-transport__cutoff-item:hover { border-color: rgba(121,48,20,0.28); background: #fffdf8; }
+  .event-transport__train-link:active,.event-transport__cutoff-item:active { background: #fff7ea; }
+  .event-transport__train-link:focus-visible,.event-transport__cutoff-item:focus-visible { outline: 3px solid rgba(151,53,46,0.42); outline-offset: 2px; }
+  .event-transport__times { grid-area: times; display: flex; align-items: center; gap: 0.46rem; color: #2d3035; font-size: 1.22rem; font-weight: 950; font-variant-numeric: tabular-nums; }
   .event-transport__times span { color: #96352e; }
-  .event-transport__train-row p { margin: 0.22rem 0 0; color: #2d3035; font-size: 0.84rem; font-weight: 790; }
-  .event-transport__train-row small { display: block; margin-top: 0.22rem; color: var(--muted); line-height: 1.32; }
-  .event-transport__calendar { display: inline-flex; align-items: center; gap: 0.34rem; margin-top: 0.62rem; padding: 0.42rem 0.64rem; border: 1px solid rgba(121,48,20,0.16); border-radius: 999px; color: #793014; background: #fffaf1; font-size: 0.78rem; font-weight: 880; text-decoration: none; }
-  .event-transport__calendar :global(.icon) { width: 1rem; height: 1rem; }
-  .event-transport__cutoff { display: grid; gap: 0.58rem; margin-top: 0.7rem; }
-  .event-transport__cutoff-item { padding: 0.78rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 18px; background: rgba(255,255,255,0.82); }
+  .event-transport__train-link > small { grid-area: meta; display: block; color: var(--muted); line-height: 1.28; }
+  .event-transport__calendar-icon { grid-area: icon; display: grid; width: 2.4rem; height: 2.4rem; place-items: center; border-radius: 50%; color: #793014; background: #fff7eb; }
+  .event-transport__calendar-icon :global(.icon) { width: 1.25rem; height: 1.25rem; }
+  .event-transport__cutoff { display: grid; gap: 0.42rem; margin-top: 0.5rem; }
+  .event-transport__cutoff-item { display: grid; grid-template-columns: minmax(0,1fr) 2.4rem; align-items: center; gap: 0.55rem; padding: 0.62rem 0.68rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 14px; color: inherit; background: rgba(255,255,255,0.82); text-decoration: none; touch-action: manipulation; }
+  .event-transport__cutoff-copy { min-width: 0; }
   .event-transport__cutoff-item p { margin: 0; color: #4f4640; font-size: 0.82rem; line-height: 1.38; }
-  .event-transport__cutoff-item strong { display: block; margin-top: 0.3rem; color: #2d3035; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .event-transport__cutoff-item strong { display: block; margin-top: 0.22rem; color: #2d3035; font-size: 1.12rem; font-variant-numeric: tabular-nums; }
   .event-transport__cutoff-item small { display: block; margin-top: 0.18rem; color: var(--muted); }
   .event-transport__cutoff-item--muted { background: rgba(45,48,53,0.05); }
   .event-transport__cutoff-note { margin: 0; color: var(--muted); font-size: 0.78rem; }
   .event-transport__empty { min-height: 5rem; margin: 0.7rem 0 0; padding: 0.8rem; border-radius: 18px; background: rgba(45,48,53,0.05); color: var(--muted); font-weight: 730; }
   .event-transport__empty--warning { color: #78342f; background: rgba(151,53,46,0.08); }
-  .event-transport__footer { padding: 0.85rem 1.1rem 1rem; border-top: 1px solid rgba(121,48,20,0.12); color: var(--muted); font-size: 0.82rem; }
+  .event-transport__footer { padding: 0.62rem 0.9rem 0.72rem; border-top: 1px solid rgba(121,48,20,0.12); color: var(--muted); font-size: 0.78rem; }
   .event-transport__footer p { margin: 0; }
   .event-transport__footer a { color: #793014; font-weight: 850; }
   @media (max-width: 720px) {

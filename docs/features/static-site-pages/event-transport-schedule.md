@@ -28,7 +28,8 @@ This is a release feature of the event page, not a standalone campaign. It is in
 7. Use the event type only to inflect the outbound heading (`К началу концерта / спектакля / мастер-класса …`), never to calculate time.
 8. With an explicit end, keep the first two return trains departing within three hours. A categorical no-return message is allowed only when the service calendar covers the relevant dates.
 9. Hide the whole block when neither a usable outbound option nor a matched return option exists. For an unknown end there is no matched return by definition, so a supported page needs at least one outbound train; schedule cutoffs enrich that block but do not make an otherwise empty block appear.
-10. Every rendered train, including a factual last/night return, links to its own static `.ics` containing departure, arrival, route and a `VALARM` 30 minutes before departure.
+10. Show the rail route once in the header. Each compact train row is itself the calendar link; it keeps the time pair, one metadata line, a calendar icon, keyboard focus and a 44px-or-larger interactive target without repeating the route or a separate `В календарь` button.
+11. Every rendered train, including a factual last/night return, links to its own static `.ics` containing departure, arrival, route and a `VALARM` 30 minutes before departure.
 
 The selector and calendar files are static. Public UI and `.ics` descriptions do not contain schedule-verification links.
 
@@ -36,13 +37,14 @@ The selector and calendar files are static. Public UI and `.ics` descriptions do
 
 `site/src/data/busTransportSchedules.json` and `site/src/lib/eventBusTransport.ts` activate only for a source-backed `11:00–16:00` event at `Холмогорье / Сказочное Холмогорье`, Романово:
 
-- `119` enters the settlement: calculated `46m` ride to `Романово`, then about `2km / 27m` on foot;
-- `118/118А` stop at `Романовский поворот`: calculated `60–65m` ride, then about `3.9km / 52m` on foot;
-- outbound departures render as compact rounded time chips; every chip adds the estimated `Северный вокзал` time (`автовокзал + 15m`) because all three routes serve that stop;
-- return times render as compact chips grouped by `118/118А` and `119`; the `≈` marker is retained for calculated intermediate-stop times;
-- the bundled map visibly draws the pedestrian route, while links open walking directions from each stop and the venue point in Yandex Maps.
+- the official route registry shows that `118`, `118А` and `119` share the same corridor from the Kaliningrad bus terminal through `Северный вокзал` and up to `Романовский поворот`; the public UI therefore uses one shared `около 1 часа в автобусе` estimate and one shared `Северный — примерно через 10–15 минут` note instead of different per-route or per-chip estimates;
+- OSM/Valhalla checks give `3.47km / 8.7m` free-flow to Северный, `30.22km / 46.5m` to the turn and `32.66km / 49.3m` to central Romanovo. These are map-model driving times, not a bus timetable; the public one-hour band includes stops, boarding and traffic;
+- `119` enters the settlement and leaves about `2km / 27m` on foot; `118/118А` stop at `Романовский поворот` and leave about `3.9km / 52m`. The paths are not identical, but the UI keeps one preferred interactive walking link from central Romanovo and leaves the different walk legs as text;
+- the decorative SVG bus icon is large and unboxed. Outbound and return departures use one-line rounded time chips;
+- the committed return snapshot stores the full day. `eventBusTransport.ts` filters it per route from `event start + walking time` through `event end + walking time + 75m`, so an attendee can leave early while late-night options after the `11:00–16:00` visit are suppressed;
+- the bundled map visibly draws the preferred pedestrian route and the map area has one walking CTA plus the venue-coordinate link.
 
-Primary timetable: [official АО «Автовокзал» Kaliningrad route table](https://avl39.ru/routes/reg/kaliningrad/). Venue/map coordinates are checked against the regional tourism portal. The committed bus calculation is a demonstration snapshot, not a live journey planner.
+Primary timetable: [official АО «Автовокзал» Kaliningrad route table](https://avl39.ru/routes/reg/kaliningrad/) and [route registry](https://avl39.ru/carriers/registry/). The shared corridor is also checked against OSM relations [`118`](https://www.openstreetmap.org/relation/13129809) and [`119`](https://www.openstreetmap.org/relation/13130074). Venue hours come from the [official Холмогорье site](https://xn----8sbgbk8ahdkccbcdbxc4f6g.xn--p1ai/). The committed bus calculation is a demonstration snapshot, not a live journey planner.
 
 ## Schedule snapshot and source boundary
 
@@ -70,7 +72,7 @@ Real active event `6510`, `Хиты любимых артистов: Конце�
 Additional release scenarios:
 
 - event `6397`, Светлогорск, `2026-07-12 21:30`: train `6725` arrives at `20:23` (67 minutes before); because the end is unknown the page reports the factual last same-day train at `22:40`, absence of night service and first next-day train at `06:25`, without inferring a two-hour duration or claiming no return;
-- production event `6710`, Сказочное Холмогорье, `2026-07-25 11:00–16:00`: compact bus chips for `118/118А/119`, estimated journey legs, `Северный +15m`, a drawn walking route and interactive map links. Re-confirm the organizer date before the official presentation because the venue's aggregate site has a conflicting day label.
+- production event `6710`, Сказочное Холмогорье, `2026-07-25 11:00–16:00`: compact bus chips for `118/118А/119`, one shared corridor/Северный estimate, hours-aware earlier return choices, a drawn preferred walking route and one route link. Re-confirm the organizer date before the official presentation because the venue's aggregate site has a conflicting day label.
 
 ## TD-STATIC-TRANSPORT-001 — automated schedule refresh before presentation
 

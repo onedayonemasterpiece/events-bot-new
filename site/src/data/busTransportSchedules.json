@@ -32,13 +32,9 @@
         {
           "routes": "118/118А",
           "departure_stop": "Автовокзал Калининград",
-          "north_stop": "Северный вокзал",
-          "north_offset_minutes": 15,
           "arrival_stop": "Романовский поворот",
-          "ride_estimate_label": "≈ 60–65 мин в автобусе",
           "walk_estimate_minutes": 52,
           "walk_distance_km": 3.9,
-          "walk_map_url": "https://yandex.ru/maps/?rtext=54.8799274%2C20.2555919~54.8817051%2C20.2792613&rtt=pd",
           "departures": [
             "06:00",
             "06:20",
@@ -52,13 +48,9 @@
         {
           "routes": "119",
           "departure_stop": "Автовокзал Калининград",
-          "north_stop": "Северный вокзал",
-          "north_offset_minutes": 15,
           "arrival_stop": "Романово",
-          "ride_estimate_label": "≈ 46 мин в автобусе",
           "walk_estimate_minutes": 27,
           "walk_distance_km": 2.0,
-          "walk_map_url": "https://yandex.ru/maps/?rtext=54.8958609%2C20.2759337~54.8817051%2C20.2792613&rtt=pd",
           "departures": [
             "06:55",
             "08:10"
@@ -70,9 +62,37 @@
           "routes": "118/118А",
           "departure_stop": "Романовский поворот",
           "destination_stop": "Калининград",
-          "ride_estimate_label": "≈ 50–65 мин в автобусе",
           "is_estimated": true,
           "departures": [
+            "06:15",
+            "06:35",
+            "07:15",
+            "07:35",
+            "07:55",
+            "08:15",
+            "08:35",
+            "08:55",
+            "09:15",
+            "09:35",
+            "09:55",
+            "10:35",
+            "10:55",
+            "11:15",
+            "11:35",
+            "11:55",
+            "12:15",
+            "12:35",
+            "12:55",
+            "13:15",
+            "13:55",
+            "14:15",
+            "14:35",
+            "14:55",
+            "15:15",
+            "15:35",
+            "15:55",
+            "16:15",
+            "16:35",
             "17:15",
             "17:35",
             "17:55",
@@ -87,21 +107,37 @@
             "21:30",
             "22:00",
             "22:35"
-          ]
+          ],
+          "walk_from_venue_minutes": 52
         },
         {
           "routes": "119",
           "departure_stop": "Романово",
           "destination_stop": "Калининград",
-          "ride_estimate_label": "≈ 65 мин в автобусе",
           "is_estimated": true,
           "departures": [
+            "06:00",
+            "06:55",
+            "08:35",
+            "09:55",
+            "12:35",
+            "13:45",
+            "16:05",
             "18:35",
             "19:30",
             "21:55"
-          ]
+          ],
+          "walk_from_venue_minutes": 27
         }
-      ]
+      ],
+      "north_stop": "Северный вокзал",
+      "north_travel_estimate_label": "ориентировочно 10–15 минут",
+      "venue_hours_label": "Открыто по субботам с 11:00 до 16:00",
+      "walk_map_url": "https://yandex.ru/maps/?rtext=54.8958609%2C20.2759337~54.8817051%2C20.2792613&rtt=pd",
+      "shared_ride_estimate_label": "До Романово — около 1 часа в автобусе",
+      "venue_open_time": "11:00",
+      "venue_close_time": "16:00",
+      "return_max_wait_minutes": 75
     }
   ]
 }
