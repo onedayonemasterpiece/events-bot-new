@@ -51,12 +51,13 @@ Artifacts are under `artifacts/codex/event-page-ux-v3-20260710/` and are intenti
 - After the HTML/CSS variants were rendered, both consultants reviewed the actual `390px` and `320px` contact sheets. Both ranked **B / Calm Date Bar** first and **A / Compact Date Tile** second.
 - Both also found calendar + bare count ambiguous and recommended `+N` or a calendar-plus SVG; V3 uses `+N` without changing the established calendar icon.
 
-Current decision recommendation:
+The consultant acceptance ranking remains useful historical evidence, but the 2026-07-11 product shortlist is now:
 
-1. **Production-first:** V3-B / Calm Date Bar — best balance of date scan, calmness, exact address, CTA hierarchy and 320px resilience.
-2. **A/B challenger:** V3-A / Compact Date Tile — more ownable visual identity and stronger compact date anchor.
-3. Keep V3-C as the explicit free-event state test.
-4. Treat V3-D as the lower bound: if users do not find its inline date immediately, do not ship date-in-eyebrow layouts.
+1. **V3-A / Compact Date Tile** — selected for its ownable compact date anchor.
+2. **V3-D / Ticket Cluster** — selected for its calm transaction hierarchy; its bare action row now includes a personalized one-at-a-time onboarding probe.
+3. Keep V3-B as the safe fallback and V3-C as the explicit free-event state test.
+
+The onboarding contract, calendar `.ics` + private save + email-follow target, current limitations and Pinterest research are canonical in `event-action-onboarding.md`.
 
 ## QA evidence
 
@@ -76,3 +77,4 @@ The lab phone is nested inside the documentation page padding, so its measured i
 - Numeric calendar/share/like values must come from truthful existing counters or an explicitly defined backend field; do not fabricate social proof.
 - Stress-test long Russian title, three-line address, unknown time, free, known price range, paid-unknown, counts from one to four digits, zero medallions and four-plus medallions.
 - Keep `/lab/date-block/`, the V2 control and regression markers until the production event-page implementation is accepted and rollback is no longer needed.
+- For V3-D, follow the one-hint-per-session policy in `event-action-onboarding.md`; do not promise email delivery while the unified calendar follow remains incomplete/dry-run.
