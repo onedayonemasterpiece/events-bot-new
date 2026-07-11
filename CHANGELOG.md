@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Email infrastructure / release architecture**: assigned SpaceWeb to the human/inbound mailbox, Yandex Mail Trigger to the retained inbound automation copy, Postbox to transactional mail only and NotiSend to personal recommendations only; kept Supabase as the consent/suppression/outbox authority and YDB analytics-only, preserved the exactly-three-events plus published-personal-page contract, and capped launch admission at 200 actively consented recommendation users with no Postbox overflow fallback.
 - **Static personal announcements / release documentation**: established canonical F1–F17 feature homes and routing, fixed Smart Update quality ownership, and accepted Supabase/Postgres as the single user/profile and email control-plane owner while limiting YDB to analytics/history and the independent comment-feedback sidecar.
 - **Social links / Max public channel**: updated the shared «Полюбить Калининград Анонсы» Max URL to the public channel `https://max.ru/channel_kenigevents` across Telegraph footers, the static-site footer/checks and related publishing docs/tests; legacy join-footers remain recognized for idempotent cleanup.
 - CherryFlash guide-excursion promo now uses the agreed `true3d-v4-approved-2026-07-11` Blender renderer from `scripts/render_cherryflash_guide_true3d_v4.py` inside production `render_cherryflash_full.py`, preserving month-text dates such as `10 июля 16:00` and the approved SVG icon/avatar/CTA composition instead of a reimplemented approximation.

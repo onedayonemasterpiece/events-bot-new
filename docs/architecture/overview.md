@@ -11,6 +11,8 @@ The static-site release uses four deliberately separate owners:
 
 Canonical decision: [personalization data ownership](personalization-data-ownership.md).
 
+Email edge services do not change that data boundary: SpaceWeb is the retained human/inbound mailbox, Yandex Mail Trigger handles the automated inbound copy, Postbox transports transactional mail only, and NotiSend transports personal recommendations only (hard launch ceiling: 200 actively consented users). The operational contract is [email infrastructure and delivery](../operations/email-delivery.md).
+
 The bot is built with **aiogram 3** and runs on Fly.io using a webhook.
 
 - **Web Server** – aiohttp application that receives updates on `/webhook`.

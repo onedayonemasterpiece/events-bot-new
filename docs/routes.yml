@@ -426,7 +426,7 @@ features:
       calendar_favorite_atomic_state: design
 
   personal_email_announcements:
-    status: design_v2
+    status: design_v3_provider_routing_accepted
     docs: docs/features/personal-email-announcements/README.md
     operations: docs/operations/email-delivery.md
     data_ownership: docs/architecture/personalization-data-ownership.md
@@ -434,9 +434,10 @@ features:
     planned_successor_branch: feature/personal-email-announcements-v2
 
   event_email_notifications:
-    status: prototype_port_required
+    status: prototype_clean_port_required
     docs: docs/features/event-email-notifications/README.md
     operations: docs/operations/email-delivery.md
+    data_ownership: docs/architecture/personalization-data-ownership.md
     related_favorites: docs/features/event-favorites-calendar/README.md
     superseded_branch: feature/event-email-notifications-static-20260702
 

@@ -12,6 +12,13 @@ The project has one current user/profile and email control-plane system of recor
 - **YDB** owns service-only high-volume/history/analytics projections and the independent event-comment-feedback sidecar. YDB is **not** a second user-profile or email-control-plane owner.
 - **Object Storage/CDN** owns generated HTML/JSON/media artifacts. It does not own consent, profile, subscription, send state or token validity.
 
+Email providers are transports and ingress surfaces, not additional systems of record:
+
+- **SpaceWeb** owns the durable human/inbound mailbox `info@kenigevents.ru` and manual webmail/IMAP/SMTP access.
+- **Yandex Cloud Mail Trigger** receives a forwarded copy for automated inbound processing; its Function/Container, private attachment storage and DLQ do not become identity, consent or subscription owners.
+- **Yandex Cloud Postbox** sends transactional account/event-lifecycle mail only.
+- **NotiSend** sends personal recommendations/announcements only, with a hard launch ceiling of 200 actively consented users.
+
 This decision follows the implementation already present in `origin/main`: Supabase Auth/Yandex, pgvector search, reaction counters and the personalization project boundary. There is no production YDB user-profile write path to migrate.
 
 ## Entity ownership
@@ -32,6 +39,8 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Personal-page token hashes/metadata | Supabase | Rendered artifact in Object Storage/CDN |
 | Email outbox, send guard, rate state | Supabase | Terminal/aggregate delivery projection in YDB |
 | Provider delivery events | Supabase for send-critical evidence | Append-only analytics projection in YDB |
+| Human mailbox and retained inbound correspondence | SpaceWeb | Forwarded automation copy through Yandex Mail Trigger |
+| Raw inbound automation payload/attachments | Private Yandex Object Storage under an approved retention policy | Normalized processing result in the existing backend |
 | Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
 | Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
 | Strong-action current state/profile inputs | Supabase | Analytics event in YDB |
@@ -65,13 +74,30 @@ Before consent/server sync, browser state is device-local and not a durable iden
 
 1. Planner reads due subscription and profile state from Supabase.
 2. Kaggle receives only a sanitized immutable profile/event snapshot.
-3. Recommendation issue/cards and personal-page token metadata are persisted in Supabase.
+3. Recommendation issue/cards (including exactly three email events) and personal-page token metadata are persisted in Supabase.
 4. HTML/JSON is published to Object Storage/CDN.
 5. Only after artifact publication succeeds may the Supabase outbox row become sendable.
-6. Sender rechecks subscription, consent and suppression before Postbox send.
+6. Sender rechecks the active-admission ceiling (`<= 200`), subscription, consent and suppression before NotiSend send.
 7. Provider callbacks update delivery/suppression in Supabase; YDB receives asynchronous analytics.
 
 The personal page itself is intentionally readable through a forwardable public secret URL without an auth session. Supabase still owns token hash/revocation/retention metadata; the artifact is `noindex` and excludes raw profile/private identity data.
+
+### Transactional email
+
+1. A server-owned account or saved/followed-event transition creates the transactional outbox row in Supabase.
+2. Sender revalidates the current event/account state, purpose-specific consent where required and suppression immediately before claim.
+3. Yandex Cloud Postbox sends from the verified transactional identity with `Reply-To: info@kenigevents.ru`.
+4. Provider events update send-critical delivery/suppression evidence in Supabase; YDB receives only the asynchronous de-identified projection.
+
+Postbox is not a recommendation fallback, and NotiSend is not a transactional fallback.
+
+### Inbound email
+
+1. Internet mail is accepted by SpaceWeb MX and retained in `info@kenigevents.ru` for human webmail/IMAP use.
+2. SpaceWeb forwards a copy, while preserving the mailbox copy, to the technical address assigned to Yandex Cloud Mail Trigger.
+3. A minimal Function/Container validates and normalizes the trigger event, stores raw MIME/attachments only in private storage with bounded retention, and hands a metadata/reference envelope to the existing backend.
+4. Idempotency prevents forwarding/retry duplicates; bounded retry and a DLQ retain failures for controlled replay.
+5. Automation must not auto-reply or Bcc `info@kenigevents.ru` until explicit loop prevention exists. `dmarc@kenigevents.ru` is not forwarded into this pipeline.
 
 ### Event comment feedback
 
@@ -89,6 +115,10 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - `anon_id` alone treated as proof of profile ownership.
 - Full canonical event copies in Supabase/YDB.
 - Comment sentiment directly applied to a user profile without a separate product/ranking contract.
+- NotiSend treated as the consent, subscription, suppression or capacity source of truth.
+- More than 200 actively consented recommendation users at launch, or a provider-only over-limit check in place of an atomic Supabase admission gate.
+- Postbox used as a hidden recommendation fallback, or NotiSend used for critical transactional mail.
+- Mail-trigger processing that removes the retained SpaceWeb mailbox copy, exposes attachments publicly or can create reply/Bcc loops.
 
 ## Security gates
 
@@ -99,6 +129,8 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Bearer tokens have at least 128 bits of entropy and are stored only as keyed hashes; page, click, unsubscribe and feedback tokens are separate.
 - YDB is service-credential-only, with TTL and minimized HMAC subject identifiers.
 - Account/profile deletion emits a purge request for eligible YDB raw/history state; irreversibly anonymized aggregates follow a documented retention policy.
+- Recommendation admission and every send claim fail closed above the 200-user launch ceiling.
+- Provider credentials and mailbox passwords stay in the approved secret manager and never enter Git, artifacts or application logs.
 
 ## Consequences for existing branches
 
