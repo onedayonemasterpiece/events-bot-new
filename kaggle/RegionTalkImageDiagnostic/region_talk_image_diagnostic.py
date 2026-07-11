@@ -22,6 +22,11 @@ PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v2"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+PROCESSED_IMAGE_KEYS: set[str] = set()
+
+
+def image_work_key(row: dict) -> str:
+    return str(row.get("image_queue_id") or row.get("post_url") or row.get("_ydb_pk") or "").strip()
 
 def refresh_run_paths() -> None:
     global RUN_ID, OUT, MEDIA, THUMBS
@@ -509,6 +514,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
         ydb_upsert_image_rows(blocked, stage="blocked_publication_eligibility")
     pending=[]
     for r in eligible_raw:
+        if image_work_key(r) in PROCESSED_IMAGE_KEYS: continue
         if not text_region_confirmed(r): continue
         status=str(r.get("image_queue_status") or "")
         input_type=str(r.get("image_model_input_type") or "")
@@ -1072,6 +1078,7 @@ if source_mode == "ydb":
             break
         batch_index += 1
         processed = process_batch(batch, batch_index)
+        PROCESSED_IMAGE_KEYS.update(image_work_key(row) for row in processed if image_work_key(row))
         all_processed_rows.extend(processed)
         remaining -= len(processed)
         wait_seconds = 0
@@ -1082,9 +1089,14 @@ if source_mode == "ydb":
                 break
             batch_index += 1
             processed = process_batch(batch, batch_index)
+            PROCESSED_IMAGE_KEYS.update(image_work_key(row) for row in processed if image_work_key(row))
             all_processed_rows.extend(processed)
             remaining -= len(processed)
-    rows = all_processed_rows
+    deduped_rows = {}
+    for row in all_processed_rows:
+        key = image_work_key(row) or f"row:{len(deduped_rows)}"
+        deduped_rows[key] = row
+    rows = list(deduped_rows.values())
 else:
     rows = process_batch(rows, 1) if rows else []
 

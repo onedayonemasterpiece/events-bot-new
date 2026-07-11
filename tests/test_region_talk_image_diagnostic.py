@@ -219,6 +219,41 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_same_run_seen_key_is_not_released_from_stale_read(self) -> None:
+        keys = (
+            "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
+            "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
+            "REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                row = {
+                    "image_queue_id": "already-processed",
+                    "image_queue_order": 1,
+                    "image_queue_status": "needs_actual_image_fetch",
+                    "post_url": "https://t.me/example/1",
+                    "kaliningrad_oblast_only_scope": "true",
+                    "kaliningrad_mention_role": "main_subject",
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "publication-gate-test-v1",
+                }
+                mod.PROCESSED_IMAGE_KEYS.add("already-processed")
+                mod.ydb_select_image_queue = lambda _limit: [dict(row)]
+                writes = []
+                mod.ydb_upsert_image_rows = lambda batch, *, stage: writes.append((stage, batch))
+                leased, total = mod.ydb_rows_for_diagnostic(10)
+                self.assertEqual(total, 1)
+                self.assertEqual(leased, [])
+                self.assertFalse(any(stage == "leased_for_image_analysis" and batch for stage, batch in writes))
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
     def test_image_queue_scan_is_not_limited_to_five_batches(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",

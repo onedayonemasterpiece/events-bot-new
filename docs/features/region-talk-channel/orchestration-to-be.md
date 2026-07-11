@@ -558,6 +558,10 @@ A semantic contradiction is fail-closed before image/Gemini capacity: any
 marker rejects the row even if an older `kaliningrad_oblast_only_scope=true`
 field survived in candidate memory.
 
+ImageDiagnostic keeps an in-memory set of processed `image_queue_id`/post URLs.
+A stale YDB read immediately after an UPSERT must not lease or score the same
+post again; report counters are unique-post counters, not processing attempts.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;
