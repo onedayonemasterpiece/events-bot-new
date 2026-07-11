@@ -721,6 +721,13 @@ while sent rows and completed delivery records are displayed separately as
 `sent-ledger` and `deliveries-completed`; a finalizer cleanup may legitimately
 reduce current-confirmed without erasing historical delivery evidence.
 
+ImageDiagnostic may receive both a generic Region Talk config dataset and its
+own image-run config dataset. Runtime config loading explicitly applies the
+config colocated with `image_diag_input.json` last, independent of Kaggle mount
+glob order. This is required for explicit zero values such as
+`WAIT_AFTER_DRAIN_SECONDS=0`; otherwise an older generic 600-second value can
+silently restore empty CPU polling after the queue has drained.
+
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with

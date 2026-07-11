@@ -23,7 +23,10 @@
 - **Region Talk / image-worker empty-poll efficiency**: orchestrated image runs
   now use a two-minute initial YDB lease window, 30-second polling and no idle
   post-drain wait, replacing the previous ten-minute empty CPU notebook when a
-  pending row was consumed or blocked before the worker started.
+  pending row was consumed or blocked before the worker started. The image-run
+  config colocated with `image_diag_input.json` now deterministically overrides
+  generic config datasets, so Kaggle glob order cannot restore the old
+  600-second wait over an explicit zero.
 - **Region Talk / local POI institutions**: source surface classification now
   routes `Музей Мирового Океана` / `world_ocean_museum` to the local-region
   monitoring list before its institutional posts consume external-candidate

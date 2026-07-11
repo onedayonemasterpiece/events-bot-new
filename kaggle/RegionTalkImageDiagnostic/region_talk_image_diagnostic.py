@@ -79,9 +79,16 @@ def load_json_file(name: str) -> dict:
         raise FileNotFoundError(name)
     return json.loads(p.read_text(encoding="utf-8"))
 
-def load_runtime_config() -> dict:
+def load_runtime_config(*, preferred_parent: Path | None = None, config_paths: list[Path] | None = None) -> dict:
     cfg = {}
-    for p in Path("/kaggle/input").glob("**/region_talk_run_config.json"):
+    paths = list(config_paths) if config_paths is not None else list(Path("/kaggle/input").glob("**/region_talk_run_config.json"))
+    if preferred_parent is not None:
+        preferred = preferred_parent / "region_talk_run_config.json"
+        # Kaggle mounts several run-config datasets. The image worker's own
+        # config must win over the generic orchestration config regardless of
+        # filesystem glob order, especially for zero-valued idle waits.
+        paths = [p for p in paths if p != preferred] + [p for p in paths if p == preferred]
+    for p in paths:
         try:
             cfg.update(json.loads(p.read_text(encoding="utf-8")))
         except Exception:
@@ -134,15 +141,16 @@ def load_secrets() -> dict:
     status["ok"] = bool(status["encrypted"].get("ok") or status["kaggle_user_secrets"].get("ok"))
     return status
 
-runtime_config = load_runtime_config()
+input_path = find_input_file("image_diag_input.json")
+runtime_config = load_runtime_config(preferred_parent=input_path.parent if input_path else None)
 refresh_run_paths()
-try:
-    input_payload = load_json_file("image_diag_input.json")
-except FileNotFoundError:
+if input_path:
+    input_payload = json.loads(input_path.read_text(encoding="utf-8"))
+else:
     if os.getenv("REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT") == "1":
         input_payload = {}
     else:
-        raise
+        raise FileNotFoundError("image_diag_input.json")
 secret_status = load_secrets()
 rows = input_payload.get("rows") or []
 limit = int(os.getenv("REGION_TALK_IMAGE_DIAG_TOP_N") or input_payload.get("top_n") or 50)

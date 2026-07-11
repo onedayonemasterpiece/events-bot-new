@@ -61,6 +61,44 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_image_specific_runtime_config_wins_over_generic_glob_order(self) -> None:
+        keys = (
+            "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
+            "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
+            "REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION",
+            "REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                root = Path(td)
+                generic = root / "generic"
+                image = root / "image"
+                generic.mkdir()
+                image.mkdir()
+                (generic / "region_talk_run_config.json").write_text(
+                    '{"env":{"REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS":"600"}}',
+                    encoding="utf-8",
+                )
+                (image / "region_talk_run_config.json").write_text(
+                    '{"env":{"REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS":"0"}}',
+                    encoding="utf-8",
+                )
+                # Deliberately put the generic config last: preferred_parent
+                # must still make the image-specific zero win.
+                mod.load_runtime_config(
+                    preferred_parent=image,
+                    config_paths=[image / "region_talk_run_config.json", generic / "region_talk_run_config.json"],
+                )
+                self.assertEqual(os.environ["REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS"], "0")
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
     def test_publication_eligibility_gate_fails_closed_and_blocks_local_source(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
