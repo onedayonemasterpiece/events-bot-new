@@ -2310,6 +2310,12 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "history_newest_post_date": row.get("history_newest_post_date") or "",
         "history_oldest_post_date": row.get("history_oldest_post_date") or "",
     }
+    # A terminal/source-status overlay may also be the durable queue update.
+    # Preserve every existing queue-contract field (especially queue_seq and
+    # queue_order) instead of replacing the ordered row with a sparse progress
+    # projection. Explicit normalized values above remain authoritative.
+    for field in SOURCE_QUEUE_STATE_FIELDS:
+        payload.setdefault(field, row.get(field))
     return compact_record(payload, SOURCE_QUEUE_STATE_FIELDS + [
         "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "queue_status",
         "source_candidate_id", "platform", "handle", "resolved_title", "discovery_type",

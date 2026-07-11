@@ -677,6 +677,10 @@ The live YDB source writer must preserve the full terminal evidence
 (`source_geo_class`, topic/quick class, filter version/reason/hits and
 `next_action`), not only the generic queue status and scope; otherwise sparse
 online overlays make the classification appear incomplete.
+The overlay is monotonic over the complete `SOURCE_QUEUE_STATE_FIELDS`
+contract: a status/classification update must preserve `queue_seq`,
+`queue_order`, admission metadata and cursor priority rather than turn an
+ordered queue row into a sparse unordered row.
 
 The delayed candidate-memory fusion pass repeats the same terminal source
 guard before looking up E5/BGE rows. Pending posts from a recognizably local or

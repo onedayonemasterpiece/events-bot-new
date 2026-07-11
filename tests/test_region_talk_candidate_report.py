@@ -611,6 +611,24 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(payload["source_quick_class"], "local_region_source")
         self.assertEqual(payload["next_action"], "route_to_local_region_source_list_no_external_scan")
 
+        ordered_payload = mod._online_source_payload(
+            {
+                "canonical_source_key": "telegram:world_ocean_museum",
+                "source_title": "Музей Мирового Океана",
+                "source_url": "https://t.me/world_ocean_museum",
+                "queue_seq": 1528,
+                "queue_order": 1528,
+                "admitted_run_id": "original-admission",
+                **decision,
+            },
+            run_id="local-backfill",
+            stage="unified_source_queue_built",
+            status=mod.LOCAL_REGION_SOURCE_STATUS,
+        )
+        self.assertEqual(ordered_payload["queue_seq"], 1528)
+        self.assertEqual(ordered_payload["queue_order"], 1528)
+        self.assertEqual(ordered_payload["admitted_run_id"], "original-admission")
+
         pending = {
             "post_url": "https://t.me/world_ocean_museum/11667",
             "source_title": "Музей Мирового Океана",
