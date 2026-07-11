@@ -37,7 +37,7 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
     </section>
 
     <div class="event-bus__map">
-      <iframe src={suggestion.mapEmbedUrl} title={`Карта: ${suggestion.venueName}`} loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <iframe src={suggestion.mapEmbedUrl} title={`Карта: ${suggestion.venueName}`} loading="eager" referrerpolicy="no-referrer"></iframe>
       <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть площадку на карте</a>
     </div>
 
