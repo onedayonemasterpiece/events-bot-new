@@ -505,6 +505,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         images = [
             {"post_url": "https://t.me/a/1", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
             {"post_url": "https://t.me/b/2", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
+            {"post_url": "https://t.me/sent/3", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
         ]
         publications = [
             {
@@ -521,6 +522,15 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_eligibility_verdict": "reject",
                 "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
             },
+            {
+                "post_url": "https://t.me/sent/3",
+                "publication_status": "eligibility_revoked",
+                "publication_candidate_status": "revoked",
+                "sent_to_chat": "true",
+                "publication_eligibility_verdict": "review",
+                "publication_eligibility_gate_version": "stale-gate",
+                "authoritative_source_fingerprint": "stale-fingerprint",
+            },
         ]
         sources = [{
             "canonical_source_key": "telegram:a",
@@ -532,7 +542,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         publications[0]["canonical_source_key"] = "telegram:a"
         publications[0]["authoritative_source_fingerprint"] = mod.authoritative_source_fingerprint(sources[0])
         metrics = mod._publication_handoff_metrics(images, publications, sources)
-        self.assertEqual(metrics["publication_candidate_total"], 2)
+        self.assertEqual(metrics["publication_candidate_total"], 3)
         self.assertEqual(metrics["publication_active_candidate_total"], 1)
         self.assertEqual(metrics["publication_ready_total"], 1)
         self.assertEqual(metrics["publication_confirmed_total"], 1)

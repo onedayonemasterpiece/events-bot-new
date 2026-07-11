@@ -1388,6 +1388,9 @@ def _publication_handoff_metrics(
     def needs_finalizer(row: dict[str, Any] | None) -> bool:
         if not row:
             return True
+        candidate_status = str(row.get("publication_candidate_status") or "").lower()
+        if str(row.get("sent_to_chat") or "").lower() == "true" or candidate_status == "sent_to_chat":
+            return False
         live_fingerprint = str(row.get("_live_authoritative_source_fingerprint") or "")
         persisted_fingerprint = str(row.get("authoritative_source_fingerprint") or "")
         if (
@@ -2799,7 +2802,7 @@ def build_decision_plan(
         actions.append(_action(
             "run_finalizer",
             ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"],
-            f"{int(metrics.get('finalizer_pending_url_total') or 0)} actual-image post URLs have no publication row",
+            f"{int(metrics.get('finalizer_pending_url_total') or 0)} actual-image/video post URLs require finalization or eligibility refresh",
             resource="local:gemini",
             timeout_seconds=900,
         ))

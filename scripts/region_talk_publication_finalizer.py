@@ -362,6 +362,11 @@ def finalization_trigger(publication: dict[str, Any] | None, *, now_iso: str, re
     status = str(publication.get("publication_status") or "").strip().lower()
     candidate_status = str(publication.get("publication_candidate_status") or "").strip().lower()
     gate_status = str(publication.get("llm_gate_status") or "").strip().lower()
+    # A delivered post is immutable for provider-cost purposes. Later source
+    # attestation changes may update its audit fields, but must never spend a
+    # second Gemini request or masquerade as a newly accepted candidate.
+    if str(publication.get("sent_to_chat") or "").strip().lower() == "true" or candidate_status == "sent_to_chat":
+        return ""
     if status.startswith("eligibility_") or candidate_status.startswith(("tombstoned", "revoked", "eligibility_")):
         return "never_finalized"
     if status in TERMINAL_PUBLICATION_STATUSES or candidate_status in TERMINAL_CANDIDATE_STATUSES:
@@ -1004,6 +1009,20 @@ def write_xlsx(path: Path, verified: list[dict[str, Any]], all_rows: list[dict[s
     return path
 
 
+def is_newly_accepted_in_run(row: dict[str, Any]) -> bool:
+    if str(row.get("publication_status") or "").lower() != "gemini_accept":
+        return False
+    previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+    previous_status = str(previous.get("publication_status") or "").lower()
+    previous_candidate_status = str(previous.get("publication_candidate_status") or "").lower()
+    was_already_accepted_or_sent = (
+        previous_status == "gemini_accept"
+        or previous_candidate_status in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
+        or str(previous.get("sent_to_chat") or "").lower() == "true"
+    )
+    return not was_already_accepted_or_sent
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env")
@@ -1078,7 +1097,7 @@ def main() -> int:
         "actual_scored_rows": sum(1 for row in rows if row.get("image_queue_status") == "actual_scored" and row.get("image_model_input_type") == "actual_image"),
         "video_manual_review_rows": sum(1 for row in rows if rt.is_video_media_candidate(row)),
         "llm_calls": len([row for row in verified if row.get("llm_attempted_this_run") == "true"]),
-        "accepted_new": sum(1 for row in verified if row.get("publication_status") == "gemini_accept"),
+        "accepted_new": sum(1 for row in verified if is_newly_accepted_in_run(row)),
         "accepted_total": sum(1 for row in rows if row.get("publication_status") == "gemini_accept" or row.get("publication_candidate_status") == "llm_confirmed"),
         "written": written,
         "source_evidence_priority_total": len(source_priority_rows),

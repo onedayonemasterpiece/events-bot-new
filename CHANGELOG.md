@@ -21,6 +21,8 @@
   20k rows so newer E5 work cannot starve behind the former 6k PK prefix.
   Empty BGE runs now emit a terminal `bge_enrichment_done/no_rows` heartbeat
   instead of leaving the last visible stage at `bge_text_rows_loaded`.
+  The publication finalizer no longer re-calls Gemini for posts already sent
+  to the operator chat, and `accepted_new` now excludes historical re-accepts.
   Per-run funnel metrics are durable, and E5 isolation defaults
   to `spawn` after a real forked worker SIGSEGV deferred 31 of 39 fetched posts.
 - **Region Talk / durable post identity and capacity hygiene**: processed-post

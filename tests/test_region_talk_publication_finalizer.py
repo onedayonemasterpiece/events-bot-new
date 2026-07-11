@@ -410,6 +410,24 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(accepted["attempt_count"], 1)
         self.assertEqual(mod.finalization_trigger(accepted, now_iso="2026-07-11T10:00:00+00:00"), "")
 
+    def test_sent_candidate_never_reuses_gemini_or_counts_as_new_accept(self) -> None:
+        mod = self.mod
+        previous = {
+            "publication_status": "eligibility_revoked",
+            "publication_candidate_status": "revoked",
+            "sent_to_chat": "true",
+        }
+        self.assertEqual(
+            mod.finalization_trigger(previous, now_iso="2026-07-11T10:00:00+00:00"),
+            "",
+        )
+        replayed = {
+            "publication_status": "gemini_accept",
+            "_previous_publication": previous,
+        }
+        self.assertFalse(mod.is_newly_accepted_in_run(replayed))
+        self.assertTrue(mod.is_newly_accepted_in_run({"publication_status": "gemini_accept"}))
+
     def test_no_text_is_terminal_and_does_not_repeatedly_consume_llm_budget(self) -> None:
         mod = self.mod
         first = candidate_row(text="", short_summary="")

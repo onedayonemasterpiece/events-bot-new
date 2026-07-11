@@ -540,6 +540,10 @@ Even an empty BGE pass must finish with
 `bge_enrichment_done(status=no_rows)` so the orchestrator can distinguish a
 clean empty queue from a worker stuck after YDB loading.
 
+Publication finalization is URL-idempotent. A row with `sent_to_chat=true` is
+terminal even when source-attestation fields later change: it may be retained
+for audit, but must not consume Gemini again or increment `accepted_new`.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;
