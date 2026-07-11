@@ -96,6 +96,8 @@ Full auto — зафиксированный целевой режим, а не 
 2. **Full auto:** `allowed_general` и `allowed_local_history_exception` одновременно переходят в автомат. Прошедший все hard gates выпуск публикуется в 10:00; ambiguity автоматически становится `no_topic`, а не уходит на ручное рассмотрение.
 3. **Silent success:** нет обязательного preview, предварительного admin alert/cancel window или success-report message. Успешный run просто создаёт публичную публикацию.
 
+`no_topic` является исключением из silent-success policy: публичного поста нет, поэтому admin-чат получает короткое служебное уведомление. Telegram/VK delivery остаются независимыми; partial result автоматически компенсирует только неуспешный target.
+
 Зафиксированный activation gate: **10 подряд рассмотренных editions, 0 критических дефектов и зелёный live E2E**; затем включить full auto сразу для `allowed_general` и `allowed_local_history_exception`. Это не требует ждать 30 календарных дней или заполнения всего golden set.
 
 Автопубликация допустима только для high-confidence editions:
@@ -226,13 +228,12 @@ Golden set содержит минимум 30 разных историческ�
 
 ## 9. Открытые продуктовые решения
 
-Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру. Уже решены: `0..1`, один Telegram administrator, только две кнопки, late approve → publish immediately, slot 10:00, любые публичные source photos со ссылкой, полноценный голос официальных источников, sensitive-topic policy с heritage exception, 10-edition activation gate, одновременный heritage auto и отсутствие full-auto alerts.
+Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру. Уже решены: `0..1`, один Telegram administrator, только две кнопки, late approve → publish immediately, slot 10:00, любые публичные source photos со ссылкой, полноценный голос официальных источников, sensitive-topic policy с heritage exception, 10-edition activation gate, одновременный heritage auto, silent successful full auto, `no_topic` notification и независимые Telegram/VK targets. Названия каналов отложены.
 
 1. Какие источники объединяются в одну ownership group?
 2. Нужен ли Telegram album/video в первом релизе или начинаем с одной Bento-карточки?
-3. Как называются и кем администрируются новый Telegram channel и VK community?
-4. Нужно ли уведомлять администратора при `no_topic`/пропуске дня или сохранять полностью тихий режим?
-5. При `Telegram=published`, `VK=failed` автоматически повторять только VK или ждать ручного решения?
+3. Что показывать в `no_topic` notification: только факт пропуска или ещё краткую причину и ближайшую отклонённую тему?
+4. Сколько автоматических попыток разрешено для упавшего target и до какого времени продолжать retry?
 
 ## 10. Definition of Done для будущей реализации
 

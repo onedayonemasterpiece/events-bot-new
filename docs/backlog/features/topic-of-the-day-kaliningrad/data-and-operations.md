@@ -263,7 +263,7 @@ pending → claimed → prepared → sending
 
 Для VK все изображения загружаются до `wall.post`; неполный upload блокирует post. После успешного `wall.post` ошибка записи в YDB не должна приводить к повторному `wall.post`: сначала выполняется API reconciliation.
 
-Telegram и VK независимы. `telegram=sent, vk=failed` даёт `edition=partial`; compensating run публикует только VK.
+Telegram и VK — полностью независимые targets. Каждый имеет собственный claim, payload hash, attempts, outcome certainty, platform id и retry/reconcile state. Ошибка одного target не отменяет, не задерживает и не повторяет успешный другой. `telegram=sent, vk=failed` даёт `edition=partial`; automatic compensating run работает только с VK. Обратная ситуация симметрична.
 
 ## 10. Расписание, watchdog и catch-up
 
@@ -276,7 +276,7 @@ Telegram и VK независимы. `telegram=sent, vk=failed` даёт `editio
 - live watchdog до editorial deadline;
 - recovery проверяет materialized Kaggle handoff и per-target delivery, а не только факт старта cron;
 - свежий heartbeat означает «ждать», а не запускать дубль;
-- `no_topic` считается осознанно обработанным слотом и отправляет операторский отчёт;
+- `no_topic` считается осознанно обработанным слотом и отправляет в закрытый Telegram admin-чат служебное уведомление о пропуске дня;
 - на manual canary отсутствие approve к 10:00 оставляет edition в `awaiting_approval`; approve позже 10:00 запускает публикацию сразу, без переноса на следующий день;
 - после включения full auto прошедший все gates edition публикуется в 10:00 без approval row; непрошедший edition автоматически становится `no_topic`, без manual fallback;
 - успешный full-auto run не отправляет предварительный или post-success admin message; durable edition/publication rows и audit artifact всё равно записываются для idempotency и расследований;
