@@ -55,7 +55,7 @@ Before consent/server sync, browser state is device-local and not a durable iden
 ### Login and profile linking
 
 1. Yandex or verified-email auth creates/recovers a Supabase Auth identity.
-2. Anonymous-to-auth linking is explicit in the product contract and idempotent in storage.
+2. Anonymous-to-auth linking runs automatically after login under eligible personalization consent and is idempotent in storage; no additional merge-confirmation dialog is required.
 3. Supabase stores `profile_identity_link` and merge audit state.
 4. Merge compact snapshots/current state, not raw browsing history.
 5. Authenticated explicit actions win conflicts.
@@ -70,6 +70,8 @@ Before consent/server sync, browser state is device-local and not a durable iden
 5. Only after artifact publication succeeds may the Supabase outbox row become sendable.
 6. Sender rechecks subscription, consent and suppression before Postbox send.
 7. Provider callbacks update delivery/suppression in Supabase; YDB receives asynchronous analytics.
+
+The personal page itself is intentionally readable through a forwardable public secret URL without an auth session. Supabase still owns token hash/revocation/retention metadata; the artifact is `noindex` and excludes raw profile/private identity data.
 
 ### Event comment feedback
 

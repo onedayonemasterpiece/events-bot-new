@@ -174,7 +174,7 @@ Read-only срез на 2026-07-11:
 
 ### Stage 0 — Scope freeze и интеграционная база
 
-- [ ] Утвердить: полный 17-feature launch или staged launch с явно исключёнными surface.
+- [x] Утверждён полный F1–F17 launch scope; staged canaries не исключают ни одной фичи из первой публичной презентации.
 - [ ] Создать integration branch только от свежего `origin/main`.
 - [ ] Для каждой side branch записать owner, base/head SHA, rebase plan, tests, merge/reject decision.
 - [ ] Не переносить весь dirty checkout; cherry-pick/re-implement только проверяемые feature commits.
@@ -238,7 +238,7 @@ Smart Update является владельцем семантического 
 - [ ] No consent = no local profile mutation and no trusted remote telemetry.
 - [ ] Remote telemetry write path passes RLS/grant/body/rate/dedupe/bot/retention tests.
 - [ ] Valid impressions, detail views, dwell, card click, ticket/calendar/share/like/hide contain surface/rank/layout context.
-- [ ] Verified email uses one-time code/link, TTL, replay/attempt limits and double opt-in where required.
+- [ ] Verified email supports both one-time code and one-click link for the same identity/transaction, with TTL and replay/attempt limits.
 - [ ] Anonymous→authorized merge explicit, idempotent, auditable, reversible; logout behavior defined.
 - [ ] Favorite, like and calendar semantics no longer conflated.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
@@ -246,7 +246,7 @@ Smart Update является владельцем семантического 
 ### Stage 5 — Email recommendations and deliverability
 
 - [ ] Personal issue schema, profile snapshot, deterministic hero+3 selection and 12–24 recommendation page.
-- [ ] Personal page is published before email enqueue; token is high-entropy, hash-only stored, revocable, expiring, `noindex`, no secret referrer leak.
+- [ ] Personal page is published before email enqueue; forwardable public secret URL works without login, token is high-entropy/hash-only/revocable, page is `noindex` and outbound navigation cannot leak the token.
 - [ ] Outbox idempotency/fatigue/quiet-hours/stale/cancelled/rescheduled gates pass.
 - [ ] Recommendation and transactional sender streams/subdomains separated.
 - [ ] SPF/DKIM/DMARC alignment verified; bounce/complaint webhooks signed/deduped.
@@ -308,9 +308,9 @@ Smart Update является владельцем семантического 
 
 ## 10. Открытые продуктовые и архитектурные решения
 
-1. **Scope:** полный релиз всех F1–F17 или staged release; что именно показывается на публичной презентации?
+1. **Scope — решено:** все F1–F17 обязательны для первого публичного релиза/презентации; staged canaries only manage risk.
 2. **Personalization storage — решено:** Supabase/Postgres owns current identity/profile/favorites/subscriptions/email control plane; YDB owns analytics/history and the independent comment-feedback sidecar. См. `docs/architecture/personalization-data-ownership.md`.
-3. **Identity:** что может email-only user без Supabase Auth session; как связываются anonymous/browser, verified email и Yandex identity?
+3. **Identity — решено на product level:** email-only user becomes a Supabase Auth identity through code or link; anonymous profile links automatically/intelligently under eligible personalization consent.
 4. **Favorites:** favorite, like и calendar-follow — одна сущность или три связанные сущности?
 5. **Email:** cadence/quiet hours/fatigue, transactional vs recommendation classification, sender subdomains and legal unsubscribe policy.
 6. **UI freeze:** какая ветка/preview является release baseline и кто даёт product/design sign-off?
@@ -333,7 +333,7 @@ Smart Update является владельцем семантического 
 9. **P2 — transport:** F11 after nightly source pipeline is production-safe.
 10. **P2 — discussion signals:** F14 after rebase and safety evaluation.
 
-При полном launch scope все десять streams остаются blockers. При staged launch `P2` можно исключить только явным продуктовым решением и без обещания соответствующего функционала на презентации.
+Все десять streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.
 
 ## 12. Closure checklist этого аудита
 

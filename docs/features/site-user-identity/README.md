@@ -18,9 +18,9 @@ Search-specific UI remains in [authorized event search](../unsigned-personalizat
 ## Product rules
 
 - Supabase Auth is the identity provider/system of record.
-- A verified-email user is a real Supabase identity, not a second subscription-only account system.
+- A verified-email user is a real Supabase identity, not a second subscription-only account system. Verification supports both a six-digit code and a one-click link bound to the same transaction/identity.
 - Local `anon_id` is not proof of ownership. Server materialization requires a device-bound credential and current consent.
-- Linking is idempotent and auditable. Repeating callback/login cannot duplicate profile/favorites/subscriptions.
+- Linking is automatic after login, idempotent and auditable. No extra merge-confirmation dialog is required; repeating callback/login cannot duplicate profile/favorites/subscriptions.
 - Authenticated explicit actions win merge conflicts over inferred/local state.
 - Logout ends the session but does not split the durable profile.
 - Reset/unlink/delete are explicit operations with clear scope.
@@ -46,7 +46,7 @@ The exact schema belongs to a dedicated implementation task, but one identity mu
 - merge is transactionally idempotent;
 - favorites/calendar saved state is deduplicated by event id;
 - negative/explicit actions retain priority and timestamps;
-- raw browsing history is not copied blindly;
+- inferred interests are merged with confidence/recency decay and conflict checks; raw browsing history is not copied blindly;
 - result is visible to the user and reset/unlink remains available;
 - session expiry/callback failure restores a usable anonymous static page;
 - deletion propagates to profile-owned Supabase rows and eligible YDB raw/history projections.

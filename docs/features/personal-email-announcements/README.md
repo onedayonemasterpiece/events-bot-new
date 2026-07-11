@@ -10,10 +10,10 @@ This is recommendation/marketing-like mail, not a transactional reminder. It req
 
 ## Identity and consent
 
-- Yandex-authenticated or verified-email Supabase identity for the first canary.
+- Yandex-authenticated or verified-email Supabase identity; verified email supports both code and one-click-link completion.
 - Recommendation-email consent is purpose-specific and independently revocable.
 - Calendar/favorite and transactional-email consent do not authorize this stream.
-- Anonymous email subscription is a later phase after identity/abuse/linking gates.
+- There is no parallel anonymous email-account model: entering and verifying an email creates/recovers the email-only Supabase identity.
 
 ## Data and artifact ownership
 
@@ -40,9 +40,11 @@ See [personalization data ownership](../../architecture/personalization-data-own
 
 ## Personal page security
 
-- high-entropy expiring/revocable token;
+- public forwardable high-entropy secret URL: anyone with the link may read the page without authentication;
+- `noindex`/`nofollow` discovery controls, while explicitly recognizing that `noindex` is not access control;
+- revocable/rotatable token with retention/expiry policy set separately;
 - only keyed token hash in Supabase;
-- `noindex`, restrictive referrer policy and no token in outbound destination;
+- restrictive referrer policy and no token in outbound destination;
 - no email, raw profile, hidden vectors/tags or internal scores in HTML/JSON;
 - separate page, click, unsubscribe and feedback tokens;
 - static content remains readable if analytics/feedback calls fail.

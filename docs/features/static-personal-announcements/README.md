@@ -7,6 +7,8 @@
 
 This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F17 from becoming an unowned flat checklist.
 
+All F1–F17 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope.
+
 ## Capability ownership
 
 | ID | Capability | Canonical home | Stage |
