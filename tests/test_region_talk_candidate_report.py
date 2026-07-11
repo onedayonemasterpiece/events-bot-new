@@ -316,6 +316,31 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 [r["candidate_memory_id"] for r in prioritized],
                 ["cleanup-1", "cleanup-2", "bge-1", "fresh-1", "fresh-2"],
             )
+
+            old_cleanup_max = os.environ.get("REGION_TALK_YDB_ONLINE_CANDIDATE_CLEANUP_MAX_ROWS")
+            old_write_max = os.environ.get("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS")
+            os.environ["REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS"] = "2"
+            os.environ["REGION_TALK_YDB_ONLINE_CANDIDATE_CLEANUP_MAX_ROWS"] = "3"
+            try:
+                bounded = mod.bound_candidate_memory_rows_for_online_write(
+                    capped_order_rows + [
+                        {"candidate_memory_id": "cleanup-3", "candidate_memory_source_cleanup_changed_this_run": "true"},
+                        {"candidate_memory_id": "cleanup-4", "candidate_memory_source_cleanup_changed_this_run": "true"},
+                    ]
+                )
+                self.assertEqual(
+                    [r["candidate_memory_id"] for r in bounded],
+                    ["cleanup-1", "cleanup-2", "cleanup-3"],
+                )
+            finally:
+                if old_cleanup_max is None:
+                    os.environ.pop("REGION_TALK_YDB_ONLINE_CANDIDATE_CLEANUP_MAX_ROWS", None)
+                else:
+                    os.environ["REGION_TALK_YDB_ONLINE_CANDIDATE_CLEANUP_MAX_ROWS"] = old_cleanup_max
+                if old_write_max is None:
+                    os.environ.pop("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS", None)
+                else:
+                    os.environ["REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS"] = old_write_max
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", None)
@@ -702,6 +727,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(rows[0]["current_lifecycle_status"], "source_terminal_local_audit_only")
         self.assertEqual(rows[0]["candidate_memory_source_cleanup_changed_this_run"], "true")
         self.assertEqual(rows[1]["current_lifecycle_status"], "image_fetch_retry_needed")
+
+    def test_not_refetched_candidate_memory_preserves_terminal_source_audit_lifecycle(self) -> None:
+        mod = load_module()
+        previous = {
+            "candidate_memory": {
+                "local": {
+                    "candidate_memory_id": "local",
+                    "post_id": "post-local",
+                    "source_id": "source-local",
+                    "current_stage": "dropped_local_source",
+                    "current_lifecycle_status": "source_terminal_local_audit_only",
+                    "kaliningrad_oblast_only_scope": "true",
+                    "kaliningrad_mention_role": "main_subject",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "vector_content_type": "visit_impression_candidate",
+                }
+            }
+        }
+        rows, not_refetched, _deltas = mod.build_candidate_memory(previous, [], [], "run-next", "2026-07-11T00:00:00+00:00")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(not_refetched), 1)
+        self.assertEqual(rows[0]["current_lifecycle_status"], "source_terminal_local_audit_only")
 
     def test_durable_processed_post_key_is_fetch_path_independent(self) -> None:
         mod = load_module()

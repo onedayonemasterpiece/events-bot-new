@@ -17,6 +17,9 @@
   instead of one network transaction call per row. Bounded candidate-memory
   writes now prioritize terminal local/spam cleanup over ordinary refreshed
   rows, preventing the online cap from starving funnel cleanup across cycles.
+  Terminal cleanup has a separate bounded 500-row allowance, and retained
+  audit-only rows preserve that lifecycle when not refetched, eliminating both
+  first-page starvation and repeated cleanup rewrites.
 - **Region Talk / image-worker empty-poll efficiency**: orchestrated image runs
   now use a two-minute initial YDB lease window, 30-second polling and no idle
   post-drain wait, replacing the previous ten-minute empty CPU notebook when a

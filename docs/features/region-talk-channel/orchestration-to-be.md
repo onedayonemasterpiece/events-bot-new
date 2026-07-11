@@ -707,7 +707,13 @@ Candidate-memory online persistence is bounded, but rows whose terminal
 local/spam source cleanup changed in the current run are ordered before BGE
 fusion changes and ordinary refreshed rows. This prevents the live-write cap
 from being occupied by the same healthy rows while already identified local or
-spam candidates remain incorrectly operational across repeated cycles.
+spam candidates remain incorrectly operational across repeated cycles. The
+one-time cleanup has its own bounded allowance
+(`REGION_TALK_YDB_ONLINE_CANDIDATE_CLEANUP_MAX_ROWS`, default 500), so it may
+exceed the ordinary 80-row refresh cap and drain the known terminal population
+without repeatedly writing only its first page. A not-refetched memory row also
+retains its terminal local/spam audit lifecycle; it is not reset to generic
+`source_not_refetched_this_run` and rewritten on every cycle.
 
 Publication telemetry distinguishes current-state and ledger counters. The
 human stats line labels `publication_confirmed_total` as current-confirmed,

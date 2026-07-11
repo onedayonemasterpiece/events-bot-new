@@ -2487,6 +2487,18 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
         return 0
     try:
         now = utc_now_iso()
+        original_rows = rows
+        rows = bound_candidate_memory_rows_for_online_write(rows)
+        if len(rows) < len(original_rows):
+            cleanup_rows = sum(
+                1 for row in rows
+                if str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true"
+            )
+            print(
+                f"[region-talk] online_candidate_ydb_limited rows={len(original_rows)} "
+                f"selected={len(rows)} cleanup_selected={cleanup_rows}",
+                flush=True,
+            )
         items: list[tuple[str, str, dict[str, Any]]] = []
         for row in rows:
             payload = compact_record({**row, "run_id": run_id, "updated_at": now, "last_seen_run_id": run_id, "online_update_stage": stage}, CANDIDATE_MEMORY_STATE_FIELDS + ["run_id", "updated_at", "online_update_stage"], max_len=900)
@@ -2495,10 +2507,6 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
                 items.append(("candidate_memory_item:" + key.replace("candidate_memory_item:", ""), "candidate_memory_item", payload))
         if not items:
             return 0
-        max_items = getenv_int("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS", 0)
-        if max_items > 0 and len(items) > max_items:
-            print(f"[region-talk] online_candidate_ydb_limited rows={len(items)} limit={max_items}", flush=True)
-            items = items[:max_items]
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
         timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
         retry_settings = ydb_retry_settings(
@@ -2516,6 +2524,30 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
         _record_ydb_online_write_failure(exc, label="online_candidate")
         print(f"[region-talk] online_candidate_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
+
+
+def bound_candidate_memory_rows_for_online_write(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bound ordinary refreshes without starving terminal source cleanup.
+
+    Cleanup is a one-time corrective write and remains separately bounded. It
+    may exceed the ordinary per-run cap so a discovered local/spam population
+    is not rewritten in the same first page forever.
+    """
+    max_items = getenv_int("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS", 0)
+    if max_items <= 0:
+        return rows
+    cleanup_max_items = max(
+        max_items,
+        getenv_int("REGION_TALK_YDB_ONLINE_CANDIDATE_CLEANUP_MAX_ROWS", 500),
+    )
+    cleanup_rows = [
+        row for row in rows
+        if str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true"
+    ][:cleanup_max_items]
+    cleanup_ids = {id(row) for row in cleanup_rows}
+    ordinary_rows = [row for row in rows if id(row) not in cleanup_ids]
+    ordinary_capacity = max(0, max_items - len(cleanup_rows))
+    return cleanup_rows + ordinary_rows[:ordinary_capacity]
 
 
 def candidate_memory_rows_for_ydb_write(
@@ -5388,13 +5420,18 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "expires_at": prev.get("expires_at", ""),
         }
     source_status = {str(s.get("source_id") or ""): s for s in source_rows}
+    terminal_source_audit_lifecycles = {
+        "source_terminal_local_audit_only",
+        "source_terminal_spam_audit_only",
+    }
     for mid, rec in list(memory.items()):
         if rec.get("post_id") in current_by_id:
             continue
         sid = str(rec.get("source_id") or "")
         srow = source_status.get(sid) or {}
         rec["not_refetched_this_run"] = "true"
-        rec["current_lifecycle_status"] = "source_not_refetched_this_run" if rec.get("current_lifecycle_status") not in {"manual_reject", "expired"} else rec.get("current_lifecycle_status")
+        if rec.get("current_lifecycle_status") not in {"manual_reject", "expired", *terminal_source_audit_lifecycles}:
+            rec["current_lifecycle_status"] = "source_not_refetched_this_run"
         rec["visibility_status"] = "not_refetched_this_run"
         rec["source_fetch_status_this_run"] = srow.get("fetch_status", "source_not_selected_this_run")
         rec["next_action"] = "keep_in_memory_or_refetch_source_later"
