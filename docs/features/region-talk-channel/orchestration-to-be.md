@@ -544,6 +544,10 @@ Publication finalization is URL-idempotent. A row with `sent_to_chat=true` is
 terminal even when source-attestation fields later change: it may be retained
 for audit, but must not consume Gemini again or increment `accepted_new`.
 
+`queue_seq_repaired_this_run` is a transient marker scoped by
+`queue_seq_repair_run_id`. It is cleared while reconstructing the queue and only
+rows marked by the current build may be bulk-upserted as a sequence repair.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;

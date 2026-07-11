@@ -1711,7 +1711,7 @@ SOURCE_STATE_FIELDS = [
 SOURCE_QUEUE_STATE_FIELDS = [
     "source_queue_id", "queue_seq", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
-    "previous_queue_seq", "queue_seq_repaired_this_run", "queue_seq_repair_reason",
+    "previous_queue_seq", "queue_seq_repaired_this_run", "queue_seq_repair_reason", "queue_seq_repair_run_id",
     "admitted_at", "admitted_run_id",
     "previous_queue_order", "queue_order_changed_this_run", "queue_order_changed_reason",
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
@@ -2735,12 +2735,18 @@ def write_region_talk_source_queue_sequence_repair(rows: list[dict[str, Any]], *
         return 0
 
 
-def source_queue_sequence_repair_rows(rows: Iterable[dict[str, Any]], expected_repairs: int) -> list[dict[str, Any]]:
+def source_queue_sequence_repair_rows(
+    rows: Iterable[dict[str, Any]],
+    expected_repairs: int,
+    *,
+    run_id: str = "",
+) -> list[dict[str, Any]]:
     repair_rows = [
         row for row in rows
         if isinstance(row, dict)
         and not row.get("_sheet_note")
         and str(row.get("queue_seq_repaired_this_run") or "").lower() == "true"
+        and (not run_id or str(row.get("queue_seq_repair_run_id") or "") == run_id)
     ]
     if len(repair_rows) != int(expected_repairs):
         raise RuntimeError(
@@ -5931,6 +5937,13 @@ def build_unified_source_queue(
             **{k: v for k, v in seed.items() if v not in ("", None)},
             "queue_seq": queue_positive_int(row.get("queue_seq")),
             "queue_order": order,
+            # These fields describe this build only. Persisted markers from a
+            # previous queue repair must not turn the next bounded repair into
+            # a multi-thousand-row rewrite.
+            "queue_seq_repaired_this_run": "",
+            "queue_seq_repair_run_id": "",
+            "status_changed_this_run": "",
+            "queue_order_changed_this_run": "",
         }
 
     for row in sorted(previous_queue_rows, key=lambda r: int(r.get("queue_order") or 999999999)):
@@ -5959,6 +5972,7 @@ def build_unified_source_queue(
         rec["previous_queue_seq"] = previous_seq or ""
         rec["queue_seq"] = repaired_seq
         rec["queue_seq_repaired_this_run"] = "true"
+        rec["queue_seq_repair_run_id"] = run_id
         rec["queue_seq_repair_reason"] = "missing_queue_seq" if previous_seq == 0 else "duplicate_queue_seq"
         rec["admitted_at"] = rec.get("admitted_at") or rec.get("added_at") or run_now
         rec["admitted_run_id"] = rec.get("admitted_run_id") or rec.get("first_seen_run_id") or run_id
@@ -12304,7 +12318,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         # Never rewrite the whole frontier to persist one or two sequence
         # repairs.  Besides the transaction cost, that used to overwrite run
         # lineage on ~7k rows and was the largest source of YDB LSM churn.
-        repair_rows = source_queue_sequence_repair_rows(unified_source_queue_sheet, queue_seq_repairs)
+        repair_rows = source_queue_sequence_repair_rows(
+            unified_source_queue_sheet, queue_seq_repairs, run_id=run_id
+        )
         queue_seq_repair_rows_written = write_region_talk_source_queue_sequence_repair(repair_rows, run_id=run_id)
         if queue_seq_repair_rows_written < len(repair_rows):
             raise RuntimeError(

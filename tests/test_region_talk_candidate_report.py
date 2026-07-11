@@ -4358,13 +4358,24 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         mod = load_module()
         rows = [
             {"canonical_source_key": "telegram:old", "queue_seq": 1},
-            {"canonical_source_key": "telegram:repair", "queue_seq": 2, "queue_seq_repaired_this_run": "true"},
-            {"_sheet_note": "note", "queue_seq_repaired_this_run": "true"},
+            {
+                "canonical_source_key": "telegram:stale-repair",
+                "queue_seq": 2,
+                "queue_seq_repaired_this_run": "true",
+                "queue_seq_repair_run_id": "previous-run",
+            },
+            {
+                "canonical_source_key": "telegram:repair",
+                "queue_seq": 3,
+                "queue_seq_repaired_this_run": "true",
+                "queue_seq_repair_run_id": "current-run",
+            },
+            {"_sheet_note": "note", "queue_seq_repaired_this_run": "true", "queue_seq_repair_run_id": "current-run"},
         ]
-        selected = mod.source_queue_sequence_repair_rows(rows, 1)
+        selected = mod.source_queue_sequence_repair_rows(rows, 1, run_id="current-run")
         self.assertEqual([row["canonical_source_key"] for row in selected], ["telegram:repair"])
         with self.assertRaises(RuntimeError):
-            mod.source_queue_sequence_repair_rows(rows, 2)
+            mod.source_queue_sequence_repair_rows(rows, 2, run_id="current-run")
 
     def test_online_queue_handoff_uses_bulk_upsert_for_independent_rows(self) -> None:
         mod = load_module()
