@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-11-cherryflash-eco-retry-storm.md`
+  - Scope: CherryFlash partner watchdog retries, Kaggle selection-manifest/payload boundary, intro poster resolution and failed-kernel status evidence.
+  - Must not regress: a deterministic partner render failure gets at most one recovery attempt per day/profile; a live runtime recovers from canonical `payload.json` and never falls back to fixture event `3292`.
 - `INC-2026-07-11-event-vector-sidecar-sync-stalled.md`
   - Scope: regular incremental event-vector synchronization, production sidecar freshness/coverage, Smart Update/VK-import follow-up and sufficient run evidence.
   - Must not regress: ephemeral audit embeddings must not be reported as persistent production coverage; current imported events must reach both `search_v3` and `related_v1`, with freshness/coverage failures visible and attributable.

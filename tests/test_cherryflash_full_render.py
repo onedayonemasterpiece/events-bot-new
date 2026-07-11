@@ -10,10 +10,45 @@ from PIL import Image
 os.environ.setdefault("BLENDER_BIN", shutil.which("true") or "/bin/true")
 
 from scripts import render_cherryflash_full as full
+from scripts import render_mobilefeed_intro_still as intro_still
 
 
 def _write_frame(path: Path, color: tuple[int, int, int, int]) -> None:
     Image.new("RGBA", (4, 4), color).save(path)
+
+
+def test_runtime_selection_can_recover_from_payload_without_derived_manifest() -> None:
+    manifest = intro_still._selection_manifest_from_payload(
+        {
+            "selection_params": {
+                "variant_overrides": {"kicker": "ПРИРОДА И ЭКОЛОГИЯ"}
+            },
+            "scenes": [
+                {
+                    "event_id": 6651,
+                    "title": "Спектакль в замке",
+                    "date": "18 июля",
+                    "date_iso": "2026-07-18",
+                    "time": "18:00",
+                    "city": "Гвардейск",
+                    "location_name": "Замок Тапиау",
+                    "images": ["scene_1_1.jpg"],
+                    "scene_variant": "primary",
+                },
+                {
+                    "event_id": 6651,
+                    "images": ["scene_1_2.jpg"],
+                    "scene_variant": "followup_image",
+                },
+            ],
+        }
+    )
+
+    assert manifest["selected_event_ids"] == [6651]
+    assert manifest["ribbon_order"] == [6651]
+    assert manifest["focus_event_id"] == 6651
+    assert manifest["events"][0]["poster_candidates"] == ["scene_1_1.jpg"]
+    assert manifest["variant"]["kicker"] == "ПРИРОДА И ЭКОЛОГИЯ"
 
 
 def test_dedupe_exact_frames_only_changes_intro_segment(

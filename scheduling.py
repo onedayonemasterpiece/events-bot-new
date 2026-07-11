@@ -2454,6 +2454,11 @@ PARTNER_TRACK_DEFAULT_TIMES: dict[str, str] = {
 # day's slot.
 PARTNER_TRACK_RETRY_DEADLINE_LOCAL = "22:00"
 PARTNER_TRACK_WATCHDOG_GRACE_SECONDS = 60
+# One scheduled attempt plus one recovery attempt is enough to distinguish a
+# transient handoff failure from a deterministic render/configuration failure.
+# Without this persisted cap the ten-minute watchdog cadence can create a
+# same-day Kaggle retry storm until the 22:00 deadline.
+PARTNER_TRACK_FAILED_SESSION_RETRY_CAP = 2
 
 
 def _partner_track_time_local(partner_track_id: str) -> str:
@@ -2467,6 +2472,63 @@ def _partner_track_time_local(partner_track_id: str) -> str:
         if raw:
             return raw
     return PARTNER_TRACK_DEFAULT_TIMES.get(partner_track_id, "12:00")
+
+
+async def _partner_track_failed_session_count_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    target_date: str,
+    profile_key: str,
+) -> int:
+    """Count persisted scheduled failures for one partner slot.
+
+    The count deliberately comes from ``videoannounce_session`` rather than
+    in-memory watchdog state so deploys/restarts cannot reset the retry budget.
+    """
+    if db is None or not hasattr(db, "raw_conn"):
+        return 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, selection_params
+            FROM videoannounce_session
+            WHERE profile_key = ?
+              AND created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (
+                profile_key,
+                _utc_sql_text(day_start_utc),
+                _utc_sql_text(day_end_utc),
+            ),
+        )
+        rows = await cur.fetchall()
+    count = 0
+    for status, selection_params_raw in rows:
+        if str(status or "").strip() != "FAILED":
+            continue
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("target_date") or "").strip() != target_date:
+            continue
+        if str(params.get("trigger") or "").strip() not in {
+            "scheduled",
+            "startup_catchup",
+        }:
+            continue
+        count += 1
+    return count
 
 
 async def maybe_dispatch_partner_track_watchdog(
@@ -2528,6 +2590,24 @@ async def maybe_dispatch_partner_track_watchdog(
         target_date=target_date,
         profile_key=partner_track.profile_key,
     ):
+        return False
+
+    failed_session_count = await _partner_track_failed_session_count_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+        target_date=target_date,
+        profile_key=partner_track.profile_key,
+    )
+    if failed_session_count >= PARTNER_TRACK_FAILED_SESSION_RETRY_CAP:
+        logging.error(
+            "SCHED partner_track watchdog retry cap reached track=%s "
+            "target_date=%s failed_sessions=%s cap=%s",
+            partner_track.track_id,
+            target_date,
+            failed_session_count,
+            PARTNER_TRACK_FAILED_SESSION_RETRY_CAP,
+        )
         return False
 
     if partner_track.track_id == "partner_region_east_001":

@@ -4854,7 +4854,23 @@ class VideoAnnounceScenario:
                 json.dumps(selection_manifest, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-            bundle_manifest_files = ["payload.json", "assets/cherryflash_selection.json"]
+            # Root-level redundant copy is intentional.  ``payload.json`` can
+            # rebuild this derived file, but keeping a second direct mount path
+            # prevents a nested-assets packaging/mount issue from falling back
+            # to the obsolete static design fixture.
+            (tmp_path / "cherryflash_selection.json").write_text(
+                json.dumps(selection_manifest, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            if not selection_manifest.get("events"):
+                raise RuntimeError(
+                    "CherryFlash selection manifest has no primary event scenes"
+                )
+            bundle_manifest_files = [
+                "payload.json",
+                "cherryflash_selection.json",
+                "assets/cherryflash_selection.json",
+            ]
             if kaggle_run_config:
                 bundle_manifest_files.append(KAGGLE_RUN_FILENAME)
             if story_publish_requested:

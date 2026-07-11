@@ -130,6 +130,7 @@ POSTER_DIR = first_existing_path(
 )
 SELECTION_MANIFEST_PATH = first_existing_path(
     ROOT / "assets" / "cherryflash_selection.json",
+    ROOT / "cherryflash_selection.json",
     ROOT / "kaggle" / "CherryFlash" / "assets" / "cherryflash_selection.json",
 )
 
@@ -396,6 +397,82 @@ def _default_variants(
     )
 
 
+def _selection_manifest_from_payload(payload: dict) -> dict:
+    """Rebuild the minimal intro manifest from the canonical render payload.
+
+    ``payload.json`` is a root-level required Kaggle input.  Keeping this
+    fallback makes the renderer independent from a missing/empty derived
+    ``assets/cherryflash_selection.json`` and prevents it from silently using
+    the old April design fixture in a production run.
+    """
+    scenes = payload.get("scenes") or []
+    primary_scenes = [
+        scene
+        for scene in scenes
+        if isinstance(scene, dict)
+        and str(scene.get("scene_variant") or "primary") == "primary"
+        and scene.get("event_id") is not None
+    ]
+    event_ids = [int(scene["event_id"]) for scene in primary_scenes]
+    ribbon_order = (
+        [event_ids[1], event_ids[0], *event_ids[2:]]
+        if len(event_ids) >= 2
+        else list(event_ids)
+    )
+    events = []
+    for scene in primary_scenes:
+        images = scene.get("images") or []
+        if isinstance(images, str):
+            images = [images]
+        candidates = [str(item).strip() for item in images if str(item).strip()]
+        events.append(
+            {
+                "event_id": int(scene["event_id"]),
+                "title": scene.get("title") or "",
+                "festival": scene.get("festival") or "",
+                "date": scene.get("date_iso") or scene.get("date") or "",
+                "date_display": scene.get("date") or "",
+                "end_date": scene.get("end_date_iso") or "",
+                "time": scene.get("time") or "",
+                "city": scene.get("city") or "",
+                "location_name": scene.get("location_name") or "",
+                "location_address": scene.get("location_address") or "",
+                "location": scene.get("location") or "",
+                "poster_file": Path(candidates[0]).name if candidates else "",
+                "poster_candidates": candidates,
+                "description": scene.get("description") or "",
+            }
+        )
+    selection_params = payload.get("selection_params") or {}
+    variant = (
+        dict(selection_params.get("variant_overrides") or {})
+        if isinstance(selection_params, dict)
+        else {}
+    )
+    return {
+        "selection_source": "payload.json recovery",
+        "focus_event_id": event_ids[0] if event_ids else None,
+        "selected_event_ids": event_ids,
+        "ribbon_order": ribbon_order,
+        "events": events,
+        "variant": variant,
+    }
+
+
+def _load_runtime_manifest() -> dict:
+    if SELECTION_MANIFEST_PATH.exists():
+        raw = json.loads(SELECTION_MANIFEST_PATH.read_text(encoding="utf-8"))
+        if list(raw.get("events") or []):
+            return raw
+    payload_path = ROOT / "payload.json"
+    if payload_path.exists():
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+        recovered = _selection_manifest_from_payload(payload)
+        if recovered["events"]:
+            return recovered
+    return {}
+
+
 def _load_runtime_selection() -> tuple[dict[int, Poster], list[int], int, tuple[Variant, ...], dict]:
     fallback_posters = _fallback_posters()
     fallback_ribbon = [3565, 3292, 3616, 3664, 3666, 3670]
@@ -412,10 +489,14 @@ def _load_runtime_selection() -> tuple[dict[int, Poster], list[int], int, tuple[
         screen_top=f"{event_count_label(fallback_scene_count)}\nкино • лекции • встречи • экскурсии",
         screen_bottom=fallback_city_ui,
     )
-    if not SELECTION_MANIFEST_PATH.exists():
+    raw = _load_runtime_manifest()
+    if not raw:
+        if os.environ.get("CHERRYFLASH_ROOT"):
+            raise RuntimeError(
+                "CherryFlash runtime selection is missing: neither a non-empty "
+                "selection manifest nor payload.json primary scenes are available"
+            )
         return fallback_posters, fallback_ribbon, fallback_focus, fallback_variants, {}
-
-    raw = json.loads(SELECTION_MANIFEST_PATH.read_text(encoding="utf-8"))
     events = list(raw.get("events") or [])
     posters: dict[int, Poster] = {}
     for item in events:
