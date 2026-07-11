@@ -194,21 +194,24 @@ Fields: `run_id` PK, `started_at`, `finished_at`, `status`, `sources_checked`, `
 
 ## MVP compact YDB state adapter
 
-For the 1 GB sidecar budget, the MVP adapter writes a compact `region_talk_state_kv` table rather than raw Telegram/VK payloads. The keys are:
+For the 1 GB sidecar budget, the production adapter writes the LZ4-compressed
+`region_talk_compact_state_kv` table rather than raw Telegram/VK payloads. The
+legacy `region_talk_state_kv` table is a rollback source only after the verified
+2026-07-11 compaction. The singleton keys are:
 
-- `latest_state` — compact cumulative state pointer for the next run;
-- `run:<run_id>` — compact run snapshot;
-- `metrics:<run_id>` — run/all-time metrics only.
+- `latest_state` — small restart checkpoint for the next run;
+- `run:<run_id>` — retention-limited copy of that checkpoint;
+- `metrics:<run_id>` — immutable compact per-run funnel + all-time metrics.
 
-The compact payload keeps source/channel URLs, source cursors, the canonical
-Telegram/VK `unified_source_queue` + cursor, post URLs/platform keys, candidate
-lifecycle, the `image_candidate_queue` + cursor, the product
-`publication_goal`, and image/publication scoring metrics. It
-deliberately excludes raw post text, raw API payload JSON and media bytes
-because posts/images can be re-fetched from external URLs when needed.
+Checkpoint schema `region-talk-ydb-checkpoint-v4` keeps only singleton state:
+cursors, cooldowns, queue totals/positions, publication goal and metrics. It
+does **not** embed the 7k-source queue, 11k processed posts, candidate memory,
+image/publication queues or vector rows. The loader reconstructs those
+collections from their stable row-level kinds. This avoids rewriting two
+~15.9 MB JSON snapshots on every run.
 
-Current compact state schema is `region-talk-ydb-compact-v3`. The MVP adapter
-keeps the compact snapshots above and additionally writes row-level queue records
+Entity compaction schema remains `region-talk-ydb-compact-v3`; checkpoint schema
+is v4. The adapter writes row-level queue records
 into the same KV table. For the semi-manual product discovery loop these rows are
 **online durable state**, not final-report-only artifacts: notebooks must upsert
 main records as soon as they are selected, discovered, fetched, scored or
@@ -268,6 +271,21 @@ Region Talk must keep row-level product state compact:
 - full post text, raw comment text, raw Telegram/VK payloads and media bytes are
   excluded from YDB;
 - row payloads use compact field allow-lists and short excerpts/hashes only;
+- `processed_post_item` is the single durable post record. New writes no longer
+  duplicate it as `post_live_item`; the old kind is read-only migration input;
+- BGE dense vectors are stored as `f16_le_base64` plus `embedding_dim`, not a
+  JSON list of decimal floats. Semantic scores and E5+BGE fusion remain intact;
+- BGE run-result rows contain only compact summary/sample references and are
+  retention-limited; they never duplicate the full enrichment rows;
+- `latest_state` and `run_state_snapshot` use checkpoint-v4 and therefore stay
+  kilobyte-scale rather than carrying all row-level product state;
+- queue admission sequence repair writes only rows marked
+  `queue_seq_repaired_this_run=true`; one repaired row must never rewrite the
+  whole source frontier;
+- the table default column family uses LZ4. The dry-run-first migration command
+  is `scripts/region_talk_ydb_compact.py`; it copies into a separate namespace,
+  drops completed embedding-research rows and applies bounded retention without
+  mutating the source table;
 - large `run_state_snapshot` rows are retention-limited
   (`REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST`, default `1`) because the durable
   source/post/image/candidate rows already carry the live product state;
@@ -280,6 +298,15 @@ Region Talk must keep row-level product state compact:
 - protected latest rows such as `latest_state`, `latest_business_heartbeat`,
   `online_stats:latest`, `queue_cursor:source`, `queue_cursor:image`,
   `queue_cursor:source_scan` and `queue_cursor:image_diagnostic` are kept.
+
+The 2026-07-11 live audit measured 644 MB physical storage for only ~171 MiB of
+live JSON. The main cause was write amplification: two full 15.9 MB snapshots
+per run plus occasional full 7k-row queue rewrites. The validated LZ4 target has
+52,286 product/operational rows, 77.4 MB logical JSON and 42.1 MB physical
+storage while preserving all critical-kind row counts. A new
+`run_funnel_metrics` payload in every `run_metrics` row provides a reliable
+daily grain; mutable entity `run_id` fields must not be used to reconstruct
+historical daily throughput.
 
 
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the

@@ -41,6 +41,9 @@ def apply_huggingface_runtime_env_defaults() -> None:
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", os.getenv("REGION_TALK_HF_HUB_DISABLE_PROGRESS_BARS", "1"))
     os.environ.setdefault("TQDM_DISABLE", os.getenv("REGION_TALK_TQDM_DISABLE", "1"))
     os.environ.setdefault("TRANSFORMERS_VERBOSITY", os.getenv("REGION_TALK_TRANSFORMERS_VERBOSITY", "error"))
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    os.environ.setdefault("OMP_NUM_THREADS", os.getenv("REGION_TALK_TEXT_EMBEDDING_OMP_THREADS", "1"))
+    os.environ.setdefault("MKL_NUM_THREADS", os.getenv("REGION_TALK_TEXT_EMBEDDING_MKL_THREADS", "1"))
 
 
 apply_huggingface_runtime_env_defaults()
@@ -2062,6 +2065,41 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
             if isinstance(v, dict)
         },
         "queue_cursors": build_queue_cursor_state(state, source_queue, image_queue),
+        "run_funnel_metrics": state.get("run_funnel_metrics") or {},
+    }
+
+
+def compact_region_talk_checkpoint_for_ydb(compact: dict[str, Any]) -> dict[str, Any]:
+    """Return the small restart checkpoint persisted as ``latest_state``.
+
+    Product entities are already durable row-level records.  Persisting the
+    same 7k sources, 11k posts and all queues inside *both* latest/run snapshots
+    rewrote roughly 32 MB on every CandidateReport run and made YDB LSM storage
+    grow much faster than the live logical data.  The checkpoint keeps only
+    singleton/cursor state; ``load_region_talk_ydb_state`` reconstructs product
+    collections from their row-level kinds.
+    """
+    source_queue_total = int(compact.get("unified_source_queue_total") or len(compact.get("unified_source_queue") or {}))
+    image_queue_total = len(compact.get("image_candidate_queue") or {})
+    return {
+        "run_id": compact.get("run_id"),
+        "state_schema_version": "region-talk-ydb-checkpoint-v4",
+        "queue_contract_version": compact.get("queue_contract_version"),
+        "full_state_schema_version": compact.get("full_state_schema_version"),
+        "updated_at": compact.get("updated_at"),
+        "all_time_metrics": compact.get("all_time_metrics") or {},
+        "run_funnel_metrics": compact.get("run_funnel_metrics") or {},
+        "source_cursors": compact.get("source_cursors") or {},
+        "telegram_cooldowns": compact.get("telegram_cooldowns") or {},
+        "publication_goal": compact.get("publication_goal") or {},
+        "unified_source_queue_cursor_position": compact.get("unified_source_queue_cursor_position", 0),
+        "unified_source_queue_cursor_key": compact.get("unified_source_queue_cursor_key", ""),
+        "unified_source_queue_total": source_queue_total,
+        "image_candidate_queue_cursor_position": compact.get("image_candidate_queue_cursor_position", 0),
+        "image_candidate_queue_cursor_key": compact.get("image_candidate_queue_cursor_key", ""),
+        "image_candidate_queue_total": image_queue_total,
+        "queue_cursors": compact.get("queue_cursors") or {},
+        "row_level_state_contract": "all_product_entities_reconstructed_from_kind_rows",
     }
 
 
@@ -2469,7 +2507,9 @@ def write_region_talk_online_post_item(row: dict[str, Any], *, run_id: str, stag
 
         def op(session: Any) -> None:
             ensure_ydb_kv_table(ydb, session, table_path)
-            ydb_upsert_json(session, ydb, table_path, "post_live_item:" + key, "post_live_item", payload, updated_at)
+            # ``post_live_item`` used to duplicate every processed row byte for
+            # byte.  ``processed_post_item`` is now the sole production source
+            # of truth; readers retain backward compatibility with old rows.
             ydb_upsert_json(session, ydb, table_path, "processed_post_item:" + key, "processed_post_item", payload, updated_at)
 
         pool.retry_operation_sync(op)
@@ -2693,6 +2733,21 @@ def write_region_talk_source_queue_sequence_repair(rows: list[dict[str, Any]], *
         _record_ydb_online_write_failure(exc, label="source_queue_admission_sequence_repair")
         print(f"[region-talk] source_queue_sequence_repair_failed {type(exc).__name__}: {str(exc)[:180]}", flush=True)
         return 0
+
+
+def source_queue_sequence_repair_rows(rows: Iterable[dict[str, Any]], expected_repairs: int) -> list[dict[str, Any]]:
+    repair_rows = [
+        row for row in rows
+        if isinstance(row, dict)
+        and not row.get("_sheet_note")
+        and str(row.get("queue_seq_repaired_this_run") or "").lower() == "true"
+    ]
+    if len(repair_rows) != int(expected_repairs):
+        raise RuntimeError(
+            "source queue sequence repair accounting mismatch: "
+            f"marked={len(repair_rows)} metric={int(expected_repairs)}"
+        )
+    return repair_rows
 
 
 def write_region_talk_entity_cache_items(cache: dict[str, Any], *, run_id: str, stage: str) -> int:
@@ -3415,15 +3470,17 @@ LIMIT 10000;
     to_delete = deletable[keep_last:]
     if not to_delete:
         return 0
-    delete_query = session.prepare(f"DECLARE $pk AS Utf8; DELETE FROM `{table_path}` WHERE pk = $pk;")
+    delete_query = session.prepare(f"""
+DECLARE $rows AS List<Struct<pk:Utf8>>;
+DELETE FROM `{table_path}` ON
+SELECT pk FROM AS_TABLE($rows);
+""")
     deleted = 0
-    chunk_size = 100
+    chunk_size = max(1, getenv_int("REGION_TALK_YDB_RETENTION_DELETE_CHUNK_SIZE", 500))
     for start in range(0, len(to_delete), chunk_size):
-        tx = session.transaction(ydb.SerializableReadWrite())
-        for pk in to_delete[start:start + chunk_size]:
-            tx.execute(delete_query, {"$pk": pk}, commit_tx=False)
-            deleted += 1
-        tx.commit()
+        chunk = [{"pk": pk} for pk in to_delete[start:start + chunk_size]]
+        session.transaction(ydb.SerializableReadWrite()).execute(delete_query, {"$rows": chunk}, commit_tx=True)
+        deleted += len(chunk)
     return deleted
 
 
@@ -3438,6 +3495,9 @@ def ydb_prune_compact_retention(session: Any, ydb: Any, table_path: str) -> dict
         "online_stats": getenv_int("REGION_TALK_YDB_ONLINE_STATS_KEEP_LAST", 50),
         "queue_cursor": getenv_int("REGION_TALK_YDB_CURSOR_HISTORY_KEEP_LAST", 100),
         "semantic_bank_embedding": getenv_int("REGION_TALK_YDB_SEMANTIC_BANK_KEEP_LAST", 4),
+        "bge_m3_enrichment_result": getenv_int("REGION_TALK_YDB_BGE_RESULT_KEEP_LAST", 4),
+        "region_talk_stats_snapshot": getenv_int("REGION_TALK_YDB_STATS_SNAPSHOT_KEEP_LAST", 1),
+        "queue_metrics": getenv_int("REGION_TALK_YDB_QUEUE_METRICS_KEEP_LAST", 1),
     }
     protected = {
         "business_heartbeat": {"latest_business_heartbeat"},
@@ -3475,7 +3535,7 @@ def ydb_prune_legacy_queue_payloads(session: Any, ydb: Any, table_path: str) -> 
         data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
         if not isinstance(data, dict):
             continue
-        pruned = compact_region_talk_state_for_ydb(data)
+        pruned = compact_region_talk_checkpoint_for_ydb(compact_region_talk_state_for_ydb(data))
         if data.get("source_frontier_queue_next") or data.get("similar_seed_queue") or data.get("canonical_source_queue") or data.get("state_schema_version") != pruned.get("state_schema_version"):
             ydb_upsert_json(session, ydb, table_path, pk, kind, pruned, str(row.updated_at or pruned.get("updated_at") or utc_now_iso()))
             changed += 1
@@ -3566,6 +3626,14 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         data0["ydb_row_level_source_status_items_loaded"] = len(source_status_items)
                         data0["ydb_row_level_online_source_items_loaded"] = len(online_source_items)
                         data0["ydb_row_level_source_queue_status_items_merged"] = merged_sources
+                        # v4 checkpoints intentionally contain no embedded
+                        # source collection. Rebuild the compatibility aliases
+                        # from the canonical ordered queue so older discovery
+                        # code still receives a complete source population.
+                        queue_sources = data0.get("unified_source_queue") if isinstance(data0.get("unified_source_queue"), dict) else {}
+                        if queue_sources:
+                            data0["sources"] = dict(queue_sources)
+                            data0["region_talk_sources"] = dict(queue_sources)
                     expected_source_queue_total = int(data0.get("unified_source_queue_total") or 0)
                     loaded_source_queue_total = len(data0.get("unified_source_queue") or {})
                     if expected_source_queue_total > loaded_source_queue_total:
@@ -3755,8 +3823,9 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
             ydb, driver, cfg = ydb_connect()
             table_path = ydb_kv_table_path(cfg)
             compact = compact_region_talk_state_for_ydb(state)
+            checkpoint = compact_region_talk_checkpoint_for_ydb(compact)
             updated_at = str(compact.get("updated_at") or utc_now_iso())
-            payload = json.dumps(compact, ensure_ascii=False, sort_keys=True)
+            payload = json.dumps(checkpoint, ensure_ascii=False, sort_keys=True)
             state_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             pool = ydb.SessionPool(driver)
             state_timeout_seconds = getenv_int(
@@ -3770,9 +3839,9 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
             )
             def op(session: Any) -> None:
                 ensure_ydb_kv_table(ydb, session, table_path)
-                ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", compact, updated_at, timeout_seconds=state_timeout_seconds)
-                ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", compact, updated_at, timeout_seconds=state_timeout_seconds)
-                ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at, timeout_seconds=state_timeout_seconds)
+                ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", checkpoint, updated_at, timeout_seconds=state_timeout_seconds)
+                ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", checkpoint, updated_at, timeout_seconds=state_timeout_seconds)
+                ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}, "run_funnel_metrics": compact.get("run_funnel_metrics") or {}}, updated_at, timeout_seconds=state_timeout_seconds)
                 row_items: list[tuple[str, str, dict[str, Any]]] = []
                 row_write_mode = (os.getenv("REGION_TALK_YDB_ROW_WRITE_MODE") or "changed").strip().lower()
                 skip_row_rewrite = getenv_bool("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", True)
@@ -3858,8 +3927,12 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         if isinstance(item, dict):
                             row_items.append(("queue_cursor:" + str(name), "queue_cursor", item))
                     row_items.append(("queue_metrics:latest", "queue_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "queue_cursors": compact.get("queue_cursors") or {}, "source_queue_total": len(compact.get("unified_source_queue") or {}), "image_queue_total": len(compact.get("image_candidate_queue") or {})}))
-                compact["_ydb_row_level_publication_candidate_items_written"] = len(compact.get("publication_candidate_queue") or {})
-                compact["_ydb_row_level_processed_post_items_written"] = len(processed_snapshot_items)
+                row_kind_counts: dict[str, int] = {}
+                for _pk, row_kind, _payload in row_items:
+                    row_kind_counts[row_kind] = row_kind_counts.get(row_kind, 0) + 1
+                compact["_ydb_row_kind_counts_written"] = row_kind_counts
+                compact["_ydb_row_level_publication_candidate_items_written"] = row_kind_counts.get("publication_candidate_item", 0)
+                compact["_ydb_row_level_processed_post_items_written"] = row_kind_counts.get("processed_post_item", 0)
                 compact["_ydb_row_level_items_written"] = ydb_bulk_upsert_json_many(
                     driver,
                     ydb,
@@ -3872,7 +3945,8 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op, retry_settings=state_retry_settings)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            row_kind_counts = compact.get("_ydb_row_kind_counts_written") or {}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": checkpoint.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_checkpoint_payload_bytes": len(payload.encode("utf-8")), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": compact.get("_ydb_row_level_processed_post_items_written", 0), "ydb_row_level_candidate_memory_items_written": row_kind_counts.get("candidate_memory_item", 0), "ydb_row_level_source_candidate_items_written": row_kind_counts.get("source_candidate_item", 0), "ydb_row_level_source_edge_items_written": row_kind_counts.get("source_edge_item", 0), "ydb_row_level_comment_link_items_written": row_kind_counts.get("comment_link_item", 0), "ydb_row_level_source_queue_items_written": row_kind_counts.get("source_queue_item", 0), "ydb_row_level_image_queue_items_written": row_kind_counts.get("image_queue_item", 0), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": row_kind_counts.get("queue_cursor", 0), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -10371,7 +10445,14 @@ def _run_embedding_model_pass_bounded(
     timeout = text_embedding_model_timeout_seconds()
     if runtime_remaining_seconds() > 0:
         timeout = max(30, min(timeout, int(max(30, runtime_remaining_seconds() - getenv_int("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", 120)))))
-    ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
+    requested_start_method = (os.getenv("REGION_TALK_TEXT_EMBEDDING_PROCESS_START_METHOD") or "spawn").strip().lower()
+    available_start_methods = mp.get_all_start_methods()
+    start_method = requested_start_method if requested_start_method in available_start_methods else ("spawn" if "spawn" in available_start_methods else available_start_methods[0])
+    # Forking after Telethon/YDB/torch native runtimes have initialized is not
+    # safe: the observed E5 worker exited with SIGSEGV (-11) and deferred 31/39
+    # posts in a product run. Spawn gives the model a clean CPU process while
+    # preserving the one-model-per-notebook architecture.
+    ctx = mp.get_context(start_method)
     queue: Any = ctx.Queue(maxsize=1)
     proc = ctx.Process(target=_embedding_model_pass_worker, args=(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, queue), daemon=True)
     proc.start()
@@ -12220,7 +12301,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         unified_source_queue_metrics.get("source_queue_seq_duplicate_repaired_this_run") or 0
     )
     if queue_seq_repairs and region_talk_state_backend_requested() == "ydb" and getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_WRITES", True):
-        repair_rows = [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]
+        # Never rewrite the whole frontier to persist one or two sequence
+        # repairs.  Besides the transaction cost, that used to overwrite run
+        # lineage on ~7k rows and was the largest source of YDB LSM churn.
+        repair_rows = source_queue_sequence_repair_rows(unified_source_queue_sheet, queue_seq_repairs)
         queue_seq_repair_rows_written = write_region_talk_source_queue_sequence_repair(repair_rows, run_id=run_id)
         if queue_seq_repair_rows_written < len(repair_rows):
             raise RuntimeError(
@@ -12384,6 +12468,45 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "candidate_memory": {str(r.get("candidate_memory_id")): r for r in candidate_memory_rows if r.get("candidate_memory_id")},
         "telegram_entity_cache": _REGION_TALK_TELEGRAM_RUNTIME.get("entity_cache") or previous_state.get("telegram_entity_cache") or {},
         "telegram_cooldowns": _REGION_TALK_TELEGRAM_RUNTIME.get("cooldowns") or previous_state.get("telegram_cooldowns") or {},
+    }
+    # One compact immutable row per completed run is the trustworthy grain for
+    # daily product diagnostics. Stable entity UPSERTs cannot answer "what
+    # moved today" because their run_id changes on later observations.
+    source_status_counts: dict[str, int] = {}
+    for source_row in source_rows:
+        source_status = str(source_row.get("fetch_status") or "unknown")
+        source_status_counts[source_status] = source_status_counts.get(source_status, 0) + 1
+    post_outcome_counts: dict[str, int] = {}
+    for post_row in new_posts:
+        post_outcome = str(post_row.get("current_stage") or "unknown")
+        post_outcome_counts[post_outcome] = post_outcome_counts.get(post_outcome, 0) + 1
+    publication_status_counts: dict[str, int] = {}
+    for publication_row in publication_candidate_rows:
+        publication_status = str(publication_row.get("publication_candidate_status") or "unknown")
+        publication_status_counts[publication_status] = publication_status_counts.get(publication_status, 0) + 1
+    state_to_write["run_funnel_metrics"] = {
+        "run_id": run_id,
+        "updated_at": run_now,
+        "sources_selected": len(source_rows),
+        "sources_attempted": sum(1 for r in source_rows if str(r.get("fetch_attempted") or "").lower() == "true"),
+        "sources_history_ok": sum(1 for r in source_rows if str(r.get("fetch_status") or "") == "ok"),
+        "source_status_counts": source_status_counts,
+        "posts_fetched": len(posts),
+        "posts_scored": posts_scored_count,
+        "posts_deferred": len(runtime_deferred_posts),
+        "posts_with_ko_scope": sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
+        "post_outcome_counts": post_outcome_counts,
+        "candidates_created": len(candidates),
+        "candidate_memory_new": sum(1 for r in candidate_memory_rows if str(r.get("first_candidate_run_id") or "") == run_id),
+        "image_queue_rows": len(image_candidate_queue_sheet),
+        "publication_queue_rows": len(publication_candidate_rows),
+        "publication_status_counts": publication_status_counts,
+        "keyword_queries_processed": int(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_search_queries_processed") or 0),
+        "keyword_unique_sources": int(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovered_sources_unique") or 0),
+        "keyword_post_hits_raw": int(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hits_raw") or 0),
+        "fast_check_sources_checked": int(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_sources_checked") or 0),
+        "fast_check_hits": int(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_hits") or 0),
+        "text_embedding_error_rows": sum(1 for r in new_posts if str(r.get("embedding_error") or "").strip()),
     }
     all_time_metrics = build_all_time_metrics(state_to_write, source_frontier_unique, candidate_memory_rows)
     state_to_write["all_time_metrics"] = all_time_metrics

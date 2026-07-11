@@ -689,25 +689,26 @@ can score them. Final LLM verification and candidate-memory vector recheck have
 the same heartbeat/runtime-stop discipline so YDB receives partial queues before
 the notebook exits.
 
-Real dual text embeddings remain the required product path when enabled, but
-CandidateReport must run them as sequential model passes: load E5, batch-score
-the bounded post set, release the model and collect memory, then load BGE-M3,
-batch-score the same post set, release it and fuse the two model score maps.
-This preserves the E5+BGE-M3 decision while avoiding simultaneous resident model
-weights in Kaggle CPU memory. The same rule applies to secondary candidate-memory
-rechecks: memory rows must be scored by one bounded batch pass (or by the
-prototype/gazetteer safety fallback if embeddings are unavailable), never by
-calling the dual model loader once per memory row. `text_embedding_model_pass_alive`
-and `memory_vector_recheck_batch_*` events are the expected heartbeat evidence
-while a subprocess is loading or scoring a model. `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=1` keeps
-production runs fail-loud if either model cannot produce scores; prototype
-vector fallback is a debug/offline mode, not a silent product fallback.
+Real dual text embeddings remain the required product path. CandidateReport
+loads **E5 only**, batch-scores the bounded post set and writes durable E5 rows;
+the separate `RegionTalkBgeM3Enrichment` CPU notebook reads those rows, loads
+**BGE-M3 only** and writes matching BGE rows. A later CandidateReport pass fuses
+both score maps without loading BGE. This preserves the E5+BGE-M3 decision while
+never placing both model weights in one Kaggle process. E5's isolation worker
+uses multiprocessing `spawn`, not `fork`: forking after Telethon/YDB/native torch
+initialization produced a real SIGSEGV (`exitcode=-11`) and deferred most posts
+in a product run. `text_embedding_model_pass_alive` is the expected heartbeat
+while E5 loads/scores; BGE emits its own model/batch heartbeats. Production runs
+fail loud when required current-version dual rows are absent; prototype fallback
+is debug/offline only.
 
 YDB compact state is process state, not a mirror of every XLSX/debug tab.
-Schema `region-talk-ydb-compact-v3` persists the single Telegram/VK
+Entity schema `region-talk-ydb-compact-v3` persists the single Telegram/VK
 `unified_source_queue`, the downstream text-confirmed `image_candidate_queue`,
-compact source/post/candidate lifecycle state and `queue_cursors`. In addition
-to `latest_state`, the writer upserts row-level records so parallel notebooks can
+compact source/post/candidate lifecycle state and `queue_cursors` as stable
+row-level records. `latest_state` uses the small
+`region-talk-ydb-checkpoint-v4` singleton contract and does not duplicate those
+collections. Parallel notebooks therefore
 exchange work without treating Kaggle as a black box:
 
 - `source_queue_item:<canonical_source_key>` / kind `source_queue_item`: one

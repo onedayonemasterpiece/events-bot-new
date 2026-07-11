@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import atexit
+import base64
 import csv
 import gc
 import hashlib
@@ -9,6 +10,7 @@ import json
 import os
 import re
 import subprocess
+import struct
 import sys
 import time
 from datetime import datetime, timezone
@@ -372,7 +374,7 @@ def emit_event(name: str, **payload: Any) -> None:
     except Exception:
         pass
     if getenv_bool("REGION_TALK_BGE_STDOUT_EVENTS", True):
-        printable = {k: v for k, v in row.items() if k not in {"embedding_vector"}}
+        printable = {k: v for k, v in row.items() if k not in {"embedding_vector", "embedding_vector_f16_b64"}}
         print("[region-talk-bge] " + json.dumps(printable, ensure_ascii=False, sort_keys=True), flush=True)
     if getenv_bool("REGION_TALK_BGE_WRITE_HEARTBEATS", True) and (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() == "ydb":
         try:
@@ -624,6 +626,24 @@ def _round_scores(scores: dict[str, float]) -> dict[str, float]:
 
 def text_hash(text: str) -> str:
     return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def encode_dense_vector_f16(vector: Iterable[float]) -> str:
+    """Encode a normalized dense vector as compact portable float16 bytes."""
+    values = [float(value) for value in vector]
+    if not values:
+        return ""
+    raw = struct.pack("<" + ("e" * len(values)), *values)
+    return base64.b64encode(raw).decode("ascii")
+
+
+def decode_dense_vector_f16(value: str, embedding_dim: int) -> list[float]:
+    """Decode the YDB f16 representation for future anti-vector scoring."""
+    raw = base64.b64decode(str(value or ""))
+    expected = max(0, int(embedding_dim)) * 2
+    if len(raw) != expected:
+        raise ValueError(f"invalid f16 vector bytes: actual={len(raw)} expected={expected}")
+    return [float(item) for item in struct.unpack("<" + ("e" * int(embedding_dim)), raw)]
 
 
 def compact_text(value: Any, *, max_len: int = 4000) -> str:
@@ -925,7 +945,8 @@ def build_enrichment_payload(
         "dense_vector_stored": bool(dense_vector),
     }
     if dense_vector is not None:
-        payload["embedding_vector"] = [round(float(x), 6) for x in dense_vector]
+        payload["embedding_vector_f16_b64"] = encode_dense_vector_f16(dense_vector)
+        payload["embedding_vector_encoding"] = "f16_le_base64"
     return payload
 
 
@@ -944,7 +965,20 @@ def write_result_rows(rows: list[dict[str, Any]], summary: dict[str, Any]) -> in
         result_payload = {
             "summary": final_summary,
             "row_count": len(rows),
-            "rows_without_vectors": [{k: v for k, v in row.items() if k != "embedding_vector"} for row in rows[:50]],
+            # Result rows are observability, not a second copy of enrichment
+            # data. Keep only a handful of compact references; full scores and
+            # the vector live in ``text_vector_enrichment_item``.
+            "sample_refs": [
+                {
+                    "post_id": row.get("post_id"),
+                    "post_url": row.get("post_url"),
+                    "text_hash": row.get("text_hash"),
+                    "vector_gate_status_bge_m3": row.get("vector_gate_status_bge_m3"),
+                    "bge_m3_top_class": row.get("bge_m3_top_class"),
+                    "bge_m3_top_score": row.get("bge_m3_top_score"),
+                }
+                for row in rows[:5]
+            ],
         }
         ydb_upsert_json(session, ydb, table_path, f"bge_m3_enrichment_result:{run_id}", "bge_m3_enrichment_result", result_payload, now)
         ydb_upsert_json(session, ydb, table_path, "bge_m3_enrichment_result:latest", "bge_m3_enrichment_result", result_payload, now)
@@ -1079,7 +1113,7 @@ def run_bge_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
         summary["error"] = f"{type(exc).__name__}: {str(exc)[:500]}"
         emit_event("bge_ydb_write_failed", phase="write_ydb", status="error", run_id=run_id, error=summary["error"])
 
-    public_rows = [{k: v for k, v in row.items() if k != "embedding_vector" and k != "_pk"} for row in result_rows]
+    public_rows = [{k: v for k, v in row.items() if k not in {"embedding_vector", "embedding_vector_f16_b64", "_pk"}} for row in result_rows]
     (output_dir / "bge_m3_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": public_rows}, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "bge_m3_enrichment_rows.jsonl").write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in public_rows) + ("\n" if public_rows else ""), encoding="utf-8")
     (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": summary["status"], "summary": summary}, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -1,6 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / YDB 1 GB sustainability and daily funnel evidence**: live
+  audit found 644 MB physical storage for ~171 MiB current JSON, driven by two
+  15.9 MB full snapshots per CandidateReport run and whole-frontier rewrites for
+  one/two queue-sequence repairs. Snapshot v4 now stores only restart cursors,
+  cooldowns, goals and metrics; product entities remain stable row-level rows,
+  sequence repair writes only marked rows, retention deletes are bulk YQL, and
+  `processed_post_item` replaces the duplicate `post_live_item` write. BGE dense
+  vectors use float16/base64 while preserving E5+BGE score fusion, and BGE result
+  rows no longer duplicate enrichment payloads. The dry-run-first
+  `region_talk_ydb_compact.py` migration produced a validated LZ4 target of
+  52,286 rows / 77.4 MB logical / 42.1 MB physical with all critical-kind counts
+  unchanged. Per-run funnel metrics are now durable, and E5 isolation defaults
+  to `spawn` after a real forked worker SIGSEGV deferred 31 of 39 fetched posts.
 - **Region Talk / durable post identity and capacity hygiene**: processed-post
   YDB rows now use stable Telegram/VK platform keys instead of fetch-path
   `post_id`, with a dry-run-first bounded normalizer for legacy duplicates.

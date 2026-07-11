@@ -517,6 +517,16 @@ while confirmed_sent < 20 and llm_calls_used < 100 and progress_budget_ok:
 
 The local orchestrator/notifier depends on the Python `ydb[yc]` package. On Debian/Ubuntu hosts with PEP-668 externally managed Python, run it from a small virtualenv (for example under `artifacts/codex/region-talk-ydb-venv/`) instead of relying on system-wide auto-install.
 
+The orchestrator must pass one explicit `REGION_TALK_YDB_NAMESPACE` to every
+CandidateReport/BGE/Image/finalizer launch. The current production namespace is
+`region_talk_compact`: an LZ4 row-family table with checkpoint-v4 singleton
+state and row-level product entities. It must not mix a Candidate run on the
+legacy `region_talk` namespace with downstream workers on the compact namespace.
+Storage health is an orchestration guardrail: monitor physical table bytes,
+checkpoint payload bytes, actual row writes per kind and E5/BGE actionable
+backlog. A one-row queue-sequence repair writing thousands of source rows is a
+failure, not successful progress.
+
 Suggested stop/trigger counters:
 
 - `new_publics_discovered`;

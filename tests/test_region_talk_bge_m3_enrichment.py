@@ -180,7 +180,11 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual(payload["bge_m3_positive_class"], "ko_visit_impression")
         self.assertEqual(payload["bge_m3_ko_geo_top"], "Куршская коса")
         self.assertEqual(payload["bge_m3_external_geo_top"], "Сочи")
-        self.assertIn("embedding_vector", payload)
+        self.assertNotIn("embedding_vector", payload)
+        self.assertEqual(payload["embedding_vector_encoding"], "f16_le_base64")
+        decoded = mod.decode_dense_vector_f16(payload["embedding_vector_f16_b64"], 3)
+        self.assertEqual(len(decoded), 3)
+        self.assertAlmostEqual(decoded[0], 0.1, places=3)
 
 
 if __name__ == "__main__":

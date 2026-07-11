@@ -2588,6 +2588,13 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotIn("raw_text", json.dumps(compact["post_link_queue"], ensure_ascii=False))
         self.assertNotIn("source_frontier_queue_next", compact)
         self.assertNotIn("similar_seed_queue", compact)
+        checkpoint = mod.compact_region_talk_checkpoint_for_ydb(compact)
+        self.assertEqual(checkpoint["state_schema_version"], "region-talk-ydb-checkpoint-v4")
+        self.assertEqual(checkpoint["unified_source_queue_total"], 1)
+        self.assertNotIn("processed_posts", checkpoint)
+        self.assertNotIn("unified_source_queue", checkpoint)
+        self.assertNotIn("image_candidate_queue", checkpoint)
+        self.assertLess(len(json.dumps(checkpoint, ensure_ascii=False)), len(blob))
         self.assertIn("https://t.me/x/1", blob)
         self.assertNotIn("RAW TEXT MUST NOT BE STORED", blob)
         self.assertNotIn("RAW SOURCE DESC", blob)
@@ -4346,6 +4353,18 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                     os.environ.pop(name, None)
                 else:
                     os.environ[name] = value
+
+    def test_source_queue_sequence_repair_only_selects_marked_rows(self) -> None:
+        mod = load_module()
+        rows = [
+            {"canonical_source_key": "telegram:old", "queue_seq": 1},
+            {"canonical_source_key": "telegram:repair", "queue_seq": 2, "queue_seq_repaired_this_run": "true"},
+            {"_sheet_note": "note", "queue_seq_repaired_this_run": "true"},
+        ]
+        selected = mod.source_queue_sequence_repair_rows(rows, 1)
+        self.assertEqual([row["canonical_source_key"] for row in selected], ["telegram:repair"])
+        with self.assertRaises(RuntimeError):
+            mod.source_queue_sequence_repair_rows(rows, 2)
 
     def test_online_queue_handoff_uses_bulk_upsert_for_independent_rows(self) -> None:
         mod = load_module()
