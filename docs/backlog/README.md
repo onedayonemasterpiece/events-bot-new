@@ -15,6 +15,7 @@
 - Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
 - Poll to Repost (опрос в TG -> репост события): `docs/backlog/features/poll-to-forward/README.md`
 - Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
+- «Тема дня — Калининград» (один source-aware дайджест о главной теме региональных авторов за вчера, E5+BGE, роли, метрики, антиповтор, Telegram/VK, Kaggle): `docs/backlog/features/topic-of-the-day-kaliningrad/README.md`
 
 ## Implemented (для ориентира)
 

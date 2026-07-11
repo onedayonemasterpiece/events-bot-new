@@ -8,6 +8,8 @@
 
 ### Added
 
+- **«Тема дня — Калининград» / docs-first design**: documented a separate-project daily source-aware digest that reads the compact Region Talk/YDB source contract, clusters the previous day with paired E5+BGE recall plus LLM verification, assigns evidence-grounded author roles, normalizes visible engagement, checks published-topic novelty, renders Telegram Bento/VK multi-photo assets and runs through a compact YDB + orchestrated Kaggle publication contract; no channel, database rows, kernels, tokens or publications were created.
+
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.

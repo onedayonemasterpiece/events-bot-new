@@ -79,6 +79,13 @@ sections:
       telegram_monitoring: docs/backlog/features/telegram-monitoring/README.md
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
+      topic_of_the_day_kaliningrad:
+        docs: docs/backlog/features/topic-of-the-day-kaliningrad/README.md
+        region_talk_baseline: docs/backlog/features/topic-of-the-day-kaliningrad/region-talk-baseline.md
+        topic_selection: docs/backlog/features/topic-of-the-day-kaliningrad/topic-selection.md
+        data_and_operations: docs/backlog/features/topic-of-the-day-kaliningrad/data-and-operations.md
+        publication_design: docs/backlog/features/topic-of-the-day-kaliningrad/publication-design.md
+        rollout: docs/backlog/features/topic-of-the-day-kaliningrad/rollout.md
       event_scoring: docs/backlog/features/event-scoring/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
