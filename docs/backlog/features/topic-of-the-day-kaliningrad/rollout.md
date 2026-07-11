@@ -48,7 +48,9 @@ TOPIC_DAY_DRY_RUN=1
 TOPIC_DAY_DISABLE_PUBLISH=1
 ```
 
-### MVP-2 — 14–30 дней shadow editions
+### MVP-2 — shadow editions, длительность пока не выбрана
+
+**Shadow mode** означает: система ежедневно делает полный анализ, выбирает тему, пишет текст и строит карточки, но ничего не публикует в открытый канал. Владелец вручную сравнивает результат с реальными постами. Цель — найти ошибки кластеризации, ролей, ссылок, антиповтора и media до первого публичного выпуска.
 
 Каждый день редактор независимо отвечает:
 
@@ -68,7 +70,7 @@ TOPIC_DAY_DISABLE_PUBLISH=1
 - durable publication claim;
 - API/live verification;
 - edit/delete/reconcile runbook;
-- минимум 14 последовательных корректных выпусков или осознанных `no_topic` без дублей.
+- заранее согласованное число корректных shadow/approved выпусков или осознанных `no_topic` без дублей.
 
 ### MVP-4 — VK multi-photo post
 
@@ -96,7 +98,9 @@ TOPIC_DAY_DISABLE_PUBLISH=1
 
 ## 3. Golden set
 
-Минимум 30 разных дней, включая:
+Golden set содержит минимум 30 разных исторических/тестовых дней. Это объём набора примеров для replay и не означает, что перед первым ручным выпуском обязательно ждать 30 календарных дней.
+
+Набор включает:
 
 - один явный массовый сюжет;
 - два конкурирующих сюжета;
@@ -179,7 +183,7 @@ TOPIC_DAY_DISABLE_PUBLISH=1
 | Комментарии недоступны | nullable availability; не присваивать `most_discussed` |
 | Тема повторяется | exact + dual-vector + fingerprint + material-newness verifier |
 | Важное продолжение ошибочно заблокировано | новый факт/стадия/result contract + human review |
-| Неверное/чужое media | score all bounded album items, evidence binding, rights gate |
+| Неверное/чужое media | score all bounded album items, evidence binding, rights gate, прямая source-post ссылка на каждом использованном фото |
 | Source link потерян в rich text | сохранять entities/embedded URLs до normalization |
 | E5/BGE рассинхронизированы | immutable corpus, exact text-hash join, coverage barrier |
 | Kaggle завершился после side effect без report | per-target claim, `unknown`, platform reconcile |
@@ -208,14 +212,15 @@ TOPIC_DAY_DISABLE_PUBLISH=1
 
 Нужны ответы владельца продукта, но они не блокируют docs-first архитектуру:
 
-1. Должен ли канал публиковать **строго каждый день**, даже когда нет темы с независимой поддержкой, или принимаем безопасный `0..1`?
-2. На каком этапе разрешить full autopublish: после 14, 30 или другого числа manual shadow/approved editions?
-3. Какое целевое local time анализа и публикации?
-4. Входят ли официальные ведомства/организаторы в source corpus наравне с блогерами, либо только как factual evidence без «голоса»?
-5. Какие источники объединяются в одну ownership group?
-6. Разрешено ли использовать публичные avatars/photos в Bento/VK или до отдельного согласования действует `link_only`?
-7. Нужен ли Telegram album/video в первом релизе или начинаем с одной Bento-карточки?
-8. Как называются и кем администрируются новый Telegram channel и VK community?
+Решение `0..1` уже принято и больше не является открытым вопросом.
+
+1. Сколько успешных тестовых черновиков без публикации нужно проверить до первого публичного выпуска: фиксированное число, календарный период или сразу публиковать только после ручного approve?
+2. Какое целевое local time анализа и публикации?
+3. Входят ли официальные ведомства/организаторы в source corpus наравне с блогерами, либо только как factual evidence без «голоса»?
+4. Какие источники объединяются в одну ownership group?
+5. Считаем ли source-link overlay достаточным продуктовым условием для публичных photos или сохраняем отдельный allowlist/permission gate?
+6. Нужен ли Telegram album/video в первом релизе или начинаем с одной Bento-карточки?
+7. Как называются и кем администрируются новый Telegram channel и VK community?
 
 ## 10. Definition of Done для будущей реализации
 
