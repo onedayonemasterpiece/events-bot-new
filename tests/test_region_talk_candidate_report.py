@@ -1326,8 +1326,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_confirmed_blogger_locations_lead_adaptive_queries(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")
+        old_confirmed = os.environ.get("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE")
         try:
-            os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = "4"
+            os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = "2"
+            os.environ["REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE"] = "10"
             row = {
                 "external_blogger_evidence_status": "confirmed_external",
                 "external_blogger_locations_text": "Поездка: Нойхаузен, Бальга и Тапиау",
@@ -1336,12 +1338,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "evidence-run", 0, start_cursor=0, strategy="adaptive_cursor_v1", source_row=row,
             )
             self.assertEqual(queries[:3], ["Тапиау", "Нойхаузен", "Бальга"])
-            self.assertEqual(len(queries), 4)
+            self.assertEqual(len(queries), 10)
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", None)
             else:
                 os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
+            if old_confirmed is None:
+                os.environ.pop("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", None)
+            else:
+                os.environ["REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE"] = old_confirmed
+
+    def test_generic_adaptive_fast_check_keeps_small_wave(self) -> None:
+        mod = load_module()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "10",
+        }, clear=False):
+            queries = mod.source_fast_check_queries(
+                "generic-run", 0, start_cursor=0, strategy="adaptive_cursor_v1",
+                source_row={"source_queue_status": "pending_scan"},
+            )
+        self.assertEqual(len(queries), 2)
 
     def test_confirmed_blogger_backlog_does_not_spend_fast_check_on_generic_sources(self) -> None:
         mod = load_module()

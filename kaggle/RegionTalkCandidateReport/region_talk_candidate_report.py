@@ -8681,6 +8681,16 @@ def source_fast_check_queries(
     per_source = max(1, getenv_int("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", 3))
     strategy = (strategy or source_fast_check_query_strategy()).strip().lower()
     if strategy == "adaptive_cursor_v1":
+        row = source_row if isinstance(source_row, dict) else {}
+        if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external":
+            # Confirmed external bloggers are a deliberately high-probability
+            # cohort. A generic two-query wave is too shallow here: exploit
+            # source-local search while retaining human-like pacing,
+            # stop-on-first-hit and the durable continuation cursor.
+            per_source = max(
+                per_source,
+                max(1, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 10)),
+            )
         bank = source_fast_check_query_bank_for_row(source_row)
         cursor = max(0, int(start_cursor or 0))
         return bank[cursor:cursor + per_source]

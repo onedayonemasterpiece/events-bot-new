@@ -221,6 +221,17 @@ Per run, the orchestrator keeps this intentionally conservative:
 - all resolves/searches go through `TelegramRequestGovernor` plus human-like
   pacing.
 
+Confirmed non-local bloggers from `region_talk_external_blogger_evidence` are
+the high-probability exception to the generic two-query wave. With adaptive
+search enabled they may consume up to
+`REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE=10` source-local
+queries in one run, ordered by evidence-specific locations and then by the
+diverse regional place/POI bank. The pass still stops on the first fresh exact
+KO post, uses the same 5–9 second human-like pauses, never bypasses cached
+entity/FloodWait rules, and persists its cursor for continuation. Thus the
+extra budget is spent only after an author is independently confirmed as an
+external visitor, rather than slowing the generic source backlog.
+
 The production rollback default remains `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=legacy_v1`
 with the historical two-query pair. The bounded research mode
 `adaptive_cursor_v1` may be enabled explicitly for a controlled run. It uses a
