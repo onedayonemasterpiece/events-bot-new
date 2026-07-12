@@ -6,6 +6,7 @@ on:
 jobs:
   python-ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,7 +27,7 @@ jobs:
           site/scripts/export-production-preview-data.py
       - name: Run incident regression tests
         run: >-
-          python -m pytest -q
+          python -m pytest -vv
           tests/test_event_vector_sync.py
           tests/test_event_identity.py
           tests/test_static_site_build_handoff.py
