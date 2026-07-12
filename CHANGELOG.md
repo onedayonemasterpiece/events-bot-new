@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static personalization / release acceptance**: made manual verified email a one-time versioned localStorage entry with explicit forget/reset, and required traced Playwright/Gherkin E2E across browser state, accepted Supabase evidence, profile formation and next-feed application; mature golden personas such as «Чайковский» must reach a relevant event within 20 valid card impressions.
 - **Static personal announcements / release plan**: required a truthful D-1 Postbox reminder state after calendar save, a shared Yandex-or-manual verified-email journey, and saved-search promotion into normalized/idempotent public static tags only after semantic and result-set novelty checks against existing tags.
 - **Static personal announcements / release checklist**: made full canonical-site CDN delivery plus a zero-exception lightweight WebP/safe-SVG asset audit presentation gates, and scheduled the Telegram/VK daily-announcement switch to canonical static-site links as a separate post-presentation canary with rollback.
 - **Email infrastructure / live foundation**: provisioned the retained SpaceWeb `info@`/`dmarc@` mailboxes and aligned MX/SPF/DKIM/DMARC without moving Yandex DNS, verified the `kenigevents.ru` Postbox identity, added isolated KMS/Lockbox/Object Storage/YMQ/Function infrastructure, and replaced the unsafe mutually-exclusive SpaceWeb forwarding assumption with a read-only UID-cursor IMAP collector while retaining direct Mail Trigger canaries.

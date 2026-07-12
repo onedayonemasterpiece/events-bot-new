@@ -2,7 +2,7 @@
 
 > Дата аудита: **2026-07-11**
 >
-> Актуализация product scope: **2026-07-12** — D-1 event reminders, Yandex/manual-email choice и saved-search public tags.
+> Актуализация product scope: **2026-07-12** — D-1 event reminders, one-time localStorage email, Yandex/manual-email choice, saved-search public tags и metric-backed personalization E2E.
 >
 > Базовая ревизия: `origin/main@323cb1e407c6`
 >
@@ -58,7 +58,7 @@
 | **F3** | Умный поиск + сохранение результата как публичного тега | **Partial** | Search UI/Edge source/canary и private feedback/tag-candidate intake существуют | Production `/poisk/`; explicit save; normalization/idempotency/result-novelty curation; current-catalog static tag generation; public anonymous tag E2E |
 | **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
 | **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; отдельная UX V3 branch активна | Design freeze + owner sign-off; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
-| **F6** | Views/list/detail/social-action personalization telemetry | **Partial** | Local profile/actions/served-list contract; remote browser writes запрещены/не включены | Consent-safe remote ingest, RLS/grants, bot/rate/dedupe/retention, list/detail/dwell/CTA/calendar/share/like/hide row evidence |
+| **F6** | Views/list/detail/social-action personalization telemetry and application | **Partial** | Local profile/actions/served-list Playwright contract exists; full DB integration/application E2E missing | Detailed Gherkin/Playwright: localStorage → accepted/deduped DB rows → profile rollup → next feed; golden personas and `cards_to_first_relevant <=20` |
 | **F7** | На выбор Yandex identity/email или вручную введённый verified email | **Partial** | Yandex PKCE login/logout работает; manual email path описан | Yandex email sync/fallback; one-use email code/link with TTL/replay/rate limits; both paths converge without duplicate identity/profile; real-device proof |
 | **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Designed / Partial foundation** | Shared disabled Supabase control plane includes verified identity/consent/outbox and `event_reminder_24h` kind | Calendar UX; D-1 scheduler; Postbox template/event ingest; separate streams; SPF/DKIM/DMARC; suppression/warmup/alerts; live canary |
 | **F9** | Избранное пользователя | **Missing** | Local `liked_event_ids` — это не durable favorites | Define favorite semantics; DB/RLS/API/page; cross-device/merge/lifecycle/delete/export |
@@ -248,6 +248,7 @@ Smart Update является владельцем семантического 
 - [ ] Valid impressions, detail views, dwell, card click, ticket/calendar/share/like/hide contain surface/rank/layout context.
 - [ ] Verified email supports both one-time code and one-click link for the same identity/transaction, with TTL and replay/attempt limits.
 - [ ] На всех email-dependent surfaces есть одинаковый выбор: Yandex login/email или ручной ввод почты; Yandex без usable email переводит в manual verification, не ломая identity и не создавая второй профиль.
+- [ ] Manual-email path writes/reuses versioned `ke_contact_email_v1`: one entry per browser, pending/verified state survives reload and later saves, explicit `Забыть почту` works, and local cache never substitutes for server verification/consent.
 - [ ] Anonymous→authorized merge explicit, idempotent, auditable, reversible; logout behavior defined.
 - [ ] Favorite, like and calendar semantics no longer conflated.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
@@ -266,6 +267,16 @@ Smart Update является владельцем семантического 
 - [ ] D-1 scheduler derives `send_at` from the current canonical start/timezone, revalidates event + verified identity + transactional consent + suppression before claim and emits at most one reminder per user/event/start-version.
 - [ ] Save retry, undo, event merge, cancellation, reschedule, late save (<24h), scheduler restart and provider retry cannot duplicate or misdirect a reminder; calendar/ICS remains usable when mail is unavailable.
 - [ ] Real Postbox seed E2E proves calendar save → visible masked promise → scheduled `event_reminder_24h` → provider message id/event, plus opt-out/suppression/kill-switch rollback.
+
+### Stage 5A — Personalization E2E and quality metrics
+
+- [ ] Канонический [personalization E2E/KPI contract](../features/unsigned-personalization/e2e-acceptance.md) реализован как traceable Gherkin scenario IDs + Playwright tests, а не только как документ.
+- [ ] Deterministic contract suite проверяет consent/no-consent, localStorage schema/migration/corruption, valid impressions/actions, dedupe, hidden state, email cache, static fallback и DB/network failure.
+- [ ] Integration suite запускает реальный browser flow через изолированный Supabase namespace/project; service-side fixture отдельно проверяет accepted rows, dedupe, profile snapshots и cleanup, не передавая secret key в browser.
+- [ ] Один correlated run доказывает четыре стадии: сигнал появился в localStorage → принят в БД → изменил ожидаемый профиль → применён к следующей выдаче.
+- [ ] Golden-persona pack включает «Чайковский», cold/mature, positive/negative interests, mobile/desktop, no-relevant-supply и catalog refresh; ground truth строится по canonical event features, не по broad title-regex.
+- [ ] Для каждого eligible mature golden scenario `cards_to_first_relevant <= 20`; mature fixture и правила valid impression/meaningful action/versioning зафиксированы в evidence.
+- [ ] Dashboard/artefact считает collection success, duplicate/drop reasons, profile rollup lag, profile-to-feed application, MRR/precision@20, relevant supply, top-20 hide/skip/diversity/fallback guardrails.
 
 ### Stage 6 — Transport, discussion signals, admin repair, media
 
@@ -311,6 +322,8 @@ Smart Update является владельцем семантического 
 | Rollback | last-good release restorable by documented operator action and drill |
 | Email safety | `0` sends to suppressed/unverified/unsubscribed recipients |
 | Admin issue idempotency | one active ArtKodex task per report/idempotency key |
+| Mature-persona time to interest | every eligible golden scenario reaches the first relevant event within `<=20` validly inspected cards; production percentile target follows measured canary baseline |
+| Personalization E2E integrity | one correlated run proves localStorage collection, exactly-once accepted DB evidence, expected profile change and application to the next served list |
 
 ## 9. Release evidence pack
 
@@ -325,6 +338,7 @@ Smart Update является владельцем семантического 
 - [ ] release manifest and catalog parity report;
 - [ ] incident regression checklist and public-surface evidence;
 - [ ] rollback command/result;
+- [ ] for personalization: mapped Gherkin/Playwright results, redacted before/after localStorage, DB assertions/profile snapshot and `cards_to_first_relevant` calculation;
 - [ ] remaining risks, owner and due date.
 
 ## 10. Открытые продуктовые и архитектурные решения
@@ -341,6 +355,7 @@ Smart Update является владельцем семантического 
 10. **SLO:** availability, publication freshness, event-quality error budget and canary duration.
 11. **Related semantics:** strict Gemma acceptance for “Похожие” vs pgvector-only neutral continuation; required precision@K/coverage/diversity thresholds.
 12. **Public search-tag novelty:** утвердить числовые semantic/result-overlap thresholds, minimum result count и moderator/owner для accept/merge/reject; product rule о mandatory normalization/idempotency/material difference уже принят.
+13. **Personalization production KPI:** golden release gate `<=20` принят; после canary утвердить production percentile/SLO и minimum relevant-supply coverage, не смешивая mature/cold-start/no-supply cohorts.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 

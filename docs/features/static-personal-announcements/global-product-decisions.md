@@ -19,6 +19,8 @@
 13. **A saved event may have one explicit D-1 email reminder.** After calendar/favorite save the UI shows whether a reminder will be sent 24 hours before the canonical start and to which masked verified address. Save/calendar alone never grants transactional consent; missing email/consent is resolved inline before the promise is shown.
 14. **Email acquisition always offers Yandex or manual email.** A usable verified email returned through Yandex may be reused; otherwise the user enters an address and verifies the same Supabase identity transaction by code or link. Recommendation and transactional consents remain separate.
 15. **A saved successful search becomes a public tag only after normalization, deduplication and novelty proof.** Equivalent intents/result sets merge into one tag. Accepted tags are regenerated from the current catalog during static builds, are public/anonymous and disclose no creator identity or private query history.
+16. **Manual email is entered once per browser.** Without Yandex, the normalized address and pending/verified UX state persist in versioned localStorage and are reused on later visits/calendar saves. Supabase remains verification/identity/consent authority; localStorage cannot independently authorize mail and has an explicit `Забыть почту` action.
+17. **Personalization release acceptance is end-to-end and metric-backed.** Playwright/Gherkin must prove localStorage collection, accepted/deduped DB records, profile formation and application to a later feed. For every eligible mature golden persona, including «Чайковский», the first relevant event must be reached within at most 20 validly inspected cards.
 
 ## Consequences
 
@@ -30,6 +32,7 @@
 - Yandex authentication is still successful when the provider supplies no usable email; email-dependent actions then require manual verification before they can be promised.
 - Reminder scheduling is keyed by user, canonical event and start-version so save retries/reschedules cannot create duplicate D-1 mail.
 - Public search-tag novelty is judged by normalized intent and verified result-set overlap, not by different wording alone; merged candidates point to the existing canonical tag.
+- A passing localStorage test or a passing DB insert alone is insufficient personalization evidence; the same correlated run must show that the expected profile changed the next served list.
 - All ten release workstreams in the readiness checklist remain blockers.
 - The public recommendation-email launch can reach fewer than 200 users during canary or when provider seed/service contacts reduce usable plan capacity, but it can never exceed 200 active consented users without a later explicit product and infrastructure decision.
 

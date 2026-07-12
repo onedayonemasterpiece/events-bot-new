@@ -17,7 +17,7 @@ For the release, “Добавить в календарь” and “Избра�
 After a successful save, the UI must immediately make reminder state understandable:
 
 - when verified email and transactional-event consent already exist, show the masked destination and the promise to remind 24 hours before the canonical start;
-- when email or consent is missing, show the next action inline: Yandex login or manual verified-email entry, then explicit reminder opt-in;
+- when email or consent is missing, show the next action inline: Yandex login or manual verified-email entry, then explicit reminder opt-in; a manually entered address is cached once in `ke_contact_email_v1` and reused on later same-browser saves instead of being requested again;
 - when less than 24 hours remain or the event start is not trustworthy, do not promise a D-1 message.
 
 Calendar export must remain successful even when email verification, consent capture or the mail provider is unavailable. Conversely, an email/reminder failure must not roll back the durable saved-event state or ICS download.

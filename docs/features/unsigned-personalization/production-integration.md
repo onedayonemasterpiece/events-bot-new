@@ -321,17 +321,19 @@ Key product reports:
 - bot quarantine/drop rate;
 - fallback rate by write-path/storage/schema incompatibility.
 
-## Future auth/linking gate
+Release acceptance, exact E2E boundaries and the mature-persona `cards_to_first_relevant <= 20` gate are canonical in [Personalization E2E acceptance and KPIs](e2e-acceptance.md). Analytics storage success alone is not product success: the same correlated run must prove application to the next served list.
+
+## Auth/linking gate
 
 Anonymous personalization cannot silently become authenticated identity stitching.
 
-Later login flow:
+Accepted login flow:
 
 1. User logs in.
-2. UI asks whether to use this browser personalization on the account.
+2. If eligible personalization consent already exists, linking starts automatically without a second merge-confirmation dialog; without consent, local behavior is not silently persisted remotely.
 3. Backend records `auth_profile_link` with auth user id, hashed/opaque anon id, consent version and merge timestamp.
-4. Backend merges compact profile snapshots, not raw history.
-5. User can unlink/delete imported anonymous personalization.
+4. Backend idempotently merges compact profile snapshots, favorites/actions and reminder state, not raw browsing history.
+5. User sees the result and can reset, unlink or delete imported anonymous personalization.
 
 Authenticated explicit actions outrank anonymous inferred actions; old anonymous weak signals decay quickly.
 

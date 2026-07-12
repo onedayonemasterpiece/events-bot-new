@@ -25,7 +25,7 @@ Adding an event to the calendar/favorites state does not silently grant email co
 
 - verified email plus active `transactional_event` consent: **«Событие сохранено. Напомним за день на a***@domain»**;
 - verified email without consent: an explicit **«Напомнить за день по почте»** opt-in;
-- no verified email: a choice between **«Войти через Яндекс»** and **«Ввести почту»**, followed by the same explicit reminder opt-in;
+- no verified email: a choice between **«Войти через Яндекс»** and **«Ввести почту»**, followed by the same explicit reminder opt-in; manual email entry is cached once in versioned localStorage and reused after reload/later saves, while server verification remains authoritative;
 - event starts in less than 24 hours or has no trustworthy start: explain that a D-1 reminder cannot be promised; never show the success promise or enqueue a misleading reminder.
 
 Changing/removing a saved event or changing/cancelling/merging the canonical event must cancel or recompute the pending reminder. Exactly one logical reminder may be sent per `user + canonical event + start-version`; retries reuse the same idempotency key.

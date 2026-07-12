@@ -31,9 +31,11 @@ Search-specific UI remains in [authorized event search](../unsigned-personalizat
 Every surface that needs a deliverable email, including the calendar D-1 reminder, must offer two equal entry paths:
 
 1. **«Войти через Яндекс».** If Yandex supplies an email that Supabase Auth treats as verified, synchronize that address to the email control plane and show it masked before consent. If Yandex does not return a usable verified email, keep the Yandex identity and ask the user to complete manual email verification; never invent an address or claim that reminders are enabled.
-2. **«Ввести почту».** Create or recover the Supabase email identity through one verification transaction that can be completed by either the six-digit code or the one-click link. Both methods must converge on the same identity and must not create a parallel subscription-only account.
+2. **«Ввести почту».** Create or recover the Supabase email identity through one verification transaction that can be completed by either the six-digit code or the one-click link. Both methods must converge on the same identity and must not create a parallel subscription-only account. The address is entered once on that browser: a versioned `ke_contact_email_v1` localStorage record keeps the normalized/masked address and `pending|verified` state so reloads and later calendar saves reuse it instead of asking again.
 
 The user can start this journey from the calendar-save confirmation, account/profile entry point or an email-subscription surface. A verified address is reusable across those surfaces, but every purpose (`transactional_event`, recommendations, and any later purpose) has separate explicit consent. Address replacement requires verification of the new address and atomic migration/cancellation of pending reminder destinations.
+
+localStorage is UX memory, not authorization: only the verified Supabase identity/control-plane record can make a reminder eligible. The cache stores no auth/provider token or consent grant, survives ordinary reload/navigation, and is cleared by explicit `Забыть почту`/profile reset, account deletion or incompatible schema migration. See [personalization E2E acceptance](../unsigned-personalization/e2e-acceptance.md#email-only-browser-persistence-contract).
 
 ## Required states
 
