@@ -1,6 +1,6 @@
 # Event transport guidance
 
-> Status: **preliminary rail+bus presentation implementation consolidated in `integration/event-transport-schedule`; not yet in `origin/main`**. The branch is clean/pushed at `dc46c348` and is being refreshed from `main@c6396331`. Integration with the newly selected release UI remains required.
+> Status: **preliminary rail+bus presentation implementation consolidated in `integration/event-transport-schedule`; not yet in `origin/main`**. The original handoff is pushed at `dc46c348`; refresh merge `4577b334` incorporates `main@c6396331` without force-push, and draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) is the single integration review surface. Integration with the newly selected release UI remains required.
 
 ## Product contract
 
@@ -56,7 +56,7 @@ Until that integration is signed off, the preliminary block must not be copied i
 
 ## Branch governance
 
-Keep `integration/event-transport-schedule` as the single transport integration source. Its former dirty-WIP blocker is closed: `dc46c348` is pushed. Refresh it from `origin/main` without force-push, validate, then open one draft PR that exposes both the reusable transport slice and the explicit automatic-refresh/new-UI blockers. Historical presentation QA belongs in reports; do not create another competing transport implementation branch.
+Keep `integration/event-transport-schedule` as the single transport integration source. Its former dirty-WIP blocker is closed: `dc46c348` was pushed, `main@c6396331` was merged without force-push as `4577b334`, the directory/full-preview gates passed, and draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) exposes both the reusable transport slice and the explicit automatic-refresh/new-UI blockers. Historical presentation QA belongs in reports; do not create another competing transport implementation branch.
 
 ## Related documentation
 

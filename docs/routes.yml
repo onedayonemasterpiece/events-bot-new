@@ -457,6 +457,8 @@ features:
     docs: docs/features/event-transport/README.md
     related_static_site: docs/features/static-site-pages/README.md
     implementation_branch: integration/event-transport-schedule
+    refresh_merge: 4577b334
+    draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/37
     renderer_contract: docs/features/static-site-pages/event-transport-schedule.md
     rail_directory: docs/features/static-site-pages/rail-multimodal-directory.md
     bus_directory: docs/features/static-site-pages/bus-transport-directory.md

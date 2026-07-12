@@ -13,7 +13,7 @@ The event page offers neutral travel help after the description:
 - visual: the supplied side-view Lastochka artwork, not the official carrier logo; each row still names its actual train type;
 - options: at most two trains in each direction.
 
-This is a release feature of the event page, not a standalone campaign. It is included in the [official presentation checklist](presentation-release-checklist.md).
+This is a release feature of the event page, not a standalone campaign. It is included in the [public release checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-6--transport-discussion-signals-admin-repair-media).
 
 ## Matching contract
 
