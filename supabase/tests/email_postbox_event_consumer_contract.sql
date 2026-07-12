@@ -6,9 +6,7 @@ declare
   v_user uuid := extensions.gen_random_uuid();
   v_hmac text := repeat('h', 43);
   v_outbox uuid;
-  v_second uuid;
   v_status text;
-  v_claim record;
 begin
   insert into auth.users (id, email, email_confirmed_at)
   values (v_user, 'postbox-contract@example.test', now());
@@ -85,14 +83,14 @@ begin
     raise exception 'hard bounce suppression missing';
   end if;
 
-  v_second := public.email_enqueue_transactional_v1(
-    v_user, 'account_auth', null, 'postbox-contract-second', 'fixture-v1',
-    '{}'::jsonb, repeat('a', 64), true
-  );
-  select * into v_claim from public.email_claim_outbox_v1('postbox-contract-worker', 10, 120);
-  if v_claim.outbox_id = v_second then
-    raise exception 'suppressed identity was claimable';
-  end if;
+  begin
+    perform public.email_enqueue_transactional_v1(
+      v_user, 'account_auth', null, 'postbox-contract-second', 'fixture-v1',
+      '{}'::jsonb, repeat('a', 64), true
+    );
+    raise exception 'suppressed identity was enqueueable';
+  exception when sqlstate '28000' then null;
+  end;
 
   if has_function_privilege(
     'service_role',
