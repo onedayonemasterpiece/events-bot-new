@@ -906,6 +906,11 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
 
 def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
     row = queue_row if isinstance(queue_row, dict) else {}
+    if (
+        str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+        or str(row.get("priority_lane") or "").strip().lower() == "confirmed_external_blogger"
+    ):
+        return -2
     if _rt_bool(row.get("publication_source_evidence_priority")):
         return -1
     if str(row.get("priority_lane") or "").strip().lower() == "media_attribution":
@@ -1759,6 +1764,17 @@ def build_queue_cursor_state(state: dict[str, Any], source_queue: dict[str, Any]
     }
 
 
+EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS = [
+    "external_blogger_evidence_status", "external_blogger_evidence_id",
+    "external_blogger_evidence_url", "external_blogger_evidence_level",
+    "external_blogger_name", "external_blogger_segment",
+    "external_blogger_visit_period_text", "external_blogger_locations_text",
+    "external_blogger_region_relation_status", "external_blogger_confirmation_basis",
+    "external_blogger_pipeline_status", "external_blogger_evidence_run_id",
+    "external_blogger_evidence_attached_run_id",
+]
+
+
 SOURCE_STATE_FIELDS = [
     "source_id", "source_seed_id", "canonical_source_key",
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
@@ -1781,7 +1797,7 @@ SOURCE_STATE_FIELDS = [
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
     "next_action", "updated_at", "last_run_id",
-]
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
 SOURCE_QUEUE_STATE_FIELDS = [
     "source_queue_id", "queue_seq", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
@@ -1815,7 +1831,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "publication_source_evidence_priority", "publication_source_evidence_post_url",
     "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
-]
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
 SOURCE_CANDIDATE_STATE_FIELDS = [
     "source_candidate_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
     "canonical_source_key", "platform", "platform_guess", "handle", "recommended_username",
@@ -1834,7 +1850,7 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
-]
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
     "from_source_id", "from_source_title", "from_post_id", "to_source_candidate_id",
@@ -2283,6 +2299,52 @@ def ydb_retry_settings(ydb: Any, *, timeout_seconds: int | None = None, max_retr
 
 def ydb_kv_table_path(cfg: dict[str, str]) -> str:
     return cfg["database"].rstrip("/") + "/" + ydb_table_name("state_kv")
+
+
+def ydb_external_blogger_evidence_table_path(cfg: dict[str, str]) -> str:
+    """Return the stable physical evidence-table path.
+
+    This table is intentionally outside compact state KV: it is maintained by
+    a separate evidence ingestion process and read by CandidateReport as an
+    authoritative high-probability source feed.
+    """
+    raw = (os.getenv("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_TABLE") or "region_talk_external_blogger_evidence").strip()
+    if not raw:
+        raw = "region_talk_external_blogger_evidence"
+    if raw.startswith("/"):
+        return raw
+    if not re.fullmatch(r"[A-Za-z0-9_./-]+", raw):
+        raise ValueError("unsafe REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_TABLE")
+    return cfg["database"].rstrip("/") + "/" + raw.lstrip("/")
+
+
+def ydb_select_external_blogger_evidence(session: Any, ydb: Any, table_path: str, *, limit: int = 2000) -> list[dict[str, Any]]:
+    """Read the compact columns needed for source admission and prioritisation."""
+    max_rows = max(1, int(limit))
+    settings = ydb_request_settings(ydb)
+    columns = [
+        "record_id", "batch_id", "list_order", "level", "blogger_name", "segment",
+        "region_relation_status", "visit_period_text", "locations_text",
+        "confirmation_basis", "evidence_url", "telegram_url", "vk_public_url",
+        "vk_video_url", "rutube_url", "source_kind", "confirmation_status",
+        "pipeline_status", "ingested_at", "updated_at",
+    ]
+    result_sets = session.transaction(ydb.StaleReadOnly()).execute(
+        f"SELECT {', '.join(columns)} FROM `{table_path}` ORDER BY list_order, record_id LIMIT {max_rows};",
+        commit_tx=True,
+        settings=settings,
+    )
+    rows = result_sets[0].rows if result_sets else []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        rec: dict[str, Any] = {}
+        for column in columns:
+            value = getattr(row, column, None)
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            rec[column] = value
+        out.append(rec)
+    return out
 
 
 def ensure_ydb_kv_table(ydb: Any, session: Any, table_path: str) -> None:
@@ -3757,7 +3819,31 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 text_vector_items = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=getenv_int("REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS", 20000))
                 entity_cache_items = ydb_select_kind_items(session, ydb, table_path, "telegram_entity_cache_item", limit=getenv_int("REGION_TALK_YDB_MAX_ENTITY_CACHE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
+                external_blogger_evidence: list[dict[str, Any]] = []
+                external_blogger_evidence_status = "disabled"
+                if getenv_bool("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_ENABLED", True):
+                    evidence_table_path = ydb_external_blogger_evidence_table_path(cfg)
+                    try:
+                        external_blogger_evidence = ydb_select_external_blogger_evidence(
+                            session,
+                            ydb,
+                            evidence_table_path,
+                            limit=getenv_int("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS", 2000),
+                        )
+                        external_blogger_evidence_status = "ok"
+                    except Exception as exc:
+                        # Evidence ingestion is independent from the compact
+                        # runtime state. A missing/new table must not make the
+                        # whole discovery notebook lose its prior state.
+                        external_blogger_evidence_status = f"error:{type(exc).__name__}:{str(exc)[:160]}"
                 if isinstance(data0, dict):
+                    data0["external_blogger_evidence"] = {
+                        str(row.get("record_id") or f"row-{idx}"): row
+                        for idx, row in enumerate(external_blogger_evidence, start=1)
+                        if isinstance(row, dict)
+                    }
+                    data0["external_blogger_evidence_read_status"] = external_blogger_evidence_status
+                    data0["external_blogger_evidence_rows_loaded"] = len(external_blogger_evidence)
                     source_items_truncated = len(source_items) > source_queue_full_read_limit
                     if source_items_truncated:
                         source_items = dict(list(source_items.items())[:source_queue_full_read_limit])
@@ -6043,7 +6129,7 @@ def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str 
     if target_reason != "ok":
         return None
     added_from = default_added_from or str(row.get("added_from") or row.get("discovery_type") or row.get("edge_type") or row.get("source_kind") or row.get("source_type") or "unknown")
-    return {
+    seed = {
         "canonical_source_key": ckey,
         "platform": platform,
         "source_url": url,
@@ -6057,6 +6143,110 @@ def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str 
         "edge_types_all": row.get("edge_types_all") or row.get("edge_type") or "",
         "source_priority_score": row.get("source_candidate_score") or row.get("frontier_priority") or row.get("monitor_priority_score") or "",
     }
+    for field in EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + [
+        "source_scope", "source_geo_class", "source_topic_class", "priority_lane", "priority_reason",
+        "priority_updated_at", "discovery_type", "edge_type", "frontier_reason",
+    ]:
+        if row.get(field) not in (None, ""):
+            seed[field] = row.get(field)
+    return seed
+
+
+def external_blogger_evidence_row_is_local(row: dict[str, Any]) -> bool:
+    relation = normalize_geo_text(str(row.get("region_relation_status") or ""))
+    return any(marker in relation for marker in [
+        "lives in region", "living in region", "resident of region", "moved to region",
+        "local resident", "local blogger", "живет в регионе", "живёт в регионе",
+        "житель региона", "местный", "переехал в калининград", "переехала в калининград",
+    ])
+
+
+def external_blogger_evidence_source_rows(previous_state: dict[str, Any], run_id: str, run_now: str) -> list[dict[str, Any]]:
+    """Convert authoritative external-blogger evidence into source-queue rows.
+
+    Telegram channels and VK communities/personal profiles are all valid. The
+    canonical source queue remains the only queue and performs final cross-list
+    deduplication by ``canonical_source_key``.
+    """
+    evidence_rows = _previous_rows_dict(previous_state.get("external_blogger_evidence"))
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    excluded_local = 0
+    excluded_unconfirmed = 0
+    invalid_links = 0
+    for row in evidence_rows:
+        if str(row.get("confirmation_status") or "").strip().lower() != "confirmed_external":
+            excluded_unconfirmed += 1
+            continue
+        if external_blogger_evidence_row_is_local(row):
+            excluded_local += 1
+            continue
+        links = [
+            ("telegram", str(row.get("telegram_url") or "").strip()),
+            ("vk", str(row.get("vk_public_url") or "").strip()),
+        ]
+        for platform, raw_url in links:
+            if not raw_url:
+                continue
+            handle = canonical_handle(raw_url)
+            canonical = canonical_source_url(platform, handle, raw_url)
+            key = canonical_source_key(platform, handle, canonical)
+            if not canonical or not key or target_source_url_reason(platform, canonical) != "ok":
+                invalid_links += 1
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "source_candidate_id": "src_cand_" + stable_hash("external_blogger_evidence", key),
+                "frontier_source_id": "src_cand_" + stable_hash("external_blogger_evidence", key),
+                "canonical_source_key": key,
+                "platform": platform,
+                "platform_guess": platform,
+                "handle": handle,
+                "username_or_handle": handle,
+                "source_url": canonical,
+                "canonical_url": canonical,
+                "normalized_url": canonical,
+                "raw_url": raw_url,
+                "source_title": str(row.get("blogger_name") or handle or canonical),
+                "recommended_title": str(row.get("blogger_name") or handle or canonical),
+                "added_from": "external_blogger_evidence",
+                "discovery_type": "confirmed_external_blogger_evidence",
+                "edge_type": "confirmed_external_blogger_evidence",
+                "candidate_source_status": "source_frontier",
+                "frontier_status": "queued_confirmed_external",
+                "frontier_priority": 1.0,
+                "frontier_reason": "confirmed external blogger with public evidence of a Kaliningrad Oblast visit",
+                "source_scope": "external",
+                "source_geo_class": "external",
+                "source_topic_class": "travel_blogger",
+                "priority_lane": "confirmed_external_blogger",
+                "priority_reason": "confirmed_external_blogger_evidence",
+                "priority_updated_at": run_now,
+                "external_blogger_evidence_status": "confirmed_external",
+                "external_blogger_evidence_id": str(row.get("record_id") or ""),
+                "external_blogger_evidence_url": str(row.get("evidence_url") or ""),
+                "external_blogger_evidence_level": str(row.get("level") or ""),
+                "external_blogger_name": str(row.get("blogger_name") or ""),
+                "external_blogger_segment": str(row.get("segment") or ""),
+                "external_blogger_visit_period_text": str(row.get("visit_period_text") or ""),
+                "external_blogger_locations_text": str(row.get("locations_text") or ""),
+                "external_blogger_region_relation_status": str(row.get("region_relation_status") or ""),
+                "external_blogger_confirmation_basis": str(row.get("confirmation_basis") or ""),
+                "external_blogger_pipeline_status": str(row.get("pipeline_status") or ""),
+                "external_blogger_evidence_run_id": run_id,
+            })
+    _REGION_TALK_TELEGRAM_RUNTIME.update({
+        "external_blogger_evidence_rows_loaded": len(evidence_rows),
+        "external_blogger_evidence_sources_eligible": len(out),
+        "external_blogger_evidence_local_excluded": excluded_local,
+        "external_blogger_evidence_unconfirmed_excluded": excluded_unconfirmed,
+        "external_blogger_evidence_invalid_links": invalid_links,
+        "external_blogger_evidence_telegram_sources": sum(1 for row in out if row.get("platform") == "telegram"),
+        "external_blogger_evidence_vk_sources": sum(1 for row in out if row.get("platform") == "vk"),
+    })
+    return out
 
 
 def _previous_rows_dict(value: Any) -> list[dict[str, Any]]:
@@ -6170,6 +6360,7 @@ def build_unified_source_queue(
     """
     previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
+    external_blogger_rows = external_blogger_evidence_source_rows(previous_state, run_id, run_now)
     prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     entries: dict[str, dict[str, Any]] = {}
     skipped_non_target_queue_rows = 0
@@ -6268,10 +6459,13 @@ def build_unified_source_queue(
         key = seed["canonical_source_key"]
         if key in entries:
             existing = entries[key]
+            evidence_was_attached = str(existing.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
             # A routine monitored-source observation must not erase the
             # original discovery provenance that controls priority. Merge
             # graph evidence, while keeping the first durable added_from.
             existing.update({k: v for k, v in seed.items() if k != "added_from" and v not in ("", None)})
+            if not evidence_was_attached and str(seed.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external":
+                existing["external_blogger_evidence_attached_run_id"] = run_id
             if not existing.get("added_from"):
                 existing["added_from"] = seed.get("added_from") or added_from
             for field in ("discovery_types", "edge_types_all"):
@@ -6300,6 +6494,8 @@ def build_unified_source_queue(
             "admitted_at": run_now,
             "admitted_run_id": run_id,
         }
+        if str(seed.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external":
+            entries[key]["external_blogger_evidence_attached_run_id"] = run_id
         provenance = " ".join(str(entries[key].get(field) or "") for field in ("added_from", "discovery_types", "edge_types_all")).lower()
         if "media_attribution" in provenance:
             entries[key].update({
@@ -6315,6 +6511,7 @@ def build_unified_source_queue(
         (source_rows, "monitored_source"),
         (source_frontier_unique, "frontier"),
         (public_blogger_rows, "public_travel_blogger_catalog"),
+        (external_blogger_rows, "external_blogger_evidence"),
     ]:
         for row in collection:
             append_or_update(row, added_from=origin)
@@ -6646,6 +6843,9 @@ def build_unified_source_queue(
         "source_queue_seq_missing_total": sum(1 for r in out if queue_positive_int(r.get("queue_seq")) == 0),
         "source_queue_historical_keyword_sources_total": len(historical_keyword_rows),
         "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
+        "source_queue_confirmed_external_blogger_total": sum(1 for r in out if str(r.get("external_blogger_evidence_status") or "") == "confirmed_external"),
+        "source_queue_confirmed_external_blogger_pending_total": sum(1 for r in out if str(r.get("external_blogger_evidence_status") or "") == "confirmed_external" and r.get("source_queue_status") == "pending_scan"),
+        "source_queue_confirmed_external_blogger_admitted_this_run": sum(1 for r in out if str(r.get("external_blogger_evidence_status") or "") == "confirmed_external" and str(r.get("admitted_run_id") or "") == run_id),
         "source_queue_telegram_total": sum(1 for r in out if r.get("platform") == "telegram"),
         "source_queue_vk_total": sum(1 for r in out if r.get("platform") == "vk"),
         "source_queue_pending_telegram_total": sum(1 for r in out if r.get("platform") == "telegram" and r.get("source_queue_status") == "pending_scan"),
@@ -6705,6 +6905,8 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             str(row.get("last_scan_run_id") or "") == run_id
             or str(row.get("keyword_evidence_run_id") or "") == run_id
             or str(row.get("last_fast_check_run_id") or "") == run_id
+            or str(row.get("admitted_run_id") or "") == run_id
+            or str(row.get("external_blogger_evidence_attached_run_id") or "") == run_id
             or str(row.get("status_changed_this_run") or "").lower() == "true"
             or str(row.get("queue_seq_repaired_this_run") or "").lower() == "true"
         )
@@ -6763,6 +6965,10 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
         if str(row.get("last_fast_check_run_id") or "") == run_id:
             return 1
         if str(row.get("keyword_evidence_run_id") or "") == run_id:
+            return 2
+        if str(row.get("external_blogger_evidence_attached_run_id") or "") == run_id:
+            return 2
+        if str(row.get("admitted_run_id") or "") == run_id:
             return 2
         if str(row.get("status_changed_this_run") or "").lower() == "true":
             return 3
@@ -8270,7 +8476,7 @@ def source_fast_check_query_bank() -> list[str]:
         "Калининград", "Зеленоградск", "Куршская коса", "Светлогорск", "Янтарный",
         "Балтийск", "Советск", "Черняховск", "Виштынец", "Роминтенская пуща",
         "Балтийская коса", "Гусев", "Тильзит", "Тапиау", "Нойхаузен",
-        "Бальга", "Преголя", "Куршский залив", "Куршале",
+        "Бальга", "Талпаки", "Преголя", "Куршский залив", "Куршале",
     ]
     terms = build_region_talk_place_query_terms().get("source_preflight_terms") or DEFAULT_ANCHORS
     return _dedupe_keep_order(priority_terms + list(terms))
@@ -8343,7 +8549,8 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
             continue
         if status not in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}:
             continue
-        if int(row.get("queue_order") or 999999999) <= cursor:
+        confirmed_external_evidence = str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+        if int(row.get("queue_order") or 999999999) <= cursor and not confirmed_external_evidence:
             continue
         if normalize_source_platform(str(row.get("platform") or ""), str(row.get("source_url") or row.get("canonical_url") or "")) != "telegram":
             continue
@@ -8362,6 +8569,7 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
         candidates.append(row)
     candidates = sorted(candidates, key=lambda r: (
         not source_queue_row_has_cached_entity(r, previous_state),
+        0 if source_queue_priority_bucket(r) == -2 else 1,
         0 if prefer_continuations and str(r.get("fast_check_status") or "") in {"no_hit", "no_hit_partial"} else 1,
         str(r.get("fast_check_status") or "") == "no_hit" if not adaptive_enabled else False,
         source_queue_priority_bucket(r),
@@ -8389,17 +8597,45 @@ def source_fast_check_queries(
     *,
     start_cursor: int = 0,
     strategy: str | None = None,
+    source_row: dict[str, Any] | None = None,
 ) -> list[str]:
     per_source = max(1, getenv_int("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", 3))
     strategy = (strategy or source_fast_check_query_strategy()).strip().lower()
     if strategy == "adaptive_cursor_v1":
-        bank = source_fast_check_query_bank()
+        bank = source_fast_check_query_bank_for_row(source_row)
         cursor = max(0, int(start_cursor or 0))
         return bank[cursor:cursor + per_source]
     # Frozen rollback/control contract: the historical implementation always
     # tested this same pair under its two-query production cap.
     legacy = ["Калининград", "Зеленоградск"]
     return legacy[:per_source]
+
+
+def source_fast_check_query_bank_for_row(source_row: dict[str, Any] | None = None) -> list[str]:
+    """Put evidence-specific KO locations before the global adaptive bank.
+
+    A confirmed blogger often has a known visit footprint in the evidence
+    table. Searching those exact locations first is both cheaper and more
+    likely to find the original trip than starting every source from the same
+    common-city prefix. The remaining bank is unchanged, preserving long-tail
+    discovery and diversity.
+    """
+    bank = source_fast_check_query_bank()
+    row = source_row if isinstance(source_row, dict) else {}
+    if str(row.get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external":
+        return bank
+    evidence_text = normalize_geo_text(" ".join([
+        str(row.get("external_blogger_locations_text") or ""),
+        str(row.get("external_blogger_confirmation_basis") or ""),
+    ]))
+    if not evidence_text:
+        return bank
+    matched: list[str] = []
+    for query in bank:
+        normalized_query = normalize_geo_text(query)
+        if normalized_query and term_in_text(normalized_query, evidence_text):
+            matched.append(query)
+    return list(dict.fromkeys(matched + bank))
 
 
 def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -8543,6 +8779,7 @@ async def run_source_fast_check_ko(
         previous_queue_row = previous_queue_by_key.get(source_key) or {}
         previous_fast_status = str(previous_queue_row.get("fast_check_status") or "")
         start_cursor = _fast_check_previous_cursor(previous_queue_row, strategy=strategy)
+        source_query_terms_total = len(source_fast_check_query_bank_for_row(previous_queue_row)) if strategy == "adaptive_cursor_v1" else 2
         source_queries_attempted: list[str] = []
         source_query_rpc_count = 0
         source_search_results_rejected = 0
@@ -8555,7 +8792,7 @@ async def run_source_fast_check_ko(
             "last_fast_check_run_id": run_id,
             "fast_check_query_strategy": strategy,
             "fast_check_query_cursor": start_cursor,
-            "fast_check_query_terms_total": query_terms_total,
+            "fast_check_query_terms_total": source_query_terms_total,
             "fast_check_query_wave": "",
             "fast_check_query_rpc_count_run": 0,
             "fast_check_query_elapsed_seconds_run": 0.0,
@@ -8583,7 +8820,13 @@ async def run_source_fast_check_ko(
                 continue
             title = str(resolve_meta.get("resolved_title") or getattr(entity, "title", None) or seed.source_title)
             base_row["resolved_title"] = title
-            queries = source_fast_check_queries(run_id, idx, start_cursor=start_cursor, strategy=strategy)
+            queries = source_fast_check_queries(
+                run_id,
+                idx,
+                start_cursor=start_cursor,
+                strategy=strategy,
+                source_row=previous_queue_row,
+            )
             hit_row: dict[str, Any] | None = None
             for q in queries:
                 if not governor.has_total_request_budget("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url):
@@ -8617,7 +8860,7 @@ async def run_source_fast_check_ko(
                 queried += 1
                 source_query_rpc_count += 1
                 source_queries_attempted.append(q)
-                completed_cursor = min(query_terms_total, start_cursor + source_query_rpc_count)
+                completed_cursor = min(source_query_terms_total, start_cursor + source_query_rpc_count)
                 elapsed_now = round(time.monotonic() - source_query_started, 3)
                 base_row.update({
                     "fast_check_query_count": source_query_rpc_count,
@@ -8630,10 +8873,10 @@ async def run_source_fast_check_ko(
                 status.event(
                     "fast_check_query_progress", phase="fast_check_ko", status="running", run_id=run_id,
                     source_id=seed.source_id, current_source_url=seed.canonical_url, query=q,
-                    query_cursor=completed_cursor, query_terms_total=query_terms_total,
+                    query_cursor=completed_cursor, query_terms_total=source_query_terms_total,
                     source_query_rpc_count=source_query_rpc_count, queries_processed=queried,
                     ko_hits=hits, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
-                    progress_label=f"fast-check {idx}/{len(seeds)} q={completed_cursor}/{query_terms_total}: {q}",
+                    progress_label=f"fast-check {idx}/{len(seeds)} q={completed_cursor}/{source_query_terms_total}: {q}",
                 )
                 for msg in messages:
                     mid = int(getattr(msg, "id", 0) or 0)
@@ -8700,12 +8943,12 @@ async def run_source_fast_check_ko(
                 # to be reverted by that handoff's pre-run snapshot.
                 post_link_items_written += write_region_talk_post_link_queue_items([hit_row], run_id=run_id, stage="fast_check_ko_post_link_queue")
             else:
-                new_cursor = min(query_terms_total, start_cursor + source_query_rpc_count)
+                new_cursor = min(source_query_terms_total, start_cursor + source_query_rpc_count)
                 if source_query_rpc_count <= 0:
                     fast_status = "deferred_no_query_budget"
                     next_action = "retry_fast_check_runtime_or_request_budget"
                 elif strategy == "adaptive_cursor_v1":
-                    fast_status = "no_hit_exhausted" if new_cursor >= query_terms_total else "no_hit_partial"
+                    fast_status = "no_hit_exhausted" if new_cursor >= source_query_terms_total else "no_hit_partial"
                     next_action = (
                         "keep_pending_scan_lower_priority_fast_check_exhausted"
                         if fast_status == "no_hit_exhausted"
@@ -8738,7 +8981,7 @@ async def run_source_fast_check_ko(
             query_elapsed_total += source_elapsed
             base_row.update({
                 "fast_check_query_count": source_query_rpc_count,
-                "fast_check_query_cursor": min(query_terms_total, start_cursor + source_query_rpc_count),
+                "fast_check_query_cursor": min(source_query_terms_total, start_cursor + source_query_rpc_count),
                 "fast_check_query_wave": f"{start_cursor + 1}-{start_cursor + source_query_rpc_count}" if source_query_rpc_count else "",
                 "fast_check_query_rpc_count_run": source_query_rpc_count,
                 "fast_check_query_elapsed_seconds_run": source_elapsed,
@@ -13472,6 +13715,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "catalog_import_unique_sources":len({r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url") for r in public_blogger_rows}),
         "catalog_sources_in_authoritative_frontier":sum(1 for r in source_frontier_unique if "public_travel_blogger_catalog" in str(r.get("discovery_types") or "")),
         "catalog_sources_in_frontier":sum(1 for r in source_frontier_unique if "public_travel_blogger_catalog" in str(r.get("discovery_types") or "")),
+        "external_blogger_evidence_read_status":previous_state.get("external_blogger_evidence_read_status", "not_loaded"),
+        "external_blogger_evidence_rows_loaded":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_rows_loaded", 0),
+        "external_blogger_evidence_sources_eligible":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_sources_eligible", 0),
+        "external_blogger_evidence_telegram_sources":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_telegram_sources", 0),
+        "external_blogger_evidence_vk_sources":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_vk_sources", 0),
+        "external_blogger_evidence_local_excluded":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_local_excluded", 0),
+        "external_blogger_evidence_invalid_links":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_invalid_links", 0),
         "frontier_duplicate_canonical_keys":len(source_frontier_unique) - len({r.get("canonical_source_key") or r.get("canonical_url") for r in source_frontier_unique}),
         "frontier_self_loops":0,
         "telegram_similar_seed_used":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_seed_count", 0),

@@ -1123,6 +1123,106 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
 
+    def test_confirmed_external_blogger_evidence_admits_telegram_and_personal_vk(self) -> None:
+        mod = load_module()
+        previous = {
+            "external_blogger_evidence": {
+                "external": {
+                    "record_id": "ext-1",
+                    "blogger_name": "External Traveller",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external visitor",
+                    "telegram_url": "https://t.me/externaltraveller",
+                    "vk_public_url": "https://vk.com/id123456",
+                    "locations_text": "Нойхаузен, Бальга",
+                    "evidence_url": "https://example.test/evidence",
+                    "pipeline_status": "stored_only",
+                },
+                "local": {
+                    "record_id": "local-1",
+                    "blogger_name": "Local Blogger",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "local blogger, lives in region",
+                    "telegram_url": "https://t.me/localblogger",
+                },
+                "unconfirmed": {
+                    "record_id": "maybe-1",
+                    "confirmation_status": "needs_review",
+                    "telegram_url": "https://t.me/maybevisitor",
+                },
+            },
+        }
+
+        evidence_rows = mod.external_blogger_evidence_source_rows(
+            previous, "evidence-run", "2026-07-12T00:00:00+00:00",
+        )
+
+        self.assertEqual({row["platform"] for row in evidence_rows}, {"telegram", "vk"})
+        self.assertEqual({row["source_title"] for row in evidence_rows}, {"External Traveller"})
+        self.assertTrue(all(row["source_scope"] == "external" for row in evidence_rows))
+        self.assertTrue(all(row["priority_lane"] == "confirmed_external_blogger" for row in evidence_rows))
+        self.assertTrue(any(row["source_url"] == "https://vk.com/id123456" for row in evidence_rows))
+
+    def test_confirmed_external_blogger_evidence_is_deduped_into_single_queue_and_persisted(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 50,
+            "unified_source_queue": {
+                "telegram:externaltraveller": {
+                    "canonical_source_key": "telegram:externaltraveller",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/externaltraveller",
+                    "canonical_url": "https://t.me/externaltraveller",
+                    "source_queue_status": "pending_scan",
+                    "queue_seq": 10,
+                    "queue_order": 10,
+                },
+            },
+            "external_blogger_evidence": {
+                "ext-1": {
+                    "record_id": "ext-1",
+                    "blogger_name": "External Traveller",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external visitor",
+                    "telegram_url": "https://t.me/externaltraveller",
+                    "locations_text": "Нойхаузен, Бальга",
+                },
+            },
+        }
+
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [], [], [], {}, "evidence-run", "2026-07-12T00:00:00+00:00",
+        )
+        evidence = [row for row in rows if row.get("external_blogger_evidence_status") == "confirmed_external"]
+
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0]["queue_order"], 10)
+        self.assertEqual(evidence[0]["external_blogger_evidence_attached_run_id"], "evidence-run")
+        self.assertEqual(mod.source_queue_priority_bucket(evidence[0]), -2)
+        self.assertEqual(metrics["source_queue_confirmed_external_blogger_total"], 1)
+        handoff = mod._source_queue_handoff_rows(rows, 50, "evidence-run")
+        self.assertTrue(any(row.get("canonical_source_key") == "telegram:externaltraveller" for row in handoff))
+
+    def test_confirmed_blogger_locations_lead_adaptive_queries(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")
+        try:
+            os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = "4"
+            row = {
+                "external_blogger_evidence_status": "confirmed_external",
+                "external_blogger_locations_text": "Поездка: Нойхаузен, Бальга и Тапиау",
+            }
+            queries = mod.source_fast_check_queries(
+                "evidence-run", 0, start_cursor=0, strategy="adaptive_cursor_v1", source_row=row,
+            )
+            self.assertEqual(queries[:3], ["Тапиау", "Нойхаузен", "Бальга"])
+            self.assertEqual(len(queries), 4)
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", None)
+            else:
+                os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
+
     def test_adaptive_fast_check_continues_legacy_no_hit_at_cursor_two(self) -> None:
         mod = load_module()
         self.assertEqual(

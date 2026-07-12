@@ -156,10 +156,37 @@ history budget on obvious local/spam hashtag hits.
 
 ### 6b. Source-local fast-check-KO preflight search
 
+#### Confirmed external-blogger evidence lane
+
+The stable YDB table `region_talk_external_blogger_evidence` is an
+authoritative high-probability input, not a report-only archive. CandidateReport
+loads rows with `confirmation_status=confirmed_external`, excludes evidence
+that says the author lives in/is local to Kaliningrad Oblast, and admits every
+valid Telegram channel and VK community **or personal profile** into the same
+canonical `unified_source_queue`. Admission is idempotent by
+`canonical_source_key`; no second blogger queue or second cursor is created.
+
+Such rows carry `priority_lane=confirmed_external_blogger` and are selected
+ahead of generic backlog and old no-hit continuations. Existing terminal
+spam/local decisions are not silently erased. New admission or first evidence
+attachment is mandatory in the bounded YDB queue handoff, so a short run cannot
+drop the priority metadata. Profile URLs are source evidence only; an exact
+post is created only after a validated `t.me/<handle>/<message_id>` or VK post
+hit exists.
+
+In `adaptive_cursor_v1`, known locations from the evidence row are moved to the
+front of that source's otherwise unchanged place bank. Thus a blogger known to
+have visited `Нойхаузен`, `Бальга` or `Тапиау` is tested for those distinctive
+terms before common-city repetition. `Талпаки/Таплакен` is included in the
+regional lexicon and adaptive bank. Human-like pacing, the one controlled
+uncached Telegram resolve lane and FloodWait cooldowns remain mandatory; source
+priority never bypasses Telegram safety.
+
 When a new source enters YDB from a catalog, similar-channel edge, keyword hit
 or hashtag hit, the next cheap step is not a deep history crawl. CandidateReport
 therefore has a bounded `fast-check-KO` pass over the existing
-`unified_source_queue` backlog after the current cursor. This is **not** a
+`unified_source_queue` backlog after the current cursor (plus confirmed
+external-blogger rows that may predate the repaired cursor). This is **not** a
 second source queue: it reads rows from the same YDB `source_queue_item`, writes
 `fast_check_*` evidence back to the same row, and uses the normal queue selector
 to promote KO hits in the same ledger without creating a second source queue.
