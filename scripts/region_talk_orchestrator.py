@@ -52,7 +52,7 @@ ACTION_KERNEL_SLUGS = {
 
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
-CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v2"
+CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v3"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
 POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
 

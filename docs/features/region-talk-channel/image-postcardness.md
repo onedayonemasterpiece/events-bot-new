@@ -142,3 +142,10 @@ The image queue is downstream of the complete text decision, so it stores
 hashes, eligibility evidence and media state but not another durable copy of
 the full post text. Exact text remains only in active candidate/vector/Gemini
 work and is removed after the final verdict.
+
+The publication media gate uses `overall_media_score >= 0.66` by default. A
+narrow near-threshold lane prevents a weighted-score edge case from discarding
+an exceptional postcard before Gemini: `overall >= 0.63`, `postcardness >=
+0.85`, `aesthetic >= 0.52` and `technical >= 0.68` must all hold. This does not
+auto-accept the post; it only permits the final Gemini review. The calibrated
+contract is `region_talk_publication_eligibility_v3`.

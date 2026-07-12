@@ -3718,7 +3718,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "post_url": "https://t.me/travel/1", "publication_candidate_status": "llm_rejected",
                 "publication_status": "gemini_reject", "finalizer_state_version": "region_talk_publication_finalizer_v4",
                 "publication_eligibility_verdict": "eligible",
-                "publication_eligibility_gate_version": "region_talk_publication_eligibility_v2",
+                "publication_eligibility_gate_version": "region_talk_publication_eligibility_v3",
                 "llm_request_fingerprint": "fingerprint-1", "llm_prompt_version": "region_talk_final_verifier_v4",
                 "llm_budget_id": "budget-1", "llm_budget_status": "completed",
                 "llm_decision": "reject", "llm_reason": "no firsthand experience",
@@ -4062,7 +4062,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS"], "45")
             self.assertEqual(env["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
-            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v2")
+            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v3")
         finally:
             for key, value in old.items():
                 if value is None:
@@ -4944,6 +4944,30 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(wrong_scope["primary_reason"], "not_confirmed_kaliningrad_oblast_scope")
         self.assertFalse(document["eligible"])
         self.assertEqual(document["primary_reason"], "actual_image_required")
+
+    def test_publication_eligibility_allows_narrow_high_postcard_near_threshold_lane(self) -> None:
+        mod = load_module()
+        base = {
+            "post_url": "https://t.me/travelcase/10",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "personal_blog",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "overall_media_score": 0.657,
+            "postcardness_score": 0.959,
+            "aesthetic_score": 0.558,
+            "technical_quality_score": 0.719,
+        }
+        accepted = mod.publication_eligibility(base)
+        low_aesthetic = mod.publication_eligibility({**base, "aesthetic_score": 0.469})
+        self.assertTrue(accepted["eligible"])
+        self.assertFalse(low_aesthetic["eligible"])
+        self.assertEqual(low_aesthetic["primary_reason"], "overall_media_score_below_threshold")
 
     def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
         mod = load_module()

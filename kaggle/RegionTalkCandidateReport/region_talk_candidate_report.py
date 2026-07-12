@@ -7322,16 +7322,31 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         return False, "actual_image_required"
     if str(row.get("image_queue_status") or "") not in {"", "actual_scored"}:
         return False, "image_queue_not_actual_scored"
-    if _rt_float(row.get("overall_media_score")) < _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE"), 0.66):
+    overall = _rt_float(row.get("overall_media_score"))
+    postcardness = _rt_float(row.get("postcardness_score"))
+    aesthetic = _rt_float(row.get("aesthetic_score"))
+    technical = _rt_float(row.get("technical_quality_score"))
+    primary_media_ok = overall >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE"), 0.66)
+    # A weighted overall score near the hard boundary must not discard an
+    # otherwise exceptional postcard before Gemini sees it. This calibrated
+    # lane remains narrow and quality-preserving: all four independent visual
+    # signals must clear their floors, and Gemini still makes the final call.
+    high_postcard_override = (
+        overall >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_OVERALL_MEDIA_SCORE"), 0.63)
+        and postcardness >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_POSTCARDNESS_SCORE"), 0.85)
+        and aesthetic >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_AESTHETIC_SCORE"), 0.52)
+        and technical >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_TECHNICAL_SCORE"), 0.68)
+    )
+    if not (primary_media_ok or high_postcard_override):
         return False, "overall_media_score_below_threshold"
-    if _rt_float(row.get("postcardness_score")) < _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE"), 0.55):
+    if postcardness < _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE"), 0.55):
         return False, "postcardness_score_below_threshold"
     return True, ""
 
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = (
     os.getenv("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION")
-    or "region_talk_publication_eligibility_v2"
+    or "region_talk_publication_eligibility_v3"
 )
 PUBLICATION_SOURCE_CONFIRMED_EXTERNAL = "confirmed_nonlocal_or_mixed_external"
 PUBLICATION_SOURCE_CONFIRMED_REJECTED = "confirmed_local_or_spam"
