@@ -22,7 +22,7 @@ Verified on 2026-07-12 after the owner pushed the preliminary handoff at `dc46c3
 
 - the former uncommitted-WIP blocker is closed;
 - `origin/main@c6396331` was merged into `integration/event-transport-schedule` without force-push;
-- the refreshed integration head is `4577b334` and is pushed to origin;
+- validated refresh merge `4577b334` is pushed to origin; current PR documentation/routing head is `2fcc7037`;
 - rail and bus directory validators passed; a browser-safe preview built 421 pages and `check:preview` passed;
 - draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) is the single integration surface.
 
@@ -36,7 +36,7 @@ This consolidates the preliminary rail/bus renderers, official route directories
 | F4 personal email | `agent/personal-email-announcements-docs` | 21 behind / 6 ahead; clean; old YDB ownership | **Superseded.** Do not merge. Canonical v2 docs live in release-doc branch; future implementation starts from fresh main after docs merge |
 | F5 release UI | `feature/event-page-ux-lab-v3-20260710` | 69 behind / 15 ahead; clean but mixed with F17, incidents, medallions/assets and generated data | **Supersede/split.** Product-select baseline, then port only accepted UX/onboarding changes to fresh `feature/static-site-release-ui-v2` |
 | F8 transactional email | old `feature/event-email-notifications-static-20260702`; current foundation in `main@c6396331` | Historical prototype superseded; Postbox feedback/worker foundation merged and live-verified | Future branches implement only event producers, calendar/reminder UX/templates, warm-up and NotiSend application flow; do not recreate the foundation |
-| F11 transport | `integration/event-transport-schedule@4577b334`, draft PR #37 | **Refreshed and validated preliminary slice.** Original handoff `dc46c348`; merged `main@c6396331` non-force; directory validators and 421-page preview/check passed | **Retain as the single integration source.** UI integration plus nightly validated atomic refresh/last-good and broader exact-date coverage remain blockers before ready-for-review/merge |
+| F11 transport | `integration/event-transport-schedule`, refresh merge `4577b334`, draft PR #37 | **Refreshed and validated preliminary slice.** Original handoff `dc46c348`; merged `main@c6396331` non-force; directory validators and 421-page preview/check passed | **Retain as the single integration source.** UI integration plus nightly validated atomic refresh/last-good and broader exact-date coverage remain blockers before ready-for-review/merge |
 | F14 comment feedback docs | `docs/event-comment-feedback-docs` | 35 behind / 2 ahead; clean docs | Canonical docs selectively ported into release-doc branch; old docs branch becomes superseded after merge |
 | F14 runner | `agent/event-comment-feedback-kaggle-runner` | 724 behind / 10 ahead; stale and carries unrelated ancestor | **Superseded.** Fresh `feature/event-comment-feedback-v2`; port only feedback runner/kernel/tests and adapt current status framework |
 | F17 issue reporting | `feature/event-issue-report-artkodex-20260703` | 69 behind / 12 ahead; severely mixed | **Superseded.** Fresh `feature/event-issue-reporting-v2`; port only issue doc/component/Edge/migration/history, then add idempotency/poller/E2E |
@@ -55,7 +55,7 @@ F11 refresh procedure is complete through a draft integration PR:
 2. `origin/main@c6396331` was merged non-force;
 3. canonical docs/routes/CHANGELOG were updated;
 4. rail/bus directory validators and the full Astro preview/check passed;
-5. refreshed head `4577b334` was pushed and draft PR #37 opened.
+5. validated refresh merge `4577b334` was pushed, draft PR #37 opened, and current routing/docs head advanced to `2fcc7037`.
 
 Next work stays in the same PR/branch or a clearly dependent release-UI task: integrate the reusable blocks into the frozen UI, implement nightly validated last-good refresh, then rerun transport/preview/visual/E2E gates. No stash as durable state, no force push and no competing transport selector/data fork.
 
