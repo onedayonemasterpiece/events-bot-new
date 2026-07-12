@@ -2,7 +2,7 @@
 
 Status: **noindex desktop-only review lab; no layout is promoted to production**.
 
-Public target: `https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/`.
+Public surface: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 This round supersedes the decision logic of the six-option 2026-07-11 lab, but the old preview remains the rollback/reference surface. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -94,3 +94,10 @@ Do not promote one desktop composition globally.
 - Typographic Lead: only after the title gate and media-quality gate pass.
 
 This lab changes only `/lab/event-desktop/`, its lab component and checks/docs. Production `EventHero.astro`, `EventLayout.astro` and the accepted mobile overlap geometry remain untouched.
+
+## Published acceptance evidence
+
+- Static build: `434` pages; `check:preview` passed.
+- Public HTTP `200`: lab HTML, generated CSS, preview index, search and real event `6345`.
+- Public Chromium repeated the six-viewport matrix with zero horizontal overflow, zero title/action clipping, zero action/content overlap and no OCR crop over budget.
+- The only OCR cover specimen is the explicitly safe portrait Split case; measured crop is `0.05–0.08%`. All other OCR cases remain `contain`, including cases where geometric cover loss would be under 20% but edge text was not proven safe.

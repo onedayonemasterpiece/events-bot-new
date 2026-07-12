@@ -39,6 +39,7 @@ committed
 - All no-OCR specimens resolve to `cover`.
 - OCR safe-cover is enabled only for the explicitly reviewed Split specimen and measures `0.05–0.08%`; every other OCR specimen remains `contain`.
 - Production `EventHero.astro`, `EventLayout.astro` and mobile styles are absent from the diff.
+- Public HTTP and the same six-viewport Chromium gate passed at `https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/`.
 
 ## Risks
 - The lab uses Steam’s Windows survey as a QA proxy, not first-party KenigEvents viewport analytics.

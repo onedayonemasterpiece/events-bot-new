@@ -6,7 +6,7 @@
 
 
 ### Added
-- **Static site pages / desktop OCR vs non-OCR media lab**: rebuilt `/lab/event-desktop/` as four real-event candidate pairs (Editorial Slab, Split Canvas, Gallery Exhibition and gated Typographic Lead), with explicit strong-cover treatment for no-OCR imagery, a measured `<=20%` OCR crop budget with automatic contain fallback, and width-plus-height viewport acceptance.
+- **Static site pages / desktop OCR vs non-OCR media lab**: rebuilt `/lab/event-desktop/` as four real-event candidate pairs (Editorial Slab, Split Canvas, Gallery Exhibition and gated Typographic Lead), with explicit strong-cover treatment for no-OCR imagery, an explicit-safe-flag plus measured `<=20%` OCR crop budget with automatic contain fallback, width-plus-height viewport acceptance, and a published `preview-20260712t-desktop-media-families` review surface.
 - **Static site pages / desktop event-page lab**: added a noindex six-variant desktop review surface for horizontal/square and portrait OCR hero families, with single-owner fact/action layouts and an explicit transition into the standard `Смотрите дальше` module.
 - **Static site pages / V3-D real-event trial**: added the build-gated `ticket-cluster` decision sheet to real noindex event pages with exact date/week/time and address, truthful price/free/unknown-price CTA states, stable icon+count actions, browser-local one-hint-per-session onboarding, 14-day dismiss cooldown and an explicit review override.
 - **Static site pages / event decision-block lab**: added a preserved-baseline A/B lab for the whole below-hero mobile decision space (`/lab/event-decision-block/`), comparing P03/P01/P04/baseline/zero-medallion/utility-stack layouts with Gemini Pro and a-opus critical review summaries.
