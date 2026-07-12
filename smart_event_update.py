@@ -527,6 +527,9 @@ class EventCandidate:
     pushkin_card: bool | None = None
     search_digest: str | None = None
     raw_excerpt: str | None = None
+    # LLM-selected event-local evidence for a multi-event source. The full
+    # source_text remains intact for provenance.
+    occurrence_scope_text: str | None = None
     posters: list[PosterCandidate] = field(default_factory=list)
     poster_scope_hashes: list[str] = field(default_factory=list)
     source_chat_username: str | None = None
@@ -690,6 +693,18 @@ LOCATION_GROUNDING_REVIEW_SCHEMA = {
         "evidence_quote",
         "reason_short",
     ],
+    "additionalProperties": False,
+}
+
+OCCURRENCE_SCOPE_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "decision": {"type": "string", "enum": ["scoped", "single_event", "uncertain"]},
+        "confidence": {"type": "number"},
+        "selected_excerpts": {"type": "array", "items": {"type": "string"}},
+        "reason_short": {"type": "string"},
+    },
+    "required": ["decision", "confidence", "selected_excerpts", "reason_short"],
     "additionalProperties": False,
 }
 
@@ -4385,10 +4400,83 @@ def _source_supports_location_value(text: str | None, value: str | None) -> bool
 
 
 def _candidate_location_grounding_corpus(candidate: "EventCandidate") -> str:
-    parts = [candidate.source_text or "", candidate.raw_excerpt or ""]
+    parts = [candidate.occurrence_scope_text or candidate.source_text or "", candidate.raw_excerpt or ""]
     for poster in candidate.posters[:4]:
         parts.extend([poster.ocr_title or "", poster.ocr_text or ""])
     return "\n".join(part for part in parts if str(part).strip()).strip()
+
+
+def _candidate_needs_llm_occurrence_scope_review(candidate: "EventCandidate") -> bool:
+    """High-recall routing for a source that may contain sibling events."""
+    if str(candidate.source_type or "").strip().lower() not in {"vk", "tg", "telegram"}:
+        return False
+    corpus = "\n".join([str(candidate.source_text or ""), str(candidate.raw_excerpt or "")]).strip()
+    if not corpus:
+        return False
+    pairs = _extract_day_month_pairs(corpus)
+    if len(pairs) < 2:
+        return False
+    dated_lines = sum(1 for line in corpus.splitlines() if _extract_day_month_pairs(line))
+    return dated_lines >= 2 or len(pairs) >= 3
+
+
+async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[bool, str]:
+    """Select exact source excerpts belonging to the candidate occurrence."""
+    if SMART_UPDATE_LLM_DISABLED:
+        return False, "llm_disabled"
+    corpus = str(candidate.source_text or "").strip()
+    payload = {
+        "target": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "end_date": candidate.end_date,
+            "location_name": candidate.location_name,
+            "city": candidate.city,
+        },
+        "source_text": _clip(corpus, 7000),
+        "raw_excerpt": _clip(candidate.raw_excerpt, 1200),
+    }
+    prompt = (
+        "Ты отделяешь одно целевое событие от дайджеста/расписания с несколькими событиями. "
+        "Смысловое решение принадлежит тебе; даты и векторы — только подсказки.\n"
+        "Выбери только блок target и общие строки, которые явно относятся ко всем пунктам "
+        "(например общая цена/ужин/адрес). Не включай названия, программу, артистов или "
+        "описания соседних дат. Верни selected_excerpts как короткие ДОСЛОВНЫЕ непрерывные "
+        "фрагменты source_text. Если принадлежность строк неясна — uncertain. Если источник "
+        "действительно описывает одну многодневную программу, верни single_event. Только JSON.\n"
+        f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        OCCURRENCE_SCOPE_REVIEW_SCHEMA,
+        max_tokens=900,
+        label="occurrence_scope_review",
+    )
+    if not isinstance(data, dict):
+        return False, "llm_unavailable"
+    decision = str(data.get("decision") or "uncertain").strip().lower()
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    if decision == "single_event" and confidence >= 0.9:
+        candidate.occurrence_scope_text = corpus
+        return True, "llm_single_event"
+    if decision != "scoped" or confidence < 0.8:
+        return False, f"llm_{decision or 'uncertain'}"
+    excerpts = [str(x or "").strip() for x in (data.get("selected_excerpts") or []) if str(x or "").strip()]
+    if not excerpts:
+        return False, "llm_scoped_empty"
+    corpus_norm = _norm_text_for_grounding(corpus)
+    if any(_norm_text_for_grounding(x) not in corpus_norm for x in excerpts):
+        return False, "llm_scope_not_verbatim"
+    scoped = "\n".join(dict.fromkeys(excerpts)).strip()
+    target_date = _parse_iso_date(candidate.date)
+    if target_date and (target_date.day, target_date.month) not in _extract_day_month_pairs(scoped):
+        return False, "llm_scope_missing_target_date"
+    candidate.occurrence_scope_text = scoped
+    return True, "llm_scoped"
 
 
 def _candidate_needs_llm_location_grounding_review(
@@ -4540,6 +4628,43 @@ def _has_retrospective_future_teaser_shape(title: str | None, text: str | None) 
         return False
     hits = sum(1 for pattern in _RETROSPECTIVE_RECAP_MARKERS if pattern.search(combined))
     return hits >= 2
+
+
+def _has_mixed_occurrence_role_risk(title: str | None, text: str | None) -> bool:
+    """Route mixed past-recap/future-invite sources to semantic review.
+
+    This is deliberately a high-recall router, not an eventness decision.  The
+    old ``retrospective_future_teaser`` guard encoded a few exact Russian phrase
+    shapes and missed the next post from the same source when it changed from
+    "ждём на следующей выставке" to "увидимся в следующую субботу".  Here we
+    only establish that both temporal roles may be present; the LLM must decide
+    whether the candidate is one grounded future event.
+    """
+
+    combined = "\n".join([str(title or ""), str(text or "")]).strip()
+    if not combined:
+        return False
+    recap_hits = sum(1 for pattern in _RETROSPECTIVE_RECAP_MARKERS if pattern.search(combined))
+    completed_hits = sum(1 for pattern in _COMPLETED_EVENT_REPORT_MARKERS if pattern.search(combined))
+    # Generic past-tense reporting is routing evidence only.  It never causes a
+    # skip without the LLM review below.
+    has_past_role = bool(
+        recap_hits
+        or completed_hits
+        or re.search(
+            r"(?iu)\b(?:пров[её]л(?:а|и)?|подготовил(?:а|и)?|стал(?:а|о|и)?|"
+            r"получил(?:ся|ась|ось|ись)|сорвал(?:а|и)?|встретил(?:а|и)?)\b",
+            combined,
+        )
+    )
+    has_future_role = bool(
+        re.search(
+            r"(?iu)\b(?:впереди|увидимся|встретимся|следующ\w*|предсто\w*|"
+            r"скоро\s+(?:снова|вновь)|жд[её]м\s+вас)\b",
+            combined,
+        )
+    )
+    return has_past_role and has_future_role and bool(_extract_day_month_pairs(combined))
 
 
 def _looks_like_too_soon_notice(title: str | None, text: str | None) -> bool:
@@ -7662,6 +7787,7 @@ async def _llm_extract_candidate_facts(
         "source_url": candidate.source_url,
         "text": _clip(
             (text_for_facts or "").strip()
+            or (candidate.occurrence_scope_text or "").strip()
             or (_strip_promo_lines(candidate.source_text) or candidate.source_text),
             7000 if SMART_UPDATE_G4_SPLIT_CREATE else 2800,
         ),
@@ -11278,6 +11404,8 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     # narrower hallucinated-location guard has already skipped them earlier.
     if _has_retrospective_future_teaser_shape(title, raw):
         return True
+    if _has_mixed_occurrence_role_risk(title, raw):
+        return True
     # Campaign/discount/action posts are semantic: do not skip by regex, but
     # require the LLM to confirm that the source announces one concrete
     # attendable event rather than an entitlement/promo mechanic.
@@ -11331,6 +11459,7 @@ async def _llm_review_candidate_eventness(
         "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
         "- Режим работы площадки, часы посетителей/касс, сообщение 'открыто и работает в обычном режиме', правила покупки билетов и срок действия входного билета — non_event, если источник не называет отдельную attendee-facing программу. Дата 'билет действителен до ...' — срок действия, не дата события; часы площадки/кассы — не время события.\n"
         "- Пост-отчёт о прошедшем событии с коротким хвостом вроде 'ждём вас на следующей выставке/ярмарке ...' — non_event/uncertain, если будущие дата, площадка, адрес и программа не подтверждены явно в источнике.\n"
+        "- Разделяй occurrence-роли: факты, программа, автомобили, фото и площадка из прошедшей части не являются фактами будущего события. Кандидат event допустим только если его будущие дата и attendee-facing место подтверждены именно будущим анонсом; иначе non_event/uncertain.\n"
         "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
         "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"
         "- Если сомневаешься для такого слабого кандидата, верни uncertain.\n\n"
@@ -13574,6 +13703,67 @@ async def _smart_event_update_impl(
         int(bool(candidate.festival_source)) if candidate.festival_source is not None else None,
         _clip_title(candidate.festival_series, 80),
     )
+    # Mixed recap + future-invite posts are reviewed before location defaults,
+    # exhibition-duration fallbacks, vector identity recall or any write.  This
+    # prevents past-occurrence facts from becoming future logistics.  Regex is
+    # only a high-recall router; the semantic eventness decision belongs to the
+    # LLM and provider uncertainty fails closed.
+    mixed_occurrence_role_risk = _has_mixed_occurrence_role_risk(
+        candidate.title,
+        "\n".join([str(candidate.source_text or ""), str(candidate.raw_excerpt or "")]),
+    )
+    early_eventness_reviewed = False
+    if (
+        mixed_occurrence_role_risk
+        and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
+        and not SMART_UPDATE_LLM_DISABLED
+    ):
+        decision, confidence, reason = await _llm_review_candidate_eventness(
+            candidate,
+            clean_title=str(candidate.title or "").strip(),
+            clean_source_text=candidate.source_text,
+            clean_raw_excerpt=candidate.raw_excerpt,
+        )
+        early_eventness_reviewed = True
+        logger.info(
+            "smart_update.mixed_occurrence_role_review decision=%s confidence=%.2f reason=%s source_type=%s source_url=%s title=%s",
+            decision,
+            confidence,
+            reason,
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.title),
+        )
+        if decision != "event" or confidence < 0.70:
+            suffix = "non_event" if decision == "non_event" else "uncertain"
+            return SmartUpdateResult(
+                status="skipped_non_event",
+                reason=f"mixed_occurrence_role_review_{suffix}",
+            )
+        corpus = _candidate_location_grounding_corpus(candidate)
+        if not (
+            _source_supports_location_value(corpus, candidate.location_name)
+            or _source_supports_location_value(corpus, candidate.location_address)
+        ):
+            return SmartUpdateResult(
+                status="invalid",
+                reason="mixed_occurrence_role_ungrounded_location",
+            )
+    if _candidate_needs_llm_occurrence_scope_review(candidate) and not SMART_UPDATE_LLM_DISABLED:
+        scope_ok, scope_result = await _llm_scope_candidate_occurrence(candidate)
+        logger.info(
+            "smart_update.occurrence_scope_review result=%s ok=%s source_type=%s source_url=%s title=%s",
+            scope_result,
+            int(scope_ok),
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.title),
+        )
+        if not scope_ok:
+            return SmartUpdateResult(
+                status="invalid",
+                reason=f"occurrence_scope_review:{scope_result}",
+            )
     (
         candidate.location_name,
         candidate.location_address,
@@ -13645,7 +13835,14 @@ async def _smart_event_update_impl(
         )
         return SmartUpdateResult(status="invalid", reason="missing_location")
 
-    inferred_default_end_date = _maybe_apply_default_end_date_for_long_event(candidate)
+    # A one-month fallback must never use exhibition words from a past recap to
+    # invent the duration of the future occurrence.  Explicit extractor ranges
+    # remain untouched; only the service fallback is suppressed.
+    inferred_default_end_date = (
+        None
+        if mixed_occurrence_role_risk
+        else _maybe_apply_default_end_date_for_long_event(candidate)
+    )
 
     if _should_skip_past_smart_update_candidate(candidate):
         logger.info(
@@ -14011,7 +14208,7 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="completed_event_report")
-        if _candidate_needs_llm_eventness_review(candidate, combined_text):
+        if not early_eventness_reviewed and _candidate_needs_llm_eventness_review(candidate, combined_text):
             decision, confidence, reason = await _llm_review_candidate_eventness(
                 candidate,
                 clean_title=clean_title,
@@ -14721,7 +14918,7 @@ async def _smart_event_update_impl(
                     posters_map=posters_map,
                     threshold=threshold,
                     clean_title=clean_title,
-                    clean_source_text=clean_source_text,
+                    clean_source_text=candidate.occurrence_scope_text or clean_source_text,
                     clean_raw_excerpt=clean_raw_excerpt,
                     normalized_event_type=normalized_event_type_hint,
                 )
@@ -15216,7 +15413,7 @@ async def _smart_event_update_impl(
                 bundled = await _llm_create_description_facts_and_digest(
                     candidate,
                     clean_title=clean_title,
-                    clean_source_text=clean_source_text,
+                    clean_source_text=candidate.occurrence_scope_text or clean_source_text,
                     clean_raw_excerpt=clean_raw_excerpt,
                     normalized_event_type=normalized_event_type,
                 )

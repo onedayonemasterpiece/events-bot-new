@@ -1096,6 +1096,13 @@ def extract_event_ts_hint(
     date_span: tuple[int, int] | None = None
     for candidate in NUM_DATE_RE.finditer(text_low):
         start = candidate.start()
+        # A compact alphanumeric/product token such as ``ГАЗ-24-10`` is an
+        # identifier, not a calendar anchor.  This only protects the queue hint
+        # parser; the LLM still owns the event date extracted from source text.
+        if start > 0 and text_low[start - 1] in "./-":
+            before_sep = text_low[: start - 1].rstrip()
+            if before_sep and before_sep[-1].isalpha():
+                continue
         prev_idx = start - 1
         while prev_idx >= 0 and text_low[prev_idx].isspace():
             prev_idx -= 1

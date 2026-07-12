@@ -522,6 +522,25 @@ Smart Update must treat campaign/discount/action-shaped candidates as semantic h
 
 Operational date-role ambiguity is handled the same LLM-first way. A narrow deterministic detector may route source shapes such as visitor/cash-desk hours or `билет действителен до <date>` to eventness review, but it must not decide meaning itself. The LLM treats normal venue operation, admission-ticket purchase/validity and work-hours-only posts as `non_event` unless the same source names a concrete attendee-facing program. Identity/vector `allow_create` is never a quality approval, and uncertainty/LLM unavailability for this high-risk route fails closed before public creation.
 
+### 2026-07-12 occurrence-role and roundup scope gates
+
+Social sources that mix a completed-event recap with a short future invitation
+are reviewed before venue defaults, inferred exhibition duration, identity
+vectors or writes. Deterministic past/future markers only route the candidate;
+the LLM assigns occurrence roles. A future candidate whose attendee-facing
+location is not present in the source fails closed, and exhibition words in a
+past section cannot trigger the one-month duration fallback for the future
+occurrence.
+
+Multi-event roundups receive a separate LLM scope pass. It selects verbatim
+event-local excerpts for the target title/date/time plus only genuinely shared
+logistics. Rich-fact extraction, the match/create bundle and description writer
+use that scoped evidence, while the complete source remains stored for
+provenance. Non-verbatim output, a missing target date, uncertainty or provider
+failure blocks automatic creation. This prevents performer/program facts from
+sibling dates being written into `event_source_fact`, descriptions, search
+digests and public projections.
+
 ### Vector-first future quality audit contract
 
 The future-event quality audit is separate from identity deduplication:

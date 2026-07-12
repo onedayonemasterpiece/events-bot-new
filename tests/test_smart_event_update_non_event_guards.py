@@ -206,6 +206,168 @@ def _e6691_retrocar_recap_source() -> str:
     )
 
 
+def _e6853_retrocar_recap_source() -> str:
+    return (
+        "11 июля наш клуб провел в потрясающей атмосфере Дня города Светлого и Дня рыбака.\n"
+        "Хотим выразить искреннюю благодарность администрации города. Мероприятие было "
+        "организовано на высочайшем уровне!\n"
+        "АвтоРетроКлуб тоже подготовил сюрприз для горожан. Помимо традиционной выставки "
+        "редких машин, где блистал Mercedes Benz 230 Cabriolet W 143 1938 года, мы стали "
+        "частью сценки «Свадебный выезд» с ГАЗ-24-10 «Волга».\n"
+        "Огромное спасибо каждому участнику выездной выставки. Светлый, спасибо за "
+        "гостеприимство!\n"
+        "А мы не сбавляем обороты. Впереди новые дороги и новые встречи.\n"
+        "Увидимся уже в следующую субботу, 18 июля, на Дне города в Янтарном!"
+    )
+
+
+def test_mixed_occurrence_router_covers_e6853_without_deciding_eventness() -> None:
+    source_text = _e6853_retrocar_recap_source()
+    assert su._has_retrospective_future_teaser_shape("День города в Янтарном", source_text) is False
+    assert su._has_mixed_occurrence_role_risk("День города в Янтарном", source_text) is True
+
+
+@pytest.mark.asyncio
+async def test_e6853_replay_llm_fails_closed_before_duration_or_create(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def _review(*_args, **_kwargs):
+            return "non_event", 0.97, "past details do not ground the future occurrence"
+
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _review)
+
+        def _must_not_infer(_candidate):
+            raise AssertionError("duration fallback ran before mixed-occurrence review")
+
+        monkeypatch.setattr(su, "_maybe_apply_default_end_date_for_long_event", _must_not_infer)
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-127107743_14707",
+            source_text=_e6853_retrocar_recap_source(),
+            title="День города в Янтарном",
+            date="2026-07-18",
+            end_date="2026-08-18",
+            end_date_is_inferred=True,
+            location_name="Калининград Сити Джаз Клуб",
+            location_address="Мира 33-35",
+            city="Калининград",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "mixed_occurrence_role_review_non_event"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_mixed_recap_grounded_future_event_keeps_one_day_shape(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def _review(*_args, **_kwargs):
+            return "event", 0.96, "future date and venue are explicit"
+
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _review)
+        source_text = (
+            "Спасибо гостям прошлой выставки 11 июля. Впереди новая встреча. "
+            "Следующая выставка ретроавтомобилей состоится 18 июля в Янтарном, "
+            "место: площадь Мастеров. Ждём вас!"
+        )
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-127107743_14708",
+            source_text=source_text,
+            title="Выставка ретроавтомобилей",
+            date="2026-07-18",
+            location_name="площадь Мастеров",
+            city="Янтарный",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status in {"created", "merged"}
+        assert candidate.end_date is None
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_roundup_scope_review_selects_only_target_block(monkeypatch) -> None:
+    source_text = (
+        "15 июля в 18.00 — концерт «Ритмы огня»\n"
+        "Фламенко, гитара и кастаньеты.\n"
+        "16 июля в 18.00 — концерт «Песни от сердца»\n"
+        "Песни Эдит Пиаф и Уитни Хьюстон.\n"
+        "19 июля в 18.00 — концерт «Мелодии любви»\n"
+        "Олег Яковенко исполнит песни Азнавура и Талькова.\n"
+        "После каждого представления — авторский ужин."
+    )
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-194927034_4750",
+        source_text=source_text,
+        title="Концерт «Ритмы огня»",
+        date="2026-07-15",
+        time="18:00",
+        location_name="Солёная ворона",
+        city="Зеленоградск",
+    )
+    assert su._candidate_needs_llm_occurrence_scope_review(candidate) is True
+
+    async def _ask(_prompt, _schema, **_kwargs):
+        return {
+            "decision": "scoped",
+            "confidence": 0.98,
+            "selected_excerpts": [
+                "15 июля в 18.00 — концерт «Ритмы огня»\nФламенко, гитара и кастаньеты.",
+                "После каждого представления — авторский ужин.",
+            ],
+            "reason_short": "target block plus shared logistics",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", _ask)
+    ok, reason = await su._llm_scope_candidate_occurrence(candidate)
+    assert (ok, reason) == (True, "llm_scoped")
+    assert "Фламенко" in (candidate.occurrence_scope_text or "")
+    assert "Олег Яковенко" not in (candidate.occurrence_scope_text or "")
+
+
+@pytest.mark.asyncio
+async def test_roundup_scope_review_rejects_nonverbatim_model_output(monkeypatch) -> None:
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-194927034_4750",
+        source_text="15 июля — Ритмы огня\n16 июля — Песни от сердца",
+        title="Ритмы огня",
+        date="2026-07-15",
+        location_name="Солёная ворона",
+    )
+
+    async def _ask(_prompt, _schema, **_kwargs):
+        return {
+            "decision": "scoped",
+            "confidence": 0.99,
+            "selected_excerpts": ["15 июля — Ритмы огня с артистом, которого источник не называл"],
+            "reason_short": "invented",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", _ask)
+    ok, reason = await su._llm_scope_candidate_occurrence(candidate)
+    assert ok is False
+    assert reason == "llm_scope_not_verbatim"
+
+
 def test_retrocar_recap_with_ungrounded_next_venue_is_non_event() -> None:
     source_text = _e6691_retrocar_recap_source()
     candidate = EventCandidate(

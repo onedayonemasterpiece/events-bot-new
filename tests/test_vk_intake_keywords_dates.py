@@ -175,6 +175,18 @@ def test_numeric_identifier_like_sequence_ignored():
     assert (dt.year, dt.month, dt.day) == (2024, 2, 24)
 
 
+def test_extract_event_ts_hint_ignores_car_model_date_shape() -> None:
+    publish_dt = real_datetime(2026, 7, 12, tzinfo=main.LOCAL_TZ)
+    text = (
+        "На выставке была ГАЗ-24-10 Волга 1987 года. "
+        "Увидимся 18 июля на Дне города в Янтарном."
+    )
+    ts = extract_event_ts_hint(text, publish_ts=publish_dt)
+    assert ts is not None
+    dt = real_datetime.fromtimestamp(ts, tz=main.LOCAL_TZ)
+    assert (dt.year, dt.month, dt.day) == (2026, 7, 18)
+
+
 def test_extract_event_ts_hint_bare_hours_after_date():
     publish_dt = real_datetime(2024, 10, 1, tzinfo=main.LOCAL_TZ)
     ts = extract_event_ts_hint("9 октября 14 часов", publish_ts=publish_dt)

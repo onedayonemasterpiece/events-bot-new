@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-12-autoretro-one-day-exhibition-location-period.md`
+  - Scope: source-grounded one-day outdoor exhibition date/venue semantics, Smart Update period/location merge safety, vector-first recall and all public projections.
+  - Must not regress: a one-day street vehicle exhibition must not inherit a long-running exhibition period or unrelated indoor/default venue; vector similarity is recall only and cannot authorize semantic field transfer.
 - `INC-2026-07-11-cherryflash-eco-retry-storm.md`
   - Scope: CherryFlash partner watchdog retries, Kaggle selection-manifest/payload boundary, intro poster resolution and failed-kernel status evidence.
   - Must not regress: a deterministic partner render failure gets at most one recovery attempt per day/profile; a live runtime recovers from canonical `payload.json` and never falls back to fixture event `3292`.
