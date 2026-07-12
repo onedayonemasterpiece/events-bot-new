@@ -244,6 +244,11 @@ Important invariants:
   `1`) so continuous keyword inflow cannot starve the fusion completion lane.
   The scorecard reports pending-new exact links and BGE-ready-rescore links as
   separate counts; the orchestrator sizes its bounded exact batch from both.
+  If complete exact text still exists in active candidate/vector state, up to
+  eight BGE-ready rows per run are fused directly from YDB **in addition to**
+  the Telegram fetch budget. Only older rows whose working text was already
+  compacted consume the single human-like refetch slot. This clears dual-model
+  lag faster while reducing Telegram requests and preserving fresh discovery.
 - The default global keyword plan reserves two phrase slots for travel intent
   (`ездили`, `путешествие`, `отзыв`, `маршрут`) and rotates the remaining POI
   slots. This keeps broad geographic recall but raises the share of personal

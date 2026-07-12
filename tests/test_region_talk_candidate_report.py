@@ -4432,6 +4432,43 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         ], 2, cached_entity_handles={"a", "fresh"})
         self.assertEqual([row["post_url"] for row in mixed], ["https://t.me/a/1", "https://t.me/fresh/1"])
 
+    def test_bge_ready_durable_text_rescores_outside_telegram_fetch_budget(self) -> None:
+        mod = load_module()
+        links = [
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": f"https://t.me/cached/{idx}"}
+            for idx in range(1, 4)
+        ]
+        processed = [
+            {"post_url": row["post_url"], "vector_gate_status": "vector_defer_wait_bge_m3"}
+            for row in links
+        ]
+        vectors = [
+            {
+                "post_url": row["post_url"],
+                "model_short": "bge_m3",
+                "full_text": f"Complete exact post text {idx}",
+                "source_title": "Travel source",
+                "post_date": "2026-07-01T00:00:00+00:00",
+            }
+            for idx, row in enumerate(links, 1)
+        ]
+        candidates = [
+            {"post_url": row["post_url"], "has_media": True, "media_count": 4}
+            for row in links
+        ]
+        promoted = mod.promote_bge_ready_exact_rows(links, processed, vectors, [], candidates)
+        with mock.patch.dict(os.environ, {"REGION_TALK_BGE_READY_LOCAL_RESCORE_PER_RUN": "8"}):
+            selected = mod.candidate_link_rows_for_fetch([
+                *promoted,
+                {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/fresh/10"},
+                {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/fresh/11"},
+            ], 1, cached_entity_handles={"fresh"})
+        self.assertEqual(len(selected), 4)
+        self.assertEqual({row["post_url"] for row in selected[:3]}, {row["post_url"] for row in links})
+        self.assertEqual(selected[3]["post_url"], "https://t.me/fresh/10")
+        self.assertTrue(all((row.get("_cached_rescore_payload") or {}).get("text") for row in selected[:3]))
+        self.assertTrue(all((row.get("_cached_rescore_payload") or {}).get("has_media") is True for row in selected[:3]))
+
     def test_post_link_rediscovery_preserves_retry_lifecycle(self) -> None:
         mod = load_module()
         previous = {

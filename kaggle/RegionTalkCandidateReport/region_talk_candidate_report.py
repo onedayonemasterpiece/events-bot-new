@@ -9140,9 +9140,22 @@ def candidate_link_rows_for_fetch(
         return pri, freshness_rank, attempt_count, str(row.get("updated_at") or "")
 
     ordered = sorted(raw_rows, key=rank)
-    # Reserve one small slot for a fetched exact post whose awaited BGE result
-    # has arrived. Continuous fresh keyword inflow must not starve those rows
-    # forever; the remainder of the batch keeps the normal fresh/cache order.
+    # Durable exact text can be fused again without another Telegram request.
+    # Process those CPU/YDB-only rows in addition to the network fetch budget,
+    # so clearing the BGE handoff never steals fresh keyword-fetch capacity.
+    local_rescore_cap = max(0, getenv_int("REGION_TALK_BGE_READY_LOCAL_RESCORE_PER_RUN", 8))
+    local_rescoring = [
+        row for row in ordered
+        if str(row.get("post_link_status") or "") == "bge_ready_rescore"
+        and isinstance(row.get("_cached_rescore_payload"), dict)
+        and str((row.get("_cached_rescore_payload") or {}).get("text") or "").strip()
+    ][:local_rescore_cap]
+    local_rescore_ids = {id(row) for row in local_rescoring}
+    ordered = [row for row in ordered if id(row) not in local_rescore_ids]
+
+    # Rows whose old working text has already been compacted still need one
+    # bounded human-like refetch slot. Continuous fresh keyword inflow must not
+    # starve those rows forever.
     rescore_cap = min(
         max(0, getenv_int("REGION_TALK_BGE_READY_EXACT_RESCORE_PER_RUN", 1)),
         max(0, limit),
@@ -9150,15 +9163,20 @@ def candidate_link_rows_for_fetch(
     rescoring = [row for row in ordered if str(row.get("post_link_status") or "") == "bge_ready_rescore"][:rescore_cap]
     rescore_ids = {id(row) for row in rescoring}
     ordered = rescoring + [row for row in ordered if id(row) not in rescore_ids]
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
+    out: list[dict[str, Any]] = list(local_rescoring)
+    seen: set[str] = {
+        str(row.get("post_url") or "").strip() for row in local_rescoring
+        if str(row.get("post_url") or "").strip()
+    }
+    network_rows = 0
     for row in ordered:
         url = str(row.get("post_url") or "").strip()
         if not url or url in blocked_urls or url in seen:
             continue
         seen.add(url)
         out.append(row)
-        if len(out) >= limit:
+        network_rows += 1
+        if network_rows >= limit:
             break
     return out
 
@@ -9179,15 +9197,16 @@ def promote_bge_ready_exact_rows(
     processed_rows: list[dict[str, Any]],
     vector_rows: list[dict[str, Any]],
     publication_rows: list[dict[str, Any]],
+    candidate_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Re-open fetched exact links only when their awaited BGE row arrived.
 
     CandidateReport may have persisted `vector_defer_wait_bge_m3` and marked
     the exact URL fetched in the same run. BGE then completes externally. A
     fetched link is otherwise terminal and would never be rescored, leaving a
-    permanent false backlog. Re-fetching is bounded by the normal exact-link
-    limit and Telegram governor; terminal publication/operator decisions stay
-    monotonic.
+    permanent false backlog. Active durable text is reused without Telegram;
+    only compacted historical text is refetched under the normal exact-link
+    limit and governor. Terminal publication/operator decisions stay monotonic.
     """
     deferred_urls = {
         canonical_post_url_for_storage(row.get("post_url"))
@@ -9211,6 +9230,27 @@ def promote_bge_ready_exact_rows(
         }
     }
     ready_urls = (deferred_urls & bge_urls) - terminal_urls
+    cached_payload_by_url: dict[str, dict[str, Any]] = {}
+    cached_fields = {
+        "post_date", "source_id", "source_title", "source_url", "source_kind",
+        "source_quick_class", "has_media", "media_count", "media_kind",
+        "primary_media_path", "local_media_paths", "rights_policy",
+        "embedded_links", "embedded_links_json",
+    }
+    cached_sources = list(vector_rows) + list(candidate_rows or [])
+    cached_sources.sort(key=lambda item: str(item.get("updated_at") or item.get("_ydb_updated_at") or ""))
+    for source in cached_sources:
+        url = canonical_post_url_for_storage(source.get("post_url"))
+        if url not in ready_urls:
+            continue
+        payload = cached_payload_by_url.setdefault(url, {})
+        text = str(source.get("full_text") or source.get("text") or "").strip()
+        if text:
+            payload["text"] = text
+        for field in cached_fields:
+            value = source.get(field)
+            if value not in (None, ""):
+                payload[field] = value
     out: list[dict[str, Any]] = []
     for source in link_rows:
         row = dict(source)
@@ -9220,7 +9260,12 @@ def promote_bge_ready_exact_rows(
             row["post_link_priority"] = 0
             row["priority_reason"] = "external_bge_m3_arrived_rescore_exact_post"
             row["next_attempt_after"] = ""
-            row["next_action"] = "refetch_exact_post_and_apply_dual_model_fusion"
+            cached_payload = cached_payload_by_url.get(url) or {}
+            if str(cached_payload.get("text") or "").strip():
+                row["_cached_rescore_payload"] = cached_payload
+                row["next_action"] = "apply_dual_model_fusion_from_durable_exact_text"
+            else:
+                row["next_action"] = "refetch_exact_post_and_apply_dual_model_fusion"
         out.append(row)
     return out
 
@@ -9301,11 +9346,16 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                     session, ydb, table_path, "publication_candidate_item",
                     limit=getenv_int("REGION_TALK_YDB_MAX_PUBLICATION_ROWS", 5000),
                 )
+                candidate_items = ydb_select_kind_items(
+                    session, ydb, table_path, "candidate_memory_item",
+                    limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000),
+                )
                 rows = promote_bge_ready_exact_rows(
                     rows,
                     list(processed_items.values()),
                     list(vector_items.values()),
                     list(publication_items.values()),
+                    list(candidate_items.values()),
                 )
             cached_handles: set[str] = set()
             cache_items = ydb_select_kind_items(
@@ -9398,6 +9448,73 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
         stat = source_stats.setdefault(handle, {"handle": handle, "source_title": row.get("source_title") or handle, "attempted": 0, "ok": 0, "errors": 0, "last_seen_post_date": ""})
         stat["attempted"] += 1
         status.event("alive", phase="fetch", status="running", run_id=run_id, progress_label=f"YDB post links {idx}/{len(rows)} · {handle}/{mid}", sources_done=idx - 1, sources_total=len(rows), current_source_handle=handle, current_source_title=stat.get("source_title"), current_source_url=canonical_url)
+        cached_rescore = row.get("_cached_rescore_payload") if isinstance(row.get("_cached_rescore_payload"), dict) else {}
+        cached_text = str(cached_rescore.get("text") or "").strip()
+        if str(row.get("post_link_status") or "") == "bge_ready_rescore" and cached_text:
+            post_date = str(cached_rescore.get("post_date") or row.get("post_date") or "")
+            raw_has_media = cached_rescore.get("has_media")
+            has_media = raw_has_media is True or str(raw_has_media or "").lower() in {"1", "true", "yes"}
+            try:
+                media_count = max(0, int(cached_rescore.get("media_count") or (1 if has_media else 0)))
+            except (TypeError, ValueError):
+                media_count = 1 if has_media else 0
+            post_row = {
+                "post_id": "post_" + stable_hash("telegram_ydb_link", handle, mid),
+                "source_id": cached_rescore.get("source_id") or "src_ydb_link_" + stable_hash("telegram", handle),
+                "source_seed_id": stage,
+                "source_title": cached_rescore.get("source_title") or row.get("source_title") or handle,
+                "platform": "telegram",
+                "handle": handle,
+                "post_url": f"https://t.me/{handle}/{mid}",
+                "platform_post_key": f"tg:{handle}:{mid}",
+                "post_date": post_date,
+                "text": cached_text,
+                "text_excerpt": re.sub(r"\s+", " ", cached_text)[:500],
+                "embedded_links": cached_rescore.get("embedded_links") or [],
+                "embedded_links_json": cached_rescore.get("embedded_links_json") or "[]",
+                "has_media": has_media,
+                "media_count": media_count,
+                "media_kind": cached_rescore.get("media_kind") or "",
+                "primary_media_path": cached_rescore.get("primary_media_path") or "",
+                "local_media_paths": cached_rescore.get("local_media_paths") or "",
+                "rights_policy": cached_rescore.get("rights_policy") or "unknown",
+                "source_kind": cached_rescore.get("source_kind") or "ydb_candidate_link",
+                "source_type": "ydb_candidate_link",
+                "source_url": cached_rescore.get("source_url") or f"https://t.me/{handle}",
+                "is_forwarded_or_repost": False,
+                "ydb_candidate_link_kind": row.get("_kind") or "",
+                "ydb_candidate_link_pk": row.get("_pk") or "",
+                "discovery_method": "exact_post_durable_text_rescore",
+                "fetch_method": "ydb_durable_exact_text_no_telegram",
+                "discovery_priority": "0",
+                "post_link_priority": 0,
+                "priority_reason": row.get("priority_reason") or "external_bge_m3_arrived_rescore_exact_post",
+                "keyword_hit_query": row.get("matched_query") or "",
+                "keyword_hit_hashtag": row.get("matched_hashtag") or "",
+            }
+            append_post_online(posts, post_row, run_id=run_id, stage=stage)
+            write_region_talk_post_link_queue_items([{
+                **row,
+                "post_link_status": "fetched",
+                "last_attempt_run_id": run_id,
+                "last_attempt_at": utc_now_iso(),
+                "fetched_post_id": post_row.get("post_id"),
+                "fetch_error_code": "",
+                "fetch_error_message": "",
+                "rescore_input_source": "durable_exact_text",
+            }], run_id=run_id, stage=stage)
+            stat["ok"] += 1
+            stat["last_seen_post_date"] = max(str(stat.get("last_seen_post_date") or ""), post_date)
+            status.event(
+                "ydb_exact_post_rescored_without_telegram",
+                phase="fetch",
+                status="running",
+                run_id=run_id,
+                post_url=url,
+                current_source_handle=handle,
+                progress_label=f"Dual fusion input restored from YDB {idx}/{len(rows)} · {handle}/{mid}",
+            )
+            continue
         if governor is not None and not governor.has_total_request_budget(method_name, "post_link_queue", canonical_url):
             status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact fetch deferred by cooldown/budget at {idx}/{len(rows)}")
             break

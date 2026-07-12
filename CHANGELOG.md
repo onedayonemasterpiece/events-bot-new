@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Reused active durable exact text for up to eight BGE-ready Region Talk rescoring rows per run outside the Telegram fetch budget; only compacted historical rows require a bounded human-like refetch, improving dual-fusion throughput without reducing fresh keyword discovery.
 - Fixed Region Talk ImageDiagnostic so the Telegram post-level `#media` marker is never downloaded as a JPG/HTML page; real media now falls through to the bounded human-like Telethon fetch. State maintenance reopens affected rows, and image-ledger rows no longer retain a redundant full post body after the text verdict.
 - Fixed Region Talk funnel metrics so image-fetch/image-quality stages no longer masquerade as text-gate rejections; the operator readout now states plainly that this is text suitability before media review, not publication readiness.
 - Fixed Region Talk exact-post metrics so stale candidate-memory verdicts cannot override a newer processed-post defer/reject verdict.
