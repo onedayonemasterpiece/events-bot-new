@@ -450,7 +450,7 @@ features:
     control_plane_tests: email_control/tests/test_control_plane.py
 
   event_email_notifications:
-    status: production_disabled_control_plane_ux_scheduler_missing
+    status: control_plane_feedback_worker_implemented_producers_pending
     docs: docs/features/event-email-notifications/README.md
     operations: docs/operations/email-delivery.md
     data_ownership: docs/architecture/personalization-data-ownership.md
@@ -459,11 +459,15 @@ features:
     shared_control_plane_package: email_control/
     shared_control_plane_migration: supabase/migrations/20260711203940_email_control_plane_v1.sql
     capabilities:
-      verified_identity_consent_outbox_guard: production_disabled_foundation
-      event_reminder_24h_kind: production_disabled_foundation
+      verified_identity_consent_outbox_guard: implemented_production_disabled
+      event_reminder_24h_kind: implemented_production_disabled
+      postbox_feedback_consumer: live_verified
+      postbox_worker: live_verified_controlled_canary
       calendar_reminder_ui: design
-      reminder_scheduler: missing
-      postbox_live_e2e: missing
+      event_reminder_schedule_producer: missing
+      cross_provider_warmup: pending
+    postbox_worker_migration: supabase/migrations/20260712083037_email_postbox_worker_v1.sql
+    postbox_worker_tests: email_control/tests/test_worker.py
 
   event_transport:
     status: branch_candidate_refresh_blocked_by_wip

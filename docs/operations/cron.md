@@ -58,6 +58,17 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 
 ## Jobs
 
+- **Postbox transactional outbox worker** – every
+  `EMAIL_OUTBOX_WORKER_INTERVAL_SECONDS` (default `60`) claims only eligible
+  transactional Postbox rows from the personalization Supabase control plane.
+  Enabled by `ENABLE_EMAIL_OUTBOX_WORKER`; database global/transactional switches
+  and `dry_run_only` remain the authoritative send gate.
+- **Postbox email health monitor** – every
+  `EMAIL_OUTBOX_MONITOR_INTERVAL_SECONDS` (default `300`) checks PII-free outbox
+  lag/failure counters and the dedicated YMQ trigger DLQ, then sends cooldown-bound
+  warning/alarm codes to the Telegram superadmin. Enabled by
+  `ENABLE_EMAIL_OUTBOX_MONITOR`.
+
 - **partner reminders** – reminds inactive partners after 09:00 local time.
 - **cleanup old events** – removes past events after 03:00 local time and notifies the superadmin.
 - **general stats** – daily operational system report (`/general_stats`) for the previous 24 hours.

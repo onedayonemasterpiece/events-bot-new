@@ -89,12 +89,10 @@ begin
   if (select count(*) from email_control.suppression) <> v_suppressions then
     raise exception 'untrusted NotiSend webhook changed suppression';
   end if;
-  perform public.email_record_provider_event_v1(
-    'notisend', 'fixture-verified', '417', 'unsubscribe', now(), repeat('f', 43), repeat('0', 64), true, true
-  );
-  if (select count(*) from email_control.suppression) <> v_suppressions + 1 then
-    raise exception 'verified NotiSend status did not create suppression';
-  end if;
+  -- Provider-event V1 is retained only for migration compatibility. It accepts
+  -- caller-controlled trust booleans and must not be used by a deployed service.
+  -- Postbox state changes are covered by email_postbox_event_consumer_contract.sql;
+  -- NotiSend needs a future provider-verified, message-correlated V2 contract.
 end;
 $$;
 

@@ -4,6 +4,18 @@
 > Base audited: `origin/main@323cb1e407c6`.
 > Rule: published/shared branches are never force-rebased. Retain only coherent branches; supersede stale/mixed branches with fresh main-based successors.
 
+## Post-audit consolidation: email worker
+
+Verified after `git fetch origin --prune` on 2026-07-12:
+
+- `feature/email-postbox-worker` → merged in PR #34;
+- `fix/postbox-authorized-key-preamble` → merged in PR #35;
+- `docs/postbox-worker-live-evidence` → merged in PR #36;
+- all three remote branch refs are deleted;
+- final integration point is `origin/main@c6396331`.
+
+This supersedes the earlier plan to create a broad `feature/event-email-notifications-v2` foundation. Future F8 tasks branch from current `main` and implement only the remaining event-specific producers, calendar/reminder UX/templates and warm-up evidence; they must not recreate the worker/feedback control plane.
+
 ## Decision table
 
 | Capability | Existing branch | State | Decision |
@@ -54,7 +66,7 @@ No stash as durable state and no force push.
 3. F17 clean reporting branch.
 4. F5 clean release-UI branch after F11/F17 placement decisions.
 5. Identity/profile/telemetry/favorites foundations.
-6. F8 transactional email v2.
+6. F8 event-specific calendar/reminder producers and warm-up on the merged Postbox worker/feedback foundation.
 7. F4 personal recommendation email/page v2.
 8. F14 comment-feedback v2.
 

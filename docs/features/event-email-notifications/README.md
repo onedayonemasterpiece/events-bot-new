@@ -1,6 +1,6 @@
 # Transactional event email notifications
 
-> Status: **production-disabled control-plane foundation in `origin/main`**. Verified-identity/consent/outbox guards and the `event_reminder_24h` message kind exist; calendar UX, reminder scheduling, templates, provider-event ingestion and live sending are not complete.
+> Status: **shared production-safe control plane, live Postbox feedback path and Fly outbox worker implemented**. Event-specific calendar/reminder producers, templates and product UX remain disabled/missing until they enqueue server-validated facts and pass bounded warm-up.
 
 ## Scope
 
@@ -30,18 +30,41 @@ Adding an event to the calendar/favorites state does not silently grant email co
 
 Changing/removing a saved event or changing/cancelling/merging the canonical event must cancel or recompute the pending reminder. Exactly one logical reminder may be sent per `user + canonical event + start-version`; retries reuse the same idempotency key.
 
-## Current foundation and missing implementation
+## Runtime status
 
-The shared Supabase email control plane in `origin/main` already accepts only verified synchronized identities, purpose-specific transactional consent, suppression checks and the fixed Postbox route for `event_reminder_24h`. All outbound switches remain disabled/dry-run-only.
+The historical branch `feature/event-email-notifications-static-20260702` remains
+superseded and must not be merged wholesale. Its unsafe assumptions were replaced
+on `main` by the shared `email_control` schema, correlated Postbox event consumer
+and a transactional-only Fly worker.
+
+The worker:
+
+- claims only `transactional -> postbox` rows through a service-only RPC;
+- rechecks verified identity, consent, suppression and database runtime switches;
+- renders only the strict `transactional-plain-v1` payload contract;
+- records the actual request hash before network access and the real Postbox
+  MessageId after acceptance;
+- quarantines ambiguous delivery instead of retrying and risking a duplicate;
+- renews short-lived Yandex IAM tokens from a dedicated service-account authorized
+  key rather than storing an expiring IAM token;
+- exposes PII-free health counters and checks the private trigger DLQ, with bounded
+  alerts to the Telegram superadmin.
+
+Event-specific enqueue producers still have to derive the current event snapshot
+from Fly SQLite and use the existing kind/consent constraints. Worker availability
+does not authorize a client to supply event facts or enqueue arbitrary mail.
+
+## Remaining release work
+
+The controlled worker/feedback canaries prove the delivery runtime, IAM authorized-key parser, authenticated event correlation, suppression, alerting, DLQ/replay and ambiguity safety. They do **not** prove the calendar/reminder product flow.
 
 Release still requires:
 
-- calendar/favorite UI states and explicit consent capture described above;
-- a scheduler that derives `send_at = canonical start - 24h`, handles timezone/reschedule/cancel/merge races and performs bounded catch-up without duplicates;
+- calendar/favorite UI states, manual-email reuse and explicit consent capture described above;
+- an event-specific producer that derives `send_at = canonical start - 24h`, handles timezone/reschedule/cancel/merge races and performs bounded catch-up without duplicates;
 - server-owned event snapshots from Fly SQLite/static export, never client-trusted event facts;
 - confirmation/reminder/reschedule/cancellation templates and accessible preference/undo surfaces;
-- Postbox delivery-event ingestion, suppression/alert proof, seed canary and live E2E;
-- retirement of the historical stale branch `feature/event-email-notifications-static-20260702` without merging it wholesale.
+- bounded cross-provider warm-up/placement evidence with application sends still behind the existing DB/process switches.
 
 ## Release gates
 

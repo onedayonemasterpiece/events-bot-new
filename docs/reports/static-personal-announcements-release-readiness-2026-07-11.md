@@ -6,6 +6,8 @@
 >
 > Базовая ревизия: `origin/main@323cb1e407c6`
 >
+> Post-audit integration milestone: `origin/main@c6396331` (2026-07-12) contains the transactional Postbox worker, authorized-key preamble fix and live worker evidence; source/fix/docs branches were merged and deleted from `origin`.
+>
 > Решение на дату аудита: **NO-GO для публичной презентации полного заявленного функционала**
 >
 > Назначение: единый release-readiness checklist. Он связывает канонические feature/operations/incident-документы, но не заменяет их.
@@ -36,6 +38,7 @@
 - Supabase pgvector sidecar и semantic related/search pipeline имеют canary evidence и rollback на sparse manifests: [Semantic vector retrieval](../features/unsigned-personalization/semantic-vector-retrieval.md), [Authorized event search](../features/unsigned-personalization/authorized-event-search.md).
 - Статическая страница остаётся полезной без JS, а недоступность personalization/telemetry не должна ломать CTA и навигацию: [Production integration](../features/unsigned-personalization/production-integration.md).
 - Incident management и regression contracts для качества событий развиты значительно лучше среднего: [Incident management](../operations/incident-management.md), [incident index](incidents/README.md).
+- Transactional email now has a production-safe disabled control plane, live authenticated Postbox feedback consumer and a deployed transactional-only Fly worker/monitor with one controlled delivered canary; application producers and user flows remain gated: [Email delivery](../operations/email-delivery.md).
 
 ### Почему сейчас NO-GO
 
@@ -60,7 +63,7 @@
 | **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; отдельная UX V3 branch активна | Design freeze + owner sign-off; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
 | **F6** | Views/list/detail/social-action personalization telemetry and application | **Partial** | Local profile/actions/served-list Playwright contract exists; full DB integration/application E2E missing | Detailed Gherkin/Playwright: localStorage → accepted/deduped DB rows → profile rollup → next feed; golden personas and `cards_to_first_relevant <=20` |
 | **F7** | На выбор Yandex identity/email или вручную введённый verified email | **Partial** | Yandex PKCE login/logout работает; manual email path описан | Yandex email sync/fallback; one-use email code/link with TTL/replay/rate limits; both paths converge without duplicate identity/profile; real-device proof |
-| **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Designed / Partial foundation** | Shared disabled Supabase control plane includes verified identity/consent/outbox and `event_reminder_24h` kind | Calendar UX; D-1 scheduler; Postbox template/event ingest; separate streams; SPF/DKIM/DMARC; suppression/warmup/alerts; live canary |
+| **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Partial / live worker foundation** | `main@c6396331`: disabled Supabase control plane, authenticated Postbox feedback/suppression, live transactional-only worker+monitor canary, authorized-key fix | Event-specific calendar/reminder producers; templates/UX; D-1 schedule/reschedule E2E; cross-provider placement warm-up; NotiSend recommendation flow/key gate |
 | **F9** | Избранное пользователя | **Missing** | Local `liked_event_ids` — это не durable favorites | Define favorite semantics; DB/RLS/API/page; cross-device/merge/lifecycle/delete/export |
 | **F10** | Yandex login/logout + merge personalization | **Partial** | Login/logout реализованы; merge описан только архитектурно | Explicit consent, idempotent merge API/schema, conflict/logout/unlink/delete policy and E2E |
 | **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, branch-only** | Rail Светлогорск/Зеленоградск + один bus example + leg ICS в integration branch | Merge; full city/provider matrix; nightly validated atomic last-good refresh; stale alert; real browser/ICS; persistent favorite if required |
@@ -87,6 +90,14 @@ Read-only срез на 2026-07-11:
 - core `/healthz` был ready, SQLite `quick_check=ok`, но свободное место `/data` составляло только около `256 MiB`; root overlay имел около `7.87 GiB`.
 
 Вывод: vector sidecar имеет актуальную operational основу, но статический публичный surface не синхронизирован с ней автоматически.
+
+Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
+
+- `feature/email-postbox-worker`, `fix/postbox-authorized-key-preamble` and `docs/postbox-worker-live-evidence` were merged through PRs #34–#36 and removed from `origin`;
+- the transactional-only Fly outbox worker and PII-free monitor are deployed; controlled send stored a real Postbox MessageId and reached `delivered` through authenticated/verified `Send`/`Delivery` events;
+- replay/dedupe, scoped suppression, alerting, private DLQ failure/replay/cleanup, automatic trigger probe and destination rollback have live evidence;
+- the Yandex authorized-key parser now accepts only a matching key-id warning preamble and strips it before PS256 signing;
+- database send switches remain off/dry-run-only; event-specific producers, calendar/reminder UX/templates and cross-provider placement warm-up are still release work.
 
 Ключевые code anchors в `origin/main@323cb1e4`: effect-only Smart Update fanout — `smart_event_update.py:15940-15946,17364-17382`; `+15 min` schedule — `main.py:15400-15408`; running/coalesce semantics — `main.py:14132-14220`; static max runtime — `main.py:17042-17053`; Kaggle command assembly — `main.py:21547-21625`; vector projection owner — `event_vector_sync.py:77-198`; public projection filters — `site/scripts/export-production-preview-data.py:303-319,786-905`; authenticated search — `supabase/functions/event-search/index.ts`.
 
@@ -115,7 +126,7 @@ Read-only срез на 2026-07-11:
 | Surface | Branch snapshot | Документ/код | Интеграционный риск |
 |---|---|---|---|
 | F4 personal email/page | `origin/agent/personal-email-announcements-docs` (21 behind / 6 ahead) | прежний `docs/features/personal-email-announcements/README.md` | Superseded ownership design; port to a new main-based v2 branch only |
-| F8 transactional email foundation | `origin/feature/event-email-notifications-static-20260702` (677 behind) | `docs/features/event-email-notifications/README.md`, `email_notifications/` | Very stale; dry-run; no bounce callback |
+| F8 historical transactional prototype | `origin/feature/event-email-notifications-static-20260702` (677 behind at audit time) | old `email_notifications/` prototype | Superseded. Current feedback/worker foundation was reimplemented and merged in `main@c6396331`; do not revive this branch |
 | F5 UI V3 | `origin/feature/event-page-ux-lab-v3-20260710` (69 behind / 15 ahead) | event-page decision/onboarding lab | UI not frozen; requires clean rebase and visual acceptance |
 | F11 transport | `origin/integration/event-transport-schedule` (1 behind / 9 ahead) | `docs/features/static-site-pages/event-transport-schedule.md` | Closest to merge; nightly refresh still P0-open |
 | F14 comment feedback | `origin/agent/event-comment-feedback-kaggle-runner` (724 behind / 10 ahead) | `docs/features/event-comment-feedback/README.md`, runner/kernel/tests | Architecture/code may be stale; no public UI/YDB path |
@@ -131,7 +142,7 @@ Read-only срез на 2026-07-11:
 | F4 | Canonical v2 home/route подготовлены в release-doc branch; реализация требует новой main-based feature branch. Старая YDB-owned docs branch superseded. |
 | F5 | Есть активная UX V3 branch, но UI не frozen и branch отстаёт от main. |
 | F6, F7, F10 | Parent personalization docs и новый canonical `site-user-identity` home подготовлены; отдельных завершённых implementation branches для remote telemetry, verified-email identity и profile merge нет. |
-| F8 | Есть очень старая transactional-email branch; она не закрывает recommendation email/deliverability целиком и не может быть слита без rebase/review. |
+| F8 | Current transactional Postbox feedback/worker foundation is in `main@c6396331`; the old prototype remains superseded. Application event producers, reminder UX/templates/warm-up and the separate NotiSend recommendation flow are still incomplete. |
 | F9 | Canonical `event-favorites-calendar` home подготовлен; implementation branch/schema/API всё ещё отсутствуют. |
 | F11 | Есть близкая к main integration branch, но nightly production refresh остаётся P0-open. |
 | F12 | ICS находится в main; отдельной branch для product contract “calendar = favorite” нет. |
@@ -267,6 +278,8 @@ Smart Update является владельцем семантического 
 
 ### Stage 5 — Email recommendations, event reminders and deliverability
 
+- [x] Transactional-only Postbox worker/monitor, authenticated feedback correlation, suppression, bounded retry/ambiguity quarantine and private DLQ control are merged and live-verified in `main@c6396331`.
+- [x] Yandex authorized-key warning preamble is accepted only when its key id matches the JSON key id, then stripped before PS256 signing.
 - [ ] Personal issue schema, profile snapshot, deterministic hero+3 selection and 12–24 recommendation page.
 - [ ] Personal page is published before email enqueue; forwardable public secret URL works without login, token is high-entropy/hash-only/revocable, page is `noindex` and outbound navigation cannot leak the token.
 - [ ] Outbox idempotency/fatigue/quiet-hours/stale/cancelled/rescheduled gates pass.

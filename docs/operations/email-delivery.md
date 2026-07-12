@@ -1,6 +1,6 @@
 # Email infrastructure, delivery and deliverability
 
-> Status: inbound/mailbox foundation live; outbound providers remain production-gated.
+> Status: inbound/mailbox and Postbox feedback infrastructure live; application outbound providers remain production-gated.
 
 ## Scope
 
@@ -44,6 +44,11 @@ outbound switches remain disabled and dry-run-only. It provides:
 - an idempotent metadata-only inbound receipt boundary; message bodies and open
   addresses remain in the private Yandex envelope/SpaceWeb mailbox, not Supabase.
 
+The transactional Postbox adapter is wired to a transactional-only Fly scheduler
+worker. The database global/stream switches remain the final send gate; process
+flags alone cannot make an ineligible row sendable. Recommendation generation and
+the NotiSend worker are not enabled.
+
 On 2026-07-11 the previous Supabase history drift was reconciled before applying
 email migrations: a restorable logical backup was taken, all prior migration-owned
 functions/indexes/RLS policies and semantic table columns were hash-compared with a
@@ -54,13 +59,19 @@ history now matches all repository versions. Continue to use the session pooler 
 port 5432 for migration operations; the transaction pooler produced a prepared
 statement collision during the guarded first attempt.
 
-Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. Postbox Data Streams events must eventually be ingested through an IAM-authenticated consumer and deduplicated by provider `eventId`; no event destination is attached yet, so transactional production sending remains disabled.
+Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. The live Postbox-specific V2 boundary uses an IAM-authenticated YDS consumer to compute a versioned recipient HMAC; a service-only Supabase RPC correlates it to the exact persisted Postbox `messageId` and DB-owned identity before applying an idempotent transition or suppression. Transactional application sending remains disabled because the scheduler/worker, notification-channel alerts and gradual warm-up gate are separate release work.
 
-## Live provider state (2026-07-11)
+## Live provider state (2026-07-12)
 
 - SpaceWeb retains `info@kenigevents.ru` and `dmarc@kenigevents.ru`; public MX,
   combined root SPF, SpaceWeb DKIM and monitoring DMARC resolve without changing
-  the authoritative Yandex nameservers or existing site/CDN records.
+  the authoritative Yandex nameservers or existing site/CDN records. One outbound
+  webmail canary from `info@kenigevents.ru` to the controlled `info@kgd80.ru`
+  address exists exactly once in `Sent` with no sender-side bounce. The mailbox
+  owner confirmed that this exact canary arrived at `info@kgd80.ru`; folder
+  placement and raw recipient-side authentication headers were not supplied and
+  are not claimed. The current host cannot establish TLS to
+  `smtp.spaceweb.ru:465`, so direct client SMTP was not claimed.
 - The isolated Yandex inbound folder, KMS-encrypted private bucket, three YMQ
   queues, four production-tagged Functions and three triggers are active. Both a
   direct Mail Trigger canary and a retained-mailbox IMAP canary sent from
@@ -68,13 +79,41 @@ Public NotiSend documentation does not document a webhook signature. A NotiSend 
   retained SpaceWeb item remained present and unread.
 - The Postbox `kenigevents.ru` identity and transactional configuration are
   verified. A seed from `notify@kenigevents.ru` returned a real provider message
-  id and reached the SpaceWeb mailbox, but landed in Spam and no event destination
-  is attached. Keep transactional sending disabled pending warm-up, event ingest
-  and suppression/alert proof.
+  id and reached the SpaceWeb mailbox. Its two DKIM signatures, SPF and DMARC all
+  passed; SpaceWeb still placed this single fresh-domain/self-domain seed in Spam
+  without exposing a deterministic classifier reason.
+
+  The dedicated Postbox feedback lane is now live: serverless YDB has zero
+  provisioned RCU, a 10 RCU/s throttle and deletion protection; its one-partition
+  request-unit YDS topic retains records for four hours. The Python 3.12 Function,
+  isolated runtime/trigger SAs, KMS-backed Lockbox secrets, seven-day PII-free log
+  group, YDS trigger and private 14-day YMQ DLQ are active. The configuration
+  destination is enabled and the live provider accepted all nine types, including
+  the API-reference omissions `COMPLAINT` and `RENDERING_FAILURE`.
+
+  Exactly one new controlled Postbox canary to `info@kenigevents.ru` produced real
+  `Send` and `Delivery` events through YDS -> Function -> Supabase. Both were
+  authenticated, verified and applied; replay returned two duplicates with no
+  extra transition. Live synthetic subscription, complaint and permanent-bounce
+  fixtures proved transactional/all-scope suppression, then were removed with the
+  temporary auth/outbox fixtures. A missing-correlation record produced one initial
+  call plus five 30-second retries, one DLQ item, then applied once after correlation,
+  replayed as a duplicate and was deleted; the DLQ ended empty. Destination-disable
+  rollback was exercised and the complete destination was re-enabled.
+
+  The Fly worker and its PII-free Supabase/YMQ monitor are now deployed. Keep
+  transactional application sending disabled until event-specific producers exist
+  and bounded warm-up/placement review closes; the feedback path and worker runtime
+  are no longer blockers.
 - NotiSend verifies `news.kenigevents.ru` and the
   `events@news.kenigevents.ru` sender. The account remains on the free 200-contact
-  plan and API activation is still pending; no contacts were imported and no
-  campaign was sent. Keep recommendation sending disabled.
+  plan and API activation is complete (`200` total, `200` available). No contacts
+  were imported and no campaign was sent. A diagnostic exposed the current key in
+  internal tool output; because the panel has no documented rotation control,
+  the recommended remediation remains support-led revoke/reissue followed by a
+  Lockbox update. On 2026-07-12 the owner explicitly deferred that rotation and
+  accepted the temporary risk; this does not waive the gate, so no recommendation
+  canary or application enablement is allowed with the exposed key.
 - The live Supabase control plane has a 200-user admission capacity with zero
   active recommendation users. Global, transactional and recommendation switches
   are off and `dry_run_only` is on.
@@ -128,6 +167,67 @@ Examples include registration/address confirmation where the application owns th
 The release product/scheduling contract for the event reminder is [Transactional event email notifications](../features/event-email-notifications/README.md): it is a separate explicit opt-in, scheduled 24 hours before the current canonical start, and the calendar-save UI may promise it only after verified email and eligible consent are confirmed.
 
 Transactional consent/legitimate-trigger rules are distinct from recommendation consent. A favorite, calendar save, auth session or previous transactional delivery never opts a user into recommendations.
+
+Postbox notifications are QoS 1 / at-least-once. The consumer deduplicates by the
+stable provider `eventId`; it never trusts a caller-provided suppression identity.
+The event must match the pinned Postbox identity, configuration ID, From domain,
+exact provider message ID and versioned recipient HMAC derived from the database
+identity. `hard_bounce` and `complaint` suppress all mail, while a Postbox
+one-click `Subscription` event suppresses only the transactional stream.
+
+The provider documentation is currently inconsistent: the notification schema
+includes `Complaint` and `Rendering Failure`, while the create-destination API
+enumerates neither. Provisioning must probe the complete required set on a disabled
+destination. If the provider rejects it, leave application transactional sending
+disabled and record a provider blocker rather than silently claiming complete
+feedback coverage from a reduced event list.
+
+#### Fly outbox worker
+
+`email_outbox_worker` runs every minute when `ENABLE_EMAIL_OUTBOX_WORKER=1`.
+It claims at most five Postbox rows with a three-minute lease through
+`email_claim_postbox_outbox_v2`; the RPC cannot claim recommendation/NotiSend rows.
+The worker accepts only `transactional-plain-v1` payloads with `subject`, `text`
+and optional `html`, fixes From/Reply-To/configuration set server-side and rejects
+unknown keys or templates before any network-start marker.
+
+Before the Postbox request it stores the exact prepared-body SHA-256. A successful
+response must contain the real provider MessageId. `429`/`5xx` uses bounded
+exponential retry; permanent rejection terminates the row. Timeout/transport
+ambiguity becomes `unknown_delivery` and is never automatically resent. Expired
+claims without network access become retryable; expired network-started claims are
+quarantined.
+
+The worker exchanges a PS256 JWT from `POSTBOX_SA_KEY_JSON` for a short-lived IAM
+token and refreshes it before expiry. The authorized key belongs only to the
+dedicated `postbox.sender` service account. Never store a 12-hour user IAM token as
+the worker credential. The parser validates the Yandex CLI key-ID warning preamble
+against the JSON `id`, removes that non-PEM line, and signs with the remaining PKCS#8
+private-key block.
+
+`email_outbox_monitor` runs every five minutes. It reads a PII-free Supabase health
+projection and the private Postbox trigger DLQ with a separate `ymq.reader` key.
+Unknown delivery, expired claims, non-empty DLQ and one-hour delivery-event lag are
+alarms; retry backlog, terminal failures and 15-minute lag are warnings. Alerts go
+to the resolved Telegram superadmin with a 15-minute duplicate cooldown; logs
+contain only counters and stable codes.
+
+Live release `1627` runs `origin/main@ca2b24f9`. A controlled worker canary made
+exactly one provider request, stored the real MessageId and reached `delivered`
+through authenticated/verified `Send` and `Delivery` events. The temporary fixture
+initially carried an invalid recipient HMAC, which correctly exhausted the
+trigger retries into the private DLQ and raised the monitor alarm. After replacing
+that fixture value with the canonical keyed HMAC, replay applied once, duplicates
+were no-ops, an automatic YDS trigger probe applied, and the DLQ/unknown/submitted
+counters returned to zero. All global, transactional and recommendation database
+switches remain disabled and dry-run-only.
+
+The SpaceWeb recipient accepted the canary with SPF pass, Postbox SPF pass, both
+Postbox and `kenigevents.ru` DKIM pass, and DMARC pass, but initially filed this
+fresh-domain message from `notify@kenigevents.ru` to the same domain's `info@`
+mailbox as Spam. The item was moved to Inbox as a deliberate mailbox-training
+action. Do not generalize that self-domain result into broad placement success or
+enable real-user producers before bounded cross-provider warm-up.
 
 ### Recommendations through NotiSend
 
