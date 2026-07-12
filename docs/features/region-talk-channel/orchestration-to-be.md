@@ -249,6 +249,9 @@ Important invariants:
   into the bounded five-post attestation lane before image handoff. This lets a
   strong exact post reach image/Gemini promptly without declaring an unknown
   source external or weakening local/spam safeguards.
+  This attestation lane is ordered ahead of generic known-KO rescans even when
+  `REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES=1`; generic rescans must not
+  consume all four history slots while a text-passed finalist waits.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but

@@ -2066,6 +2066,46 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         selected = mod.selected_sources_for_run([pending, finalist], 2, previous_state=previous)
         self.assertEqual([seed.canonical_url for seed in selected], ["https://t.me/finalist", "https://t.me/pending"])
 
+    def test_publication_source_evidence_beats_generic_known_ko_rescan(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES")
+        os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = "1"
+        try:
+            finalist = mod.Seed(
+                source_seed_id="finalist", platform="telegram", source_title="Strict text finalist",
+                handle="@finalist", url="https://t.me/finalist", source_kind="unified_source_queue",
+                source_scope_guess="canonical_queue", priority=99, discovered_from="unit", discovered_from_url="",
+                why_seeded="publication", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            known = mod.Seed(
+                source_seed_id="known", platform="telegram", source_title="Generic known KO",
+                handle="@known", url="https://t.me/known", source_kind="unified_source_queue",
+                source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+                why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            previous = {"unified_source_queue": {
+                "telegram:finalist": {
+                    "canonical_source_key": "telegram:finalist", "source_url": "https://t.me/finalist",
+                    "source_queue_status": "processed_found_ko_candidate", "queue_order": 999,
+                    "posts_scanned": 1, "publication_source_evidence_priority": "true",
+                    "publication_source_evidence_target_posts": 5,
+                },
+                "telegram:known": {
+                    "canonical_source_key": "telegram:known", "source_url": "https://t.me/known",
+                    "source_queue_status": "processed_found_ko_candidate", "queue_order": 1,
+                    "posts_scanned": 10, "ko_posts_found": 4, "candidate_posts_found": 4,
+                },
+            }}
+            selected = mod.selected_sources_for_run([known, finalist], 1, previous_state=previous)
+            self.assertEqual([seed.canonical_url for seed in selected], ["https://t.me/finalist"])
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", None)
+            else:
+                os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = old
+
     def test_image_queue_requires_fused_e5_bge_when_enabled(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")

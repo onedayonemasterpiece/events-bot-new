@@ -20,6 +20,7 @@
 - Promoted sources of strict text-passed exact posts into the bounded five-post source-attestation lane before image handoff, without bypassing local/spam checks.
 - Reworded the complete Region Talk operator scorecard in plain product language, including disjoint source coverage and explicit historical-ledger versus active-backlog labels.
 - Made Telegram keyword-result excerpts transient: pending exact-link work may retain them, while fetched/rejected terminal ledger rows now retain only URL/query/hash evidence.
+- Fixed source selection so strict text-passed finalists complete bounded source attestation before generic known-KO rescans instead of being starved by the four-source history budget.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active
