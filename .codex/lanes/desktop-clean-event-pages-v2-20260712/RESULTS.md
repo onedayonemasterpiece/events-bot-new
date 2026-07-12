@@ -16,7 +16,7 @@ feature/event-page-desktop-clean-pages-v2-20260712
 e9a50f61805dd2ae01222e3ddc1eb6c16126cbdb
 
 ## Head SHA
-c1b3e039f40b719d7ae56f38b3ff824ba84b650b
+c1b3e0397c3736b026861d079beb5637599a1b7b
 
 ## Files changed
 - clean desktop event page component and six scenario routes
