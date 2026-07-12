@@ -299,6 +299,7 @@ features:
     event_token_medallions_integration_branch: integration/static-site-medallions-release-20260712
     event_token_medallions_source_branch: feature/static-site-venue-medallions-20260703
     event_token_medallions_content_baseline: fa367ea3
+    event_token_medallions_draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/38
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
