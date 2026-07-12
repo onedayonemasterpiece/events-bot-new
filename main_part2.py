@@ -8754,6 +8754,12 @@ async def _runtime_health_report(
     guide_full_status = (
         str(scheduler_health.get("guide_excursions_full") or "").strip() or "unknown"
     )
+    email_worker_status = (
+        str(scheduler_health.get("email_outbox_worker") or "").strip() or "unknown"
+    )
+    email_monitor_status = (
+        str(scheduler_health.get("email_outbox_monitor") or "").strip() or "unknown"
+    )
     if ready:
         if scheduler_status != "ok":
             issues.append(f"apscheduler:{scheduler_status}")
@@ -8763,6 +8769,10 @@ async def _runtime_health_report(
             issues.append(f"guide_excursions_light_job:{guide_light_status}")
         if guide_full_status not in {"ok", "disabled"}:
             issues.append(f"guide_excursions_full_job:{guide_full_status}")
+        if email_worker_status not in {"ok", "disabled"}:
+            issues.append(f"email_outbox_worker_job:{email_worker_status}")
+        if email_monitor_status not in {"ok", "disabled"}:
+            issues.append(f"email_outbox_monitor_job:{email_monitor_status}")
 
     payload = {
         "ok": not issues,

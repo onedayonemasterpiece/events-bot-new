@@ -30,13 +30,11 @@ class PostboxAdapter:
         self.config = config
         self.transport = transport or UrllibTransport()
 
-    def send(self, message: EmailMessage) -> ProviderResult:
+    def prepare(self, message: EmailMessage) -> bytes:
         if message.stream is not Stream.TRANSACTIONAL:
             raise ValueError("Postbox is reserved for transactional mail; no provider fallback is allowed")
-        if not self.config.enabled or self.config.dry_run:
-            return ProviderResult(self.provider, None, accepted=False, dry_run=True)
-        if not self.config.iam_token or not self.config.configuration_set:
-            raise ProviderConfigurationError("Postbox IAM token and configuration set are required")
+        if not self.config.configuration_set:
+            raise ProviderConfigurationError("Postbox configuration set is required")
 
         mime = MimeMessage(policy=SMTP)
         mime["From"] = f"{self.config.from_name} <{self.config.from_email}>"
@@ -52,12 +50,18 @@ class PostboxAdapter:
         if message.html:
             mime.add_alternative(message.html, subtype="html")
 
-        payload = {
+        return json.dumps({
             "ConfigurationSetName": self.config.configuration_set,
             "FromEmailAddress": self.config.from_email,
             "Destination": {"ToAddresses": [message.to_email]},
             "Content": {"Raw": {"Data": base64.b64encode(mime.as_bytes()).decode("ascii")}},
-        }
+        }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+    def send_prepared(self, body: bytes) -> ProviderResult:
+        if not self.config.enabled or self.config.dry_run:
+            return ProviderResult(self.provider, None, accepted=False, dry_run=True)
+        if not self.config.iam_token:
+            raise ProviderConfigurationError("Postbox IAM token is required")
         response = self.transport.request(
             "POST",
             self.config.endpoint,
@@ -65,7 +69,7 @@ class PostboxAdapter:
                 "Content-Type": "application/json",
                 "X-YaCloud-SubjectToken": self.config.iam_token,
             },
-            body=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            body=body,
         )
         if response.status != 200:
             raise ProviderRejected(
@@ -80,3 +84,10 @@ class PostboxAdapter:
         if not provider_id:
             raise ProviderRejected("Postbox acceptance response has empty MessageId", status=response.status)
         return ProviderResult(self.provider, provider_id, accepted=True, dry_run=False, response_code=response.status)
+
+    def send(self, message: EmailMessage) -> ProviderResult:
+        if not self.config.enabled or self.config.dry_run:
+            if message.stream is not Stream.TRANSACTIONAL:
+                raise ValueError("Postbox is reserved for transactional mail; no provider fallback is allowed")
+            return ProviderResult(self.provider, None, accepted=False, dry_run=True)
+        return self.send_prepared(self.prepare(message))

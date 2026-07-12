@@ -44,11 +44,10 @@ outbound switches remain disabled and dry-run-only. It provides:
 - an idempotent metadata-only inbound receipt boundary; message bodies and open
   addresses remain in the private Yandex envelope/SpaceWeb mailbox, not Supabase.
 
-The provider adapters are currently a tested library/control-plane foundation;
-they are not wired to a deployed Fly scheduler/worker. The Postbox provider-event
-consumer and its stream-specific canary gates are live, but do not describe either
-automated outbound stream as production-enabled until its worker and remaining
-monitoring/warm-up gates are deployed.
+The transactional Postbox adapter is wired to a transactional-only Fly scheduler
+worker. The database global/stream switches remain the final send gate; process
+flags alone cannot make an ineligible row sendable. Recommendation generation and
+the NotiSend worker are not enabled.
 
 On 2026-07-11 the previous Supabase history drift was reconciled before applying
 email migrations: a restorable logical backup was taken, all prior migration-owned
@@ -179,6 +178,34 @@ enumerates neither. Provisioning must probe the complete required set on a disab
 destination. If the provider rejects it, leave application transactional sending
 disabled and record a provider blocker rather than silently claiming complete
 feedback coverage from a reduced event list.
+
+#### Fly outbox worker
+
+`email_outbox_worker` runs every minute when `ENABLE_EMAIL_OUTBOX_WORKER=1`.
+It claims at most five Postbox rows with a three-minute lease through
+`email_claim_postbox_outbox_v2`; the RPC cannot claim recommendation/NotiSend rows.
+The worker accepts only `transactional-plain-v1` payloads with `subject`, `text`
+and optional `html`, fixes From/Reply-To/configuration set server-side and rejects
+unknown keys or templates before any network-start marker.
+
+Before the Postbox request it stores the exact prepared-body SHA-256. A successful
+response must contain the real provider MessageId. `429`/`5xx` uses bounded
+exponential retry; permanent rejection terminates the row. Timeout/transport
+ambiguity becomes `unknown_delivery` and is never automatically resent. Expired
+claims without network access become retryable; expired network-started claims are
+quarantined.
+
+The worker exchanges a PS256 JWT from `POSTBOX_SA_KEY_JSON` for a short-lived IAM
+token and refreshes it before expiry. The authorized key belongs only to the
+dedicated `postbox.sender` service account. Never store a 12-hour user IAM token as
+the worker credential.
+
+`email_outbox_monitor` runs every five minutes. It reads a PII-free Supabase health
+projection and the private Postbox trigger DLQ with a separate `ymq.reader` key.
+Unknown delivery, expired claims, non-empty DLQ and one-hour delivery-event lag are
+alarms; retry backlog, terminal failures and 15-minute lag are warnings. Alerts go
+to the resolved Telegram superadmin with a 15-minute duplicate cooldown; logs
+contain only counters and stable codes.
 
 ### Recommendations through NotiSend
 
