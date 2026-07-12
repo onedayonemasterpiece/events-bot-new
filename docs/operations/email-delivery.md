@@ -198,7 +198,9 @@ quarantined.
 The worker exchanges a PS256 JWT from `POSTBOX_SA_KEY_JSON` for a short-lived IAM
 token and refreshes it before expiry. The authorized key belongs only to the
 dedicated `postbox.sender` service account. Never store a 12-hour user IAM token as
-the worker credential.
+the worker credential. The parser validates the Yandex CLI key-ID warning preamble
+against the JSON `id`, removes that non-PEM line, and signs with the remaining PKCS#8
+private-key block.
 
 `email_outbox_monitor` runs every five minutes. It reads a PII-free Supabase health
 projection and the private Postbox trigger DLQ with a separate `ymq.reader` key.
