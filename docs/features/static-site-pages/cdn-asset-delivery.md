@@ -6,6 +6,17 @@
 
 Use the CDN for stable static-site assets while keeping canonical pages, APIs/RPC, telemetry and calendar flows on `https://kenigevents.ru`.
 
+## Public-release delivery contract
+
+The current preview topology below is not sufficient evidence for the public release. At launch:
+
+- the canonical `https://kenigevents.ru/...` HTML/JSON/sitemap/robots surface must itself be CDN-backed while retaining the canonical hostname;
+- Astro assets, event media and ICS must be CDN-served, with no direct Object Storage or third-party source-CDN URLs leaking into generated HTML/JSON-LD;
+- the release smoke must verify the canonical response path and expected cache headers rather than accepting only a successful bucket-origin response;
+- every runtime raster asset must be an optimized WebP within approved byte/dimension budgets; vectors must be safe SVG without embedded raster; the release asset inventory must report zero PNG/JPEG/GIF or oversized exceptions before promotion.
+
+This is a release gate, not a claim that the current canonical HTML path already satisfies the contract.
+
 CDN is currently safe for:
 
 - Astro-generated code assets under versioned preview/prod prefixes: `/<build_id>/_astro/*`;

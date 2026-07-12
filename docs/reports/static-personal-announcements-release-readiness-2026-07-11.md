@@ -214,6 +214,8 @@ Smart Update является владельцем семантического 
 - [ ] Включить production env only after clean deploy.
 - [ ] Immutable SQLite snapshot → unique Kaggle input → status heartbeat → checked artifact.
 - [ ] Release manifest содержит snapshot hash/max event update, page/event counts, quality/freshness result, asset hashes.
+- [ ] Гарантировать CDN delivery всего публичного статического сайта: canonical HTML/JSON/sitemap/robots, Astro assets, event media и ICS отдаются через CDN-backed hosts; generated HTML не содержит прямых Object Storage/source-CDN URL, а release smoke подтверждает CDN response/cache headers на canonical URL.
+- [ ] Release asset audit подтверждает `0` runtime PNG/JPEG/GIF и других тяжёлых raster-исключений: вся растровая графика конвертирована в оптимизированный WebP и проходит утверждённые byte/dimension budgets, а векторная графика поставляется как безопасный SVG без embedded raster. Нарушение блокирует promotion.
 - [ ] Upload только в unique staging prefix.
 - [ ] Atomic promotion marker/pointer; failed build never alters current release.
 - [ ] Last-good rollback tested; retention and cleanup tested.
@@ -274,6 +276,14 @@ Smart Update является владельцем семантического 
 - [ ] Rollback drill and incident on-call/contact tree executed.
 - [ ] Remove root `noindex` only after all launch blockers are signed off.
 - [ ] Post-launch 72-hour hypercare, then 14-day review before declaring stable.
+
+### Stage 8 — После публичной презентации
+
+Эта стадия намеренно не является GO-блокером презентации и начинается только после её завершения.
+
+- [ ] Перевести ежедневные анонсы в Telegram и VK на canonical ссылки соответствующих страниц статического сайта вместо прежних целевых страниц.
+- [ ] До переключения подтвердить parity ссылок для всех eligible событий, корректные UTM/source attribution, доступность CDN и отсутствие утечки preview/personal secret URL.
+- [ ] Выполнить раздельный canary для Telegram и VK, проверить опубликованные сообщения через реальные channel surfaces и сохранить быстрый rollback на предыдущий link target до окончания post-presentation hypercare.
 
 ## 8. Reliability objectives to approve
 
