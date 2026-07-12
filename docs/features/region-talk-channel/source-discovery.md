@@ -182,6 +182,12 @@ username resolve and can process VK evidence rows directly. This prevents a
 ten-source generic adaptive wave from running before the high-probability
 cohort.
 
+The history selector reserves two of the normal four source slots per run for
+due confirmed-blogger rows (`REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN=2`).
+The remaining slots still serve already text-passed source attestation and
+known-KO rescans, so discovery does not starve the publication tail and the
+publication tail cannot consume every source slot indefinitely.
+
 In `adaptive_cursor_v1`, known locations from the evidence row are moved to the
 front of that source's otherwise unchanged place bank. Thus a blogger known to
 have visited `Нойхаузен`, `Бальга` or `Тапиау` is tested for those distinctive

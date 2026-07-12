@@ -99,6 +99,48 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
         self.assertEqual([s.handle for s in selected], [queue_seed.handle])
 
+    def test_source_selection_reserves_two_history_slots_for_confirmed_bloggers(self) -> None:
+        mod = load_module()
+        seeds = [self._seed(mod, f"@source{idx}", seed_id=f"seed_{idx}") for idx in range(6)]
+        queue = {}
+        for idx, seed in enumerate(seeds):
+            key = mod.canonical_source_key("telegram", seed.handle, seed.canonical_url)
+            row = {
+                "canonical_source_key": key,
+                "platform": "telegram",
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+                "canonical_url": seed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": idx + 1,
+            }
+            if idx < 2:
+                row.update({
+                    "external_blogger_evidence_status": "confirmed_external",
+                    "priority_lane": "confirmed_external_blogger",
+                    "source_scope": "external",
+                })
+            elif idx < 5:
+                row.update({
+                    "publication_source_evidence_priority": "true",
+                    "publication_source_evidence_target_posts": 5,
+                })
+            queue[key] = row
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+        env = {
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "2",
+            "REGION_TALK_PRIORITIZE_TRAVEL_SOURCES": "1",
+        }
+
+        with mock.patch.dict(os.environ, env, clear=False):
+            selected = mod.selected_sources_for_run(seeds, 4, previous_state=previous)
+
+        selected_urls = [seed.canonical_url for seed in selected]
+        self.assertEqual(selected_urls[:2], [seeds[0].canonical_url, seeds[1].canonical_url])
+        self.assertEqual(len(selected_urls), 4)
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"], 2)
+
     def test_source_cursor_never_regresses_when_pending_gap_is_before_previous_cursor(self) -> None:
         mod = load_module()
         seed = self._seed(mod, "@freshcursor", seed_id="seed_cursor")

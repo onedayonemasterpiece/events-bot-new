@@ -1126,9 +1126,30 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     ))
     primary_due = [seed for seed, due in ordered if bool(due.get("due")) and not bool(due.get("is_rescan"))]
     rescan_due = [seed for seed, due in ordered if bool(due.get("due")) and bool(due.get("is_rescan"))]
+    confirmed_external_priority: list[Seed] = []
+    confirmed_external_selected: list[Seed] = []
     # First complete the unscanned/retry queue. Only when there are no primary
     # pending publics left do we spend budget on processed-source delta rescans.
     if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False):
+        confirmed_external_pairs = [
+            (seed, due) for seed, due in annotated
+            if bool(due.get("due"))
+            and str((due.get("queue_row") or {}).get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+        ]
+        confirmed_external_priority = [
+            seed for seed, due in sorted(confirmed_external_pairs, key=lambda item: (
+                source_selection_cache_bucket(item[0], previous_state),
+                bool(item[1].get("is_rescan")),
+                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+                item[0].canonical_url,
+            ))
+        ]
+        confirmed_external_slots = min(
+            max(0, max_sources),
+            max(0, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN", 2)),
+            len(confirmed_external_priority),
+        )
+        confirmed_external_selected = confirmed_external_priority[:confirmed_external_slots]
         publication_completion_pairs = [
             (seed, due) for seed, due in annotated
             if bool(due.get("due")) and str(due.get("reason") or "") == "publication_source_evidence_completion"
@@ -1157,11 +1178,13 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         # to publication than a generic known-KO source rescan. Finish its
         # bounded five-post source attestation first; the previous ordering
         # let four generic KO rescans consume the entire history budget.
-        selected = publication_completion + [
-            seed for seed in high_yield_rescan if seed not in publication_completion
+        selected = confirmed_external_selected + [
+            seed for seed in publication_completion if seed not in confirmed_external_selected
+        ] + [
+            seed for seed in high_yield_rescan if seed not in publication_completion and seed not in confirmed_external_selected
         ] + [
             seed for seed in primary_due
-            if seed not in publication_completion and seed not in high_yield_rescan
+            if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected
         ]
         if not selected:
             selected = rescan_due
@@ -1178,6 +1201,8 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         for seed, due in annotated if not bool(due.get("due"))
     ][:20]
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_travel_priority_enabled"] = bool(prioritize_product_sources)
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_eligible_total"] = len(confirmed_external_priority)
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"] = len(confirmed_external_selected)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_top_product_priority"] = [
         {
             "source_title": seed.source_title,
