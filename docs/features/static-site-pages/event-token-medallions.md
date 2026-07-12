@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb`, `act-opus` and `kantata-festival` are WebP-first raster items until source SVGs are found; old SVG containers with embedded rasters are not used as browser-primary medallions.
+> **Status:** release-candidate medallion slice consolidated from the freshest source-faithful branch state into `integration/static-site-medallions-release-20260712` from `origin/main@c6396331`; not yet in `origin/main`. Content baseline `fa367ea3` contains 25 organizer/venue entries and 11 festival/venue-brand entries. SVG is primary only for official or safely source-faithful vector marks; raster-only sources are WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb`, `act-opus`, `kantata-festival` and other documented raster exceptions remain WebP-first until trustworthy SVG sources exist.
 > **Workflow skill:** project-specific medallion archaeology/sourcing/rendering workflow is codified in `.codex/skills/static-event-medallions/SKILL.md`.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
@@ -23,6 +23,61 @@ Current scope:
 - **P0:** medallions on the concrete event page only;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
 - **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
+
+## Release consolidation and remaining shortlist
+
+### Branch archaeology decision
+
+Audit on 2026-07-12 found these relevant remote histories:
+
+- `feature/static-medallion-svg-upgrade@fb2570dc`, `agent/static-medallions-visual-tune-20260702@1959dad5`, `recovery/static-site-smart-search-full-20260701` and `integration/static-site-smart-search-20260701` are already contained in `origin/main`; do not revive them.
+- `feature/event-issue-report-artkodex-20260703` contains the first festival/venue pass but then diverges into date/decision labs and issue-report work; it is not a medallion release branch.
+- `feature/static-site-venue-medallions-20260703@d6f9d499` is the freshest source-faithfulness result, but its ancestry also contains issue-report/incident work. It is the evidence/source branch, not the merge target.
+- `integration/static-site-medallions-release-20260712` is the clean main-based projection. It carries only the medallion commits `0e4b70bf`, `1e8f42db`, `b6a5759a`, `b5d0ef12`, `d6f9d499` plus current consolidation/docs/check fixes; unrelated issue-report, Smart Update incident and date/decision lab commits are excluded.
+
+The release branch is therefore the only current integration source for static-site medallions. Old branches remain archaeological evidence until this branch is merged, after which they may be marked superseded/archived.
+
+### Already consolidated baseline
+
+- 25 organizer/venue medallions: the 11 already in main plus 14 reviewed venue additions/repairs;
+- 11 festival/venue-brand medallions, including `Симфония ветра`, `Бахослужение`, `80 историй о главном` and `Кауп`;
+- source/provenance trees, official/source-faithful SVG or WebP+PNG fallback policy;
+- event-detail renderer, medallion lab and preview assertions;
+- no listing/search-card medallion row in the P0 scope.
+
+Validation of the clean consolidation on 2026-07-12:
+
+- browser-safe preview build produced `420` pages; `npm --prefix site run check:preview` passed;
+- medallion lab rendered `38/38` lazy-loaded images after full-page scroll, with zero broken assets, zero console errors/warnings and no horizontal overflow at `390px`;
+- desktop `1440px` and mobile `390px` viewport screenshots confirmed the intended circle grid, readable marks and source/festival sections. Final owner visual sign-off still applies after P0 shortlist assets are added.
+
+### Release shortlist: medallions still to produce
+
+Read-only production snapshot on **2026-07-12** contained `326` active current/future canonical events across `124` normalized-as-stored location strings. Direct location-alias matching against the consolidated organizer manifest covered `181/326` events before festival/program matching. Counts below are prioritization evidence, not permission to guess a logo; every item still requires official/source-faithful provenance and mobile/desktop visual QA.
+
+**P0 — required before medallion release sign-off:**
+
+| Candidate | Current/future | Historical total | Why shortlisted | Source lane |
+| --- | ---: | ---: | --- | --- |
+| `Понарт` | 6 | 84 | highest uncovered recurring venue | confirm official venue/social mark; neutral initials only if normalization is proven and no clean mark exists |
+| `Дом железнодорожников / ДКЖ` | 7 combined | 21 combined | two active aliases for the same high-frequency venue family | verify canonical ownership/name and official railway/culture venue source before one alias set is created |
+| `Театральная гостиная «Солёная ворона»` | 5 | 25 | recurring regional theatre venue | official VK/ticket identity; source-faithful raster allowed |
+| `Лекторий Центра «Мой бизнес»` | 5 | 15 | concentrated current program and recognizable institutional identity | official institutional logo/source first |
+| `Гусевский музей` | 4 | 42 | recurring regional museum and release coverage outside Kaliningrad | official museum/municipal source first |
+| `Закхаймские ворота` | 3 | 32 | recurring venue with current events and stable public identity | official venue/social source first |
+| `Замок Тапиау` | 3 | 16 | recurring regional destination venue | official castle/museum source first |
+| `Pianissimo` | 9 festival-labelled events (`Pianissimo` + `PIANISSIMO`) | — | largest uncovered current festival/program family | official festival/Tretyakovka identity; one case-insensitive alias set |
+
+**P1 — make only after P0 or promote when the RC snapshot crosses the threshold:** `СКЛАD`, `HUMAN concept`, парк `ЮНОСТЬ`, `Место Силы`, `ОКЦ на Горького`, `Фридландские ворота`, Дворец спорта `Янтарный`, `BREAK SUMMER FEST`, `Балтийские сезоны`. These are not blanket approval for artwork; first confirm canonical venue/festival identity and clean source evidence.
+
+### Shortlist maintenance and release gate
+
+- Regenerate the read-only production gap report within 48 hours of release-candidate freeze.
+- Automatically add/review any uncovered canonical venue/festival with at least 4 active current/future events; product owner may explicitly promote strategic regional institutions below that threshold.
+- Deduplicate address-suffixed aliases before counting (`Янтарь холл, ...`, `Филиал Третьяковской галереи, ...`, `ДКЖ` variants).
+- P0 is complete only when every shortlist item is `implemented` or explicitly `deferred_by_owner` with reason; silence is not acceptance.
+- Each accepted asset has provenance, manifest aliases, SVG/WebP contract, preview assertion and mobile (~90px)/desktop (~112px) visual QA. Broken/ambiguous source or distorted artwork fails closed to no medallion.
+- Final release preview must prove no broken asset URLs, no duplicate organizer/festival token for the same identity, no false alias matches, no horizontal overflow and correct accessible labels.
 
 ## Visual contract
 

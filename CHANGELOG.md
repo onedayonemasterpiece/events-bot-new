@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static-site medallions / release consolidation**: projected the freshest source-faithful venue/festival medallion work from mixed legacy branches onto a clean `origin/main@c6396331` integration branch, retaining 25 organizer/venue and 11 festival/venue-brand manifest entries while excluding issue-report, incident and decision-lab ancestry; added a production-backed P0 shortlist and RC recency/visual/provenance gates.
 - **Email / live Postbox worker release**: deployed Fly worker/monitor release `1627` from `origin/main@ca2b24f9`, provisioned isolated sender and DLQ-reader credentials in deletion-protected Lockbox/Fly secrets, proved one real worker request through authenticated `Send`/`Delivery`, exercised alerting plus five-item DLQ replay/cleanup and an automatic YDS trigger probe, and retained all database send switches off pending event producers and cross-provider placement warm-up.
 - **Email / Yandex authorized key compatibility**: accept the current `yc iam key create` key-ID warning preamble only when it matches the JSON key id, strip it before PS256 signing, and reject mismatched preambles.
 - **Email / transactional Postbox worker**: added a transactional-only Supabase claim/recovery/preflight/health RPC boundary, a Fly scheduler worker with short-lived service-account IAM tokens and ambiguity quarantine, plus PII-free outbox/DLQ monitoring with cooldown-bound Telegram superadmin alerts; recommendation/NotiSend rows remain unreachable from this worker.
