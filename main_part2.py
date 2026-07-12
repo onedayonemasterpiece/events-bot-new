@@ -19703,7 +19703,7 @@ async def _build_source_summary_block(
     is_exhibition = (event_summary.event_type or "").strip().casefold() == "выставка"
     has_date_range = bool(end_date_obj) or bool(event_summary.date and ".." in event_summary.date)
 
-    if is_exhibition:
+    if is_exhibition and has_date_range:
         date_line = _format_exhibition_period_line(
             start_date=start_date,
             end_date=end_date_obj,
