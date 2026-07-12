@@ -7846,7 +7846,6 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
     seeds = seed_pool[:max_seed_channels]
     raw_count = 0
     errors = 0
-    search_results_rejected = 0
     floodwait = 0
     seen: set[str] = set()
     self_loop_count = 0
@@ -8515,6 +8514,7 @@ async def run_source_fast_check_ko(
     local_rejected = 0
     spam_rejected = 0
     errors = 0
+    search_results_rejected = 0
     query_elapsed_total = 0.0
     post_link_items_written = 0
     cutoff = history_min_post_datetime()
