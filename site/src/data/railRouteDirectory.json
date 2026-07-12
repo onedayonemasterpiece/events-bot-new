@@ -4,6 +4,15 @@
   "timezone": "Europe/Kaliningrad",
   "storage": "static_json",
   "official_index_url": "https://www.kppk39.ru/raspisanie/",
+  "supporting_sources": [
+    {
+      "id": "elizavetinskaya-opening-2026-07-03",
+      "kind": "infrastructure_opening_report",
+      "url": "https://kgd.ru/news/society/item/118100-na-ulice-elizavetinskoj-v-kaliningrade-otkryli-novuyu-zheleznodorozhnuyu-ostanovku",
+      "published_at": "2026-07-03",
+      "note": "The new platform opened at the Elizavetinskaya/Generala Chelnokova intersection; the current carrier matrices provide the actual stopping services."
+    }
+  ],
   "publication_contract": {
     "change_feed_url": "https://www.kppk39.ru/izmeneniya-v-raspisanii/",
     "precedence": [
@@ -152,6 +161,7 @@
   "stations": [
     {"id": "kaliningrad-south", "name": "Калининград-Южный", "city_id": "kaliningrad", "coordinates": [54.69456, 20.49960]},
     {"id": "kaliningrad-north", "name": "Калининград-Северный", "city_id": "kaliningrad"},
+    {"id": "elizavetinskaya", "name": "о.п. Елизаветинская", "city_id": "kaliningrad", "coordinates": [54.74717, 20.47879], "coordinate_source": "official_intersection_description_plus_osm_rail_geometry", "coordinate_confidence": "medium"},
     {"id": "zelenogradsk-new", "name": "Зеленоградск-Новый", "city_id": "zelenogradsk"},
     {"id": "pionersky-kurort", "name": "Пионерский Курорт", "city_id": "pionersky"},
     {"id": "svetlogorsk-2", "name": "Светлогорск-2", "city_id": "svetlogorsk"},
@@ -173,6 +183,7 @@
   ],
   "routes": [
     {"id": "coastal-frequent", "source_ids": ["coast-via-zelenogradsk", "coast-via-pereslavskoe", "sea-express"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["zelenogradsk-new", "pionersky-kurort", "svetlogorsk-2"], "vehicle": "ЭС2Г Ласточка", "priority_class": "frequent_primary", "service_data": "transportSchedules.json + next official refresh"},
+    {"id": "elizavetinskaya-venue", "source_ids": ["coast-via-pereslavskoe"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["elizavetinskaya"], "vehicle": "ЭС2Г Ласточка", "priority_class": "venue_specific_optional", "service_data": "next official refresh; never infer an Elizavetinskaya stop in an empty matrix cell"},
     {"id": "baltiysk-rail", "source_ids": ["baltiysk"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["baltiysk"], "vehicle": "РА-2", "priority_class": "seasonal_frequent_primary"},
     {"id": "eastern-main", "source_ids": ["chernyshevskoe"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["gvardeysk", "znamensk", "chernyakhovsk", "gusev", "nesterov", "chernyshevskoe"], "vehicle": "РА-2", "priority_class": "limited_parallel"},
     {"id": "zheleznodorozhny-tourist", "source_ids": ["zheleznodorozhny"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["zheleznodorozhny"], "via_station_ids": ["chernyakhovsk"], "vehicle": "РА-2", "priority_class": "limited_parallel"},
@@ -224,6 +235,7 @@
     {"id": "sovetsk-neman-current", "route_id": "sovetsk-neman-rail", "direction": "both", "calendar": {"effective_from": "2026-07-05", "valid_to": null}, "trips": [{"number": "6385/6386/6331", "day_class": "mon_fri_sun", "departure": "18:21", "polessk": "19:24", "sovetsk_arrival": "20:40", "sovetsk_departure": "20:50", "arrival": "21:13"}, {"number": "6332/6381/6382", "day_class": "mon_sat", "departure": "05:58", "sovetsk_arrival": "06:21", "sovetsk_departure": "06:31", "polessk": "07:50", "arrival": "08:53"}], "removed_services": [{"number": "6334/6387/6388", "day_class": "sunday", "removed_from": "2026-07-05"}]}
   ],
   "venue_access": [
+    {"id": "kaliningrad-ds-yantarny", "locality_id": "kaliningrad", "venue_name": "Дворец спорта «Янтарный»", "venue_aliases": ["ДС Янтарный", "Дворец спорта Янтарный", "Спорткомплекс Янтарный"], "venue_address": "Калининград, ул. Согласия, 39", "venue_coordinates": [54.749181, 20.485521], "station_id": "elizavetinskaya", "route_id": "elizavetinskaya-venue", "walk_distance_m": 627, "walk_minutes": 9, "public_walk_copy": "около 650 м / 8–10 минут пешком", "routing_source": "Valhalla and OSM foot routing over the official platform-intersection location", "coordinate_confidence": "medium", "journey_rule": "This is a venue-specific optional rail suggestion for exact DS Yantarny aliases/address only. Keep only trains whose official matrix has an Elizavetinskaya stop and whose event-date arrival/return windows are useful; never enable it for other Kaliningrad events.", "public_readiness": "needs_exact_date_service_calendar_and_real_event_regression"},
     {"id": "ferma-tyuniny", "locality_id": "znamensk", "venue_name": "Ферма Тюниных", "venue_coordinates": [54.6189793, 21.227253], "station_id": "znamensk", "walk_distance_m": 1057, "walk_minutes": 14, "routing_source": "OSM foot router", "journey_rule": "Rail is useful outbound on Saturday/holiday, but longer visits normally need bus return; allow mixed train-there/bus-back suggestions."},
     {"id": "brandenburg-castle", "locality_id": "ushakovo", "venue_name": "Замок Бранденбург", "station_id": "ladushkin", "access_kind": "rail_then_road_transfer", "walk_distance_m": null, "walk_minutes": null, "journey_rule": "There is no Ushakovo rail stop. Never label Ladushkin as arrival in Ushakovo; combine the train only with reviewed bus/taxi transfer, otherwise show route 117."}
   ],

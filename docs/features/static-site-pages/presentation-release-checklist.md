@@ -31,6 +31,7 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
 - [x] **Done in reference audit** — all 13 direction/product pages from the official КППК schedule index inventoried with effective dates, exact image URLs and SHA-256; current coastal, Балтийск, eastern, Багратионовск, Мамоново, Железнодорожный and Краснолесье matrices manually reviewed.
 - [x] **Done in policy directory** — Пионерский/Зеленоградск/Светлогорск are rail-primary, Балтийск is rail-primary while the current multi-pair table applies, sparse inland routes remain parallel with buses, and mixed-mode/transfer safety rules cover Ферма Тюниных and Бранденбург.
 - [ ] **Partial** — export the prepared Пионерский, Балтийск and inland references into exact-date public service calendars and add real event regressions; directory presence alone must not enable a transport block.
+- [ ] **Partial** — add a real ДС «Янтарный» regression before enabling the venue-specific `Елизаветинская` option; the reviewed walk is about 650 m / 8–10 min, but unrelated Калининград events must remain excluded.
 - [ ] **Blocked — P0:** close [`TD-STATIC-TRANSPORT-001`](event-transport-schedule.md#td-static-transport-001--automated-schedule-refresh-before-presentation).
 - [ ] **Blocked** — latest successful rail+bus refresh is within the approved max age; public build manifest points to it.
 - [ ] **Blocked** — last-known-good behavior, stale warning and admin alert verified by a failed/partial refresh drill.

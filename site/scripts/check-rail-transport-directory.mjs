@@ -28,6 +28,7 @@ const routes = indexUnique(directory.routes, 'routes');
 const policies = indexUnique(directory.locality_policies, 'locality_policies', 'locality_id');
 const patterns = indexUnique(directory.reviewed_service_patterns, 'reviewed_service_patterns');
 const busLocalities = indexUnique(busDirectory.localities, 'bus localities');
+const supportingSources = indexUnique(directory.supporting_sources || [], 'supporting_sources');
 
 if (directory.official_index_url !== 'https://www.kppk39.ru/raspisanie/') throw new Error('The carrier index must be the canonical КППК schedule page');
 if (sources.size !== 13) throw new Error(`Expected all 13 carrier direction/product pages, got ${sources.size}`);
@@ -48,6 +49,15 @@ for (const route of routes.values()) {
   for (const id of [...route.origin_station_ids, ...route.destination_station_ids, ...(route.via_station_ids || [])]) {
     if (!stations.has(id)) throw new Error(`Route ${route.id} references unknown station ${id}`);
   }
+}
+
+for (const source of supportingSources.values()) {
+  if (!source.url?.startsWith('https://') || !/^\d{4}-\d{2}-\d{2}$/.test(source.published_at)) throw new Error(`Invalid supporting source ${source.id}`);
+}
+
+for (const venue of directory.venue_access) {
+  if (!stations.has(venue.station_id)) throw new Error(`Venue ${venue.id} references unknown station ${venue.station_id}`);
+  if (venue.route_id && !routes.has(venue.route_id)) throw new Error(`Venue ${venue.id} references unknown route ${venue.route_id}`);
 }
 
 for (const policy of policies.values()) {
@@ -98,6 +108,10 @@ const tyunin = directory.venue_access.find((row) => row.id === 'ferma-tyuniny');
 if (tyunin?.station_id !== 'znamensk' || tyunin.walk_distance_m !== 1057 || tyunin.walk_minutes !== 14 || !tyunin.journey_rule.includes('mixed')) throw new Error('Ferma Tyuniny must preserve the reviewed station walk and mixed-mode rule');
 const krasnolesye = patterns.get('krasnolesye-roundtrip');
 if (krasnolesye.calendar.kind !== 'weekends_holidays' || krasnolesye.trips[0].departure !== '09:55' || krasnolesye.trips[1].departure !== '18:25') throw new Error('Krasnolesye must remain an exact-date weekend/holiday round trip');
+const yantarny = directory.venue_access.find((row) => row.id === 'kaliningrad-ds-yantarny');
+if (yantarny?.station_id !== 'elizavetinskaya' || yantarny.route_id !== 'elizavetinskaya-venue') throw new Error('DS Yantarny must use only the Elizavetinskaya venue-specific route');
+if (yantarny.walk_distance_m !== 627 || yantarny.walk_minutes !== 9 || !yantarny.journey_rule.includes('never enable it for other Kaliningrad events')) throw new Error('DS Yantarny must preserve the reviewed walk and venue-only safety rule');
+if (routes.get('elizavetinskaya-venue')?.priority_class !== 'venue_specific_optional') throw new Error('Elizavetinskaya must remain optional and venue-specific');
 if (!directory.excluded_services.some((row) => row.id === 'victory-echelon')) throw new Error('The exhibition train exclusion is required');
 
 console.log(`Rail transport directory checks passed: ${sources.size} official pages, ${routes.size} routes, ${policies.size} locality policies, ${patterns.size} service patterns`);

@@ -24,3 +24,7 @@ All three child lanes were read-only and made no repository writes. Their eviden
 - presentation checklist and `TD-STATIC-TRANSPORT-001` acceptance expansion
 
 Public rendering outside Светлогорск/Зеленоградск remains intentionally disabled until exact-date calendars, exceptions and last-mile access are exported atomically. This prevents directory presence from creating false journey suggestions.
+
+## Follow-up — ДС «Янтарный» / Елизаветинская
+
+The 2026-07-12 product follow-up is **Done in reference / Partial in public UI**. `о.п. Елизаветинская` is worthwhile for this venue: the reviewed pedestrian route is about `627 m / 8–10 min`, and the current official matrix has regular non-express stops. A dedicated `venue_specific_optional` route and exact venue aliases/address were added. Public activation remains gated by an exact-date calendar export and a real-event regression; no other Kaliningrad event can inherit the route by city alone.

@@ -33,6 +33,7 @@ A base without an official end date remains valid until superseded. Do not inven
 | Ушаково / Замок Бранденбург | no rail stop; nearest usable corridor stop is Ладушкин | route `117` first; train only as **rail + reviewed road transfer** | bus remains the only enabled direct option |
 | Краснолесье | one weekend/holiday tourist round trip | exact-date special rail plus bus fallback | event/service match needed |
 | Полесск / Советск / Неман | limited РА-2 on the northern corridor | rail and bus together | exact-date export needed |
+| Калининград — ДС «Янтарный» | new `Елизаветинская` platform on the Светлогорск line | optional **venue-specific** rail suggestion | exact-date export + real-event regression needed |
 
 “Rail primary” does not mean that the block appears merely because a town has a station. A suggestion still needs an operating trip for the exact event date, arrival in the configured pre-event window, a reachable station/venue leg and a useful way back. Limited rail never suppresses feasible buses.
 
@@ -55,6 +56,14 @@ The venue's published point is `54.6189793, 21.2272530`; station `Знаменс
 ### Замок Бранденбург, Ушаково
 
 Official route `117` reaches the correct Ushakovo corridor and remains the direct public option. A Mamonovo train can only be considered to `Ладушкин`, followed by a separately reviewed bus/taxi leg. Until that transfer has exact stop times and geometry, the rail alternative stays disabled; it is never described as a train to Ушаково.
+
+### Дворец спорта «Янтарный», Калининград
+
+The platform `о.п. Елизаветинская` opened on **3 July 2026** at the Елизаветинская / Генерала Челнокова intersection. It appears as an explicit row in the current official Светлогорск-via-Переславское matrices; express columns with an empty cell still must not be treated as stopping services.
+
+This is a useful exception to the general “no transport block for Kaliningrad events” rule. OSM/Valhalla walking over the published intersection and current pedestrian network gives approximately **627 m / 8–10 minutes** to the venue at `Согласия, 39`. The train ride from `Калининград-Северный` is about 7–8 minutes when the service stops there, and the base table offers regular non-express options through the day.
+
+The match must be venue-specific: exact aliases `ДС Янтарный`, `Дворец спорта Янтарный`, `Спорткомплекс Янтарный`, or the canonical address. It must never activate for unrelated Калининград events. Public rendering still waits for exact event-date calendars and a real event regression; when enabled, hide the option if no useful arrival or return survives the normal filters.
 
 ## Runtime/export boundary
 

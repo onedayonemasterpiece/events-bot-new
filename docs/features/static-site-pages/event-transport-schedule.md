@@ -33,6 +33,8 @@ This is a release feature of the event page, not a standalone campaign. It is in
 
 This is the current renderer contract, not the full routing policy. Пионерский and seasonal Балтийск are rail-primary in the prepared directory; sparse inland destinations compare train and bus and may use a different mode each way. They stay out of the public block until exact-date service calendars and venue access have passed the same checks.
 
+The prepared directory also contains one intentional Kaliningrad exception: events at ДС «Янтарный» may use `о.п. Елизаветинская`, about 8–10 minutes on foot from the arena. Matching is by reviewed venue alias/address, never by city alone, and remains gated until an exact-date timetable export and real-event regression exist.
+
 The selector and calendar files are static. Public UI and `.ics` descriptions do not contain schedule-verification links.
 
 ## Bus example: Сказочное Холмогорье
