@@ -5,7 +5,7 @@
 | scroll-geometry-map | R02–R05 | read-only | merged | Sticky media/action, normal-flow slab, ratio-derived OCR and deterministic scroll recommendations integrated |
 | related-normalization-map | R06 | read-only | merged | Geometric minimax row ratio and bounded contain fallback integrated |
 | consultants | R02–R06 | n/a | merged with provider blocker | Gemini Pro review integrated; a-opus quota blocker preserved in local artifact |
-| integrator | R01–R06 | `feature/event-page-desktop-scroll-compositions-v3-20260712` | pending commit/public gate | Environment-backed Astro build/check + `49`-run Chromium QA with zero failures |
+| integrator | R01–R06 | `feature/event-page-desktop-scroll-compositions-v3-20260712` | committed; public gate pending | Implementation `144884a4`; environment-backed Astro build/check + `49`-run Chromium QA with zero failures |
 | closure-review | R01–R06 | read-only | merged | R01–R04/R06 Done; R05 Partial only for neural same-visual dedup; see closure audit |
 
 ## Integration decisions

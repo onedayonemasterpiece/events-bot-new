@@ -13,6 +13,7 @@ Integration implementation and local release gates complete; public-preview gate
 - Branch: `feature/event-page-desktop-scroll-compositions-v3-20260712`
 - Worktree: `/home/dev/.codex/worktrees/events-bot-new/event-page-desktop-multimedia-analysis`
 - Base SHA: `c4e6bae98f344c1a7bd06b0a346fc7589bfc73b5`
+- Implementation SHA: `144884a4`
 
 ## Files changed
 
@@ -44,4 +45,3 @@ No production `EventHero.astro`, `EventLayout.astro` or mobile stylesheet/compon
 
 - The lab does exact URL dedup only. Neural same-visual crop/composite dedup remains the documented production follow-up and is not represented as complete.
 - These are noindex desktop review pages, not a production renderer rollout.
-

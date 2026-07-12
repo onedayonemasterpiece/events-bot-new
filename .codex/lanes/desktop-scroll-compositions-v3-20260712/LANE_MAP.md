@@ -80,7 +80,7 @@ lanes:
     expected_output: clean desktop-only preview URLs
     verification_scope: full_local_and_public
     effort: high
-    status: spawned
+    status: merged
   - id: closure-review
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06]
