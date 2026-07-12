@@ -101,9 +101,10 @@ Public NotiSend documentation does not document a webhook signature. A NotiSend 
   replayed as a duplicate and was deleted; the DLQ ended empty. Destination-disable
   rollback was exercised and the complete destination was re-enabled.
 
-  Keep transactional application sending disabled until a deployed worker,
-  Yandex Monitoring notification-channel alerts and bounded warm-up/placement
-  review are complete. The feedback path itself is no longer the blocker.
+  The Fly worker and its PII-free Supabase/YMQ monitor are now deployed. Keep
+  transactional application sending disabled until event-specific producers exist
+  and bounded warm-up/placement review closes; the feedback path and worker runtime
+  are no longer blockers.
 - NotiSend verifies `news.kenigevents.ru` and the
   `events@news.kenigevents.ru` sender. The account remains on the free 200-contact
   plan and API activation is complete (`200` total, `200` available). No contacts
@@ -208,6 +209,23 @@ Unknown delivery, expired claims, non-empty DLQ and one-hour delivery-event lag 
 alarms; retry backlog, terminal failures and 15-minute lag are warnings. Alerts go
 to the resolved Telegram superadmin with a 15-minute duplicate cooldown; logs
 contain only counters and stable codes.
+
+Live release `1627` runs `origin/main@ca2b24f9`. A controlled worker canary made
+exactly one provider request, stored the real MessageId and reached `delivered`
+through authenticated/verified `Send` and `Delivery` events. The temporary fixture
+initially carried an invalid recipient HMAC, which correctly exhausted the
+trigger retries into the private DLQ and raised the monitor alarm. After replacing
+that fixture value with the canonical keyed HMAC, replay applied once, duplicates
+were no-ops, an automatic YDS trigger probe applied, and the DLQ/unknown/submitted
+counters returned to zero. All global, transactional and recommendation database
+switches remain disabled and dry-run-only.
+
+The SpaceWeb recipient accepted the canary with SPF pass, Postbox SPF pass, both
+Postbox and `kenigevents.ru` DKIM pass, and DMARC pass, but initially filed this
+fresh-domain message from `notify@kenigevents.ru` to the same domain's `info@`
+mailbox as Spam. The item was moved to Inbox as a deliberate mailbox-training
+action. Do not generalize that self-domain result into broad placement success or
+enable real-user producers before bounded cross-provider warm-up.
 
 ### Recommendations through NotiSend
 
