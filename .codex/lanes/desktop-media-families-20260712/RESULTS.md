@@ -1,7 +1,7 @@
 # Desktop media families results
 
 ## Status
-ready-for-commit
+committed
 
 ## Requirement IDs
 - R01–R06
@@ -16,7 +16,7 @@ ready-for-commit
 `e736cf0eb3127c361f094d9e516775fdecca4888`
 
 ## Head SHA
-To be recorded after commit.
+`9276eaaf0525ee21c1425f90311b356503e17ed4`
 
 ## Files changed
 - desktop-only lab page and lab component;
