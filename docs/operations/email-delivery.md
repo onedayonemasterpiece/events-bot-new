@@ -44,6 +44,11 @@ outbound switches remain disabled and dry-run-only. It provides:
 - an idempotent metadata-only inbound receipt boundary; message bodies and open
   addresses remain in the private Yandex envelope/SpaceWeb mailbox, not Supabase.
 
+The provider adapters are currently a tested library/control-plane foundation;
+they are not wired to a deployed Fly scheduler/worker. Do not describe either
+automated outbound stream as production-enabled until its worker, provider-event
+consumer and stream-specific canary gates are deployed.
+
 On 2026-07-11 the previous Supabase history drift was reconciled before applying
 email migrations: a restorable logical backup was taken, all prior migration-owned
 functions/indexes/RLS policies and semantic table columns were hash-compared with a
@@ -56,11 +61,16 @@ statement collision during the guarded first attempt.
 
 Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. Postbox Data Streams events must eventually be ingested through an IAM-authenticated consumer and deduplicated by provider `eventId`; no event destination is attached yet, so transactional production sending remains disabled.
 
-## Live provider state (2026-07-11)
+## Live provider state (2026-07-12)
 
 - SpaceWeb retains `info@kenigevents.ru` and `dmarc@kenigevents.ru`; public MX,
   combined root SPF, SpaceWeb DKIM and monitoring DMARC resolve without changing
-  the authoritative Yandex nameservers or existing site/CDN records.
+  the authoritative Yandex nameservers or existing site/CDN records. One outbound
+  webmail canary from `info@kenigevents.ru` to the controlled `info@kgd80.ru`
+  address exists exactly once in `Sent` with no sender-side bounce. Recipient-side
+  placement and authentication headers still require read-only verification in
+  the kgd80 mailbox; the current host cannot establish TLS to
+  `smtp.spaceweb.ru:465`, so direct client SMTP was not claimed.
 - The isolated Yandex inbound folder, KMS-encrypted private bucket, three YMQ
   queues, four production-tagged Functions and three triggers are active. Both a
   direct Mail Trigger canary and a retained-mailbox IMAP canary sent from
@@ -68,13 +78,20 @@ Public NotiSend documentation does not document a webhook signature. A NotiSend 
   retained SpaceWeb item remained present and unread.
 - The Postbox `kenigevents.ru` identity and transactional configuration are
   verified. A seed from `notify@kenigevents.ru` returned a real provider message
-  id and reached the SpaceWeb mailbox, but landed in Spam and no event destination
-  is attached. Keep transactional sending disabled pending warm-up, event ingest
-  and suppression/alert proof.
+  id and reached the SpaceWeb mailbox. Its two DKIM signatures, SPF and DMARC all
+  passed; SpaceWeb still placed this single fresh-domain/self-domain seed in Spam
+  without exposing a deterministic classifier reason. Postbox transport works,
+  but the isolated folder has no YDS stream, event consumer or event destination.
+  Keep transactional application sending disabled until consumer + stream +
+  destination, suppression/alert evidence and a bounded cross-provider warm-up
+  canary are completed atomically.
 - NotiSend verifies `news.kenigevents.ru` and the
   `events@news.kenigevents.ru` sender. The account remains on the free 200-contact
-  plan and API activation is still pending; no contacts were imported and no
-  campaign was sent. Keep recommendation sending disabled.
+  plan and API activation is complete (`200` total, `200` available). No contacts
+  were imported and no campaign was sent. A diagnostic exposed the current key in
+  internal tool output; because the panel has no documented rotation control,
+  NotiSend support must revoke/reissue it and Lockbox must be updated before any
+  recommendation canary or application enablement.
 - The live Supabase control plane has a 200-user admission capacity with zero
   active recommendation users. Global, transactional and recommendation switches
   are off and `dry_run_only` is on.

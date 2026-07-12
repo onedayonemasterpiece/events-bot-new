@@ -45,7 +45,7 @@ lanes:
     forbidden_files: [application code, Supabase migrations, DNS except an evidence-backed additive event destination change]
     expected_output: committed redacted provider audit with exact action/blocker
     verification_scope: live targeted
-    status: planned
+    status: committed
   - id: smtp-canary
     role: worker
     effort: extra-high
@@ -59,7 +59,7 @@ lanes:
     forbidden_files: [application code, DNS, mailbox settings unrelated to SMTP]
     expected_output: committed redacted send/delivery/header evidence
     verification_scope: live controlled
-    status: planned
+    status: committed
   - id: ci-audit
     role: worker
     effort: extra-high
@@ -73,7 +73,7 @@ lanes:
     forbidden_files: [email provider state, application behavior outside the CI root cause]
     expected_output: committed focused CI fix or audit-only blocker handoff
     verification_scope: full local and GitHub Actions
-    status: planned
+    status: merged
   - id: integrator
     role: merge_reviewer
     effort: extra-high
@@ -87,5 +87,5 @@ lanes:
     forbidden_files: [stale dirty checkout]
     expected_output: merged/rejected lanes, full verification, main-reachable changes
     verification_scope: full local and live evidence review
-    status: in_progress
+    status: committed
 ```
