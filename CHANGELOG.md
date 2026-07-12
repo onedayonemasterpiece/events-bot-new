@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 - Fixed Region Talk funnel metrics so image-fetch/image-quality stages no longer masquerade as text-gate rejections; the operator readout now states plainly that this is text suitability before media review, not publication readiness.
+- Fixed Region Talk exact-post metrics so stale candidate-memory verdicts cannot override a newer processed-post defer/reject verdict.
+- Split Region Talk exact-post text outcomes into suitable, rejected and still-pending counts so BGE work-in-progress is no longer reported as rejection.
+- Preserved the Region Talk final Gemini request fingerprint and prompt version across later CandidateReport refreshes for auditable idempotency.
+- Bounded Region Talk actual-media retries (default three attempts) and terminalized repeatedly empty downloads as broken media, while preserving the separate manual-video path.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active

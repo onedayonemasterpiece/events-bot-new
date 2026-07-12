@@ -17,12 +17,17 @@ IMAGE_TERMINAL_SKIP_STATUSES = {
     IMAGE_TERMINAL_UNSUPPORTED_STATUS,
     IMAGE_TERMINAL_ELIGIBILITY_STATUS,
     "rejected_text_gate",
+    "broken_media",
 }
 PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v2"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
+
+
+def max_media_fetch_attempts() -> int:
+    return max(1, int(os.getenv("REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS") or "3"))
 
 
 def image_work_key(row: dict) -> str:
@@ -513,6 +518,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
     if blocked:
         ydb_upsert_image_rows(blocked, stage="blocked_publication_eligibility")
     pending=[]
+    retry_exhausted=[]
     for r in eligible_raw:
         if image_work_key(r) in PROCESSED_IMAGE_KEYS: continue
         if not text_region_confirmed(r): continue
@@ -521,6 +527,13 @@ def ydb_rows_for_diagnostic(limit_n: int):
         lease=str(r.get("lease_run_id") or "")
         if status == "actual_scored" and input_type == "actual_image": continue
         if status in IMAGE_TERMINAL_SKIP_STATUSES: continue
+        if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
+            r["image_queue_status"] = "broken_media"
+            r["media_acquisition_status"] = "terminal_media_fetch_exhausted"
+            r["next_action"] = "terminal_broken_media_no_retry"
+            r["media_fetch_retry_exhausted"] = "true"
+            retry_exhausted.append(r)
+            continue
         # A failed media acquisition remains retryable for a future notebook
         # run, but must not be leased repeatedly by this same run. Otherwise a
         # persistent Telegram/VK auth error creates an unbounded hot retry loop.
@@ -538,6 +551,9 @@ def ydb_rows_for_diagnostic(limit_n: int):
             r["stale_lease_reclaimed_from_run_id"] = lease
             r["stale_lease_reclaimed_at"] = datetime.now(timezone.utc).isoformat()
         pending.append(r)
+    if retry_exhausted:
+        ydb_upsert_image_rows(retry_exhausted, stage="media_fetch_retry_exhausted")
+        log_event("media_fetch_retry_exhausted", phase="poll", rows=len(retry_exhausted), max_attempts=max_media_fetch_attempts())
     expose_publication_eligibility_counters(pending=len(pending), blocked=len(blocked))
     pending=sorted(pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))[:limit_n]
     now=datetime.now(timezone.utc).isoformat()
@@ -997,6 +1013,12 @@ def apply_image_queue_status(r):
             r["image_model_type"] = r.get("image_model_type") or "unsupported_media"
             r["images_scored_actual_count"] = 0
             r["next_action"] = "skip_unsupported_media"
+        elif int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
+            r["image_queue_status"] = "broken_media"
+            r["media_acquisition_status"] = "terminal_media_fetch_exhausted"
+            r["images_scored_actual_count"] = 0
+            r["media_fetch_retry_exhausted"] = "true"
+            r["next_action"] = "terminal_broken_media_no_retry"
         else:
             r["image_queue_status"] = "needs_actual_image_fetch"
             r["media_acquisition_status"] = "needs_actual_image_fetch"
@@ -1015,6 +1037,10 @@ def process_batch(batch_rows, batch_index: int):
         ydb_upsert_image_rows(eligibility_blocked_rows, stage="blocked_publication_eligibility")
     elif source_mode != "ydb":
         expose_publication_eligibility_counters(pending=len(rows), blocked=0)
+    attempt_at = datetime.now(timezone.utc).isoformat()
+    for r in rows:
+        r["media_fetch_attempt_count"] = int(r.get("media_fetch_attempt_count") or 0) + 1
+        r["media_fetch_last_attempt_at"] = attempt_at
     eligibility_pending_count = int(input_payload.get("publication_eligibility_pending_count") or 0)
     eligibility_blocked_count = int(input_payload.get("publication_eligibility_blocked_count") or 0)
     log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count)

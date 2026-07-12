@@ -278,6 +278,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('fast_check_exact_posts_publication_queue_total')}"
         ),
         (
+            "Exact KO text outcomes — suitable / rejected / still pending: "
+            f"{value('fast_check_exact_posts_strict_text_accepted_total')}/"
+            f"{value('fast_check_exact_posts_text_rejected_total')}/"
+            f"{value('fast_check_exact_posts_text_pending_total')}"
+        ),
+        (
             "Inflow manual/keyword/hashtag/similar: "
             f"{value('discovery_inflow_manual_total')}/"
             f"{value('discovery_inflow_keyword_total')}/"
@@ -1753,10 +1759,17 @@ def _fast_check_exact_post_metrics(
     accepted_urls: set[str] = set()
     semantic_accept_urls: set[str] = set()
     rejection_counts: dict[str, int] = {}
+    pending_counts: dict[str, int] = {}
     for url in fetched_urls:
         processed_row = processed.get(url) or {}
         candidate_row = candidates.get(url) or {}
-        row = {**processed_row, **candidate_row}
+        # The processed-post projection is the current scoring verdict. A
+        # candidate-memory row can intentionally outlive that verdict and may
+        # still contain an older `vector_accept_candidate`. Let current
+        # processed fields override the historical candidate memory; otherwise
+        # a row deferred for fresh BGE enrichment is falsely reported as fully
+        # accepted.
+        row = {**candidate_row, **processed_row}
         source = next((item for item in hit_rows if _canonical_post_url(str(item.get("fast_check_hit_post_url") or item.get("keyword_hit_post_url") or "")) == url), {})
         source_status = str(source.get("source_queue_status") or "")
         vector_status = str(row.get("vector_gate_status") or "")
@@ -1819,13 +1832,16 @@ def _fast_check_exact_post_metrics(
             reason = "stale"
         elif vector_status.startswith("vector_reject"):
             reason = vector_status
+        elif vector_status.startswith("vector_defer"):
+            reason = "dual_vector_pending"
         elif not ko_only:
             reason = "not_confirmed_ko_only"
         elif not fused:
             reason = "dual_vector_not_complete"
         else:
             reason = "other_text_gate"
-        rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+        target_counts = pending_counts if reason in {"dual_vector_pending", "other_text_gate"} else rejection_counts
+        target_counts[reason] = target_counts.get(reason, 0) + 1
 
     video_urls = {url for url in accepted_urls if _is_video_manual_review_row(images.get(url) or {})}
     return {
@@ -1840,8 +1856,10 @@ def _fast_check_exact_post_metrics(
         # terminal text rejection), not merely semantic similarity.
         "fast_check_exact_posts_strict_text_accepted_total": len(accepted_urls),
         "fast_check_exact_posts_strict_text_accepted_urls": sorted(accepted_urls),
-        "fast_check_exact_posts_text_rejected_total": max(0, len(fetched_urls) - len(accepted_urls)),
+        "fast_check_exact_posts_text_rejected_total": sum(rejection_counts.values()),
         "fast_check_exact_posts_text_rejection_reasons": rejection_counts,
+        "fast_check_exact_posts_text_pending_total": sum(pending_counts.values()),
+        "fast_check_exact_posts_text_pending_reasons": pending_counts,
         "fast_check_exact_posts_image_queue_total": len(urls & set(images)),
         "fast_check_exact_posts_video_manual_review_total": len(video_urls),
         "fast_check_exact_posts_publication_queue_total": len(urls & set(publications)),

@@ -298,6 +298,8 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["publication_eligibility_gate_version"], "publication-source-gate-v3")
         self.assertEqual(payload["attempt_count"], 1)
         self.assertEqual(payload["finalizer_state_version"], mod.PUBLICATION_FINALIZER_STATE_VERSION)
+        self.assertEqual(payload["llm_prompt_version"], mod.rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION)
+        self.assertTrue(payload["llm_request_fingerprint"])
         self.assertNotIn("text", payload)
 
     def test_retryable_publication_keeps_only_bounded_text_for_next_attempt(self) -> None:

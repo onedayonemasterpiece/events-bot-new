@@ -3568,6 +3568,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "publication_status": "gemini_reject", "finalizer_state_version": "region_talk_publication_finalizer_v4",
                 "publication_eligibility_verdict": "eligible",
                 "publication_eligibility_gate_version": "region_talk_publication_eligibility_v2",
+                "llm_request_fingerprint": "fingerprint-1", "llm_prompt_version": "region_talk_final_verifier_v4",
+                "llm_budget_id": "budget-1", "llm_budget_status": "completed",
                 "llm_decision": "reject", "llm_reason": "no firsthand experience",
             }],
             {"publication_goal_id": "unit-goal", "target_confirmed": 20, "llm_budget_max": 100},
@@ -3578,6 +3580,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(rows[0]["publication_status"], "gemini_reject")
         self.assertEqual(rows[0]["finalizer_state_version"], "region_talk_publication_finalizer_v4")
         self.assertEqual(rows[0]["llm_reason"], "no firsthand experience")
+        self.assertEqual(rows[0]["llm_request_fingerprint"], "fingerprint-1")
+        self.assertEqual(rows[0]["llm_prompt_version"], "region_talk_final_verifier_v4")
+        self.assertEqual(rows[0]["llm_budget_id"], "budget-1")
 
     def test_status_event_uses_kaggle_progress_argument(self) -> None:
         mod = load_module()

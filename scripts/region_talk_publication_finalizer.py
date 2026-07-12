@@ -883,6 +883,7 @@ def verify_rows(
         row["last_attempt_at"] = now_iso
         row["llm_attempted_this_run"] = str(replay_result is None).lower()
         row["llm_request_fingerprint"] = fingerprint
+        row["llm_prompt_version"] = rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION
         row["llm_budget_id"] = durable_budget.budget_id if durable_budget is not None else ""
         evidence = {
             "stage": "final_publication_verifier",
@@ -960,7 +961,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "publication_eligibility_verdict", "publication_eligibility_evidence", "publication_eligibility_gate_version",
         "publication_tombstone", "publication_revoked", "revoked_at", "finalization_status", "finalization_trigger",
         "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run", "finalizer_state_version",
-        "llm_request_fingerprint", "llm_budget_id", "llm_budget_status",
+        "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",
         "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
     ]
     items = []

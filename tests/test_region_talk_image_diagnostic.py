@@ -384,6 +384,31 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 else:
                     os.environ["REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT"] = old_allow_missing
 
+    def test_repeated_empty_media_fetch_becomes_terminal_after_bounded_attempts(self) -> None:
+        old_attempts = os.environ.get("REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS")
+        os.environ["REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS"] = "3"
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                row = {
+                    "image_queue_id": "imgq_empty",
+                    "image_queue_status": "image_analysis_in_progress",
+                    "media_fetch_attempt_count": 3,
+                    "media_fetch_status": "needs_actual_image_fetch",
+                    "media_fetch_error": "download_media returned empty path",
+                    "actual_image_count": 0,
+                }
+                mod.apply_image_queue_status(row)
+                self.assertEqual(row["image_queue_status"], "broken_media")
+                self.assertEqual(row["media_acquisition_status"], "terminal_media_fetch_exhausted")
+                self.assertEqual(row["next_action"], "terminal_broken_media_no_retry")
+                self.assertEqual(row["media_fetch_retry_exhausted"], "true")
+            finally:
+                if old_attempts is None:
+                    os.environ.pop("REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS", None)
+                else:
+                    os.environ["REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS"] = old_attempts
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,11 @@ must not reach the review chat merely because their image is attractive. The
 prompt version is part of the durable request fingerprint so a tightened policy
 cannot replay an older, weaker verdict.
 
+The finalizer persists both `llm_request_fingerprint` and
+`llm_prompt_version`; CandidateReport must preserve them together with the
+terminal status. This makes replay/idempotency auditable instead of relying on
+an opaque status alone.
+
 Advertising is judged from commercial evidence in the main content. A trailing
 channel signature such as `Мы ВКонтакте | Мы в MAX` is cross-platform
 navigation, and `Фото:` / `Видео:` / `Источник:` is media attribution; neither
@@ -48,6 +53,12 @@ score. Gemini verifies only the text/product criteria. The notifier sends a
 Gemini-confirmed video link to the same operator chat, where the operator makes
 the visual/video-quality decision manually.
 
+Actual-media acquisition is bounded by
+`REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS` (default `3`). A post that returns
+no downloadable image repeatedly becomes `broken_media` and leaves the active
+queue; a positively identified video still follows the separate operator-video
+path and is not converted into a broken photo.
+
 ## Honest funnel metrics
 
 Discovery matches and confirmed post decisions are different grains and must
@@ -66,6 +77,8 @@ not be added together. The operator surface uses these stages:
    KO-only scope, dual semantic match and no terminal text rejection. It and
    `fast_check_exact_posts_text_rejected_total` plus
    `fast_check_exact_posts_text_rejection_reasons` — the real text-gate result.
+   `fast_check_exact_posts_text_pending_total` is reported separately: waiting
+   for BGE or another current processing stage is not a rejection.
 5. `fast_check_exact_posts_image_queue_total` and
    `fast_check_exact_posts_video_manual_review_total` — separate photo and
    manual-video paths.
@@ -82,6 +95,11 @@ also used for downstream media outcomes (`image_fetch_gate`,
 `image_postcardness_gate`, `candidate_score_gate`). A post waiting for its image
 or routed to manual video review therefore counts as having passed the text
 gate, while remaining **not yet** a publication candidate.
+
+For current funnel metrics, `processed_post_item` is authoritative over an
+older `candidate_memory_item`. Candidate memory is historical/operational and
+must not turn a newly deferred or rejected current verdict back into an
+acceptance.
 
 Operator feedback is durable and idempotent through
 `scripts/region_talk_operator_feedback.py`. A reject tombstones exact-link,
