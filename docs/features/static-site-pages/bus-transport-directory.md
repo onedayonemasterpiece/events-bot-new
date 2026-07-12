@@ -21,6 +21,8 @@ Committed contracts:
 - `site/src/data/busTransportSchedules.json` — actual trip snapshot; currently only the reviewed Romanovo example;
 - `npm --prefix site run check:bus-directory` — referential, count and safety validation.
 
+Rail priority and combined-mode decisions are not duplicated here. They live in [rail-multimodal-directory.md](rail-multimodal-directory.md), which cross-links these stable bus locality ids for destinations where rail must not suppress buses.
+
 ## Production event inventory — 2026-07-11
 
 Read-only production SQLite selection: canonical active events with `date >= 2026-07-11` or `end_date >= 2026-07-11`, excluding Калининград, Зеленоградск and Светлогорск. Result: **30 events, 14 logical localities and 21 logical venues**.

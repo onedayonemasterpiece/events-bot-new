@@ -3,12 +3,15 @@
 ## [Unreleased]
 
 ### Changed
+- **Static-site multimodal transport policy**: made Пионерский/Зеленоградск/Светлогорск rail-primary, seasonal multi-pair Балтийск rail-primary while its current table applies, and sparse inland destinations parallel rail+bus routes that may use different modes each way; added safe Ладушкин-transfer handling for Бранденбург and exact-date weekend handling for Краснолесье.
 - **Static-site presentation / event transport**: widened the rail arrival window to 20–90 minutes, removed public schedule-verification links and guessed event-type durations, added inflected headings plus factual last/night/next-day boundaries, and made each compact train row the calendar link without repeating its route; redesigned the official-Avtovokzal-backed Romanovo example with a verified shared one-hour corridor/Северный estimate, a large unboxed SVG bus icon, one-line chips, a 20–90 minute arrival filter, returns after at least 1h15 on site plus the route-specific walk, one preferred walking-route link and responsive square/portrait route maps; packed outbound, return and map into one desktop grid while preserving the mobile reading order; synchronized the presentation checklist and Kaggle-refresh debt.
 - **Static event pages / КППК preview correction**: replaced the stale event `6538` acceptance example with real active Янтарь холл event `6510` on 2026-07-12 and taught the preview exporter to derive the return window only from an explicitly labeled source duration (`Продолжительность: 1 час 10 мин.`), with regression coverage for the resulting `18:10` end and real outbound/return trains.
 - **Social links / Max public channel**: updated the shared «Полюбить Калининград Анонсы» Max URL to the public channel `https://max.ru/channel_kenigevents` across Telegraph footers, the static-site footer/checks and related publishing docs/tests; legacy join-footers remain recognized for idempotent cleanup.
 - CherryFlash guide-excursion promo now uses the v4 Blender-style depth background treatment in the production renderer and formats guide promo dates as `10 июля 16:00` instead of numeric `10.07 16:00`.
 
 ### Added
+
+- **Static-site official rail directory**: inventoried all 13 timetable/product pages linked by КППК with effective dates, carrier image URLs/hashes, trip-specific origins, reviewed anchor services and validation; prepared locality policies for coastal rail priority, summer Балтийск, eastern/Багратионовск/Железнодорожный comparisons, Ферма Тюниных mixed-mode trips and the Краснолесье weekend train.
 
 - **Static-site bus transport directory**: added versioned JSON topology and venue-access references for 30 active events across 14 non-Kaliningrad/non-rail localities and 21 logical venues, plus prepared Chernyakhovsk/Zalesye/Nekrasovo candidates; tied the reviewed Romanovo schedule to stable locality/venue/corridor ids and added safety validation for aliases, blocked venue points, official intermediate-time gaps and the two different Ushakovo corridors.
 

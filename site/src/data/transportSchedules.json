@@ -5,7 +5,19 @@
   "source": {
     "schedule": "Яндекс Расписания / АО «Калининградская ППК»",
     "retrieved_at": "2026-07-11T13:00:00Z",
-    "note": "Статический build-time snapshot. Перед поездкой пользователь должен проверить оперативные изменения по live-ссылке."
+    "official_carrier_reviewed_at": "2026-07-12",
+    "official_schedule_index": "https://www.kppk39.ru/raspisanie/",
+    "official_direction_pages": [
+      "https://www.kppk39.ru/raspisanie/kaliningrad-zelenogradsk-svetlogorsk/",
+      "https://www.kppk39.ru/raspisanie/kaliningrad-svetlogorsk-cherez-pereslavskoe/"
+    ],
+    "official_base_effective_from": "2026-07-03",
+    "official_directory": "railRouteDirectory.json",
+    "official_reconciliation": {
+      "status": "compared_not_promoted",
+      "reason": "В API-снимке есть расхождения на несколько минут с официальной матрицей (например, 6722 прибывает на Северный в 19:50, а не в 19:48). Публичный снимок нельзя называть официально синхронизированным до атомарного полного refresh."
+    },
+    "note": "Статический build-time snapshot с сервисными календарями Яндекс Расписаний. Он сопоставлен с действующими матрицами официального перевозчика, но не заменён ими частично: официальные времена, календари и оперативные исключения должны публиковаться одним полным refresh перед сборкой."
   },
   "selection": {
     "arrival_before_event_min_minutes": 20,

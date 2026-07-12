@@ -1,0 +1,233 @@
+{
+  "schema_version": "event_rail_route_directory_v1",
+  "reviewed_at": "2026-07-12",
+  "timezone": "Europe/Kaliningrad",
+  "storage": "static_json",
+  "official_index_url": "https://www.kppk39.ru/raspisanie/",
+  "publication_contract": {
+    "change_feed_url": "https://www.kppk39.ru/izmeneniya-v-raspisanii/",
+    "precedence": [
+      "exact_date_exception_or_cancellation",
+      "latest_reviewed_base_with_effective_from_not_after_event",
+      "older_base"
+    ],
+    "valid_to_rule": "A base remains valid until superseded. Never invent an end date when the carrier publishes none.",
+    "calendar_rule": "Resolve workdays, weekends and holidays with the Russian production calendar, then apply carrier add/remove dates.",
+    "extraction_rule": "Carrier raster tables require manual review of train numbers, day classes, stop cells and footnotes before public use."
+  },
+  "direction_sources": [
+    {
+      "id": "coast-via-zelenogradsk",
+      "title": "Калининград — Зеленоградск — Светлогорск",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-zelenogradsk-svetlogorsk/",
+      "effective_from": "2026-07-03",
+      "scope": "current_base",
+      "assets": [
+        {"direction": "outbound", "url": "https://www.kppk39.ru/upload/medialibrary/1a3/km5glsi4bo60p6e4k7tn80jlmzyfsvuc.png", "sha256": "a0e40307ab9b0f7b9710e72b7a294667cdbe0046a05cf0918558db2bab77d567"},
+        {"direction": "return", "url": "https://www.kppk39.ru/upload/medialibrary/2fb/fvs14i1qux06teyr9443ajm4vpw2hs6s.png", "sha256": "eeae0e1fa375646ae838be19d46f4fb9a4eb59a84c1001e9533ad45ab8d4c3fb"}
+      ],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "coast-via-pereslavskoe",
+      "title": "Калининград — Светлогорск через Переславское",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-svetlogorsk-cherez-pereslavskoe/",
+      "effective_from": "2026-07-03",
+      "scope": "current_base",
+      "assets": [
+        {"direction": "outbound", "url": "https://www.kppk39.ru/upload/medialibrary/753/rta8pnz67g7qxzenrw834c55d0m036sa.png", "sha256": "9a6edb7752bbd1d0a31e6f0a16aafdb7801be082725c1700603f413c3e91a023"},
+        {"direction": "return", "url": "https://www.kppk39.ru/upload/medialibrary/f66/g2yhf7caaur8vyn5t8hmqntmlyvxh3gm.png", "sha256": "cfba2f692fcd97cd34d358c69272ae5f0b0412a5dc378834d26485f25bc76dc6"}
+      ],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "golubevo-gurevsk",
+      "title": "Голубево — Калининград — Гурьевск",
+      "page_url": "https://www.kppk39.ru/raspisanie/golubevo-kaliningrad-gurevsk/",
+      "effective_from": "2026-07-03",
+      "scope": "source_inventory_only",
+      "assets": [
+        {"direction": "return", "url": "https://www.kppk39.ru/upload/medialibrary/b6b/kp0424x9151ddhiabhd1qj9p1on1dhd9.png", "sha256": "ca564da5b5c2f35aa4e26477381c62ebc68253dd0ff1cbe34c3373212fffc48b"},
+        {"direction": "outbound", "url": "https://www.kppk39.ru/upload/medialibrary/de8/7xlaskru7ytlyt04860kurvy8szaxwln.png", "sha256": "09e0f76decff880dcf0b225d6502369027a97e5e4dfab9f48c57cd7434771fd2"}
+      ],
+      "review_state": "source_and_effective_date_reviewed"
+    },
+    {
+      "id": "golubevo-chkalovsk",
+      "title": "Голубево — Калининград — Чкаловск",
+      "page_url": "https://www.kppk39.ru/raspisanie/o-p-kievskaya-severnyy-vokzal/",
+      "effective_from": "2026-07-03",
+      "scope": "source_inventory_only",
+      "assets": [
+        {"direction": "return", "url": "https://www.kppk39.ru/upload/medialibrary/61e/iclmur5tq0ft5ard18inyn94dvthqws0.png", "sha256": "17ee2036dfdc71933e88136a7a6233afb87149c2fb67c6d0e7ba5ab1d440408f"},
+        {"direction": "outbound", "url": "https://www.kppk39.ru/upload/medialibrary/c47/k8uekxwnbq0fjc8jglguq7218gv8evxh.png", "sha256": "4aa3e14b4624b555ba56cb1380e9d82487cfe085f3d7c5066773fe3026314706"}
+      ],
+      "review_state": "source_and_effective_date_reviewed"
+    },
+    {
+      "id": "bagrationovsk",
+      "title": "Калининград — Багратионовск",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-bagrationovsk/",
+      "effective_from": "2026-06-23",
+      "scope": "current_base",
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/b66/eq2abvskezvynbr366fq7se4bp59cofe.jpg", "sha256": "3177cc337423a72b457d2f90875be2cffc2ca725f39842aa3d72a47b8f496d13"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "baltiysk",
+      "title": "Калининград — Балтийск",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-baltiysk/",
+      "effective_from": "2026-06-29",
+      "scope": "current_base",
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/2aa/js4eo7tb1qul110ugjlp67lgc8jlqa77.jpg", "sha256": "1299c96fe2db6a2dd89fe97e413536aebe970704e82edbc91770f1b1e63be7a7"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "mamonovo",
+      "title": "Калининград — Мамоново",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-mamonovo/",
+      "effective_from": "2026-04-15",
+      "scope": "current_base",
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/21f/cxcffu5u2sgi6rdkrxite152scc9ds1l.jpg", "sha256": "ca84d5db9c58a05b9f45b2425801ba3b8e36e7aa9437355ac9149d6a513e4c21"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "sovetsk-neman",
+      "title": "Калининград — Советск — Неман",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-sovetsk/",
+      "effective_from": "2026-07-05",
+      "scope": "current_base_with_dated_override",
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/c47/j3kd55a3a7axrzv5q4461jcwwq38h49c.jpg", "sha256": "40fdcf2a09defab3ec4b72d6798b100fb335231f8181c03bc645501ceae95471"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "chernyshevskoe",
+      "title": "Калининград — Чернышевское через Черняховск",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-chernyakhovsk-chernyshevskoe/",
+      "effective_from": "2026-06-01",
+      "scope": "current_base",
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/08b/05hegyam45yh4j89k6ce6jcngg0glpc2.jpg", "sha256": "f4b3f1f0783c537bdffc6939f26854e9c9d11afa5219385076c62fbefe3466ad"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "zheleznodorozhny",
+      "title": "Калининград — Железнодорожный через Черняховск",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-zheleznodorozhnyy/",
+      "effective_from": "2026-05-01",
+      "scope": "seasonal_current_base",
+      "season_months": [5, 6, 7, 8, 9],
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/4e1/1ueo5gboxpuarf8udjwp08ubt44olmv7.png", "sha256": "7aab6def2794bf10b7669d4190f912387e45ccf0f62b202b5df9a2043e25c5fb"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "krasnolesye",
+      "title": "Путешествие в Краснолесье",
+      "page_url": "https://www.kppk39.ru/raspisanie/kaliningrad-krasnolesye-cherez-chernyahovsh/",
+      "effective_from": "2026-05-01",
+      "scope": "seasonal_current_base",
+      "season_months": [5, 6, 7, 8, 9],
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/25e/nt9nk625tfm41gkl258g6ufsr6475k8t.png", "sha256": "358011c024394bed364aa46276b3b07a13e88ae6c4f275c7a80a92092e103b6d"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "bagrationovsk-steam",
+      "title": "Путешествие во времени",
+      "page_url": "https://www.kppk39.ru/raspisanie/puteshestvie-vo-vremeni/",
+      "effective_from": "2026-06-23",
+      "scope": "service_overlay",
+      "season_months": [6, 7, 8, 9],
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/da2/brhcz1udx9uhf8rt7d1ndzg8dt4woav3.jpg", "sha256": "9aa16dae42cacc08d3001f60e64ccda136bb14b4405807dc5e9fd6eb3db218d7"}],
+      "review_state": "manual_matrix_reviewed"
+    },
+    {
+      "id": "sea-express",
+      "title": "Морской экспресс",
+      "page_url": "https://www.kppk39.ru/raspisanie/morskoy-ekspress/",
+      "effective_from": "2026-07-04",
+      "scope": "coastal_capacity_overlay",
+      "assets": [{"direction": "both", "url": "https://www.kppk39.ru/upload/medialibrary/acb/83ffp663cvyypky82dfwhiirrh1nj0ak.png", "sha256": "49dfe9e442eb0cdec540c6594755e2df364857c38f1cb821d16c7f72dd472b04"}],
+      "review_state": "source_and_effective_date_reviewed"
+    }
+  ],
+  "stations": [
+    {"id": "kaliningrad-south", "name": "Калининград-Южный", "city_id": "kaliningrad", "coordinates": [54.69456, 20.49960]},
+    {"id": "kaliningrad-north", "name": "Калининград-Северный", "city_id": "kaliningrad"},
+    {"id": "zelenogradsk-new", "name": "Зеленоградск-Новый", "city_id": "zelenogradsk"},
+    {"id": "pionersky-kurort", "name": "Пионерский Курорт", "city_id": "pionersky"},
+    {"id": "svetlogorsk-2", "name": "Светлогорск-2", "city_id": "svetlogorsk"},
+    {"id": "baltiysk", "name": "Балтийск", "city_id": "baltiysk"},
+    {"id": "gvardeysk", "name": "Гвардейск", "city_id": "gvardeysk"},
+    {"id": "znamensk", "name": "Знаменск", "city_id": "znamensk", "coordinates": [54.614936, 21.2148737]},
+    {"id": "chernyakhovsk", "name": "Черняховск", "city_id": "chernyakhovsk"},
+    {"id": "gusev", "name": "Гусев", "city_id": "gusev"},
+    {"id": "nesterov", "name": "Нестеров", "city_id": "nesterov"},
+    {"id": "chernyshevskoe", "name": "Чернышевское", "city_id": "chernyshevskoe"},
+    {"id": "zheleznodorozhny", "name": "Железнодорожный", "city_id": "zheleznodorozhny", "coordinates": [54.357344, 21.3236636]},
+    {"id": "krasnolesye", "name": "Краснолесье", "city_id": "krasnolesye"},
+    {"id": "bagrationovsk", "name": "Багратионовск", "city_id": "bagrationovsk", "coordinates": [54.3921529, 20.6439006]},
+    {"id": "ladushkin", "name": "Ладушкин", "city_id": "ladushkin"},
+    {"id": "mamonovo", "name": "Мамоново", "city_id": "mamonovo"},
+    {"id": "polessk", "name": "Полесск", "city_id": "polessk"},
+    {"id": "sovetsk", "name": "Советск", "city_id": "sovetsk"},
+    {"id": "neman-new", "name": "Неман-Новый", "city_id": "neman"}
+  ],
+  "routes": [
+    {"id": "coastal-frequent", "source_ids": ["coast-via-zelenogradsk", "coast-via-pereslavskoe", "sea-express"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["zelenogradsk-new", "pionersky-kurort", "svetlogorsk-2"], "vehicle": "ЭС2Г Ласточка", "priority_class": "frequent_primary", "service_data": "transportSchedules.json + next official refresh"},
+    {"id": "baltiysk-rail", "source_ids": ["baltiysk"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["baltiysk"], "vehicle": "РА-2", "priority_class": "seasonal_frequent_primary"},
+    {"id": "eastern-main", "source_ids": ["chernyshevskoe"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["gvardeysk", "znamensk", "chernyakhovsk", "gusev", "nesterov", "chernyshevskoe"], "vehicle": "РА-2", "priority_class": "limited_parallel"},
+    {"id": "zheleznodorozhny-tourist", "source_ids": ["zheleznodorozhny"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["zheleznodorozhny"], "via_station_ids": ["chernyakhovsk"], "vehicle": "РА-2", "priority_class": "limited_parallel"},
+    {"id": "krasnolesye-tourist", "source_ids": ["krasnolesye"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["krasnolesye"], "via_station_ids": ["chernyakhovsk", "gusev", "nesterov"], "vehicle": "РА-2", "priority_class": "special_exact_date"},
+    {"id": "bagrationovsk-rail", "source_ids": ["bagrationovsk", "bagrationovsk-steam"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["bagrationovsk"], "vehicle": "РА-2 / паровоз Эр", "priority_class": "limited_parallel"},
+    {"id": "mamonovo-rail", "source_ids": ["mamonovo"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["ladushkin", "mamonovo"], "vehicle": "РА-2", "priority_class": "limited_parallel"},
+    {"id": "sovetsk-neman-rail", "source_ids": ["sovetsk-neman"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["polessk", "sovetsk", "neman-new"], "vehicle": "РА-2", "priority_class": "limited_parallel"}
+  ],
+  "locality_policies": [
+    {"locality_id": "svetlogorsk", "city_names": ["Светлогорск"], "route_ids": ["coastal-frequent"], "mode_policy": "rail_primary", "bus_locality_id": null, "public_readiness": "enabled"},
+    {"locality_id": "zelenogradsk", "city_names": ["Зеленоградск"], "route_ids": ["coastal-frequent"], "mode_policy": "rail_primary", "bus_locality_id": null, "public_readiness": "enabled"},
+    {"locality_id": "pionersky", "city_names": ["Пионерский"], "route_ids": ["coastal-frequent"], "mode_policy": "rail_primary", "bus_locality_id": "pionersky", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "baltiysk", "city_names": ["Балтийск"], "route_ids": ["baltiysk-rail"], "mode_policy": "rail_primary_while_current_table_has_multiple_daily_pairs", "bus_locality_id": "baltiysk", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "gvardeysk", "city_names": ["Гвардейск"], "route_ids": ["eastern-main"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": "gvardeysk", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "znamensk", "city_names": ["Знаменск"], "route_ids": ["eastern-main"], "mode_policy": "rail_and_bus_parallel_allow_mixed_direction", "bus_locality_id": null, "public_readiness": "needs_bus_directory_and_service_calendar"},
+    {"locality_id": "chernyakhovsk", "city_names": ["Черняховск"], "route_ids": ["eastern-main"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": "chernyakhovsk", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "gusev", "city_names": ["Гусев"], "route_ids": ["eastern-main", "krasnolesye-tourist"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": "gusev", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "nesterov", "city_names": ["Нестеров"], "route_ids": ["eastern-main", "krasnolesye-tourist"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": null, "public_readiness": "needs_bus_directory_and_service_calendar"},
+    {"locality_id": "zheleznodorozhny", "city_names": ["Железнодорожный"], "route_ids": ["zheleznodorozhny-tourist"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": null, "public_readiness": "needs_bus_directory_and_service_calendar"},
+    {"locality_id": "bagrationovsk", "city_names": ["Багратионовск"], "route_ids": ["bagrationovsk-rail"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": null, "public_readiness": "needs_bus_directory_and_service_calendar"},
+    {"locality_id": "mamonovo", "city_names": ["Мамоново"], "route_ids": ["mamonovo-rail"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": null, "public_readiness": "needs_bus_directory_and_service_calendar"},
+    {"locality_id": "ushakovo", "city_names": ["Ушаково", "пос. Ушаково"], "route_ids": ["mamonovo-rail"], "mode_policy": "bus_primary_with_optional_rail_to_ladushkin_then_road", "bus_locality_id": "ushakovo", "public_readiness": "bus_only_until_transfer_is_reviewed", "direct_rail_station": false},
+    {"locality_id": "krasnolesye", "city_names": ["Краснолесье"], "route_ids": ["krasnolesye-tourist"], "mode_policy": "special_rail_exact_date_plus_bus_fallback", "bus_locality_id": null, "public_readiness": "needs_event_and_service_calendar_match"},
+    {"locality_id": "polessk", "city_names": ["Полесск"], "route_ids": ["sovetsk-neman-rail"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": "polessk", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "sovetsk", "city_names": ["Советск"], "route_ids": ["sovetsk-neman-rail"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": "sovetsk", "public_readiness": "needs_service_calendar_export"},
+    {"locality_id": "neman", "city_names": ["Неман"], "route_ids": ["sovetsk-neman-rail"], "mode_policy": "rail_and_bus_parallel", "bus_locality_id": null, "public_readiness": "needs_bus_directory_and_service_calendar"}
+  ],
+  "reviewed_service_patterns": [
+    {"id": "baltiysk-outbound", "route_id": "baltiysk-rail", "direction": "outbound", "calendar": {"kind": "daily", "effective_from": "2026-06-29", "valid_to": null}, "trips": [{"number": "6403", "departure": "08:10", "arrival": "09:17"}, {"number": "6405", "departure": "09:48", "arrival": "10:50"}, {"number": "6407", "departure": "11:30", "arrival": "12:37"}, {"number": "6409", "departure": "13:05", "arrival": "14:13"}, {"number": "6417", "departure": "17:45", "arrival": "18:48"}]},
+    {"id": "baltiysk-return", "route_id": "baltiysk-rail", "direction": "return", "calendar": {"kind": "daily", "effective_from": "2026-06-29", "valid_to": null}, "trips": [{"number": "6400", "departure": "06:34", "arrival": "07:38"}, {"number": "6406", "departure": "09:49", "arrival": "10:55"}, {"number": "6410", "departure": "13:08", "arrival": "14:14"}, {"number": "6412", "departure": "14:30", "arrival": "15:35"}, {"number": "6416", "departure": "16:20", "arrival": "17:25"}, {"number": "6418", "departure": "19:05", "arrival": "20:10"}]},
+    {"id": "east-outbound", "route_id": "eastern-main", "direction": "outbound", "calendar": {"effective_from": "2026-06-01", "valid_to": null}, "trips": [
+      {"number": "6502", "day_class": "tue_thu_sat_holidays", "stops": [{"station_id": "kaliningrad-south", "departure": "08:15"}, {"station_id": "gvardeysk", "arrival": "08:59"}, {"station_id": "znamensk", "arrival": "09:07"}, {"station_id": "chernyakhovsk", "arrival": "09:45"}]},
+      {"number": "6582/6591", "day_class": "weekends_holidays", "stops": [{"station_id": "kaliningrad-south", "departure": "09:15"}, {"station_id": "chernyakhovsk", "arrival": "10:28", "departure": "10:43"}, {"station_id": "zheleznodorozhny", "arrival": "11:35"}], "skips_station_ids": ["gvardeysk", "znamensk"]},
+      {"number": "6572", "day_class": "weekends_holidays", "stops": [{"station_id": "kaliningrad-south", "departure": "09:55"}, {"station_id": "chernyakhovsk", "arrival": "11:08"}, {"station_id": "gusev", "arrival": "11:29"}, {"station_id": "nesterov", "arrival": "11:49", "departure": "11:54"}, {"station_id": "krasnolesye", "arrival": "12:35"}], "skips_station_ids": ["gvardeysk", "znamensk"]},
+      {"number": "6508", "day_class": "daily", "stops": [{"station_id": "kaliningrad-south", "departure": "18:23"}, {"station_id": "gvardeysk", "arrival": "19:07"}, {"station_id": "znamensk", "arrival": "19:15"}, {"station_id": "chernyakhovsk", "arrival": "19:54"}, {"station_id": "gusev", "arrival": "20:17"}, {"station_id": "nesterov", "arrival": "20:40"}, {"station_id": "chernyshevskoe", "arrival": "20:50"}]}
+    ]},
+    {"id": "east-return", "route_id": "eastern-main", "direction": "return", "calendar": {"effective_from": "2026-06-01", "valid_to": null}, "trips": [
+      {"number": "6501", "day_class": "workdays", "stops": [{"station_id": "chernyshevskoe", "departure": "05:40"}, {"station_id": "nesterov", "departure": "05:52"}, {"station_id": "gusev", "departure": "06:14"}, {"station_id": "chernyakhovsk", "departure": "06:39"}, {"station_id": "znamensk", "departure": "07:13"}, {"station_id": "gvardeysk", "departure": "07:22"}, {"station_id": "kaliningrad-south", "arrival": "08:07"}]},
+      {"number": "6503", "day_class": "weekends_holidays", "stops": [{"station_id": "chernyshevskoe", "departure": "07:15"}, {"station_id": "nesterov", "departure": "07:27"}, {"station_id": "gusev", "departure": "07:49"}, {"station_id": "chernyakhovsk", "departure": "08:14"}, {"station_id": "znamensk", "departure": "08:48"}, {"station_id": "gvardeysk", "departure": "08:57"}, {"station_id": "kaliningrad-south", "arrival": "09:42"}]},
+      {"number": "6505", "day_class": "tue_thu_sat_holidays", "stops": [{"station_id": "chernyakhovsk", "departure": "13:05"}, {"station_id": "znamensk", "departure": "13:41"}, {"station_id": "gvardeysk", "departure": "13:49"}, {"station_id": "kaliningrad-south", "arrival": "14:34"}]},
+      {"number": "6594/6583", "day_class": "weekends_holidays", "stops": [{"station_id": "zheleznodorozhny", "departure": "15:25"}, {"station_id": "chernyakhovsk", "arrival": "16:18", "departure": "16:33"}, {"station_id": "kaliningrad-south", "arrival": "17:46"}], "skips_station_ids": ["gvardeysk", "znamensk"]},
+      {"number": "6571", "day_class": "weekends_holidays", "stops": [{"station_id": "krasnolesye", "departure": "18:25"}, {"station_id": "nesterov", "departure": "19:06"}, {"station_id": "gusev", "departure": "19:26"}, {"station_id": "chernyakhovsk", "departure": "19:47"}, {"station_id": "kaliningrad-south", "arrival": "21:00"}], "skips_station_ids": ["gvardeysk", "znamensk"]}
+    ]},
+    {"id": "bagrationovsk-outbound", "route_id": "bagrationovsk-rail", "direction": "outbound", "calendar": {"effective_from": "2026-06-23", "valid_to": null}, "trips": [{"number": "6312", "day_class": "mon_wed_fri_weekends_holidays", "departure": "08:25", "arrival": "09:16"}, {"number": "6320", "day_class": "tue_thu", "departure": "10:30", "arrival": "11:40", "service_overlay": "heritage_steam"}, {"number": "6316", "day_class": "mon_wed_fri", "departure": "17:30", "arrival": "18:20"}, {"number": "6318", "day_class": "tue_thu", "departure": "17:30", "arrival": "18:27"}]},
+    {"id": "bagrationovsk-return", "route_id": "bagrationovsk-rail", "direction": "return", "calendar": {"effective_from": "2026-06-23", "valid_to": null}, "trips": [{"number": "6311", "day_class": "workdays", "departure": "06:15", "arrival": "07:05"}, {"number": "6321", "day_class": "tue_thu", "departure": "17:10", "arrival": "18:23", "service_overlay": "heritage_steam"}, {"number": "6317", "day_class": "mon_wed_fri_weekends_holidays", "departure": "18:35", "arrival": "19:25"}]},
+    {"id": "mamonovo-outbound", "route_id": "mamonovo-rail", "direction": "outbound", "calendar": {"effective_from": "2026-04-15", "valid_to": null}, "trips": [{"number": "6305", "day_class": "mon_wed_fri_weekends_holidays", "departure": "10:25", "ladushkin_arrival": "11:09", "arrival": "11:36"}, {"number": "6307", "day_class": "workdays", "departure": "18:10", "ladushkin_arrival": "18:52", "arrival": "19:19"}]},
+    {"id": "mamonovo-return", "route_id": "mamonovo-rail", "direction": "return", "calendar": {"effective_from": "2026-04-15", "valid_to": null}, "trips": [{"number": "6302", "day_class": "workdays", "departure": "06:30", "ladushkin_departure": "06:55", "arrival": "07:37"}, {"number": "6308", "day_class": "mon_wed_fri_weekends_holidays", "departure": "16:20", "ladushkin_departure": "16:45", "arrival": "17:29"}, {"number": "6310", "day_class": "workdays", "departure": "19:45", "ladushkin_departure": "20:10", "arrival": "20:52"}]},
+    {"id": "krasnolesye-roundtrip", "route_id": "krasnolesye-tourist", "direction": "roundtrip", "calendar": {"kind": "weekends_holidays", "effective_from": "2026-05-01", "valid_to": null, "season_months": [5, 6, 7, 8, 9]}, "trips": [{"number": "6572", "departure": "09:55", "arrival": "12:35"}, {"number": "6571", "departure": "18:25", "arrival": "21:00"}], "visit_window_minutes": 350, "border_zone_note_required": true},
+    {"id": "sovetsk-neman-current", "route_id": "sovetsk-neman-rail", "direction": "both", "calendar": {"effective_from": "2026-07-05", "valid_to": null}, "trips": [{"number": "6385/6386/6331", "day_class": "mon_fri_sun", "departure": "18:21", "polessk": "19:24", "sovetsk_arrival": "20:40", "sovetsk_departure": "20:50", "arrival": "21:13"}, {"number": "6332/6381/6382", "day_class": "mon_sat", "departure": "05:58", "sovetsk_arrival": "06:21", "sovetsk_departure": "06:31", "polessk": "07:50", "arrival": "08:53"}], "removed_services": [{"number": "6334/6387/6388", "day_class": "sunday", "removed_from": "2026-07-05"}]}
+  ],
+  "venue_access": [
+    {"id": "ferma-tyuniny", "locality_id": "znamensk", "venue_name": "Ферма Тюниных", "venue_coordinates": [54.6189793, 21.227253], "station_id": "znamensk", "walk_distance_m": 1057, "walk_minutes": 14, "routing_source": "OSM foot router", "journey_rule": "Rail is useful outbound on Saturday/holiday, but longer visits normally need bus return; allow mixed train-there/bus-back suggestions."},
+    {"id": "brandenburg-castle", "locality_id": "ushakovo", "venue_name": "Замок Бранденбург", "station_id": "ladushkin", "access_kind": "rail_then_road_transfer", "walk_distance_m": null, "walk_minutes": null, "journey_rule": "There is no Ushakovo rail stop. Never label Ladushkin as arrival in Ushakovo; combine the train only with reviewed bus/taxi transfer, otherwise show route 117."}
+  ],
+  "excluded_services": [
+    {"id": "victory-echelon", "reason": "Exhibition train, not passenger transport; never use it in journey suggestions."}
+  ]
+}

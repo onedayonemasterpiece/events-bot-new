@@ -1,6 +1,6 @@
 # Event transport guidance
 
-> Status: presentation-candidate MVP. Scope: rail for Светлогорск/Зеленоградск and a bus example for Сказочное Холмогорье in Романово.
+> Status: presentation-candidate MVP. Public scope: rail for Светлогорск/Зеленоградск and a bus example for Сказочное Холмогорье in Романово. The official-source reference for the next multimodal localities is documented in [rail-multimodal-directory.md](rail-multimodal-directory.md).
 
 ## Product rule
 
@@ -31,6 +31,8 @@ This is a release feature of the event page, not a standalone campaign. It is in
 10. Show the rail route once in the header. Each compact train row is itself the calendar link; it keeps the time pair, one metadata line, a calendar icon, keyboard focus and a 44px-or-larger interactive target without repeating the route or a separate `В календарь` button.
 11. Every rendered train, including a factual last/night return, links to its own static `.ics` containing departure, arrival, route and a `VALARM` 30 minutes before departure.
 
+This is the current renderer contract, not the full routing policy. Пионерский and seasonal Балтийск are rail-primary in the prepared directory; sparse inland destinations compare train and bus and may use a different mode each way. They stay out of the public block until exact-date service calendars and venue access have passed the same checks.
+
 The selector and calendar files are static. Public UI and `.ics` descriptions do not contain schedule-verification links.
 
 ## Bus example: Сказочное Холмогорье
@@ -51,7 +53,9 @@ Primary timetable: [official АО «Автовокзал» Kaliningrad route tab
 
 ## Schedule snapshot and source boundary
 
-The committed schedule is a compact service-calendar snapshot checked on **2026-07-11** against Yandex Расписания route pages that identify the carrier as АО «Калининградская ППК». Every service stores train number, departure, arrival, duration and per-month operating-day bitsets. The source URL and retrieval metadata remain in the committed data/provenance contract but are not shown as public schedule-verification links.
+The committed schedule is a compact service-calendar snapshot checked on **2026-07-11** against Yandex Расписания route pages that identify the carrier as АО «Калининградская ППК», then compared on **2026-07-12** with the official КППК coastal matrices effective from 3 July. The comparison found minute-level differences (for example official `6722` reaches Северный at `19:50`, while the current API snapshot has `19:48`), so the current public snapshot is deliberately **not** relabeled as officially synchronized and is not partially overwritten. Every rendered service stores train number, departure, arrival, duration and per-month operating-day bitsets. The source URL and retrieval metadata remain in the committed data/provenance contract but are not shown as public schedule-verification links.
+
+The wider official audit and source-image hashes are in `site/src/data/railRouteDirectory.json`; see [the multimodal directory](rail-multimodal-directory.md). That reference covers all 13 direction/product pages on the carrier index and makes the origin trip-specific: inland routes use `Калининград-Южный`, while a coastal option may use `Северный` only when that train actually calls there.
 
 The earlier July prototype at `https://static.kenigevents.ru/reference/transport/lastochka-svetlogorsk-test.json` was an **Object Storage/CDN test fixture**, not YDB. It is not used here: it was marked test-only, contained departures without arrivals/service calendars, covered only Светлогорск and used `Калининград-Южный`.
 
@@ -85,10 +89,10 @@ The current committed rail/bus data is a reviewed snapshot. Before the official 
 
 1. `scheduling.py` starts nightly and manual `transport_schedule_refresh` with `max_instances=1`, `coalesce=True` and resource lease `transport_schedule:refresh`.
 2. A `KaggleClient` runner pushes `ParseTransportSchedule`, uses the shared status dataset/heartbeats/report contract and downloads normalized rail+bus JSON.
-3. Validator requires source URL, `effective_from`, `fetched_at`, timezone, route/trip/stop identity, service calendar, monotonic departure/arrival, non-empty output and bounded diff size.
+3. Validator requires source page and exact image URL/hash, `effective_from`, `fetched_at`, timezone, route/trip/stop identity, service calendar, Russian production-calendar semantics, dated override precedence, monotonic departure/arrival, non-empty output and bounded diff size.
 4. Resolve or create an authoritative YDB current+history lane; the 2026-07-11 accessible databases had no transport table, so it must not be described as already YDB-backed.
 5. Publish atomically only after validation. Empty/partial output keeps last-known-good, records stale age and alerts an operator.
 6. A changed validated content hash exports the existing static JSON contract and enqueues one coalesced `static_site_build:prod`; release manifest records schedule snapshot ID/hash/fetched time.
-7. Acceptance covers rail, bus, unknown-end schedule cutoffs, explicit-end no-return, intermediate-stop inference, stale source, partial failure and public transport ICS MIME/alarms.
+7. Acceptance covers rail-primary Пионерский/Балтийск, parallel rail+bus inland routes, mixed train/bus directions for Знаменск, the Ладушкин transfer safety block for Бранденбург, exact-date Краснолесье, unknown-end schedule cutoffs, explicit-end no-return, intermediate-stop non-inference, stale source, partial failure and public transport ICS MIME/alarms.
 
 Until this debt is closed, the release checklist remains blocked: the presentation candidate must be refreshed and validated manually, without adding public schedule-verification links.
