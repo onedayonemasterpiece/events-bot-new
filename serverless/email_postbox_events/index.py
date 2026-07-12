@@ -4,7 +4,6 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 import os
 import re
 import urllib.error
@@ -15,9 +14,6 @@ from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
 
-LOGGER = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-LOGGER.setLevel(logging.INFO)
 MAX_RECORD_BYTES = 65_536
 MAX_BATCH_BYTES = 131_072
 MAX_BATCH_RECORDS = 100
@@ -47,6 +43,13 @@ class EventError(RuntimeError):
 
 class BatchError(RuntimeError):
     pass
+
+
+def _log(level: str, message: str, **fields: str) -> None:
+    # Cloud Functions captures stdout and recognizes this single-line JSON shape
+    # as a structured log. Callers must pass only bounded non-PII fields.
+    row = {"level": level, "message": message, "stream_name": "postbox-events", **fields}
+    print(json.dumps(row, ensure_ascii=True, sort_keys=True, separators=(",", ":")), flush=True)
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -262,13 +265,13 @@ def process_event(event: Any, *, env: Mapping[str, str], transport: Transport = 
             result = _store(payload, env=env, transport=transport)
             applied += result == "applied"
             duplicates += result == "duplicate"
-            LOGGER.info("postbox_event_ok event_hash=%s result=%s", event_hash, result)
+            _log("INFO", "postbox_event_ok", event_hash=event_hash, result=result)
         except EventError as exc:
             failures += 1
-            LOGGER.error("postbox_event_failed event_hash=%s error_code=%s", event_hash, exc.code)
+            _log("ERROR", "postbox_event_failed", event_hash=event_hash, error_code=exc.code)
         except Exception:
             failures += 1
-            LOGGER.error("postbox_event_failed event_hash=%s error_code=transport_failed", event_hash)
+            _log("ERROR", "postbox_event_failed", event_hash=event_hash, error_code="transport_failed")
     if failures:
         raise BatchError("batch_failed")
     return {"ok": True, "applied": applied, "duplicates": duplicates, "records": len(messages)}
