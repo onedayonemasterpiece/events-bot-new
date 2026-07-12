@@ -1,7 +1,7 @@
 # Desktop scroll compositions v4 — integration results
 
 ## Status
-local-gates-complete-pending-public-release
+complete-public-preview-released
 
 ## Requirement IDs
 - R01–R05
@@ -28,7 +28,10 @@ local-gates-complete-pending-public-release
 - Production mobile diff gate: no `EventHero.astro`, `EventLayout.astro` or production mobile file changes; lab root remains hidden below `1024px`.
 - Gemini 3.1 Pro High review completed; `a-opus` was unavailable with `Individual quota reached` and was not replaced by a lower-class model.
 - Closure re-review: R01–R05 and desktop/mobile isolation are Done; no code blocker remains.
+- Public release: overview and all five review routes returned HTTP `200`; the referenced CSS asset returned `200`.
+- Public Chromium smoke at `1440×650`: Editorial and Bento returned `200`, rendered the expected H1/composition/related markers and had zero horizontal overflow.
 
 ## Risks
 - This is a noindex lab preview, not a production event-page rollout.
 - Media metadata has known width/mode errors; v4 uses runtime natural ratios for Bento and explicit reviewed hero dimensions for event 4671.
+- The deploy's primary recursive upload and hashed assets completed. The redundant long tail that rewrites stable `/ics/*.ics` metadata was interrupted after public page verification; it does not block these desktop lab routes.
