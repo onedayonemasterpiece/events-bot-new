@@ -579,6 +579,41 @@ def test_runtime_health_status_reports_critical_monitoring_jobs(monkeypatch):
     assert "vk_auto_import_next_run" in payload
 
 
+def test_runtime_health_status_reports_email_worker_and_monitor(monkeypatch):
+    monkeypatch.setenv("ENABLE_EMAIL_OUTBOX_WORKER", "1")
+    monkeypatch.setenv("ENABLE_EMAIL_OUTBOX_MONITOR", "1")
+    monkeypatch.setenv("DEV_MODE", "1")
+
+    class Job:
+        def __init__(self, job_id: str) -> None:
+            self.id = job_id
+            self.next_run_time = datetime(2026, 7, 12, 8, 45, tzinfo=timezone.utc)
+
+    class Scheduler:
+        running = True
+
+        def __init__(self) -> None:
+            self.jobs = {
+                "email_outbox_worker": Job("email_outbox_worker"),
+                "email_outbox_monitor": Job("email_outbox_monitor"),
+            }
+
+        def get_job(self, job_id: str):
+            return self.jobs.get(job_id)
+
+        def get_jobs(self):
+            return list(self.jobs.values())
+
+    monkeypatch.setattr(scheduling, "_scheduler", Scheduler())
+
+    payload = scheduling.runtime_health_status()
+
+    assert payload["email_outbox_worker"] == "ok"
+    assert payload["email_outbox_monitor"] == "ok"
+    assert "email_outbox_worker_next_run" in payload
+    assert "email_outbox_monitor_next_run" in payload
+
+
 @pytest.mark.asyncio
 async def test_scheduled_video_tomorrow_fails_if_session_has_no_remote_handoff(
     tmp_path, monkeypatch

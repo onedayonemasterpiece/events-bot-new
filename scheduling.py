@@ -2692,6 +2692,8 @@ def runtime_health_status() -> dict[str, Any]:
     is_prod = os.getenv("DEV_MODE") != "1" and os.getenv("PYTEST_CURRENT_TEST") is None
     tg_monitoring_enabled = _env_enabled("ENABLE_TG_MONITORING", default=is_prod)
     vk_auto_import_enabled = _env_enabled("ENABLE_VK_AUTO_IMPORT", default=False)
+    email_worker_enabled = _env_enabled("ENABLE_EMAIL_OUTBOX_WORKER", default=False)
+    email_monitor_enabled = _env_enabled("ENABLE_EMAIL_OUTBOX_MONITOR", default=False)
     critical_watchdog_enabled = (
         tg_monitoring_enabled or guide_enabled or vk_auto_import_enabled
     )
@@ -2701,6 +2703,8 @@ def runtime_health_status() -> dict[str, Any]:
         "critical_scheduler_watchdog": "disabled",
         "tg_monitoring": "disabled",
         "vk_auto_import": "disabled",
+        "email_outbox_worker": "disabled",
+        "email_outbox_monitor": "disabled",
         "video_tomorrow": "disabled",
         "video_popular_review": "disabled",
         "video_popular_review_watchdog": "disabled",
@@ -2725,6 +2729,10 @@ def runtime_health_status() -> dict[str, Any]:
             payload["tg_monitoring"] = "missing_scheduler"
         if vk_auto_import_enabled:
             payload["vk_auto_import"] = "missing_scheduler"
+        if email_worker_enabled:
+            payload["email_outbox_worker"] = "missing_scheduler"
+        if email_monitor_enabled:
+            payload["email_outbox_monitor"] = "missing_scheduler"
         if guide_enabled:
             payload["guide_excursions_light"] = "missing_scheduler"
             payload["guide_excursions_full"] = "missing_scheduler"
@@ -2765,6 +2773,12 @@ def runtime_health_status() -> dict[str, Any]:
 
     if tg_monitoring_enabled:
         _set_job_health("tg_monitoring", "tg_monitoring")
+
+    if email_worker_enabled:
+        _set_job_health("email_outbox_worker", "email_outbox_worker")
+
+    if email_monitor_enabled:
+        _set_job_health("email_outbox_monitor", "email_outbox_monitor")
 
     if vk_auto_import_enabled:
         try:
@@ -3757,6 +3771,55 @@ def startup(
             )
     else:
         logging.info("SCHED skipping core schedulers (ENABLE_CORE_SCHEDULERS!=1)")
+
+    if _env_enabled("ENABLE_EMAIL_OUTBOX_WORKER", default=False):
+        from email_control.scheduler import run_email_outbox_worker
+
+        email_worker_interval = max(
+            30,
+            min(300, int((os.getenv("EMAIL_OUTBOX_WORKER_INTERVAL_SECONDS") or "60").strip() or "60")),
+        )
+        _register_job(
+            "email_outbox_worker",
+            _job_wrapper(
+                "email_outbox_worker",
+                run_email_outbox_worker,
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="email_outbox_worker",
+            seconds=email_worker_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=email_worker_interval,
+        )
+    else:
+        logging.info("SCHED skipping email_outbox_worker (ENABLE_EMAIL_OUTBOX_WORKER!=1)")
+
+    if _env_enabled("ENABLE_EMAIL_OUTBOX_MONITOR", default=False):
+        from email_control.scheduler import EmailMonitorConfig, run_email_outbox_monitor
+
+        email_monitor_interval = EmailMonitorConfig.from_env().interval_seconds
+        _register_job(
+            "email_outbox_monitor",
+            _job_wrapper(
+                "email_outbox_monitor",
+                run_email_outbox_monitor,
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="email_outbox_monitor",
+            seconds=email_monitor_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=email_monitor_interval,
+        )
+    else:
+        logging.info("SCHED skipping email_outbox_monitor (ENABLE_EMAIL_OUTBOX_MONITOR!=1)")
 
     # Source parsing from theatres (before daily announcement at 08:00)
     enable_source_parsing = _env_enabled("ENABLE_SOURCE_PARSING", default=is_prod)
