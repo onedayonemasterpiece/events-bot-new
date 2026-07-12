@@ -1069,18 +1069,109 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_fast_check_queries_use_broad_anchor_plus_poi_under_two_query_budget(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")
+        old_strategy = os.environ.get("REGION_TALK_FAST_CHECK_QUERY_STRATEGY")
         try:
             os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = "2"
+            os.environ["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"] = "legacy_v1"
             queries = mod.source_fast_check_queries("unit-run", 0)
-            self.assertEqual(queries[0], "Калининград")
-            self.assertEqual(len(queries), 2)
-            self.assertIn(queries[1], {"Зеленоградск", "Куршская коса", "Светлогорск", "Балтийск", "Янтарный", "Черняховск", "Балтийская коса", "Виштынец", "Роминтенская пуща"})
-            self.assertNotEqual(queries[1], "Калининградская область")
+            self.assertEqual(queries, ["Калининград", "Зеленоградск"])
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", None)
             else:
                 os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
+            if old_strategy is None:
+                os.environ.pop("REGION_TALK_FAST_CHECK_QUERY_STRATEGY", None)
+            else:
+                os.environ["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"] = old_strategy
+
+    def test_adaptive_fast_check_query_cursor_is_stable_and_non_overlapping(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")
+        try:
+            os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = "10"
+            first = mod.source_fast_check_queries("run-a", 0, start_cursor=0, strategy="adaptive_cursor_v1")
+            repeated = mod.source_fast_check_queries("run-b", 99, start_cursor=0, strategy="adaptive_cursor_v1")
+            second = mod.source_fast_check_queries("run-c", 0, start_cursor=10, strategy="adaptive_cursor_v1")
+            self.assertEqual(first, repeated)
+            self.assertEqual(len(first), 10)
+            self.assertEqual(len(first), len(set(first)))
+            self.assertFalse(set(first) & set(second))
+            bank = mod.source_fast_check_query_bank()
+            self.assertIn("Преголя", bank)
+            self.assertIn("Бальга", bank)
+            self.assertIn("Куршале", bank)
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", None)
+            else:
+                os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
+
+    def test_adaptive_fast_check_continues_legacy_no_hit_at_cursor_two(self) -> None:
+        mod = load_module()
+        self.assertEqual(
+            mod._fast_check_previous_cursor({"fast_check_status": "no_hit"}, strategy="adaptive_cursor_v1"),
+            2,
+        )
+        total = len(mod.source_fast_check_query_bank())
+        self.assertEqual(
+            mod._fast_check_previous_cursor({"fast_check_query_cursor": total}, strategy="adaptive_cursor_v1"),
+            total,
+        )
+
+    def test_adaptive_fast_check_requeues_partial_but_not_exhausted_rows(self) -> None:
+        mod = load_module()
+        old_strategy = os.environ.get("REGION_TALK_FAST_CHECK_QUERY_STRATEGY")
+        old_cached = os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY")
+        old_prefer = os.environ.get("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS")
+        try:
+            os.environ["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"] = "adaptive_cursor_v1"
+            os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "0"
+            os.environ["REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS"] = "1"
+            total = len(mod.source_fast_check_query_bank())
+            previous_state = {
+                "unified_source_queue_cursor_position": 0,
+                "unified_source_queue": {
+                    "telegram:partial": {
+                        "canonical_source_key": "telegram:partial", "platform": "telegram",
+                        "source_url": "https://t.me/partial", "source_queue_status": "pending_scan",
+                        "fast_check_status": "no_hit_partial", "fast_check_query_cursor": 10, "queue_order": 1,
+                    },
+                    "telegram:exhausted": {
+                        "canonical_source_key": "telegram:exhausted", "platform": "telegram",
+                        "source_url": "https://t.me/exhausted", "source_queue_status": "pending_scan",
+                        "fast_check_status": "no_hit_exhausted", "fast_check_query_cursor": total, "queue_order": 2,
+                    },
+                    "telegram:legacy_no_hit": {
+                        "canonical_source_key": "telegram:legacy_no_hit", "platform": "telegram",
+                        "source_url": "https://t.me/legacy_no_hit", "source_queue_status": "pending_scan",
+                        "fast_check_status": "no_hit", "queue_order": 3,
+                    },
+                    "telegram:fresh": {
+                        "canonical_source_key": "telegram:fresh", "platform": "telegram",
+                        "source_url": "https://t.me/fresh", "source_queue_status": "pending_scan", "queue_order": 4,
+                    },
+                },
+            }
+            seeds = mod.source_fast_check_backlog_seeds(previous_state, 5)
+            self.assertEqual(
+                [seed.canonical_url for seed in seeds],
+                ["https://t.me/partial", "https://t.me/legacy_no_hit", "https://t.me/fresh"],
+            )
+            self.assertEqual(mod.source_queue_priority_bucket(previous_state["unified_source_queue"]["telegram:partial"]), 2)
+        finally:
+            if old_strategy is None:
+                os.environ.pop("REGION_TALK_FAST_CHECK_QUERY_STRATEGY", None)
+            else:
+                os.environ["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"] = old_strategy
+            if old_cached is None:
+                os.environ.pop("REGION_TALK_TG_CACHED_ENTITY_ONLY", None)
+            else:
+                os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = old_cached
+            if old_prefer is None:
+                os.environ.pop("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS", None)
+            else:
+                os.environ["REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS"] = old_prefer
 
     def test_fast_check_no_hit_is_not_rechecked_or_prioritized_as_keyword(self) -> None:
         mod = load_module()

@@ -774,10 +774,23 @@ stages. All post-stage counters use unique normalized post URLs and the latest
 durable row, so repeated upserts cannot inflate conversion.
 
 Fast-check KO is a preflight prioritizer, not a terminal no-KO classifier.
-`fast_check_status=no_hit` means "the small source-local query budget did not
-find a fresh KO hit"; the source remains pending/lower-priority for normal scan.
-Only explicit local-region or spam surface filters become terminal rejections at
-this stage.
+`fast_check_status=no_hit` is the rollback-compatible result of the old fixed
+two-query check. In the opt-in `adaptive_cursor_v1` experiment,
+`no_hit_partial` means only the persisted query slice was exhausted and
+`no_hit_exhausted` means the full configured lexicon bank was exhausted. None
+of these is a source rejection; the source remains pending/lower-priority for
+normal scan. Only explicit local-region or spam surface filters become terminal
+rejections at this stage. The cursor advances only after a successful Telethon
+source-local search RPC, so runtime reserve, cooldown and FloodWait cannot
+silently skip terms.
+
+The adaptive strategy is rollout-gated rather than a new default. The first
+comparison run uses at most five sources × ten terms, cached Telegram entities
+only, zero username resolves, two result rows per term, 5–9 second pauses and
+stop-on-first-hit. Acceptance is based on incremental fresh exact KO URLs from
+query positions 3+, honest RPC/time cost, no FloodWait, durable cursor recovery
+and unchanged downstream E5+BGE gates. `legacy_v1` and the pushed rollback
+branch remain available if the marginal yield does not justify the requests.
 
 Local/nonlocal source classification must use both surface signals and scanned
 post profile. A source such as `Дом китобоя` / `domkitoboya` is a local

@@ -173,14 +173,29 @@ Per run, the orchestrator keeps this intentionally conservative:
 - all resolves/searches go through `TelegramRequestGovernor` plus human-like
   pacing.
 
+The production rollback default remains `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=legacy_v1`
+with the historical two-query pair. The bounded research mode
+`adaptive_cursor_v1` may be enabled explicitly for a controlled run. It uses a
+stable, diversity-aware place bank, persists progress on the canonical source
+row, and resumes from that cursor on a later run instead of randomly rotating
+or repeating the first terms. A first live probe is capped at five cached
+sources, ten queries per source, two returned messages per query, 5–9 second
+human-like pauses, zero username resolves and stop-on-first-hit.
+For the comparison only,
+`REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS=1` selects cached legacy
+two-query no-hits first; this directly measures whether positions 3+ add fresh
+KO URLs. It is not the long-term breadth/depth scheduling default.
+
 Algorithm:
 
 1. surface-filter title/handle/recent evidence for local-region and spam
    terminal statuses;
 2. resolve the channel through the shared governor/cache only if needed;
-3. search the channel for `Калининград` first, then one rotating
-   town/POI/toponym from the broader lexicon (`Зеленоградск`, `Куршская коса`,
-   `Светлогорск`, `Балтийск`, ...);
+3. in `legacy_v1`, search the historical fixed pair `Калининград`,
+   `Зеленоградск`; in `adaptive_cursor_v1`, read the next persisted slice from
+   the full town/POI/historical-name lexicon. The leading slice deliberately
+   mixes Kaliningrad, resorts, eastern towns, nature and historical anchors so
+   it does not collapse discovery to the same two tourist cities;
 4. stop early on the first fresh hit (`post_date >= now-365d`);
 5. persist `matched_query`, `keyword_hit_post_url`, `post_date`,
    `preflight_hit_age_days`, `keyword_evidence_excerpt` and `fast_check_status`.
@@ -189,9 +204,13 @@ If a fresh hit is found, the source receives an immediate priority/due marker
 in the canonical ledger and the exact post URL must be written to
 a known-post queue (`post_link_queue_item` / generalized candidate-link fetch)
 so that the post itself is scored next instead of being only a source hint. If
-no hit is found, `fast_check_status=no_hit` is not terminal: the source remains
-eligible for normal history scanning later, but is not rechecked by fast-check
-and is deprioritized behind un-preflighted backlog. If the hit is older than one
+no hit is found under the legacy pair, `fast_check_status=no_hit` is not
+terminal. Under the adaptive strategy, a completed slice writes
+`no_hit_partial` plus `fast_check_query_cursor`; only exhausting the complete
+bank writes `no_hit_exhausted`. Neither state rejects the source: it remains
+eligible for normal history scanning and is not given KO-hit priority. A
+budget/runtime interruption writes a deferred state and never advances the
+cursor past a query that was not actually sent. If the hit is older than one
 year, keep it as evidence and lower-priority backlog; do not jump it immediately
 ahead of fresh sources.
 
@@ -218,8 +237,13 @@ Implementation invariants:
 - uncertain rows are kept for the normal semantic/vector gate rather than
   rejected by regex;
 - `fast_check_status=ko_hit` is the only source-local preflight state that gets
-  keyword priority; `no_hit`/`error` must not be promoted just because the
-  internal stage name contains “keyword”;
+  keyword priority; `no_hit`, `no_hit_partial`, `no_hit_exhausted`, deferred and
+  error states must not be promoted just because the internal stage name
+  contains “keyword”;
+- honest experiment telemetry separates completed source-local search RPCs,
+  elapsed query time, attempts in positions 1–2, incremental hits in positions
+  3+, partial no-hits and full-bank exhaustion. `fast_check_query_count` is
+  per-source; the run-wide count is reported separately;
 - a keyword/preflight post hit is not a final candidate, but its URL must not be
   lost: CandidateReport writes it as `post_link_queue_item`, and the next normal
   CandidateReport run first refetches a bounded batch of these exact links

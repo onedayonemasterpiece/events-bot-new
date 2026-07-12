@@ -186,6 +186,10 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "10",
     "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
     "REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY": "2",
+    "REGION_TALK_FAST_CHECK_QUERY_STRATEGY": "legacy_v1",
+    "REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS": "0",
+    "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS": "5",
+    "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS": "9",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS": "330",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "300",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": "240",
@@ -222,6 +226,16 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except Exception:
         return int(default)
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
 
 
 def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
@@ -2891,6 +2905,36 @@ def build_decision_plan(
         "REGION_TALK_HISTORY_SOURCES_TARGET": str(candidate_budget["history_sources"]),
         "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": str(candidate_budget["history_sources"]),
         "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": str(candidate_budget["fast_check_sources"]),
+        "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": str(max(
+            1,
+            _env_int(
+                "REGION_TALK_ORCHESTRATOR_FAST_CHECK_QUERIES_PER_SOURCE",
+                _env_int("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", 2),
+            ),
+        )),
+        "REGION_TALK_FAST_CHECK_QUERY_STRATEGY": (
+            os.getenv("REGION_TALK_FAST_CHECK_QUERY_STRATEGY") or "legacy_v1"
+        ).strip().lower(),
+        "REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS": (
+            "1" if (os.getenv("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS") or "0").strip().lower()
+            in {"1", "true", "yes", "on"} else "0"
+        ),
+        "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS": str(max(
+            0,
+            _env_float("REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS", 5.0),
+        )),
+        "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS": str(max(
+            _env_float("REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS", 5.0),
+            _env_float("REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS", 9.0),
+        )),
+        "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": str(max(
+            0,
+            _env_int("REGION_TALK_ORCHESTRATOR_UNCACHED_RESOLVE_LANE_PER_RUN", 1),
+        )),
+        "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": str(max(
+            0,
+            _env_int("REGION_TALK_ORCHESTRATOR_MAX_NETWORK_RESOLVES_PER_RUN", 1),
+        )),
     }
     actions.append(_action(
         "launch_candidate_report",

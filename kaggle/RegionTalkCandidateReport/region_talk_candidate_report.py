@@ -916,7 +916,10 @@ def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int
     fast_check_status = str(row.get("fast_check_status") or "").strip().lower()
     if fast_check_status == "ko_hit":
         return 0
-    if fast_check_status in {"no_hit", "unresolved", "error"}:
+    if fast_check_status in {
+        "no_hit", "no_hit_partial", "no_hit_exhausted", "unresolved", "error",
+        "error_floodwait", "deferred_no_query_budget",
+    }:
         return 2
     haystack = " ".join(str(row.get(k) or "") for k in [
         "added_from", "insertion_policy", "discovery_type", "discovery_types", "edge_type", "edge_types_all", "frontier_reason",
@@ -1774,6 +1777,9 @@ SOURCE_STATE_FIELDS = [
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
+    "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
+    "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
+    "fast_check_query_terms_attempted", "fast_check_previous_status",
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
@@ -1803,6 +1809,9 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
+    "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
+    "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
+    "fast_check_query_terms_attempted", "fast_check_previous_status",
     "publication_source_evidence_priority", "publication_source_evidence_post_url",
     "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
@@ -1822,6 +1831,9 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
+    "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
+    "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
+    "fast_check_query_terms_attempted", "fast_check_previous_status",
 ]
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
@@ -4820,12 +4832,16 @@ def build_region_talk_place_query_terms(lexicon: list[dict[str, Any]] | None = N
         if safe_preflight and name:
             preflight.append(name)
         if tier in {"core", "tourist", "important"} and ambiguity in {"low", "medium"}:
-            for col in ("aliases", "old_names", "common_misspellings"):
+            for col in ("aliases", "old_names", "common_misspellings", "latin_aliases"):
                 for alias in split_semicolon(str(row.get(col) or "")):
-                    if len(normalize_geo_text(alias)) >= 4 and re.search(r"[А-Яа-я]", alias):
+                    if len(normalize_geo_text(alias)) < 4 or not re.search(r"[A-Za-zА-Яа-я]", alias):
+                        continue
+                    # Latin/historical aliases are useful inside a known source
+                    # but too noisy for global Telegram discovery.
+                    if col != "latin_aliases" and re.search(r"[А-Яа-я]", alias):
                         alias_terms.append(alias)
-                        if safe_preflight:
-                            preflight.append(alias)
+                    if safe_preflight:
+                        preflight.append(alias)
     global_keyword_terms = _dedupe_keep_order(
         list(TELEGRAM_TRAVEL_INTENT_DISCOVERY_TERMS)
         + global_plain
@@ -8233,6 +8249,49 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
     return rows, edges
 
 
+def source_fast_check_query_strategy() -> str:
+    value = (os.getenv("REGION_TALK_FAST_CHECK_QUERY_STRATEGY") or "legacy_v1").strip().lower()
+    return value if value in {"legacy_v1", "adaptive_cursor_v1"} else "legacy_v1"
+
+
+def source_fast_check_adaptive_enabled() -> bool:
+    return source_fast_check_query_strategy() == "adaptive_cursor_v1"
+
+
+def source_fast_check_query_bank() -> list[str]:
+    """Stable high-recall query order followed by the full safe place bank.
+
+    The prefix deliberately mixes the dominant city/resort terms with eastern,
+    natural and historical geography.  A persisted cursor, rather than a
+    per-run random rotation, guarantees that a source eventually reaches the
+    long tail without repeating the same two place names forever.
+    """
+    priority_terms = [
+        "Калининград", "Куршская коса", "Светлогорск", "Зеленоградск", "Янтарный",
+        "Балтийск", "Советск", "Черняховск", "Виштынец", "Роминтенская пуща",
+        "Балтийская коса", "Гусев", "Тильзит", "Тапиау", "Нойхаузен",
+        "Бальга", "Преголя", "Куршский залив", "Куршале",
+    ]
+    terms = build_region_talk_place_query_terms().get("source_preflight_terms") or DEFAULT_ANCHORS
+    return _dedupe_keep_order(priority_terms + list(terms))
+
+
+def _fast_check_previous_cursor(row: dict[str, Any], *, strategy: str) -> int:
+    if strategy != "adaptive_cursor_v1":
+        return 0
+    raw = row.get("fast_check_query_cursor")
+    if raw not in (None, ""):
+        try:
+            return max(0, int(float(raw)))
+        except (TypeError, ValueError):
+            return 0
+    # Legacy `no_hit` meant that only the fixed Kaliningrad/Zelenogradsk pair
+    # was tried.  Start the adaptive continuation after those two terms.
+    if str(row.get("fast_check_status") or "") == "no_hit":
+        return 2
+    return 0
+
+
 def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: int) -> list[Seed]:
     """Select cursor-forward Telegram backlog sources for cheap source-local KO preflight.
 
@@ -8243,6 +8302,9 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
         return []
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    adaptive_enabled = source_fast_check_adaptive_enabled()
+    adaptive_terms_total = len(source_fast_check_query_bank()) if adaptive_enabled else 0
+    prefer_continuations = adaptive_enabled and getenv_bool("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS", False)
     candidates: list[dict[str, Any]] = []
     for row in rows:
         status = str(row.get("source_queue_status") or "")
@@ -8254,14 +8316,23 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
             continue
         if normalize_source_platform(str(row.get("platform") or ""), str(row.get("source_url") or row.get("canonical_url") or "")) != "telegram":
             continue
-        if str(row.get("fast_check_status") or "") in {"ko_hit", "no_hit", "local_region_source", "spam_source_reject"}:
+        fast_status = str(row.get("fast_check_status") or "")
+        terminal_fast_statuses = {"ko_hit", "no_hit_exhausted", "local_region_source", "spam_source_reject"}
+        if fast_status in terminal_fast_statuses:
+            continue
+        if fast_status == "no_hit" and not adaptive_enabled:
+            continue
+        if fast_status == "no_hit_partial" and not adaptive_enabled:
+            continue
+        if adaptive_enabled and _fast_check_previous_cursor(row, strategy="adaptive_cursor_v1") >= adaptive_terms_total:
             continue
         if telegram_cached_entity_only_enabled() and not source_queue_row_has_cached_entity(row, previous_state):
             continue
         candidates.append(row)
     candidates = sorted(candidates, key=lambda r: (
         not source_queue_row_has_cached_entity(r, previous_state),
-        str(r.get("fast_check_status") or "") == "no_hit",
+        0 if prefer_continuations and str(r.get("fast_check_status") or "") in {"no_hit", "no_hit_partial"} else 1,
+        str(r.get("fast_check_status") or "") == "no_hit" if not adaptive_enabled else False,
         source_queue_priority_bucket(r),
         int(r.get("queue_order") or 999999999),
     ))
@@ -8281,21 +8352,23 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
     return out
 
 
-def source_fast_check_queries(run_id: str, source_index: int = 0) -> list[str]:
+def source_fast_check_queries(
+    run_id: str,
+    source_index: int = 0,
+    *,
+    start_cursor: int = 0,
+    strategy: str | None = None,
+) -> list[str]:
     per_source = max(1, getenv_int("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", 3))
-    terms = build_region_talk_place_query_terms().get("source_preflight_terms") or DEFAULT_ANCHORS
-    # Query 1 is the broad city/region anchor. In the default 2-query budget,
-    # query 2 should already expand recall to a tourist city/POI rather than
-    # waste another slot on "Калининградская область".
-    core = ["Калининград"]
-    poi_pool = [
-        "Зеленоградск", "Куршская коса", "Светлогорск", "Балтийск", "Янтарный",
-        "Черняховск", "Балтийская коса", "Виштынец", "Роминтенская пуща",
-    ]
-    tail = [t for t in _dedupe_keep_order(terms) if normalize_geo_text(t) not in {normalize_geo_text(x) for x in core}]
-    offset = (int(stable_hash(run_id or "fast-check", length=8), 16) + int(source_index or 0)) % max(1, len(tail) or 1)
-    rotated = _rotate_query_terms(tail, offset) if tail else []
-    return _dedupe_keep_order(core + poi_pool + rotated)[:per_source]
+    strategy = (strategy or source_fast_check_query_strategy()).strip().lower()
+    if strategy == "adaptive_cursor_v1":
+        bank = source_fast_check_query_bank()
+        cursor = max(0, int(start_cursor or 0))
+        return bank[cursor:cursor + per_source]
+    # Frozen rollback/control contract: the historical implementation always
+    # tested this same pair under its two-query production cap.
+    legacy = ["Калининград", "Зеленоградск"]
+    return legacy[:per_source]
 
 
 def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -8310,6 +8383,14 @@ def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
         "fast_check_hit_post_date",
         "fast_check_error_code",
         "fast_check_error_message",
+        "fast_check_query_strategy",
+        "fast_check_query_cursor",
+        "fast_check_query_terms_total",
+        "fast_check_query_wave",
+        "fast_check_query_rpc_count_run",
+        "fast_check_query_elapsed_seconds_run",
+        "fast_check_query_terms_attempted",
+        "fast_check_previous_status",
         "source_probe_reason",
         "next_action",
     ]:
@@ -8394,22 +8475,58 @@ async def run_source_fast_check_ko(
     post_hits: list[dict[str, Any]] = []
     queried = 0
     hits = 0
+    control_hits = 0
+    incremental_hits = 0
+    partial_no_hits = 0
+    exhausted_no_hits = 0
     local_rejected = 0
     spam_rejected = 0
     errors = 0
+    query_elapsed_total = 0.0
     post_link_items_written = 0
     cutoff = history_min_post_datetime()
-    status.event("fast_check_ko_started", phase="fast_check_ko", status="running", run_id=run_id, sources_total=len(seeds), progress_label=f"fast-check KO {len(seeds)} sources")
+    strategy = source_fast_check_query_strategy()
+    query_terms_total = len(source_fast_check_query_bank()) if strategy == "adaptive_cursor_v1" else 2
+    previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    previous_queue_by_key = {
+        canonical_source_key(
+            str(row.get("platform") or ""),
+            str(row.get("handle") or row.get("username_or_handle") or ""),
+            str(row.get("source_url") or row.get("canonical_url") or ""),
+        ): row
+        for row in previous_queue_rows
+        if isinstance(row, dict)
+    }
+    status.event(
+        "fast_check_ko_started", phase="fast_check_ko", status="running", run_id=run_id,
+        sources_total=len(seeds), query_strategy=strategy, query_terms_total=query_terms_total,
+        progress_label=f"fast-check KO {len(seeds)} sources; strategy={strategy}",
+    )
     for idx, seed in enumerate(seeds, start=1):
         if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300)):
             break
         base_row = source_status_row(seed, "", fetch_attempted="false")
+        source_key = canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+        previous_queue_row = previous_queue_by_key.get(source_key) or {}
+        previous_fast_status = str(previous_queue_row.get("fast_check_status") or "")
+        start_cursor = _fast_check_previous_cursor(previous_queue_row, strategy=strategy)
+        source_queries_attempted: list[str] = []
+        source_query_rpc_count = 0
+        source_query_started = time.monotonic()
         base_row.update({
             "source_queue_status": seed.initial_status if seed.initial_status in {"pending_scan", "needs_rescan_or_retry"} else "pending_scan",
             "discovery_type": "source_local_fast_check",
             "edge_type": "source_local_fast_check",
             "fast_check_at": utc_now_iso(),
             "last_fast_check_run_id": run_id,
+            "fast_check_query_strategy": strategy,
+            "fast_check_query_cursor": start_cursor,
+            "fast_check_query_terms_total": query_terms_total,
+            "fast_check_query_wave": "",
+            "fast_check_query_rpc_count_run": 0,
+            "fast_check_query_elapsed_seconds_run": 0.0,
+            "fast_check_query_terms_attempted": "",
+            "fast_check_previous_status": previous_fast_status,
         })
         surface_terminal = source_local_region_terminal_fields(base_row)
         if source_terminal_rejected_status(surface_terminal.get("source_queue_status")):
@@ -8431,10 +8548,9 @@ async def run_source_fast_check_ko(
                 continue
             title = str(resolve_meta.get("resolved_title") or getattr(entity, "title", None) or seed.source_title)
             base_row["resolved_title"] = title
-            queries = source_fast_check_queries(run_id, idx)
+            queries = source_fast_check_queries(run_id, idx, start_cursor=start_cursor, strategy=strategy)
             hit_row: dict[str, Any] | None = None
             for q in queries:
-                queried += 1
                 if not governor.has_total_request_budget("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url):
                     break
                 if not await governor.humanlike_pause(
@@ -8448,7 +8564,43 @@ async def run_source_fast_check_ko(
                     reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300),
                 ):
                     break
-                for msg in await telethon_iter_messages_list(client, entity, method_name="iter_messages.fast_check_ko", search=q, limit=getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2)):
+                governor.total_attempted += 1
+                governor.requests_by_method["iter_messages.fast_check_ko"] = governor.requests_by_method.get("iter_messages.fast_check_ko", 0) + 1
+                try:
+                    messages = await telethon_iter_messages_list(
+                        client, entity, method_name="iter_messages.fast_check_ko", search=q,
+                        limit=getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2),
+                    )
+                except Exception:
+                    governor.total_error += 1
+                    raise
+                governor.total_ok += 1
+                governor.log(
+                    "iter_messages.fast_check_ko", "source_local_search", seed.source_id,
+                    seed.canonical_url, "allowed", ok=True, network_call=True, query=q,
+                )
+                queried += 1
+                source_query_rpc_count += 1
+                source_queries_attempted.append(q)
+                completed_cursor = min(query_terms_total, start_cursor + source_query_rpc_count)
+                elapsed_now = round(time.monotonic() - source_query_started, 3)
+                base_row.update({
+                    "fast_check_query_count": source_query_rpc_count,
+                    "fast_check_query_cursor": completed_cursor,
+                    "fast_check_query_wave": f"{start_cursor + 1}-{completed_cursor}",
+                    "fast_check_query_rpc_count_run": source_query_rpc_count,
+                    "fast_check_query_elapsed_seconds_run": elapsed_now,
+                    "fast_check_query_terms_attempted": "|".join(source_queries_attempted),
+                })
+                status.event(
+                    "fast_check_query_progress", phase="fast_check_ko", status="running", run_id=run_id,
+                    source_id=seed.source_id, current_source_url=seed.canonical_url, query=q,
+                    query_cursor=completed_cursor, query_terms_total=query_terms_total,
+                    source_query_rpc_count=source_query_rpc_count, queries_processed=queried,
+                    ko_hits=hits, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+                    progress_label=f"fast-check {idx}/{len(seeds)} q={completed_cursor}/{query_terms_total}: {q}",
+                )
+                for msg in messages:
                     mid = int(getattr(msg, "id", 0) or 0)
                     if not mid:
                         continue
@@ -8475,7 +8627,7 @@ async def run_source_fast_check_ko(
                         "matched_hashtag": "",
                         "post_date": dt.isoformat() if dt else "",
                         "fast_check_status": "ko_hit",
-                        "fast_check_query_count": queried,
+                        "fast_check_query_count": source_query_rpc_count,
                         "fast_check_matched_query": q,
                         "fast_check_hit_post_url": post_url,
                         "fast_check_hit_post_date": dt.isoformat() if dt else "",
@@ -8489,8 +8641,17 @@ async def run_source_fast_check_ko(
                     break
                 if hit_row:
                     break
+            source_elapsed = round(time.monotonic() - source_query_started, 3)
+            query_elapsed_total += source_elapsed
+            base_row["fast_check_query_elapsed_seconds_run"] = source_elapsed
             if hit_row:
+                hit_row.update(source_queue_keyword_evidence_fields(base_row))
                 hits += 1
+                hit_position = start_cursor + source_query_rpc_count
+                if hit_position <= 2:
+                    control_hits += 1
+                else:
+                    incremental_hits += 1
                 rows.append(hit_row)
                 post_hits.append(hit_row)
                 write_region_talk_online_source_item(hit_row, run_id=run_id, stage="fast_check_ko", status="fast_check_ko_hit")
@@ -8499,17 +8660,50 @@ async def run_source_fast_check_ko(
                 # to be reverted by that handoff's pre-run snapshot.
                 post_link_items_written += write_region_talk_post_link_queue_items([hit_row], run_id=run_id, stage="fast_check_ko_post_link_queue")
             else:
+                new_cursor = min(query_terms_total, start_cursor + source_query_rpc_count)
+                if source_query_rpc_count <= 0:
+                    fast_status = "deferred_no_query_budget"
+                    next_action = "retry_fast_check_runtime_or_request_budget"
+                elif strategy == "adaptive_cursor_v1":
+                    fast_status = "no_hit_exhausted" if new_cursor >= query_terms_total else "no_hit_partial"
+                    next_action = (
+                        "keep_pending_scan_lower_priority_fast_check_exhausted"
+                        if fast_status == "no_hit_exhausted"
+                        else "continue_adaptive_fast_check_from_persisted_cursor"
+                    )
+                    if fast_status == "no_hit_exhausted":
+                        exhausted_no_hits += 1
+                    else:
+                        partial_no_hits += 1
+                else:
+                    fast_status = "no_hit"
+                    next_action = "keep_pending_scan_lower_priority_fast_check_no_hit"
                 base_row.update({
-                    "fast_check_status": "no_hit",
-                    "fast_check_query_count": len(queries),
-                    "next_action": "keep_pending_scan_lower_priority_fast_check_no_hit",
+                    "fast_check_status": fast_status,
+                    "fast_check_query_count": source_query_rpc_count,
+                    "fast_check_query_cursor": new_cursor,
+                    "fast_check_query_wave": f"{start_cursor + 1}-{new_cursor}" if source_query_rpc_count else "",
+                    "fast_check_query_rpc_count_run": source_query_rpc_count,
+                    "fast_check_query_elapsed_seconds_run": source_elapsed,
+                    "fast_check_query_terms_attempted": "|".join(source_queries_attempted),
+                    "next_action": next_action,
                     "discovery_type": "source_local_fast_check_no_hit",
                     "edge_type": "source_local_fast_check_no_hit",
                 })
                 rows.append(base_row)
-                write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status="fast_check_no_hit")
+                write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status=f"fast_check_{fast_status}")
         except Exception as exc:
             errors += 1
+            source_elapsed = round(time.monotonic() - source_query_started, 3)
+            query_elapsed_total += source_elapsed
+            base_row.update({
+                "fast_check_query_count": source_query_rpc_count,
+                "fast_check_query_cursor": min(query_terms_total, start_cursor + source_query_rpc_count),
+                "fast_check_query_wave": f"{start_cursor + 1}-{start_cursor + source_query_rpc_count}" if source_query_rpc_count else "",
+                "fast_check_query_rpc_count_run": source_query_rpc_count,
+                "fast_check_query_elapsed_seconds_run": source_elapsed,
+                "fast_check_query_terms_attempted": "|".join(source_queries_attempted),
+            })
             seconds = int(getattr(exc, "seconds", 0) or 0)
             if type(exc).__name__ == "FloodWaitError" or seconds:
                 cooldown_until = governor.mark_floodwait("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url, seconds)
@@ -8547,13 +8741,29 @@ async def run_source_fast_check_ko(
         "fast_check_ko_sources_checked": len(rows),
         "fast_check_ko_hits": hits,
         "fast_check_ko_queries_processed": queried,
+        "fast_check_ko_query_strategy": strategy,
+        "fast_check_ko_query_terms_total": query_terms_total,
+        "fast_check_ko_query_elapsed_seconds": round(query_elapsed_total, 3),
+        "fast_check_ko_control_hits_q1_q2": control_hits,
+        "fast_check_ko_incremental_hits_q3_plus": incremental_hits,
+        "fast_check_ko_no_hit_partial": partial_no_hits,
+        "fast_check_ko_no_hit_exhausted": exhausted_no_hits,
         "fast_check_ko_local_rejected": local_rejected,
         "fast_check_ko_spam_rejected": spam_rejected,
         "fast_check_ko_errors": errors,
         "fast_check_ko_post_link_items_written": post_link_items_written,
         "keyword_post_hit_rows": combined,
     })
-    status.event("fast_check_ko_done", phase="fast_check_ko", status="running", run_id=run_id, sources_checked=len(rows), ko_hits=hits, local_rejected=local_rejected, spam_rejected=spam_rejected, progress_label=f"fast-check KO done {hits}/{len(rows)}")
+    status.event(
+        "fast_check_ko_done", phase="fast_check_ko", status="running", run_id=run_id,
+        sources_checked=len(rows), ko_hits=hits, queries_processed=queried,
+        query_strategy=strategy, query_terms_total=query_terms_total,
+        control_hits_q1_q2=control_hits, incremental_hits_q3_plus=incremental_hits,
+        no_hit_partial=partial_no_hits, no_hit_exhausted=exhausted_no_hits,
+        query_elapsed_seconds=round(query_elapsed_total, 3),
+        local_rejected=local_rejected, spam_rejected=spam_rejected,
+        progress_label=f"fast-check KO done {hits}/{len(rows)}; q={queried}",
+    )
     return rows, post_hits
 
 

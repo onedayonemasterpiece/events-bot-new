@@ -391,10 +391,15 @@ visibility.
   external blogger/travel publication funnel;
   source-local `fast-check-KO` preflight writes `fast_check_status`,
   `fast_check_at`, `fast_check_matched_query`, `fast_check_hit_post_url`,
-  `fast_check_hit_post_date` and error fields back to this same row. Only
+  `fast_check_hit_post_date`, `fast_check_query_strategy`,
+  `fast_check_query_cursor`, `fast_check_query_terms_total`,
+  `fast_check_query_wave`, completed-RPC count, elapsed seconds, attempted terms
+  and error fields back to this same row. Only
   `fast_check_status=ko_hit` gives the source immediate priority in the same
   ledger;
-  `no_hit`/`error` are not terminal and are not promoted;
+  `no_hit`, `no_hit_partial`, `no_hit_exhausted`, deferred and error states are
+  not source rejections and are not promoted; adaptive partial rows may resume
+  from the persisted cursor while exhausted rows fall back to normal scanning;
   terminal high-volume rejections use
   `source_queue_status=rejected_high_volume_text_posts_per_day` plus
   `monitoring_exclusion_reason`, `source_probe_reason`,
