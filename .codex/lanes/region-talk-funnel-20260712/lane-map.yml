@@ -70,4 +70,4 @@ lanes:
     expected_output: committed and pushed integrated implementation with live evidence
     verification_scope: full_local
     effort: extra-high
-    status: in_progress
+    status: committed
