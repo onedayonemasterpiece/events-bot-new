@@ -2989,6 +2989,16 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
             "fetch_error_message": reason,
             "next_action": "do_not_fetch_exact_post_from_rejected_source",
         })
+    # The search-result excerpt is useful only until the exact-post fetch gets
+    # a durable outcome. Afterwards URL/query/hash are sufficient for audit and
+    # idempotency; retaining 500 characters in every historical queue row is a
+    # silent append-only text archive.
+    final_status = str(item.get("post_link_status") or "")
+    if final_status in {
+        "fetched", "scored", "terminal_no_text", "terminal_bad_url",
+        "terminal_source_rejected", "operator_rejected",
+    } or final_status.startswith("terminal_"):
+        item.pop("keyword_hit_text_excerpt", None)
     lifecycle_cache[queue_id] = dict(item)
     if post_url:
         lifecycle_cache[post_url] = dict(item)

@@ -1151,10 +1151,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "publication_sent_total": 7,
             "publication_delivery_completed_total": 6,
         })
-        self.assertIn("canonical population: 7055", text)
-        self.assertIn("Sources with broad KO/candidate evidence (legacy): 91", text)
-        self.assertIn("Exact pending-new / BGE-ready-rescore / cooldown / entity-wait / fetched-ledger: 67/0/0/0/0", text)
-        self.assertIn("Publication ledger rows / currently Gemini-confirmed / sent-ledger / ready-unsent / deliveries-completed: 19/7/7/0/6", text)
+        self.assertIn("всего / хотя бы раз реально просмотрены / ещё ни разу не просмотрены: 7055/662/6393", text)
+        self.assertIn("Источники, где уже найден хотя бы один возможный пост о КО: 91", text)
+        self.assertIn("новые тексты к чтению / готовы к повторному решению после BGE", text)
+        self.assertIn("67/0/0/0/0", text)
+        self.assertIn("Публикационный отбор", text)
+        self.assertIn("19/7/7/0/6", text)
 
     def test_strong_source_attestation_backlog_schedules_bounded_priority_pass(self) -> None:
         mod = load_module()

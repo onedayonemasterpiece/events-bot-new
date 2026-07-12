@@ -242,8 +242,17 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
 
 
 def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
-    """Render one coherent stats surface from the already-read metric snapshot."""
+    """Render the full product funnel in plain operator language.
+
+    Metric keys remain stable for automation, but this message deliberately
+    avoids implementation shorthand such as ``strict gate``, ``fetched`` or
+    an unlabeled historical ``image rows`` total.
+    """
     value = lambda key: _safe_int(metrics.get(key))
+    source_total = value("publics_total")
+    source_never_scanned = value("publics_primary_unscanned_pending_total")
+    source_ever_scanned = max(0, source_total - source_never_scanned)
+    source_scanned_percent = int(round((source_ever_scanned / source_total) * 100)) if source_total else 0
     latest_outcomes = metrics.get("heuristic_ko_latest_run_outcome_counts") or {}
     if not isinstance(latest_outcomes, dict):
         latest_outcomes = {}
@@ -252,13 +261,23 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         for reason, count in sorted(latest_outcomes.items(), key=lambda item: (-_safe_int(item[1]), str(item[0])))[:8]
     ) or "none"
     return "\n".join([
-        "📊 Region Talk live YDB stats",
-        f"Источников в canonical population: {value('publics_total')}",
-        f"Pending primary scan: {value('publics_primary_unscanned_pending_total')}",
-        f"Terminal processed: {value('publics_terminal_processed_total')}",
-        f"Sources with broad KO/candidate evidence (legacy): {value('publics_with_ko_candidates_total')}",
+        "📊 Region Talk — полная продуктовая воронка из live YDB",
         (
-            "Keyword sources discovered/scanned/preliminary/confirmed-KO/external-confirmed-KO: "
+            "Источники — всего / хотя бы раз реально просмотрены / ещё ни разу не просмотрены: "
+            f"{source_total}/{source_ever_scanned}/{source_never_scanned} "
+            f"(просмотрено {source_scanned_percent}%)"
+        ),
+        (
+            "Итог источников — завершены / нужен повторный просмотр / локальные / спам: "
+            f"{value('publics_terminal_processed_total')}/"
+            f"{value('publics_needs_rescan_or_retry_total')}/"
+            f"{value('publics_rejected_local_region_source_total')}/"
+            f"{value('publics_rejected_spam_source_total')}"
+        ),
+        f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
+        (
+            "Поиск по словам/хештегам — найдено источников / реально просмотрено / "
+            "есть предварительный KO-пост / KO подтверждён / KO подтверждён у внешнего источника: "
             f"{value('publics_keyword_discovered_total')}/"
             f"{value('publics_keyword_scanned_with_posts_total')}/"
             f"{value('keyword_sources_with_preliminary_candidates_total')}/"
@@ -266,8 +285,9 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('keyword_external_sources_with_confirmed_ko_posts_total')}"
         ),
         (
-            "Fast-check sources with keyword hit / exact posts read / dual-vector posts / "
-            "text semantically matched / text fully suitable before media review / photo handoff / video handoff / Gemini queue: "
+            "Прямой KO-маршрут — источников с найденной ссылкой / тексты постов прочитаны / "
+            "посчитаны E5+BGE / обе модели считают текст постом о КО / "
+            "текст полностью подходит до проверки медиа / передано фото / передано видео / дошло до Gemini: "
             f"{value('fast_check_keyword_match_sources_total')}/"
             f"{value('fast_check_exact_posts_processed_unique_total')}/"
             f"{value('fast_check_exact_posts_dual_vectorized_total')}/"
@@ -278,25 +298,27 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('fast_check_exact_posts_publication_queue_total')}"
         ),
         (
-            "Exact KO text outcomes — suitable / rejected / still pending: "
+            "Решение по прочитанным прямым KO-постам — текст подходит / отклонён / ещё обрабатывается: "
             f"{value('fast_check_exact_posts_strict_text_accepted_total')}/"
             f"{value('fast_check_exact_posts_text_rejected_total')}/"
             f"{value('fast_check_exact_posts_text_pending_total')}"
         ),
         (
-            "Historical source provenance totals (manual/import / keyword / hashtag / similar; not this-run deltas): "
+            "Как источники когда-либо попали в базу — импорт/ручной ввод / ключевые слова / хештеги / похожие каналы "
+            "(исторический состав, не прирост запуска): "
             f"{value('discovery_inflow_manual_total')}/"
             f"{value('discovery_inflow_keyword_total')}/"
             f"{value('discovery_inflow_hashtag_total')}/"
             f"{value('discovery_inflow_similar_total')}"
         ),
         (
-            "Queue unordered/duplicate rows: "
+            "Целостность очереди — без порядкового номера / дубли порядка: "
             f"{value('source_queue_integrity_unordered_total')}/"
             f"{value('source_queue_integrity_duplicate_order_rows_total')}"
         ),
         (
-            "Exact pending-new / BGE-ready-rescore / cooldown / entity-wait / fetched-ledger: "
+            "Очередь конкретных ссылок — новые тексты к чтению / готовы к повторному решению после BGE / "
+            "ждут Telegram cooldown / ждут Telegram entity / исторически тексты уже читались: "
             f"{value('post_link_queue_exact_ready_total')}/"
             f"{value('post_link_queue_bge_ready_rescore_total')}/"
             f"{value('post_link_queue_cooldown_total')}/"
@@ -304,19 +326,20 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('post_link_queue_fetched_total')}"
         ),
         (
-            "Processed posts unique/raw/duplicate rows: "
+            "Посты за всё время — уникально обработано / строк состояния / дублей идентичности: "
             f"{value('processed_posts_unique_total')}/"
             f"{value('processed_post_rows_total')}/"
             f"{value('processed_post_duplicate_identity_rows_total')}"
         ),
         (
-            "Latest Candidate posts unique/raw/duplicate rows: "
+            "Последний основной ноутбук — уникальных постов обработано / строк / дублей: "
             f"{value('processed_posts_unique_latest_candidate_run_total')}/"
             f"{value('processed_post_rows_latest_candidate_run_total')}/"
             f"{value('processed_post_duplicate_identity_rows_latest_candidate_run_total')}"
         ),
         (
-            "Heuristic KO latest raw/vector/text/image/publication/sent: "
+            "Последний основной ноутбук, KO-воронка — эвристически KO / проверены векторами / "
+            "текст подходит / передано медиа / дошло до публикационного отбора / отправлено в чат: "
             f"{value('heuristic_ko_latest_run_raw_posts_total')}/"
             f"{value('heuristic_ko_latest_run_vector_evaluated_total')}/"
             f"{value('heuristic_ko_latest_run_text_accepted_total')}/"
@@ -325,13 +348,14 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('heuristic_ko_latest_run_sent_total')}"
         ),
         (
-            "Latest yields heuristic-per-post/text-per-heuristic/publication-per-heuristic: "
+            "Конверсия последнего запуска — KO среди обработанных / подходящий текст среди KO / публикация среди KO: "
             f"{value('latest_candidate_heuristic_ko_hit_rate_percent')}%/"
             f"{value('latest_candidate_heuristic_to_text_accept_rate_percent')}%/"
             f"{value('latest_candidate_heuristic_to_publication_rate_percent')}%"
         ),
         (
-            "Latest source scan sources/KO/yield; fast-check sources/hits/yield: "
+            "Последний запуск — глубоко просмотрено источников / с KO / доля; "
+            "быстро проверено источников / с KO / доля: "
             f"{value('source_latest_scan_run_sources_total')}/"
             f"{value('source_latest_scan_run_ko_sources_total')}/"
             f"{value('source_latest_scan_run_ko_source_yield_percent')}%; "
@@ -339,9 +363,10 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('fast_check_latest_run_hit_sources_total')}/"
             f"{value('fast_check_latest_run_hit_rate_percent')}%"
         ),
-        f"Heuristic KO latest outcomes: {top_latest_outcomes}",
+        f"Причины результата эвристических KO-постов последнего запуска: {top_latest_outcomes}",
         (
-            "Candidate-memory ledger rows / active operational / local-audit / spam-audit / dual-pending / image-wait: "
+            "Реестр текстовых кандидатов — исторических строк / активных / локальных для аудита / "
+            "спам для аудита / ждут второй вектор / ждут медиа: "
             f"{value('candidate_memory_total')}/"
             f"{value('candidate_memory_operational_total')}/"
             f"{value('candidate_memory_terminal_local_audit_total')}/"
@@ -350,23 +375,24 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('candidate_memory_image_wait_total')}"
         ),
         (
-            "Current E5/BGE raw/actionable coverage: "
+            "Покрытие двумя моделями E5+BGE — всех строк / реально обрабатываемых: "
             f"{value('text_vector_current_version_dual_coverage_percent')}%/"
             f"{value('text_vector_current_version_dual_actionable_coverage_percent')}% "
-            f"(raw pending {value('text_vector_current_version_e5_without_bge_total')}; "
-            f"actionable {value('text_vector_current_version_e5_without_bge_actionable_total')}; "
-            f"short excluded {value('text_vector_current_version_e5_below_bge_min_text_total')}; "
-            f"terminal-source excluded {value('text_vector_current_version_e5_without_bge_source_terminal_total')})"
+            f"(без BGE всего {value('text_vector_current_version_e5_without_bge_total')}; "
+            f"из них надо обработать {value('text_vector_current_version_e5_without_bge_actionable_total')}; "
+            f"слишком коротких {value('text_vector_current_version_e5_below_bge_min_text_total')}; "
+            f"из уже отклонённых источников {value('text_vector_current_version_e5_without_bge_source_terminal_total')})"
         ),
         (
-            "BGE actionable/capacity/load/terminal-skipped: "
+            "Следующий BGE-запуск — надо посчитать / вместимость / загрузка / пропущено из отклонённых источников: "
             f"{value('bge_pending_sample_total')}/"
             f"{value('bge_capacity_rows')}/"
             f"{value('bge_backlog_capacity_percent')}%/"
             f"{value('bge_source_terminal_skipped_sample_total')}"
         ),
         (
-            "Image ledger historical / active photo backlog / photos scored / strong photos>=0.70 / video manual-review: "
+            "Медиа — исторических строк / фото сейчас ждут оценки / фото реально оценено / "
+            "сильных фото >=0.70 / видео для ручного просмотра: "
             f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
             f"{value('image_actual_scored_total')}/"
@@ -374,7 +400,8 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('video_manual_review_candidate_urls_total')}"
         ),
         (
-            "Publication ledger rows / currently Gemini-confirmed / sent-ledger / ready-unsent / deliveries-completed: "
+            "Публикационный отбор — исторических строк / сейчас подтверждены Gemini / "
+            "когда-либо отмечены отправленными / подтверждены, но не отправлены / фактически доставлено сообщений: "
             f"{value('publication_candidate_total')}/"
             f"{value('publication_confirmed_total')}/"
             f"{value('publication_sent_total')}/"
@@ -382,7 +409,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publication_delivery_completed_total')}"
         ),
         (
-            "Finalizer actual-image/video inputs/pending: "
+            "Финализатор — постов с оценённым фото / видео / ещё требуют решения или обновления: "
             f"{value('image_actual_scored_urls_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}/"
             f"{value('finalizer_pending_url_total')}"

@@ -29,7 +29,8 @@ from scripts.region_talk_publication_finalizer import normalize_post_url, rt  # 
 
 KINDS = [
     "processed_post_item", "candidate_memory_item", "image_queue_item",
-    "publication_candidate_item", "text_vector_enrichment_item", "online_source_item",
+    "publication_candidate_item", "text_vector_enrichment_item", "post_link_queue_item",
+    "online_source_item",
 ]
 TEXT_FIELDS = {
     "text", "full_text", "text_excerpt", "short_summary", "raw",
@@ -80,6 +81,12 @@ def row_has_terminal_text_verdict(kind: str, row: dict[str, Any], publication_te
         )
     if kind == "image_queue_item":
         return str(row.get("image_queue_status") or "") in IMAGE_TERMINAL and not rt.is_video_media_candidate(row)
+    if kind == "post_link_queue_item":
+        status = str(row.get("post_link_status") or "")
+        return status in {
+            "fetched", "scored", "terminal_no_text", "terminal_bad_url",
+            "terminal_source_rejected", "operator_rejected",
+        } or status.startswith("terminal_")
     return False
 
 
@@ -177,7 +184,10 @@ def main() -> int:
             counters["publication_urls_normalized"] += 1
             counters["publication_duplicate_rows_removed"] += max(0, len(group) - 1)
 
-    for kind in ["processed_post_item", "candidate_memory_item", "image_queue_item", "text_vector_enrichment_item"]:
+    for kind in [
+        "processed_post_item", "candidate_memory_item", "image_queue_item",
+        "text_vector_enrichment_item", "post_link_queue_item",
+    ]:
         for row in rows[kind]:
             pk = str(row.get("_ydb_pk") or "")
             if not pk:

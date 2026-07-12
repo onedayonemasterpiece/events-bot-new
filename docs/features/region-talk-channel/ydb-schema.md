@@ -322,6 +322,10 @@ Region Talk must keep row-level product state compact:
 - retryable publication candidates retain the exact post text while a Gemini
   retry is possible. Accepted, rejected, operator-rejected and sent terminal
   rows keep URL/hash/verdict evidence but no post text;
+- exact-link queue rows may keep the bounded Telegram search-result excerpt
+  only while the link is pending/retryable. After fetched, scored, rejected or
+  another terminal outcome, maintenance keeps URL/query/evidence hash and
+  deletes the excerpt;
 - BGE run-result rows contain only compact summary/sample references and are
   retention-limited; they never duplicate the full enrichment rows;
 - `latest_state` and `run_state_snapshot` use checkpoint-v4 and therefore stay

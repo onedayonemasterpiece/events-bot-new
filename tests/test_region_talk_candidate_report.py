@@ -1031,6 +1031,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(item["priority_reason"], "global_keyword_search_exact_post")
         self.assertIn("postlink_", item["post_link_queue_id"])
         self.assertTrue(item["evidence_excerpt_hash"])
+        self.assertIn("Калининград", item["keyword_hit_text_excerpt"])
 
     def test_post_link_queue_item_from_keyword_hit_terminally_rejects_local_source(self) -> None:
         mod = load_module()
@@ -1049,6 +1050,21 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(item["source_scope"], "local_region")
         self.assertEqual(item["source_quick_class"], "local_region_source")
         self.assertEqual(item["next_action"], "do_not_fetch_exact_post_from_rejected_source")
+        self.assertTrue(item["evidence_excerpt_hash"])
+        self.assertNotIn("keyword_hit_text_excerpt", item)
+
+    def test_post_link_queue_removes_search_excerpt_after_exact_fetch(self) -> None:
+        mod = load_module()
+        item = mod.post_link_queue_item_from_keyword_hit({
+            "keyword_hit_post_url": "https://t.me/travel_foo/123",
+            "keyword_hit_source_url": "https://t.me/travel_foo",
+            "canonical_source_key": "telegram:travel_foo",
+            "keyword_hit_text_excerpt": "Полный поисковый сниппет больше не нужен после чтения поста",
+            "post_link_status": "fetched",
+        }, run_id="unit-run", status="fetched")
+        self.assertEqual(item["post_link_status"], "fetched")
+        self.assertTrue(item["evidence_excerpt_hash"])
+        self.assertNotIn("keyword_hit_text_excerpt", item)
 
     def test_fast_check_queries_use_broad_anchor_plus_poi_under_two_query_budget(self) -> None:
         mod = load_module()

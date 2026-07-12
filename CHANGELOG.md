@@ -18,6 +18,8 @@
 - Stopped writing the redundant third `online_source_item` source projection and added maintenance cleanup, retaining canonical queue identity plus one live status overlay.
 - Reserved two default Telegram keyword slots for rotating travel-intent phrases while retaining broad POI/hashtag discovery, targeting higher publication-candidate yield rather than raw mention volume alone.
 - Promoted sources of strict text-passed exact posts into the bounded five-post source-attestation lane before image handoff, without bypassing local/spam checks.
+- Reworded the complete Region Talk operator scorecard in plain product language, including disjoint source coverage and explicit historical-ledger versus active-backlog labels.
+- Made Telegram keyword-result excerpts transient: pending exact-link work may retain them, while fetched/rejected terminal ledger rows now retain only URL/query/hash evidence.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active

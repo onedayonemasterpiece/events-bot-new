@@ -169,6 +169,12 @@ Telegram Monitoring and Guide monitoring:
   unique processed post, text accepts/publications per heuristic KO hit,
   KO-bearing sources per scanned source, and fast-check hits per checked
   source. These rates control breadth tuning; raw post volume alone does not;
+- the operator stats message names every denominator and lifecycle stage in
+  plain Russian. In particular, source coverage is a disjoint
+  `total / ever scanned / never scanned` population, direct KO rows distinguish
+  `text read` from `dual-vector complete` and `text suitable before media`, and
+  media/publication totals are explicitly marked as historical ledgers versus
+  active backlog. Stable machine metric keys remain available in JSON;
 - `image_queue_total` retained as the transparent raw/audit row count, plus
   `image_product_eligible_total` for rows accepted by the current strict gate;
   `--target-image-queue` follows the eligible delta rather than rejected rows
