@@ -203,6 +203,14 @@ Algorithm:
 5. persist `matched_query`, `keyword_hit_post_url`, `post_date`,
    `preflight_hit_age_days`, `keyword_evidence_excerpt` and `fast_check_status`.
 
+Telegram's source-local search is only candidate generation: it can stem
+`Советск` to ordinary words such as `советский`. Before a result becomes a KO
+hit, CandidateReport therefore requires the visible text to contain the exact
+toponym or an explicit Russian case form (`Советск/Советска/Советске/...`,
+`Куршская/Куршской коса/косе`, etc.). Ambiguous `янтарный` is accepted only in
+settlement/location context. Rejected search-engine matches are counted
+separately and never enter the exact-post queue.
+
 If a fresh hit is found, the source receives an immediate priority/due marker
 in the canonical ledger and the exact post URL must be written to
 a known-post queue (`post_link_queue_item` / generalized candidate-link fetch)

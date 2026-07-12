@@ -1779,7 +1779,7 @@ SOURCE_STATE_FIELDS = [
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
     "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
-    "fast_check_query_terms_attempted", "fast_check_previous_status",
+    "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
@@ -1811,7 +1811,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
     "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
-    "fast_check_query_terms_attempted", "fast_check_previous_status",
+    "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
     "publication_source_evidence_priority", "publication_source_evidence_post_url",
     "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
@@ -1833,7 +1833,7 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
     "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
-    "fast_check_query_terms_attempted", "fast_check_previous_status",
+    "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
 ]
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
@@ -7846,6 +7846,7 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
     seeds = seed_pool[:max_seed_channels]
     raw_count = 0
     errors = 0
+    search_results_rejected = 0
     floodwait = 0
     seen: set[str] = set()
     self_loop_count = 0
@@ -8267,7 +8268,7 @@ def source_fast_check_query_bank() -> list[str]:
     long tail without repeating the same two place names forever.
     """
     priority_terms = [
-        "Калининград", "Куршская коса", "Светлогорск", "Зеленоградск", "Янтарный",
+        "Калининград", "Зеленоградск", "Куршская коса", "Светлогорск", "Янтарный",
         "Балтийск", "Советск", "Черняховск", "Виштынец", "Роминтенская пуща",
         "Балтийская коса", "Гусев", "Тильзит", "Тапиау", "Нойхаузен",
         "Бальга", "Преголя", "Куршский залив", "Куршале",
@@ -8290,6 +8291,37 @@ def _fast_check_previous_cursor(row: dict[str, Any], *, strategy: str) -> int:
     if str(row.get("fast_check_status") or "") == "no_hit":
         return 2
     return 0
+
+
+def source_fast_check_query_matches_text(query: str, text: str) -> bool:
+    """Reject Telegram search stemming noise before it becomes KO evidence.
+
+    Telegram may return ``советский`` for the query ``Советск``.  Search is
+    therefore only candidate generation: the visible post must contain the
+    exact toponym or a small, explicit Russian case-form family.
+    """
+    q = normalize_geo_text(query)
+    body = normalize_geo_text(text)
+    if not q or not body:
+        return False
+    phrase_patterns = {
+        "куршская коса": r"(?<![0-9a-zа-я])куршск(?:ая|ой|ую)\s+кос(?:а|е|ы|у|ой)(?![0-9a-zа-я])",
+        "балтийская коса": r"(?<![0-9a-zа-я])балтийск(?:ая|ой|ую)\s+кос(?:а|е|ы|у|ой)(?![0-9a-zа-я])",
+        "роминтенская пуща": r"(?<![0-9a-zа-я])роминтенск(?:ая|ой|ую)\s+пущ(?:а|е|и|у|ей)(?![0-9a-zа-я])",
+        "куршский залив": r"(?<![0-9a-zа-я])куршск(?:ий|ого|ом|ому|им)\s+залив(?:а|е|ом|у)?(?![0-9a-zа-я])",
+    }
+    if q in phrase_patterns:
+        return re.search(phrase_patterns[q], body, flags=re.I) is not None
+    if q == "янтарный":
+        return re.search(
+            r"(?<![0-9a-zа-я])(?:пос[её]лок|город)\s+янтарный(?![0-9a-zа-я])"
+            r"|(?<![0-9a-zа-я])(?:в|из|до|под|около)\s+янтарн(?:ом|ого|ому)(?![0-9a-zа-я])",
+            body,
+            flags=re.I,
+        ) is not None
+    if re.fullmatch(r"[a-zа-я]+ск", q, flags=re.I):
+        return re.search(rf"(?<![0-9a-zа-я]){re.escape(q)}(?:а|е|ом|у)?(?![0-9a-zа-я])", body, flags=re.I) is not None
+    return term_in_text(q, body)
 
 
 def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: int) -> list[Seed]:
@@ -8390,6 +8422,7 @@ def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
         "fast_check_query_rpc_count_run",
         "fast_check_query_elapsed_seconds_run",
         "fast_check_query_terms_attempted",
+        "fast_check_search_results_rejected_run",
         "fast_check_previous_status",
         "source_probe_reason",
         "next_action",
@@ -8512,6 +8545,7 @@ async def run_source_fast_check_ko(
         start_cursor = _fast_check_previous_cursor(previous_queue_row, strategy=strategy)
         source_queries_attempted: list[str] = []
         source_query_rpc_count = 0
+        source_search_results_rejected = 0
         source_query_started = time.monotonic()
         base_row.update({
             "source_queue_status": seed.initial_status if seed.initial_status in {"pending_scan", "needs_rescan_or_retry"} else "pending_scan",
@@ -8526,6 +8560,7 @@ async def run_source_fast_check_ko(
             "fast_check_query_rpc_count_run": 0,
             "fast_check_query_elapsed_seconds_run": 0.0,
             "fast_check_query_terms_attempted": "",
+            "fast_check_search_results_rejected_run": 0,
             "fast_check_previous_status": previous_fast_status,
         })
         surface_terminal = source_local_region_terminal_fields(base_row)
@@ -8609,6 +8644,11 @@ async def run_source_fast_check_ko(
                         continue
                     text = str(getattr(msg, "message", None) or "").strip()
                     if not text:
+                        continue
+                    if not source_fast_check_query_matches_text(q, text):
+                        source_search_results_rejected += 1
+                        search_results_rejected += 1
+                        base_row["fast_check_search_results_rejected_run"] = source_search_results_rejected
                         continue
                     handle = seed.handle.lstrip("@")
                     post_url = f"https://t.me/{handle}/{mid}"
@@ -8748,6 +8788,7 @@ async def run_source_fast_check_ko(
         "fast_check_ko_incremental_hits_q3_plus": incremental_hits,
         "fast_check_ko_no_hit_partial": partial_no_hits,
         "fast_check_ko_no_hit_exhausted": exhausted_no_hits,
+        "fast_check_ko_search_results_rejected": search_results_rejected,
         "fast_check_ko_local_rejected": local_rejected,
         "fast_check_ko_spam_rejected": spam_rejected,
         "fast_check_ko_errors": errors,
@@ -8760,6 +8801,7 @@ async def run_source_fast_check_ko(
         query_strategy=strategy, query_terms_total=query_terms_total,
         control_hits_q1_q2=control_hits, incremental_hits_q3_plus=incremental_hits,
         no_hit_partial=partial_no_hits, no_hit_exhausted=exhausted_no_hits,
+        search_results_rejected=search_results_rejected,
         query_elapsed_seconds=round(query_elapsed_total, 3),
         local_rejected=local_rejected, spam_rejected=spam_rejected,
         progress_label=f"fast-check KO done {hits}/{len(rows)}; q={queried}",

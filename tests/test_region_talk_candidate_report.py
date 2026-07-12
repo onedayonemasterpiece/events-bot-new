@@ -1109,6 +1109,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             repeated = mod.source_fast_check_queries("run-b", 99, start_cursor=0, strategy="adaptive_cursor_v1")
             second = mod.source_fast_check_queries("run-c", 0, start_cursor=10, strategy="adaptive_cursor_v1")
             self.assertEqual(first, repeated)
+            self.assertEqual(first[:3], ["Калининград", "Зеленоградск", "Куршская коса"])
             self.assertEqual(len(first), 10)
             self.assertEqual(len(first), len(set(first)))
             self.assertFalse(set(first) & set(second))
@@ -1133,6 +1134,16 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             mod._fast_check_previous_cursor({"fast_check_query_cursor": total}, strategy="adaptive_cursor_v1"),
             total,
         )
+
+    def test_fast_check_search_hit_requires_visible_toponym_not_telegram_stem_noise(self) -> None:
+        mod = load_module()
+        self.assertFalse(mod.source_fast_check_query_matches_text("Советск", "костюмы из советских фильмов"))
+        self.assertFalse(mod.source_fast_check_query_matches_text("Советск", "история советского народа"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Советск", "поездка в Советск"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Советск", "гуляли по Советску и ночевали в Советске"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Куршская коса", "были на Куршской косе"))
+        self.assertFalse(mod.source_fast_check_query_matches_text("Янтарный", "янтарный цвет заката"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Янтарный", "поехали в посёлок Янтарный"))
 
     def test_adaptive_fast_check_requeues_partial_but_not_exhausted_rows(self) -> None:
         mod = load_module()
