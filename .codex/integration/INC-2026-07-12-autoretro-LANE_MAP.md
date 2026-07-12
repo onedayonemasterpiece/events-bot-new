@@ -23,13 +23,13 @@
   owner: integrator
   dependencies: [R01, R02, R03]
   validation: Production-boundary replay passes through Smart Update and targeted regression tests pass.
-  status: in_progress
+  status: completed
 - requirement_id: R05
   description: Repair canonical data and every managed public projection, deploy and verify catch-up.
   owner: integrator
   dependencies: [R01, R02, R04]
   validation: Backups, repaired DB, Telegram/VK/Telegraph checks, deployed SHA from origin/main and post-deploy evidence.
-  status: pending
+  status: in_progress
 
 ## Integration order
 

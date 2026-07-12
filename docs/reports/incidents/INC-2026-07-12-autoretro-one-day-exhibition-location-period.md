@@ -1,6 +1,6 @@
 # INC-2026-07-12 Autoretro one-day exhibition location and period drift
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: event ingestion / Smart Update / public event projections
 Opened: 2026-07-12
@@ -117,6 +117,25 @@ Source truth is frozen: one day `2026-07-18`, time unknown, city `Янтарны
 outdoor City Day auto exhibition; exact square/address is not source-grounded.
 The primary repair must use no end date and no invented indoor venue/address.
 
+Production event `6853` is now repaired to one day (`2026-07-18`), location
+`День города в Янтарном`, city `Янтарный`, no address/end date and an
+event-local description. The wrong Telegram album `2297–2300` was deleted and
+replaced by `https://t.me/kldevents/2301`; managed VK `7233` and the existing
+Telegraph page were edited in place. The replacement still uses prior
+Autoretro show photos as illustrations, but its caption no longer presents the
+past cars/performance as the future program.
+
+The audit repair queue was also applied:
+
+- duplicates `6743 -> 6742` and `6852 -> 6191` merged/tombstoned;
+- non-events `6032`, `6033`, `6062`, `6088`, `6098`, `6423`, `6635`
+  cancelled; old Telegram captions now explicitly say the card was removed;
+- ranges/dates repaired for `6818`, `6117`, `3569`, `3592`, `5581`, `6093`,
+  `6346`, `6414`, `6466`, `6497`, `6629`;
+- location/time repaired for `6841`, `6844`, `6567`, `6568`;
+- event-local text repaired for `6845`, `6846`, `6847`, `6849`, `6407`;
+  `6848` remained the verified negative control.
+
 ## Corrective Actions
 
 - [x] Add early LLM-first mixed-occurrence eventness review before defaults,
@@ -146,10 +165,55 @@ The primary repair must use no end date and no invented indoor venue/address.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `59312251` (prevention `e95a596f` + atomic exhibition date
+  renderer); both commits are ancestors of `origin/main`. Local E2E diagnostic
+  hardening `130d228f` is also on `origin/main` and requires no runtime deploy.
+- deploy path: two clean-worktree `flyctl deploy --remote-only` releases;
+  machine `2860d45f312248` reached `started`, `/healthz` returned
+  `ok=true`, `ready=true`, DB/scheduler/tasks all `ok`.
+- regression checks:
+  - Smart Update/VK date tests compiled and passed; focused occurrence-role,
+    roundup-scope, date-model and one-day Telegraph tests passed;
+  - deployed shadow-DB replay of `wall-127107743_14707` called the real LLM
+    boundary and returned
+    `skipped_non_event:mixed_occurrence_role_review_non_event` before create;
+  - grounded one-day indoor and explicit multi-day controls remained accepted;
+  - frozen full audit covered `326/326` rows and `326/326` persisted
+    `related_v1` vectors before source adjudication.
+- production backup tables:
+  `codex_backup_event_20260712_autoretro`,
+  `codex_backup_event_source_20260712_autoretro`,
+  `codex_backup_eventposter_20260712_autoretro`,
+  `codex_backup_event_source_fact_20260712_autoretro`,
+  `codex_backup_joboutbox_20260712_autoretro`;
+  post-repair `PRAGMA quick_check=ok`.
+- vector catch-up: `ops_run=3655`, `success`, `complete=true`, `262` actionable
+  events, `20` embedding writes, `504` unchanged documents, `64` stale event
+  ids pruned and `0` left due to provider cap. Event `6853` has fresh
+  `search_v3` + `related_v1` hashes and corrected Янтарный/one-day documents.
+- public verification:
+  - Telegram `2297` is absent; `https://t.me/kldevents/2301` says only
+    `18 июля` and `День города в Янтарном`;
+  - VK `https://vk.com/wall-231920894_7233` contains only the corrected
+    event-local description, without City Jazz/month/past-performance claims;
+  - Telegraph `https://telegra.ph/Den-goroda-v-YAntarnom-07-12` renders
+    atomic `18 июля`, no `с 18 июля`, and no wrong venue/range.
+
+### Monitoring blockers before `closed`
+
+- Live Telegram-UI VK auto-import did not start: the role-scoped E2E human
+  account `8336351413` receives `Not authorized`. The harness now captures this
+  immediately (`terminal_kind=authorization_denied`) instead of timing out.
+  Authorization must be restored by the operator/security owner before a real
+  1-row live import can close this check; no privilege was granted implicitly.
+- Production file-mirror logging remains intentionally disabled after the prior
+  Fly disk-pressure incident (`ENABLE_RUNTIME_FILE_LOGGING=0`). Current evidence
+  therefore comes from `ops_run`, DB, Telegram UI, VK API and provider logs.
+  A bounded-volume/retention design is required before re-enabling it.
+- Static-site Kaggle production handoff is disabled and no `static_site_build`
+  outbox exists. The old advertised static path was 404 (not stale wrong data);
+  the corrected vector card now points at the new canonical path, but publishing
+  that page remains a separate static-site operational gate.
 
 ## Prevention
 
