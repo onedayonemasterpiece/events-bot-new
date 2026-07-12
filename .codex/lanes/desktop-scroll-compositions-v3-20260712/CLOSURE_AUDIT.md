@@ -21,4 +21,4 @@ R05's neural same-visual dedup is not represented as complete. It does not block
 - Preview checker: passed.
 - Focused Chromium QA: `49` desktop layout runs plus interaction, row and phone-isolation checks; zero failures.
 - `git diff --check`: passed.
-
+- Public preview HTTP and the complete `49`-run Chromium matrix: passed after deploy.

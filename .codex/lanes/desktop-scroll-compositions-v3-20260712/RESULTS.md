@@ -2,7 +2,7 @@
 
 ## Status
 
-Integration implementation and local release gates complete; public-preview gate pending.
+Integration implementation, local release gates and public-preview gate complete.
 
 ## Requirement IDs
 
@@ -13,7 +13,7 @@ Integration implementation and local release gates complete; public-preview gate
 - Branch: `feature/event-page-desktop-scroll-compositions-v3-20260712`
 - Worktree: `/home/dev/.codex/worktrees/events-bot-new/event-page-desktop-multimedia-analysis`
 - Base SHA: `c4e6bae98f344c1a7bd06b0a346fc7589bfc73b5`
-- Implementation SHA: `144884a4`
+- Implementation SHAs: `144884a4`, `4db7a3fa`
 
 ## Files changed
 
@@ -35,6 +35,9 @@ No production `EventHero.astro`, `EventLayout.astro` or mobile stylesheet/compon
 - Viewports: `1024×768`, `1366×768`, `1440×650`, `1920×600`, `1920×1080`, `2560×1440`, `3440×1440`; phone isolation `390×844`.
 - Visual evidence: `artifacts/codex/desktop-scroll-compositions-v3-20260712/visual/` (not committed).
 - Build/check logs: `artifacts/codex/desktop-scroll-compositions-v3-20260712/{build,check-preview}.log` (not committed).
+- Public HTTP: overview, Editorial photo/OCR, Split OCR and reading-column URLs returned `200`; hashed CSS returned `200`.
+- Public Chromium QA: the same `49` desktop runs plus interaction/row/phone-isolation gates passed with `0` failures.
+- Published preview: `https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/`.
 
 ## Consultant gate
 
