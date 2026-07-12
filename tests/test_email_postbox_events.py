@@ -4,7 +4,6 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 
 import pytest
 
@@ -147,15 +146,16 @@ def test_payload_hash_is_stable_under_object_key_order():
     assert index.parse_record(first, env=ENV)["p_payload_sha256"] == index.parse_record(second, env=ENV)["p_payload_sha256"]
 
 
-def test_process_event_calls_service_only_rpc_and_accepts_duplicate(caplog):
+def test_process_event_calls_service_only_rpc_and_accepts_duplicate(capsys):
     calls, transport = transport_result("duplicate")
-    with caplog.at_level(logging.INFO):
-        result = index.process_event({"messages": [event()]}, env=ENV, transport=transport)
+    result = index.process_event({"messages": [event()]}, env=ENV, transport=transport)
+    logs = capsys.readouterr().out
     assert result == {"ok": True, "applied": 0, "duplicates": 1, "records": 1}
     assert calls[0][0].endswith("/rest/v1/rpc/email_record_postbox_event_v2")
     assert calls[0][2]["apikey"].startswith("sb_secret_")
-    assert "user@example.test" not in caplog.text.lower()
-    assert "sb_secret" not in caplog.text
+    assert '"message":"postbox_event_ok"' in logs
+    assert "user@example.test" not in logs.lower()
+    assert "sb_secret" not in logs
 
 
 def test_correlation_pending_retries_whole_invocation():
@@ -184,14 +184,16 @@ def test_kill_switch_prevents_transport():
     assert calls == []
 
 
-def test_external_error_body_and_recipient_are_not_logged(caplog):
+def test_external_error_body_and_recipient_are_not_logged(capsys):
     def transport(*_args):
         return 500, b"user@example.test secret diagnostic"
 
-    with caplog.at_level(logging.ERROR), pytest.raises(index.BatchError):
+    with pytest.raises(index.BatchError):
         index.process_event({"messages": [event()]}, env=ENV, transport=transport)
-    assert "user@example.test" not in caplog.text
-    assert "diagnostic" not in caplog.text
+    logs = capsys.readouterr().out
+    assert '"error_code":"supabase_retryable"' in logs
+    assert "user@example.test" not in logs
+    assert "diagnostic" not in logs
 
 
 def test_subscription_without_event_id_is_rejected():
