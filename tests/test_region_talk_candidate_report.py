@@ -2131,6 +2131,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(enriched[0]["source_profile_build_mode"], "publication_attestation_only")
         self.assertNotIn("source_scope", enriched[1])
 
+    def test_sparse_exhaustive_trip_series_is_external_not_local(self) -> None:
+        mod = load_module()
+        source = {
+            "source_id": "trip", "platform": "telegram", "canonical_source_key": "telegram:trip",
+            "canonical_url": "https://t.me/trip", "source_title": "География и факты",
+            "source_probe_reason": "Stopped at the configured history age cutoff.",
+        }
+        sampled = [
+            {"kaliningrad_oblast_only_scope": index < 3, "has_firsthand_visit_evidence": "true", "has_media": True}
+            for index in range(4)
+        ]
+        state = {"unified_source_queue": {"telegram:trip": {
+            "canonical_source_key": "telegram:trip", "source_url": "https://t.me/trip",
+            "publication_source_evidence_priority": "true",
+        }}}
+        enriched, count = mod.enrich_publication_attestation_source_profiles([source], {"trip": sampled}, state)
+        self.assertEqual(count, 1)
+        self.assertEqual(enriched[0]["source_scope"], "external")
+        self.assertEqual(enriched[0]["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(enriched[0]["source_profile_recent_history_exhausted"], "true")
+
+    def test_sparse_all_ko_source_without_local_title_stays_unknown(self) -> None:
+        mod = load_module()
+        sparse = mod.classify_source_profile(
+            {"source_title": "География и факты", "canonical_url": "https://t.me/geo"},
+            [{"kaliningrad_oblast_only_scope": True} for _ in range(4)],
+        )
+        dense = mod.classify_source_profile(
+            {"source_title": "География и факты", "canonical_url": "https://t.me/geo"},
+            [{"kaliningrad_oblast_only_scope": True} for _ in range(10)],
+        )
+        self.assertEqual(sparse["source_geo_class"], "unknown")
+        self.assertEqual(dense["source_geo_class"], "kaliningrad_local")
+
     def test_finalist_with_five_posts_but_unknown_scope_remains_due_for_profile(self) -> None:
         mod = load_module()
         seed = mod.Seed(

@@ -259,6 +259,12 @@ Important invariants:
   A finalist with five historical counters but still-unknown scope remains due
   for one bounded profile-producing fetch; reaching the numeric counter alone
   is not treated as completed attestation.
+  If Telegram reaches the one-year history cutoff with fewer than five posts,
+  that exhaustive recent sample is sufficient. A sparse trip series is not
+  called local merely because 3/4 posts concern KO: one non-KO post plus a
+  non-local title confirms an external source; ratio-only local inference
+  requires all ten sampled posts to concern KO (title/handle local evidence can
+  still reject immediately).
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but

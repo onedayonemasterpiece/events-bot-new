@@ -1761,7 +1761,7 @@ SOURCE_STATE_FIELDS = [
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
     "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
-    "source_profile_build_mode", "source_profile_sampled_posts",
+    "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
     "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
@@ -1789,7 +1789,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
-    "source_profile_build_mode", "source_profile_sampled_posts",
+    "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
@@ -5462,9 +5462,14 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
     ko_ratio = round(ko_hits / n, 3)
     if any(w in joined for w in ["калининград", "kaliningrad", "кёнигсберг", "kenig", "koenig", "konig", "kgd", "kld", "klgd", "39"]):
         geo = "kaliningrad_local"
-    elif sampled and 0 < ko_ratio < 0.7:
+    # A travel channel can publish a short four-post Kaliningrad trip series.
+    # Any recent non-KO post plus a non-local title proves that the source is
+    # not dedicated exclusively to the region. Conversely, infer local from
+    # content ratio alone only after the full bounded ten-post sample is all KO;
+    # sparse all-KO samples stay unknown rather than being falsely rejected.
+    elif sampled and 0 < ko_ratio < 1.0:
         geo = "nonlocal_russia"
-    elif ko_ratio >= 0.7:
+    elif len(sampled) >= 10 and ko_ratio >= 1.0:
         geo = "kaliningrad_local"
     else:
         geo = "unknown"
@@ -5531,10 +5536,15 @@ def enrich_publication_attestation_source_profiles(
             str(row.get("canonical_url") or row.get("source_url") or ""),
         ))
         sampled = posts_by_source.get(str(row.get("source_id") or ""), [])
-        if key in priority_keys and len(sampled) >= target:
+        exhaustive_recent_sample = (
+            bool(sampled)
+            and "configured history age cutoff" in str(row.get("source_probe_reason") or "").lower()
+        )
+        if key in priority_keys and (len(sampled) >= target or exhaustive_recent_sample):
             row.update(classify_source_profile(row, sampled))
             row["source_profile_build_mode"] = "publication_attestation_only"
             row["source_profile_sampled_posts"] = len(sampled)
+            row["source_profile_recent_history_exhausted"] = str(exhaustive_recent_sample).lower()
             enriched += 1
         out.append(row)
     return out, enriched
