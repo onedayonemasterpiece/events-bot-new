@@ -1,6 +1,6 @@
 # Email infrastructure, delivery and deliverability
 
-> Status: inbound/mailbox foundation live; outbound providers remain production-gated.
+> Status: inbound/mailbox and Postbox feedback infrastructure live; application outbound providers remain production-gated.
 
 ## Scope
 
@@ -45,9 +45,10 @@ outbound switches remain disabled and dry-run-only. It provides:
   addresses remain in the private Yandex envelope/SpaceWeb mailbox, not Supabase.
 
 The provider adapters are currently a tested library/control-plane foundation;
-they are not wired to a deployed Fly scheduler/worker. Do not describe either
-automated outbound stream as production-enabled until its worker, provider-event
-consumer and stream-specific canary gates are deployed.
+they are not wired to a deployed Fly scheduler/worker. The Postbox provider-event
+consumer and its stream-specific canary gates are live, but do not describe either
+automated outbound stream as production-enabled until its worker and remaining
+monitoring/warm-up gates are deployed.
 
 On 2026-07-11 the previous Supabase history drift was reconciled before applying
 email migrations: a restorable logical backup was taken, all prior migration-owned
@@ -59,7 +60,7 @@ history now matches all repository versions. Continue to use the session pooler 
 port 5432 for migration operations; the transaction pooler produced a prepared
 statement collision during the guarded first attempt.
 
-Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. The repository now contains the Postbox-specific V2 boundary: an IAM-authenticated YDS consumer computes a versioned recipient HMAC and a service-only Supabase RPC correlates it to the exact persisted Postbox `messageId` and DB-owned identity before applying an idempotent transition or suppression. The isolated live YDS/Function/DLQ resources and event destination still have to pass the release gates below, so transactional application sending remains disabled.
+Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. The live Postbox-specific V2 boundary uses an IAM-authenticated YDS consumer to compute a versioned recipient HMAC; a service-only Supabase RPC correlates it to the exact persisted Postbox `messageId` and DB-owned identity before applying an idempotent transition or suppression. Transactional application sending remains disabled because the scheduler/worker, notification-channel alerts and gradual warm-up gate are separate release work.
 
 ## Live provider state (2026-07-12)
 
@@ -81,11 +82,29 @@ Public NotiSend documentation does not document a webhook signature. A NotiSend 
   verified. A seed from `notify@kenigevents.ru` returned a real provider message
   id and reached the SpaceWeb mailbox. Its two DKIM signatures, SPF and DMARC all
   passed; SpaceWeb still placed this single fresh-domain/self-domain seed in Spam
-  without exposing a deterministic classifier reason. Postbox transport works,
-  but the isolated folder has no YDS stream, event consumer or event destination.
-  Keep transactional application sending disabled until consumer + stream +
-  destination, suppression/alert evidence and a bounded cross-provider warm-up
-  canary are completed atomically.
+  without exposing a deterministic classifier reason.
+
+  The dedicated Postbox feedback lane is now live: serverless YDB has zero
+  provisioned RCU, a 10 RCU/s throttle and deletion protection; its one-partition
+  request-unit YDS topic retains records for four hours. The Python 3.12 Function,
+  isolated runtime/trigger SAs, KMS-backed Lockbox secrets, seven-day PII-free log
+  group, YDS trigger and private 14-day YMQ DLQ are active. The configuration
+  destination is enabled and the live provider accepted all nine types, including
+  the API-reference omissions `COMPLAINT` and `RENDERING_FAILURE`.
+
+  Exactly one new controlled Postbox canary to `info@kenigevents.ru` produced real
+  `Send` and `Delivery` events through YDS -> Function -> Supabase. Both were
+  authenticated, verified and applied; replay returned two duplicates with no
+  extra transition. Live synthetic subscription, complaint and permanent-bounce
+  fixtures proved transactional/all-scope suppression, then were removed with the
+  temporary auth/outbox fixtures. A missing-correlation record produced one initial
+  call plus five 30-second retries, one DLQ item, then applied once after correlation,
+  replayed as a duplicate and was deleted; the DLQ ended empty. Destination-disable
+  rollback was exercised and the complete destination was re-enabled.
+
+  Keep transactional application sending disabled until a deployed worker,
+  Yandex Monitoring notification-channel alerts and bounded warm-up/placement
+  review are complete. The feedback path itself is no longer the blocker.
 - NotiSend verifies `news.kenigevents.ru` and the
   `events@news.kenigevents.ru` sender. The account remains on the free 200-contact
   plan and API activation is complete (`200` total, `200` available). No contacts
