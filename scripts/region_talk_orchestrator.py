@@ -2935,6 +2935,10 @@ def build_decision_plan(
             0,
             _env_int("REGION_TALK_ORCHESTRATOR_MAX_NETWORK_RESOLVES_PER_RUN", 1),
         )),
+        "REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN": str(max(
+            0,
+            _env_int("REGION_TALK_ORCHESTRATOR_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN", 1),
+        )),
     }
     actions.append(_action(
         "launch_candidate_report",

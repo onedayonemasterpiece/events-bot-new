@@ -185,6 +185,9 @@ For the comparison only,
 `REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS=1` selects cached legacy
 two-query no-hits first; this directly measures whether positions 3+ add fresh
 KO URLs. It is not the long-term breadth/depth scheduling default.
+The probe also sets both the general and exact-link network-resolve budgets to
+zero; cached `channel_id/access_hash` rows are the only allowed Telegram entity
+path during the comparison.
 
 Algorithm:
 
