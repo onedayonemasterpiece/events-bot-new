@@ -25,6 +25,12 @@ A user who does not use Yandex must not re-enter the same email on every calenda
 - The cache contains no access/refresh token, provider secret, consent grant or email-control row. It is cleared only by explicit `Забыть почту`/profile reset, account deletion, or an incompatible schema migration; ordinary navigation/reload does not clear it.
 - On a shared device, the UI must expose `Забыть почту`. A stale/pending/unverified cache never displays the promise that a D-1 reminder will be sent.
 
+### Global identity-shell coverage contract
+
+The release E2E route matrix must visit every generated HTML page family: root, listings/categories/tags, event detail, search, forwardable personal page, transport-enabled event and admin HTML surface. Each must expose the same shared identity controller and reach the same restored visible state. `.ics`, JSON, sitemap, robots and media are non-HTML exclusions.
+
+Email verification and Yandex OAuth start on a non-search control page as well as on `/poisk/`, return to the initiating cleaned URL and remain active after navigation/reload/new same-origin tab. Search must consume the restored shared session; it cannot be the only page capable of login/logout. A forwarded personal page remains bearer-accessed and is not rebound to the viewer's identity.
+
 ## Test layers
 
 | Layer | Environment | What it proves | Must not be accepted as |
@@ -39,7 +45,12 @@ Every run records a unique `e2e_run_id`, persona id, build/catalog watermark, al
 
 | ID | Scenario | Browser/localStorage assertion | DB assertion | Application assertion |
 |---|---|---|---|---|
-| `PERS-EMAIL-001` | Manual email entered once, code/link verified, page reloaded and revisited | `ke_contact_email_v1` persists as verified; field is not requested again; masked address is shown | one verified identity, no duplicate recipient/profile | calendar reminder UI reuses the address |
+| `IDENTITY-SHELL-001` | Route matrix visits every static HTML page family in anonymous, pending, email-authenticated and Yandex-authenticated states | one shared controller renders the same state/actions; no auth flicker or search-only store | no state mutation from route navigation alone | every page offers/reflects login, add email, account menu and static fallback |
+| `IDENTITY-EMAIL-001` | Manual email starts on an event/list page, code or link verifies, then browser visits search and another event | `ke_contact_email_v1` persists as verified; Supabase session is restored; field is not requested again | one passwordless verified identity, no duplicate recipient/profile | global shell and eligible features treat the user as authenticated everywhere |
+| `IDENTITY-YANDEX-001` | Yandex login starts outside search and returns to the initiating clean URL, with and without provider email | PKCE/session survives route changes; missing email exposes completion action | one identity/profile; optional manual email links to it | all pages show the same account state; search consumes it |
+| `IDENTITY-LOGOUT-001` | Logout from event/list/search account menu | session/cache state updates across navigation and same-origin tabs | durable profile/favorites/consents remain; no duplicate identity | all pages become anonymous and stay usable |
+| `IDENTITY-FORGET-001` | Email-only user chooses `Забыть почту на этом устройстве` | `ke_contact_email_v1`, pending UX and email-only browser session are cleared | server identity/consent/suppression rows are not silently deleted or mutated | every page stops showing the address; later recovery requires verification |
+| `IDENTITY-SYNC-001` | Login/logout/forget/email verification occurs in a second same-origin tab and during session expiry/backend timeout | bounded cross-tab update; expired state cleans safely; no token leakage | no duplicate link/profile rows or unauthorized write | all open pages converge or degrade to usable anonymous static content |
 | `PERS-EMAIL-002` | Yandex login returns no usable email, then manual verification | Yandex session survives; manual address is cached once | one linked identity/profile, no duplicate favorite/reminder | later surfaces reuse the verified address |
 | `PERS-CONSENT-001` | Browse and act without personalization consent | no trusted profile mutation/remote queue | zero accepted personalization rows | static order and CTA remain usable |
 | `PERS-COLLECT-001` | Consent, valid impression, dwell, detail open, like/save/calendar/share/hide | expected compact action/profile deltas with stable ids and versions | expected accepted rows once; duplicate resize/retry deduped | local profile changes immediately where allowed |
@@ -53,6 +64,10 @@ Every run records a unique `e2e_run_id`, persona id, build/catalog watermark, al
 | `PERS-QUALITY-002` | Strong preference plus explicit negative interests | positive and negative axes remain separate | profile weights/reasons are explainable | top 20 preserves relevance, exclusions and diversity without one-category collapse |
 
 The catalogue must become executable Gherkin/Playwright work. Extend the existing `static_site_personalization.feature` for browser/local fallback, and add a clearly marked planned integration feature for DB/profile/feed boundaries only when its step implementation lands. Scenario IDs must be identical in Gherkin, Playwright test titles, DB fixtures and release evidence.
+
+## Identity-shell release metric
+
+`identity_shell_html_coverage = HTML page families with the shared controller and passing state matrix / all generated HTML page families`. Release requires `100%`, zero search-only auth paths and zero state divergence after navigation/reload/cross-tab synchronization. Machine artifacts are excluded explicitly, not counted as failures.
 
 ## Golden persona: «Чайковский»
 

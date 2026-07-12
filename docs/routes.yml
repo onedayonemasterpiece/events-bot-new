@@ -412,12 +412,22 @@ features:
       - tests/e2e/features/static_site_personalization.feature
       - tests/playwright/static_personalization_contract.spec.ts
   site_user_identity:
-    status: partial_design
+    status: search_only_yandex_global_identity_shell_missing
     docs: docs/features/site-user-identity/README.md
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_search: docs/features/unsigned-personalization/authorized-event-search.md
     related_favorites: docs/features/event-favorites-calendar/README.md
+    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
+    e2e_acceptance: docs/features/unsigned-personalization/e2e-acceptance.md
     capabilities:
+      global_html_identity_shell: missing_release_blocker
+      yandex_login_from_any_html_page: missing
+      email_passwordless_login_from_any_html_page: design
+      global_session_restore: design
+      global_logout: search_only_partial
+      forget_email_on_device: design
+      cross_tab_state_sync: design
+      identity_shell_html_coverage_e2e: missing
       yandex_login_logout: partial
       yandex_verified_email_sync: design
       verified_email_identity: design

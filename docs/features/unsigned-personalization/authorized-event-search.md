@@ -14,7 +14,7 @@ Authenticated users get a one-line **Умный поиск** on a dedicated `/po
 
 When vector results are exhausted, the UI starts a separate section **«Возможно, вам будет интересно»**. This is fallback/discovery, not a continuation of exact search relevance.
 
-Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
+Anonymous users have quota `0`; search is not available until Supabase Auth has a valid session. **Current implementation limitation:** `/poisk/` still owns its Yandex login/account UI. For the public release it must consume the shared [site-wide identity shell](../site-user-identity/README.md#global-static-page-identity-shell-release-requirement): anonymous users can choose Yandex or verified passwordless email on any HTML page, and the restored session reaches search without a second login. Search-specific code must not remain a competing logout/session owner.
 
 ## Search feedback and public tag candidates
 

@@ -13,9 +13,25 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - event detail and gallery;
 - related/search/personal feed cards;
 - favorite/calendar/share/not-interested actions;
-- auth/search state and anonymous fallback;
+- shared site-wide identity/account state and anonymous fallback on every static HTML page;
 - personal page, transport, discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
+
+## Global identity/account UI
+
+The release baseline must include one shared compact identity control in the common HTML shell, not a search-only login block. Root, listings/categories/tags, event detail, search, personal-secret pages, transport-enabled pages and admin HTML surfaces all render the same controller and state vocabulary. Non-HTML artifacts are excluded.
+
+Acceptance requires:
+
+- anonymous menu offers equal **«Войти через Яндекс»** and **«Добавить почту»** paths;
+- verified manual email acts as lightweight passwordless authorization after code/link proof, without requesting extra profile information;
+- account menu consistently exposes masked identity, **«Выйти»** and, where applicable, **«Забыть почту на этом устройстве»** with non-destructive wording;
+- callback/verification returns to the initiating clean URL and session state survives navigation/reload/new same-origin tab;
+- pending, Yandex-without-email, expired and backend-degraded states stay understandable and never break static content/CTA;
+- search, favorites, reminder and personalization surfaces consume the shared controller instead of creating their own auth stores or logout behavior;
+- forwardable personal-secret pages remain accessible by secret link and do not bind the viewer's current account to the page owner merely because the shared account control is visible.
+
+The detailed identity and action semantics live in [Site user identity](../site-user-identity/README.md#global-static-page-identity-shell-release-requirement).
 
 ## Acceptance matrix
 
@@ -24,7 +40,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - keyboard/focus/accessible names and contrast;
 - reduced-motion and no-JS behavior;
 - slow network and unavailable optional backend;
-- real Android/iOS browser checks for auth, calendar and share;
+- real Android/iOS browser checks for Yandex login, email code/link login, logout, forget-email, calendar and share;
 - visual baselines tied to one immutable preview build id;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 

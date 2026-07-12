@@ -25,10 +25,14 @@
 19. **Event-quality GO requires a clean 14-day window.** The 14 consecutive days must contain zero new critical event-quality defects on release surfaces and zero recurrences/reopens of root causes declared closed; a violation resets the window after repair and replay.
 20. **Final UI sign-off belongs to the project owner/user.** Automated visual/a11y checks and reviewers provide evidence, but only the owner accepts the exact release branch/SHA, preview and deviations.
 21. **Public search-tag curation is fully automatic and LLM-first.** There is no routine human moderation. A strict multi-pass offline LLM gate plus deterministic duplicate/result/safety thresholds decides accept/merge/reject; ambiguity/provider failure remains pending and unpublished for automatic retry.
+22. **Identity state is global across every static HTML page, and verified manual email is lightweight passwordless authorization.** One shared account shell provides Yandex login, code/link email login, logout, add/change email and device-local forget-email actions everywhere. Pending/cached email is not authentication; after verification it creates/restores the same Supabase identity class used by ordinary user-owned features, without collecting extra profile data.
 
 ## Consequences
 
 - Email-only users are authenticated identities, not a parallel anonymous-subscription account model.
+- Search no longer owns authentication UI; every HTML route consumes one shared identity controller/session state, while machine artifacts remain non-interactive.
+- `Выйти` ends the browser session but does not delete durable data. `Забыть почту на этом устройстве` clears the manual-email cache/email-only browser session but does not silently withdraw consent, cancel mail or delete the account; those remain separate actions.
+- A forwarded personal-page secret remains bearer access to that page and must not be rebound to the viewer's current global identity merely because the shared account shell is visible.
 - The code and link cannot create two accounts or consume each other incorrectly; replay/attempt/TTL limits apply to the shared verification transaction.
 - `noindex` is discovery control, not access control. A forwarded personal-page URL intentionally grants read access to its holder.
 - Personal-page artifacts must exclude email, account id, raw/inferred profile internals, hidden scores and sensitive history.
@@ -48,6 +52,6 @@
 
 Product/legal owners must approve retention for current profile state, consent evidence, raw telemetry, delivery events, suppressions and personal pages. Suppression evidence must outlive normal profile deletion enough to prevent accidental resend.
 
-### Event-quality stability window
+### Non-critical event-quality thresholds
 
-Define the required canary duration and numerical “almost no defects” thresholds for duplicates, wrong location and wrong date/time. Smart Update remains prevention owner; release monitoring supplies the evidence.
+The 14-day clean window and zero-critical/zero-recurrence rules are fixed. Product/operations still must approve numerical warning thresholds for non-critical duplicate/location/date-time rates and alert trends. Smart Update remains prevention owner; release monitoring supplies the evidence.
