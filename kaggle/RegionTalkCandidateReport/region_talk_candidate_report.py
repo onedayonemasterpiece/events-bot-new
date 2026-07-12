@@ -1752,6 +1752,7 @@ SOURCE_STATE_FIELDS = [
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
     "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_profile_build_mode", "source_profile_sampled_posts",
     "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
@@ -1779,6 +1780,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_profile_build_mode", "source_profile_sampled_posts",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
@@ -5482,6 +5484,51 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
         "nonlocal_value_score": nonlocal_value,
         "source_priority_reason": f"geo={geo}; topic={topic}; ko_ratio={ko_ratio}; personal_hits={personal_hits}/{len(sampled)}",
     }
+
+
+def enrich_publication_attestation_source_profiles(
+    source_rows: list[dict[str, Any]],
+    posts_by_source: dict[str, list[dict[str, Any]]],
+    previous_state: dict[str, Any],
+) -> tuple[list[dict[str, Any]], int]:
+    """Classify only finalist sources after a representative bounded sample.
+
+    Full source profiling remains disabled in the time-bounded notebook. A
+    source blocking an otherwise text-suitable post is different: after at
+    least the configured five freshly sampled posts, persisting external/local
+    scope is required to advance or reject that post. This is O(finalists), not
+    an all-source report pass.
+    """
+    target = max(1, getenv_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
+    queue = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    priority_keys = {
+        str(row.get("canonical_source_key") or canonical_source_key(
+            str(row.get("platform") or ""),
+            str(row.get("handle") or row.get("username_or_handle") or ""),
+            str(row.get("source_url") or row.get("canonical_url") or ""),
+        ))
+        for row in queue
+        if isinstance(row, dict) and _rt_bool(row.get("publication_source_evidence_priority"))
+    } - {""}
+    if not priority_keys:
+        return source_rows, 0
+    out: list[dict[str, Any]] = []
+    enriched = 0
+    for source in source_rows:
+        row = dict(source)
+        key = str(row.get("canonical_source_key") or canonical_source_key(
+            str(row.get("platform") or ""),
+            str(row.get("handle") or row.get("username_or_handle") or ""),
+            str(row.get("canonical_url") or row.get("source_url") or ""),
+        ))
+        sampled = posts_by_source.get(str(row.get("source_id") or ""), [])
+        if key in priority_keys and len(sampled) >= target:
+            row.update(classify_source_profile(row, sampled))
+            row["source_profile_build_mode"] = "publication_attestation_only"
+            row["source_profile_sampled_posts"] = len(sampled)
+            enriched += 1
+        out.append(row)
+    return out, enriched
 
 
 def normalize_image_status(stage: str, ms: dict[str, Any]) -> dict[str, Any]:
@@ -12277,7 +12324,19 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         source_rows = enriched_source_rows
         report_event("source_profile_build_done", phase="queue_assembly", status="running", source_rows=len(source_rows), source_rows_done=len(source_rows), posts_by_source=len(posts_by_source), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     else:
-        report_event("source_profile_build_skipped", phase="queue_assembly", status="deferred", source_rows=len(source_rows), posts_by_source=len(posts_by_source), next_action="build_image_queue", runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+        source_rows, finalist_profiles_built = enrich_publication_attestation_source_profiles(
+            source_rows, posts_by_source, previous_state,
+        )
+        report_event(
+            "source_profile_build_skipped",
+            phase="queue_assembly",
+            status="deferred",
+            source_rows=len(source_rows),
+            posts_by_source=len(posts_by_source),
+            publication_attestation_profiles_built=finalist_profiles_built,
+            next_action="build_image_queue",
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
     source_class_by_id = {str(s.get("source_id") or ""): {k: s.get(k) for k in ["source_geo_class", "source_topic_class", "ko_mention_ratio_recent", "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason"]} for s in source_rows}
     for r in new_posts:
         r.update({k: v for k, v in source_class_by_id.get(str(r.get("source_id") or ""), {}).items() if v != "" and v is not None})

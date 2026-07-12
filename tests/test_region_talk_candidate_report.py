@@ -2106,6 +2106,31 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = old
 
+    def test_only_publication_finalist_gets_bounded_source_profile(self) -> None:
+        mod = load_module()
+        source_rows = [
+            {"source_id": "final", "platform": "telegram", "canonical_source_key": "telegram:final", "canonical_url": "https://t.me/final", "source_title": "Авторские путешествия"},
+            {"source_id": "other", "platform": "telegram", "canonical_source_key": "telegram:other", "canonical_url": "https://t.me/other", "source_title": "Другой канал"},
+        ]
+        posts = {
+            "final": [
+                {"kaliningrad_oblast_only_scope": index == 0, "has_firsthand_visit_evidence": "true", "has_media": True}
+                for index in range(5)
+            ],
+            "other": [{"kaliningrad_oblast_only_scope": False} for _ in range(5)],
+        }
+        state = {"unified_source_queue": {
+            "telegram:final": {
+                "canonical_source_key": "telegram:final", "source_url": "https://t.me/final",
+                "publication_source_evidence_priority": "true",
+            },
+        }}
+        enriched, count = mod.enrich_publication_attestation_source_profiles(source_rows, posts, state)
+        self.assertEqual(count, 1)
+        self.assertEqual(enriched[0]["source_scope"], "external")
+        self.assertEqual(enriched[0]["source_profile_build_mode"], "publication_attestation_only")
+        self.assertNotIn("source_scope", enriched[1])
+
     def test_image_queue_requires_fused_e5_bge_when_enabled(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")

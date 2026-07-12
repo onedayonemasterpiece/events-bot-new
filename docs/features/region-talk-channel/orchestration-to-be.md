@@ -252,6 +252,10 @@ Important invariants:
   This attestation lane is ordered ahead of generic known-KO rescans even when
   `REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES=1`; generic rescans must not
   consume all four history slots while a text-passed finalist waits.
+  The expensive all-source profile pass stays disabled, but after the finalist
+  itself has at least five freshly sampled posts CandidateReport computes and
+  persists its source scope. Thus source evidence can actually resolve to
+  external/local instead of repeatedly rescanning an `unknown` source.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but
