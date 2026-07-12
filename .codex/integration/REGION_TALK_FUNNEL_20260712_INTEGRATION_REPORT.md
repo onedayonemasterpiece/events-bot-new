@@ -10,5 +10,5 @@
 All writes were integrated serially because CandidateReport, finalizer and the
 orchestrator share one state contract and parallel edits would have conflicted.
 
-L4 head: `23830691`. Live evidence is stored under
+L4 head: `23ae4c2a`. Live evidence is stored under
 `artifacts/codex/region-talk-funnel-rework-20260712/live-run/`.

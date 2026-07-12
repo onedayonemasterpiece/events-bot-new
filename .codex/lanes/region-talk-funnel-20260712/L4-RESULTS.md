@@ -16,7 +16,7 @@ agent/region-talk/bge-m3-enrichment-test
 0e8f5e3be2a561bfa73deb55ac125ce01379c607
 
 ## Head SHA
-23830691
+23ae4c2a
 
 ## Files changed
 - Region Talk CandidateReport, ImageDiagnostic, orchestrator/finalizer/notifier helpers
