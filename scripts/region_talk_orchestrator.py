@@ -302,6 +302,17 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
+            "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
+            "fast-check дал точную ссылку / ещё pending / ошибочно локальный / спам: "
+            f"{value('confirmed_external_blogger_sources_total')}/"
+            f"{value('confirmed_external_blogger_scanned_total')}/"
+            f"{value('confirmed_external_blogger_with_ko_total')}/"
+            f"{value('confirmed_external_blogger_fast_check_hit_total')}/"
+            f"{value('confirmed_external_blogger_pending_total')}/"
+            f"{value('confirmed_external_blogger_rejected_local_total')}/"
+            f"{value('confirmed_external_blogger_rejected_spam_total')}"
+        ),
+        (
             "Поиск по словам/хештегам — найдено источников / реально просмотрено / "
             "есть предварительный KO-пост / KO подтверждён / KO подтверждён у внешнего источника: "
             f"{value('publics_keyword_discovered_total')}/"
@@ -2715,6 +2726,15 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     fast_check_no_hit_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "no_hit"]
     fast_check_local_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "local_region_source"]
     fast_check_spam_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "spam_source_reject"]
+    confirmed_external_blogger_rows = [
+        row for row in source_rows
+        if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+    ]
+    confirmed_external_blogger_scanned_rows = [row for row in confirmed_external_blogger_rows if _source_has_scan_evidence(row)]
+    confirmed_external_blogger_ko_rows = [row for row in confirmed_external_blogger_rows if _source_has_ko_candidate(row)]
+    confirmed_external_blogger_fast_hit_rows = [
+        row for row in confirmed_external_blogger_rows if str(row.get("fast_check_status") or "") == "ko_hit"
+    ]
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_unique_keys)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
@@ -2791,6 +2811,15 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "fast_check_ko_local_rejected_sources_total": len(fast_check_local_rows),
         "fast_check_ko_spam_rejected_sources_total": len(fast_check_spam_rows),
         "fast_check_ko_hit_post_links_total": sum(1 for r in fast_check_hit_rows if str(r.get("fast_check_hit_post_url") or r.get("keyword_hit_post_url") or "").strip()),
+        "confirmed_external_blogger_sources_total": len(confirmed_external_blogger_rows),
+        "confirmed_external_blogger_telegram_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("platform") or "") == "telegram"),
+        "confirmed_external_blogger_vk_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("platform") or "") == "vk"),
+        "confirmed_external_blogger_pending_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "pending_scan"),
+        "confirmed_external_blogger_scanned_total": len(confirmed_external_blogger_scanned_rows),
+        "confirmed_external_blogger_with_ko_total": len(confirmed_external_blogger_ko_rows),
+        "confirmed_external_blogger_fast_check_hit_total": len(confirmed_external_blogger_fast_hit_rows),
+        "confirmed_external_blogger_rejected_local_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
+        "confirmed_external_blogger_rejected_spam_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
         "rejected_sources_total": len(rejected_sources),
         "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
         "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,

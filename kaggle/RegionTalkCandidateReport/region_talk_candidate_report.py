@@ -6960,21 +6960,26 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
                 break
 
     def mandatory_rank(row: dict[str, Any]) -> int:
-        if str(row.get("last_scan_run_id") or "") == run_id:
+        # A one-time external-evidence backfill must win over broad source
+        # rollups that can stamp last_scan_run_id on hundreds of rows. Without
+        # this ordering a bounded 80-row handoff persisted only the two
+        # evidence rows that happened to overlap the broad rollup and silently
+        # lost the other high-probability sources.
+        if str(row.get("external_blogger_evidence_attached_run_id") or "") == run_id:
+            return 0
+        if str(row.get("admitted_run_id") or "") == run_id:
             return 0
         if str(row.get("last_fast_check_run_id") or "") == run_id:
             return 1
         if str(row.get("keyword_evidence_run_id") or "") == run_id:
             return 2
-        if str(row.get("external_blogger_evidence_attached_run_id") or "") == run_id:
-            return 2
-        if str(row.get("admitted_run_id") or "") == run_id:
-            return 2
-        if str(row.get("status_changed_this_run") or "").lower() == "true":
+        if str(row.get("last_scan_run_id") or "") == run_id:
             return 3
-        if str(row.get("queue_seq_repaired_this_run") or "").lower() == "true":
+        if str(row.get("status_changed_this_run") or "").lower() == "true":
             return 4
-        return 5
+        if str(row.get("queue_seq_repaired_this_run") or "").lower() == "true":
+            return 5
+        return 6
 
     ordered_selected = sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))
     if len(ordered_selected) <= max_rows:

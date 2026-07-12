@@ -1203,6 +1203,50 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         handoff = mod._source_queue_handoff_rows(rows, 50, "evidence-run")
         self.assertTrue(any(row.get("canonical_source_key") == "telegram:externaltraveller" for row in handoff))
 
+    def test_external_blogger_backfill_wins_bounded_handoff_over_broad_scan_rollup(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS")
+        try:
+            os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "80"
+            run_id = "evidence-run"
+            rows = [
+                {
+                    "canonical_source_key": f"telegram:generic{idx}",
+                    "source_url": f"https://t.me/generic{idx}",
+                    "platform": "telegram",
+                    "queue_order": idx + 1,
+                    "source_queue_status": "pending_scan",
+                    "last_scan_run_id": run_id,
+                }
+                for idx in range(100)
+            ]
+            rows.extend([
+                {
+                    "canonical_source_key": f"telegram:evidence{idx}",
+                    "source_url": f"https://t.me/evidence{idx}",
+                    "platform": "telegram",
+                    "queue_order": 1000 + idx,
+                    "source_queue_status": "pending_scan",
+                    "external_blogger_evidence_status": "confirmed_external",
+                    "external_blogger_evidence_attached_run_id": run_id,
+                    "admitted_run_id": run_id,
+                }
+                for idx in range(53)
+            ])
+
+            handoff = mod._source_queue_handoff_rows(rows, 1, run_id)
+
+            self.assertEqual(len(handoff), 80)
+            self.assertEqual(
+                sum(row.get("external_blogger_evidence_status") == "confirmed_external" for row in handoff),
+                53,
+            )
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old
+
     def test_confirmed_blogger_locations_lead_adaptive_queries(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")
