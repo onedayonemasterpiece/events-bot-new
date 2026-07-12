@@ -41,7 +41,14 @@ At minimum track by import batch and day:
 - root causes closed with passing replay;
 - time from detection to mitigation and prevention closure.
 
-Numerical GO thresholds and the required stable window are global product/release decisions. The release owner must not replace missing thresholds with an informal “looks clean”.
+The product owner approved the release stability gate on 2026-07-12:
+
+- **14 consecutive days** of the normal daily/full-inventory monitoring cadence before GO;
+- **0 new critical event-quality defects** reaching public release surfaces;
+- **0 recurrences/reopens of a defect family whose root cause was declared closed**;
+- any violation resets the window after mitigation, root-cause correction and passing closure-grade replay.
+
+Lower-severity defect-rate targets still need measured baselines, but they cannot be used to average away a critical defect or a repeated closed root cause. The release owner must not replace the gate with an informal “looks clean”.
 
 ## Projection safety boundary
 
@@ -59,4 +66,4 @@ Use the current incident index and at least the contracts linked from the [stati
 - replay commands/results and DB diffs;
 - current Telegram/VK/Telegraph/static/ICS evidence;
 - remaining risks, owner and deadline;
-- approved stability-window result.
+- complete 14-day stability-window result with zero critical defects and zero closed-root-cause recurrences.

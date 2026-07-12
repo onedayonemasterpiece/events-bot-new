@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static release / accepted product decisions**: fixed the event-quality GO gate at 14 clean consecutive days with zero critical defects/closed-root-cause recurrences, assigned final UI sign-off to the project owner/user, and made public search-tag publication fully automatic through a strict fail-closed multi-pass LLM gate with no routine manual moderation.
 - **Personalization Supabase / ecological capacity**: promoted the approximately 500 MB plan limit into a release gate with compact current-state storage, bounded evidence/TTL aggregation, YDB/Object Storage offload boundaries, Green-to-Critical operating bands, growth forecasts and near-cap shedding that preserves consent/favorite/reminder/suppression control writes.
 - **Static personalization / release acceptance**: made manual verified email a one-time versioned localStorage entry with explicit forget/reset, and required traced Playwright/Gherkin E2E across browser state, accepted Supabase evidence, profile formation and next-feed application; mature golden personas such as «Чайковский» must reach a relevant event within 20 valid card impressions.
 - **Static personal announcements / release plan**: required a truthful D-1 Postbox reminder state after calendar save, a shared Yandex-or-manual verified-email journey, and saved-search promotion into normalized/idempotent public static tags only after semantic and result-set novelty checks against existing tags.

@@ -195,7 +195,7 @@ Smart Update является владельцем семантического 
 - [ ] На release cutoff выполнить полный аудит exact active/future catalog и устранить все подтверждённые high-impact дефекты.
 - [ ] `silent`, merged/review/cancelled/inactive и структурно невалидные rows fail closed across listings, sitemap, related, search snapshots and ICS; это узкий projection safety net, а не замена Smart Update semantics.
 - [ ] Вести dashboard/trend: абсолютное число и rate дублей, wrong-location и wrong-date-time по import batch/day; отдельно new incidents, reopened incidents и root causes closed with replay.
-- [ ] Перед GO показать согласованное стабильное окно без новых критических повторов и с “почти нулевым” уровнем дефектов; длительность окна и числовые пороги утверждаются владельцем продукта.
+- [ ] Перед GO показать **14 последовательных дней** с `0` новых critical event-quality defects и `0` recurrence/reopen по root causes, объявленным закрытыми. Любое нарушение перезапускает окно после repair + closure-grade replay; lower-severity baseline не может скрыть critical/repeat средним значением.
 
 Обязательные regression contracts:
 
@@ -239,6 +239,7 @@ Smart Update является владельцем семантического 
 - [ ] Curation сравнивает candidate со всеми pending/accepted tags по normalized hash, semantic intent и top-K result-set overlap; эквивалентный запрос привязывается к существующему canonical tag.
 - [ ] Новый публичный тег принимается только при доказанной заметной новизне выдачи на утверждённом multi-user golden pack; числовые overlap/novelty thresholds и минимальный объём качественных результатов зафиксированы до implementation acceptance.
 - [ ] Каждый static build пересчитывает accepted tag по текущему каталогу, публикует canonical anonymous HTML/JSON + manifest/fingerprint, suppresses empty/stale tags и не вызывает embedding/LLM при обычном просмотре страницы.
+- [ ] Tag curation полностью автоматическая: strict multi-pass offline LLM normalization/audit + deterministic overlap/safety/eligibility gates; `accept|merge|reject` исполняются без human queue, а disagreement/low-confidence/provider/schema failure остаётся private `pending` и fail-closed автоматически retry later.
 
 ### Stage 4 — Identity, telemetry, favorites, calendar
 
@@ -305,7 +306,7 @@ Smart Update является владельцем семантического 
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
-- [ ] 7-day limited canary with event-quality and availability dashboards.
+- [ ] Limited canary continues through the approved **14-day event-quality stability window** with availability/quality dashboards; GO requires zero critical defects and zero recurrences of closed root causes across the full window.
 - [ ] Rollback drill and incident on-call/contact tree executed.
 - [ ] Remove root `noindex` only after all launch blockers are signed off.
 - [ ] Post-launch 72-hour hypercare, then 14-day review before declaring stable.
@@ -327,7 +328,7 @@ Smart Update является владельцем семантического 
 | Static page availability | `>=99.9%` monthly for canonical HTML/assets/ICS |
 | Build scheduling | due time = last effective Smart Update + 15 min |
 | Publication freshness | approve separate P95/P99 from due time to atomic promotion; do not call `+15 min` a publication SLA |
-| Known critical catalog defects at cutover | `0` duplicate identities / wrong logistics / invalid dates in release inventory |
+| Known critical catalog defects at cutover | `0` duplicate identities / wrong logistics / invalid dates in release inventory, plus 14-day window with zero new criticals and zero closed-root-cause recurrences |
 | Catalog projection coverage | `100%` eligible events present; `0` ineligible/quarantined leaks |
 | Search/vector current coverage | `>=95%` embeddings plus explicit fail-safe for uncovered rows |
 | Rollback | last-good release restorable by documented operator action and drill |
@@ -361,15 +362,15 @@ Smart Update является владельцем семантического 
 3. **Identity — решено на product level:** email-only user becomes a Supabase Auth identity through code or link; anonymous profile links automatically/intelligently under eligible personalization consent.
 4. **Favorites — решено:** calendar save и favorite — один durable saved-event state; like остаётся отдельным сигналом; email reminder — отдельный explicit transactional opt-in.
 5. **Email reminder — решено на product level:** один D-1 (`24h`) reminder для saved event при verified email + consent; остаются implementation decisions по quiet hours/catch-up и общая legal unsubscribe policy.
-6. **UI freeze:** какая ветка/preview является release baseline и кто даёт product/design sign-off?
+6. **UI freeze — owner решён:** финальный sign-off даёт project owner/user; execution task ещё должна выбрать точную branch/SHA + immutable preview baseline.
 7. **Transport:** первый provider/city matrix, источник истины, лицензирование/кэширование и acceptable stale window.
 8. **Discussion signals:** допустимые источники комментариев, retention/PII/moderation и правила показа negative/price signals.
 9. **ArtKodex:** API/poller owner, task/thread contract, retry/idempotency and structured repair-result schema.
-10. **SLO:** availability, publication freshness, event-quality error budget and canary duration.
+10. **Event-quality window — решено:** 14 consecutive days, `0` new critical defects, `0` recurrence/reopen of closed root causes; остаются availability/publication-freshness numerical SLO.
 11. **Related semantics:** strict Gemma acceptance for “Похожие” vs pgvector-only neutral continuation; required precision@K/coverage/diversity thresholds.
-12. **Public search-tag novelty:** утвердить числовые semantic/result-overlap thresholds, minimum result count и moderator/owner для accept/merge/reject; product rule о mandatory normalization/idempotency/material difference уже принят.
+12. **Public search-tag governance — решено:** strict fully automated LLM-first accept/merge/reject, no manual process, fail-closed private pending/retry. Implementation/eval task утверждает numerical semantic/result-overlap thresholds и minimum result count against the golden pack.
 13. **Personalization production KPI:** golden release gate `<=20` принят; после canary утвердить production percentile/SLO и minimum relevant-supply coverage, не смешивая mature/cold-start/no-supply cohorts.
-14. **Retention/ecological budget:** утвердить proposed defaults (served lists `21d`, sessions `30d`, strong-action audit `90d`, inactive profile `365d`, daily aggregates `12mo`) и отдельную legal retention для consent/suppression/send-critical evidence.
+14. **Retention/ecological budget — требуется понятное product решение:** забывать/анонимизировать ли compact interest profile после `365d` без визита? Короткие technical logs всё равно удаляются раньше; consent/suppression/send-critical evidence живёт по отдельной safety/legal policy.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 

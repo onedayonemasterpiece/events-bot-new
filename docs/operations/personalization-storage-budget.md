@@ -52,6 +52,8 @@ The release target is Green with enough forecast headroom to remain below Orange
 
 ## Proposed retention defaults for product approval
 
+In plain product terms, the only unresolved user-facing question is: **for how long should the service remember an inactive person's compact interests before forgetting/anonymizing that profile?** The recommended answer is one year after the last visit. Short technical logs are removed much earlier automatically, while consent/suppression evidence follows its separate safety/legal policy.
+
 | Data | Proposed default |
 |---|---:|
 | served-list summaries | 21 days, then daily aggregate |
@@ -63,7 +65,7 @@ The release target is Green with enough forecast headroom to remain below Orange
 | inactive compact profile | 365 days since last seen, subject to consent/delete policy |
 | consent, suppression and send-critical evidence | separate legal/product policy; never deleted merely to satisfy telemetry budget |
 
-These defaults become release truth only after product/legal approval. Until then, implementation must choose the shortest safe end of any documented range.
+The product owner has not yet approved these retention periods. Until the simple inactive-profile question and legal exceptions are approved, implementation must choose the shortest safe end of any documented technical-log range and must not treat the table above as final release truth.
 
 ## Monitoring and forecast
 

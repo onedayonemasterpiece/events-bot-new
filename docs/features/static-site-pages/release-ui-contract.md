@@ -1,6 +1,6 @@
 # Static event-page release UI contract
 
-> Status: **release baseline pending product/design sign-off**.
+> Status: **release baseline pending selection; final product/design sign-off owner is the project owner/user who accepted the release plan on 2026-07-12**.
 
 ## Purpose
 
@@ -26,7 +26,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - slow network and unavailable optional backend;
 - real Android/iOS browser checks for auth, calendar and share;
 - visual baselines tied to one immutable preview build id;
-- product/design owner signs off exact branch/SHA and open deviations.
+- the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 
 ## Branch rule
 

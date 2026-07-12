@@ -22,6 +22,9 @@
 16. **Manual email is entered once per browser.** Without Yandex, the normalized address and pending/verified UX state persist in versioned localStorage and are reused on later visits/calendar saves. Supabase remains verification/identity/consent authority; localStorage cannot independently authorize mail and has an explicit `Забыть почту` action.
 17. **Personalization release acceptance is end-to-end and metric-backed.** Playwright/Gherkin must prove localStorage collection, accepted/deduped DB records, profile formation and application to a later feed. For every eligible mature golden persona, including «Чайковский», the first relevant event must be reached within at most 20 validly inspected cards.
 18. **Supabase usage must fit a compact ecological 500 MB envelope.** Supabase keeps current durable state and bounded evidence, not raw telemetry/artifacts. LocalStorage/CDN avoid per-view DB work; de-identified high-volume analytics may flow asynchronously to YDB with TTL. Nonessential writes stop before user-control/send-safety state is endangered.
+19. **Event-quality GO requires a clean 14-day window.** The 14 consecutive days must contain zero new critical event-quality defects on release surfaces and zero recurrences/reopens of root causes declared closed; a violation resets the window after repair and replay.
+20. **Final UI sign-off belongs to the project owner/user.** Automated visual/a11y checks and reviewers provide evidence, but only the owner accepts the exact release branch/SHA, preview and deviations.
+21. **Public search-tag curation is fully automatic and LLM-first.** There is no routine human moderation. A strict multi-pass offline LLM gate plus deterministic duplicate/result/safety thresholds decides accept/merge/reject; ambiguity/provider failure remains pending and unpublished for automatic retry.
 
 ## Consequences
 
@@ -35,6 +38,7 @@
 - Public search-tag novelty is judged by normalized intent and verified result-set overlap, not by different wording alone; merged candidates point to the existing canonical tag.
 - A passing localStorage test or a passing DB insert alone is insufficient personalization evidence; the same correlated run must show that the expected profile changed the next served list.
 - The provider limit is a capacity ceiling, not a utilization target; release starts in the Green band with measured growth/compaction headroom and a tested near-cap kill switch.
+- Search-tag automation fails closed rather than weakening checks to avoid a manual queue; `pending` is private and never appears in navigation/sitemap.
 - All eleven release workstreams in the readiness checklist remain blockers.
 - The public recommendation-email launch can reach fewer than 200 users during canary or when provider seed/service contacts reduce usable plan capacity, but it can never exceed 200 active consented users without a later explicit product and infrastructure decision.
 
