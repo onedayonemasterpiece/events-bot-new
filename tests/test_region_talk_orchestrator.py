@@ -1186,6 +1186,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "confirmed_external_blogger_scanned_total": 8,
             "confirmed_external_blogger_with_ko_total": 5,
             "confirmed_external_blogger_fast_check_hit_total": 3,
+            "confirmed_external_blogger_vk_search_checked_total": 7,
+            "confirmed_external_blogger_vk_search_hit_total": 4,
             "confirmed_external_blogger_pending_total": 45,
             "confirmed_external_blogger_rejected_local_total": 0,
             "confirmed_external_blogger_rejected_spam_total": 0,
@@ -1203,7 +1205,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("Технический backlog", text)
         self.assertIn("Источники, где уже найден хотя бы один возможный пост о КО: 91", text)
         self.assertIn("Подтверждённые внешние блогеры", text)
-        self.assertIn("53/8/5/3/45/0/0", text)
+        self.assertIn("53/8/5/3/7/4/45/0/0", text)
         self.assertIn("новые тексты к чтению / готовы к повторному решению после BGE", text)
         self.assertIn("67/0/0/0/0", text)
         self.assertIn("Публикационный отбор", text)

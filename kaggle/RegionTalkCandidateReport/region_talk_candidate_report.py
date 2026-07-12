@@ -1149,7 +1149,21 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             max(0, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN", 2)),
             len(confirmed_external_priority),
         )
-        confirmed_external_selected = confirmed_external_priority[:confirmed_external_slots]
+        evidence_telegram = [seed for seed in confirmed_external_priority if seed.platform == "telegram"]
+        evidence_vk = [seed for seed in confirmed_external_priority if seed.platform == "vk"]
+        evidence_other = [seed for seed in confirmed_external_priority if seed.platform not in {"telegram", "vk"}]
+        balanced_evidence: list[Seed] = []
+        # VK does not need a Telegram resolve, while one Telegram source per
+        # run steadily warms the private entity cache. Interleave platforms so
+        # 32 VK rows cannot postpone all Telegram evidence for 16 runs.
+        while len(balanced_evidence) < confirmed_external_slots and (evidence_telegram or evidence_vk or evidence_other):
+            if evidence_telegram and len(balanced_evidence) < confirmed_external_slots:
+                balanced_evidence.append(evidence_telegram.pop(0))
+            if evidence_vk and len(balanced_evidence) < confirmed_external_slots:
+                balanced_evidence.append(evidence_vk.pop(0))
+            if evidence_other and len(balanced_evidence) < confirmed_external_slots:
+                balanced_evidence.append(evidence_other.pop(0))
+        confirmed_external_selected = balanced_evidence
         publication_completion_pairs = [
             (seed, due) for seed, due in annotated
             if bool(due.get("due")) and str(due.get("reason") or "") == "publication_source_evidence_completion"
@@ -1815,6 +1829,8 @@ SOURCE_STATE_FIELDS = [
     "history_posts_with_dates", "history_avg_post_age_days",
     "history_newest_post_age_days", "history_oldest_post_age_days",
     "history_newest_post_date", "history_oldest_post_date",
+    "vk_wall_search_query_count", "vk_wall_search_queries_attempted",
+    "vk_wall_search_matched_query", "vk_wall_search_hits",
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
@@ -1847,6 +1863,8 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "history_posts_with_dates", "history_avg_post_age_days",
     "history_newest_post_age_days", "history_oldest_post_age_days",
     "history_newest_post_date", "history_oldest_post_date",
+    "vk_wall_search_query_count", "vk_wall_search_queries_attempted",
+    "vk_wall_search_matched_query", "vk_wall_search_hits",
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
@@ -6274,6 +6292,23 @@ def external_blogger_evidence_source_rows(previous_state: dict[str, Any], run_id
     return out
 
 
+def external_blogger_queue_evidence_fields(row: dict[str, Any] | None) -> dict[str, Any]:
+    item = row if isinstance(row, dict) else {}
+    if str(item.get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external":
+        return {}
+    out = {
+        field: item.get(field)
+        for field in EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
+        if item.get(field) not in (None, "")
+    }
+    out.update({
+        "source_scope": "external",
+        "source_geo_class": "external",
+        "source_topic_class": item.get("source_topic_class") or "travel_blogger",
+    })
+    return out
+
+
 def _previous_rows_dict(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, dict):
         return [dict(v) for v in value.values() if isinstance(v, dict)]
@@ -8668,18 +8703,30 @@ def source_fast_check_query_bank_for_row(source_row: dict[str, Any] | None = Non
     row = source_row if isinstance(source_row, dict) else {}
     if str(row.get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external":
         return bank
+    matched = source_fast_check_evidence_priority_queries(row, bank=bank)
+    return list(dict.fromkeys(matched + bank))
+
+
+def source_fast_check_evidence_priority_queries(
+    source_row: dict[str, Any] | None = None,
+    *,
+    bank: list[str] | None = None,
+) -> list[str]:
+    row = source_row if isinstance(source_row, dict) else {}
+    if str(row.get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external":
+        return []
     evidence_text = normalize_geo_text(" ".join([
         str(row.get("external_blogger_locations_text") or ""),
         str(row.get("external_blogger_confirmation_basis") or ""),
     ]))
     if not evidence_text:
-        return bank
+        return []
     matched: list[str] = []
-    for query in bank:
+    for query in bank or source_fast_check_query_bank():
         normalized_query = normalize_geo_text(query)
         if normalized_query and term_in_text(normalized_query, evidence_text):
             matched.append(query)
-    return list(dict.fromkeys(matched + bank))
+    return list(dict.fromkeys(matched))
 
 
 def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -9330,10 +9377,20 @@ def vk_domain_from_seed(seed: Seed) -> str:
     return canonical_handle(seed.handle).lstrip("@")
 
 
-def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def fetch_vk_wall_for_seed(
+    seed: Seed,
+    output_dir: Path,
+    max_posts: int,
+    *,
+    source_row: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     token = vk_wall_token()
-    src = source_status_row(seed, "skipped_vk_wall_not_configured" if not token else "ok", vk_wall_probe_status="not_configured" if not token else "ok", fetch_attempted=str(bool(token)).lower())
+    evidence_fields = external_blogger_queue_evidence_fields(source_row)
+    src = {
+        **source_status_row(seed, "skipped_vk_wall_not_configured" if not token else "ok", vk_wall_probe_status="not_configured" if not token else "ok", fetch_attempted=str(bool(token)).lower()),
+        **evidence_fields,
+    }
     if not token:
         src["source_probe_reason"] = "VK token is not configured; source retained in frontier/backlog"
         return src, []
@@ -9354,7 +9411,56 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
             src.update({"fetch_status": status, "vk_wall_probe_status": probe, "fetch_error_code": err.get("error_code"), "fetch_error_message": str(err.get("error_msg") or "")[:180], "vk_token_kind": vk_wall_token_kind()})
             return src, []
         response = payload.get("response") or {}
-        items = response.get("items") or []
+        items = list(response.get("items") or [])
+        vk_search_queries_attempted: list[str] = []
+        vk_search_matched_query = ""
+        vk_search_hits = 0
+        if evidence_fields and getenv_bool("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED", True):
+            owner_id = next((item.get("owner_id") or item.get("from_id") for item in items if isinstance(item, dict) and (item.get("owner_id") or item.get("from_id"))), None)
+            query_limit = max(1, getenv_int("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE", 8))
+            evidence_queries = source_fast_check_evidence_priority_queries(source_row)[:query_limit]
+            if not evidence_queries:
+                evidence_queries = source_fast_check_query_bank()[: min(3, query_limit)]
+            cutoff_ts = int(history_min_post_datetime().timestamp())
+            if owner_id:
+                for query in evidence_queries:
+                    time.sleep(random.uniform(
+                        getenv_float("REGION_TALK_VK_SEARCH_DELAY_MIN_SECONDS", 0.6),
+                        getenv_float("REGION_TALK_VK_SEARCH_DELAY_MAX_SECONDS", 1.2),
+                    ))
+                    search_params = urllib.parse.urlencode({
+                        "owner_id": owner_id,
+                        "query": query,
+                        "owners_only": 1,
+                        "count": max(1, min(100, getenv_int("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_RESULTS_PER_QUERY", 20))),
+                        "extended": 1,
+                        "access_token": token,
+                        "v": os.getenv("VK_API_VERSION") or "5.199",
+                    })
+                    with urllib.request.urlopen("https://api.vk.com/method/wall.search?" + search_params, timeout=getenv_int("REGION_TALK_VK_TIMEOUT_SECONDS", 20)) as search_resp:
+                        search_payload = json.loads(search_resp.read().decode("utf-8"))
+                    vk_search_queries_attempted.append(query)
+                    if search_payload.get("error"):
+                        continue
+                    search_response = search_payload.get("response") or {}
+                    search_items = [
+                        item for item in (search_response.get("items") or [])
+                        if isinstance(item, dict)
+                        and int(item.get("date") or 0) >= cutoff_ts
+                        and source_fast_check_query_matches_text(query, str(item.get("text") or ""))
+                    ]
+                    if search_items:
+                        vk_search_matched_query = query
+                        vk_search_hits = len(search_items)
+                        items.extend(search_items)
+                        break
+        unique_items: dict[str, dict[str, Any]] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_key = f"{item.get('owner_id') or item.get('from_id')}:{item.get('id')}"
+            unique_items[item_key] = item
+        items = list(unique_items.values())
         groups = {str(g.get("id")): g for g in response.get("groups") or [] if isinstance(g, dict)}
         posts: list[dict[str, Any]] = []
         media_budget = getenv_int("REGION_TALK_VK_MAX_MEDIA_DOWNLOADS_PER_RUN", getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 120))
@@ -9397,9 +9503,9 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
             forwarded_url = f"https://vk.com/wall{origin_owner}_{origin_mid}" if origin_owner and origin_mid else ""
             group = groups.get(str(abs(int(owner_id))) if str(owner_id).lstrip("-").isdigit() else "") or {}
             title = str(group.get("name") or seed.source_title or domain)
-            post_row = {"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else ""}
+            post_row = {"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else "", **evidence_fields}
             append_post_online(posts, post_row, run_id=run_id, stage="vk_wall_fetch")
-        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind()})
+        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_plus_evidence_search" if vk_search_queries_attempted else "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "VK wall.get plus bounded evidence-location wall.search" if vk_search_queries_attempted else "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind(), "vk_wall_search_query_count": len(vk_search_queries_attempted), "vk_wall_search_queries_attempted": "|".join(vk_search_queries_attempted), "vk_wall_search_matched_query": vk_search_matched_query, "vk_wall_search_hits": vk_search_hits})
         return src, posts
     except Exception as exc:
         src.update({"fetch_status": "error_vk_wall_fetch", "vk_wall_probe_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]})
@@ -10363,11 +10469,12 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         "progress_label": f"selected sources {len(selected)}",
     })
     for seed in selected:
+        selected_queue_row = _source_queue_row_for_seed(seed, previous_state)
         if seed.platform == "telegram":
             continue
         if seed.platform == "vk":
             if fetch_enabled:
-                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts)
+                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts, source_row=selected_queue_row)
                 append_source_row_online(source_rows, vk_row, run_id=run_id, stage="source_fetch", sources_total=len(selected))
                 posts.extend(vk_posts)
             else:
@@ -10375,7 +10482,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 append_source_row_online(source_rows, source_status_row(seed, status_value, vk_wall_probe_status="fetch_disabled", source_probe_reason="VK wall fetch disabled by REGION_TALK_FETCH_TELEGRAM=0"), run_id=run_id, stage="source_fetch", sources_total=len(selected))
         elif seed.platform == "vkvideo":
             if fetch_enabled and getenv_bool("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", True) and "vk.com/" in seed.url.lower() and "/video" not in seed.url.lower():
-                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts)
+                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts, source_row=selected_queue_row)
                 vk_row["platform"] = "vk"
                 vk_row["source_probe_reason"] = (vk_row.get("source_probe_reason") or "") + "; source row was marked vkvideo but has a public vk.com wall URL, fetched as VK wall fallback"
                 append_source_row_online(source_rows, vk_row, run_id=run_id, stage="source_fetch", sources_total=len(selected))
@@ -10487,7 +10594,12 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 append_source_row_online(source_rows, web_row, run_id=run_id, stage="source_fetch_public_web", sources_total=len(monitored))
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · public web · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": web_row.get("fetch_status"), "telegram_resolve_status": web_row.get("telegram_resolve_status"), "posts_scanned": web_row.get("posts_scanned", 0), "last_seen_post_date": web_row.get("last_seen_post_date", ""), "history_fetch_runtime_seconds": web_row.get("history_fetch_runtime_seconds", ""), "fetch_error_code": web_row.get("fetch_error_code", ""), "fetch_error_message": web_row.get("fetch_error_message", "")})
                 continue
-            src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
+            selected_queue_row = _source_queue_row_for_seed(seed, previous_state)
+            evidence_fields = external_blogger_queue_evidence_fields(selected_queue_row)
+            src_row = {
+                **source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false"),
+                **evidence_fields,
+            }
             surface_terminal = source_local_region_terminal_fields({
                 "source_title": seed.source_title,
                 "handle": seed.handle,
@@ -10666,7 +10778,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                             elif from_name:
                                 forwarded_from_confidence = 0.45
                         embedded_links = telegram_message_embedded_links(msg)
-                        post_row = {"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "embedded_links": embedded_links, "embedded_links_json": serialize_embedded_links(embedded_links), "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""}
+                        post_row = {"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "embedded_links": embedded_links, "embedded_links_json": serialize_embedded_links(embedded_links), "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else "", **evidence_fields}
                         source_post_rows.append(post_row)
                         if len(seen) >= max_posts:
                             break

@@ -187,6 +187,13 @@ due confirmed-blogger rows (`REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN
 The remaining slots still serve already text-passed source attestation and
 known-KO rescans, so discovery does not starve the publication tail and the
 publication tail cannot consume every source slot indefinitely.
+Those two evidence slots are platform-balanced: one Telegram source steadily
+warms/uses the single controlled entity-resolve lane while one VK source can be
+processed without Telegram. Confirmed VK rows use their evidence locations in
+a bounded `wall.search` pass (default up to eight evidence-specific queries,
+stop on the first fresh exact-text hit) in addition to the recent wall slice;
+this avoids treating ten recent non-trip posts as a meaningful check of a
+blogger known to have visited the region.
 
 In `adaptive_cursor_v1`, known locations from the evidence row are moved to the
 front of that source's otherwise unchanged place bank. Thus a blogger known to

@@ -192,6 +192,9 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_TABLE": "region_talk_external_blogger_evidence",
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS": "2000",
     "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "2",
+    "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED": "1",
+    "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE": "8",
+    "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_RESULTS_PER_QUERY": "20",
     "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS": "5",
     "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS": "9",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS": "330",
@@ -304,11 +307,13 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
             "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
-            "fast-check дал точную ссылку / ещё pending / ошибочно локальный / спам: "
+            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё pending / ошибочно локальный / спам: "
             f"{value('confirmed_external_blogger_sources_total')}/"
             f"{value('confirmed_external_blogger_scanned_total')}/"
             f"{value('confirmed_external_blogger_with_ko_total')}/"
             f"{value('confirmed_external_blogger_fast_check_hit_total')}/"
+            f"{value('confirmed_external_blogger_vk_search_checked_total')}/"
+            f"{value('confirmed_external_blogger_vk_search_hit_total')}/"
             f"{value('confirmed_external_blogger_pending_total')}/"
             f"{value('confirmed_external_blogger_rejected_local_total')}/"
             f"{value('confirmed_external_blogger_rejected_spam_total')}"
@@ -2819,6 +2824,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "confirmed_external_blogger_scanned_total": len(confirmed_external_blogger_scanned_rows),
         "confirmed_external_blogger_with_ko_total": len(confirmed_external_blogger_ko_rows),
         "confirmed_external_blogger_fast_check_hit_total": len(confirmed_external_blogger_fast_hit_rows),
+        "confirmed_external_blogger_vk_search_checked_total": sum(1 for row in confirmed_external_blogger_rows if _safe_int(row.get("vk_wall_search_query_count")) > 0),
+        "confirmed_external_blogger_vk_search_hit_total": sum(1 for row in confirmed_external_blogger_rows if _safe_int(row.get("vk_wall_search_hits")) > 0),
         "confirmed_external_blogger_rejected_local_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
         "confirmed_external_blogger_rejected_spam_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
         "rejected_sources_total": len(rejected_sources),
@@ -2964,6 +2971,16 @@ def build_decision_plan(
         ),
         "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": (
             os.getenv("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN") or "2"
+        ),
+        "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED": (
+            "1" if (os.getenv("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED") or "1").strip().lower()
+            in {"1", "true", "yes", "on"} else "0"
+        ),
+        "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE": (
+            os.getenv("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE") or "8"
+        ),
+        "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_RESULTS_PER_QUERY": (
+            os.getenv("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_RESULTS_PER_QUERY") or "20"
         ),
         "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS": str(max(
             0,
