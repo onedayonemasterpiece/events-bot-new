@@ -723,6 +723,39 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["fast_check_exact_posts_video_manual_review_total"], 1)
         self.assertEqual(metrics["fast_check_exact_posts_text_rejection_reasons"], {"vector_reject_multi_region_roundup": 1})
 
+    def test_fast_check_exact_metrics_count_image_fetch_pending_as_text_passed(self) -> None:
+        mod = load_module()
+        sources = [
+            {
+                "fast_check_status": "ko_hit",
+                "fast_check_hit_post_url": "https://t.me/krasivoorussia/6168",
+                "source_queue_status": "processed_found_ko_candidate",
+            }
+        ]
+        processed = [
+            {
+                "post_url": "https://t.me/krasivoorussia/6168",
+                "updated_at": "2",
+                "current_stage": "image_fetch_retry_needed",
+                "drop_gate": "image_fetch_gate",
+                "rejection_reason": "needs_actual_image_fetch",
+                "fresh_enough": True,
+                "kaliningrad_oblast_only_scope": True,
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+            }
+        ]
+        vectors = [
+            {"post_url": "https://t.me/krasivoorussia/6168", "model_short": "e5"},
+            {"post_url": "https://t.me/krasivoorussia/6168", "model_short": "bge_m3"},
+        ]
+
+        metrics = mod._fast_check_exact_post_metrics(sources, processed, [], [], [], vectors)
+
+        self.assertEqual(metrics["fast_check_exact_posts_dual_semantic_accept_total"], 1)
+        self.assertEqual(metrics["fast_check_exact_posts_strict_text_accepted_total"], 1)
+        self.assertEqual(metrics["fast_check_exact_posts_text_rejected_total"], 0)
+
     def test_keyword_source_metrics_include_keyword_edge_targets(self) -> None:
         mod = load_module()
         source_rows = [

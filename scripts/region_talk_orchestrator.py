@@ -267,7 +267,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         (
             "Fast-check sources with keyword hit / exact posts read / dual-vector posts / "
-            "text semantically matched / full publication-text gate passed / photo handoff / video handoff / Gemini queue: "
+            "text semantically matched / text fully suitable before media review / photo handoff / video handoff / Gemini queue: "
             f"{value('fast_check_keyword_match_sources_total')}/"
             f"{value('fast_check_exact_posts_processed_unique_total')}/"
             f"{value('fast_check_exact_posts_dual_vectorized_total')}/"
@@ -1775,13 +1775,40 @@ def _fast_check_exact_post_metrics(
         current_stage = str(row.get("current_stage") or "").lower()
         drop_gate = str(row.get("drop_gate") or "").lower()
         rejection = str(row.get("rejection_reason") or row.get("rejection_reason_primary") or "").lower()
+        # `drop_gate` is an unfortunately historical field name: it also
+        # records downstream media outcomes such as `image_fetch_gate` and
+        # `image_postcardness_gate`. Those values prove that the text gate was
+        # passed; treating every non-empty value as a text rejection made the
+        # product metric report zero while rows waited for image processing.
+        terminal_text_drop_gates = {
+            "freshness_gate",
+            "semantic_vector_gate",
+            "region_evidence_safety_gate",
+            "llm_semantic_gate",
+            "pre_llm_cost_guard",
+            "final_llm_verifier",
+        }
+        downstream_text_pass_stages = {
+            "image_fetch_retry_needed",
+            "needs_image_review",
+            "good_text_weak_media",
+            "low_substance_but_region_relevant",
+            "semantic_candidate",
+            "favorite",
+            "image_reviewable",
+            "publication_candidate",
+            "publication_confirmed",
+            "publication_sent",
+        }
         terminal_text_drop = (
             current_stage.startswith("dropped_")
-            or bool(drop_gate)
+            or current_stage in {"debug_reject", "pre_candidate_needs_llm", "needs_llm_retry"}
+            or drop_gate in terminal_text_drop_gates
             or rejection.startswith("reject_")
             or vector_status.startswith("vector_reject")
         )
-        if semantic_ok and fresh and not terminal_text_drop:
+        text_passed_downstream = current_stage in downstream_text_pass_stages
+        if semantic_ok and fresh and not terminal_text_drop and text_passed_downstream:
             accepted_urls.add(url)
             continue
         if source_status == "rejected_local_region_source":

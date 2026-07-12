@@ -77,6 +77,12 @@ The phrase “strict gate passed” must never be presented as “ready for
 publication”. Ready means Gemini-confirmed and not yet sent; sent is a separate
 terminal ledger.
 
+The legacy field `drop_gate` is not by itself proof of a text rejection. It is
+also used for downstream media outcomes (`image_fetch_gate`,
+`image_postcardness_gate`, `candidate_score_gate`). A post waiting for its image
+or routed to manual video review therefore counts as having passed the text
+gate, while remaining **not yet** a publication candidate.
+
 Operator feedback is durable and idempotent through
 `scripts/region_talk_operator_feedback.py`. A reject tombstones exact-link,
 candidate, media and publication projections; a review request records human

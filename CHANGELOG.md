@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+- Fixed Region Talk funnel metrics so image-fetch/image-quality stages no longer masquerade as text-gate rejections; the operator readout now states plainly that this is text suitability before media review, not publication readiness.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active
