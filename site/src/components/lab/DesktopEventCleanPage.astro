@@ -375,6 +375,10 @@ const shareFileName = `kenigevents-${event.slug}`;
 
       const selectHero = async (index:number, source:'manual'|'auto'|'scroll'='manual') => {
         if (!heroImage || !thumbButtons.length) return;
+        if (source === 'manual' && cleanRoot.dataset.readingScrollGallery !== 'true') {
+          rotationEnabled = false;
+          markRotation();
+        }
         const next = Math.max(0, Math.min(thumbButtons.length - 1, index));
         const button = thumbButtons[next];
         const src = button?.dataset.src;
@@ -395,10 +399,6 @@ const shareFileName = `kenigevents-${event.slug}`;
           item.classList.toggle('is-current', current);
         });
         cleanRoot.dataset.activeHeroIndex = String(next);
-        if (source === 'manual' && cleanRoot.dataset.readingScrollGallery !== 'true') {
-          rotationEnabled = false;
-          markRotation();
-        }
       };
 
       const readingScrollTarget = (index:number) => {
