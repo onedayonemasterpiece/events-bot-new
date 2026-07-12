@@ -174,6 +174,14 @@ drop the priority metadata. Profile URLs are source evidence only; an exact
 post is created only after a validated `t.me/<handle>/<message_id>` or VK post
 hit exists.
 
+While any confirmed-blogger row is still awaiting its first decision, the
+fast-check selector does not fill unused slots with generic cached channels. If
+no confirmed Telegram entity is cached yet, fast-check yields the time budget
+to the normal priority history lane, which may use the single controlled
+username resolve and can process VK evidence rows directly. This prevents a
+ten-source generic adaptive wave from running before the high-probability
+cohort.
+
 In `adaptive_cursor_v1`, known locations from the evidence row are moved to the
 front of that source's otherwise unchanged place bank. Thus a blogger known to
 have visited `Нойхаузен`, `Бальга` or `Тапиау` is tested for those distinctive

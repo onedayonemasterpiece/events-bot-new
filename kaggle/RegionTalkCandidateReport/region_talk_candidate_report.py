@@ -8547,6 +8547,13 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
     adaptive_enabled = source_fast_check_adaptive_enabled()
     adaptive_terms_total = len(source_fast_check_query_bank()) if adaptive_enabled else 0
     prefer_continuations = adaptive_enabled and getenv_bool("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS", False)
+    confirmed_evidence_backlog_exists = any(
+        str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+        and not source_terminal_rejected_status(str(row.get("source_queue_status") or ""))
+        and not str(row.get("source_queue_status") or "").startswith("processed")
+        for row in rows
+        if isinstance(row, dict)
+    )
     candidates: list[dict[str, Any]] = []
     for row in rows:
         status = str(row.get("source_queue_status") or "")
@@ -8555,6 +8562,13 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
         if status not in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}:
             continue
         confirmed_external_evidence = str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+        # Do not burn the source-local search budget on generic backlog while
+        # an authoritative confirmed-blogger cohort is waiting. If those
+        # Telegram entities are not cached yet, return an empty fast-check
+        # batch and let the normal priority history lane spend its controlled
+        # one-resolve budget on them instead.
+        if confirmed_evidence_backlog_exists and not confirmed_external_evidence:
+            continue
         if int(row.get("queue_order") or 999999999) <= cursor and not confirmed_external_evidence:
             continue
         if normalize_source_platform(str(row.get("platform") or ""), str(row.get("source_url") or row.get("canonical_url") or "")) != "telegram":

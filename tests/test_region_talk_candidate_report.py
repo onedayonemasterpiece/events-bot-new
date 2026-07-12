@@ -1267,6 +1267,53 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
 
+    def test_confirmed_blogger_backlog_does_not_spend_fast_check_on_generic_sources(self) -> None:
+        mod = load_module()
+        old_cached = os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY")
+        try:
+            os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "1"
+            previous = {
+                "unified_source_queue_cursor_position": 0,
+                "unified_source_queue": {
+                    "telegram:evidence": {
+                        "canonical_source_key": "telegram:evidence",
+                        "platform": "telegram",
+                        "source_url": "https://t.me/evidence",
+                        "source_queue_status": "pending_scan",
+                        "queue_order": 1,
+                        "external_blogger_evidence_status": "confirmed_external",
+                    },
+                    "telegram:generic": {
+                        "canonical_source_key": "telegram:generic",
+                        "platform": "telegram",
+                        "source_url": "https://t.me/generic",
+                        "source_queue_status": "pending_scan",
+                        "queue_order": 2,
+                    },
+                },
+                "telegram_entity_cache": {
+                    "telegram:username:generic": {
+                        "channel_id_private": "123",
+                        "access_hash_private": "456",
+                    },
+                },
+            }
+
+            selected = mod.source_fast_check_backlog_seeds(previous, 10)
+
+            self.assertEqual(selected, [])
+            previous["telegram_entity_cache"]["telegram:username:evidence"] = {
+                "channel_id_private": "789",
+                "access_hash_private": "012",
+            }
+            selected_cached = mod.source_fast_check_backlog_seeds(previous, 10)
+            self.assertEqual([seed.canonical_url for seed in selected_cached], ["https://t.me/evidence"])
+        finally:
+            if old_cached is None:
+                os.environ.pop("REGION_TALK_TG_CACHED_ENTITY_ONLY", None)
+            else:
+                os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = old_cached
+
     def test_adaptive_fast_check_continues_legacy_no_hit_at_cursor_two(self) -> None:
         mod = load_module()
         self.assertEqual(
