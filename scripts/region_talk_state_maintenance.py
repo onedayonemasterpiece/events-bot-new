@@ -126,6 +126,41 @@ def is_video_payload(row: dict[str, Any]) -> bool:
     return any(suffix in evidence for suffix in (".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"))
 
 
+def is_placeholder_media_decode_failure(row: dict[str, Any]) -> bool:
+    """Recognize the historical ``#media`` marker downloaded as HTML/JPG."""
+    ref = str(row.get("image_url_or_local_path") or row.get("primary_media_path") or "").strip().lower()
+    error = str(row.get("media_fetch_error") or "").lower()
+    return bool(
+        ref.endswith("#media")
+        and str(row.get("image_queue_status") or "") == "not_reviewable_unsupported_media"
+        and str(row.get("media_fetch_status") or "") == "decode_failed"
+        and ("unidentifiedimageerror" in error or "cannot identify image" in error)
+    )
+
+
+def reopen_placeholder_media_row(payload: dict[str, Any], now: str) -> bool:
+    if not is_placeholder_media_decode_failure(payload):
+        return False
+    payload["previous_image_queue_status"] = payload.get("image_queue_status") or "not_reviewable_unsupported_media"
+    payload["image_queue_status"] = "needs_actual_image_fetch"
+    payload["current_stage"] = "image_fetch_retry_needed"
+    payload["current_lifecycle_status"] = "image_fetch_retry_needed"
+    payload["media_fetch_status"] = "needs_actual_image_fetch"
+    payload["media_acquisition_status"] = "needs_actual_image_fetch"
+    payload["media_fetch_error"] = "retry_via_telegram_after_placeholder_media_ref"
+    payload["media_fetch_attempt_count"] = 0
+    payload["actual_image_count"] = 0
+    payload["images_scored_actual_count"] = 0
+    payload["next_action"] = "download_actual_telegram_media_bytes_next"
+    payload["placeholder_media_retry_reopened_at"] = now
+    for field in [
+        "actual_media_path", "unsupported_media_path", "final_visual_status",
+        "image_diagnostic_error", "image_decode_seconds", "lease_run_id", "lease_at",
+    ]:
+        payload.pop(field, None)
+    return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", type=Path, default=Path("/home/dev/projects/events-bot-new/.env"))
@@ -195,10 +230,11 @@ def main() -> int:
             payload = {k: v for k, v in row.items() if not str(k).startswith("_ydb_")}
             changed = False
             text_is_consumed = row_has_terminal_text_verdict(kind, row, publication_terminal_urls)
-            # processed_post_item is always an identity/status projection, not
-            # a text store. Full transient working text lives only in the
-            # active candidate/vector/media lane until its verdict.
-            if kind == "processed_post_item":
+            # processed_post_item is identity/status only. Image rows are also
+            # downstream of the text verdict and do not need another durable
+            # copy of the post body; active candidate/vector rows retain the
+            # exact working text until publication finalization.
+            if kind in {"processed_post_item", "image_queue_item"}:
                 text_is_consumed = True
             if text_is_consumed:
                 for field in TEXT_FIELDS:
@@ -210,6 +246,9 @@ def main() -> int:
                     payload["text_payload_pruned_at"] = now
                     counters[f"{kind}_text_rows_pruned"] += 1
             if kind == "image_queue_item":
+                if reopen_placeholder_media_row(payload, now):
+                    counters["placeholder_media_decode_failures_reopened"] += 1
+                    changed = True
                 status = str(payload.get("image_queue_status") or "")
                 if status == "not_reviewable_unsupported_media":
                     if is_video_payload(payload):

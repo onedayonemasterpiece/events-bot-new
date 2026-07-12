@@ -291,6 +291,15 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 else:
                     os.environ["REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK"] = old
 
+    def test_post_media_marker_is_not_treated_as_direct_image_url(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            self.assertEqual(mod.direct_image_url("https://t.me/example/123#media"), "")
+            self.assertEqual(
+                mod.direct_image_url("https://cdn.example/photo.jpg?size=large"),
+                "https://cdn.example/photo.jpg?size=large",
+            )
+
     def test_process_batch_rejects_before_media_fetch_or_scoring(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",

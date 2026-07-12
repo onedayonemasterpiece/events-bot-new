@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, base64, html, json, os, re, subprocess, sys, time, urllib.parse
+import asyncio, base64, html, json, os, random, re, subprocess, sys, time, urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, median, pstdev
@@ -630,6 +630,9 @@ def _download_http_image(url: str, path: Path, *, timeout: int = 30) -> str:
         url = "https:" + url
     req = Request(url, headers={"User-Agent":"Mozilla/5.0 RegionTalkImageDiagnostic/1.0","Accept":"image/avif,image/webp,image/apng,image/*,*/*;q=0.8"})
     with urlopen(req, timeout=timeout) as resp:  # nosec B310 - public image URL from public post HTML/YDB row
+        content_type = str(resp.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if content_type and not (content_type.startswith("image/") or content_type == "application/octet-stream"):
+            raise ValueError(f"public media URL returned non-image content-type: {content_type}")
         data = resp.read(25_000_000)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -672,11 +675,38 @@ def decode_bundle():
 def public_tg_html_fallback_enabled() -> bool:
     return str(os.getenv("REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK") or "0").strip().lower() in {"1", "true", "yes", "on"}
 
+def direct_image_url(ref: str) -> str:
+    """Return only a real HTTP image locator, never a post-level marker.
+
+    CandidateReport uses ``https://t.me/<handle>/<id>#media`` to say that the
+    Telegram post has media but its bytes still need to be fetched.  Treating
+    that marker as an image URL downloads the Telegram HTML page into a ``.jpg``
+    file and terminalizes a perfectly valid candidate as a decode failure.
+    """
+    value = str(ref or "").strip()
+    if not (value.startswith("http") or value.startswith("//")):
+        return ""
+    parsed = urllib.parse.urlsplit("https:" + value if value.startswith("//") else value)
+    if parsed.fragment.lower() == "media":
+        return ""
+    return value
+
+async def telegram_media_humanlike_pause(index: int, total: int) -> None:
+    if index >= total:
+        return
+    minimum = max(0.0, float(os.getenv("REGION_TALK_IMAGE_DIAG_TG_MIN_DELAY_SECONDS") or "2.0"))
+    maximum = max(minimum, float(os.getenv("REGION_TALK_IMAGE_DIAG_TG_MAX_DELAY_SECONDS") or "5.0"))
+    if maximum <= 0:
+        return
+    delay = random.uniform(minimum, maximum)
+    log_event("telegram_media_humanlike_pause", phase="telegram_fetch", seconds=round(delay, 3), after_index=index, total=total)
+    await asyncio.sleep(delay)
+
 async def fetch_telegram(batch):
     remaining = []
     for r in batch:
-        direct_url = str(r.get("image_url_or_local_path") or r.get("primary_media_path") or "").strip()
-        if direct_url.startswith("http") or direct_url.startswith("//"):
+        direct_url = direct_image_url(r.get("image_url_or_local_path") or r.get("primary_media_path") or "")
+        if direct_url:
             t0 = time.monotonic()
             try:
                 suffix = ".jpg"
@@ -756,13 +786,14 @@ async def fetch_telegram(batch):
             log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
             if idx % 10 == 0:
                 log_event("media_fetch_progress", phase="media_fetch", done=idx, total=len(batch), actual=sum(1 for x in batch if x.get("actual_media_path")))
+            await telegram_media_humanlike_pause(idx, len(batch))
     finally:
         await client.disconnect()
 
 def fetch_vk(r):
     t0 = time.monotonic()
-    direct_url = str(r.get("image_url_or_local_path") or r.get("primary_media_path") or "").strip()
-    if direct_url.startswith("http") or direct_url.startswith("//"):
+    direct_url = direct_image_url(r.get("image_url_or_local_path") or r.get("primary_media_path") or "")
+    if direct_url:
         try:
             suffix = ".jpg"
             match = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", direct_url, re.I)

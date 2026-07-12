@@ -129,3 +129,16 @@ Image acquisition failures remain retryable across separate notebook runs, but
 an item with `last_image_diag_run_id` equal to the current run is not leased
 again in that run. This prevents a persistent Telegram/VK authorization error
 from becoming a same-run hot retry loop while preserving later recovery.
+# Media locator lifecycle
+
+`https://t.me/<handle>/<message_id>#media` is a **post-level marker**, not a
+direct image URL. ImageDiagnostic must ignore it as an HTTP image locator and
+retrieve the message media through its role-scoped `DISCOVERY2` Telethon
+session. Direct HTTP media is accepted only when the response advertises an
+image (or binary octet-stream); an HTML response falls through to Telegram
+media retrieval instead of becoming a terminal decode failure.
+
+The image queue is downstream of the complete text decision, so it stores
+hashes, eligibility evidence and media state but not another durable copy of
+the full post text. Exact text remains only in active candidate/vector/Gemini
+work and is removed after the final verdict.

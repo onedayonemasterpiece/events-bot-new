@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk ImageDiagnostic so the Telegram post-level `#media` marker is never downloaded as a JPG/HTML page; real media now falls through to the bounded human-like Telethon fetch. State maintenance reopens affected rows, and image-ledger rows no longer retain a redundant full post body after the text verdict.
 - Fixed Region Talk funnel metrics so image-fetch/image-quality stages no longer masquerade as text-gate rejections; the operator readout now states plainly that this is text suitability before media review, not publication readiness.
 - Fixed Region Talk exact-post metrics so stale candidate-memory verdicts cannot override a newer processed-post defer/reject verdict.
 - Split Region Talk exact-post text outcomes into suitable, rejected and still-pending counts so BGE work-in-progress is no longer reported as rejection.
