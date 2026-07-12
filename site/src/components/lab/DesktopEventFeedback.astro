@@ -1,0 +1,25 @@
+---
+import Icon from '../Icon.astro';
+interface FeedbackItem { tone: 'positive' | 'neutral' | 'question'; text: string; }
+interface Props { eventId: number; items: FeedbackItem[]; }
+const { eventId, items } = Astro.props;
+---
+
+<aside class="event-feedback" aria-labelledby={`feedback-title-${eventId}`}>
+  <p>проектируемый агрегат · не production-данные</p>
+  <h2 id={`feedback-title-${eventId}`}>Что видно по обсуждению</h2>
+  <ul>
+    {items.map((item) => <li data-tone={item.tone}><Icon name={item.tone === 'question' ? 'info' : 'spark'} /><span>{item.text}</span></li>)}
+  </ul>
+  <small>Только проверенные агрегированные сигналы; без имён, аватарок и прямых цитат.</small>
+</aside>
+
+<style>
+  .event-feedback { align-self:start; display:grid; gap:.65rem; margin-block:clamp(2rem,4vw,4rem); padding:clamp(1.2rem,2.4vw,2rem); border:1px solid rgba(40,88,82,.2); border-radius:28px; background:#eef3ee; }
+  .event-feedback>p { margin:0; color:#285852; font-size:.72rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+  .event-feedback h2 { margin:0; font-size:clamp(1.75rem,3vw,3.25rem); line-height:1; letter-spacing:-.04em; }
+  .event-feedback ul { display:grid; gap:.55rem; margin:0; padding:0; list-style:none; }
+  .event-feedback li { display:grid; grid-template-columns:1.35rem 1fr; gap:.55rem; padding:.65rem .7rem; border-radius:14px; background:rgba(255,255,255,.76); }
+  .event-feedback li :global(.icon) { width:1.2rem; height:1.2rem; color:#285852; }
+  .event-feedback small { color:#65736d; }
+</style>

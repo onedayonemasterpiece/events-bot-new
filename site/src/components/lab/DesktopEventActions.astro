@@ -1,0 +1,42 @@
+---
+import Icon from '../Icon.astro';
+import type { PreviewEvent } from '../../lib/types';
+
+interface Props { event: PreviewEvent; compact?: boolean; showAdmission?: boolean; }
+const { event, compact = false, showAdmission = !compact } = Astro.props;
+const hasTicketHref = Boolean(event.ticket?.href);
+const primaryIsCalendar = Boolean(event.ticket?.is_free && !hasTicketHref);
+const primaryLabel = primaryIsCalendar ? 'Добавить в календарь' : event.ticket?.price_label ? 'Купить билет' : 'Билеты';
+const admission = event.ticket?.is_free ? 'Бесплатно' : (event.ticket?.price_label || 'Билеты');
+---
+
+<aside class:list={['event-actions', compact && 'event-actions--compact']} aria-label="Действия события">
+  {showAdmission && <p><span>вход</span><strong>{admission}</strong></p>}
+  <a class="event-actions__primary" href={primaryIsCalendar ? '#calendar-demo' : (event.ticket?.href || '#tickets-demo')} rel={primaryIsCalendar ? undefined : 'noreferrer'}>
+    <Icon name={primaryIsCalendar ? 'calendar' : 'ticket'} /><span>{primaryLabel}</span>
+  </a>
+  <div class="event-actions__secondary">
+    {!primaryIsCalendar && <button type="button" aria-label="Добавить в календарь" title="Добавить в календарь"><Icon name="calendar" /></button>}
+    <button type="button" aria-label={`Поделиться, ${event.shares_count || 0}`} title="Поделиться"><Icon name="share" /><b>{event.shares_count || 0}</b></button>
+    <button type="button" aria-label={`Нравится, ${event.likes_count || 0}`} title="Нравится"><Icon name="heart" /><b>{event.likes_count || 0}</b></button>
+  </div>
+</aside>
+
+<style>
+  .event-actions { display:grid; gap:.75rem; padding:1rem; border-radius:24px; background:#282421; color:#fffaf2; box-shadow:0 18px 45px rgba(42,27,19,.24); }
+  .event-actions>p { display:grid; gap:.1rem; margin:0; }
+  .event-actions>p span { color:#cfc1b6; font-size:.7rem; font-weight:850; letter-spacing:.09em; text-transform:uppercase; }
+  .event-actions>p strong { font-size:1.25rem; }
+  .event-actions__primary { min-height:58px; display:flex; align-items:center; justify-content:center; gap:.6rem; padding:.65rem 1rem; border-radius:18px; background:#b84a20; color:#fff; font-size:1.05rem; font-weight:900; text-decoration:none; }
+  .event-actions__primary :global(.icon) { width:1.55rem; height:1.55rem; }
+  .event-actions__secondary { display:flex; gap:.6rem; }
+  .event-actions__secondary button { min-width:56px; min-height:52px; display:inline-flex; align-items:center; justify-content:center; gap:.28rem; border:0; border-radius:15px; background:rgba(255,255,255,.08); color:#fff; font:inherit; cursor:pointer; }
+  .event-actions__secondary :global(.icon) { width:29px; height:29px; }
+  .event-actions__secondary b { font-size:.92rem; font-variant-numeric:tabular-nums; }
+  @media (min-width:1024px) and (max-height:700px) { .event-actions { padding:.8rem; } }
+  .event-actions--compact { grid-template-columns:minmax(145px,1fr) auto; align-items:center; gap:.45rem; margin:.7rem 0 .9rem; padding:.65rem; }
+  .event-actions--compact>p { grid-column:1/-1; }
+  .event-actions--compact .event-actions__primary { min-height:52px; padding:.5rem; font-size:.94rem; white-space:nowrap; }
+  .event-actions--compact .event-actions__secondary { gap:.35rem; }
+  .event-actions--compact .event-actions__secondary button { min-width:48px; min-height:48px; }
+</style>

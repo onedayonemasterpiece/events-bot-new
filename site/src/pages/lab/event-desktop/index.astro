@@ -6,6 +6,12 @@ import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 const canonicalUrl = absoluteUrl('/lab/event-desktop/');
 const title = `Desktop OCR / non-OCR lab | ${SITE_NAME}`;
 const description = 'Desktop-only сравнение Editorial Slab, Split Canvas, Gallery Exhibition и Typographic Lead на реальных событиях: свободный crop без OCR и лимит crop 20% для OCR.';
+const fullExamples = [
+  ['pianissimo-editorial', 'Editorial · landscape', 'Полная страница: hero → описание → feedback → gallery → practical → related.'],
+  ['tapiau-split-transport', 'Split · portrait + transport', 'Sticky media, длинный текст, future transport slot и гарантированный release.'],
+  ['magomaev-ocr-gallery', 'Gallery · OCR', 'Contain-постер, длинный H1 и полный скролл до похожих событий.'],
+  ['b413-semantic-primary-gate', 'Semantic primary gate', 'Контрпример: landscape есть, но геометрия не должна подменять смысл hero.'],
+];
 
 const photoSamples = {
   editorial: {
@@ -121,10 +127,10 @@ const candidates = [
           </div>
 
           <div class="desktop-lab__evidence">
-            <div><strong>312</strong><span>реальных страниц в срезе 11.07</span></div>
-            <div><strong>113</strong><span>OCR: 81 portrait · 18 landscape · 14 square</span></div>
-            <div><strong>64,2%</strong><span>portrait OCR проходят short-title gate Typographic Lead</span></div>
-            <div><strong>52,77%</strong><span>1920×1080 в Steam Survey; QHD ещё 22,04%</span></div>
+            <div><strong>326</strong><span>public-eligible active events в production snapshot 12.07</span></div>
+            <div><strong>195</strong><span>событий имеют больше одного изображения</span></div>
+            <div><strong>26</strong><span>no-OCR: portrait/square primary + landscape alternative</span></div>
+            <div><strong>8 / 19</strong><span>alternative проходит ≥1600×720 / ≥1280×720</span></div>
           </div>
 
           <div class="desktop-lab__viewport-matrix">
@@ -133,6 +139,13 @@ const candidates = [
           </div>
 
           <p class="desktop-lab__source">Источник desktop-разрешений: <a href="https://store.steampowered.com/hwsurvey/?platform=pc" rel="noreferrer">Steam Hardware &amp; Software Survey, June 2026</a>. Это не аналитика аудитории сайта, а практическая матрица QA; экстремально короткие viewport добавлены отдельно.</p>
+          <div class="desktop-lab__full-examples" aria-label="Полные прототипы реальных событий">
+            {fullExamples.map(([slug, label, note]) => (
+              <a href={withBase(`/lab/event-desktop/examples/${slug}/`)}>
+                <strong>{label}</strong><span>{note}</span>
+              </a>
+            ))}
+          </div>
           <div class="desktop-lab__jump" aria-label="Перейти к кандидату">
             {candidates.map((item, index) => <a href={`#candidate-${item.key}`}>{index + 1}</a>)}
           </div>
@@ -199,6 +212,10 @@ const candidates = [
   .desktop-lab__viewport-matrix p { display: grid; grid-template-columns: minmax(170px,.35fr) minmax(0,1fr); gap: 1rem; margin: 0; padding: .8rem 1rem; border-left: 4px solid #2d5751; background: #f0f3ed; }
   .desktop-lab__viewport-matrix span { color: #5f655e; }
   .desktop-lab__source { color: #6b5d54; font-size: .86rem; }
+  .desktop-lab__full-examples { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; margin-top:1rem; }
+  .desktop-lab__full-examples a { display:grid; gap:.3rem; min-height:112px; padding:1rem; border:1px solid rgba(40,88,82,.2); border-radius:18px; background:#edf3ee; color:#254d48; text-decoration:none; }
+  .desktop-lab__full-examples strong { font-size:1.05rem; }
+  .desktop-lab__full-examples span { color:#63716b; font-size:.84rem; }
   .desktop-lab__jump { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
   .desktop-lab__jump a { min-width: 48px; min-height: 48px; display: grid; place-items: center; border: 1px solid rgba(121,48,20,.2); border-radius: 50%; background: #fff; color: #793014; font-weight: 900; text-decoration: none; }
   .desktop-lab__candidate { display: grid; gap: 2.4rem; scroll-margin-top: 1rem; }
@@ -216,6 +233,7 @@ const candidates = [
     .desktop-lab__shell { gap: 2.8rem; }
     .desktop-lab__intro::before { content: "Исследование только для desktop. Production mobile hero не изменён."; display: block; padding: .8rem 1rem; background: #2b2724; color: #fff; font-weight: 850; text-align: center; }
     .desktop-lab__contract, .desktop-lab__evidence { grid-template-columns: 1fr; }
+    .desktop-lab__full-examples { grid-template-columns:1fr; }
     .desktop-lab__viewport-matrix p { grid-template-columns: 1fr; gap: .25rem; }
   }
 </style>

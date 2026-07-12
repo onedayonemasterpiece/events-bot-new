@@ -34,6 +34,10 @@ const required = [
   'lab/date-block/index.html',
   'lab/event-decision-block/index.html',
   'lab/event-desktop/index.html',
+  'lab/event-desktop/examples/pianissimo-editorial/index.html',
+  'lab/event-desktop/examples/tapiau-split-transport/index.html',
+  'lab/event-desktop/examples/magomaev-ocr-gallery/index.html',
+  'lab/event-desktop/examples/b413-semantic-primary-gate/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -124,10 +128,47 @@ for (const marker of [
   'Билеты',
   'safe-cover',
   '20%',
+  'pianissimo-editorial',
+  'tapiau-split-transport',
+  'magomaev-ocr-gallery',
+  'b413-semantic-primary-gate',
+  '326',
+  '195',
+  '26',
 ]) {
   if (!eventDesktopLabHtml.includes(marker)) throw new Error(`Desktop event lab misses marker: ${marker}`);
 }
 if (eventDesktopLabHtml.includes('Узнать цену') || eventDesktopLabHtml.includes('Открыть условия') || eventDesktopLabHtml.includes('calendar-link__plus')) throw new Error('Desktop event lab leaks rejected CTA/icon copy');
+
+const desktopExampleContracts = [
+  ['pianissimo-editorial', 3864, 'editorial', ['Pianissimo', 'data-parallax-shell']],
+  ['tapiau-split-transport', 6651, 'split', ['будущий transport media slot', 'Расписание ещё не загружено']],
+  ['magomaev-ocr-gallery', 6510, 'gallery', ['Хиты любимых артистов', 'data-gallery-focus']],
+  ['b413-semantic-primary-gate', 6032, 'split', ['Почему не выбрали landscape автоматически', 'data-gallery-focus']],
+];
+for (const [scenario, eventId, variant, scenarioMarkers] of desktopExampleContracts) {
+  const html = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
+  for (const marker of [
+    'data-desktop-full-page',
+    `data-event-id="${eventId}"`,
+    `data-desktop-variant="${variant}"`,
+    'Что видно по обсуждению',
+    'Посмотреть событие ближе',
+    'Перед тем как ехать',
+    'Смотрите дальше',
+    'data-related-start',
+    'prefers-reduced-motion',
+    'Добавить в календарь',
+    'Поделиться',
+    'Нравится',
+    ...scenarioMarkers,
+  ]) {
+    if (!html.includes(marker)) throw new Error(`Desktop full-page example ${scenario} misses marker: ${marker}`);
+  }
+  if (html.includes('Узнать цену') || html.includes('Открыть условия') || html.includes('По билетам') || html.includes('calendar-link__plus')) {
+    throw new Error(`Desktop full-page example ${scenario} leaks rejected CTA/icon copy`);
+  }
+}
 
 const genericFaviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
 if (!genericFaviconSvg.includes('viewBox="160 230 970 820"') || !genericFaviconSvg.includes('left-monogram') || !genericFaviconSvg.includes('brand-k-mark') || !genericFaviconSvg.includes('heart-block') || !genericFaviconSvg.includes('#2d3035') || !genericFaviconSvg.includes('#af481f') || genericFaviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(genericFaviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');

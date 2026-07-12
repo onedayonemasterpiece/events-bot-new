@@ -1,0 +1,21 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+interface Props { event: PreviewEvent; }
+const { event } = Astro.props;
+---
+
+<section class="event-description" aria-labelledby={`description-title-${event.id}`}>
+  <p>о событии</p>
+  <h2 id={`description-title-${event.id}`}>{event.summary || event.title}</h2>
+  <div class="event-description__html" set:html={event.description_html} />
+</section>
+
+<style>
+  .event-description { padding-block:clamp(2rem,4vw,4rem); }
+  .event-description>p { margin:0 0 .55rem; color:#963c19; font-size:.72rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+  .event-description h2 { margin:0 0 1rem; font-size:clamp(1.75rem,3vw,3.25rem); line-height:1; letter-spacing:-.04em; }
+  .event-description__html { max-width:70ch; color:#3f332c; font-size:clamp(1rem,1.25vw,1.16rem); line-height:1.7; }
+  .event-description__html :global(h3) { margin:1.8rem 0 .45rem; font-size:1.3rem; }
+  .event-description__html :global(p),.event-description__html :global(blockquote) { margin:.65rem 0; }
+  .event-description__html :global(blockquote) { padding:.8rem 1rem; border-left:4px solid #285852; background:#edf2ed; }
+</style>
