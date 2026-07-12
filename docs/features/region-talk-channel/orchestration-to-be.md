@@ -256,6 +256,9 @@ Important invariants:
   itself has at least five freshly sampled posts CandidateReport computes and
   persists its source scope. Thus source evidence can actually resolve to
   external/local instead of repeatedly rescanning an `unknown` source.
+  A finalist with five historical counters but still-unknown scope remains due
+  for one bounded profile-producing fetch; reaching the numeric counter alone
+  is not treated as completed attestation.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but

@@ -2131,6 +2131,26 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(enriched[0]["source_profile_build_mode"], "publication_attestation_only")
         self.assertNotIn("source_scope", enriched[1])
 
+    def test_finalist_with_five_posts_but_unknown_scope_remains_due_for_profile(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="finalist", platform="telegram", source_title="Strict text finalist",
+            handle="@finalist", url="https://t.me/finalist", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="publication", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        unknown = {"unified_source_queue": {"telegram:finalist": {
+            "canonical_source_key": "telegram:finalist", "source_url": "https://t.me/finalist",
+            "source_queue_status": "processed_found_ko_candidate", "posts_scanned": 5,
+            "publication_source_evidence_priority": "true", "publication_source_evidence_target_posts": 5,
+        }}}
+        self.assertEqual(mod._seed_scan_due_state(seed, unknown)["reason"], "publication_source_evidence_completion")
+        resolved = {"unified_source_queue": {"telegram:finalist": {
+            **unknown["unified_source_queue"]["telegram:finalist"], "source_scope": "external",
+        }}}
+        self.assertNotEqual(mod._seed_scan_due_state(seed, resolved)["reason"], "publication_source_evidence_completion")
+
     def test_image_queue_requires_fused_e5_bge_when_enabled(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")

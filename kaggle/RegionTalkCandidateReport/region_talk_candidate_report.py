@@ -860,7 +860,16 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     except Exception:
         publication_evidence_target = max(1, getenv_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
         publication_evidence_scanned = 0
-    if _rt_bool(qrow.get("publication_source_evidence_priority")) and publication_evidence_scanned < publication_evidence_target:
+    publication_scope = str(qrow.get("source_scope") or "").strip().lower().replace("-", "_")
+    publication_geo = str(qrow.get("source_geo_class") or "").strip().lower().replace("-", "_")
+    publication_profile_resolved = publication_scope in {
+        "external", "nonlocal", "nonlocal_russia", "local", "local_region", "kaliningrad_local",
+    } or publication_geo in {
+        "external", "nonlocal", "nonlocal_russia", "local", "local_region", "kaliningrad_local",
+    }
+    if _rt_bool(qrow.get("publication_source_evidence_priority")) and (
+        publication_evidence_scanned < publication_evidence_target or not publication_profile_resolved
+    ):
         return {"due": True, "reason": "publication_source_evidence_completion", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
     if str(qrow.get("fast_check_status") or "").strip().lower() == "ko_hit":
         return {"due": True, "reason": "fast_check_ko_hit_priority", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
