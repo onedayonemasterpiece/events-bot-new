@@ -19,6 +19,7 @@ sections:
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
     email_delivery: docs/operations/email-delivery.md
+    personalization_storage_budget: docs/operations/personalization-storage-budget.md
     telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
       docs: docs/operations/cron.md
@@ -358,6 +359,7 @@ features:
     golden_interest_facets: docs/features/unsigned-personalization/golden-interest-facets.md
     personal_feed_architecture: docs/features/unsigned-personalization/personal-feed-architecture.md
     e2e_acceptance: docs/features/unsigned-personalization/e2e-acceptance.md
+    storage_budget: docs/operations/personalization-storage-budget.md
     authorized_event_search: docs/features/unsigned-personalization/authorized-event-search.md
     semantic_vector_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
@@ -391,6 +393,7 @@ features:
       saved_search_public_tag: design_required_for_release
       full_personalization_e2e: design_required_for_release
       cards_to_first_relevant_le_20: accepted_golden_gate
+      supabase_compact_500mb_budget: design_required_for_release
       remote_telemetry_ingest: design
       durable_profile: design
       profile_merge: design

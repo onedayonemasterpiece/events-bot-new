@@ -201,6 +201,8 @@ Failure modes must be safe:
 
 The free-tier personalization DB has roughly 500 MB budget. Therefore served-list and session summaries cannot store JSON-heavy debug payloads by default.
 
+The operational source of truth for size bands, forecast, retention/compaction and near-cap admission is [Personalization Supabase storage budget and compaction](../../operations/personalization-storage-budget.md). Release enables remote telemetry only from a fresh Green-band baseline (`<60%` of the verified current plan limit) with forecast headroom through canary/hypercare; Orange and above stop nonessential writes before durable control state.
+
 Accepted production row shape for served-list exposure is compact arrays/bitmasks:
 
 ```text

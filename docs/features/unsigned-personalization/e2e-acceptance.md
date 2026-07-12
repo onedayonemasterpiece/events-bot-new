@@ -48,6 +48,7 @@ Every run records a unique `e2e_run_id`, persona id, build/catalog watermark, al
 | `PERS-APPLY-001` | New session after profile update | restored local profile and session id are valid | served-list/result records reference current profile/algorithm | relevant candidates move forward; hidden candidates stay absent |
 | `PERS-LINK-001` | Anonymous history → email/Yandex identity | local cache/profile is not duplicated | idempotent merge produces one profile/favorite/reminder state | ranking remains stable after login/logout/reload |
 | `PERS-FAIL-001` | Supabase timeout/reject during collection | local fallback stays bounded and retry-safe | no partial/duplicate accepted rows | static/local feed and CTA keep working |
+| `PERS-STORAGE-001` | Supabase reaches Orange/Red synthetic capacity band | bounded local queue; no retry storm | nonessential telemetry is rejected while consent/favorite/reminder-control writes remain available | static/local personalization and user-control UI keep working |
 | `PERS-QUALITY-001` | Mature «Чайковский» persona sees a newly eligible Tchaikovsky concert | local profile contains source-grounded classical/composer affinity, not raw keyword noise | server snapshot reflects expected facets and strong actions | first eligible relevant event appears within 20 inspected cards |
 | `PERS-QUALITY-002` | Strong preference plus explicit negative interests | positive and negative axes remain separate | profile weights/reasons are explainable | top 20 preserves relevance, exclusions and diversity without one-category collapse |
 
@@ -109,6 +110,7 @@ A personalization feature cannot be marked production-verified until one automat
 - before/after localStorage snapshots with email/auth tokens redacted;
 - network request/response correlation without secrets or plaintext email in logs;
 - service-side DB assertions for accepted/deduped telemetry, profile snapshot and served-list application;
+- storage-band/capacity evidence showing that disposable telemetry cannot crowd out durable control state;
 - Tchaikovsky and other golden-persona metric calculations, including candidate-supply evidence;
 - trace/screenshots for the visible personalized order and failure fallback;
 - cleanup result and confirmation that test data cannot train/contaminate ordinary production profiles.

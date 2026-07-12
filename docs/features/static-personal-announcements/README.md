@@ -49,6 +49,7 @@ Current decisions and questions that affect several feature families live in [gl
 - Public presentation requires CDN-backed delivery of the full canonical static site and an asset audit proving that runtime images are lightweight WebP or safe SVG. The detailed gate lives in the [release checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-2--production-static-buildpublish-platform) and [CDN delivery contract](../static-site-pages/cdn-asset-delivery.md#public-release-delivery-contract).
 - Only after the public presentation, daily Telegram and VK announcements move their event links to canonical static-site pages through a channel-by-channel canary and rollback. This is tracked in [Stage 8](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-8--после-публичной-презентации), not as a presentation GO blocker.
 - Personalization release acceptance requires the [full Playwright/Gherkin E2E and KPI contract](../unsigned-personalization/e2e-acceptance.md), including browser localStorage, DB/profile evidence and `cards_to_first_relevant <= 20` for eligible mature golden personas.
+- Personalization remote writes remain release-gated by the [Supabase 500 MB storage/compaction contract](../../operations/personalization-storage-budget.md): compact current state, bounded evidence, Green-band launch and fail-safe shedding of disposable telemetry.
 
 ## Documentation completion rule
 

@@ -2,7 +2,7 @@
 
 > Дата аудита: **2026-07-11**
 >
-> Актуализация product scope: **2026-07-12** — D-1 event reminders, one-time localStorage email, Yandex/manual-email choice, saved-search public tags и metric-backed personalization E2E.
+> Актуализация product scope: **2026-07-12** — D-1 event reminders, one-time localStorage email, Yandex/manual-email choice, saved-search public tags, metric-backed personalization E2E и экологичный Supabase 500 MB capacity/compaction gate.
 >
 > Базовая ревизия: `origin/main@323cb1e407c6`
 >
@@ -254,6 +254,16 @@ Smart Update является владельцем семантического 
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
 - [ ] После save UI показывает либо `Напомним за день на a***@domain`, либо inline action для email verification/transactional consent; при старте менее чем через 24 часа обещание D-1 не показывается.
 
+### Stage 4A — Supabase capacity and ecological storage
+
+- [ ] Канонический [500 MB storage/compaction contract](../operations/personalization-storage-budget.md) реализован; current provider limit перепроверен перед canary.
+- [ ] Launch baseline находится в Green (`<60%` verified plan limit) и имеет forecast headroom through canary/hypercare; измеряются таблицы **и индексы**, bytes/user-day и projected days to Orange.
+- [ ] Raw weak telemetry по умолчанию выключена; browser/session compacts signals, Supabase хранит current state + bounded evidence, YDB получает только asynchronous de-identified TTL analytics, artifacts идут в Object Storage/CDN.
+- [ ] Retention/fold/compaction jobs идемпотентны, observable и проверены на restorable snapshot; stale vector/event/tag versions и debug/provider payloads не растут бесконечно.
+- [ ] Yellow/Orange/Red/Critical alerts и admission/kill switches доказаны: disposable telemetry/debug прекращаются раньше, чем становятся недоступны consent withdrawal, unsubscribe/suppression, favorite/reminder cancellation и send guards.
+- [ ] Synthetic volume model проверяет launch cohort, 1k и 10k active-user scenarios по утверждённому retention horizon; upgrade/architecture decision принимается до Red, не во время outage.
+- [ ] Product/legal утвердили retention для profiles/actions/served lists/aggregates/consent/suppressions; storage pressure не сокращает send-critical evidence самовольно.
+
 ### Stage 5 — Email recommendations, event reminders and deliverability
 
 - [ ] Personal issue schema, profile snapshot, deterministic hero+3 selection and 12–24 recommendation page.
@@ -277,6 +287,7 @@ Smart Update является владельцем семантического 
 - [ ] Golden-persona pack включает «Чайковский», cold/mature, positive/negative interests, mobile/desktop, no-relevant-supply и catalog refresh; ground truth строится по canonical event features, не по broad title-regex.
 - [ ] Для каждого eligible mature golden scenario `cards_to_first_relevant <= 20`; mature fixture и правила valid impression/meaningful action/versioning зафиксированы в evidence.
 - [ ] Dashboard/artefact считает collection success, duplicate/drop reasons, profile rollup lag, profile-to-feed application, MRR/precision@20, relevant supply, top-20 hide/skip/diversity/fallback guardrails.
+- [ ] Near-cap E2E `PERS-STORAGE-001` доказывает, что nonessential telemetry shed не создаёт retry storm и не блокирует durable user-control/email-safety state.
 
 ### Stage 6 — Transport, discussion signals, admin repair, media
 
@@ -324,6 +335,7 @@ Smart Update является владельцем семантического 
 | Admin issue idempotency | one active ArtKodex task per report/idempotency key |
 | Mature-persona time to interest | every eligible golden scenario reaches the first relevant event within `<=20` validly inspected cards; production percentile target follows measured canary baseline |
 | Personalization E2E integrity | one correlated run proves localStorage collection, exactly-once accepted DB evidence, expected profile change and application to the next served list |
+| Supabase ecological capacity | verified limit ≈`500 MB`; launch `<60%`, disposable-write shedding from Orange, current control state remains writable through simulated near-cap test |
 
 ## 9. Release evidence pack
 
@@ -339,6 +351,7 @@ Smart Update является владельцем семантического 
 - [ ] incident regression checklist and public-surface evidence;
 - [ ] rollback command/result;
 - [ ] for personalization: mapped Gherkin/Playwright results, redacted before/after localStorage, DB assertions/profile snapshot and `cards_to_first_relevant` calculation;
+- [ ] for Supabase capacity: current plan/size, top table+index attribution, retention/compaction result, growth forecast and tested storage-band alerts/kill switch;
 - [ ] remaining risks, owner and due date.
 
 ## 10. Открытые продуктовые и архитектурные решения
@@ -356,21 +369,23 @@ Smart Update является владельцем семантического 
 11. **Related semantics:** strict Gemma acceptance for “Похожие” vs pgvector-only neutral continuation; required precision@K/coverage/diversity thresholds.
 12. **Public search-tag novelty:** утвердить числовые semantic/result-overlap thresholds, minimum result count и moderator/owner для accept/merge/reject; product rule о mandatory normalization/idempotency/material difference уже принят.
 13. **Personalization production KPI:** golden release gate `<=20` принят; после canary утвердить production percentile/SLO и minimum relevant-supply coverage, не смешивая mature/cold-start/no-supply cohorts.
+14. **Retention/ecological budget:** утвердить proposed defaults (served lists `21d`, sessions `30d`, strong-action audit `90d`, inactive profile `365d`, daily aggregates `12mo`) и отдельную legal retention для consent/suppression/send-critical evidence.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
 1. **P0 — static release platform:** F1/F13/G1, coalesce race, atomic promotion/rollback/monitoring.
 2. **P0 — Smart Update quality stabilization:** G2, регулярные аудиты, incident burn-down, root-cause fixes, closure-grade replay, dashboard/SLO.
-3. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
-4. **P0 — UI release freeze:** F5 plus clean preview contract and real-device/a11y evidence.
-5. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12, включая Yandex/manual-email choice и видимый reminder state после save.
-6. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
-7. **P1 — admin repair loop:** F17 after idempotency/poller contract.
-8. **P1 — media quality/share:** F15/F16.
-9. **P2 — transport:** F11 after nightly source pipeline is production-safe.
-10. **P2 — discussion signals:** F14 after rebase and safety evaluation.
+3. **P0 — Supabase ecological capacity:** fresh size/budget, compact schema, retention/compaction, growth forecast, alerts and near-cap fail-safe before remote telemetry/email activation.
+4. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
+5. **P0 — UI release freeze:** F5 plus clean preview contract and real-device/a11y evidence.
+6. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12, включая Yandex/manual-email choice и видимый reminder state после save.
+7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
+8. **P1 — admin repair loop:** F17 after idempotency/poller contract.
+9. **P1 — media quality/share:** F15/F16.
+10. **P2 — transport:** F11 after nightly source pipeline is production-safe.
+11. **P2 — discussion signals:** F14 after rebase and safety evaluation.
 
-Все десять streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.
+Все одиннадцать streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.
 
 ## 12. Closure checklist этого аудита
 

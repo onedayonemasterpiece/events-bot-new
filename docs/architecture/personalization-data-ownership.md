@@ -51,6 +51,18 @@ This decision follows the implementation already present in `origin/main`: Supab
 
 Before consent/server sync, browser state is device-local and not a durable identity claim. After materialization, the current durable profile belongs to Supabase. The project must not maintain competing `visitor_profile_snapshot`/`profile_revision` rows in Supabase and `pa_profile_snapshot` rows in YDB with unclear precedence.
 
+## Capacity and ecological boundary
+
+The personalization Supabase project has an approximately 500 MB plan ceiling and must remain a compact current-state/control plane. Resource efficiency is part of correctness:
+
+- local-first reranking and CDN/static manifests avoid a database read or LLM call for every card/page view;
+- Supabase stores bounded current profile/action/control state and compact short-lived evidence, not a raw telemetry firehose;
+- de-identified high-volume history may be projected asynchronously to YDB with TTL, while generated/bulky artifacts go to Object Storage;
+- table and index growth, retention, compaction and admission bands are release gates;
+- capacity pressure may drop nonessential telemetry but must not block consent withdrawal, suppression, favorite/reminder cancellation or other user-control writes.
+
+Canonical operational budgets and release evidence: [Personalization Supabase storage budget and compaction](../operations/personalization-storage-budget.md).
+
 ## Required flows
 
 ### Views and actions
@@ -146,4 +158,5 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - [Site user identity](../features/site-user-identity/README.md)
 - [Favorites and calendar](../features/event-favorites-calendar/README.md)
 - [Email delivery operations](../operations/email-delivery.md)
+- [Personalization storage budget and compaction](../operations/personalization-storage-budget.md)
 - [Event comment feedback](../features/event-comment-feedback/README.md)

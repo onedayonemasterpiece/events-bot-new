@@ -16,6 +16,7 @@
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
+- Personalization Supabase 500 MB storage/compaction: `docs/operations/personalization-storage-budget.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`
