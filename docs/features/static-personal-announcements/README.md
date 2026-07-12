@@ -23,7 +23,7 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 | F8 | SpaceWeb retained mailbox, read-only Yandex IMAP copy pipeline, direct Mail Trigger canary, Postbox transactional delivery including D-1 event reminders, NotiSend recommendation delivery, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md), [event notifications](../event-email-notifications/README.md) | Postbox feedback+worker live/verified; event producers, warm-up and NotiSend application flow gated |
 | F9 | Durable favorites | [Favorites and calendar](../event-favorites-calendar/README.md) | design |
 | F10 | Login/logout and profile linking | [Site user identity](../site-user-identity/README.md) | login partial; merge design |
-| F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md) | implementation branch / refresh blocker |
+| F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md) | preliminary rail+bus slice validated in refreshed draft PR #37; release-UI integration and automatic refresh pending |
 | F12 | Calendar action backed by favorite state, with visible D-1 email-reminder status | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save/reminder UX design |
 | F13 | Catalog freshness vs canonical bot DB | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production blocked |
 | F14 | Comment-derived discussion signals | [Event comment feedback](../event-comment-feedback/README.md) | docs/probe; production missing |

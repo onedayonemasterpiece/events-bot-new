@@ -46,7 +46,7 @@
 2. В production отсутствуют env-флаги static builder/vector-related handoff; на момент read-only проверки не было ни одного `static_site_build` в outbox/ledger.
 3. В coalesce-коде есть риск потери обновления во время долгого static build: running follow-up не создаётся для `static_site_build`, а общий stale threshold `600s` конфликтует с разрешённым runtime до `5400s`.
 4. Публичный root всё ещё `noindex`; production `/poisk/` не опубликован. Последний полный preview отстаёт от текущего каталога.
-5. Значительная часть заявленного функционала находится только в side branches либо остаётся design-only: персональное письмо/страница, transport refresh, comment feedback, admin→ArtKodex, durable favorites, verified-email identity, personalization merge.
+5. Значительная часть заявленного функционала находится только в side branches либо остаётся design-only: персональное письмо/страница, automatic transport refresh/final UI integration, comment feedback, admin→ArtKodex, durable favorites, verified-email identity, personalization merge. Предварительный rail+bus transport slice уже консолидирован и проверен в draft PR #37, но ещё не является release-ready.
 6. Smart Update остаётся владельцем предотвращения дублей и ошибок фактов, но перед релизом ещё не формализован регулярный контроль его результата: cadence аудитов, incident-rate trend/SLO, обязательное заведение инцидентов и подтверждённое закрытие root causes до устойчиво низкого уровня дефектов.
 7. Локальная release-проверка текущего WIP 2026-07-11: Astro собрал `110` страниц, но `npm run check:preview` упал из-за рассинхронизации UI (`Смотрите дальше`) и contract assertion (`Вам могут быть интересны`). Это не дефект `origin/main`, но доказательство, что активный WIP не является чистым RC.
 
@@ -66,7 +66,7 @@
 | **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Partial / live worker foundation** | `main@c6396331`: disabled Supabase control plane, authenticated Postbox feedback/suppression, live transactional-only worker+monitor canary, authorized-key fix | Event-specific calendar/reminder producers; templates/UX; D-1 schedule/reschedule E2E; cross-provider placement warm-up; NotiSend recommendation flow/key gate |
 | **F9** | Избранное пользователя | **Missing** | Local `liked_event_ids` — это не durable favorites | Define favorite semantics; DB/RLS/API/page; cross-device/merge/lifecycle/delete/export |
 | **F10** | Yandex login/logout + merge personalization | **Partial** | Login/logout реализованы; merge описан только архитектурно | Explicit consent, idempotent merge API/schema, conflict/logout/unlink/delete policy and E2E |
-| **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, branch-only** | Rail Светлогорск/Зеленоградск + один bus example + leg ICS в integration branch | Merge; full city/provider matrix; nightly validated atomic last-good refresh; stale alert; real browser/ICS; persistent favorite if required |
+| **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, validated draft PR** | Draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) at `4577b334`: rail/bus blocks, route directories, type-prefixed event/transport ICS, directory validators and a 421-page preview/check pass | Integrate into frozen release UI without forking logic; full exact-date city/provider coverage; nightly validated atomic last-good refresh; stale alert; real browser/ICS; persistent favorite if required |
 | **F12** | Add to calendar = favorite + видимый статус D-1 email reminder | **Partial** | Stable `.ics` работает; favorite mutation/reminder UX отсутствуют | Atomic/idempotent ICS+favorite; masked reminder status or inline email/consent choice; undo/cross-device/reschedule/cancel tests |
 | **F13** | Site events do not become stale vs bot/core DB | **Partial / Blocked** | Candidate freshness filters and rebuild design exist | Production rebuild/promotion loop, two-update race fix, catalog parity manifest, max-staleness alert and SLO |
 | **F14** | Comment-derived event feedback on page | **Partial research, branch-only** | Offline Kaggle probe/strict gates and static manifest design in stale branch | Rebase; YDB incremental collector; optional verifier; production manifest/Astro UI; PII/safety/canary evidence |
@@ -128,7 +128,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | F4 personal email/page | `origin/agent/personal-email-announcements-docs` (21 behind / 6 ahead) | прежний `docs/features/personal-email-announcements/README.md` | Superseded ownership design; port to a new main-based v2 branch only |
 | F8 historical transactional prototype | `origin/feature/event-email-notifications-static-20260702` (677 behind at audit time) | old `email_notifications/` prototype | Superseded. Current feedback/worker foundation was reimplemented and merged in `main@c6396331`; do not revive this branch |
 | F5 UI V3 | `origin/feature/event-page-ux-lab-v3-20260710` (69 behind / 15 ahead) | event-page decision/onboarding lab | UI not frozen; requires clean rebase and visual acceptance |
-| F11 transport | `origin/integration/event-transport-schedule` (1 behind / 9 ahead) | `docs/features/static-site-pages/event-transport-schedule.md` | Closest to merge; nightly refresh still P0-open |
+| F11 transport | `origin/integration/event-transport-schedule@4577b334`, draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) | `docs/features/event-transport/README.md` plus renderer/rail/bus child contracts | Refreshed from `main@c6396331` and validated; release UI integration and nightly atomic refresh remain P0-open |
 | F14 comment feedback | `origin/agent/event-comment-feedback-kaggle-runner` (724 behind / 10 ahead) | `docs/features/event-comment-feedback/README.md`, runner/kernel/tests | Architecture/code may be stale; no public UI/YDB path |
 | F17 admin issue reporting | `origin/feature/event-issue-report-artkodex-20260703` (69 behind / 12 ahead) | `docs/features/event-issue-reporting/README.md`, UI/Edge/migration | Mixed branch; no DB-level double-start guard/poller proof |
 
@@ -144,7 +144,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | F6, F7, F10 | Parent personalization docs и новый canonical `site-user-identity` home подготовлены; отдельных завершённых implementation branches для remote telemetry, verified-email identity и profile merge нет. |
 | F8 | Current transactional Postbox feedback/worker foundation is in `main@c6396331`; the old prototype remains superseded. Application event producers, reminder UX/templates/warm-up and the separate NotiSend recommendation flow are still incomplete. |
 | F9 | Canonical `event-favorites-calendar` home подготовлен; implementation branch/schema/API всё ещё отсутствуют. |
-| F11 | Есть близкая к main integration branch, но nightly production refresh остаётся P0-open. |
+| F11 | Предварительный rail+bus slice консолидирован в обновлённой от main ветке и draft PR #37; nightly production refresh и интеграция с финальным UI остаются P0-open. |
 | F12 | ICS находится в main; отдельной branch для product contract “calendar = favorite” нет. |
 | F14 | Есть старая probe branch; production collection/YDB/Astro feature не оформлены как merge-ready implementation. |
 | F15 | Preview implementation находится в main, production share-asset generator остаётся debt без отдельной завершённой ветки. |
@@ -163,7 +163,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | Personal email/page | Canonical design v2 подготовлен | Реализация отсутствует; старая branch назначала неверного владельца | Новый main-based feature branch по принятому Supabase control-plane ADR |
 | Email delivery | Средняя, branch-only | Transactional follow и recommendation digest смешиваются концептуально | Разделить transactional/reminder и recommendation marketing streams |
 | UI/share/focus | Средняя/высокая | Решения разбросаны по длинным preview/UI review docs | Зафиксировать единственный release UI contract + visual baselines |
-| Transport | Хорошая branch spec | Нет main route; coverage намного уже требования | Merge как отдельную feature; city/provider/source matrix и ops runbook |
+| Transport | Канонический home/route и renderer/rail/bus child contracts консолидированы; draft PR #37 прошёл directory + full preview checks | Coverage уже требования; нет nightly atomic refresh и принятой интеграции в release UI | Сохранить один reusable slice; добавить city/provider/source matrix, ops runbook, automatic last-good refresh и UI acceptance |
 | Comment feedback | Сильная design/probe | Старая ветка; нет main feature home/public implementation | Rebase architecture, отдельно storage/probe/UI/operations stages |
 | Admin incident report | Хорошая product prose | Документ переоценивает готовность ArtKodex poller/idempotency | Явно разделить UI, DB queue, poller, repair result, E2E statuses |
 | Event quality / Smart Update | Сильные incident records | `routes.yml` не перечисляет свежие Jul-7/9/10/11 contracts; нет единого cadence/SLO/dashboard и release burn-down | Добавить routes; закрепить Smart Update как prevention owner; описать регулярный audit → incident → root-cause fix → replay → monitoring workflow |
@@ -305,7 +305,9 @@ Smart Update является владельцем семантического 
 
 ### Stage 6 — Transport, discussion signals, admin repair, media
 
-- [ ] Transport city/provider matrix approved; rail/bus sources/licensing/refresh SLAs recorded.
+- [x] Preliminary rail/bus renderers, official route directories and type-prefixed event/transport ICS are consolidated in refreshed draft PR #37 and pass directory validators plus a 421-page preview/check.
+- [ ] Integrate the reusable transport slice into the frozen release UI without duplicating selector/data logic; approve mobile/desktop/no-JS/stale/unsupported visual baselines.
+- [ ] Transport city/provider matrix approved; rail/bus sources/licensing/refresh SLAs and exact-date public coverage recorded.
 - [ ] Nightly Kaggle transport refresh uses lease/status/validator/bounded diff/atomic last-good/stale alert and one coalesced static rebuild.
 - [ ] Comment feedback: incremental YDB state, PII redaction, phrase-bank/vector-first gates, cached group verifier, static manifest, Astro fallback and manual canary.
 - [ ] Admin report: allowlisted auth, event snapshot, idempotency key/unique active constraint, atomic poller claim, crash/retry safety, structured repair result/history/re-report.
@@ -396,7 +398,7 @@ Smart Update является владельцем семантического 
 7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 8. **P1 — admin repair loop:** F17 after idempotency/poller contract.
 9. **P1 — media quality/share:** F15/F16.
-10. **P2 — transport:** F11 after nightly source pipeline is production-safe.
+10. **P2 — transport:** land the validated preliminary slice through PR #37 only after release-UI placement is accepted; F11 becomes production-safe only after the nightly source pipeline/atomic last-good gate is closed.
 11. **P2 — discussion signals:** F14 after rebase and safety evaluation.
 
 Все одиннадцать streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.

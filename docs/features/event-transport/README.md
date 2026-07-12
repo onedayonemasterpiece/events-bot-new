@@ -1,6 +1,6 @@
 # Event transport guidance
 
-> Status: **presentation candidate in `integration/event-transport-schedule`; not in `origin/main`**. The branch has active uncommitted WIP and must not be updated or merged until that work is committed/pushed or explicitly discarded.
+> Status: **preliminary rail+bus presentation implementation consolidated in `integration/event-transport-schedule`; not yet in `origin/main`**. The branch is clean/pushed at merge head `4577b334`, contains the original handoff `dc46c348`, and has been refreshed from `main@c6396331`; draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) is the single integration review surface. Integration with the newly selected release UI remains required.
 
 ## Product contract
 
@@ -13,7 +13,15 @@ For eligible events outside Kaliningrad, the event page may show source-backed p
 - no invented event duration or return feasibility;
 - hide/fail safe when schedule evidence is missing or stale.
 
-Current branch scope is narrower than the release requirement: rail examples for Svetlogorsk/Zelenogradsk and one Romanovo bus case. Gusev, Chernyakhovsk, Sovetsk, Ozyorsk, Zheleznodorozhny and the full provider/city matrix remain open.
+The preliminary branch now contains:
+
+- source-backed rail blocks for the enabled Svetlogorsk/Zelenogradsk scope;
+- an official-Avtovokzal-backed Romanovo/Сказочное Холмогорье bus block;
+- prepared official rail and regional bus locality/venue directories for broader coverage;
+- event and transport-leg ICS with bounded type-prefixed filenames and stable UIDs;
+- static preview validators for visible rows, directories, artifact ceilings and orphan-free calendar output.
+
+Prepared directory coverage is not the same as public schedule enablement. Gusev, Chernyakhovsk, Sovetsk, Ozyorsk, Zheleznodorozhny and other localities still require exact-date validated schedules/last-mile rules before their blocks may render.
 
 ## Ownership
 
@@ -34,12 +42,27 @@ A manually reviewed committed snapshot is insufficient for the public presentati
 6. release manifest records transport snapshot id/hash/time;
 7. full city/provider, weekday/weekend/holiday and unknown-end acceptance matrix.
 
+## New release UI integration
+
+The transport implementation is now a reusable feature slice, not the owner of the final page composition. The release-UI task must:
+
+1. port the rail/bus blocks and transport-leg calendar actions into the chosen immutable UI baseline without duplicating schedule logic/data;
+2. decide the final responsive placement (content block, gallery-adjacent summary card or another approved surface) while keeping full schedule rows accessible;
+3. retain fail-closed matching, source/date freshness, unknown-end warnings, keyboard/touch targets and no-JS/static fallback;
+4. run the same transport directory/preview/ICS validators after the UI merge;
+5. prove mobile/desktop visual baselines for an enabled rail event, enabled bus event, unsupported locality and stale/partial schedule.
+
+Until that integration is signed off, the preliminary block must not be copied into another UI branch as forked markup or a second schedule selector.
+
 ## Branch governance
 
-Keep `integration/event-transport-schedule`; after its current dirty WIP is safely committed/pushed, merge `origin/main` into it without force-push, run feature tests/build/check and open a PR. Move the canonical contract to this feature home during integration; historical presentation QA belongs in reports.
+Keep `integration/event-transport-schedule` as the single transport integration source. Its former dirty-WIP blocker is closed: `dc46c348` was pushed, `main@c6396331` was merged without force-push, the validated result is `4577b334`, and draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) exposes both the reusable transport slice and the explicit automatic-refresh/new-UI blockers. Historical presentation QA belongs in reports; do not create another competing transport implementation branch.
 
 ## Related documentation
 
 - [Static event pages](../static-site-pages/README.md)
 - [Favorites/calendar](../event-favorites-calendar/README.md)
 - [Kaggle static-site builder](../../operations/kaggle-static-site-builder.md)
+- [Detailed preliminary renderer/schedule contract](../static-site-pages/event-transport-schedule.md)
+- [Rail multimodal directory](../static-site-pages/rail-multimodal-directory.md)
+- [Bus transport directory](../static-site-pages/bus-transport-directory.md)
