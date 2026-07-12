@@ -211,6 +211,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR",
             "REGION_TALK_TG_CACHED_ENTITY_ONLY",
             "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN",
+            "REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN",
+            "REGION_TALK_FAST_CHECK_QUERY_STRATEGY",
+            "REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS",
+            "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS",
+            "REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS",
             "REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS",
             "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS",
             "REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY",
@@ -242,6 +247,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"] = "1"
             os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "1"
             os.environ["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"] = "0"
+            os.environ["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"] = "0"
+            os.environ["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"] = "adaptive_cursor_v1"
+            os.environ["REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS"] = "1"
+            os.environ["REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS"] = "5"
+            os.environ["REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS"] = "9"
             os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "80"
             os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
             os.environ["REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY"] = "1"
@@ -262,6 +272,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"], "1")
             self.assertEqual(env["REGION_TALK_TG_CACHED_ENTITY_ONLY"], "1")
             self.assertEqual(env["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "0")
+            self.assertEqual(env["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "0")
+            self.assertEqual(env["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"], "adaptive_cursor_v1")
+            self.assertEqual(env["REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS"], "1")
+            self.assertEqual(env["REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS"], "5")
+            self.assertEqual(env["REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS"], "9")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"], "80")
             self.assertEqual(env["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"], "80")
             self.assertEqual(env["REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY"], "1")
