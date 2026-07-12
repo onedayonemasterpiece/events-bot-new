@@ -16,6 +16,8 @@ from urllib.parse import urlsplit
 
 
 LOGGER = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+LOGGER.setLevel(logging.INFO)
 MAX_RECORD_BYTES = 65_536
 MAX_BATCH_BYTES = 131_072
 MAX_BATCH_RECORDS = 100
