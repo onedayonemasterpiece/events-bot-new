@@ -5084,6 +5084,8 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = previous
         self.assertEqual(len(queue), 1)
         self.assertEqual(queue[0]["publication_eligibility_decision"], "accept")
+        self.assertNotIn("full_text", queue[0])
+        self.assertNotIn("text", queue[0])
         self.assertEqual(
             queue[0]["publication_eligibility_gate_version"],
             mod.PUBLICATION_ELIGIBILITY_GATE_VERSION,

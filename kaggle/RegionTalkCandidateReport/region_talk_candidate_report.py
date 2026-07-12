@@ -7121,7 +7121,6 @@ def build_image_candidate_queue(
             "has_media": str(has_image_media(row, media)).lower(),
             "media_count": row.get("media_count", media.get("media_count", entries[key].get("media_count", ""))),
             "primary_media_path": row.get("primary_media_path", media.get("primary_media_path", entries[key].get("primary_media_path", ""))),
-            "full_text": row.get("text") or row.get("full_text") or entries[key].get("full_text", ""),
             "text_hash": row.get("text_hash") or entries[key].get("text_hash", ""),
             "image_product_gate_status": "accepted_for_image_analysis",
             "image_product_gate_reason": "",
@@ -7159,6 +7158,11 @@ def build_image_candidate_queue(
     target_ids = {str(r.get("image_queue_id")) for r in pending_after_cursor[:target]}
     display = sorted(ordered, key=lambda r: (0 if r.get("image_queue_status") == "actual_scored" else 1, int(r.get("image_queue_order") or 0)))
     for idx, row in enumerate(display, start=1):
+        # The complete text verdict already exists before this queue. Keep the
+        # exact working text in candidate/vector state for Gemini, not in a
+        # redundant image-ledger projection that every CandidateReport rewrites.
+        for text_field in ("text", "full_text", "text_excerpt", "short_summary", "raw"):
+            row.pop(text_field, None)
         order = int(row.get("image_queue_order") or 0)
         row["display_order"] = idx
         row["cursor_marker"] = "cursor_here" if order == cursor_position else ("next_after_cursor" if order > cursor_position and str(row.get("image_queue_id")) in target_ids else "")
