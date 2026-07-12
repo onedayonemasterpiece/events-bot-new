@@ -59,7 +59,7 @@ history now matches all repository versions. Continue to use the session pooler 
 port 5432 for migration operations; the transaction pooler produced a prepared
 statement collision during the guarded first attempt.
 
-Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. Postbox Data Streams events must eventually be ingested through an IAM-authenticated consumer and deduplicated by provider `eventId`; no event destination is attached yet, so transactional production sending remains disabled.
+Public NotiSend documentation does not document a webhook signature. A NotiSend webhook body is therefore only an untrusted signal: it may be size/schema/dedup checked and recorded, but it cannot update delivery state or suppression until an authenticated `GET /v1/email/messages/:id` lookup verifies the provider state. The repository now contains the Postbox-specific V2 boundary: an IAM-authenticated YDS consumer computes a versioned recipient HMAC and a service-only Supabase RPC correlates it to the exact persisted Postbox `messageId` and DB-owned identity before applying an idempotent transition or suppression. The isolated live YDS/Function/DLQ resources and event destination still have to pass the release gates below, so transactional application sending remains disabled.
 
 ## Live provider state (2026-07-12)
 
@@ -67,9 +67,10 @@ Public NotiSend documentation does not document a webhook signature. A NotiSend 
   combined root SPF, SpaceWeb DKIM and monitoring DMARC resolve without changing
   the authoritative Yandex nameservers or existing site/CDN records. One outbound
   webmail canary from `info@kenigevents.ru` to the controlled `info@kgd80.ru`
-  address exists exactly once in `Sent` with no sender-side bounce. Recipient-side
-  placement and authentication headers still require read-only verification in
-  the kgd80 mailbox; the current host cannot establish TLS to
+  address exists exactly once in `Sent` with no sender-side bounce. The mailbox
+  owner confirmed that this exact canary arrived at `info@kgd80.ru`; folder
+  placement and raw recipient-side authentication headers were not supplied and
+  are not claimed. The current host cannot establish TLS to
   `smtp.spaceweb.ru:465`, so direct client SMTP was not claimed.
 - The isolated Yandex inbound folder, KMS-encrypted private bucket, three YMQ
   queues, four production-tagged Functions and three triggers are active. Both a
@@ -90,8 +91,10 @@ Public NotiSend documentation does not document a webhook signature. A NotiSend 
   plan and API activation is complete (`200` total, `200` available). No contacts
   were imported and no campaign was sent. A diagnostic exposed the current key in
   internal tool output; because the panel has no documented rotation control,
-  NotiSend support must revoke/reissue it and Lockbox must be updated before any
-  recommendation canary or application enablement.
+  the recommended remediation remains support-led revoke/reissue followed by a
+  Lockbox update. On 2026-07-12 the owner explicitly deferred that rotation and
+  accepted the temporary risk; this does not waive the gate, so no recommendation
+  canary or application enablement is allowed with the exposed key.
 - The live Supabase control plane has a 200-user admission capacity with zero
   active recommendation users. Global, transactional and recommendation switches
   are off and `dry_run_only` is on.
@@ -143,6 +146,20 @@ Loop guards are mandatory before any automatic response. Do not Bcc automated ou
 Examples include registration/address confirmation where the application owns that flow, preference/account changes, save/follow confirmation, reminder, cancellation and material reschedule notices. The server must derive current event/account facts and recheck the transactional send guard immediately before Postbox claim.
 
 Transactional consent/legitimate-trigger rules are distinct from recommendation consent. A favorite, calendar save, auth session or previous transactional delivery never opts a user into recommendations.
+
+Postbox notifications are QoS 1 / at-least-once. The consumer deduplicates by the
+stable provider `eventId`; it never trusts a caller-provided suppression identity.
+The event must match the pinned Postbox identity, configuration ID, From domain,
+exact provider message ID and versioned recipient HMAC derived from the database
+identity. `hard_bounce` and `complaint` suppress all mail, while a Postbox
+one-click `Subscription` event suppresses only the transactional stream.
+
+The provider documentation is currently inconsistent: the notification schema
+includes `Complaint` and `Rendering Failure`, while the create-destination API
+enumerates neither. Provisioning must probe the complete required set on a disabled
+destination. If the provider rejects it, leave application transactional sending
+disabled and record a provider blocker rather than silently claiming complete
+feedback coverage from a reduced event list.
 
 ### Recommendations through NotiSend
 

@@ -1,0 +1,61 @@
+{
+  "folder_id": "b1g0v4ur96gis5kot6ku",
+  "labels": {
+    "environment": "prod",
+    "project": "kenigevents",
+    "purpose": "postbox-events"
+  },
+  "ydb": {
+    "name": "kenigevents-email-events",
+    "mode": "serverless",
+    "deletion_protection": true,
+    "provisioned_rcu_per_second": 0,
+    "throttling_rcu_per_second": 10,
+    "storage_limit_gb": 5
+  },
+  "stream": {
+    "name": "kenigevents-postbox-events",
+    "partitions": 1,
+    "retention": "4h",
+    "partition_write_speed_kbps": 128,
+    "metering_mode": "request-units",
+    "codec": "RAW",
+    "auto_partitioning": "disabled"
+  },
+  "function": {
+    "name": "kenigevents-postbox-event-consumer",
+    "runtime": "python312",
+    "entrypoint": "index.handler",
+    "memory_mb": 256,
+    "timeout_seconds": 30,
+    "concurrency": 1,
+    "tag": "prod"
+  },
+  "trigger": {
+    "name": "kenigevents-postbox-event-trigger",
+    "batch_size_bytes": 1,
+    "batch_cutoff_seconds": 1,
+    "retry_attempts": 5,
+    "retry_interval_seconds": 30,
+    "dlq": "kenigevents-postbox-events-dlq"
+  },
+  "dlq": {
+    "retention_seconds": 1209600,
+    "visibility_timeout_seconds": 60,
+    "receive_wait_seconds": 10
+  },
+  "postbox": {
+    "configuration_set": "kenigevents-transactional",
+    "destination": "kenigevents-postbox-events-v1",
+    "enabled_last": true,
+    "required_event_types": [
+      "SEND",
+      "BOUNCE",
+      "COMPLAINT",
+      "DELIVERY",
+      "DELIVERY_DELAY",
+      "SUBSCRIPTION",
+      "RENDERING_FAILURE"
+    ]
+  }
+}
