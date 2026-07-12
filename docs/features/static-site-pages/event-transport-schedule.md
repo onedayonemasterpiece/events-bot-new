@@ -50,13 +50,13 @@ Static generation follows the visible actions, not the size of the timetable:
 
 On the 2026-07-12 regression catalog the full build contains `400` ordinary event calendars and `166` transport calendars for `44` eligible events: `566` ICS files total, no orphan transport files and no event above four transport files. The rendered-action rule removed three unused transport files from the previous `169`-file output. There are `127` unique date/destination/train keys; the other `39` files intentionally retain different event context in `SUMMARY`, `DESCRIPTION`, `URL` and `UID`. Replacing them with global trip files would currently save little while making the calendar entry less clear. A mandatory global-sharing review is triggered if transport ICS count reaches `1000`. This is a validation snapshot, not a fixed production count.
 
-Transport paths use short semantic ASCII names:
+The first filename segment identifies the calendar artifact. Rail paths use short semantic ASCII names:
 
-- `to-svetlogorsk-20260712-6717.ics`;
-- `to-kaliningrad-20260712-6722.ics`;
-- future dual-origin example: `to-elizavetinskaya-south-20260727-6725.ics`.
+- `rzd-svetlogorsk-20260712-6717.ics`;
+- `rzd-kaliningrad-20260712-6722.ics`;
+- future dual-origin example: `rzd-elizavetinskaya-south-20260727-6725.ics`.
 
-The saved filename adds the event id, for example `kenigevents-to-svetlogorsk-20260712-6717-e6510.ics`. Ordinary event calendars use a shortened Latin event slug plus id instead of the unbounded full page slug. Changing the readable filename does **not** change the existing VEVENT `UID`, preventing a renamed file from becoming a duplicate calendar entry.
+The saved filename adds the event id, for example `rzd-svetlogorsk-20260712-6717-e6510.ics`. Bus calendar artifacts follow `bus-<route>-<destination>-<date>-<departure>-e<event-id>.ics`, for example `bus-118-romanovo-20260725-0740-e6710.ics`. The event itself downloads as `event-<short-topic>-<date>-e<event-id>.ics`, for example `event-kontsert-posvyaschenie-muslimu-magomaevu-20260712-e6510.ics`. This bounded topic is derived from the already transliterated event page slug; it is readable without allowing an unbounded full title into the filename. The preview uploader applies the same names to Object Storage `Content-Disposition`, including the stable `/ics/<event_id>.ics` alias, rather than falling back to `event.ics`. Changing any readable filename does **not** change the existing VEVENT `UID`, preventing a renamed file from becoming a duplicate calendar entry.
 
 ## Bus example: Сказочное Холмогорье
 

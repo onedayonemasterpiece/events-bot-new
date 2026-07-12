@@ -21,6 +21,10 @@ const corridors = indexUnique(routes.route_corridors, 'route_corridors');
 const stops = indexUnique(access.stops, 'stops');
 const venues = indexUnique(access.venues, 'venues');
 
+if (!routes.ics_generation?.path_filename_pattern.startsWith('bus-<route>')) throw new Error('Bus ICS paths must use the semantic bus prefix');
+if (!routes.ics_generation?.download_filename_pattern.startsWith('bus-<route>')) throw new Error('Bus ICS download names must use the semantic bus prefix');
+if (!routes.ics_generation?.uid_rule.includes('UID stable')) throw new Error('Bus ICS filename changes must not churn calendar UIDs');
+
 const activeLocalities = [...localities.values()].filter((row) => row.active_event_count > 0);
 const activeVenues = [...venues.values()].filter((row) => row.active_event_count > 0);
 if (activeLocalities.length !== 14 || activeVenues.length !== 21) throw new Error('Production-day inventory must contain 14 active localities and 21 logical venues');

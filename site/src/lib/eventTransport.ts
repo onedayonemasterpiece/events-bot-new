@@ -225,7 +225,7 @@ export function eventTransportTripKey(
   const qualifier = String(boardingQualifier || '').toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
   const number = train.number.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'service';
   const date = train.serviceDate.replace(/-/gu, '');
-  return ['to', targetSlug, qualifier, date, number].filter(Boolean).join('-');
+  return ['rzd', targetSlug, qualifier, date, number].filter(Boolean).join('-');
 }
 
 export function eventTransportCalendarPath(

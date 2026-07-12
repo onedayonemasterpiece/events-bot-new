@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
+import { eventIcsDownloadFilename, transportIcsDownloadFilename } from '../src/lib/icsFilenames.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -25,13 +26,13 @@ const required = [
   'assets/transport/bus-svgrepo-337651.svg',
   'assets/transport/romanovo-holmogorye-route-square.png',
   'assets/transport/romanovo-holmogorye-route-portrait.png',
-  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/to-svetlogorsk-20260712-6725.ics',
-  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/to-kaliningrad-20260712-6730.ics',
-  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/to-kaliningrad-20260713-6700.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-svetlogorsk-20260712-6717.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-svetlogorsk-20260712-7213.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-kaliningrad-20260712-6722.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-kaliningrad-20260712-7220.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/rzd-svetlogorsk-20260712-6725.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/rzd-kaliningrad-20260712-6730.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/rzd-kaliningrad-20260713-6700.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-svetlogorsk-20260712-6717.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-svetlogorsk-20260712-7213.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-kaliningrad-20260712-6722.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-kaliningrad-20260712-7220.ics',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -59,7 +60,7 @@ for (const event of eventsData.events) {
   if (files.length > fileCeiling) throw new Error(`Event ${event.id} exceeds its ${fileCeiling}-file transport ICS ceiling: ${files.length}`);
   if (files.join('\n') !== linkedUnique.join('\n')) throw new Error(`Event ${event.id} transport ICS files must match interactive calendar links exactly`);
   for (const name of files) {
-    if (!/^to-[a-z0-9-]+-\d{8}-[a-z0-9-]+\.ics$/u.test(name)) throw new Error(`Transport ICS filename is not concise semantic ASCII: ${name}`);
+    if (!/^rzd-[a-z0-9-]+-\d{8}-[a-z0-9-]+\.ics$/u.test(name)) throw new Error(`Transport ICS filename is not concise semantic ASCII: ${name}`);
   }
   transportIcsTotal += files.length;
 }
@@ -370,6 +371,8 @@ const transportDemoEvent = eventsData.events.find((event) => event.id === 6510);
 if (!transportDemoEvent) throw new Error('Missing real event 6510 transport schedule regression event');
 if (transportDemoEvent.start_date !== '2026-07-12' || transportDemoEvent.start_time !== '17:00' || transportDemoEvent.time_range_end !== '18:10') throw new Error('Event 6510 must retain its source-verified 2026-07-12 17:00 start and 1h10m duration');
 if (!transportDemoEvent.title.includes('Муслиму Магомаеву') || !transportDemoEvent.title.includes('Анне Герман') || transportDemoEvent.ticket?.href !== 'https://янтарьхолл.рф/afisha/kontsertnaya-programma-khity-lyubimykh-artistov%2012%2007/') throw new Error('Event 6510 must remain connected to the real Yantar Hall event and ticket page');
+if (eventIcsDownloadFilename(transportDemoEvent) !== 'event-kontsert-posvyaschenie-muslimu-magomaevu-20260712-e6510.ics') throw new Error('Event ICS download name must keep a concise event-* topic/date/id contract');
+if (transportIcsDownloadFilename(transportDemoEvent, 'rzd-svetlogorsk-20260712-6717') !== 'rzd-svetlogorsk-20260712-6717-e6510.ics') throw new Error('Rail ICS download name must keep the rzd-* trip/event contract');
 const transportDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${transportDemoEvent.slug}/index.html`), 'utf8'));
 if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="2"') || !transportDemoHtml.includes('data-return-count="2"')) throw new Error('Event 6510 must expose two outbound and two return options for its real 17:00–18:10 window');
 if (!/data-transport-direction="outbound"[^>]*data-train-number="6717"[\s\S]*?<time[^>]*>15:11<\/time>[\s\S]*?<time[^>]*>16:05<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second outbound suggestion must be train 6717, 15:11→16:05 (55 minutes before start)');
@@ -377,10 +380,10 @@ if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<t
 if (!/data-transport-direction="return"[^>]*data-train-number="6722"[\s\S]*?<time[^>]*>18:54<\/time>[\s\S]*?<time[^>]*>19:48<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 first return suggestion must be train 6722, 18:54→19:48');
 if (!/data-transport-direction="return"[^>]*data-train-number="7220"[\s\S]*?<time[^>]*>19:33<\/time>[\s\S]*?<time[^>]*>20:19<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second return suggestion must be train 7220, 19:33→20:19');
 for (const [trip, expected] of [
-  ['to-svetlogorsk-20260712-6717', ['UID:transport-6510-outbound-2026-07-12-6717@kenigevents.ru', 'DTSTART:20260712T131100Z', 'DTEND:20260712T140500Z', 'TRIGGER:-PT30M']],
-  ['to-svetlogorsk-20260712-7213', ['UID:transport-6510-outbound-2026-07-12-7213@kenigevents.ru', 'DTSTART:20260712T134300Z', 'DTEND:20260712T142900Z', 'TRIGGER:-PT30M', 'LOCATION:Калининград-Северный']],
-  ['to-kaliningrad-20260712-6722', ['UID:transport-6510-return-2026-07-12-6722@kenigevents.ru', 'DTSTART:20260712T165400Z', 'TRIGGER:-PT30M']],
-  ['to-kaliningrad-20260712-7220', ['UID:transport-6510-return-2026-07-12-7220@kenigevents.ru', 'DTSTART:20260712T173300Z', 'TRIGGER:-PT30M']],
+  ['rzd-svetlogorsk-20260712-6717', ['UID:transport-6510-outbound-2026-07-12-6717@kenigevents.ru', 'DTSTART:20260712T131100Z', 'DTEND:20260712T140500Z', 'TRIGGER:-PT30M']],
+  ['rzd-svetlogorsk-20260712-7213', ['UID:transport-6510-outbound-2026-07-12-7213@kenigevents.ru', 'DTSTART:20260712T134300Z', 'DTEND:20260712T142900Z', 'TRIGGER:-PT30M', 'LOCATION:Калининград-Северный']],
+  ['rzd-kaliningrad-20260712-6722', ['UID:transport-6510-return-2026-07-12-6722@kenigevents.ru', 'DTSTART:20260712T165400Z', 'TRIGGER:-PT30M']],
+  ['rzd-kaliningrad-20260712-7220', ['UID:transport-6510-return-2026-07-12-7220@kenigevents.ru', 'DTSTART:20260712T173300Z', 'TRIGGER:-PT30M']],
 ]) {
   const href = `/sobytiya/${transportDemoEvent.slug}/transport/${trip}.ics`;
   if (!transportDemoHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6510 misses calendar CTA for ${trip}`);
@@ -397,7 +400,7 @@ if (!/data-transport-direction="outbound"[^>]*data-train-number="6725"[\s\S]*?<t
 for (const needle of ['Обратно после события', 'Последний поезд в день события — в 22:40', '22:40 → 23:35', 'Ночных рейсов нет', 'Первый поезд 13 июля — в 06:25', 'Уточните время окончания у организатора']) {
   if (!cutoffHtml.includes(needle)) throw new Error(`Event 6397 schedule-cutoff block missing ${needle}`);
 }
-for (const trip of ['to-svetlogorsk-20260712-6725', 'to-kaliningrad-20260712-6730', 'to-kaliningrad-20260713-6700']) {
+for (const trip of ['rzd-svetlogorsk-20260712-6725', 'rzd-kaliningrad-20260712-6730', 'rzd-kaliningrad-20260713-6700']) {
   const href = `/sobytiya/${cutoffEvent.slug}/transport/${trip}.ics`;
   if (!cutoffHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6397 misses calendar CTA for ${trip}`);
   const tripIcs = readFileSync(join(root, href.slice(1)), 'utf8');

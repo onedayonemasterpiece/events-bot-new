@@ -21,6 +21,8 @@ Committed contracts:
 - `site/src/data/busTransportSchedules.json` — actual trip snapshot; currently only the reviewed Romanovo example;
 - `npm --prefix site run check:bus-directory` — referential, count and safety validation.
 
+When a bus row gains a calendar action, both its static path and downloaded file start with `bus-`: `bus-<route>-<latin-destination>-<YYYYMMDD>-<HHMM>.ics`, with `-e<event_id>` appended to the download name. Example: `bus-118-romanovo-20260725-0740-e6710.ics`. This is the prepared naming contract; the current Romanovo UI still renders timetable chips without bus ICS links. The VEVENT `UID` must remain stable if only the readable filename changes.
+
 Rail priority and combined-mode decisions are not duplicated here. They live in [rail-multimodal-directory.md](rail-multimodal-directory.md), which cross-links these stable bus locality ids for destinations where rail must not suppress buses.
 
 ## Production event inventory — 2026-07-11

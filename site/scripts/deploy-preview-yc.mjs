@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import { eventIcsDownloadFilename, transportIcsDownloadFilename } from '../src/lib/icsFilenames.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const repoRoot = resolve(siteDir, '..');
@@ -51,7 +52,7 @@ function loadPreviewEventsBySlug() {
   const parsed = JSON.parse(readFileSync(dataPath, 'utf8'));
   const out = new Map();
   for (const event of parsed.events || []) {
-    if (event?.slug && event?.id) out.set(String(event.slug), Number(event.id));
+    if (event?.slug && event?.id) out.set(String(event.slug), event);
   }
   return out;
 }
@@ -77,13 +78,21 @@ let stableIcsUploaded = 0;
 const find = spawnSync('find', [sourceDir, '-name', '*.ics', '-type', 'f'], { encoding: 'utf8' });
 for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
   const rel = file.slice(sourceDir.length + 1);
-  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="${basename(file)}"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+  const eventMatch = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(rel);
+  const transportMatch = /^sobytiya\/([^/]+)\/transport\/([^/]+)\.ics$/u.exec(rel);
+  const eventSlug = eventMatch?.[1] || transportMatch?.[1] || null;
+  const event = eventSlug ? eventsBySlug.get(eventSlug) : null;
+  const downloadFilename = eventMatch && event
+    ? eventIcsDownloadFilename(event)
+    : transportMatch && event
+      ? transportIcsDownloadFilename(event, transportMatch[2])
+      : basename(file);
+  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="${downloadFilename}"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
-  const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(rel);
-  const slugEventId = match ? /-(\d+)$/u.exec(match[1])?.[1] : null;
-  const eventId = match ? (eventsBySlug.get(match[1]) || (slugEventId ? Number(slugEventId) : null)) : null;
+  const slugEventId = eventMatch ? /-(\d+)$/u.exec(eventMatch[1])?.[1] : null;
+  const eventId = eventMatch ? (event?.id || (slugEventId ? Number(slugEventId) : null)) : null;
   if (eventId) {
-    const stablePut = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/ics/${eventId}.ics`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="event-${eventId}.ics"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+    const stablePut = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/ics/${eventId}.ics`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="${downloadFilename}"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
     if (stablePut.status !== 0) process.exit(stablePut.status || 1);
     stableIcsUploaded += 1;
   }
@@ -101,7 +110,7 @@ const verifyTargets = [
 if (stableIcsUploaded) {
   const firstIcs = find.stdout.split(/\r?\n/).find((file) => /\/event\.ics$/u.test(file));
   const match = firstIcs ? /^sobytiya\/([^/]+)\/event\.ics$/u.exec(firstIcs.slice(sourceDir.length + 1)) : null;
-  const eventId = match ? eventsBySlug.get(match[1]) || /-(\d+)$/u.exec(match[1])?.[1] : null;
+  const eventId = match ? eventsBySlug.get(match[1])?.id || /-(\d+)$/u.exec(match[1])?.[1] : null;
   if (eventId && env.PUBLIC_ICS_BASE_URL) {
     verifyTargets.push([`${String(env.PUBLIC_ICS_BASE_URL).replace(/\/+$/u, '')}/${eventId}.ics`, 'stable ICS CDN sample']);
   }

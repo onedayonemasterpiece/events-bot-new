@@ -31,7 +31,7 @@ The 2026-07-12 product follow-up is **Done in reference / Partial in public UI**
 
 ## Follow-up — ICS scale and naming
 
-The 2026-07-12 ICS follow-up is **Done**. Standard pages now generate only their rendered actions (maximum 4 files); the future dual-origin contract has a hard ceiling of 6. Explicit-end pages no longer pre-generate unused last/next-day cutoff files. Paths and saved names use concise Latin destination/date/service identifiers, while existing VEVENT UIDs remain stable. Preview acceptance rejects orphan files, non-semantic names and per-event budget violations.
+The 2026-07-12 ICS follow-up is **Done**. Standard pages now generate only their rendered actions (maximum 4 files); the future dual-origin contract has a hard ceiling of 6. Explicit-end pages no longer pre-generate unused last/next-day cutoff files. Paths and saved names begin with a readable artifact type: `rzd-*` for trains, `bus-*` for the prepared bus-calendar contract and `event-*` for the event itself. Existing VEVENT UIDs remain stable. Preview acceptance rejects orphan files, non-semantic names and per-event budget violations.
 
 Validation baseline: `400` event ICS + `166` transport ICS = `566` total; `44` events have transport files, maximum `4` each, `0` non-semantic names and `0` generated-vs-linked mismatches. The transport count decreased from `169` to `166` by removing unused cutoff artifacts.
 

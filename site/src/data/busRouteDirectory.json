@@ -2,6 +2,12 @@
   "schema_version": "event_bus_route_directory_v1",
   "reviewed_at": "2026-07-11",
   "storage": "static_json",
+  "ics_generation": {
+    "rule": "Generate files only for bus calendar actions rendered on the event page; never pre-generate every timetable departure.",
+    "path_filename_pattern": "bus-<route>-<latin-destination>-<YYYYMMDD>-<HHMM>.ics",
+    "download_filename_pattern": "bus-<route>-<latin-destination>-<YYYYMMDD>-<HHMM>-e<event_id>.ics",
+    "uid_rule": "Keep the existing route/date/departure UID stable when only the human-facing filename changes."
+  },
   "event_inventory": {
     "source": "production Fly SQLite read-only snapshot",
     "snapshot_date": "2026-07-11",

@@ -37,9 +37,9 @@
     "dual_origin_max_files_per_event": 6,
     "shared_trip_review_threshold": 1000,
     "sharing_policy": "Keep event-scoped transport ICS while the catalog is below the threshold because SUMMARY/DESCRIPTION/URL carry event context. Re-evaluate global trip files when the threshold is reached.",
-    "transport_filename_pattern": "to-<latin-destination>[-<latin-origin>]-<YYYYMMDD>-<service>.ics",
-    "download_filename_pattern": "kenigevents-to-<latin-destination>-<YYYYMMDD>-<service>-e<event_id>.ics",
-    "event_download_filename_pattern": "kenigevents-<short-latin-event>-<event_id>.ics",
+    "transport_filename_pattern": "rzd-<latin-destination>[-<latin-origin>]-<YYYYMMDD>-<service>.ics",
+    "download_filename_pattern": "rzd-<latin-destination>[-<latin-origin>]-<YYYYMMDD>-<service>-e<event_id>.ics",
+    "event_download_filename_pattern": "event-<short-latin-topic>-<YYYYMMDD>-e<event_id>.ics",
     "uid_rule": "Keep the existing direction/date/service UID stable when only the human-facing filename changes.",
     "deduplication_key": "destination + optional boarding origin + service date + service number",
     "dual_origin_rule": "One physical train row may expose two origin-specific ICS actions because departure time and LOCATION differ; return from Elizavetinskaya uses one departure ICS with both city arrivals in DESCRIPTION."
