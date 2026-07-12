@@ -1,47 +1,43 @@
 ---
 import Icon from '../Icon.astro';
 
-type Variant = 'h1' | 'h2' | 'h3' | 'p1' | 'p2' | 'p3';
-interface Props {
-  variant: Variant;
-  family: 'horizontal' | 'portrait';
+type Candidate = 'editorial' | 'split' | 'gallery' | 'typographic';
+type MediaPolicy = 'non-ocr' | 'ocr';
+
+interface Sample {
+  id: number;
   image: string;
   imageAlt: string;
+  imageWidth: number;
+  imageHeight: number;
+  imagePosition?: string;
+  ocrSafeCover?: boolean;
+  type: string;
+  date: string;
+  weekday?: string;
+  time?: string;
+  title: string;
+  venue: string;
+  address: string;
+  admission: string;
+  primary: string;
+  calendarPrimary?: boolean;
+  summary: string;
+}
+
+interface Props {
+  candidate: Candidate;
+  mediaPolicy: MediaPolicy;
   name: string;
-  strapline: string;
+  verdict: string;
+  sample: Sample;
   recommendation?: string;
 }
 
-const { variant, family, image, imageAlt, name, strapline, recommendation } = Astro.props;
-const isPortrait = family === 'portrait';
-const sample = isPortrait
-  ? {
-      type: 'фестиваль',
-      date: '12 июля',
-      weekday: 'воскресенье',
-      time: '09:00',
-      title: 'ВЕЛОДЕНЬ',
-      venue: 'Парковка у Правительства Калининградской области',
-      address: 'Дм. Донского, 1 · Калининград',
-      admission: 'Бесплатно',
-      primary: 'Добавить в календарь',
-      calendarPrimary: true,
-      summary: 'Городской фестиваль объединяет любителей велоспорта для участия в массовом заезде и семейных активностях.',
-    }
-  : {
-      type: 'концерт',
-      date: '12 июля',
-      weekday: 'воскресенье',
-      time: '17:00',
-      title: 'Хиты любимых артистов: концерт-посвящение Муслиму Магомаеву и Анне Герман',
-      venue: 'Янтарь холл',
-      address: 'Ленина, 11 · Светлогорск',
-      admission: 'Билеты',
-      primary: 'Билеты',
-      calendarPrimary: false,
-      summary: 'Симфонический оркестр исполняет известные произведения из репертуара легендарных артистов.',
-    };
-
+const { candidate, mediaPolicy, name, verdict, sample, recommendation } = Astro.props;
+const ratio = sample.imageWidth / sample.imageHeight;
+const isOcr = mediaPolicy === 'ocr';
+const variantId = `${candidate}-${mediaPolicy}`;
 const actions = sample.calendarPrimary
   ? [
       { icon: 'share' as const, value: '6', label: 'Поделиться' },
@@ -54,34 +50,59 @@ const actions = sample.calendarPrimary
     ];
 ---
 
-<article class:list={['desktop-prototype', `desktop-prototype--${variant}`, `desktop-prototype--${family}`]} data-desktop-variant={variant}>
+<article
+  class:list={['desktop-prototype', `desktop-prototype--${candidate}`, `desktop-prototype--${mediaPolicy}`]}
+  data-desktop-variant={variantId}
+  data-media-policy={mediaPolicy}
+  data-ocr-safe-cover={sample.ocrSafeCover ? 'true' : 'false'}
+  style={`--image-ratio:${ratio};--image-position:${sample.imagePosition || '50% 50%'};`}
+>
   <header class="desktop-prototype__review-head">
-    <p><strong>{variant.toUpperCase()}</strong><span>{family === 'portrait' ? 'вертикальный OCR-постер' : 'горизонтальный / квадратный hero'}</span>{recommendation && <em>{recommendation}</em>}</p>
-    <h2>{name}</h2>
-    <p>{strapline}</p>
+    <p>
+      <strong>{candidate.slice(0, 1).toUpperCase()}{isOcr ? '·OCR' : '·PHOTO'}</strong>
+      <span>реальное событие #{sample.id}</span>
+      {recommendation && <em>{recommendation}</em>}
+    </p>
+    <h3>{name}</h3>
+    <p>{verdict}</p>
   </header>
 
   <div class="desktop-prototype__canvas">
-    <section class="desktop-prototype__stage" aria-label={`Прототип ${variant.toUpperCase()}`}>
-      <figure class="desktop-prototype__media">
-        <img src={image} alt={imageAlt} loading="lazy" decoding="async" />
-        <figcaption>Фото · открыть полностью</figcaption>
+    <section class="desktop-prototype__stage" aria-label={`${name}: ${isOcr ? 'афиша с OCR' : 'изображение без OCR'}`}>
+      <figure class="desktop-prototype__media" data-media-frame>
+        <img
+          src={sample.image}
+          alt={sample.imageAlt}
+          width={sample.imageWidth}
+          height={sample.imageHeight}
+          loading="lazy"
+          decoding="async"
+        />
       </figure>
 
-      <div class="desktop-prototype__info">
-        <p class="desktop-prototype__kicker"><span>{sample.type}</span><time datetime="2026-07-12T09:00:00+02:00">{sample.date} · {sample.weekday} · {sample.time}</time></p>
-        <h3>{sample.title}</h3>
-        <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{sample.venue}</strong><small>{sample.address}</small></span></p>
+      <div class="desktop-prototype__info" data-title-panel>
+        <p class="desktop-prototype__kicker">
+          <span>{sample.type}</span>
+          <time>{sample.date}{sample.weekday && ` · ${sample.weekday}`}{sample.time && ` · ${sample.time}`}</time>
+        </p>
+        <h4 data-event-title>{sample.title}</h4>
+        <p class="desktop-prototype__place">
+          <Icon name="pin" />
+          <span><strong>{sample.venue}</strong><small>{sample.address}</small></span>
+        </p>
         <div class="desktop-prototype__medallions" aria-label="Медальоны события">
           <span><b>БАХ</b><small>Бахослужение</small></span>
           <span><b>ПК</b><small>Пушкинская карта</small></span>
-          <span><b>ЯХ</b><small>Янтарь холл</small></span>
+          <span><b>39</b><small>Калининград</small></span>
         </div>
       </div>
 
       <aside class="desktop-prototype__action" aria-label="Главное действие и действия события">
         <p><span>{sample.calendarPrimary ? 'вход' : 'доступ'}</span><strong>{sample.admission}</strong></p>
-        <a href="#desktop-review">{sample.calendarPrimary ? <Icon name="calendar" /> : <Icon name="ticket" />}<span>{sample.primary}</span></a>
+        <a href="#desktop-review">
+          {sample.calendarPrimary ? <Icon name="calendar" /> : <Icon name="ticket" />}
+          <span>{sample.primary}</span>
+        </a>
         <div class="desktop-prototype__action-row">
           {actions.map((action) => (
             <button type="button" aria-label={`${action.label}${action.value ? `, ${action.value}` : ''}`} title={action.label}>
@@ -92,137 +113,159 @@ const actions = sample.calendarPrimary
       </aside>
     </section>
 
-    <section class="desktop-prototype__body">
-      <div>
-        <p class="eyebrow">Описание</p>
-        <p>{sample.summary}</p>
-        <p>Ниже продолжается обычный поток страницы: подробности, другие даты и источники. Hero и временная sticky-композиция к этому моменту уже ушли вверх.</p>
-      </div>
-      <div class="desktop-prototype__state-matrix" aria-label="Состояния CTA">
-        <span><b>Бесплатно без записи</b>Добавить в календарь</span>
-        <span><b>Цена известна</b>800 ₽ · Позвонить</span>
-        <span><b>Цена неизвестна</b>Билеты</span>
-      </div>
-    </section>
-
-    <section class="desktop-prototype__next" aria-label="Переход к рекомендациям">
-      <header><p class="eyebrow">Стандартный модуль</p><h3>Смотрите дальше</h3></header>
-      <div><span></span><span></span><span></span></div>
-    </section>
+    <footer class="desktop-prototype__note">
+      <p><strong>Почему этот пример:</strong> {sample.summary}</p>
+      <span>
+        {sample.imageWidth}×{sample.imageHeight} · {isOcr ? 'OCR safe: ' : 'free crop: '}
+        <strong data-crop-label>{isOcr ? 'расчёт кропа…' : 'cover разрешён'}</strong>
+      </span>
+    </footer>
   </div>
 </article>
 
+<script>
+  const calculateCoverCrop = (frame: HTMLElement, image: HTMLImageElement) => {
+    const frameWidth = frame.clientWidth;
+    const frameHeight = frame.clientHeight;
+    const imageWidth = image.naturalWidth || Number(image.getAttribute('width'));
+    const imageHeight = image.naturalHeight || Number(image.getAttribute('height'));
+    if (!frameWidth || !frameHeight || !imageWidth || !imageHeight) return 1;
+    const scale = Math.max(frameWidth / imageWidth, frameHeight / imageHeight);
+    const visibleFraction = (frameWidth * frameHeight) / (imageWidth * imageHeight * scale * scale);
+    return Math.max(0, Math.min(1, 1 - visibleFraction));
+  };
+
+  const updateOcrFrames = () => {
+    document.querySelectorAll<HTMLElement>('[data-media-policy="ocr"]').forEach((prototype) => {
+      const frame = prototype.querySelector<HTMLElement>('[data-media-frame]');
+      const image = frame?.querySelector<HTMLImageElement>('img');
+      const label = prototype.querySelector<HTMLElement>('[data-crop-label]');
+      if (!frame || !image || !label) return;
+      const potentialCrop = calculateCoverCrop(frame, image);
+      const safeCover = prototype.dataset.ocrSafeCover === 'true' && potentialCrop <= 0.2;
+      prototype.classList.toggle('is-safe-cover', safeCover);
+      prototype.classList.toggle('is-safe-contain', !safeCover);
+      const measuredCrop = safeCover ? potentialCrop : 0;
+      prototype.dataset.measuredCrop = measuredCrop.toFixed(4);
+      prototype.dataset.potentialCoverCrop = potentialCrop.toFixed(4);
+      label.textContent = safeCover
+        ? `кроп ${(potentialCrop * 100).toFixed(1)}% из 20%`
+        : `без кропа · cover дал бы ${(potentialCrop * 100).toFixed(1)}%`;
+    });
+  };
+
+  const initOcrFrames = () => {
+    document.querySelectorAll<HTMLImageElement>('[data-media-policy="ocr"] [data-media-frame] img').forEach((image) => {
+      if (!image.complete) image.addEventListener('load', updateOcrFrames, { once: true });
+    });
+    updateOcrFrames();
+  };
+
+  initOcrFrames();
+  window.addEventListener('resize', updateOcrFrames, { passive: true });
+  document.addEventListener('astro:page-load', initOcrFrames);
+</script>
+
 <style>
-  .desktop-prototype { display: grid; gap: 1rem; scroll-margin-top: 1rem; }
-  .desktop-prototype__review-head { display: grid; gap: .32rem; max-width: 72rem; }
+  .desktop-prototype { display: grid; gap: .9rem; scroll-margin-top: 1rem; }
+  .desktop-prototype__review-head { display: grid; gap: .28rem; max-width: 72rem; }
   .desktop-prototype__review-head > p { margin: 0; color: #6d6259; }
-  .desktop-prototype__review-head > p:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; font-size: .8rem; letter-spacing: .075em; text-transform: uppercase; }
-  .desktop-prototype__review-head > p:first-child strong { padding: .26rem .56rem; border-radius: 999px; background: #25211e; color: #fffdf8; }
-  .desktop-prototype__review-head > p:first-child em { padding: .26rem .56rem; border-radius: 999px; background: #d8ead9; color: #1d5d3d; font-style: normal; font-weight: 850; }
-  .desktop-prototype__review-head h2 { margin: 0; font-size: clamp(1.65rem, 2.6vw, 2.7rem); }
-  .desktop-prototype__canvas { overflow: clip; border: 1px solid rgba(121,48,20,.15); border-radius: 30px; background: #fffaf2; box-shadow: 0 22px 60px rgba(58,35,20,.12); }
-  .desktop-prototype__stage { position: relative; min-height: 690px; background: #eee2d2; }
-  .desktop-prototype__media { position: relative; margin: 0; overflow: hidden; background: #211e1b; }
-  .desktop-prototype__media img { width: 100%; height: 100%; display: block; }
-  .desktop-prototype__media figcaption { position: absolute; top: 1rem; right: 1rem; padding: .45rem .7rem; border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(24,20,17,.58); color: #fff; font-size: .78rem; font-weight: 800; backdrop-filter: blur(8px); }
-  .desktop-prototype__info { z-index: 2; display: grid; align-content: start; gap: 1rem; color: #241c17; }
-  .desktop-prototype__kicker { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .4rem 1rem; margin: 0; color: #91401d; font-size: .82rem; font-weight: 900; letter-spacing: .075em; text-transform: uppercase; }
+  .desktop-prototype__review-head > p:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; font-size: .78rem; letter-spacing: .075em; text-transform: uppercase; }
+  .desktop-prototype__review-head > p:first-child strong { padding: .28rem .58rem; border-radius: 999px; background: #25211e; color: #fffdf8; }
+  .desktop-prototype--ocr .desktop-prototype__review-head > p:first-child strong { background: #285852; }
+  .desktop-prototype__review-head > p:first-child em { padding: .28rem .58rem; border-radius: 999px; background: #d8ead9; color: #1d5d3d; font-style: normal; font-weight: 850; }
+  .desktop-prototype__review-head h3 { margin: 0; font-size: clamp(1.55rem, 2.4vw, 2.55rem); }
+  .desktop-prototype__canvas { overflow: clip; border: 1px solid rgba(121,48,20,.15); border-radius: 30px; background: #fffaf2; box-shadow: 0 22px 60px rgba(58,35,20,.11); }
+  .desktop-prototype__stage { --stage-height: clamp(560px, calc(100svh - 88px), 800px); position: relative; min-height: var(--stage-height); height: var(--stage-height); overflow: hidden; background: #eadfce; }
+  .desktop-prototype__media { position: relative; margin: 0; overflow: hidden; background: #e6d9c7; }
+  .desktop-prototype__media img { width: 100%; height: 100%; display: block; object-position: var(--image-position); }
+  .desktop-prototype--non-ocr .desktop-prototype__media img,
+  .desktop-prototype--ocr.is-safe-cover .desktop-prototype__media img { object-fit: cover; }
+  .desktop-prototype--ocr .desktop-prototype__media img,
+  .desktop-prototype--ocr.is-safe-contain .desktop-prototype__media img { object-fit: contain; }
+  .desktop-prototype__info { z-index: 2; display: grid; align-content: start; gap: clamp(.62rem, 1.5vh, 1rem); color: #241c17; }
+  .desktop-prototype__kicker { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .35rem .85rem; margin: 0; color: #91401d; font-size: clamp(.7rem, 1.25vw, .82rem); font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
   .desktop-prototype__kicker time { color: inherit; font-variant-numeric: tabular-nums; }
-  .desktop-prototype__info h3 { max-width: 15ch; margin: 0; font-size: clamp(2.4rem, 4.25vw, 4.9rem); line-height: .96; letter-spacing: -.06em; overflow-wrap: anywhere; }
-  .desktop-prototype__place { display: grid; grid-template-columns: 1.4rem minmax(0,1fr); gap: .65rem; margin: 0; }
-  .desktop-prototype__place :global(.icon) { width: 1.35rem; height: 1.35rem; color: #a54821; }
-  .desktop-prototype__place span { display: grid; gap: .08rem; }
-  .desktop-prototype__place strong { font-size: 1.02rem; }
-  .desktop-prototype__place small { color: #72645b; font-size: .84rem; font-weight: 680; }
-  .desktop-prototype__action { z-index: 3; display: grid; align-content: start; gap: 1rem; padding: 1.4rem; color: #fffaf2; background: #292521; }
-  .desktop-prototype__action > p { display: grid; gap: .08rem; margin: 0; }
-  .desktop-prototype__action > p span { color: #d7c9bc; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-  .desktop-prototype__action > p strong { font-size: 1.45rem; line-height: 1.05; }
-  .desktop-prototype__action > a { min-height: 58px; display: inline-flex; align-items: center; justify-content: center; gap: .65rem; padding: .75rem 1rem; border-radius: 18px; background: #b54d22; color: #fff; font-size: 1.04rem; font-weight: 900; text-decoration: none; box-shadow: 0 12px 24px rgba(124,49,20,.26); }
+  .desktop-prototype__info h4 { max-width: 17ch; margin: 0; font-size: clamp(2rem, min(3.7vw, 6.2vh), 4.55rem); line-height: .96; letter-spacing: -.055em; overflow-wrap: anywhere; }
+  .desktop-prototype__place { display: grid; grid-template-columns: 1.35rem minmax(0,1fr); gap: .6rem; margin: 0; }
+  .desktop-prototype__place :global(.icon) { width: 1.3rem; height: 1.3rem; color: #a54821; }
+  .desktop-prototype__place span { display: grid; gap: .06rem; }
+  .desktop-prototype__place strong { font-size: clamp(.88rem, 1.4vw, 1.02rem); }
+  .desktop-prototype__place small { color: #72645b; font-size: .8rem; font-weight: 680; }
+  .desktop-prototype__action { z-index: 3; display: grid; align-content: start; gap: clamp(.65rem, 1.6vh, 1rem); padding: clamp(1rem, 2.2vw, 1.4rem); color: #fffaf2; background: #292521; }
+  .desktop-prototype__action > p { display: grid; gap: .06rem; margin: 0; }
+  .desktop-prototype__action > p span { color: #d7c9bc; font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .desktop-prototype__action > p strong { font-size: clamp(1.1rem, 2vw, 1.42rem); line-height: 1.05; }
+  .desktop-prototype__action > a { min-height: 56px; display: inline-flex; align-items: center; justify-content: center; gap: .62rem; padding: .7rem .9rem; border-radius: 18px; background: #b54d22; color: #fff; font-size: .98rem; font-weight: 900; text-decoration: none; box-shadow: 0 12px 24px rgba(124,49,20,.25); }
   .desktop-prototype__action > a :global(.icon) { width: 1.5rem; height: 1.5rem; }
   .desktop-prototype__action-row { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .4rem; }
-  .desktop-prototype__action-row button { min-width: 48px; min-height: 56px; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding: .4rem; border: 0; border-radius: 14px; background: rgba(255,255,255,.06); color: #fffaf2; font: inherit; cursor: pointer; }
-  .desktop-prototype__action-row button :global(.icon) { width: 30px; height: 30px; stroke-width: 1.8; }
-  .desktop-prototype__action-row button strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
-  .desktop-prototype__medallions { display: flex; gap: .7rem; overflow: hidden; padding-top: .35rem; }
-  .desktop-prototype__medallions > span { width: 92px; height: 92px; flex: 0 0 92px; display: grid; place-items: center; align-content: center; gap: .1rem; border: 4px solid #fff; border-radius: 50%; background: #e8d5b3; color: #34291f; box-shadow: 0 9px 22px rgba(64,43,28,.16); text-align: center; }
-  .desktop-prototype__medallions b { font-size: 1.15rem; }
-  .desktop-prototype__medallions small { max-width: 72px; font-size: .57rem; font-weight: 900; line-height: 1.02; }
-  .desktop-prototype__body { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(18rem,.75fr); gap: 2.2rem; padding: 3rem clamp(1.4rem,4vw,4rem); background: #fffaf2; }
-  .desktop-prototype__body p { max-width: 67ch; margin: 0 0 1rem; font-size: 1.04rem; }
-  .desktop-prototype__state-matrix { display: grid; align-content: start; gap: .65rem; }
-  .desktop-prototype__state-matrix span { display: grid; padding: .78rem 1rem; border-left: 3px solid #b54d22; background: #f2e4d2; color: #655449; font-size: .82rem; }
-  .desktop-prototype__state-matrix b { color: #2e251f; }
-  .desktop-prototype__next { display: grid; gap: 1rem; padding: 2.4rem clamp(1.4rem,4vw,4rem) 3rem; border-top: 1px solid rgba(121,48,20,.13); background: #fbf6ed; }
-  .desktop-prototype__next h3 { margin: 0; font-size: 1.7rem; }
-  .desktop-prototype__next > div { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; }
-  .desktop-prototype__next > div span { height: 120px; border-radius: 18px; background: linear-gradient(135deg,#d9c4a7,#80644f); }
+  .desktop-prototype__action-row button { min-width: 48px; min-height: 54px; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; padding: .35rem; border: 0; border-radius: 14px; background: rgba(255,255,255,.07); color: #fffaf2; font: inherit; cursor: pointer; }
+  .desktop-prototype__action-row button :global(.icon) { width: 29px; height: 29px; stroke-width: 1.8; }
+  .desktop-prototype__action-row button strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
+  .desktop-prototype__medallions { display: flex; gap: .6rem; overflow: hidden; padding-top: .15rem; }
+  .desktop-prototype__medallions > span { width: clamp(72px, 7vw, 92px); height: clamp(72px, 7vw, 92px); flex: 0 0 clamp(72px, 7vw, 92px); display: grid; place-items: center; align-content: center; gap: .05rem; border: 4px solid #fff; border-radius: 50%; background: #e8d5b3; color: #34291f; box-shadow: 0 9px 22px rgba(64,43,28,.16); text-align: center; }
+  .desktop-prototype__medallions b { font-size: 1.05rem; }
+  .desktop-prototype__medallions small { max-width: 68px; font-size: .53rem; font-weight: 900; line-height: 1.02; }
+  .desktop-prototype__note { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem 2rem; padding: 1.1rem 1.3rem; border-top: 1px solid rgba(121,48,20,.12); background: #fffaf2; }
+  .desktop-prototype__note p { max-width: 68ch; margin: 0; }
+  .desktop-prototype__note > span { max-width: 36ch; color: #796b61; font-size: .78rem; text-align: right; }
+  .desktop-prototype__note > span strong { color: #285852; }
 
-  /* H1 — image owns the opening, then a two-slab overlap: facts left, actions right. */
-  .desktop-prototype--h1 .desktop-prototype__stage { min-height: 835px; padding-top: 500px; }
-  .desktop-prototype--h1 .desktop-prototype__media { position: absolute; inset: 0 0 auto; height: 590px; }
-  .desktop-prototype--h1 .desktop-prototype__media img { object-fit: contain; background: #1e1b18; }
-  .desktop-prototype--h1 .desktop-prototype__info { position: relative; width: min(66%,780px); min-height: 335px; margin-left: 4%; padding: 2.2rem 2.5rem; background: #fffaf2; }
-  .desktop-prototype--h1 .desktop-prototype__info h3 { font-size: clamp(2.5rem,3.6vw,4.2rem); }
-  .desktop-prototype--h1 .desktop-prototype__action { position: absolute; top: 535px; right: 4%; width: min(28%,330px); border-radius: 0 24px 24px 0; }
+  /* Editorial Slab: photo can become a full-width billboard; OCR gets an adjacent slab and a measured safe crop. */
+  .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__media { position: absolute; inset: 0 0 25%; }
+  .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__info { position: absolute; left: 3%; bottom: 0; width: min(64%, 820px); min-height: 43%; padding: clamp(1.3rem, 2.5vw, 2.2rem); background: #fffaf2; box-shadow: 0 -12px 42px rgba(47,33,23,.13); }
+  .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__action { position: absolute; right: 3%; bottom: 3%; width: min(28%, 330px); border-radius: 22px; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__stage { display: grid; grid-template-columns: minmax(0, 59%) minmax(390px, 41%); grid-template-rows: minmax(0, 1fr); background: #d8c9b5; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__media { grid-column: 1; grid-row: 1; height: 100%; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__info { grid-column: 2; grid-row: 1; margin: 3% 0 0 -2rem; padding: clamp(1.4rem, 2.5vw, 2.3rem) clamp(1.4rem, 2.5vw, 2.3rem) 12rem; background: #fffaf2; box-shadow: -18px 18px 48px rgba(55,37,24,.15); }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__info h4 { font-size: clamp(1.85rem, min(3.15vw, 5.6vh), 3.8rem); }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__action { grid-column: 2; grid-row: 1; align-self: end; grid-template-columns: minmax(90px, auto) minmax(170px, 1fr); margin-left: -2rem; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__action-row { grid-column: 1 / -1; }
 
-  /* H2 — image and information are equal canvases; action belongs to text column. */
-  .desktop-prototype--h2 .desktop-prototype__stage { display: grid; grid-template-columns: 1fr 1fr; min-height: 730px; background: #fffaf2; }
-  .desktop-prototype--h2 .desktop-prototype__media { grid-column: 1; grid-row: 1 / span 2; min-height: 730px; }
-  .desktop-prototype--h2 .desktop-prototype__media img { object-fit: contain; background: #1f1c19; }
-  .desktop-prototype--h2 .desktop-prototype__info { grid-column: 2; grid-row: 1; padding: 3.2rem 3rem 1.2rem; }
-  .desktop-prototype--h2 .desktop-prototype__info h3 { font-size: clamp(2.5rem,3.6vw,4rem); }
-  .desktop-prototype--h2 .desktop-prototype__action { grid-column: 2; grid-row: 2; align-self: end; margin: 0 3rem 3rem; border-radius: 22px; }
+  /* Split Canvas: the media column responds to image ratio for OCR and is assertively wide for photos. */
+  .desktop-prototype--split .desktop-prototype__stage { display: grid; grid-template-rows: 1fr auto; background: #fffaf2; }
+  .desktop-prototype--split.desktop-prototype--non-ocr .desktop-prototype__stage { grid-template-columns: 55% 45%; }
+  .desktop-prototype--split.desktop-prototype--ocr .desktop-prototype__stage { grid-template-columns: min(52%, calc(var(--stage-height) * var(--image-ratio))) minmax(0, 1fr); }
+  .desktop-prototype--split .desktop-prototype__media { grid-column: 1; grid-row: 1 / span 2; height: 100%; }
+  .desktop-prototype--split .desktop-prototype__info { grid-column: 2; grid-row: 1; padding: clamp(1.3rem, 3vw, 3rem) clamp(1.25rem, 3vw, 3rem) 1rem; }
+  .desktop-prototype--split .desktop-prototype__info h4 { font-size: clamp(2rem, min(3.45vw, 6vh), 4.1rem); }
+  .desktop-prototype--split .desktop-prototype__action { grid-column: 2; grid-row: 2; margin: 0 clamp(1.25rem, 3vw, 3rem) clamp(1.25rem, 3vw, 3rem); border-radius: 22px; }
 
-  /* H3 — immersive image, facts and actions share one readable bottom horizon. */
-  .desktop-prototype--h3 .desktop-prototype__stage { min-height: 760px; color: #fff; background: #1f1c19; }
-  .desktop-prototype--h3 .desktop-prototype__stage::after { content:""; position:absolute; inset: 28% 0 0; z-index:1; pointer-events:none; background: linear-gradient(180deg,transparent,rgba(21,18,16,.94)); }
-  .desktop-prototype--h3 .desktop-prototype__media { position: absolute; inset: 0; }
-  .desktop-prototype--h3 .desktop-prototype__media img { object-fit: contain; background: #1f1c19; }
-  .desktop-prototype--h3 .desktop-prototype__info { position: absolute; left: 4%; right: 36%; bottom: 2.6rem; color: #fff; }
-  .desktop-prototype--h3 .desktop-prototype__kicker, .desktop-prototype--h3 .desktop-prototype__place small { color: #f1c39d; }
-  .desktop-prototype--h3 .desktop-prototype__info h3 { max-width: 14ch; font-size: clamp(2.6rem,4.2vw,4.7rem); }
-  .desktop-prototype--h3 .desktop-prototype__action { position: absolute; right: 4%; bottom: 2.6rem; width: min(28%,330px); border: 1px solid rgba(255,255,255,.16); border-radius: 22px; background: rgba(33,29,26,.86); backdrop-filter: blur(12px); }
-  .desktop-prototype--h3 .desktop-prototype__medallions { display: none; }
+  /* Gallery Exhibition: the frame follows source ratio, so OCR needs almost no letterbox. */
+  .desktop-prototype--gallery .desktop-prototype__stage { display: grid; grid-template-columns: min(48%, calc((var(--stage-height) - 3rem) * var(--image-ratio))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 1.5rem; padding: 1.5rem; background: #e9dece; }
+  .desktop-prototype--gallery .desktop-prototype__media { grid-column: 1; grid-row: 1; height: calc(var(--stage-height) - 3rem); box-shadow: 0 18px 42px rgba(53,37,25,.17); }
+  .desktop-prototype--gallery .desktop-prototype__info { grid-column: 2; grid-row: 1; align-self: start; padding: 1.2rem clamp(1.2rem, 2.5vw, 2.5rem) 8rem; }
+  .desktop-prototype--gallery .desktop-prototype__info h4 { font-size: clamp(2rem, min(3.1vw, 5.1vh), 3.6rem); }
+  .desktop-prototype--gallery .desktop-prototype__action { grid-column: 2; grid-row: 1; grid-template-columns: auto minmax(180px, 1fr) auto; align-self: end; align-items: center; margin: 0 clamp(1.2rem, 2.5vw, 2.5rem) clamp(.2rem, 1vh, .8rem); border-radius: 22px; }
+  .desktop-prototype--gallery .desktop-prototype__action-row { min-width: 112px; grid-template-columns: repeat(3, minmax(48px, 1fr)); }
 
-  /* P1 — gallery split; portrait always contains and fills available height. */
-  .desktop-prototype--p1 .desktop-prototype__stage { display: grid; grid-template-columns: minmax(340px,5fr) minmax(0,7fr); min-height: 760px; padding: 2rem; gap: 2rem; background: #eee2d2; }
-  .desktop-prototype--p1 .desktop-prototype__media { grid-column: 1; grid-row: 1 / span 2; height: 696px; border-radius: 4px; }
-  .desktop-prototype--p1 .desktop-prototype__media img { object-fit: contain; object-position: center; }
-  .desktop-prototype--p1 .desktop-prototype__info { grid-column: 2; padding: 1.5rem 1.5rem 0; }
-  .desktop-prototype--p1 .desktop-prototype__action { grid-column: 2; align-self: end; margin: 0 1.5rem 1.5rem; border-radius: 22px; }
+  /* Typographic Lead: only viable when the title itself can be the graphic object. */
+  .desktop-prototype--typographic .desktop-prototype__stage { display: grid; grid-template-columns: minmax(0, 1fr) min(52%, calc(var(--stage-height) * var(--image-ratio))); grid-template-rows: minmax(0, 1fr); padding: 1.5rem; gap: 1.5rem; background: #fffaf2; }
+  .desktop-prototype--typographic .desktop-prototype__info { grid-column: 1; grid-row: 1; align-self: start; padding: clamp(1rem, 2.7vw, 2.8rem) clamp(1rem, 2.7vw, 2.8rem) 12.5rem; }
+  .desktop-prototype--typographic .desktop-prototype__info h4 { max-width: 14ch; font-size: clamp(2.6rem, min(4.4vw, 7vh), 5rem); }
+  .desktop-prototype--typographic .desktop-prototype__media { grid-column: 2; grid-row: 1; height: calc(var(--stage-height) - 3rem); }
+  .desktop-prototype--typographic .desktop-prototype__action { grid-column: 1; grid-row: 1; grid-template-columns: minmax(90px, auto) minmax(170px, 1fr); align-self: end; margin: 0 clamp(1rem, 2.7vw, 2.8rem) clamp(.2rem, 1vh, .8rem); border-radius: 22px; }
+  .desktop-prototype--typographic .desktop-prototype__action-row { grid-column: 1 / -1; }
 
-  /* P2 — the poster gets a wider billboard stage; only actions live in rail. */
-  .desktop-prototype--p2 .desktop-prototype__stage { display: grid; grid-template-columns: minmax(0,8fr) minmax(270px,4fr); min-height: 760px; padding: 2rem; gap: 1.5rem; }
-  .desktop-prototype--p2 .desktop-prototype__media { grid-column: 1; grid-row: 1; height: 520px; }
-  .desktop-prototype--p2 .desktop-prototype__media img { object-fit: contain; }
-  .desktop-prototype--p2 .desktop-prototype__info { grid-column: 1; grid-row: 2; padding: .3rem 1rem 0; }
-  .desktop-prototype--p2 .desktop-prototype__info h3 { font-size: clamp(2.25rem,3.4vw,3.9rem); }
-  .desktop-prototype--p2 .desktop-prototype__medallions { display: none; }
-  .desktop-prototype--p2 .desktop-prototype__action { grid-column: 2; grid-row: 1 / span 2; align-self: start; min-height: 330px; border-radius: 22px; }
+  @media (min-width: 1024px) and (max-height: 720px) {
+    .desktop-prototype__stage { --stage-height: calc(100svh - 72px); min-height: 520px; }
+    .desktop-prototype__info { gap: .52rem; }
+    .desktop-prototype__info h4 { font-size: clamp(1.8rem, min(3.2vw, 5.8vh), 3.65rem); }
+    .desktop-prototype__medallions > span { width: 60px; height: 60px; flex-basis: 60px; border-width: 3px; }
+    .desktop-prototype__medallions small { display: none; }
+    .desktop-prototype__action { gap: .55rem; padding: .9rem; }
+    .desktop-prototype__action > a { min-height: 50px; }
+    .desktop-prototype__action-row button { min-height: 48px; }
+    .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__info { min-height: 46%; }
+  }
 
-  /* P3 — clean HTML typography leads; poster remains fully visible on the right. */
-  .desktop-prototype--p3 .desktop-prototype__stage { display: grid; grid-template-columns: minmax(0,7fr) minmax(350px,5fr); min-height: 760px; padding: 2rem; gap: 2rem; background: #fffaf2; }
-  .desktop-prototype--p3 .desktop-prototype__info { grid-column: 1; grid-row: 1; padding: 2rem 1.5rem 1rem; }
-  .desktop-prototype--p3 .desktop-prototype__info h3 { font-size: clamp(3.3rem,5.2vw,6rem); }
-  .desktop-prototype--p3 .desktop-prototype__media { grid-column: 2; grid-row: 1 / span 2; height: 696px; }
-  .desktop-prototype--p3 .desktop-prototype__media img { object-fit: contain; }
-  .desktop-prototype--p3 .desktop-prototype__action { grid-column: 1; grid-row: 2; align-self: end; margin: 0 1.5rem 1.5rem; border-radius: 22px; }
+  @media (min-width: 1024px) and (max-width: 1200px) {
+    .desktop-prototype--gallery .desktop-prototype__action { grid-template-columns: minmax(90px, auto) minmax(160px, 1fr); }
+    .desktop-prototype--gallery .desktop-prototype__action-row { grid-column: 1 / -1; }
+  }
 
   @media (max-width: 1023px) {
-    .desktop-prototype__canvas { overflow: hidden; }
-    .desktop-prototype__stage { min-height: 0 !important; display: grid !important; grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
-    .desktop-prototype__stage::after { display: none; }
-    .desktop-prototype__media,
-    .desktop-prototype__info,
-    .desktop-prototype__action { position: relative !important; inset: auto !important; grid-column: 1 !important; grid-row: auto !important; width: auto !important; height: auto !important; min-height: 0 !important; margin: 0 !important; border-radius: 0 !important; }
-    .desktop-prototype__media { max-height: 430px; }
-    .desktop-prototype__media img { max-height: 430px; object-fit: contain !important; }
-    .desktop-prototype__info { padding: 1.25rem !important; color: #241c17 !important; background: #fffaf2; }
-    .desktop-prototype__kicker, .desktop-prototype__place small { color: #91401d !important; }
-    .desktop-prototype__info h3 { font-size: clamp(2rem,8vw,3.2rem) !important; }
-    .desktop-prototype__action { padding: 1.25rem; }
-    .desktop-prototype__body { grid-template-columns: 1fr; padding: 1.4rem; }
-    .desktop-prototype__next { padding: 1.4rem; }
+    .desktop-prototype__canvas { display: none; }
+    .desktop-prototype__review-head::after { content: "Этот прототип намеренно доступен только на desktop ≥1024px"; display: block; padding: .8rem 1rem; border-left: 4px solid #a54821; background: #f3e6d5; color: #5f5148; font-weight: 780; }
   }
 </style>

@@ -2,6 +2,8 @@
 
 Status: **noindex review lab; no desktop option promoted to the default event page yet**.
 
+Successor: `event-desktop-media-families-2026-07-12.md` splits every surviving candidate into explicit OCR and non-OCR contracts. This document and its public preview remain preserved as the previous comparison round.
+
 Public surface: <https://kenigevents.ru/preview-20260711t-desktop-event-layouts/lab/event-desktop/>.
 
 The same fresh preview was generated from a 2026-07-11 production Fly SQLite snapshot with the local Kaliningrad cutoff `2026-07-11T23:20`: `312` active/future events through id `6832`, including the four CTA/media stress cases `6345`, `6510`, `6678` and `6750`.

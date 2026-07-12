@@ -105,12 +105,15 @@ for (const marker of [
 const eventDesktopLabHtml = readFileSync(join(root, 'lab/event-desktop/index.html'), 'utf8');
 for (const marker of [
   'data-desktop-event-lab',
-  'data-desktop-variant="h1"',
-  'data-desktop-variant="h2"',
-  'data-desktop-variant="h3"',
-  'data-desktop-variant="p1"',
-  'data-desktop-variant="p2"',
-  'data-desktop-variant="p3"',
+  'data-desktop-media-families',
+  'data-desktop-variant="editorial-non-ocr"',
+  'data-desktop-variant="editorial-ocr"',
+  'data-desktop-variant="split-non-ocr"',
+  'data-desktop-variant="split-ocr"',
+  'data-desktop-variant="gallery-non-ocr"',
+  'data-desktop-variant="gallery-ocr"',
+  'data-desktop-variant="typographic-non-ocr"',
+  'data-desktop-variant="typographic-ocr"',
   'Editorial Slab',
   'Split Canvas',
   'Immersive Bottom Horizon',
@@ -119,7 +122,8 @@ for (const marker of [
   'Typographic Lead',
   'Добавить в календарь',
   'Билеты',
-  'Смотрите дальше',
+  'safe-cover',
+  '20%',
 ]) {
   if (!eventDesktopLabHtml.includes(marker)) throw new Error(`Desktop event lab misses marker: ${marker}`);
 }

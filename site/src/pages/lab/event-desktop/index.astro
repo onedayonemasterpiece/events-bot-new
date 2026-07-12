@@ -1,80 +1,221 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
 import DesktopEventPrototype from '../../../components/lab/DesktopEventPrototype.astro';
-import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../lib/events';
-import { eventImageUrl } from '../../../lib/assets';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
-const events = getEvents();
-const horizontalEvent = events.find((event) => event.id === 6510) || events.find((event) => event.image_text_mode === 'visual_only' && event.image_url) || events[0];
-const portraitEvent = events.find((event) => event.id === 6345) || events.find((event) => event.image_text_mode !== 'visual_only' && event.image_url) || events[0];
-const horizontalImage = eventImageUrl(horizontalEvent?.image_url) || 'https://storage.yandexcloud.net/kenigevents.ru/p/dh16/20/20204525610244030e032cd124db24c924cd16c90bd80025008000904200b22a.webp';
-const portraitImage = eventImageUrl(portraitEvent?.image_url) || 'https://storage.yandexcloud.net/kenigevents/p/dh16/11/11308390e60aec30d332d262e286e1c4a530cad29ac8f21cf33fc2ccdaa69aa4.webp';
 const canonicalUrl = absoluteUrl('/lab/event-desktop/');
-const title = `Desktop-варианты страницы события | ${SITE_NAME}`;
-const description = 'Шесть desktop-first компоновок для горизонтальных, квадратных и вертикальных OCR hero-изображений без изменения принятого мобильного hero-overlap.';
+const title = `Desktop OCR / non-OCR lab | ${SITE_NAME}`;
+const description = 'Desktop-only сравнение Editorial Slab, Split Canvas, Gallery Exhibition и Typographic Lead на реальных событиях: свободный crop без OCR и лимит crop 20% для OCR.';
 
-const variants = [
-  { variant: 'h1' as const, family: 'horizontal' as const, image: horizontalImage, imageAlt: horizontalEvent?.image_alt || 'Квадратная афиша концерта', name: 'Editorial Slab', strapline: 'Полноширинный hero и два не дублирующихся владельца: факты в светлой плите, конверсионные действия в графитовом rail.', recommendation: 'Gemini: №1 horizontal' },
-  { variant: 'h2' as const, family: 'horizontal' as const, image: horizontalImage, imageAlt: horizontalEvent?.image_alt || 'Квадратная афиша концерта', name: 'Split Canvas', strapline: 'Изображение и решение занимают равные холсты. Самый предсказуемый вариант для длинного H1 и фиксированного первого экрана.' },
-  { variant: 'h3' as const, family: 'horizontal' as const, image: horizontalImage, imageAlt: horizontalEvent?.image_alt || 'Квадратная афиша концерта', name: 'Immersive Bottom Horizon', strapline: 'Максимальный визуальный удар: один нижний горизонт читабельных фактов и действий поверх hero, затем обычный поток страницы.' },
-  { variant: 'p1' as const, family: 'portrait' as const, image: portraitImage, imageAlt: portraitEvent?.image_alt || 'Вертикальная афиша Велодня', name: 'Gallery Exhibition', strapline: 'Постер как музейный экспонат слева, всё решение справа. `contain` и полезная высота без кропа OCR.', recommendation: 'Gemini: №1 portrait' },
-  { variant: 'p2' as const, family: 'portrait' as const, image: portraitImage, imageAlt: portraitEvent?.image_alt || 'Вертикальная афиша Велодня', name: 'Billboard + Action Rail', strapline: 'Большой нейтральный billboard для постера; узкий rail владеет только входом и действиями, поэтому ничего не повторяет.' },
-  { variant: 'p3' as const, family: 'portrait' as const, image: portraitImage, imageAlt: portraitEvent?.image_alt || 'Вертикальная афиша Велодня', name: 'Typographic Lead', strapline: 'Чистый HTML-заголовок и дата становятся главным графическим объектом, а полный OCR-постер держит правую колонку.' },
+const photoSamples = {
+  editorial: {
+    id: 5658,
+    image: 'https://storage.yandexcloud.net/kenigevents/p/dh16/70/70023892388230933693329b369b361b369b36db34e330e27062792299e51ca6.webp',
+    imageAlt: 'Сцена из спектакля «Гараж»', imageWidth: 1280, imageHeight: 853, imagePosition: '50% 45%',
+    type: 'спектакль', date: '1 августа', weekday: 'суббота', time: '18:00', title: 'Спектакль «Гараж»',
+    venue: 'Драматический театр', address: 'Мира, 4 · Калининград', admission: 'Билеты', primary: 'Билеты',
+    summary: 'настоящая сценическая фотография 3:2 проверяет широкий cover без встроенной афишной типографики.',
+  },
+  split: {
+    id: 5264,
+    image: 'https://storage.yandexcloud.net/kenigevents/p/dh16/01/01e301e202ca0dc10d82be0a32533187735e68e860f36772e0e064d9b699721b.webp',
+    imageAlt: 'Пианист за роялем на фестивале Pianissimo', imageWidth: 1280, imageHeight: 853, imagePosition: '48% 50%',
+    type: 'концерт', date: '6 августа', weekday: 'четверг', time: '20:00', title: 'Фестиваль Pianissimo',
+    venue: 'Филиал Третьяковской галереи', address: 'Парадная наб., 3 · Калининград', admission: 'Билеты', primary: 'Билеты',
+    summary: 'горизонтальная фотография с ясным героем показывает, сколько визуальной силы даёт независимая media-колонка.',
+  },
+  gallery: {
+    id: 6794,
+    image: 'https://static.kenigevents.ru/p/dh16/28/28249114289249884692d9842784e0a4c014cd0268226c21f500b400f488f901.webp',
+    imageAlt: 'Музейное судно у причала', imageWidth: 1920, imageHeight: 2560, imagePosition: '50% 54%',
+    type: 'выставка', date: '12 июля — до 12 августа', weekday: 'воскресенье', title: 'Выставка «Труженики моря»',
+    venue: 'Музей Мирового океана', address: 'наб. Петра Великого, 1 · Калининград', admission: 'Билеты', primary: 'Билеты',
+    summary: 'вертикальная фотография без OCR доказывает, что Gallery может заполнить высоту сильным cover, а не имитировать плакат на чёрном фоне.',
+  },
+  typographic: {
+    id: 6033,
+    image: 'https://sun9-58.userapi.com/s/v1/ig2/E-u5jgI9ZE97KM3CQVFl3ZkNvD5qVBSk5pe2AhZGS5ztCZDS_JaMHQvp57GntkT9whfn2ZVcatSXKjVFqyIaJ_NA.jpg?quality=95&as=32x43,48x64,72x96,108x144,160x213,240x320,360x480,540x720,720x960,1080x1440,1920x2560&from=bu&cs=1920x0',
+    imageAlt: 'Подводная лодка у музейного причала', imageWidth: 1920, imageHeight: 2560, imagePosition: '52% 56%',
+    type: 'выставка', date: 'до 31 августа', title: 'Выставки в центре «Пакгауз»',
+    venue: 'Музей Мирового океана', address: 'наб. Петра Великого, 1 · Калининград', admission: 'Билеты', primary: 'Билеты',
+    summary: 'вертикальная фотография и заголовок средней длины проверяют предел Typographic Lead без зависимости от текста внутри изображения.',
+  },
+};
+
+const ocrSamples = {
+  editorial: {
+    id: 4671,
+    image: 'https://storage.yandexcloud.net/kenigevents/p/dh16/0a/0a0b0e4b46cb0de31ceb0a8b096b0ce1063302e616e6245b2d9b2519306b205b.webp',
+    imageAlt: 'OCR-афиша метал-оперы «Эпидемия. Огненная рукопись»', imageWidth: 2500, imageHeight: 2500,
+    type: 'концерт', date: '17 июля', weekday: 'пятница', time: '20:00', title: 'ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ',
+    venue: 'Поселение викингов Кауп', address: 'пос. Романово · Калининград', admission: 'Билеты', primary: 'Билеты',
+    summary: 'плотная квадратная афиша заставляет Editorial Slab доказать лимит crop числом, а не обещанием.',
+  },
+  split: {
+    id: 6345,
+    image: 'https://static.kenigevents.ru/p/dh16/11/11308390e60aec30c332d262e286e1c4a530cad29ac8f20cf337c2ccdaa69aa4.webp',
+    imageAlt: 'OCR-афиша городского Велодня', imageWidth: 905, imageHeight: 1280, ocrSafeCover: true,
+    type: 'фестиваль', date: '12 июля', weekday: 'воскресенье', time: '09:00', title: 'ВЕЛОДЕНЬ',
+    venue: 'Парковка у Правительства области', address: 'Дм. Донского, 1 · Калининград', admission: 'Бесплатно', primary: 'Добавить в календарь', calendarPrimary: true,
+    summary: 'вертикальная OCR-афиша с важным текстом сверху и снизу требует ratio-aware колонки и почти всегда остаётся без кропа.',
+  },
+  gallery: {
+    id: 6510,
+    image: 'https://static.kenigevents.ru/p/dh16/21/21204525610244030e032cd124db24c924cd16c90bd80025008000904200b222.webp',
+    imageAlt: 'OCR-афиша концерта-посвящения Муслиму Магомаеву и Анне Герман', imageWidth: 1080, imageHeight: 1080,
+    type: 'концерт', date: '12 июля', weekday: 'воскресенье', time: '17:00', title: 'Хиты любимых артистов: концерт-посвящение Муслиму Магомаеву и Анне Герман',
+    venue: 'Янтарь холл', address: 'Ленина, 11 · Светлогорск', admission: 'Билеты', primary: 'Билеты',
+    summary: 'квадратная OCR-афиша плюс очень длинный HTML-заголовок — стресс-тест полезной высоты и гарантии, что H1 не обрезан.',
+  },
+  typographic: {
+    id: 6661,
+    image: 'https://storage.yandexcloud.net/kenigevents.ru/p/dh16/ab/ab8c78f4f0ceec632e40bae2b6a6aac4fe401da0cac01e800f00230061688884.webp',
+    imageAlt: 'OCR-афиша выставки Сергея Комягина «Легенды»', imageWidth: 1044, imageHeight: 1280,
+    type: 'выставка', date: '31 июля', weekday: 'пятница', time: '16:00', title: 'Легенды',
+    venue: 'Телеграф', address: 'Островского, 3 · Светлогорск', admission: 'Бесплатно', primary: 'Добавить в календарь', calendarPrimary: true,
+    summary: 'однословный заголовок — корректный positive case для Typographic Lead; длинные заголовки должны маршрутизироваться в Gallery или Split.',
+  },
+};
+
+const candidates = [
+  {
+    key: 'editorial' as const, name: 'Editorial Slab',
+    photoVerdict: 'Сохраняем: фото становится настоящим широким hero и может быть смело кропнуто; информационная плита поднимается на нижний край.',
+    ocrVerdict: 'Сохраняем условно: афиша и плита стоят рядом; без source-grounded safe-флага остаётся contain даже при геометрической потере меньше 20%.',
+  },
+  {
+    key: 'split' as const, name: 'Split Canvas',
+    photoVerdict: 'Сохраняем: простой 55/45 split хорошо использует горизонтальную фотографию и переживает короткую высоту.',
+    ocrVerdict: 'Сохраняем: ширина media-колонки вычисляется из реальной высоты viewport и ratio постера, а не назначается произвольно.',
+    recommendation: 'наиболее предсказуемый',
+  },
+  {
+    key: 'gallery' as const, name: 'Gallery Exhibition',
+    photoVerdict: 'Сохраняем: вертикальная фотография допустимо кропается по высоте и не превращается в маленький постер посреди поля.',
+    ocrVerdict: 'Сильный кандидат: рама повторяет ratio источника, поэтому афиша занимает высоту почти без пустых полей и без потери текста.',
+    recommendation: 'фаворит для portrait OCR',
+  },
+  {
+    key: 'typographic' as const, name: 'Typographic Lead',
+    photoVerdict: 'Эксперимент: работает, когда HTML-заголовок короткий/средний, а вертикальное фото достаточно сильное само по себе.',
+    ocrVerdict: 'Оставляем как gated-вариант: только короткие заголовки (≤35 знаков и ≤5 слов); иначе автоматический fallback в Gallery/Split.',
+    recommendation: 'только по title gate',
+  },
 ];
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="desktop-lab" data-desktop-event-lab>
+  <main id="main" class="desktop-lab" data-desktop-event-lab data-desktop-media-families>
     <div class="page-shell desktop-lab__shell">
-      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event lab</span></nav>
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop OCR / non-OCR lab</span></nav>
 
       <section class="section-card desktop-lab__intro" id="desktop-review">
         <div class="section-card__inner">
-          <p class="eyebrow">desktop-only comparison · mobile baseline untouched</p>
-          <h1>Два семейства hero, шесть способов собрать страницу</h1>
-          <p class="lead">На desktop больше нет права повторять дату, место и CTA в двух карточках. В каждом варианте у факта и действия один владелец. Горизонтальные/квадратные изображения получают сильный широкий hero; вертикальные OCR-постеры всегда показаны целиком через <code>object-fit: contain</code>.</p>
-          <div class="desktop-lab__rules">
-            <article><strong>CTA</strong><span>Бесплатно без записи → «Добавить в календарь»; платно без цены → «Билеты».</span></article>
-            <article><strong>Действия</strong><span>Календарь, поделиться и лайк доступны; SVG 28–30px в целях от 48px, без плюса.</span></article>
-            <article><strong>Scroll</strong><span>Hero/sticky-композиция заканчивается до стандартного «Смотрите дальше».</span></article>
-            <article><strong>Mobile</strong><span>До 1024px это только review-страница; production mobile hero-overlap не переписан.</span></article>
+          <p class="eyebrow">desktop only · media-aware · mobile production untouched</p>
+          <h1>Одна композиция — два разных договора с изображением</h1>
+          <p class="lead">Без OCR изображение работает как фотография: <strong>cover и выразительный crop обязательны</strong>. С OCR оно работает как документ: сначала сохраняем весь текст, а safe-cover разрешаем только для явно проверенного кадра и при измеренной потере не более <strong>20%</strong>.</p>
+
+          <div class="desktop-lab__contract" aria-label="Правила обработки изображений">
+            <article><span>PHOTO / без OCR</span><strong>Сильный hero</strong><p>Масштабировать и кропать. Фокус — человек, сцена или объект. Пустые поля считаются дефектом компоновки.</p></article>
+            <article><span>POSTER / OCR</span><strong>Сохранить смысл</strong><p>Рама следует ratio источника. По умолчанию contain; cover требует явного safe-флага и измеренной потери ≤20%.</p></article>
           </div>
-          <p class="desktop-lab__consultants"><strong>Gemini 3.1 Pro:</strong> выбрал H1 и P1. <strong>Opus:</strong> a-opus достиг лимита подписки; Claude Code Opus был запрошен отдельно, статус фиксируется в отчёте ветки и не подменяется другой моделью.</p>
-          <div class="desktop-lab__jump" aria-label="Перейти к варианту">
-            {variants.map((item) => <a href={`#variant-${item.variant}`}>{item.variant.toUpperCase()}</a>)}
+
+          <div class="desktop-lab__evidence">
+            <div><strong>312</strong><span>реальных страниц в срезе 11.07</span></div>
+            <div><strong>113</strong><span>OCR: 81 portrait · 18 landscape · 14 square</span></div>
+            <div><strong>64,2%</strong><span>portrait OCR проходят short-title gate Typographic Lead</span></div>
+            <div><strong>52,77%</strong><span>1920×1080 в Steam Survey; QHD ещё 22,04%</span></div>
+          </div>
+
+          <div class="desktop-lab__viewport-matrix">
+            <p><strong>Acceptance viewports</strong><span>1366×768 · 1920×1080 · 2560×1440 · 3440×1440 · стресс: 1440×650 и 1920×600</span></p>
+            <p><strong>Высота — first-class constraint</strong><span>Высота сцены и размер H1 зависят от <code>svh</code>; ни один title не получает line-clamp или overflow clipping.</span></p>
+          </div>
+
+          <p class="desktop-lab__source">Источник desktop-разрешений: <a href="https://store.steampowered.com/hwsurvey/?platform=pc" rel="noreferrer">Steam Hardware &amp; Software Survey, June 2026</a>. Это не аналитика аудитории сайта, а практическая матрица QA; экстремально короткие viewport добавлены отдельно.</p>
+          <div class="desktop-lab__jump" aria-label="Перейти к кандидату">
+            {candidates.map((item, index) => <a href={`#candidate-${item.key}`}>{index + 1}</a>)}
           </div>
         </div>
       </section>
 
-      <section class="desktop-lab__family-head"><p class="eyebrow">horizontal / square</p><h2>Сильный широкий hero</h2><p>Один и тот же реальный квадратный стресс-кейс с типографикой и длинным названием — чтобы сравнивать именно компоновку.</p></section>
-      {variants.filter((item) => item.family === 'horizontal').map((item) => <div id={`variant-${item.variant}`}><DesktopEventPrototype {...item} /></div>)}
+      {candidates.map((candidate, index) => (
+        <section class="desktop-lab__candidate" id={`candidate-${candidate.key}`}>
+          <header class="desktop-lab__candidate-head">
+            <p class="eyebrow">candidate {String(index + 1).padStart(2, '0')} · side-by-side policy review</p>
+            <h2>{candidate.name}</h2>
+            <div><span>Без OCR</span><span>С OCR</span></div>
+          </header>
+          <DesktopEventPrototype
+            candidate={candidate.key}
+            mediaPolicy="non-ocr"
+            name={`${candidate.name} · без OCR`}
+            verdict={candidate.photoVerdict}
+            sample={photoSamples[candidate.key]}
+            recommendation={candidate.recommendation}
+          />
+          <DesktopEventPrototype
+            candidate={candidate.key}
+            mediaPolicy="ocr"
+            name={`${candidate.name} · OCR`}
+            verdict={candidate.ocrVerdict}
+            sample={ocrSamples[candidate.key]}
+            recommendation={candidate.recommendation}
+          />
+        </section>
+      ))}
 
-      <section class="desktop-lab__family-head"><p class="eyebrow">portrait OCR</p><h2>Вертикальный постер без кропа</h2><p>Во всех трёх вариантах один и тот же реальный 905×1280 постер показан целиком; меняется только иерархия колонок и действий.</p></section>
-      {variants.filter((item) => item.family === 'portrait').map((item) => <div id={`variant-${item.variant}`}><DesktopEventPrototype {...item} /></div>)}
-
-      <section class="section-card desktop-lab__vote">
-        <div class="section-card__inner"><p class="eyebrow">Что выбирать</p><h2>Сначала по одному фавориту из каждого семейства</h2><p>H1 — наиболее характерный editorial-вариант, H2 — безопасный контроль, H3 — смелый immersive. P1 — самый устойчивый, P2 — наиболее плакатный, P3 — лучший для очень длинного заголовка. После выбора одного H и одного P они переносятся на реальные страницы за desktop-only media query.</p></div>
+      <section class="section-card desktop-lab__decision">
+        <div class="section-card__inner">
+          <p class="eyebrow">Предварительное решение</p>
+          <h2>Не выбирать один desktop-шаблон для всех media</h2>
+          <ol>
+            <li><strong>Без OCR:</strong> Editorial Slab для landscape/square и Split Canvas как устойчивый fallback; вертикальное фото допускает Gallery с cover.</li>
+            <li><strong>С OCR:</strong> Gallery Exhibition для portrait, Split Canvas для остальных ratio; safe-cover только по явному safe-флагу и измеренному бюджету ≤20%.</li>
+            <li><strong>Typographic Lead:</strong> отдельная ветка только для короткого title. В срезе это 52 из 81 portrait OCR (64,2%), поэтому вариант не экзотический, но и не универсальный.</li>
+            <li><strong>Отклонены:</strong> Immersive Bottom Horizon и Billboard + Action Rail не продолжаем: первый рискует читаемостью OCR, второй возвращает служебный rail и лишние поля.</li>
+          </ol>
+          <p>Предыдущая шестёрка сохранена в отдельном опубликованном preview; эта страница — следующий, более строгий раунд сравнения.</p>
+        </div>
       </section>
     </div>
   </main>
 </EventLayout>
 
 <style>
-  .desktop-lab__shell { display: grid; gap: 4rem; padding-bottom: 5rem; }
-  .desktop-lab__intro h1 { max-width: 15ch; }
-  .desktop-lab__rules { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; margin-top: 1.5rem; }
-  .desktop-lab__rules article { display: grid; gap: .15rem; padding: 1rem; border-left: 4px solid #a54821; background: #f5e9da; }
-  .desktop-lab__rules span { color: #6d6259; }
-  .desktop-lab__consultants { margin: 1.2rem 0 0; color: #5d5047; }
+  .desktop-lab__shell { display: grid; gap: 4.5rem; padding-bottom: 5rem; }
+  .desktop-lab__intro h1 { max-width: 17ch; }
+  .desktop-lab__contract { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; margin-top: 1.6rem; }
+  .desktop-lab__contract article { display: grid; gap: .35rem; padding: 1.25rem; border-top: 5px solid #b54d22; background: #f5e8d7; }
+  .desktop-lab__contract article:last-child { border-color: #285852; background: #e2ece7; }
+  .desktop-lab__contract span { color: #795e4f; font-size: .74rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+  .desktop-lab__contract strong { font-size: 1.35rem; }
+  .desktop-lab__contract p { margin: 0; color: #65584f; }
+  .desktop-lab__evidence { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .75rem; margin-top: 1rem; }
+  .desktop-lab__evidence div { display: grid; align-content: start; gap: .2rem; min-height: 112px; padding: 1rem; border: 1px solid rgba(121,48,20,.15); background: #fffdf9; }
+  .desktop-lab__evidence strong { color: #8f3918; font-size: clamp(1.55rem,2.7vw,2.45rem); line-height: 1; }
+  .desktop-lab__evidence span { color: #6e6158; font-size: .8rem; }
+  .desktop-lab__viewport-matrix { display: grid; gap: .55rem; margin-top: 1rem; }
+  .desktop-lab__viewport-matrix p { display: grid; grid-template-columns: minmax(170px,.35fr) minmax(0,1fr); gap: 1rem; margin: 0; padding: .8rem 1rem; border-left: 4px solid #2d5751; background: #f0f3ed; }
+  .desktop-lab__viewport-matrix span { color: #5f655e; }
+  .desktop-lab__source { color: #6b5d54; font-size: .86rem; }
   .desktop-lab__jump { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
   .desktop-lab__jump a { min-width: 48px; min-height: 48px; display: grid; place-items: center; border: 1px solid rgba(121,48,20,.2); border-radius: 50%; background: #fff; color: #793014; font-weight: 900; text-decoration: none; }
-  .desktop-lab__family-head { display: grid; gap: .25rem; max-width: 60rem; margin-top: 2rem; }
-  .desktop-lab__family-head h2 { margin: 0; font-size: clamp(2rem,4vw,4rem); }
-  .desktop-lab__family-head p { margin: 0; }
-  .desktop-lab__vote { margin-top: 1rem; }
+  .desktop-lab__candidate { display: grid; gap: 2.4rem; scroll-margin-top: 1rem; }
+  .desktop-lab__candidate-head { display: grid; gap: .25rem; max-width: 72rem; padding-bottom: .9rem; border-bottom: 1px solid rgba(121,48,20,.2); }
+  .desktop-lab__candidate-head h2 { margin: 0; font-size: clamp(2.2rem,4.5vw,4.8rem); letter-spacing: -.055em; }
+  .desktop-lab__candidate-head > div { display: flex; gap: .5rem; }
+  .desktop-lab__candidate-head > div span { padding: .35rem .65rem; border-radius: 999px; background: #f1dfca; color: #77391f; font-size: .78rem; font-weight: 850; }
+  .desktop-lab__candidate-head > div span:last-child { background: #dcebe5; color: #275850; }
+  .desktop-lab__decision ol { display: grid; gap: .75rem; padding-left: 1.25rem; }
+  .desktop-lab__decision li { padding-left: .35rem; }
+  @media (max-width: 1100px) {
+    .desktop-lab__evidence { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  }
   @media (max-width: 1023px) {
-    .desktop-lab__shell { gap: 2.5rem; }
-    .desktop-lab__rules { grid-template-columns: 1fr; }
-    .desktop-lab__intro::before { content: "Desktop-варианты лучше сравнивать при ширине от 1024px"; display: block; padding: .75rem 1rem; background: #2b2724; color: #fff; font-weight: 850; text-align: center; }
+    .desktop-lab__shell { gap: 2.8rem; }
+    .desktop-lab__intro::before { content: "Исследование только для desktop. Production mobile hero не изменён."; display: block; padding: .8rem 1rem; background: #2b2724; color: #fff; font-weight: 850; text-align: center; }
+    .desktop-lab__contract, .desktop-lab__evidence { grid-template-columns: 1fr; }
+    .desktop-lab__viewport-matrix p { grid-template-columns: 1fr; gap: .25rem; }
   }
 </style>

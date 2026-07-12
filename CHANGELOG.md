@@ -6,6 +6,7 @@
 
 
 ### Added
+- **Static site pages / desktop OCR vs non-OCR media lab**: rebuilt `/lab/event-desktop/` as four real-event candidate pairs (Editorial Slab, Split Canvas, Gallery Exhibition and gated Typographic Lead), with explicit strong-cover treatment for no-OCR imagery, a measured `<=20%` OCR crop budget with automatic contain fallback, and width-plus-height viewport acceptance.
 - **Static site pages / desktop event-page lab**: added a noindex six-variant desktop review surface for horizontal/square and portrait OCR hero families, with single-owner fact/action layouts and an explicit transition into the standard `Смотрите дальше` module.
 - **Static site pages / V3-D real-event trial**: added the build-gated `ticket-cluster` decision sheet to real noindex event pages with exact date/week/time and address, truthful price/free/unknown-price CTA states, stable icon+count actions, browser-local one-hint-per-session onboarding, 14-day dismiss cooldown and an explicit review override.
 - **Static site pages / event decision-block lab**: added a preserved-baseline A/B lab for the whole below-hero mobile decision space (`/lab/event-decision-block/`), comparing P03/P01/P04/baseline/zero-medallion/utility-stack layouts with Gemini Pro and a-opus critical review summaries.
@@ -27,6 +28,7 @@
 - **Static site pages / event medallion assets**: added the first local organizer avatar medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония and Остров Канта, with optimized WebP/PNG runtime assets, source originals/provenance and a `organizerMedallions.json` manifest; the филармония medallion uses the yellow harp background seen in its Telegram profile avatar.
 
 ### Changed
+- **Static site pages / desktop media routing evidence**: audited 312 real event pages (`194` visual-only, `113` OCR, `5` unknown), established a `<=35` characters / `<=5` words Typographic Lead gate covering `52/81` portrait-OCR samples, preserved the prior six-option preview, and left production mobile event components untouched.
 - **Static site pages / fresh desktop-layout preview**: generated and published `preview-20260711t-desktop-event-layouts` from a fresh 2026-07-11 Fly snapshot with `312` active/future events through id `6832`, including CTA/media stress events `6345`, `6510`, `6678` and `6750`.
 - **Static site pages / event CTA and onboarding correction**: made free/no-registration events use `Добавить в календарь` as the primary action, renamed paid/unknown-price destinations to `Билеты`, removed the calendar `+`, enlarged event action icons, and made unsolicited onboarding explicitly opt-in (`off|adaptive|calendar-first`).
 
