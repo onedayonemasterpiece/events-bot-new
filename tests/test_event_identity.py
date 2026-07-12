@@ -196,7 +196,7 @@ def test_supabase_migration_is_service_role_only():
     ).read()
 
     assert "event_identity_candidates_by_embedding_v1" in sql
-    assert "p_embedding vector" in sql
+    assert "p_embedding extensions.vector" in sql
     assert "p_embedding_doc_kind text" in sql
     assert "related_v1" in sql
     assert "p_city text" in sql
