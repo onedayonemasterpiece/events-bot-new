@@ -63,6 +63,7 @@ const RU_MONTHS = [
 ];
 
 const RU_WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const RU_WEEKDAYS_LONG = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
 function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value || '');
@@ -112,6 +113,13 @@ export function displayDateWithWeekday(event: Pick<PreviewEvent, 'start_date' | 
   const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
   const weekday = RU_WEEKDAYS_SHORT[date.getUTCDay()];
   return weekday ? `${weekday}, ${displayDate(event)}` : displayDate(event);
+}
+
+export function displayWeekdayLong(event: Pick<PreviewEvent, 'start_date'>): string | null {
+  const parts = parseIsoDateParts(event.start_date);
+  if (!parts) return null;
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  return RU_WEEKDAYS_LONG[date.getUTCDay()] || null;
 }
 
 export function displayDateTime(event: Pick<PreviewEvent, 'start_date' | 'end_date' | 'display_time'>): string {

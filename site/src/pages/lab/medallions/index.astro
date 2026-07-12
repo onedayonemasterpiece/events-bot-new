@@ -1,14 +1,18 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
 import medallionData from '../../../data/organizerMedallions.json';
+import festivalMedallions from '../../../data/festivalMedallions.json';
 import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/medallions/');
 const title = `Лаборатория медальонов | ${SITE_NAME}`;
 const description = 'Визуальная проверка медальонов организаторов и быстрых признаков событий для статических страниц KenigEvents.';
 const organizers = (medallionData as { items: Array<{ slug: string; name: string; shortName?: string; avatarUrl: string; fallbackPngUrl?: string; ariaLabel?: string; renderNote?: string; background?: string; ring?: string; sourcePage?: string }> }).items;
+const festivalItems = (festivalMedallions as { items: Array<{ slug: string; name: string; shortName?: string; avatarUrl: string; ariaLabel?: string; renderNote?: string; sourcePage?: string; category?: string }> }).items;
+const festivals = festivalItems.filter((item) => item.category !== 'venue_brand');
+const venueBrands = festivalItems.filter((item) => item.category === 'venue_brand');
 const webpSource = (url: string) => url.endsWith('.webp');
-const primaryImageSrc = (avatarUrl: string, fallbackPngUrl?: string) => avatarUrl.endsWith('.webp') ? (fallbackPngUrl || avatarUrl) : avatarUrl;
+const imageFallbackSrc = (avatarUrl: string, fallbackPngUrl?: string) => avatarUrl.endsWith('.webp') ? (fallbackPngUrl || avatarUrl) : avatarUrl;
 const sourceTokens = [
   {
     slug: 'meow-afisha',
@@ -23,7 +27,7 @@ const pushkin = {
   slug: 'pushkin-card',
   name: 'Пушкинская карта',
   shortName: 'Пушкинская карта',
-  avatarUrl: '/assets/badges/pushkin-card-medallion.webp',
+  avatarUrl: '/assets/badges/pushkin-card-medallion.png',
   fallbackPngUrl: '/assets/badges/pushkin-card-medallion.png',
   ariaLabel: 'Можно оплатить Пушкинской картой',
   renderNote: 'Единый композитный PNG из исходников: бюст внутри круглого медальона, исходная надпись «Пушкинская карта» наложена поверх круга и выступает вправо.',
@@ -41,7 +45,7 @@ const pushkin = {
         <div class="section-card__inner">
           <p class="eyebrow">Визуальный QA</p>
           <h1>Медальоны событий</h1>
-          <p class="lead">Страница для проверки размеров, цветовой гаммы и читаемости медальонов. «Дом китобоя» собран как простой стековый знак из исходных слов логотипа: «дом» над «Китобоя», а синий фон и светлое кольцо взяты из публичной социальной палитры.</p>
+          <p class="lead">Страница для проверки размеров, цветовой гаммы и читаемости медальонов организаторов, источников, программ и фестивальных логотипов. «Дом китобоя» собран как простой стековый знак из исходных слов логотипа: «дом» над «Китобоя», а синий фон и светлое кольцо взяты из публичной социальной палитры.</p>
         </div>
       </section>
 
@@ -54,7 +58,7 @@ const pushkin = {
                 <span class="event-token__circle" aria-hidden="true">
                   <picture>
                     {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
-                    <img src={withBase(primaryImageSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
+                    <img src={withBase(imageFallbackSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
                   </picture>
                 </span>
               </li>
@@ -68,16 +72,58 @@ const pushkin = {
         </div>
       </section>
 
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Фестивали</h2>
+          <p class="muted-note">Чистые логотипы/знаки и проверенные публичные аватары фестивалей, где они найдены. Обложки событий сюда не добавлены без отдельного ручного cutout/QA.</p>
+          <ul class="event-token-row" role="list">
+            {festivals.map((item) => (
+              <li class={`event-token event-token--festival event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+                <span class="event-token__circle" aria-hidden="true">
+                  <img src={withBase(item.avatarUrl)} alt="" loading="eager" decoding="async" />
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div class="source-links">
+            {festivals.map((item) => (
+              <a href={item.sourcePage} target="_blank" rel="noopener noreferrer">{item.shortName || item.name}</a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {venueBrands.length > 0 && (
+        <section class="section-card" style="margin-top: 1rem;">
+          <div class="section-card__inner">
+            <h2>Фестивальные площадки и бренды</h2>
+            <p class="muted-note">Не фестивали сами по себе, а узнаваемые площадки/бренды, где проходят фестивальные события.</p>
+            <ul class="event-token-row" role="list">
+              {venueBrands.map((item) => (
+                <li class={`event-token event-token--festival event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+                  <span class="event-token__circle" aria-hidden="true">
+                    <img src={withBase(item.avatarUrl)} alt="" loading="eager" decoding="async" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div class="source-links">
+              {venueBrands.map((item) => (
+                <a href={item.sourcePage} target="_blank" rel="noopener noreferrer">{item.shortName || item.name}</a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Программы и признаки</h2>
           <ul class="event-token-row" role="list">
             <li class="event-token event-token--pushkin" aria-label={pushkin.ariaLabel} title={pushkin.name}>
               <span class="event-token__pushkin-frame" aria-hidden="true">
-                <picture>
-                  <source srcset={withBase(pushkin.avatarUrl)} type="image/webp" />
-                  <img class="event-token__pushkin-composite" src={withBase(pushkin.fallbackPngUrl)} alt="" loading="lazy" decoding="async" />
-                </picture>
+                <img class="event-token__pushkin-composite" src={withBase(pushkin.avatarUrl)} alt="" loading="lazy" decoding="async" />
               </span>
             </li>
           </ul>

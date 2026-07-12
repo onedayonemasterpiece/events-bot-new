@@ -1,0 +1,6 @@
+interface:
+  display_name: "Static Event Medallions"
+  short_description: "Build source-grounded static-site medallions"
+  default_prompt: "Use $static-event-medallions to add or audit KenigEvents static-site medallions with provenance and visual QA."
+policy:
+  allow_implicit_invocation: true

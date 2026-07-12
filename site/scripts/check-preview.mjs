@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
+import festivalMedallions from '../src/data/festivalMedallions.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -27,6 +28,8 @@ const required = [
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
+  'lab/medallions/index.html',
+  ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -106,6 +109,7 @@ if (!controlHtml.includes('mobile-discovery-menu__label') || !controlHtml.includ
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
+if (!controlVisibleHtml.includes('event-hero__date-card') || !controlVisibleHtml.includes('event-hero__date-weekday') || !controlVisibleHtml.includes('event-hero__date-time')) throw new Error('Event hero must expose a strong date/week/time block');
 if (controlVisibleHtml.indexOf('data-event-hero') > controlVisibleHtml.indexOf('crumbs--after-hero')) throw new Error('Hero must render before mobile/after-hero breadcrumbs in event HTML');
 let checkedMediaRegressionEvents = 0;
 for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [4913, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
@@ -115,6 +119,25 @@ for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], 
   if (item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
 }
 if (checkedMediaRegressionEvents < 4) throw new Error(`Media regression guard needs at least 4 present control events, got ${checkedMediaRegressionEvents}`);
+const bachProgramEvent = eventsData.events.find((event) => {
+  const haystack = [event.title, event.summary, event.description_html, event.venue_name, event.source_url, ...(event.source_urls || [])].filter(Boolean).join(' ').toLowerCase();
+  return /(?:\bbach\b|(?:и\.?\s*с\.?\s*)?бах(?:а|у|ом|е)?|баховск)/iu.test(haystack)
+    && /орган|органн|кафедральн(?:ый|ом|ого)?\s+собор|остров\s+канта|собор39|sobor39/u.test(haystack);
+});
+if (bachProgramEvent) {
+  const bachHtml = readFileSync(join(root, `sobytiya/${bachProgramEvent.slug}/index.html`), 'utf8');
+  if (!bachHtml.includes('event-token--bahosluzhenie') || !bachHtml.includes('/assets/festivals/bahosluzhenie.png') || !bachHtml.includes('Бахослужение')) throw new Error(`Bach/organ event ${bachProgramEvent.id} misses Bahosluzhenie medallion`);
+}
+const festivalRegressionEvents = [
+  ['Бахослужение', 'bahosluzhenie', '/assets/festivals/bahosluzhenie.png'],
+  ['Симфония ветра', 'simfoniya-vetra', '/assets/festivals/simfoniya-vetra.png'],
+];
+for (const [festivalName, slug, assetUrl] of festivalRegressionEvents) {
+  const item = eventsData.events.find((event) => String(event.festival || '').toLowerCase().includes(String(festivalName).toLowerCase()));
+  if (!item) continue;
+  const html = readFileSync(join(root, `sobytiya/${item.slug}/index.html`), 'utf8');
+  if (!html.includes(`event-token--${slug}`) || !html.includes(assetUrl)) throw new Error(`Festival event ${item.id} (${festivalName}) misses festival medallion ${slug}`);
+}
 const tretyakovEvent = eventsData.events.find((event) => event.id === 5370);
 if (!tretyakovEvent) throw new Error('Missing 5370 ticket/paid regression event');
 if (!Array.isArray(tretyakovEvent.image_assets) || tretyakovEvent.image_assets.length < 5) throw new Error('Event 5370 must carry multi-image gallery assets for hero fullscreen review');
