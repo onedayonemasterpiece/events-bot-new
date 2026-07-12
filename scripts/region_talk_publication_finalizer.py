@@ -32,6 +32,8 @@ except ModuleNotFoundError:  # keep live-YDB finalization usable in slim envs
     Workbook = None  # type: ignore[assignment]
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 if str(PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport"))
 import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
@@ -990,6 +992,10 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
             fields,
             max_len=700,
         )
+        # A retryable Gemini row still needs the exact post body. Preserve it
+        # losslessly only while active; terminal rows above delete it entirely.
+        if not terminal_text and str(durable_row.get("text") or ""):
+            payload["text"] = str(durable_row["text"])
         key = payload.get("post_url") or payload.get("image_queue_id") or str(row.get("publication_rank"))
         if key:
             items.append(("publication_candidate_item:" + str(key).replace("publication_candidate_item:", ""), "publication_candidate_item", payload))
@@ -1135,6 +1141,11 @@ def main() -> int:
     parser.add_argument("--reverify-existing", action="store_true", help="Ignore existing publication_candidate_item verifier statuses and call Gemini again.")
     args = parser.parse_args()
     load_env(args.env_file)
+    # Local finalization uses the same proven endpoint/database/IAM discovery
+    # path as the orchestrator. The .env intentionally need not persist a
+    # short-lived YC token.
+    import scripts.region_talk_orchestrator as orchestrator  # noqa: PLC0415
+    orchestrator.ensure_child_ydb_env(allow_yc_fallback=True)
     args.llm_budget_id = args.llm_budget_id or os.getenv("REGION_TALK_LLM_BUDGET_ID") or datetime.now(timezone.utc).strftime("region-talk-debug-%Y%m%d")
     args.llm_budget_max = _env_int("REGION_TALK_LLM_BUDGET_MAX", 100) if args.llm_budget_max is None else args.llm_budget_max
     os.environ.setdefault("REGION_TALK_LLM_MODEL", args.model)

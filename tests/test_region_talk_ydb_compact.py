@@ -66,7 +66,7 @@ class RegionTalkYdbCompactTests(unittest.TestCase):
         target, meta = mod.transform_rows(rows)
         posts = {row["pk"]: row for row in target if row["kind"] == "processed_post_item"}
         self.assertEqual(set(posts), {"processed_post_item:tg:travel:42", "processed_post_item:tg:travel:43"})
-        self.assertEqual(posts["processed_post_item:tg:travel:42"]["payload"]["text_excerpt"], "rich")
+        self.assertNotIn("text_excerpt", posts["processed_post_item:tg:travel:42"]["payload"])
         self.assertEqual(meta["post_projection_source_rows"], 2)
         self.assertEqual(meta["post_projection_canonical_rows"], 2)
         self.assertTrue(mod.validate(rows, target)["ok"])

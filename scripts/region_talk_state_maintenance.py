@@ -146,11 +146,6 @@ def main() -> int:
     publication_terminal_urls = {
         url for url, group in publication_groups.items() if any(is_publication_terminal(row) for row in group)
     }
-    vectorized_urls = {
-        normalize_post_url(str(row.get("post_url") or ""))
-        for row in rows["text_vector_enrichment_item"]
-        if normalize_post_url(str(row.get("post_url") or ""))
-    }
     now = datetime.now(timezone.utc).isoformat()
     upserts: list[tuple[str, str, dict[str, Any]]] = []
     deletes: list[str] = []
@@ -184,10 +179,10 @@ def main() -> int:
             payload = {k: v for k, v in row.items() if not str(k).startswith("_ydb_")}
             changed = False
             text_is_consumed = row_has_terminal_text_verdict(kind, row, publication_terminal_urls)
-            # processed_post_item is an identity/status projection, not a text
-            # store. Once E5 exists, the working text belongs to the vector /
-            # active-candidate lane and this duplicate excerpt can be removed.
-            if kind == "processed_post_item" and normalize_post_url(str(row.get("post_url") or "")) in vectorized_urls:
+            # processed_post_item is always an identity/status projection, not
+            # a text store. Full transient working text lives only in the
+            # active candidate/vector/media lane until its verdict.
+            if kind == "processed_post_item":
                 text_is_consumed = True
             if text_is_consumed:
                 for field in TEXT_FIELDS:

@@ -240,8 +240,9 @@ technical heartbeats. The core Region Talk funnel is:
 3. **Source cursor advanced** — the current scan/queue cursor and current source
    are visible while the notebook is still running.
 4. **Post fetched/scored** — canonical `processed_post_item` is an identity,
-   status and hash projection; it does not retain the post body after E5 has
-   taken ownership of the working text. Raw platform payloads are never stored.
+   status and hash projection and never retains the post body. Active E5,
+   candidate/media or retryable Gemini state owns the working text instead.
+   Raw platform payloads are never stored.
 5. **Region/text candidate** — the post passed/failed Kaliningrad-only,
    non-ad/non-news/text-value gates and candidate memory is updated.
 6. **Media queue** — text-confirmed posts with media are queued for
@@ -264,8 +265,8 @@ Post text is operational state, not historical content storage:
    E5/candidate/media handoff needed by BGE, image/video routing and Gemini.
    It is not silently truncated to an arbitrary 500/180-character database
    excerpt when a downstream verifier still needs the complete post.
-2. `processed_post_item` keeps identity, date, hashes, stage and reasons; its
-   duplicate excerpt is removed once a matching E5 row exists.
+2. `processed_post_item` keeps identity, date, hashes, stage and reasons only;
+   it never duplicates an excerpt.
 3. E5+BGE scores remain durable, but text fields are removed from processed,
    candidate, image, publication and vector projections immediately after a
    terminal reject/accept/needs-review/sent verdict.
@@ -302,9 +303,10 @@ Region Talk must keep row-level product state compact:
   `source_edge_item`, `comment_link_item`, `processed_post_item`,
   `post_link_queue_item`, `candidate_memory_item`, `image_queue_item`,
   `publication_candidate_item`;
-- full post text, raw comment text, raw Telegram/VK payloads and media bytes are
-  excluded from YDB;
-- row payloads use compact field allow-lists and short excerpts/hashes only;
+- full post text exists only in active working rows that still need BGE,
+  media routing or a Gemini retry; raw comment text, raw Telegram/VK payloads
+  and media bytes are excluded from YDB;
+- identity/history projections use compact field allow-lists and hashes only;
 - `processed_post_item` is the single durable post record. New writes no longer
   duplicate it as `post_live_item`; the old kind is read-only migration input;
 - BGE dense vectors are stored as `f16_le_base64` plus `embedding_dim`, not a
@@ -313,9 +315,9 @@ Region Talk must keep row-level product state compact:
   missing. A successful BGE write removes that transient excerpt from the E5
   row, and the BGE row itself stores scores/vector/hash rather than another text
   copy. This is lifecycle compaction, not a single-model shortcut;
-- publication candidates retain at most 700 characters only while a Gemini
+- retryable publication candidates retain the exact post text while a Gemini
   retry is possible. Accepted, rejected, operator-rejected and sent terminal
-  rows keep URL/hash/summary/verdict evidence but no full verifier text;
+  rows keep URL/hash/verdict evidence but no post text;
 - BGE run-result rows contain only compact summary/sample references and are
   retention-limited; they never duplicate the full enrichment rows;
 - `latest_state` and `run_state_snapshot` use checkpoint-v4 and therefore stay

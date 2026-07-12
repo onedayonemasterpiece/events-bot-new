@@ -1859,7 +1859,7 @@ POST_STATE_FIELDS = [
 ]
 POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "has_media",
-    "media_count", "text_hash", "text_excerpt_hash", "text_excerpt", "short_summary", "source_url", "handle",
+    "media_count", "text_hash", "text_excerpt_hash", "source_url", "handle",
     "fetch_status", "post_observation_status", "discovery_method", "discovery_priority",
     "keyword_hit_query", "keyword_hit_hashtag", "ydb_candidate_link_kind", "ydb_candidate_link_pk",
     "embedded_links_json",

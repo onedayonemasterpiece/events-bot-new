@@ -3619,6 +3619,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(payload["run_id"], "online-run")
         self.assertTrue(payload.get("text_hash"))
         self.assertTrue(payload.get("text_excerpt_hash"))
+        self.assertNotIn("text_excerpt", payload)
+        self.assertNotIn("short_summary", payload)
 
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()

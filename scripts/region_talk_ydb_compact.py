@@ -342,6 +342,11 @@ def transform_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], di
             summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
             payload = {"summary": summary, "row_count": payload.get("row_count") or summary.get("rows_written") or 0}
         transformed.append({**row, "payload": payload})
+    for row in post_groups.values():
+        payload = dict(row.get("payload") or {})
+        for field in ("text", "full_text", "text_excerpt", "short_summary", "raw"):
+            payload.pop(field, None)
+        row["payload"] = payload
     transformed.extend(post_groups.values())
     return transformed, {
         "dropped_rows_by_reason": dict(dropped),

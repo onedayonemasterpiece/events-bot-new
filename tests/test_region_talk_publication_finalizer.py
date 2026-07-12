@@ -328,7 +328,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=capture),
         ):
             self.assertEqual(mod.write_publication_rows(Pool(), object(), "table", [row], "run-1"), 1)
-        self.assertEqual(len(captured["items"][0][2]["text"]), 700)
+        self.assertEqual(len(captured["items"][0][2]["text"]), 2000)
 
     def test_unknown_local_and_spam_fail_closed_without_gemini_and_revoke_prior_accept(self) -> None:
         mod = self.mod

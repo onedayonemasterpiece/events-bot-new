@@ -7,6 +7,8 @@
 - Split Region Talk exact-post text outcomes into suitable, rejected and still-pending counts so BGE work-in-progress is no longer reported as rejection.
 - Preserved the Region Talk final Gemini request fingerprint and prompt version across later CandidateReport refreshes for auditable idempotency.
 - Bounded Region Talk actual-media retries (default three attempts) and terminalized repeatedly empty downloads as broken media, while preserving the separate manual-video path.
+- Removed post excerpts from the durable processed-post identity projection and kept exact, untruncated text only in active BGE/candidate/media/Gemini-retry state until a terminal verdict.
+- Reused the orchestrator's YC/YDB credential discovery in the local Region Talk finalizer so downstream Gemini processing does not fail when only a renewable local YC token is available.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active
