@@ -9,6 +9,8 @@
 - Bounded Region Talk actual-media retries (default three attempts) and terminalized repeatedly empty downloads as broken media, while preserving the separate manual-video path.
 - Removed post excerpts from the durable processed-post identity projection and kept exact, untruncated text only in active BGE/candidate/media/Gemini-retry state until a terminal verdict.
 - Reused the orchestrator's YC/YDB credential discovery in the local Region Talk finalizer so downstream Gemini processing does not fail when only a renewable local YC token is available.
+- Ensured short exact keyword/fast-check posts still receive BGE-M3 instead of remaining permanently in dual-vector pending; the generic short-text noise filter remains in place.
+- Reopened fetched exact-post links for one bounded rescore when their awaited BGE result arrives, while preserving terminal Gemini/operator idempotency.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active

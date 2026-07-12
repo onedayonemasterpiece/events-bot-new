@@ -695,6 +695,23 @@ def _source_terminal_excluded(row: dict[str, Any]) -> bool:
     )
 
 
+def _is_product_priority_row(row: dict[str, Any]) -> bool:
+    method = str(row.get("discovery_method") or "").lower()
+    reason = str(row.get("priority_reason") or "").lower()
+    try:
+        exact_priority = int(row.get("post_link_priority")) == 0
+    except (TypeError, ValueError):
+        exact_priority = False
+    return bool(
+        exact_priority
+        or method == "exact_post_link_queue"
+        or row.get("keyword_hit_query")
+        or row.get("keyword_hit_hashtag")
+        or "keyword" in reason
+        or "fast_check" in reason
+    )
+
+
 def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, existing_pks: set[str], limit: int, include_existing: bool = False) -> list[dict[str, Any]]:
     global LAST_COLLECT_STATS
     rows: list[dict[str, Any]] = []
@@ -744,7 +761,11 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
                 stats["source_terminal_skipped"] += 1
                 continue
             text, used = text_from_row(row)
-            if len(text) < getenv_int("REGION_TALK_BGE_MIN_TEXT_CHARS", 24):
+            # Generic tiny snippets are usually low-value noise, but an exact
+            # keyword/fast-check post is already scarce product evidence. It
+            # must receive the second model even when the caption is short;
+            # otherwise it remains forever in `dual_vector_pending`.
+            if len(text) < getenv_int("REGION_TALK_BGE_MIN_TEXT_CHARS", 24) and not _is_product_priority_row(row):
                 stats["short_text_skipped"] += 1
                 continue
             post_url = str(row.get("post_url") or "").strip()
@@ -773,21 +794,7 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
     stats["eligible_rows"] = len(candidates)
 
     def is_product_priority(item: tuple[int, str, dict[str, Any]]) -> bool:
-        row = item[2]
-        method = str(row.get("discovery_method") or "").lower()
-        reason = str(row.get("priority_reason") or "").lower()
-        try:
-            exact_priority = int(row.get("post_link_priority")) == 0
-        except (TypeError, ValueError):
-            exact_priority = False
-        return bool(
-            exact_priority
-            or method == "exact_post_link_queue"
-            or row.get("keyword_hit_query")
-            or row.get("keyword_hit_hashtag")
-            or "keyword" in reason
-            or "fast_check" in reason
-        )
+        return _is_product_priority_row(item[2])
 
     def post_timestamp(item: tuple[int, str, dict[str, Any]]) -> float:
         raw = str(item[1] or "").strip()

@@ -4248,6 +4248,32 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "https://t.me/cached/10",
         ])
 
+    def test_bge_arrival_reopens_only_nonterminal_fetched_exact_post(self) -> None:
+        mod = load_module()
+        links = [
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/a/1"},
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/b/2"},
+        ]
+        processed = [
+            {"post_url": "https://t.me/a/1", "vector_gate_status": "vector_defer_wait_bge_m3"},
+            {"post_url": "https://t.me/b/2", "vector_gate_status": "vector_defer_wait_bge_m3"},
+        ]
+        vectors = [
+            {"post_url": "https://t.me/a/1", "model_short": "bge_m3"},
+            {"post_url": "https://t.me/b/2", "model_id": "BAAI/bge-m3"},
+        ]
+        publications = [
+            {"post_url": "https://t.me/b/2", "publication_status": "gemini_reject", "publication_candidate_status": "llm_rejected"},
+        ]
+
+        promoted = mod.promote_bge_ready_exact_rows(links, processed, vectors, publications)
+
+        self.assertEqual(promoted[0]["post_link_status"], "bge_ready_rescore")
+        self.assertEqual(promoted[0]["post_link_priority"], 0)
+        self.assertEqual(promoted[1]["post_link_status"], "fetched")
+        selected = mod.candidate_link_rows_for_fetch(promoted, 10, cached_entity_handles={"a", "b"})
+        self.assertEqual([row["post_url"] for row in selected], ["https://t.me/a/1"])
+
     def test_post_link_rediscovery_preserves_retry_lifecycle(self) -> None:
         mod = load_module()
         previous = {

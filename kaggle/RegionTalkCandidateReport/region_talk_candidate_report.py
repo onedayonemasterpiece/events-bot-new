@@ -9032,6 +9032,57 @@ def exact_post_fetch_error_is_terminal(exc: Exception) -> bool:
     }
 
 
+def promote_bge_ready_exact_rows(
+    link_rows: list[dict[str, Any]],
+    processed_rows: list[dict[str, Any]],
+    vector_rows: list[dict[str, Any]],
+    publication_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Re-open fetched exact links only when their awaited BGE row arrived.
+
+    CandidateReport may have persisted `vector_defer_wait_bge_m3` and marked
+    the exact URL fetched in the same run. BGE then completes externally. A
+    fetched link is otherwise terminal and would never be rescored, leaving a
+    permanent false backlog. Re-fetching is bounded by the normal exact-link
+    limit and Telegram governor; terminal publication/operator decisions stay
+    monotonic.
+    """
+    deferred_urls = {
+        canonical_post_url_for_storage(row.get("post_url"))
+        for row in processed_rows
+        if str(row.get("vector_gate_status") or "").startswith("vector_defer")
+        or str(row.get("current_stage") or "") == "dual_model_vector_enrichment_pending"
+    }
+    bge_urls = {
+        canonical_post_url_for_storage(row.get("post_url"))
+        for row in vector_rows
+        if str(row.get("model_short") or "") == "bge_m3"
+        or str(row.get("model_id") or "") == "BAAI/bge-m3"
+    }
+    terminal_urls = {
+        canonical_post_url_for_storage(row.get("post_url"))
+        for row in publication_rows
+        if str(row.get("publication_status") or "").startswith(("gemini_", "operator_rejected", "eligibility_"))
+        or str(row.get("publication_candidate_status") or "") in {
+            "llm_confirmed", "llm_rejected", "llm_needs_review", "sent_to_chat",
+            "accepted_for_publication", "tombstoned_reject", "revoked",
+        }
+    }
+    ready_urls = (deferred_urls & bge_urls) - terminal_urls
+    out: list[dict[str, Any]] = []
+    for source in link_rows:
+        row = dict(source)
+        url = canonical_post_url_for_storage(row.get("post_url") or row.get("keyword_hit_post_url"))
+        if url in ready_urls and str(row.get("post_link_status") or "") == "fetched":
+            row["post_link_status"] = "bge_ready_rescore"
+            row["post_link_priority"] = 0
+            row["priority_reason"] = "external_bge_m3_arrived_rescore_exact_post"
+            row["next_attempt_after"] = ""
+            row["next_action"] = "refetch_exact_post_and_apply_dual_model_fusion"
+        out.append(row)
+    return out
+
+
 def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
@@ -9095,6 +9146,25 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                     for field in authoritative_fields:
                         if field in source:
                             row[field] = source.get(field)
+            if "post_link_queue_item" in selected_kinds:
+                processed_items = ydb_select_kind_items(
+                    session, ydb, table_path, "processed_post_item",
+                    limit=getenv_int("REGION_TALK_YDB_MAX_PROCESSED_POST_ROWS", 20000),
+                )
+                vector_items = ydb_select_kind_items(
+                    session, ydb, table_path, "text_vector_enrichment_item",
+                    limit=getenv_int("REGION_TALK_YDB_VECTOR_METRIC_READ_LIMIT", 20000),
+                )
+                publication_items = ydb_select_kind_items(
+                    session, ydb, table_path, "publication_candidate_item",
+                    limit=getenv_int("REGION_TALK_YDB_MAX_PUBLICATION_ROWS", 5000),
+                )
+                rows = promote_bge_ready_exact_rows(
+                    rows,
+                    list(processed_items.values()),
+                    list(vector_items.values()),
+                    list(publication_items.values()),
+                )
             cached_handles: set[str] = set()
             cache_items = ydb_select_kind_items(
                 session,

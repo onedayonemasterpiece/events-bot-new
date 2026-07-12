@@ -153,6 +153,38 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual([row["post_id"] for row in rows[:4]], ["p7", "p6", "p5", "p4"])
         self.assertEqual(rows[4]["post_id"], "p8")
 
+    def test_short_exact_post_is_not_left_in_permanent_dual_pending(self) -> None:
+        mod = load_bge_module()
+        short = "Калининград"
+        priority_row = {
+            "post_id": "p-short-exact",
+            "post_url": "https://t.me/source/10",
+            "model_id": "intfloat/multilingual-e5-base",
+            "model_short": "e5",
+            "text_hash": mod.text_hash(short),
+            "text_excerpt": short,
+            "discovery_method": "exact_post_link_queue",
+            "post_link_priority": 0,
+            "priority_reason": "global_keyword_search_exact_post",
+        }
+        generic_row = {
+            "post_id": "p-short-generic",
+            "post_url": "https://t.me/source/11",
+            "model_id": "intfloat/multilingual-e5-base",
+            "model_short": "e5",
+            "text_hash": mod.text_hash("Зеленоградск"),
+            "text_excerpt": "Зеленоградск",
+        }
+
+        rows = mod.collect_text_rows(
+            {"text_vector_enrichment_item": {"e5:priority": priority_row, "e5:generic": generic_row}},
+            existing_pks=set(),
+            limit=5,
+        )
+
+        self.assertEqual([row["post_id"] for row in rows], ["p-short-exact"])
+        self.assertEqual(mod.LAST_COLLECT_STATS["short_text_skipped"], 1)
+
     def test_no_rows_emits_terminal_done_heartbeat(self) -> None:
         mod = load_bge_module()
         events: list[tuple[str, dict]] = []

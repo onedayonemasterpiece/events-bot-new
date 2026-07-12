@@ -213,8 +213,9 @@ Important invariants:
 - BGE-M3 is launched immediately when `bge_pending_sample_total >= 1`, using
   the worker's own text-length/PK contract. Raw E5/BGE coverage remains visible,
   but the scorecard also reports actionable coverage and E5 rows excluded below
-  `REGION_TALK_BGE_MIN_TEXT_CHARS` (default 24); ultra-short captions must not
-  masquerade as a runnable BGE backlog or be hidden from the raw metric.
+  `REGION_TALK_BGE_MIN_TEXT_CHARS` (default 24). Generic ultra-short captions
+  are excluded, but exact keyword/fast-check posts bypass that optimization:
+  direct KO evidence must receive BGE and cannot remain permanently pending.
 - This is the current dual-vector normalizer: at most one BGE kernel may run at
   once, but while actionable E5-without-BGE rows remain the loop polls in the
   shorter downstream interval (60 seconds by default) and relaunches BGE after
@@ -223,6 +224,11 @@ Important invariants:
   The BGE batch reserves 80% of bounded capacity for exact keyword/fast-check
   posts (fresh-first) and 20% for generic FIFO backlog, filling unused capacity
   from either side. This reduces known-KO latency without starving breadth.
+- When BGE arrives after CandidateReport has already marked an exact link
+  fetched with `vector_defer_wait_bge_m3`, the next CandidateReport reopens
+  only that URL as `bge_ready_rescore`. It is re-fetched under the normal
+  bounded cached-entity/human-like exact-link budget; terminal Gemini/operator
+  decisions are never reopened.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but
