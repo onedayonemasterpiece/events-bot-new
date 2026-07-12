@@ -26,6 +26,11 @@ Production transactional sending must stay disabled if a disabled destination
 probe rejects `COMPLAINT` or `RENDERING_FAILURE`; do not silently deploy a reduced
 subscription and claim complete suppression coverage.
 
+The 2026-07-12 live disabled-destination probe succeeded. A subsequent GET returned
+all nine event types (`SEND`, `DELIVERY`, `BOUNCE`, `SUBSCRIPTION`, `OPEN`, `CLICK`,
+`DELIVERY_DELAY`, `COMPLAINT`, `RENDERING_FAILURE`), so this provider gate is
+closed despite the incomplete create-method enumeration.
+
 ## Safe order
 
 1. Merge tested code to `origin/main`; take a live Supabase backup.
@@ -43,3 +48,24 @@ subscription and claim complete suppression coverage.
 Application switches remain `global=false`, `transactional=false`,
 `dry_run_only=true` throughout this infrastructure release. NotiSend is unrelated
 and remains disabled.
+
+## Live release evidence (2026-07-12)
+
+- Supabase migration `20260712072912` is applied after a verified 3.1 MB custom
+  backup; both rollback-only email SQL contracts pass and V1 is no longer executable
+  by `service_role`.
+- YDB `etn97gnogglv3fgntadv` and topic `kenigevents-postbox-events` match the desired
+  zero-provisioned/request-unit limits. Use the database's returned Kinesis endpoint;
+  its internal path component is not the resource folder ID and must not be guessed.
+- Function `d4enjcfg3h6nep4ij4fh` tag `prod` points to the Python 3.12 version built
+  from `origin/main@140c9e15`; trigger `a1svvdcbe8pdoc8cv74a` is active with batch
+  size 1 byte and five retries at 30 seconds. Both dedicated SAs have zero static keys.
+- One real canary produced authenticated/verified `accepted` + `delivered` provider
+  evidence. Exact duplicates were no-ops; the controlled retry test produced six
+  invocations, one DLQ record, successful replay, duplicate replay and an empty DLQ.
+- Structured Cloud Logging contains only request/version IDs, event hashes, bounded
+  outcomes and stable error codes. The temporary user/outboxes and synthetic
+  suppressions/events were removed; only the real Send/Delivery evidence remains.
+- Destination disable/enable rollback passed and the nine-type destination is enabled.
+  Application switches remain off/dry-run-only because no production worker or
+  Monitoring notification channel was deployed in this infrastructure release.

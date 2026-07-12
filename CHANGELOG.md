@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Email / live Postbox feedback release**: applied the correlated V2 RPC after backup, provisioned isolated zero-provisioned serverless YDB/YDS/Function/Lockbox/YMQ-DLQ resources, enabled the complete nine-type Postbox destination, and proved real Send/Delivery, duplicate idempotency, scoped suppression fixtures, six-attempt failure-to-DLQ, controlled replay, empty-DLQ cleanup and destination rollback while leaving all application send switches off.
 - **Email / Postbox event observability**: emit bounded single-line structured stdout records so event hashes, outcomes and stable error codes reach the isolated Cloud Logging group without recipient or message content, following the Yandex Python runtime contract rather than ineffective `basicConfig()` root-logger changes.
 - **Email / Postbox feedback boundary**: added an IAM-authenticated YDS consumer and message-correlated Supabase V2 RPC for at-least-once delivery events, idempotent status transitions and bounce/complaint/unsubscribe suppression; added the isolated serverless YDB/YDS/Function/DLQ desired state while keeping application sending disabled until the live complete-event-type gate and canaries pass.
 - **Email / operator acceptance**: recorded owner confirmation that the single `info@kenigevents.ru` SpaceWeb canary arrived at `info@kgd80.ru`, and accepted the temporary NotiSend key-exposure risk without rotation while keeping recommendation sending disabled.
