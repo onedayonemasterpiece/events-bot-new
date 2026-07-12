@@ -1,26 +1,18 @@
 ---
 import Icon from '../Icon.astro';
-import CalendarLink from '../CalendarLink.astro';
 import EventCard from '../EventCard.astro';
 import EventTokenMedallions from '../EventTokenMedallions.astro';
+import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
 import type { EventImageAsset, PreviewEvent } from '../../lib/types';
 import {
   displayDate,
   displayDateTime,
   displayWeekdayLong,
-  eventAbsoluteUrl,
-  eventActionHref,
-  eventAdmissionLabel,
-  eventTicketActionLabel,
-  isCalendarEligible,
-  isExternalHttpUrl,
-  isTelephoneUrl,
-  isTicketSoldOut,
   withBase,
 } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 
-type Candidate = 'editorial' | 'split' | 'gallery' | 'reading';
+type Candidate = 'editorial' | 'split' | 'gallery' | 'reading' | 'bento';
 type MediaPolicy = 'non-ocr' | 'ocr';
 
 interface Props {
@@ -30,6 +22,8 @@ interface Props {
   mediaPolicy: MediaPolicy;
   transport?: boolean;
   heroImageIndex?: number;
+  heroWidth?: number;
+  heroHeight?: number;
   editorialRail?: boolean;
   autoRotate?: boolean;
   ocrSafeCover?: boolean;
@@ -42,6 +36,7 @@ type GalleryImage = {
   width?: number;
   height?: number;
   position?: string;
+  sourceIndex?: number;
 };
 
 const {
@@ -51,6 +46,8 @@ const {
   mediaPolicy,
   transport = false,
   heroImageIndex = 0,
+  heroWidth,
+  heroHeight,
   editorialRail = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   autoRotate = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   ocrSafeCover = false,
@@ -60,15 +57,17 @@ const heroAlt = event.image_alt || `Афиша события «${event.title}»
 const rawAssets = event.image_assets || [];
 const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
 const preferredUrl = eventImageUrl(preferredAsset?.src || event.image_url) || preferredAsset?.src || event.image_url || '';
-const preferredWidth = preferredAsset?.width || 1600;
-const preferredHeight = preferredAsset?.height || 1000;
+const preferredWidth = heroWidth || preferredAsset?.width || 1600;
+const preferredHeight = heroHeight || preferredAsset?.height || 1000;
 const ratio = preferredWidth / preferredHeight;
 const preferredPosition = preferredAsset?.recommended_object_position || event.image_object_position || '50% 50%';
+const selectedMediaMode = preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
+const selectedHeroIsOcr = selectedMediaMode !== 'visual_only';
 
 const galleryImages = (() => {
   const out: GalleryImage[] = [];
   const seen = new Set<string>();
-  const add = (asset: EventImageAsset | null | undefined, fallbackMode: PreviewEvent['image_text_mode']) => {
+  const add = (asset: EventImageAsset | null | undefined, fallbackMode: PreviewEvent['image_text_mode'], sourceIndex?: number) => {
     const src = eventImageUrl(asset?.src) || asset?.src || '';
     if (!src || seen.has(src) || src.includes('files.catbox.moe')) return;
     seen.add(src);
@@ -79,15 +78,16 @@ const galleryImages = (() => {
       width: asset?.width,
       height: asset?.height,
       position: asset?.recommended_object_position,
+      sourceIndex,
     });
   };
-  if (preferredAsset) add(preferredAsset, event.image_text_mode);
+  if (preferredAsset) add(preferredAsset, event.image_text_mode, heroImageIndex);
   else if (event.image_url) {
     const src = eventImageUrl(event.image_url) || event.image_url;
     seen.add(src);
     out.push({ src, alt: heroAlt, image_text_mode: event.image_text_mode, width: preferredWidth, height: preferredHeight });
   }
-  rawAssets.forEach((asset) => add(asset, event.image_text_mode));
+  rawAssets.forEach((asset, index) => add(asset, event.image_text_mode, index));
   return out.slice(0, 12);
 })();
 const galleryId = `clean-hero-gallery-${event.id}`;
@@ -96,190 +96,151 @@ const photoCount = galleryImages.length;
 const readingImages = (galleryImages.filter((image) => image.image_text_mode === 'visual_only').length >= 2
   ? galleryImages.filter((image) => image.image_text_mode === 'visual_only')
   : galleryImages).slice(0, 5);
-const railImages = (candidate === 'reading' ? readingImages : galleryImages).slice(0, 5);
+const railImages = galleryImages.slice(0, 6);
+const stripImages = readingImages.slice(0, 4);
+const bentoImages = galleryImages.slice(0, 9);
+const usesLongFlow = candidate === 'editorial' || candidate === 'reading' || candidate === 'bento' || (candidate === 'split' && isOcr);
 
 const dateLabel = displayDate(event);
 const weekdayLabel = displayWeekdayLong(event);
 const dateTimeLabel = displayDateTime(event);
-const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
 const addressLabel = event.address || event.city || 'Адрес уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
-const ctaHref = eventActionHref(event);
-const ctaIsExternal = isExternalHttpUrl(ctaHref);
-const ctaIsTelephone = isTelephoneUrl(ctaHref);
-const soldOut = isTicketSoldOut(event);
-const canAddToCalendar = isCalendarEligible(event);
-const requiresExplicitBooking = event.ticket.kind === 'registration' || event.ticket.kind === 'phone';
-const calendarPrimary = canAddToCalendar && (!ctaHref || (event.ticket.is_free && !requiresExplicitBooking));
-const ctaLabel = !event.ticket.is_free && !event.ticket.price_label && ctaHref ? 'Билеты' : eventTicketActionLabel(event);
-const canonicalUrl = eventAbsoluteUrl(event);
-const likesCount = event.likes_count || 0;
-const sharesCount = event.shares_count || 0;
-const shareText = [event.title, dateTimeLabel, placeLabel, eventAdmissionLabel(event)].filter(Boolean).join('\n');
-const shareImageType = preferredUrl.toLowerCase().includes('.webp') ? 'image/webp' : preferredUrl.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
-const shareFileName = `kenigevents-${event.slug}`;
+// The page owns the section heading; source descriptions occasionally repeat it.
+const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\s*О событии\s*<\/h\1>/giu, '');
 ---
 
 <main
-  class:list={['desktop-clean-event', `desktop-clean-event--${candidate}`, `desktop-clean-event--${mediaPolicy}`]}
+  class:list={['desktop-clean-event', `desktop-clean-event--${candidate}`, `desktop-clean-event--${mediaPolicy}`, selectedHeroIsOcr ? 'desktop-clean-event--hero-ocr' : 'desktop-clean-event--hero-photo']}
   data-desktop-clean-event
   data-desktop-family={candidate}
   data-media-policy={mediaPolicy}
+  data-selected-media-policy={selectedMediaMode}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
-  data-reading-scroll-gallery={candidate === 'reading' ? 'true' : undefined}
   data-event-id={event.id}
-  style={`--image-ratio:${ratio};--image-position:${preferredPosition};`}
+  style={`--image-ratio:${ratio};--image-position:${preferredPosition};--media-count:${Math.max(1, stripImages.length)};`}
 >
   <div class="desktop-clean-reading-shell">
   <article class:list={['desktop-prototype', 'desktop-prototype--clean', `desktop-prototype--${candidate}`, `desktop-prototype--${mediaPolicy}`]} data-clean-hero>
     <div class="desktop-prototype__canvas">
-      <section class="desktop-prototype__stage" aria-labelledby={`clean-event-title-${event.id}`}>
-        <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={isOcr ? undefined : ''}>
-          {preferredUrl && (
-            <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
-              <img
-                class="desktop-prototype__media-image"
-                data-clean-hero-image
-                src={preferredUrl}
-                alt={heroAlt}
-                width={preferredWidth}
-                height={preferredHeight}
-                fetchpriority="high"
-                decoding="async"
-              />
-            </button>
-          )}
-          {photoCount > 0 && (
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}>
-              <Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span>
-            </button>
-          )}
-          {editorialRail && railImages.length > 1 && (
-            <div class="desktop-prototype__media-rail" data-hero-rail aria-label="Выбрать фотографию в hero">
-              {railImages.map((image, index) => (
-                <button
-                  type="button"
-                  class:list={[index === 0 && 'is-current']}
-                  data-clean-hero-thumb
-                  data-index={index}
-                  data-src={image.src}
-                  data-alt={image.alt}
-                  data-mode={image.image_text_mode}
-                  data-width={image.width || 1600}
-                  data-height={image.height || 1000}
-                  data-position={image.position || '50% 50%'}
-                  aria-pressed={index === 0 ? 'true' : 'false'}
-                  aria-label={`Показать фото ${index + 1} из ${railImages.length}`}
-                >
-                  <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
+      <section
+        class="desktop-prototype__stage"
+        data-scroll-stage={usesLongFlow ? '' : undefined}
+        data-scroll-kind={candidate}
+        aria-labelledby={`clean-event-title-${event.id}`}
+      >
+        {candidate === 'reading' ? (
+          <figure class="desktop-prototype__media desktop-prototype__media--strip" data-media-frame data-slow-media-viewport>
+            <div class="desktop-media-strip" data-slow-media-track data-slow-media-speed="0.55">
+              {stripImages.map((image, index) => (
+                <button type="button" class="desktop-media-strip__item" data-strip-item data-strip-index={index} data-image-text-mode={image.image_text_mode} data-hero-gallery-open={galleryId} aria-label={`Открыть фото ${index + 1} события «${event.title}»`}>
+                  <img src={image.src} alt={image.alt} width={image.width || 1600} height={image.height || 1000} loading={index ? 'lazy' : 'eager'} decoding="async" />
                 </button>
               ))}
-              {autoRotate && <button type="button" class="desktop-prototype__rotation-toggle" data-hero-rotation-toggle aria-pressed="true" aria-label="Остановить автоматическую смену фотографий">Авто</button>}
+            </div>
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
+          </figure>
+        ) : candidate === 'bento' ? (
+          <figure class="desktop-prototype__media desktop-prototype__media--bento" data-media-frame data-slow-media-viewport>
+            <div class="desktop-bento-track" data-slow-media-track data-slow-media-speed="0.48" data-bento-track>
+              {bentoImages[0] && (
+                <button type="button" class="desktop-bento-main" data-hero-gallery-open={galleryId} aria-label={`Открыть главное фото события «${event.title}»`}>
+                  <img src={bentoImages[0].src} alt={bentoImages[0].alt} width={bentoImages[0].width || 1200} height={bentoImages[0].height || 1600} fetchpriority="high" decoding="async" />
+                </button>
+              )}
+              <div class="desktop-bento-grid" data-bento-grid>
+                {bentoImages.slice(1).map((image, index) => (
+                  <button type="button" class="desktop-bento-tile" data-bento-tile data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} aria-label={`Открыть дополнительное фото ${index + 2}`}>
+                    <img src={image.src} alt={image.alt} width={image.width || 1080} height={image.height || 1350} loading="lazy" decoding="async" />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
+          </figure>
+        ) : candidate === 'split' && isOcr ? (
+          <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport>
+            <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.35">
+              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} aria-label={`Открыть афишу события «${event.title}» на весь экран`}>
+                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
+              </button>
+            </div>
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
+          </figure>
+        ) : (
+          <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''}>
+            {preferredUrl && (
+              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
+                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
+              </button>
+            )}
+            {photoCount > 0 && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
+          </figure>
+        )}
+
+        {candidate === 'editorial' && (
+          <aside class="desktop-editorial-side" data-editorial-side>
+            {editorialRail && railImages.length > 1 && (
+              <div class="desktop-prototype__media-rail" data-hero-rail aria-label="Выбрать изображение">
+                {railImages.map((image, index) => (
+                  <button type="button" class:list={[index === 0 && 'is-current']} data-clean-hero-thumb data-index={index} data-source-index={image.sourceIndex} data-src={image.src} data-alt={image.alt} data-mode={image.image_text_mode} data-width={image.width || 1600} data-height={image.height || 1000} data-position={image.position || '50% 50%'} aria-pressed={index === 0 ? 'true' : 'false'} aria-label={image.image_text_mode === 'ocr_text' ? 'Показать афишу целиком' : `Показать фото ${index + 1}`}>
+                    <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
+                    {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
+          </aside>
+        )}
+
+        <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined}>
+          <div class="desktop-prototype__info" data-title-panel>
+            <p class="desktop-prototype__kicker">
+              <span>{event.event_type || 'событие'}</span>
+              <time datetime={event.starts_at || event.start_date}><strong>{dateLabel}</strong>{weekdayLabel && <b>{weekdayLabel}</b>}{event.display_time && <strong>{event.display_time}</strong>}</time>
+            </p>
+            <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
+            {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
+            <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span></p>
+            <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
+          </div>
+
+          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" />}
+
+          {usesLongFlow && (
+            <div class="desktop-prototype__flow-body" data-continuous-event-body>
+              <article class="desktop-clean-description">
+                <p class="eyebrow">О событии</p>
+                <h2 id={`about-${event.id}`}>{event.summary || event.title}</h2>
+                <div class="desktop-clean-description__text prose" set:html={descriptionHtml} />
+              </article>
+              <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
+                <span class="desktop-clean-feedback__icon"><Icon name="spark" /></span>
+                <div><p class="eyebrow">Что говорят</p><h2 id={`feedback-${event.id}`}>Общего вывода пока нет</h2><p>Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.</p></div>
+              </aside>
+              <section class="desktop-clean-practical" aria-labelledby={`practical-${event.id}`}>
+                <p class="eyebrow">Перед посещением</p><h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
+                <div class="desktop-clean-practical__grid">
+                  <article><Icon name="calendar" /><span>Когда</span><strong>{dateTimeLabel}</strong></article>
+                  <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
+                  <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
+                </div>
+              </section>
             </div>
           )}
-          {candidate === 'editorial' && !isOcr && (
-            <aside class="desktop-prototype__action desktop-prototype__action--media" data-feedback-scope aria-label="Действия события">
-              <p><span>вход</span><strong>{admissionLabel}</strong></p>
-              {calendarPrimary ? (
-                <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
-              ) : ctaHref ? (
-                <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
-                  <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
-                </a>
-              ) : soldOut ? (
-                <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
-              ) : canAddToCalendar ? (
-                <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
-              ) : (
-                <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
-              )}
-              <div class="desktop-prototype__action-row event-hero__metric-row">
-                {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
-                <button type="button" class="desktop-prototype__icon-action" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={preferredUrl} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`} title="Поделиться"><Icon name="share" /><strong data-share-count>{sharesCount}</strong></button>
-                <button type="button" class="desktop-prototype__icon-action feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`} title="Нравится"><Icon name="heart" /><strong data-feedback-count>{likesCount}</strong></button>
-              </div>
-            </aside>
-          )}
-        </figure>
-
-        <div class="desktop-prototype__info" data-title-panel>
-          <p class="desktop-prototype__kicker">
-            <span>{event.event_type || 'событие'}</span>
-            <time datetime={event.starts_at || event.start_date}>
-              <strong>{dateLabel}</strong>
-              {weekdayLabel && <b>{weekdayLabel}</b>}
-              {event.display_time && <strong>{event.display_time}</strong>}
-            </time>
-          </p>
-          <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
-          {candidate === 'editorial' && isOcr && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
-          <p class="desktop-prototype__place">
-            <Icon name="pin" />
-            <span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span>
-          </p>
-          <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
         </div>
 
-        <aside class="desktop-prototype__action desktop-prototype__action--flow" data-feedback-scope aria-label="Действия события">
-          <p><span>вход</span><strong>{admissionLabel}</strong></p>
-          {calendarPrimary ? (
-            <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
-          ) : ctaHref ? (
-            <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
-              <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
-            </a>
-          ) : soldOut ? (
-            <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
-          ) : canAddToCalendar ? (
-            <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
-          ) : (
-            <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
-          )}
-          <div class="desktop-prototype__action-row event-hero__metric-row">
-            {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
-            <button
-              type="button"
-              class="desktop-prototype__icon-action"
-              data-nosnippet
-              data-native-share
-              data-share-event-id={event.id}
-              data-share-event-title={event.title}
-              data-share-base-count={sharesCount}
-              data-share-title={event.title}
-              data-share-text={shareText}
-              data-share-url={canonicalUrl}
-              data-share-image={preferredUrl}
-              data-share-image-type={shareImageType}
-              data-share-file-name={shareFileName}
-              data-share-date-time={dateTimeLabel}
-              data-share-place={placeLabel}
-              data-share-admission={admissionLabel}
-              aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}
-              title="Поделиться"
-            ><Icon name="share" /><strong data-share-count>{sharesCount}</strong></button>
-            <button
-              type="button"
-              class="desktop-prototype__icon-action feedback-button--like"
-              data-nosnippet
-              data-feedback-action="like"
-              data-event-id={event.id}
-              data-event-title={event.title}
-              data-base-count={likesCount}
-              aria-pressed="false"
-              aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`}
-              title="Нравится"
-            ><Icon name="heart" /><strong data-feedback-count>{likesCount}</strong></button>
-          </div>
-        </aside>
+        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--flow" />}
       </section>
     </div>
   </article>
 
-  <section class="desktop-clean-story page-shell" aria-labelledby={`about-${event.id}`}>
+  {!usesLongFlow && <section class="desktop-clean-story page-shell" aria-labelledby={`about-${event.id}`}>
     <article class="desktop-clean-description">
       <p class="eyebrow">О событии</p>
       <h2 id={`about-${event.id}`}>{event.summary || event.title}</h2>
-      <div class="desktop-clean-description__text prose" set:html={event.description_html} />
+      <div class="desktop-clean-description__text prose" set:html={descriptionHtml} />
     </article>
     <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
       <span class="desktop-clean-feedback__icon"><Icon name="spark" /></span>
@@ -289,9 +250,9 @@ const shareFileName = `kenigevents-${event.slug}`;
         <p>Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.</p>
       </div>
     </aside>
-  </section>
+  </section>}
 
-  <section class="desktop-clean-practical page-shell" aria-labelledby={`practical-${event.id}`}>
+  {!usesLongFlow && <section class="desktop-clean-practical page-shell" aria-labelledby={`practical-${event.id}`}>
     <p class="eyebrow">Перед посещением</p>
     <h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
     <div class="desktop-clean-practical__grid">
@@ -299,9 +260,9 @@ const shareFileName = `kenigevents-${event.slug}`;
       <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
       <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
     </div>
-  </section>
+  </section>}
 
-  {transport && event.city && event.city !== 'Калининград' && (
+  {!usesLongFlow && transport && event.city && event.city !== 'Калининград' && (
     <section class="desktop-clean-travel page-shell" aria-labelledby={`travel-${event.id}`}>
       <div>
         <p class="eyebrow">Как добраться</p>
@@ -373,9 +334,9 @@ const shareFileName = `kenigevents-${event.slug}`;
         rotationToggle.textContent = rotationEnabled ? 'Авто' : 'Пауза';
       };
 
-      const selectHero = async (index:number, source:'manual'|'auto'|'scroll'='manual') => {
+      const selectHero = async (index:number, source:'manual'|'auto'='manual') => {
         if (!heroImage || !thumbButtons.length) return;
-        if (source === 'manual' && cleanRoot.dataset.readingScrollGallery !== 'true') {
+        if (source === 'manual') {
           rotationEnabled = false;
           markRotation();
         }
@@ -393,29 +354,19 @@ const shareFileName = `kenigevents-${event.slug}`;
         heroImage.width = Number(button.dataset.width || probe.naturalWidth || heroImage.width);
         heroImage.height = Number(button.dataset.height || probe.naturalHeight || heroImage.height);
         heroImage.style.objectPosition = button.dataset.position || '50% 50%';
+        cleanRoot.dataset.selectedMediaPolicy = button.dataset.mode || 'unknown';
         thumbButtons.forEach((item, itemIndex) => {
           const current = itemIndex === next;
           item.setAttribute('aria-pressed', current ? 'true' : 'false');
           item.classList.toggle('is-current', current);
         });
         cleanRoot.dataset.activeHeroIndex = String(next);
-      };
-
-      const readingScrollTarget = (index:number) => {
-        const related = cleanRoot.querySelector<HTMLElement>('[data-related-start]');
-        if (!related || thumbButtons.length < 2) return window.scrollY;
-        const start = cleanRoot.offsetTop;
-        const end = Math.max(start, related.offsetTop - window.innerHeight);
-        return start + (end - start) * (index / (thumbButtons.length - 1));
+        updateOcrFrame();
       };
 
       thumbButtons.forEach((button, index) => {
         button.addEventListener('click', () => {
-          if (cleanRoot.dataset.readingScrollGallery === 'true') {
-            window.scrollTo({ top:readingScrollTarget(index), behavior:reducedMotion.matches ? 'auto' : 'smooth' });
-          } else {
-            void selectHero(index, 'manual');
-          }
+          void selectHero(index, 'manual');
         });
       });
       rotationToggle?.addEventListener('click', () => {
@@ -434,22 +385,51 @@ const shareFileName = `kenigevents-${event.slug}`;
         void selectHero((current + 1) % thumbButtons.length, 'auto');
       }, 8500);
 
-      const updateReadingImage = () => {
-        if (cleanRoot.dataset.readingScrollGallery !== 'true' || thumbButtons.length < 2) return;
-        const related = cleanRoot.querySelector<HTMLElement>('[data-related-start]');
-        if (!related) return;
-        const start = cleanRoot.offsetTop;
-        const end = Math.max(start + 1, related.offsetTop - window.innerHeight);
-        const progress = clamp((window.scrollY - start) / (end - start));
-        const next = Math.min(thumbButtons.length - 1, Math.floor(progress * thumbButtons.length));
-        if (Number(cleanRoot.dataset.activeHeroIndex || '0') !== next) void selectHero(next, 'scroll');
+      let layoutFrame = 0;
+      const layoutScrollMedia = () => {
+        layoutFrame = 0;
+        cleanRoot.querySelectorAll<HTMLElement>('[data-bento-tile]').forEach((tile) => {
+          const image = tile.querySelector<HTMLImageElement>('img');
+          if (!image?.naturalWidth || !image.naturalHeight) return;
+          const ratio = image.naturalWidth / image.naturalHeight;
+          const mode = tile.dataset.imageTextMode || 'unknown';
+          let span = 'square';
+          if (mode === 'visual_only' && ratio >= 1.45) span = 'wide';
+          else if (mode === 'visual_only' && ratio <= .72 && window.innerWidth >= 1280) span = 'tall';
+          tile.dataset.bentoSpan = span;
+          tile.dataset.naturalRatio = ratio.toFixed(4);
+        });
+        cleanRoot.querySelectorAll<HTMLElement>('[data-scroll-stage]').forEach((stage) => {
+          const viewport = stage.querySelector<HTMLElement>('[data-slow-media-viewport]');
+          const track = viewport?.querySelector<HTMLElement>('[data-slow-media-track]');
+          const content = stage.querySelector<HTMLElement>('[data-scroll-content]');
+          if (!viewport || !track || !content) return;
+          content.style.removeProperty('min-height');
+          stage.style.removeProperty('--scroll-stage-min-height');
+          const speed = clamp(Number(track.dataset.slowMediaSpeed || '.5'), .2, .7);
+          const overflow = Math.max(0, track.scrollHeight - viewport.clientHeight);
+          const requiredHeight = Math.ceil(viewport.clientHeight + overflow / speed);
+          const targetHeight = Math.max(content.scrollHeight, requiredHeight);
+          stage.style.setProperty('--scroll-stage-min-height', `${targetHeight}px`);
+          stage.dataset.mediaOverflow = overflow.toFixed(2);
+          stage.dataset.mediaSpeed = speed.toFixed(2);
+        });
+        scheduleMotion();
       };
+      const scheduleLayout = () => {
+        if (layoutFrame) return;
+        layoutFrame = window.requestAnimationFrame(layoutScrollMedia);
+      };
+      cleanRoot.querySelectorAll<HTMLImageElement>('[data-slow-media-track] img').forEach((image) => {
+        if (!image.complete) image.addEventListener('load', scheduleLayout, { once:true });
+      });
 
       const updateParallax = () => {
         frame = 0;
         cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-parallax]').forEach((media) => {
           if (reducedMotion.matches) {
             media.style.setProperty('--desktop-parallax-y', '0px');
+            media.style.removeProperty('transform');
             return;
           }
           const viewport = window.innerHeight || 800;
@@ -461,30 +441,60 @@ const shareFileName = `kenigevents-${event.slug}`;
             const travel = Math.max(1, rect.height - viewport + 73);
             progress = clamp((73 - rect.top) / travel);
             amplitude = 32;
-          } else if (cleanRoot.dataset.readingScrollGallery === 'true') {
-            const related = cleanRoot.querySelector<HTMLElement>('[data-related-start]');
-            const end = Math.max(cleanRoot.offsetTop + 1, (related?.offsetTop || document.documentElement.scrollHeight) - viewport);
-            progress = clamp((window.scrollY - cleanRoot.offsetTop) / (end - cleanRoot.offsetTop));
-            amplitude = 24;
+            const description = stage.querySelector<HTMLElement>('.desktop-clean-description');
+            if (description) {
+              const stageTravel = Math.max(0, 73 - rect.top);
+              const descriptionEnd = description.getBoundingClientRect().bottom - rect.top;
+              const exitStart = Math.max(0, descriptionEnd - viewport);
+              const exitEnd = Math.max(exitStart + 1, descriptionEnd - 73);
+              const exitProgress = clamp((stageTravel - exitStart) / (exitEnd - exitStart));
+              const exitDistance = media.offsetHeight + 73;
+              media.style.transform = `translate3d(0,${(-exitDistance * exitProgress).toFixed(2)}px,0)`;
+              stage.dataset.editorialMediaExitProgress = exitProgress.toFixed(4);
+            }
           } else {
             const rect = media.getBoundingClientRect();
             progress = clamp((viewport - rect.top) / Math.max(1, viewport + rect.height));
           }
           media.style.setProperty('--desktop-parallax-y', `${(-amplitude + progress * amplitude * 2).toFixed(1)}px`);
         });
-        updateReadingImage();
+        cleanRoot.querySelectorAll<HTMLElement>('[data-slow-media-viewport]').forEach((viewport) => {
+          const stage = viewport.closest<HTMLElement>('[data-scroll-stage]');
+          const track = viewport.querySelector<HTMLElement>('[data-slow-media-track]');
+          if (!stage || !track) return;
+          if (reducedMotion.matches) {
+            track.style.transform = 'none';
+            return;
+          }
+          const stageRect = stage.getBoundingClientRect();
+          const viewportHeight = viewport.clientHeight;
+          const overflow = Math.max(0, track.scrollHeight - viewportHeight);
+          const scrollRange = Math.max(1, stage.offsetHeight - viewportHeight);
+          const progress = clamp((73 - stageRect.top) / scrollRange);
+          const speed = clamp(Number(track.dataset.slowMediaSpeed || '.5'), .2, .7);
+          const travel = Math.min(overflow, scrollRange * speed);
+          track.style.transform = `translate3d(0,${(-travel * progress).toFixed(2)}px,0)`;
+          stage.dataset.mediaProgress = progress.toFixed(4);
+          stage.dataset.mediaTravel = travel.toFixed(2);
+        });
       };
       const scheduleMotion = () => {
         if (frame) return;
         frame = window.requestAnimationFrame(updateParallax);
       };
       updateParallax();
+      scheduleLayout();
       window.addEventListener('scroll', scheduleMotion, { passive:true });
-      window.addEventListener('resize', scheduleMotion, { passive:true });
+      window.addEventListener('resize', scheduleLayout, { passive:true });
       reducedMotion.addEventListener?.('change', scheduleMotion);
+      new ResizeObserver(scheduleLayout).observe(cleanRoot);
 
       const updateOcrFrame = () => {
-        if (cleanRoot.dataset.mediaPolicy !== 'ocr') return;
+        if (cleanRoot.dataset.selectedMediaPolicy === 'visual_only') {
+          cleanRoot.classList.remove('is-safe-cover', 'is-safe-contain');
+          cleanRoot.dataset.measuredCrop = '0.0000';
+          return;
+        }
         const image = mediaFrame?.querySelector<HTMLImageElement>('[data-clean-hero-image]');
         if (!mediaFrame || !image) return;
         const imageWidth = image.naturalWidth || Number(image.getAttribute('width'));
@@ -673,7 +683,7 @@ const shareFileName = `kenigevents-${event.slug}`;
 
   @media (min-width:1024px) {
     .desktop-clean-event { display:block; }
-    :global(body.desktop-clean-event-page .site-header) { position:sticky; top:0; z-index:60; background:rgba(255,250,242,.97); box-shadow:0 1px 0 rgba(121,48,20,.12); }
+    :global(body.desktop-clean-event-page .site-header) { position:sticky; top:0; z-index:60; background:#fffaf2; box-shadow:0 1px 0 rgba(121,48,20,.12); }
     :global(body.desktop-clean-event-page .site-footer__note) { display:none; }
 
     /* Editorial photo v3: sticky media/action layer; the white event slab remains normal document flow. */
@@ -765,8 +775,112 @@ const shareFileName = `kenigevents-${event.slug}`;
     .desktop-prototype--gallery .desktop-prototype__action-row { grid-column:1/-1; }
     .desktop-clean-story { grid-template-columns:1fr; }
   }
+
+  /* Desktop v4 scroll compositions. These selectors intentionally come last and never apply below 1024px. */
+  @media (min-width:1024px) {
+    .desktop-prototype__content-flow { display:contents; }
+    .desktop-prototype__content-flow--long { display:block; position:relative; z-index:5; color:var(--clean-ink); background:var(--clean-paper); }
+    .desktop-prototype__content-flow--long .desktop-prototype__info { position:relative; inset:auto; width:auto; min-height:0; margin:0; padding:clamp(1.5rem,3vw,3.2rem); background:transparent; box-shadow:none; }
+    .desktop-prototype__flow-body { display:grid; grid-template-columns:minmax(0,1fr); gap:clamp(3rem,7vw,6.5rem); padding:clamp(2.5rem,5vw,5.5rem) clamp(1.5rem,3vw,3.2rem) clamp(4rem,8vw,8rem); border-top:1px solid rgba(121,48,20,.13); }
+    .desktop-prototype__flow-body > .desktop-clean-description,
+    .desktop-prototype__flow-body > .desktop-clean-feedback,
+    .desktop-prototype__flow-body > .desktop-clean-practical { grid-column:1; grid-row:auto; width:auto; }
+    .desktop-prototype__flow-body .desktop-clean-description { max-width:68ch; }
+    .desktop-prototype__flow-body .desktop-clean-feedback { margin:0; }
+    .desktop-prototype__flow-body .desktop-clean-practical { padding:0; }
+    .desktop-prototype__flow-body .desktop-clean-practical__grid { grid-template-columns:1fr; }
+    .desktop-prototype__flow-body .desktop-clean-practical__grid article { min-height:128px; }
+    :global(.desktop-prototype__action--inline) { margin:0 clamp(1.5rem,3vw,3.2rem); border-radius:24px; }
+
+    /* Editorial: one continuous slab plus one bounded sticky right stack. */
+    .desktop-clean-event--editorial .desktop-prototype__canvas { overflow:visible; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(300px,25vw,360px); display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; }
+    .desktop-clean-event--editorial .desktop-prototype__media-image { width:100%; height:100%; margin:0; transform:none; object-position:var(--image-position); }
+    .desktop-clean-event--editorial[data-selected-media-policy="visual_only"] .desktop-prototype__media-image { height:calc(100% + 88px); margin-top:-44px; object-fit:cover; transform:translate3d(0,var(--desktop-parallax-y,0),0) scale(1.018); }
+    .desktop-clean-event--editorial:not([data-selected-media-policy="visual_only"]) .desktop-prototype__media-image { object-fit:contain; background:#181411; }
+    .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100% - 5vw)); min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
+    .desktop-clean-event--editorial .desktop-prototype__content-flow .desktop-prototype__info { position:relative; inset:auto; width:auto; min-height:0; margin:0; padding:clamp(1.5rem,3vw,3rem); background:transparent; box-shadow:none; }
+    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; gap:.8rem; max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 2rem; overflow:auto; scrollbar-width:thin; }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail { position:static; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; padding:.55rem; border-radius:18px; background:rgba(31,27,24,.9); }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail button { position:relative; width:100%; height:64px; }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail button span { position:absolute; inset:auto .25rem .2rem; padding:.12rem .3rem; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:.62rem; font-weight:850; }
+    .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { position:static; inset:auto; width:auto; margin:0; border-radius:22px; }
+
+    /* Shared two-column long-flow shell for Split OCR, physical strip and Bento. */
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__canvas,
+    .desktop-clean-event--reading .desktop-prototype__canvas,
+    .desktop-clean-event--bento .desktop-prototype__canvas { overflow:visible; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__stage,
+    .desktop-clean-event--reading .desktop-prototype__stage,
+    .desktop-clean-event--bento .desktop-prototype__stage { display:grid; grid-template-columns:clamp(380px,45vw,620px) minmax(0,1fr); grid-template-rows:auto; align-items:start; height:auto; min-height:var(--scroll-stage-min-height,var(--stage-height)); overflow:visible; background:var(--clean-paper); }
+    .desktop-clean-event--reading .desktop-clean-reading-shell,
+    .desktop-clean-event--bento .desktop-clean-reading-shell { display:contents; }
+    .desktop-clean-event--reading .desktop-prototype,
+    .desktop-clean-event--reading .desktop-prototype__canvas,
+    .desktop-clean-event--reading .desktop-prototype__stage { display:grid; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__media,
+    .desktop-clean-event--reading .desktop-prototype__media,
+    .desktop-clean-event--bento .desktop-prototype__media { grid-column:1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:2; width:100%; min-width:0; height:calc(100svh - 73px); align-self:start; overflow:hidden; background:#181411; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__content-flow,
+    .desktop-clean-event--reading .desktop-prototype__content-flow,
+    .desktop-clean-event--bento .desktop-prototype__content-flow { grid-column:2; grid-row:1; width:auto; min-width:0; margin:0; box-shadow:-12px 0 36px rgba(47,33,23,.08); }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__info,
+    .desktop-clean-event--reading .desktop-prototype__info,
+    .desktop-clean-event--bento .desktop-prototype__info { grid-column:auto; grid-row:auto; padding:clamp(1.5rem,3.2vw,4rem) clamp(1.5rem,3.6vw,4.5rem) 1.5rem; }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline),
+    .desktop-clean-event--reading :global(.desktop-prototype__action--inline),
+    .desktop-clean-event--bento :global(.desktop-prototype__action--inline) { display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action-row),
+    .desktop-clean-event--reading :global(.desktop-prototype__action-row),
+    .desktop-clean-event--bento :global(.desktop-prototype__action-row) { grid-column:auto; }
+
+    .desktop-poster-track,
+    .desktop-media-strip,
+    .desktop-bento-track { width:100%; transform:translate3d(0,0,0); will-change:transform; }
+    .desktop-prototype__media--poster-scroll .desktop-poster-track,
+    .desktop-prototype__media--poster-scroll .desktop-prototype__media-opener { height:auto; }
+    .desktop-prototype__media--poster-scroll .desktop-prototype__media-image { width:100%; height:auto; object-fit:contain; object-position:left top; }
+
+    .desktop-media-strip { display:grid; gap:clamp(14px,1.4vh,24px); padding-bottom:1px; background:#181411; }
+    .desktop-media-strip__item { width:100%; height:clamp(330px,56svh,620px); display:block; padding:0; overflow:hidden; border:0; background:#181411; cursor:zoom-in; }
+    .desktop-media-strip__item:first-child { height:calc(100svh - 73px); }
+    .desktop-media-strip__item img { width:100%; height:100%; display:block; object-fit:cover; }
+    .desktop-media-strip__item[data-image-text-mode="ocr_text"] img,
+    .desktop-media-strip__item[data-image-text-mode="unknown"] img { object-fit:contain; }
+
+    .desktop-bento-track { display:grid; gap:clamp(14px,1.4vh,24px); padding-bottom:1px; background:#181411; }
+    .desktop-bento-main { width:100%; min-height:calc(100svh - 73px); display:block; padding:0; overflow:hidden; border:0; background:#181411; cursor:zoom-in; }
+    .desktop-bento-main img { width:100%; height:auto; min-height:calc(100svh - 73px); display:block; object-fit:cover; object-position:center top; }
+    .desktop-bento-grid { --bento-row:clamp(150px,14vw,240px); display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-auto-rows:var(--bento-row); grid-auto-flow:row dense; gap:clamp(10px,1vw,16px); padding:0 clamp(10px,1vw,16px) clamp(10px,1vw,16px); }
+    .desktop-bento-tile { width:100%; min-width:0; display:block; padding:0; overflow:hidden; border:0; border-radius:12px; background:#292521; cursor:zoom-in; }
+    .desktop-bento-tile[data-bento-span="wide"] { grid-column:span 2; }
+    .desktop-bento-tile[data-bento-span="tall"] { grid-row:span 2; }
+    .desktop-bento-tile img { width:100%; height:100%; display:block; object-fit:cover; object-position:center 20%; }
+    .desktop-bento-tile[data-image-text-mode="ocr_text"] img,
+    .desktop-bento-tile[data-image-text-mode="unknown"] img { object-fit:contain; object-position:center top; }
+  }
+
+  @media (min-width:1024px) and (max-width:1279px) {
+    .desktop-bento-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .desktop-bento-tile[data-bento-span="tall"] { grid-row:span 1; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:300px; }
+  }
+
+  @media (min-width:1024px) and (max-height:720px) {
+    .desktop-clean-event--editorial .desktop-prototype__content-flow { margin-top:350px; }
+    .desktop-clean-event--editorial .desktop-editorial-side { margin-top:350px; }
+  }
+
+  @media (min-width:1600px) {
+    .desktop-clean-event--bento .desktop-prototype__stage { grid-template-columns:min(50vw,760px) minmax(0,1fr); }
+    .desktop-bento-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  }
+
   @media (prefers-reduced-motion:reduce) {
     .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { transform:none !important; }
     .desktop-prototype__media-image { transition:none !important; }
+    [data-slow-media-viewport] { position:relative !important; top:auto !important; height:auto !important; overflow:visible !important; }
+    [data-slow-media-track] { transform:none !important; }
   }
 </style>

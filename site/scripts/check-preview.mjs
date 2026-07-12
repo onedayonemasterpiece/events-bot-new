@@ -41,6 +41,7 @@ const required = [
   'lab/event-desktop/examples/gallery-photo/index.html',
   'lab/event-desktop/examples/gallery-ocr/index.html',
   'lab/event-desktop/examples/reading-photo/index.html',
+  'lab/event-desktop/examples/bento-portrait/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -146,13 +147,14 @@ for (const marker of [
 if (eventDesktopLabHtml.includes('Узнать цену') || eventDesktopLabHtml.includes('Открыть условия') || eventDesktopLabHtml.includes('calendar-link__plus')) throw new Error('Desktop event lab leaks rejected CTA/icon copy');
 
 const desktopExampleContracts = [
-  ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'desktop-prototype__media-rail']],
-  ['editorial-ocr', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ']],
+  ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'desktop-prototype__media-rail', 'data-continuous-event-body']],
+  ['editorial-ocr', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ', 'data-selected-media-policy="visual_only"', 'data-source-index="0"']],
   ['split-photo', 6472, 'split', 'non-ocr', ['Концерт «Закрытие сезона»']],
-  ['split-ocr', 5783, 'split', 'ocr', ['Великие учителя', 'Зарегистрироваться']],
+  ['split-ocr', 5783, 'split', 'ocr', ['Великие учителя', 'Зарегистрироваться', 'data-slow-media-track', 'data-continuous-event-body']],
   ['gallery-photo', 5259, 'gallery', 'non-ocr', ['Экскурсия по Светлогорску', 'Как добраться']],
   ['gallery-ocr', 6510, 'gallery', 'ocr', ['Хиты любимых артистов', 'Как добраться']],
-  ['reading-photo', 5658, 'reading', 'non-ocr', ['Спектакль «Гараж»', 'data-reading-scroll-gallery="true"', 'desktop-clean-reading-shell']],
+  ['reading-photo', 5658, 'reading', 'non-ocr', ['Спектакль «Гараж»', 'desktop-media-strip', 'data-strip-item', 'desktop-clean-reading-shell']],
+  ['bento-portrait', 5761, 'bento', 'non-ocr', ['Выставка фэнтези-картин', 'desktop-bento-grid', 'data-bento-tile']],
 ];
 for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktopExampleContracts) {
   const html = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
@@ -185,6 +187,7 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
   ]) {
     if (!html.includes(marker)) throw new Error(`Desktop full-page example ${scenario} misses marker: ${marker}`);
   }
+  if ((visibleText.match(/О событии/gu) || []).length !== 1) throw new Error(`Desktop full-page example ${scenario} must render exactly one continuous “О событии” section`);
   if (/prototype|candidate|semantic-primary|будущий transport|проектируемый агрегат|служебн/iu.test(visibleText)) {
     throw new Error(`Desktop full-page example ${scenario} leaks technical/research copy`);
   }
@@ -205,7 +208,12 @@ for (const marker of [
   'grid-template-columns:min(48%,calc((var(--stage-height) - 3rem) * var(--image-ratio)))',
   'potentialCrop <= .2',
   'data-auto-rotate',
-  'data-reading-scroll-gallery',
+  'data-slow-media-track',
+  'data-continuous-event-body',
+  'desktop-bento-grid',
+  'editorialMediaExitProgress',
+  '(-travel * progress)',
+  'prefers-reduced-motion:reduce',
   'data-lab-row-normalize',
   'right:calc(3% + min(28vw,330px) + 1rem)',
   '--ocr-media-width:clamp(380px,45vw,620px)',

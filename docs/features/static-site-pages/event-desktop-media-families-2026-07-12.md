@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -236,3 +236,26 @@ Direct review URLs:
 | Sticky media + reading column | <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/examples/reading-photo/> |
 
 Gemini 3.1 Pro (High) completed a fresh v3 implementation review and its accepted recommendations are reflected above. The `a-opus` review was not completed because the provider returned `Individual quota reached`; it was not replaced by a lower-class model. Local evidence is stored under `artifacts/codex/desktop-scroll-compositions-v3-20260712/` and is not committed.
+
+## Desktop continuous scroll compositions (v4)
+
+V4 is still a noindex desktop-only experiment and does not modify the production mobile event page. It corrects the scroll model rather than adding another decorative shell:
+
+- **Editorial Slab:** title/date/place/medallions, `О событии`, the complete description, consolidated-feedback state and practical facts now form one continuous cream slab. There is no second description block below the hero, and a duplicated source-level `О событии` heading is removed before rendering. The wide image stays behind the slab with bounded slow parallax, exits fully by the end of the description, and does not remain behind feedback/practical content; the thumbnail rail and CTA rise on the right, stick at `97px`, and release with the stage before `Смотрите дальше`.
+- **OCR-primary Editorial rescue:** event `4671` explicitly promotes its verified `2560×1709` visual performance photo (`image_assets[3]`) instead of forcing the square OCR poster into the wide hero. The original poster remains the second labelled `Афиша` thumbnail and stays available in the fullscreen gallery.
+- **Split OCR:** the full event information lives in the right column. The left poster is a physical tall track, not a fixed background or abrupt source swap; it moves upward at `0.35×` document progress and remains at least `380px` wide.
+- **Physical image strip:** all four review images coexist in one vertical track. Scrolling down translates the track only upward, so the next image enters continuously from below; reverse scroll is naturally reversible. No time-based or wheel-hijacking carousel is used.
+- **Portrait + adaptive Bento:** a selected portrait is followed by up to eight real event images. Runtime natural dimensions classify visual media as square, wide `2×1`, or tall `1×2`; tall spans are disabled below `1280px`, and the column changes from two to three to four tracks at `1280px` and `1600px`. The whole media column moves at `0.48×` and releases before related cards.
+- **Motion and boundaries:** slow-media travel is clamped to measured track overflow. The stage gets the larger of natural content height and the media travel requirement; the content itself is never artificially stretched. `prefers-reduced-motion` removes transformations and returns media to normal flow.
+
+Direct review URLs:
+
+| Composition | URL |
+|---|---|
+| Editorial photo · continuous slab | <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/examples/editorial-photo/> |
+| OCR-primary event · promoted landscape Editorial | <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/examples/editorial-ocr/> |
+| Split OCR · slow physical poster | <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/examples/split-ocr/> |
+| Physical vertical image strip | <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/examples/reading-photo/> |
+| Portrait + adaptive Bento | <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/examples/bento-portrait/> |
+
+Gemini `gemini-3.1-pro-preview` / Pro High completed the v4 design gate. Applied constraints include a `97px` side-stack top, negative-only bounded media translation, no scroll-jacking, two Bento columns below `1280px`, and no tall `1×2` spans in that narrow band. `a-opus` returned `Individual quota reached` and was not replaced by a lower-class model. Local prompts, raw reviews and Playwright evidence are stored under `artifacts/codex/desktop-scroll-compositions-v4-20260712/` and are not committed.

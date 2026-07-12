@@ -7,13 +7,14 @@ const canonicalUrl = absoluteUrl('/lab/event-desktop/');
 const title = `Desktop OCR / non-OCR lab | ${SITE_NAME}`;
 const description = 'Desktop-only сравнение Editorial Slab, Split Canvas, Gallery Exhibition и Typographic Lead на реальных событиях: свободный crop без OCR и лимит crop 20% для OCR.';
 const fullExamples = [
-  ['editorial-photo', 'Editorial Slab · scroll v3', 'Sticky фото и билетный слой; белая колонка события поднимается обычным скроллом.'],
-  ['editorial-ocr', 'Editorial Slab · OCR v3', 'Постер на полную высоту слева; ratio-aware правая колонка с коротким описанием.'],
+  ['editorial-photo', 'Editorial Slab · continuous v4', 'Один непрерывный блок от заголовка до полного описания поднимается над hero; справа закрепляются превью и CTA.'],
+  ['editorial-ocr', 'Editorial Slab · landscape rescue v4', 'Для события с OCR-афишей явно выбрано сильное горизонтальное фото; афиша сохранена в доступной карусели.'],
   ['split-photo', 'Split Canvas · без OCR', 'Согласованный bounded 55/45 split с фото-параллаксом.'],
-  ['split-ocr', 'Split Canvas · OCR v3', 'Читаемый минимум ширины постера и естественная прокрутка всей страницы.'],
+  ['split-ocr', 'Split Canvas · OCR scroll v4', 'Постер остаётся достаточно широким и плавно прокручивается медленнее полной информационной колонки.'],
   ['gallery-photo', 'Gallery Exhibition · без OCR', 'Вертикальное фото занимает до 48% ширины, текст и действия остаются справа.'],
   ['gallery-ocr', 'Gallery Exhibition · OCR', 'OCR-постер, длинный H1, дорога в Светлогорск и полный scroll-flow.'],
-  ['reading-photo', 'Sticky media + reading column', 'Около половины экрана занимает sticky media; справа прокручивается полная история и детерминированно меняются фото.'],
+  ['reading-photo', 'Physical image strip v4', 'Следующие изображения физически входят снизу в медленно движущейся левой ленте; справа идёт полный текст.'],
+  ['bento-portrait', 'Portrait + adaptive Bento v4', 'Главный портрет и aspect-aware Bento-сетка движутся медленнее непрерывной информационной колонки.'],
 ];
 
 const photoSamples = {
