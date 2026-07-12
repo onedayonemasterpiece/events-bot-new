@@ -1,0 +1,667 @@
+{
+  "schema_version": "event_bus_route_directory_v1",
+  "reviewed_at": "2026-07-11",
+  "storage": "static_json",
+  "ics_generation": {
+    "rule": "Generate files only for bus calendar actions rendered on the event page; never pre-generate every timetable departure.",
+    "path_filename_pattern": "bus-<route>-<latin-destination>-<YYYYMMDD>-<HHMM>.ics",
+    "download_filename_pattern": "bus-<route>-<latin-destination>-<YYYYMMDD>-<HHMM>-e<event_id>.ics",
+    "uid_rule": "Keep the existing route/date/departure UID stable when only the human-facing filename changes."
+  },
+  "event_inventory": {
+    "source": "production Fly SQLite read-only snapshot",
+    "snapshot_date": "2026-07-11",
+    "selection": "active canonical events with date/end_date >= 2026-07-11",
+    "excluded_localities": [
+      "Калининград",
+      "Зеленоградск",
+      "Светлогорск"
+    ],
+    "events": 30,
+    "logical_localities": 14,
+    "logical_venues": 21,
+    "catalog_candidate_localities": 3,
+    "catalog_candidate_venues": 5
+  },
+  "sources": [
+    {
+      "id": "avl39-kaliningrad",
+      "kind": "official_timetable_html",
+      "url": "https://avl39.ru/routes/reg/kaliningrad/"
+    },
+    {
+      "id": "avl39-regional-index",
+      "kind": "official_station_pages",
+      "url": "https://avl39.ru/routes/reg/"
+    },
+    {
+      "id": "avl39-registry",
+      "kind": "official_route_registry_page",
+      "url": "https://avl39.ru/carriers/registry/"
+    },
+    {
+      "id": "avl39-registry-xlsx-2026-04-23",
+      "kind": "official_route_registry_xlsx",
+      "url": "https://avl39.ru/upload/iblock/d37/3qi6c0nmb0dhueu2t1llgvuy7zxnvy5l/reestr_marsh_ot_23.04.2026_57.xlsx",
+      "registry_order_date": "2026-04-23"
+    }
+  ],
+  "localities": [
+    {
+      "id": "baltiysk",
+      "name": "Балтийск",
+      "aliases": [],
+      "active_event_count": 2,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "107"
+      ],
+      "timetable_readiness": "ready_endpoint",
+      "route_corridor_ids": [
+        "baltiysk-107"
+      ]
+    },
+    {
+      "id": "gvardeysk",
+      "name": "Гвардейск",
+      "aliases": [],
+      "active_event_count": 2,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "111",
+        "211Э"
+      ],
+      "timetable_readiness": "ready_local_page",
+      "route_corridor_ids": [
+        "gvardeysk-111-211e"
+      ]
+    },
+    {
+      "id": "gurevsk",
+      "name": "Гурьевск",
+      "aliases": [],
+      "active_event_count": 2,
+      "logical_venue_count": 2,
+      "route_numbers": [
+        "103",
+        "104",
+        "152",
+        "245Э",
+        "345"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "gurevsk-corridor"
+      ]
+    },
+    {
+      "id": "gusev",
+      "name": "Гусев",
+      "aliases": [],
+      "active_event_count": 5,
+      "logical_venue_count": 3,
+      "route_numbers": [
+        "580",
+        "583",
+        "680Э"
+      ],
+      "timetable_readiness": "ready_local_page",
+      "route_corridor_ids": [
+        "gusev-east"
+      ]
+    },
+    {
+      "id": "medvedevka",
+      "name": "Медведевка",
+      "aliases": [
+        "пос. Медведевка"
+      ],
+      "active_event_count": 1,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "116"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "medvedevka-116"
+      ]
+    },
+    {
+      "id": "pionersky",
+      "name": "Пионерский",
+      "aliases": [],
+      "active_event_count": 2,
+      "logical_venue_count": 2,
+      "route_numbers": [
+        "118",
+        "118А",
+        "119"
+      ],
+      "timetable_readiness": "ready_endpoint",
+      "route_corridor_ids": [
+        "pionersky-romanovo"
+      ]
+    },
+    {
+      "id": "polessk",
+      "name": "Полесск",
+      "aliases": [],
+      "active_event_count": 1,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "152",
+        "245Э",
+        "345"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "polessk-corridor"
+      ]
+    },
+    {
+      "id": "primorye",
+      "name": "Приморье",
+      "aliases": [
+        "пос. Приморье"
+      ],
+      "active_event_count": 1,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "125",
+        "125А"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "primorye-donskoye"
+      ]
+    },
+    {
+      "id": "romanovo",
+      "name": "Романово",
+      "aliases": [
+        "пос. Романово"
+      ],
+      "active_event_count": 5,
+      "logical_venue_count": 2,
+      "route_numbers": [
+        "118",
+        "118А",
+        "119"
+      ],
+      "timetable_readiness": "ready_reviewed_snapshot",
+      "route_corridor_ids": [
+        "pionersky-romanovo"
+      ]
+    },
+    {
+      "id": "rybachy",
+      "name": "Рыбачий",
+      "aliases": [
+        "пос. Рыбачий"
+      ],
+      "active_event_count": 1,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "593"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "rybachy-593"
+      ]
+    },
+    {
+      "id": "sovetsk",
+      "name": "Советск",
+      "aliases": [],
+      "active_event_count": 2,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "523",
+        "601Э"
+      ],
+      "timetable_readiness": "ready_local_page",
+      "route_corridor_ids": [
+        "sovetsk-east"
+      ]
+    },
+    {
+      "id": "ushakovo",
+      "name": "Ушаково",
+      "aliases": [
+        "пос. Ушаково"
+      ],
+      "active_event_count": 2,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "117"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "ushakovo-117"
+      ]
+    },
+    {
+      "id": "yantarny",
+      "name": "Янтарный",
+      "aliases": [
+        "пгт. Янтарный"
+      ],
+      "active_event_count": 3,
+      "logical_venue_count": 3,
+      "route_numbers": [
+        "120"
+      ],
+      "timetable_readiness": "ready_explicit_partial_endpoint",
+      "route_corridor_ids": [
+        "yantarny-120"
+      ]
+    },
+    {
+      "id": "donskoye",
+      "name": "пос. Донское",
+      "aliases": [
+        "Донское"
+      ],
+      "active_event_count": 1,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "125",
+        "125А"
+      ],
+      "timetable_readiness": "ready_endpoint",
+      "route_corridor_ids": [
+        "primorye-donskoye"
+      ]
+    },
+    {
+      "id": "chernyakhovsk",
+      "name": "Черняховск",
+      "aliases": [],
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 3,
+      "logical_venue_count": 3,
+      "route_numbers": [
+        "520А",
+        "566",
+        "567А",
+        "580",
+        "583",
+        "680Э"
+      ],
+      "timetable_readiness": "ready_local_page",
+      "route_corridor_ids": [
+        "chernyakhovsk-east"
+      ]
+    },
+    {
+      "id": "zalesye",
+      "name": "Залесье",
+      "aliases": [
+        "пос. Залесье"
+      ],
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 1,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "345"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "zalesye-345"
+      ]
+    },
+    {
+      "id": "nekrasovo",
+      "name": "Некрасово",
+      "aliases": [
+        "пос. Некрасово"
+      ],
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 2,
+      "logical_venue_count": 1,
+      "route_numbers": [
+        "116"
+      ],
+      "timetable_readiness": "needs_intermediate_times",
+      "route_corridor_ids": [
+        "nekrasovo-116"
+      ]
+    }
+  ],
+  "route_corridors": [
+    {
+      "id": "baltiysk-107",
+      "locality_ids": [
+        "baltiysk"
+      ],
+      "route_numbers": [
+        "107"
+      ],
+      "origin_stop_name": "ул. Багратиона / отдельные рейсы по таблице",
+      "target_stop_names": [
+        "Павлово",
+        "Дом культуры"
+      ],
+      "timetable_status": "ready_endpoint",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "gvardeysk-111-211e",
+      "locality_ids": [
+        "gvardeysk"
+      ],
+      "route_numbers": [
+        "111",
+        "211Э"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "Гвардейск",
+        "ул. Вокзальная",
+        "ул. Мира / ул. Гагарина"
+      ],
+      "timetable_status": "ready_local_page",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/routes/reg/gvardeysk/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "gurevsk-corridor",
+      "locality_ids": [
+        "gurevsk"
+      ],
+      "route_numbers": [
+        "103",
+        "104",
+        "152",
+        "245Э",
+        "345"
+      ],
+      "origin_stop_name": "зависит от маршрута: Автовокзал / гостиница «Калининград»",
+      "target_stop_names": [
+        "Новая Резиденция",
+        "Краковский бульвар",
+        "Поликлиника",
+        "Парк / Почта",
+        "ул. Заречная",
+        "Станция",
+        "Больница"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Официальный реестр подтверждает остановки, но общая таблица не публикует время прибытия в Гурьевск."
+    },
+    {
+      "id": "gusev-east",
+      "locality_ids": [
+        "gusev"
+      ],
+      "route_numbers": [
+        "580",
+        "583",
+        "680Э"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "Площадь Победы",
+        "Автостанция Гусев"
+      ],
+      "timetable_status": "ready_local_page",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/routes/reg/gusev/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "medvedevka-116",
+      "locality_ids": [
+        "medvedevka"
+      ],
+      "route_numbers": [
+        "116"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "пос. Медведевка"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Маршрут и остановка подтверждены реестром, но время в промежуточной Медведевке отсутствует."
+    },
+    {
+      "id": "pionersky-romanovo",
+      "locality_ids": [
+        "romanovo",
+        "pionersky"
+      ],
+      "route_numbers": [
+        "118",
+        "118А",
+        "119"
+      ],
+      "origin_stop_name": "Автовокзал Калининград; маршрут 119 также проходит Северный вокзал",
+      "target_stop_names": [
+        "Романовский поворот",
+        "пос. Романово",
+        "Городская больница",
+        "Пионерский курорт"
+      ],
+      "timetable_status": "ready_reviewed_snapshot",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "polessk-corridor",
+      "locality_ids": [
+        "polessk"
+      ],
+      "route_numbers": [
+        "152",
+        "245Э",
+        "345"
+      ],
+      "origin_stop_name": "зависит от маршрута: Автовокзал / гостиница «Калининград»",
+      "target_stop_names": [
+        "Полесск (ж/д станция)",
+        "Полесск (площадь)",
+        "Полесск"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Маршруты и остановки подтверждены, но точное промежуточное время из Калининграда не выделено."
+    },
+    {
+      "id": "primorye-donskoye",
+      "locality_ids": [
+        "primorye",
+        "donskoye"
+      ],
+      "route_numbers": [
+        "125",
+        "125А"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "Приморье-2",
+        "Приморье",
+        "Донское"
+      ],
+      "timetable_status": "mixed",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "locality_status": {
+        "primorye": "needs_intermediate_times",
+        "donskoye": "ready_endpoint"
+      }
+    },
+    {
+      "id": "rybachy-593",
+      "locality_ids": [
+        "rybachy"
+      ],
+      "route_numbers": [
+        "593"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "пос. Рыбачий"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Прямой маршрут до Морского проходит Рыбачий, но промежуточное время требует отдельного извлечения."
+    },
+    {
+      "id": "sovetsk-east",
+      "locality_ids": [
+        "sovetsk"
+      ],
+      "route_numbers": [
+        "523",
+        "601Э"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "Автовокзал Советск"
+      ],
+      "timetable_status": "ready_local_page",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/routes/reg/sovetsk/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "yantarny-120",
+      "locality_ids": [
+        "yantarny"
+      ],
+      "route_numbers": [
+        "120"
+      ],
+      "origin_stop_name": "Автовокзал Калининград; также Северный вокзал",
+      "target_stop_names": [
+        "Микрорайон",
+        "Универмаг",
+        "ул. Балебина",
+        "Памятник советским воинам"
+      ],
+      "timetable_status": "ready_explicit_partial_endpoint",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Для расписания используются только строки, явно помеченные до/из Янтарного."
+    },
+    {
+      "id": "ushakovo-117",
+      "locality_ids": [
+        "ushakovo"
+      ],
+      "route_numbers": [
+        "117"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "Ушаково-1",
+        "Ушаково-2",
+        "Ушаково-3"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Это Ушаково на мамоновском коридоре. Маршрут 110 идёт в другое одноимённое Ушаково и запрещён для привязки к Бранденбургу."
+    },
+    {
+      "id": "chernyakhovsk-east",
+      "locality_ids": [
+        "chernyakhovsk"
+      ],
+      "route_numbers": [
+        "520А",
+        "566",
+        "567А",
+        "580",
+        "583",
+        "680Э"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "Автовокзал Черняховск"
+      ],
+      "timetable_status": "ready_local_page",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/routes/reg/chernyakhovsk/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "zalesye-345",
+      "locality_ids": [
+        "zalesye"
+      ],
+      "route_numbers": [
+        "345"
+      ],
+      "origin_stop_name": "гостиница «Калининград» / ул. Черняховского",
+      "target_stop_names": [
+        "пос. Залесье"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ]
+    },
+    {
+      "id": "nekrasovo-116",
+      "locality_ids": [
+        "nekrasovo"
+      ],
+      "route_numbers": [
+        "116"
+      ],
+      "origin_stop_name": "Автовокзал Калининград",
+      "target_stop_names": [
+        "пос. Некрасово"
+      ],
+      "timetable_status": "needs_intermediate_times",
+      "source_urls": [
+        "https://avl39.ru/routes/reg/kaliningrad/",
+        "https://avl39.ru/carriers/registry/"
+      ],
+      "limitation": "Использовать только рейсы 116, явно следующие до/через Некрасово; опубликованный текст 145 противоречит сторонней OSM-разметке."
+    }
+  ],
+  "qa_rules": [
+    "Do not infer an intermediate-stop time from the final route duration.",
+    "Store an origin per route; not every service starts at the Kaliningrad bus terminal.",
+    "Preserve timetable notes and service calendars; rows marked до/из a partial endpoint are separate trip variants.",
+    "Cross-check registry route-name endpoints against ordered stops because the official XLSX contains isolated inconsistencies.",
+    "Reject homonymous stops unless the official ordered-stop corridor matches the venue locality (critical for Ушаково)."
+  ]
+}

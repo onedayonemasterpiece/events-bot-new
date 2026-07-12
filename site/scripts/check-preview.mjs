@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
+import { eventIcsDownloadFilename, transportIcsDownloadFilename } from '../src/lib/icsFilenames.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -21,6 +22,17 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'assets/transport/kppk-lastochka.webp',
+  'assets/transport/bus-svgrepo-337651.svg',
+  'assets/transport/romanovo-holmogorye-route-square.png',
+  'assets/transport/romanovo-holmogorye-route-portrait.png',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/rzd-svetlogorsk-20260712-6725.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/rzd-kaliningrad-20260712-6730.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/rzd-kaliningrad-20260713-6700.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-svetlogorsk-20260712-6717.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-svetlogorsk-20260712-7213.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-kaliningrad-20260712-6722.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/rzd-kaliningrad-20260712-7220.ics',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -37,6 +49,22 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+let transportIcsTotal = 0;
+for (const event of eventsData.events) {
+  const transportDir = join(root, `sobytiya/${event.slug}/transport`);
+  const files = existsSync(transportDir) ? readdirSync(transportDir).filter((name) => name.endsWith('.ics')).sort() : [];
+  const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
+  const linked = [...html.matchAll(/href="[^"]*\/transport\/([^"?#]+\.ics)(?:[?#][^"]*)?"/gu)].map((match) => match[1]);
+  const linkedUnique = [...new Set(linked)].sort();
+  const fileCeiling = html.includes('data-transport-dual-origin') ? 6 : 4;
+  if (files.length > fileCeiling) throw new Error(`Event ${event.id} exceeds its ${fileCeiling}-file transport ICS ceiling: ${files.length}`);
+  if (files.join('\n') !== linkedUnique.join('\n')) throw new Error(`Event ${event.id} transport ICS files must match interactive calendar links exactly`);
+  for (const name of files) {
+    if (!/^rzd-[a-z0-9-]+-\d{8}-[a-z0-9-]+\.ics$/u.test(name)) throw new Error(`Transport ICS filename is not concise semantic ASCII: ${name}`);
+  }
+  transportIcsTotal += files.length;
+}
+if (transportIcsTotal === 0) throw new Error('Preview must generate transport ICS files for the regression events');
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
@@ -65,6 +93,14 @@ if (control.slug !== 'pesni-sssr-svetlogorsk-5878') throw new Error(`Unexpected 
 const controlHtml = readFileSync(join(root, `sobytiya/${control.slug}/index.html`), 'utf8');
 const stripGeneratedCode = (html) => html.replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<style[\s\S]*?<\/style>/giu, '');
 const controlVisibleHtml = stripGeneratedCode(controlHtml);
+if (!controlVisibleHtml.includes('data-event-transport-schedule') || !controlVisibleHtml.includes('data-event-city="Светлогорск"')) throw new Error('Svetlogorsk control event misses the event transport block');
+if (!controlVisibleHtml.includes('/assets/transport/kppk-lastochka.webp') || !controlVisibleHtml.includes('Как добраться на электричке')) throw new Error('Event transport block misses supplied Lastochka artwork or neutral heading');
+if (controlVisibleHtml.includes('Партнёрский маршрут') || controlVisibleHtml.includes('АО «КППК»')) throw new Error('Event transport block must not present the schedule as a partner route');
+if ((controlVisibleHtml.match(/>КППК<\/a>/gu) || []).length !== 1) throw new Error('Event transport block must mention КППК exactly once in the laconic footer');
+if (controlVisibleHtml.includes('Проверить расписание') || controlVisibleHtml.includes('rasp.yandex')) throw new Error('Event transport block must not expose schedule verification links');
+if (!controlVisibleHtml.includes('К началу концерта в 21:30')) throw new Error('Transport heading must inflect the public event type');
+if (!controlVisibleHtml.includes('Калининград-Северный ⇄ Светлогорск-2') || !controlVisibleHtml.includes('event-transport__train-link') || controlVisibleHtml.includes('class="event-transport__calendar"')) throw new Error('Train rows must be compact whole-card calendar links with one bidirectional route label');
+if (controlVisibleHtml.indexOf('data-event-transport-schedule') > controlVisibleHtml.indexOf('>Коротко</h2>')) throw new Error('Event transport block must render immediately after the description and before “Коротко”');
 if (!controlHtml.includes('noindex,nofollow,noarchive')) throw new Error('Missing preview robots meta');
 if (controlHtml.includes('https://kenigevents.ru/sobytiya/pesni-sssr-svetlogorsk-5878/')) throw new Error('Production canonical leaked into preview page');
 if (!controlHtml.includes(`https://kenigevents.ru/${buildId}/sobytiya/pesni-sssr-svetlogorsk-5878/`)) throw new Error('Preview canonical missing for control page');
@@ -120,6 +156,7 @@ if (!tretyakovEvent) throw new Error('Missing 5370 ticket/paid regression event'
 if (!Array.isArray(tretyakovEvent.image_assets) || tretyakovEvent.image_assets.length < 5) throw new Error('Event 5370 must carry multi-image gallery assets for hero fullscreen review');
 const tretyakovHtml = readFileSync(join(root, `sobytiya/${tretyakovEvent.slug}/index.html`), 'utf8');
 const tretyakovVisibleHtml = stripGeneratedCode(tretyakovHtml);
+if (tretyakovVisibleHtml.includes('data-event-transport-schedule')) throw new Error('Kaliningrad event 5370 must not render a coastal train schedule block');
 const tretyakovEyebrow = (tretyakovVisibleHtml.match(/<p class="event-hero__eyebrow">([^<]*)<\/p>/u) || [null, ''])[1];
 if (!tretyakovEvent.ticket.is_free && tretyakovEvent.ticket.kind === 'ticket' && !tretyakovEvent.ticket.price_label) {
   if (/Билеты|Платный вход/u.test(tretyakovEyebrow)) throw new Error('Paid/generic admission copy must not be shown above the event title');
@@ -329,6 +366,59 @@ const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 if (!popularHtml.includes('Популярное') || !popularHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
+
+const transportDemoEvent = eventsData.events.find((event) => event.id === 6510);
+if (!transportDemoEvent) throw new Error('Missing real event 6510 transport schedule regression event');
+if (transportDemoEvent.start_date !== '2026-07-12' || transportDemoEvent.start_time !== '17:00' || transportDemoEvent.time_range_end !== '18:10') throw new Error('Event 6510 must retain its source-verified 2026-07-12 17:00 start and 1h10m duration');
+if (!transportDemoEvent.title.includes('Муслиму Магомаеву') || !transportDemoEvent.title.includes('Анне Герман') || transportDemoEvent.ticket?.href !== 'https://янтарьхолл.рф/afisha/kontsertnaya-programma-khity-lyubimykh-artistov%2012%2007/') throw new Error('Event 6510 must remain connected to the real Yantar Hall event and ticket page');
+if (eventIcsDownloadFilename(transportDemoEvent) !== 'event-kontsert-posvyaschenie-muslimu-magomaevu-20260712-e6510.ics') throw new Error('Event ICS download name must keep a concise event-* topic/date/id contract');
+if (transportIcsDownloadFilename(transportDemoEvent, 'rzd-svetlogorsk-20260712-6717') !== 'rzd-svetlogorsk-20260712-6717-e6510.ics') throw new Error('Rail ICS download name must keep the rzd-* trip/event contract');
+const transportDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${transportDemoEvent.slug}/index.html`), 'utf8'));
+if (!transportDemoHtml.includes('data-event-transport-schedule') || !transportDemoHtml.includes('data-outbound-count="2"') || !transportDemoHtml.includes('data-return-count="2"')) throw new Error('Event 6510 must expose two outbound and two return options for its real 17:00–18:10 window');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="6717"[\s\S]*?<time[^>]*>15:11<\/time>[\s\S]*?<time[^>]*>16:05<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second outbound suggestion must be train 6717, 15:11→16:05 (55 minutes before start)');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<time[^>]*>15:43<\/time>[\s\S]*?<time[^>]*>16:29<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 outbound suggestion must be train 7213, 15:43→16:29 (31 minutes before start)');
+if (!/data-transport-direction="return"[^>]*data-train-number="6722"[\s\S]*?<time[^>]*>18:54<\/time>[\s\S]*?<time[^>]*>19:48<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 first return suggestion must be train 6722, 18:54→19:48');
+if (!/data-transport-direction="return"[^>]*data-train-number="7220"[\s\S]*?<time[^>]*>19:33<\/time>[\s\S]*?<time[^>]*>20:19<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second return suggestion must be train 7220, 19:33→20:19');
+for (const [trip, expected] of [
+  ['rzd-svetlogorsk-20260712-6717', ['UID:transport-6510-outbound-2026-07-12-6717@kenigevents.ru', 'DTSTART:20260712T131100Z', 'DTEND:20260712T140500Z', 'TRIGGER:-PT30M']],
+  ['rzd-svetlogorsk-20260712-7213', ['UID:transport-6510-outbound-2026-07-12-7213@kenigevents.ru', 'DTSTART:20260712T134300Z', 'DTEND:20260712T142900Z', 'TRIGGER:-PT30M', 'LOCATION:Калининград-Северный']],
+  ['rzd-kaliningrad-20260712-6722', ['UID:transport-6510-return-2026-07-12-6722@kenigevents.ru', 'DTSTART:20260712T165400Z', 'TRIGGER:-PT30M']],
+  ['rzd-kaliningrad-20260712-7220', ['UID:transport-6510-return-2026-07-12-7220@kenigevents.ru', 'DTSTART:20260712T173300Z', 'TRIGGER:-PT30M']],
+]) {
+  const href = `/sobytiya/${transportDemoEvent.slug}/transport/${trip}.ics`;
+  if (!transportDemoHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6510 misses calendar CTA for ${trip}`);
+  const tripIcs = readFileSync(join(root, href.slice(1)), 'utf8');
+  for (const needle of expected) if (!tripIcs.includes(needle)) throw new Error(`Transport ICS ${trip} missing ${needle}`);
+  if (tripIcs.includes('Проверить расписание') || tripIcs.includes('rasp.yandex')) throw new Error(`Transport ICS ${trip} must not expose a schedule verification link`);
+}
+
+const cutoffEvent = eventsData.events.find((event) => event.id === 6397);
+if (!cutoffEvent) throw new Error('Missing real event 6397 schedule-cutoff regression event');
+const cutoffHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${cutoffEvent.slug}/index.html`), 'utf8'));
+if (!cutoffHtml.includes('data-event-end-basis="schedule_cutoff"') || !cutoffHtml.includes('data-outbound-count="1"') || !cutoffHtml.includes('data-return-count="0"')) throw new Error('Event 6397 must expose one outbound train and a factual schedule cutoff');
+if (!/data-transport-direction="outbound"[^>]*data-train-number="6725"[\s\S]*?<time[^>]*>19:26<\/time>[\s\S]*?<time[^>]*>20:23<\/time>/u.test(cutoffHtml)) throw new Error('Event 6397 outbound must be 6725, 19:26→20:23 (67 minutes before start)');
+for (const needle of ['Обратно после события', 'Последний поезд в день события — в 22:40', '22:40 → 23:35', 'Ночных рейсов нет', 'Первый поезд 13 июля — в 06:25', 'Уточните время окончания у организатора']) {
+  if (!cutoffHtml.includes(needle)) throw new Error(`Event 6397 schedule-cutoff block missing ${needle}`);
+}
+for (const trip of ['rzd-svetlogorsk-20260712-6725', 'rzd-kaliningrad-20260712-6730', 'rzd-kaliningrad-20260713-6700']) {
+  const href = `/sobytiya/${cutoffEvent.slug}/transport/${trip}.ics`;
+  if (!cutoffHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6397 misses calendar CTA for ${trip}`);
+  const tripIcs = readFileSync(join(root, href.slice(1)), 'utf8');
+  if (!tripIcs.includes('BEGIN:VCALENDAR') || tripIcs.includes('Проверить расписание') || tripIcs.includes('rasp.yandex')) throw new Error(`Event 6397 transport ICS ${trip} is invalid or leaks a verification link`);
+}
+if (cutoffHtml.includes('типовую длительность') || cutoffHtml.includes('Ориентировочно после 23:30') || cutoffHtml.includes('подходящего поезда в Калининград нет')) throw new Error('Event 6397 must not infer a no-return state from a default duration');
+
+const busDemoEvent = eventsData.events.find((event) => event.id === 6710);
+if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regression event');
+const busDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8'));
+if (!busDemoHtml.includes('data-event-bus-schedule') || !busDemoHtml.includes('data-bus-route="romanovo-holmogorye"') || !busDemoHtml.includes('class="event-bus__body"')) throw new Error('Event 6710 must expose the compact Romanovo bus block');
+if (busDemoHtml.includes('data-event-transport-schedule')) throw new Error('Romanovo event 6710 must not expose a train block');
+for (const needle of ['<img class="event-bus__symbol"', 'bus-svgrepo-337651.svg', 'До Романово — около 1 часа в автобусе', 'От автовокзала до остановки «Северный вокзал» у всех маршрутов — ориентировочно 10–15 минут', 'data-bus-number="118/118А"', '07:40', '08:00', '08:40', 'data-bus-number="119"', '08:10', 'data-bus-return-number="118/118А"', '≈ 13:15', '≈ 17:55', 'data-bus-return-number="119"', '≈ 13:45', '≈ 16:05', 'после 1 ч 15 мин на площадке', 'Открыто по субботам с 11:00 до 16:00', 'romanovo-holmogorye-route-square.png', 'romanovo-holmogorye-route-portrait.png', 'rtt=pd']) {
+  if (!busDemoHtml.includes(needle)) throw new Error(`Event 6710 bus block missing ${needle}`);
+}
+if ((busDemoHtml.match(/Открыть пеший маршрут/gu) || []).length !== 1 || busDemoHtml.includes('Северный ≈') || busDemoHtml.includes('>06:00</time>') || busDemoHtml.includes('>06:20</time>') || busDemoHtml.includes('>06:55</time>') || busDemoHtml.includes('≈ 11:55') || busDemoHtml.includes('≈ 12:35') || busDemoHtml.includes('≈ 18:35') || busDemoHtml.includes('≈ 21:55') || busDemoHtml.includes('≈ 22:35') || busDemoHtml.includes('≈ 46 мин в автобусе')) throw new Error('Event 6710 bus block must avoid too-early outbound/return options, duplicated labels and pointless late returns');
+if (!busDemoHtml.includes('<picture') || !busDemoHtml.includes('media="(max-width: 720px)"') || !busDemoHtml.includes('loading="eager"') || !busDemoHtml.includes('Открыть пеший маршрут') || !busDemoHtml.includes('Точка на карте')) throw new Error('Event 6710 bus block must eagerly use responsive route-focused maps and one external route link');
+if (busDemoHtml.includes('avl39.ru/routes/reg/kaliningrad/')) throw new Error('Event 6710 bus block must not expose a schedule verification link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

@@ -296,6 +296,8 @@ features:
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
+    event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
+    presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
@@ -324,6 +326,7 @@ features:
       - site/src/pages/vyhodnye/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
+      - site/src/pages/sobytiya/[slug]/transport/[trip].ics.ts
       - site/src/pages/data/discovery/[eventId].json.ts
       - site/src/pages/lab/hero/index.astro
       - site/src/pages/lab/hero/review/index.astro
@@ -450,10 +453,23 @@ features:
     postbox_worker_tests: email_control/tests/test_worker.py
 
   event_transport:
-    status: branch_candidate_refresh_blocked_by_wip
+    status: preliminary_branch_refreshed_ui_and_automatic_refresh_pending
     docs: docs/features/event-transport/README.md
     related_static_site: docs/features/static-site-pages/README.md
     implementation_branch: integration/event-transport-schedule
+    refresh_merge: 4577b334
+    draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/37
+    renderer_contract: docs/features/static-site-pages/event-transport-schedule.md
+    rail_directory: docs/features/static-site-pages/rail-multimodal-directory.md
+    bus_directory: docs/features/static-site-pages/bus-transport-directory.md
+    capabilities:
+      rail_schedule_block: preliminary_implemented
+      bus_schedule_block: preliminary_implemented
+      transport_leg_ics: preliminary_implemented
+      official_route_directories: preliminary_implemented
+      release_ui_integration: pending
+      nightly_kaggle_refresh: missing_p0
+      atomic_last_good_publish: missing_p0
 
   event_comment_feedback:
     status: design_probe_port_required

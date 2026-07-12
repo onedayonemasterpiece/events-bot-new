@@ -6,6 +6,24 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
+## Presentation transport preview — 2026-07-11
+
+Public focus preview `preview-20260711-event-transport-compact-v7` supersedes v6. Rail behavior is unchanged from the accepted compact pass: arrivals 20–90 minutes before the event, factual unknown-end boundaries, one visible route label, and whole-row `.ics` links with keyboard focus.
+
+Romanovo bus selection is now timing-aware in both directions. The committed full-day timetable is filtered with a conservative `65m bus + route-specific walk` calculation, so an `11:00` event shows only `07:40, 08:00, 08:40` for `118/118А` and `08:10` for `119`; the 06:00/06:20/06:55 departures no longer appear. Return filtering requires at least `1h15` on the venue, adds the known 52m/27m walk, and caps waiting after the `16:00` close, producing first reachable options at `13:15` and `13:45` rather than impossible immediate returns.
+
+The preferred north–south walking route has two deterministic assets selected with `<picture>`: a 450×450 square map for desktop/tablet and a 360×450 portrait map for mobile. On desktop the outbound schedule, return schedule and square map now share one horizontal grid; the mobile page keeps the vertical reading order and portrait map. Both assets show the same OSM/Valhalla pedestrian geometry over Yandex Static Maps.
+
+The 400-event focus fixture built 421 HTML pages and 169 transport `.ics` files and passed `npm run check:preview`; focused Python duration tests passed. Public pages, icon and both responsive map assets returned `200` with the expected MIME types. Desktop/mobile Playwright QA found no horizontal overflow and proved that desktop uses a `765.95px + 360.45px` schedules/map grid with the 450×450 square source, while mobile returns to block flow and loads the 360×450 portrait source. The rendered desktop bus block is `647.41px` high, down from `1236.13px` in v6 (about 48% shorter). The only browser `404` is the pre-existing optional Supabase personalization RPC, not a transport asset. Evidence is under ignored `artifacts/codex/site-presentation-transport/visual-v7/`. Scheduled Kaggle refresh, final browser acceptance and the organizer-date conflict for event `6710` remain presentation gates.
+
+- Real rail event `6510`, explicit `17:00–18:10` duration and two trains each way: <https://kenigevents.ru/preview-20260711-event-transport-compact-v7/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
+- Real late concert `6397`, factual `22:40` last train / no night service / `06:25` first next-day train: <https://kenigevents.ru/preview-20260711-event-transport-compact-v7/sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/>
+- Romanovo event `6710`, compact desktop grid, filtered buses and responsive walking route (date still needs organizer reconfirmation): <https://kenigevents.ru/preview-20260711-event-transport-compact-v7/sobytiya/slet-babok-ezhek-romanovo-6710/>
+- Preview index: <https://kenigevents.ru/preview-20260711-event-transport-compact-v7/__preview/>
+- Canonical behavior/data contract: [event-transport-schedule.md](event-transport-schedule.md)
+
+The prefix is published without rewriting stable `/ics/<event_id>.ics` objects.
+
 ## Public URLs
 
 Required URLs for the current preview:
