@@ -1267,6 +1267,19 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
 
+    def test_kaliningrad_only_scope_rejects_comparison_to_kaliningrad(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        text = (
+            "Маршрут находится в Кургальском заказнике, в месте впадения реки Выбья в Финский залив. "
+            "Настилы идут через лес, дюны и побережье (похоже на Калининград). "
+            "Старт маршрута 59.675154 28.221669."
+        )
+        scope = mod.kaliningrad_oblast_only_scope_gate(text, lexicon)
+        self.assertFalse(scope["kaliningrad_oblast_only_scope"])
+        self.assertEqual(scope["kaliningrad_reference_role"], "comparison_only")
+        self.assertIn("comparison_only_kaliningrad_reference", scope["external_geo_mentions"])
+
 
     def test_source_selection_skips_recently_processed_publics_until_due(self) -> None:
         mod = load_module()

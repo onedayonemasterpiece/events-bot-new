@@ -5002,12 +5002,24 @@ def kaliningrad_oblast_only_scope_gate(text: str, lexicon: list[dict[str, Any]])
     strong_matches = [m for m in matches if m.get("accepted_as_region_evidence") == "true"]
     ambiguous_matches = [m for m in matches if m.get("accepted_as_region_evidence") != "true"]
     external_regions, external_countries = external_geo_mentions(text)
-    ok = bool(strong_matches) and not external_regions and not external_countries
+    canonical_matches = {str(m.get("canonical_name") or "").lower() for m in strong_matches}
+    comparison_only_reference = bool(
+        canonical_matches
+        and canonical_matches <= {"калининград"}
+        and re.search(
+            r"\b(?:похож\w*\s+на|напомина\w*|словно|почти\s+как|как\s+будто)\s+(?:город\s+)?калининград\w*\b",
+            normalize_geo_text(main_text),
+            flags=re.I,
+        )
+    )
+    ok = bool(strong_matches) and not external_regions and not external_countries and not comparison_only_reference
     reason = ""
     if not matches:
         reason = "reject: no Kaliningrad Oblast place evidence in main content"
     elif external_regions or external_countries:
         reason = "reject: external destinations in main content: " + "; ".join(external_regions + external_countries)
+    elif comparison_only_reference:
+        reason = "reject: Kaliningrad is only a comparison for a place located elsewhere"
     else:
         reason = "accepted: matched Kaliningrad Oblast places only: " + "; ".join(sorted({m['canonical_name'] for m in matches})[:10])
     return {
@@ -5027,7 +5039,10 @@ def kaliningrad_oblast_only_scope_gate(text: str, lexicon: list[dict[str, Any]])
         "mentioned_external_countries": "; ".join(external_countries),
         "external_region_count": len(external_regions),
         "external_country_count": len(external_countries),
-        "external_geo_mentions": "; ".join(external_regions + external_countries),
+        "external_geo_mentions": "; ".join(
+            external_regions + external_countries + (["comparison_only_kaliningrad_reference"] if comparison_only_reference else [])
+        ),
+        "kaliningrad_reference_role": "comparison_only" if comparison_only_reference else "location_evidence",
         "region_scope_decision": "accept_kaliningrad_oblast_only" if ok else "reject_not_kaliningrad_oblast_only",
         "region_scope_reason": reason,
         "place_matches": matches,
@@ -10607,6 +10622,7 @@ def semantic_bank_v1() -> dict[str, list[str]]:
             "Пост о Москве, московских парках, пляжах, маршрутах и прогулках, не связанный с Калининградской областью.",
             "Путешествие по Хайнаню, Турции, Беларуси, Европе, Кавказу, Байкалу, Сочи, Петербургу или другому региону, где Калининградская область не является основной темой.",
             "Рассказ о другом городе или стране, случайно содержащий слово, похожее на калининградский топоним.",
+            "Маршрут находится в другом регионе, а лес, дюны или побережье лишь похожи на Калининград; Калининград используется только для сравнения.",
         ],
         "multi_region_roundup": [
             "Подборка разных регионов России: Калининград, Байкал, Дагестан, Сочи, Карелия, Алтай и другие направления одним списком.",

@@ -24,6 +24,7 @@
 - Added O(finalists) source-profile completion after five sampled posts, allowing a text-passed post to leave the unknown-source state while the expensive all-source profile pass remains disabled.
 - Kept finalist source attestation due when its post counter reached five but external/local scope was still unknown, so the numeric counter cannot strand a candidate before profile persistence.
 - Accepted a sub-five-post source sample when the one-year history is exhausted, and prevented sparse Kaliningrad trip series from being mislabeled local solely by a 3/4 KO ratio; content-only local inference now requires ten all-KO sampled posts.
+- Added a dual-vector negative prototype and narrow comparison-role safety gate for other-region routes that merely say they “look like Kaliningrad”, closing a verified false-positive path to media.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active

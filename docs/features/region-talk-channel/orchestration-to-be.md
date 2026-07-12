@@ -265,6 +265,11 @@ Important invariants:
   non-local title confirms an external source; ratio-only local inference
   requires all ten sampled posts to concern KO (title/handle local evidence can
   still reject immediately).
+- The dual semantic bank includes the negative meaning “a place in another
+  region merely resembles Kaliningrad”. A narrow safety guard also rejects a
+  sole Kaliningrad mention whose grammatical role is explicitly comparative
+  (`похоже на/напоминает Калининград`), preventing another-region routes from
+  reaching media merely because both encoders liked the travel-story form.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but
