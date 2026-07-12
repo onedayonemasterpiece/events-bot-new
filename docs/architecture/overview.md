@@ -1,5 +1,18 @@
 # Architecture
 
+## Static personal announcements data boundary
+
+The static-site release uses four deliberately separate owners:
+
+- Fly SQLite — canonical events/sources/lifecycle/publication state;
+- personalization Supabase/Postgres — identity, current user profile, consent, favorites/subscriptions and email control plane;
+- YDB — service-only analytics/history and independent comment-feedback sidecar;
+- Object Storage/CDN — generated public/personal artifacts.
+
+Canonical decision: [personalization data ownership](personalization-data-ownership.md).
+
+Email edge services do not change that data boundary: SpaceWeb is the retained human/inbound mailbox, a read-only Yandex IMAP collector handles the production automation copy while Mail Trigger is direct-canary-only, Postbox transports transactional mail only, and NotiSend transports personal recommendations only (hard launch ceiling: 200 actively consented users). The operational contract is [email infrastructure and delivery](../operations/email-delivery.md).
+
 The bot is built with **aiogram 3** and runs on Fly.io using a webhook.
 
 - **Web Server** – aiohttp application that receives updates on `/webhook`.

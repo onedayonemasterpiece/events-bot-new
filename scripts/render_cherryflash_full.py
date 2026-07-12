@@ -57,6 +57,10 @@ SCENE_TOTAL_LOCAL = approval.SCENE1_TOTAL_LOCAL
 SCENE_TEXT_START = approval.SCENE1_TEXT_START
 GUIDE_EXCURSION_TOTAL_LOCAL = 6.14
 GUIDE_EXCURSION_FRAME_TRIM_SECONDS = 2.0 / approval.FPS
+GUIDE_EXCURSION_TRUE3D_APPROVED_VERSION = "true3d-v4-approved-2026-07-11"
+GUIDE_EXCURSION_TRUE3D_DURATION = 5.90
+GUIDE_EXCURSION_TRUE3D_FRAME_COUNT = int(math.ceil(GUIDE_EXCURSION_TRUE3D_DURATION * approval.FPS))
+GUIDE_EXCURSION_TRUE3D_SCRIPT = ROOT / "scripts" / "render_cherryflash_guide_true3d_v4.py"
 INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
@@ -1217,6 +1221,121 @@ def _render_scene_frame(scene: RenderScene, local_t: float, text_blocks) -> Imag
     return canvas
 
 
+def _guide_true3d_enabled() -> bool:
+    raw = str(os.environ.get("CHERRYFLASH_GUIDE_TRUE3D_ENABLED", "1")).strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def _blender_bin() -> str:
+    configured = str(os.environ.get("BLENDER_BIN") or "").strip()
+    candidates = [
+        configured,
+        shutil.which("blender") or "",
+        "/usr/local/bin/blender",
+        "/opt/blender-4.5.4-linux-x64/blender",
+        "/opt/blender-4.5.0-linux-x64/blender",
+    ]
+    for value in candidates:
+        if value and Path(value).exists():
+            return value
+    raise FileNotFoundError("Blender binary not found for guide true3D renderer")
+
+
+def _guide_true3d_scene_content(scene: RenderScene) -> dict:
+    promo = scene.guide_excursion or {}
+    contact = str(promo.get("contact") or "").strip()
+    if not contact:
+        contact = str(promo.get("source_username") or "").strip()
+        if contact and not contact.startswith("@"):
+            contact = f"@{contact}"
+    if not contact:
+        contact = str(promo.get("booking_url") or promo.get("channel_url") or "kenigevents").strip()
+    contact_label = str(promo.get("contact_label") or "").strip()
+    if not contact_label:
+        if contact.startswith("@"):
+            contact_label = "ЗАПИСЬ В TELEGRAM"
+        elif contact.startswith("+") or contact.startswith("8"):
+            contact_label = "ЗАПИСЬ ПО ТЕЛЕФОНУ"
+        elif contact.lower().startswith("vk.com/") or "vk.com/" in contact.lower():
+            contact_label = "ЗАПИСЬ В VK"
+        else:
+            contact_label = "ГДЕ ЗАБРОНИРОВАТЬ"
+    avatars = [str(path) for path in (scene.image_paths or (scene.image_path,)) if Path(path).exists()]
+    return {
+        "title": scene.title,
+        "date_line": scene.date_line,
+        "contact": contact,
+        "contact_label": contact_label,
+        "footer": "kenigevents • guide promo",
+        "icon_kind": str(promo.get("icon_kind") or "walk"),
+        "palette": str(promo.get("palette") or "prussian_cream"),
+        "avatars": avatars[:2],
+    }
+
+
+def _render_guide_excursion_true3d_frames(scene: RenderScene, scene_idx: int) -> list[Path]:
+    if not GUIDE_EXCURSION_TRUE3D_SCRIPT.exists():
+        raise FileNotFoundError(f"Approved guide true3D script not found: {GUIDE_EXCURSION_TRUE3D_SCRIPT}")
+    scene_out = OUT_DIR / "guide_true3d" / f"scene_{scene_idx:02d}"
+    if scene_out.exists():
+        shutil.rmtree(scene_out)
+    scene_out.mkdir(parents=True, exist_ok=True)
+    content = _guide_true3d_scene_content(scene)
+    scene_json = scene_out / "scene.json"
+    scene_json.write_text(
+        json.dumps(
+            {
+                **content,
+                "approved_version": GUIDE_EXCURSION_TRUE3D_APPROVED_VERSION,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    cmd = [
+        _blender_bin(),
+        "-b",
+        "--python",
+        str(GUIDE_EXCURSION_TRUE3D_SCRIPT),
+        "--",
+        "--project-root",
+        str(ROOT),
+        "--out-root",
+        str(scene_out),
+        "--mode",
+        "video",
+        "--duration",
+        f"{GUIDE_EXCURSION_TRUE3D_DURATION:.2f}",
+        "--fps",
+        str(FPS),
+        "--width",
+        str(W),
+        "--height",
+        str(H),
+        "--samples",
+        str(os.environ.get("CHERRYFLASH_GUIDE_TRUE3D_SAMPLES", "2")),
+        "--scene-json",
+        str(scene_json),
+        "--no-encode",
+    ]
+    palette = str(content.get("palette") or "").strip()
+    if palette:
+        cmd.extend(["--palette", palette])
+    print(
+        f"CherryFlash guide excursion renderer={GUIDE_EXCURSION_TRUE3D_APPROVED_VERSION} scene={scene.index}",
+        flush=True,
+    )
+    subprocess.run(cmd, check=True, cwd=str(ROOT))
+    frames = sorted((scene_out / "work" / "frames").glob("frame_*.png"))
+    if len(frames) != GUIDE_EXCURSION_TRUE3D_FRAME_COUNT:
+        raise RuntimeError(
+            "Guide true3D renderer produced unexpected frame count: "
+            f"{len(frames)} != {GUIDE_EXCURSION_TRUE3D_FRAME_COUNT}"
+        )
+    return frames
+
+
 def _render_brand_outro_frame(local_t: float) -> Image.Image:
     scale = W / approval.BASE_W
     # `global_scale` lets the outro config shrink every stripe + font + gap
@@ -1304,6 +1423,19 @@ def _render_scene_frames(scenes: list[RenderScene]) -> int:
         INTRO_END_FRAME + 54,
     }
     for scene_idx, scene in enumerate(scenes, start=1):
+        if scene.variant == "guide_excursion_promo" and _guide_true3d_enabled():
+            for frame_src in _render_guide_excursion_true3d_frames(scene, scene_idx):
+                out_path = RAW_FRAMES_DIR / f"frame_{frame_num:04d}.png"
+                shutil.copy2(frame_src, out_path)
+                if frame_num in preview_points:
+                    shutil.copy2(out_path, PREVIEW_FRAMES_DIR / out_path.name)
+                frame_num += 1
+            print(
+                f"Rendered scene {scene_idx}/{len(scenes)} variant={scene.variant} "
+                f"renderer={GUIDE_EXCURSION_TRUE3D_APPROVED_VERSION} image={scene.image_path.name}",
+                flush=True,
+            )
+            continue
         blocks = (
             []
             if scene.variant == "guide_excursion_promo"
@@ -1385,6 +1517,9 @@ def _write_manifest(
         f"- FPS: `{FPS}`",
         f"- Event scenes: `{len(event_scenes)}`",
         f"- Animated brand outro: `{'yes' if has_final_card else 'no'}`",
+        f"- Guide excursion renderer: `{GUIDE_EXCURSION_TRUE3D_APPROVED_VERSION}`"
+        if any(scene.variant == "guide_excursion_promo" for scene in scenes)
+        else "- Guide excursion renderer: `not used`",
         f"- Intro end frame: `{INTRO_END_FRAME}`",
         f"- Final frame: `{final_frame}`",
         f"- Removed exact duplicate frames: `{removed_duplicates_total}`",
@@ -1396,8 +1531,13 @@ def _write_manifest(
         "",
     ]
     for scene in scenes:
+        suffix = (
+            f" renderer={GUIDE_EXCURSION_TRUE3D_APPROVED_VERSION}"
+            if scene.variant == "guide_excursion_promo"
+            else ""
+        )
         lines.append(
-            f"- `{scene.index}` `{scene.variant}` `{scene.image_path.name}` :: {scene.title or scene.description[:80]}"
+            f"- `{scene.index}` `{scene.variant}` `{scene.image_path.name}`{suffix} :: {scene.title or scene.description[:80]}"
         )
     manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return manifest

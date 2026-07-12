@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import pytest
+import pytest_asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -19,6 +20,23 @@ import vk_auto_queue
 import poster_ocr
 from poster_media import PosterMedia
 from source_parsing.handlers import AddedEventInfo
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Close SQLAlchemy/aiosqlite workers created by every test in this module."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 class DummyBot:
@@ -1225,12 +1243,22 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
     async def fake_build_event_drafts(*_args, **_kwargs):
         raise RateLimitError(blocked_reason="tpm", retry_after_ms=3000)
 
-    async def noop_sleep(_sec):  # noqa: ARG001
-        return None
+    # Advance a deterministic clock instead of busy-spinning for five real
+    # seconds.  A no-op sleep plus the real monotonic clock generated tens of
+    # thousands of retries/log records and could occupy a CI runner for hours.
+    clock = 100.0
+
+    def fake_monotonic():
+        return clock
+
+    async def advance_clock(sec):
+        nonlocal clock
+        clock += float(sec)
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch_vk_post_text_and_photos)
     monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", fake_build_event_drafts)
-    monkeypatch.setattr(vk_auto_queue.asyncio, "sleep", noop_sleep)
+    monkeypatch.setattr(vk_auto_queue.asyncio, "sleep", advance_clock)
+    monkeypatch.setattr(vk_auto_queue.time, "monotonic", fake_monotonic)
     monkeypatch.setenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC", "5")
 
     report = vk_auto_queue.VkAutoImportReport(batch_id="batch-x")

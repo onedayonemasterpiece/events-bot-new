@@ -1,0 +1,22 @@
+{
+  "messages": [
+    {
+      "received_at": "2026-07-11T20:31:00Z",
+      "headers": [
+        {"name": "From", "values": ["Attachment Sender <attach@example.test>"]},
+        {"name": "Reply-To", "values": ["reply@example.test"]},
+        {"name": "To", "values": ["generated@serverless.yandexcloud.net"]},
+        {"name": "X-Original-To", "values": ["info@kenigevents.ru"]},
+        {"name": "Subject", "values": ["Attachment fixture"]},
+        {"name": "Message-ID", "values": ["<fixture-attachment@example.test>"]},
+        {"name": "Content-Type", "values": ["text/html"]},
+        {"name": "Authentication-Results", "values": ["mx; dkim=pass; spf=pass"]}
+      ],
+      "attachments": {
+        "bucket_id": "kenigevents-email-inbound-test",
+        "keys": ["opaque/attachment-2", "opaque/attachment-1"]
+      },
+      "message": "<p>Safe fixture, never render in intake.</p>"
+    }
+  ]
+}

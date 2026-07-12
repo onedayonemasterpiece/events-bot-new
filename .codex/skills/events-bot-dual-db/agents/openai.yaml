@@ -1,0 +1,4 @@
+interface:
+  display_name: "Events Bot Dual DB"
+  short_description: "Route core SQLite and personalization Supabase safely"
+  default_prompt: "Use $events-bot-dual-db to inspect database routing, Supabase personalization access, and Fly SQLite health safely."

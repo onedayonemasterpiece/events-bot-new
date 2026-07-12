@@ -1,7 +1,7 @@
 # Anonymous Personalization for Static Event Pages
 
-> **Status:** MVP-0 design hardened; pgvector authorized-search infrastructure added; v53 authorized-search progress/validation canary is published after the Yandex userinfo adapter; final manual live OAuth retry remains
-> **MVP:** anonymous-only, no auth, consent/banner with “OK” before personalization telemetry  
+> **Status:** mixed capability family: local anonymous profile/actions are preview-level, pgvector related/search have canary evidence, remote telemetry/profile persistence and identity linking remain design/partial.
+> **Core fallback:** public static pages require no auth; optional authorized search and future durable profile features use Supabase Auth.
 > **Primary product goal:** пользователь быстрее находит интересное событие, чем у конкурентов.
 
 ## Контекст
@@ -25,6 +25,10 @@ Authorized event search / pgvector RPC contract: `docs/features/unsigned-persona
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
+Cross-feature data ownership ADR: `docs/architecture/personalization-data-ownership.md`.
+Site identity/profile linking: `docs/features/site-user-identity/README.md`.
+Durable favorites/calendar: `docs/features/event-favorites-calendar/README.md`.
+Personal email announcements: `docs/features/personal-email-announcements/README.md`.
 
 Дополнительные проектные артефакты:
 

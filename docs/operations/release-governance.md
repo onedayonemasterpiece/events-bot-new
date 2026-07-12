@@ -22,6 +22,14 @@
 - Нельзя деплоить из грязного worktree.
 - Нельзя держать прод-значимые фиксы только в `release/*` или `hotfix/*` без обратного возврата в `main`.
 
+## Pull Request CI Gate
+
+- PR в `main` запускает incident regression suite из `.github/workflows/ci.yaml`; эти проверки не отключаются для документационных или release-веток, потому что PR проверяется вместе с текущей базой `main`.
+- Job ограничен 20 минутами и запускает pytest в verbose-режиме, чтобы зависший тест был виден по последнему имени, а runner не оставался занятым на шестичасовой лимит GitHub Actions.
+- Тесты retry/backoff обязаны использовать ограниченный deterministic clock или реальный bounded sleep. Нельзя сочетать no-op mock для `asyncio.sleep` с реальным monotonic deadline: это создаёт busy loop и log storm, а не быстрый unit test.
+- Тесты, создающие `Database`, обязаны закрывать SQLAlchemy engine после проверки; оставшийся worker `aiosqlite` может удерживать уже завершившийся pytest-процесс без нового вывода.
+- Если CI не завершился, merge без зелёного результата допустим только после локального воспроизведения тех же файлов с явным timeout и записи blocker evidence; отменённый или timed-out run не считается успешной проверкой.
+
 ## Pre-Deploy Checklist
 
 1. `git fetch origin --prune`

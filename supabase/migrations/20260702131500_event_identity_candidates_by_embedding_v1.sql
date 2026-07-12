@@ -3,10 +3,10 @@
 
 BEGIN;
 
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 
 CREATE OR REPLACE FUNCTION public.event_identity_candidates_by_embedding_v1(
-    p_embedding vector,
+    p_embedding extensions.vector,
     p_embedding_doc_kind text DEFAULT 'related_v1',
     p_city text DEFAULT NULL,
     p_event_type text DEFAULT NULL,
@@ -318,12 +318,12 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.event_identity_candidates_by_embedding_v1(vector, text, text, text, integer, double precision)
+COMMENT ON FUNCTION public.event_identity_candidates_by_embedding_v1(extensions.vector, text, text, text, integer, double precision)
 IS 'Service-role backend vector recall for Smart Update event identity candidates. Uses event_search_documents/event_embeddings only and returns candidate evidence columns when present.';
 
-REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1(vector, text, text, text, integer, double precision) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1(vector, text, text, text, integer, double precision) FROM anon;
-REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1(vector, text, text, text, integer, double precision) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.event_identity_candidates_by_embedding_v1(vector, text, text, text, integer, double precision) TO service_role;
+REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1(extensions.vector, text, text, text, integer, double precision) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1(extensions.vector, text, text, text, integer, double precision) FROM anon;
+REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1(extensions.vector, text, text, text, integer, double precision) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.event_identity_candidates_by_embedding_v1(extensions.vector, text, text, text, integer, double precision) TO service_role;
 
 COMMIT;
