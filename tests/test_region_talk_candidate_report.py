@@ -4274,6 +4274,13 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         selected = mod.candidate_link_rows_for_fetch(promoted, 10, cached_entity_handles={"a", "b"})
         self.assertEqual([row["post_url"] for row in selected], ["https://t.me/a/1"])
 
+        mixed = mod.candidate_link_rows_for_fetch([
+            {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/fresh/1"},
+            {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/fresh/2"},
+            promoted[0],
+        ], 2, cached_entity_handles={"a", "fresh"})
+        self.assertEqual([row["post_url"] for row in mixed], ["https://t.me/a/1", "https://t.me/fresh/1"])
+
     def test_post_link_rediscovery_preserves_retry_lifecycle(self) -> None:
         mod = load_module()
         previous = {

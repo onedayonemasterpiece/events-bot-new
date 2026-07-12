@@ -9008,9 +9008,20 @@ def candidate_link_rows_for_fetch(
             attempt_count = 0
         return pri, freshness_rank, attempt_count, str(row.get("updated_at") or "")
 
+    ordered = sorted(raw_rows, key=rank)
+    # Reserve one small slot for a fetched exact post whose awaited BGE result
+    # has arrived. Continuous fresh keyword inflow must not starve those rows
+    # forever; the remainder of the batch keeps the normal fresh/cache order.
+    rescore_cap = min(
+        max(0, getenv_int("REGION_TALK_BGE_READY_EXACT_RESCORE_PER_RUN", 1)),
+        max(0, limit),
+    )
+    rescoring = [row for row in ordered if str(row.get("post_link_status") or "") == "bge_ready_rescore"][:rescore_cap]
+    rescore_ids = {id(row) for row in rescoring}
+    ordered = rescoring + [row for row in ordered if id(row) not in rescore_ids]
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    for row in sorted(raw_rows, key=rank):
+    for row in ordered:
         url = str(row.get("post_url") or "").strip()
         if not url or url in blocked_urls or url in seen:
             continue

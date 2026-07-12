@@ -226,9 +226,12 @@ Important invariants:
   from either side. This reduces known-KO latency without starving breadth.
 - When BGE arrives after CandidateReport has already marked an exact link
   fetched with `vector_defer_wait_bge_m3`, the next CandidateReport reopens
-  only that URL as `bge_ready_rescore`. It is re-fetched under the normal
-  bounded cached-entity/human-like exact-link budget; terminal Gemini/operator
-  decisions are never reopened.
+  only that URL as `bge_ready_rescore`. The default exact budget is five per
+  run so fresh links and a few BGE-ready rescoring rows can both move. It stays
+  under the normal cached-entity/human-like governor; terminal Gemini/operator
+  decisions are never reopened. One exact slot per run is reserved for
+  `bge_ready_rescore` (`REGION_TALK_BGE_READY_EXACT_RESCORE_PER_RUN`, default
+  `1`) so continuous keyword inflow cannot starve the fusion completion lane.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but
