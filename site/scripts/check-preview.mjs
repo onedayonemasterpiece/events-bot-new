@@ -40,6 +40,7 @@ const required = [
   'lab/event-desktop/examples/split-ocr/index.html',
   'lab/event-desktop/examples/gallery-photo/index.html',
   'lab/event-desktop/examples/gallery-ocr/index.html',
+  'lab/event-desktop/examples/reading-photo/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -151,6 +152,7 @@ const desktopExampleContracts = [
   ['split-ocr', 5783, 'split', 'ocr', ['Великие учителя', 'Зарегистрироваться']],
   ['gallery-photo', 5259, 'gallery', 'non-ocr', ['Экскурсия по Светлогорску', 'Как добраться']],
   ['gallery-ocr', 6510, 'gallery', 'ocr', ['Хиты любимых артистов', 'Как добраться']],
+  ['reading-photo', 5658, 'reading', 'non-ocr', ['Спектакль «Гараж»', 'data-reading-scroll-gallery="true"', 'desktop-clean-reading-shell']],
 ];
 for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktopExampleContracts) {
   const html = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
@@ -202,6 +204,15 @@ for (const marker of [
   'grid-template-columns:min(52%,calc(var(--stage-height) * var(--image-ratio)))',
   'grid-template-columns:min(48%,calc((var(--stage-height) - 3rem) * var(--image-ratio)))',
   'potentialCrop <= .2',
+  'data-auto-rotate',
+  'data-reading-scroll-gallery',
+  'data-lab-row-normalize',
+  'right:calc(3% + min(28vw,330px) + 1rem)',
+  '--ocr-media-width:clamp(380px,45vw,620px)',
+  'min-height:max(var(--stage-height),calc(var(--ocr-media-width) / var(--image-ratio)))',
+  'grid-template-columns:minmax(440px,48%) minmax(0,1fr)',
+  'Math.sqrt(Math.min(...ratios) * Math.max(...ratios))',
+  'poster-contain-fallback',
   'prefers-reduced-motion:reduce',
 ]) {
   if (!desktopCleanSource.includes(marker)) throw new Error(`Desktop clean source misses geometry/motion contract: ${marker}`);
@@ -592,7 +603,8 @@ const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWit
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
-if (/event-card__media-shell--preserve[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('OCR-safe card media must not use contain over a fixed frame');
+const preserveContainRules = css.match(/[^}]*event-card__media-shell--preserve[^{}]*\{[^}]*object-fit:\s*contain[^}]*\}/giu) || [];
+if (preserveContainRules.some((rule) => !rule.includes('desktop-clean-related__grid') || !rule.includes('poster-contain-fallback'))) throw new Error('Production OCR-safe card media must not use contain over a fixed frame');
 if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');

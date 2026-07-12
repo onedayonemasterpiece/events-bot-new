@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -164,7 +164,7 @@ Target two-stage pipeline:
 
 - A desktop-carousel usability experiment reported slower performance and a significant preference for the non-carousel interface, so the prototypes keep one editorial hero and expose the rest in a manual, non-autoplay gallery ([First Monday study](https://firstmonday.org/ojs/index.php/fm/article/view/11801)).
 - W3C explicitly identifies parallax scrolling as non-essential motion that can trigger vestibular reactions. Parallax is therefore bounded to no-OCR Editorial/Split media, ends before the gallery/related feed, and is disabled by `prefers-reduced-motion` ([WCAG 2.3.3 explanation](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions)).
-- If a carousel is later introduced, W3C requires keyboard operation, announced state and user control over motion; the current prototype avoids autoplay entirely ([WAI carousel tutorial](https://www.w3.org/WAI/tutorials/carousels/)).
+- If a carousel is introduced, W3C requires keyboard operation, announced state and user control over motion. The v3 Editorial photo probe autorotates only while the page is at the top, pauses on hover/manual choice and is disabled under reduced motion; the reading-column probe is scroll-driven and reversible ([WAI carousel tutorial](https://www.w3.org/WAI/tutorials/carousels/)).
 - June 2026 global screen-resolution data reports `1920×1080` at `20.2%` and `1366×768` at `5.71%`, but screen resolution is not browser viewport. The lab retains `1440×650` and `1920×600` stress windows and must collect first-party viewport analytics before rollout ([StatCounter](https://gs.statcounter.com/screen-resolution-stats/desktop/worldwide/2020)).
 
 ## Gemini 3.1 Pro critical review
@@ -215,3 +215,24 @@ Applied findings: preserve the exact approved geometry, remove the lower gallery
 ### Acceptance
 
 Local Chromium acceptance covers all six pages at `1024×768`, `1366×768`, `1440×650`, `1920×600`, `1920×1080`, `2560×1440` and `3440×1440` (`42` layout runs), plus six `390×844` desktop-only isolation checks and a reduced-motion run. The gate checks first-viewport H1/date/venue/CTA visibility, zero horizontal overflow, family geometry, OCR crop/parallax policy, sticky header, fullscreen gallery open/advance/Escape, production related-card controls and absence of technical copy/lower gallery.
+
+## Desktop scroll compositions (v3)
+
+V3 does not replace the preserved v2 pages and still changes no production mobile component. It applies the latest scroll interpretation to the clean real-event examples:
+
+- **Editorial photo:** the wide visual and ticket cluster form one sticky, slowly moving media layer. The white title/date/venue slab is normal document content and rises over the visual while scrolling. The thumbnail rail sits between the slab and ticket cluster; optional autorotation is controllable and stops after manual interaction, page scroll, hover or reduced-motion preference.
+- **Editorial OCR:** the poster is flush left, uncropped and occupies the full available stage height. The right column consumes the remaining width and adds the short canonical event digest before venue and medallions.
+- **Split OCR:** the poster has a `380px` desktop floor and a `620px` cap. Its natural ratio determines the full stage height; the right information and CTA rows remain compact enough for a `1920×600` first viewport while the poster leaves through ordinary document scrolling.
+- **Sticky media + reading column:** a separate candidate keeps roughly `48%` sticky media on the left while the complete event information scrolls on the right. The active image is a deterministic function of scroll progress, so reverse scroll restores the previous image. The media is constrained by the reading shell and releases before `Смотрите дальше`.
+- **Related rows:** cards are grouped by their measured row. A row with one OCR/document card follows its natural ratio; multiple OCR cards use the geometric minimax ratio `sqrt(minRatio × maxRatio)`. If the worst calculated crop exceeds `15%`, OCR cards fall back to `contain` on a solid graphite field. Photo cards use `cover`; media, body and action rows stay aligned.
+
+Direct review URLs:
+
+| Composition | URL |
+|---|---|
+| Editorial photo scroll | <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/examples/editorial-photo/> |
+| Editorial OCR full-height | <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/examples/editorial-ocr/> |
+| Split OCR natural scroll | <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/examples/split-ocr/> |
+| Sticky media + reading column | <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/examples/reading-photo/> |
+
+Gemini 3.1 Pro (High) completed a fresh v3 implementation review and its accepted recommendations are reflected above. The `a-opus` review was not completed because the provider returned `Individual quota reached`; it was not replaced by a lower-class model. Local evidence is stored under `artifacts/codex/desktop-scroll-compositions-v3-20260712/` and is not committed.

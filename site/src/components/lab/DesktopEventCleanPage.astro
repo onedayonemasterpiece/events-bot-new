@@ -20,7 +20,7 @@ import {
 } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 
-type Candidate = 'editorial' | 'split' | 'gallery';
+type Candidate = 'editorial' | 'split' | 'gallery' | 'reading';
 type MediaPolicy = 'non-ocr' | 'ocr';
 
 interface Props {
@@ -31,6 +31,7 @@ interface Props {
   transport?: boolean;
   heroImageIndex?: number;
   editorialRail?: boolean;
+  autoRotate?: boolean;
   ocrSafeCover?: boolean;
 }
 
@@ -51,6 +52,7 @@ const {
   transport = false,
   heroImageIndex = 0,
   editorialRail = candidate === 'editorial' && mediaPolicy === 'non-ocr',
+  autoRotate = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   ocrSafeCover = false,
 } = Astro.props;
 const isOcr = mediaPolicy === 'ocr';
@@ -91,7 +93,10 @@ const galleryImages = (() => {
 const galleryId = `clean-hero-gallery-${event.id}`;
 const galleryTitleId = `${galleryId}-title`;
 const photoCount = galleryImages.length;
-const railImages = galleryImages.slice(0, 5);
+const readingImages = (galleryImages.filter((image) => image.image_text_mode === 'visual_only').length >= 2
+  ? galleryImages.filter((image) => image.image_text_mode === 'visual_only')
+  : galleryImages).slice(0, 5);
+const railImages = (candidate === 'reading' ? readingImages : galleryImages).slice(0, 5);
 
 const dateLabel = displayDate(event);
 const weekdayLabel = displayWeekdayLong(event);
@@ -120,9 +125,12 @@ const shareFileName = `kenigevents-${event.slug}`;
   data-desktop-clean-event
   data-desktop-family={candidate}
   data-media-policy={mediaPolicy}
+  data-auto-rotate={autoRotate ? 'true' : 'false'}
+  data-reading-scroll-gallery={candidate === 'reading' ? 'true' : undefined}
   data-event-id={event.id}
   style={`--image-ratio:${ratio};--image-position:${preferredPosition};`}
 >
+  <div class="desktop-clean-reading-shell">
   <article class:list={['desktop-prototype', 'desktop-prototype--clean', `desktop-prototype--${candidate}`, `desktop-prototype--${mediaPolicy}`]} data-clean-hero>
     <div class="desktop-prototype__canvas">
       <section class="desktop-prototype__stage" aria-labelledby={`clean-event-title-${event.id}`}>
@@ -147,22 +155,50 @@ const shareFileName = `kenigevents-${event.slug}`;
             </button>
           )}
           {editorialRail && railImages.length > 1 && (
-            <div class="desktop-prototype__media-rail" aria-label="Выбрать фотографию в hero">
+            <div class="desktop-prototype__media-rail" data-hero-rail aria-label="Выбрать фотографию в hero">
               {railImages.map((image, index) => (
                 <button
                   type="button"
                   class:list={[index === 0 && 'is-current']}
                   data-clean-hero-thumb
+                  data-index={index}
                   data-src={image.src}
                   data-alt={image.alt}
                   data-mode={image.image_text_mode}
+                  data-width={image.width || 1600}
+                  data-height={image.height || 1000}
+                  data-position={image.position || '50% 50%'}
                   aria-pressed={index === 0 ? 'true' : 'false'}
                   aria-label={`Показать фото ${index + 1} из ${railImages.length}`}
                 >
                   <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
                 </button>
               ))}
+              {autoRotate && <button type="button" class="desktop-prototype__rotation-toggle" data-hero-rotation-toggle aria-pressed="true" aria-label="Остановить автоматическую смену фотографий">Авто</button>}
             </div>
+          )}
+          {candidate === 'editorial' && !isOcr && (
+            <aside class="desktop-prototype__action desktop-prototype__action--media" data-feedback-scope aria-label="Действия события">
+              <p><span>вход</span><strong>{admissionLabel}</strong></p>
+              {calendarPrimary ? (
+                <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+              ) : ctaHref ? (
+                <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
+                  <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
+                </a>
+              ) : soldOut ? (
+                <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
+              ) : canAddToCalendar ? (
+                <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+              ) : (
+                <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
+              )}
+              <div class="desktop-prototype__action-row event-hero__metric-row">
+                {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
+                <button type="button" class="desktop-prototype__icon-action" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={preferredUrl} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`} title="Поделиться"><Icon name="share" /><strong data-share-count>{sharesCount}</strong></button>
+                <button type="button" class="desktop-prototype__icon-action feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`} title="Нравится"><Icon name="heart" /><strong data-feedback-count>{likesCount}</strong></button>
+              </div>
+            </aside>
           )}
         </figure>
 
@@ -176,6 +212,7 @@ const shareFileName = `kenigevents-${event.slug}`;
             </time>
           </p>
           <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
+          {candidate === 'editorial' && isOcr && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
           <p class="desktop-prototype__place">
             <Icon name="pin" />
             <span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span>
@@ -183,7 +220,7 @@ const shareFileName = `kenigevents-${event.slug}`;
           <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
         </div>
 
-        <aside class="desktop-prototype__action" data-feedback-scope aria-label="Действия события">
+        <aside class="desktop-prototype__action desktop-prototype__action--flow" data-feedback-scope aria-label="Действия события">
           <p><span>вход</span><strong>{admissionLabel}</strong></p>
           {calendarPrimary ? (
             <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
@@ -276,6 +313,7 @@ const shareFileName = `kenigevents-${event.slug}`;
       </div>
     </section>
   )}
+  </div>
 
   <section class="desktop-clean-related" data-related-start aria-labelledby={`related-${event.id}`}>
     <div class="page-shell">
@@ -283,7 +321,7 @@ const shareFileName = `kenigevents-${event.slug}`;
         <p class="eyebrow">Продолжить выбор</p>
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
-      <div class="cards-grid cards-grid--immersive desktop-clean-related__grid">
+      <div class="cards-grid cards-grid--immersive desktop-clean-related__grid" data-lab-row-normalize data-lab-crop-budget="0.15">
         {related.map((item) => <EventCard event={item} variant="split-actions" />)}
       </div>
     </div>
@@ -318,7 +356,95 @@ const shareFileName = `kenigevents-${event.slug}`;
     if (cleanRoot) {
       document.body.classList.add('desktop-clean-event-page');
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
+      const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
+      const thumbButtons = Array.from(cleanRoot.querySelectorAll<HTMLButtonElement>('[data-clean-hero-thumb]'));
+      const rotationToggle = cleanRoot.querySelector<HTMLButtonElement>('[data-hero-rotation-toggle]');
       let frame = 0;
+      let imageRequest = 0;
+      let rotationEnabled = cleanRoot.dataset.autoRotate === 'true';
+      let mediaHovered = false;
+
+      const clamp = (value:number, min=0, max=1) => Math.max(min, Math.min(max, value));
+      const markRotation = () => {
+        if (!rotationToggle) return;
+        rotationToggle.setAttribute('aria-pressed', rotationEnabled ? 'true' : 'false');
+        rotationToggle.setAttribute('aria-label', rotationEnabled ? 'Остановить автоматическую смену фотографий' : 'Включить автоматическую смену фотографий');
+        rotationToggle.textContent = rotationEnabled ? 'Авто' : 'Пауза';
+      };
+
+      const selectHero = async (index:number, source:'manual'|'auto'|'scroll'='manual') => {
+        if (!heroImage || !thumbButtons.length) return;
+        const next = Math.max(0, Math.min(thumbButtons.length - 1, index));
+        const button = thumbButtons[next];
+        const src = button?.dataset.src;
+        if (!button || !src) return;
+        const token = ++imageRequest;
+        const probe = new Image();
+        probe.src = src;
+        try { await probe.decode(); } catch {}
+        if (token !== imageRequest) return;
+        heroImage.src = src;
+        heroImage.alt = button.dataset.alt || heroImage.alt;
+        heroImage.width = Number(button.dataset.width || probe.naturalWidth || heroImage.width);
+        heroImage.height = Number(button.dataset.height || probe.naturalHeight || heroImage.height);
+        heroImage.style.objectPosition = button.dataset.position || '50% 50%';
+        thumbButtons.forEach((item, itemIndex) => {
+          const current = itemIndex === next;
+          item.setAttribute('aria-pressed', current ? 'true' : 'false');
+          item.classList.toggle('is-current', current);
+        });
+        cleanRoot.dataset.activeHeroIndex = String(next);
+        if (source === 'manual' && cleanRoot.dataset.readingScrollGallery !== 'true') {
+          rotationEnabled = false;
+          markRotation();
+        }
+      };
+
+      const readingScrollTarget = (index:number) => {
+        const related = cleanRoot.querySelector<HTMLElement>('[data-related-start]');
+        if (!related || thumbButtons.length < 2) return window.scrollY;
+        const start = cleanRoot.offsetTop;
+        const end = Math.max(start, related.offsetTop - window.innerHeight);
+        return start + (end - start) * (index / (thumbButtons.length - 1));
+      };
+
+      thumbButtons.forEach((button, index) => {
+        button.addEventListener('click', () => {
+          if (cleanRoot.dataset.readingScrollGallery === 'true') {
+            window.scrollTo({ top:readingScrollTarget(index), behavior:reducedMotion.matches ? 'auto' : 'smooth' });
+          } else {
+            void selectHero(index, 'manual');
+          }
+        });
+      });
+      rotationToggle?.addEventListener('click', () => {
+        rotationEnabled = !rotationEnabled;
+        markRotation();
+      });
+      mediaFrame?.addEventListener('pointerenter', () => { mediaHovered = true; });
+      mediaFrame?.addEventListener('pointerleave', () => { mediaHovered = false; });
+      markRotation();
+
+      window.setInterval(() => {
+        if (!rotationEnabled || reducedMotion.matches || mediaHovered || document.visibilityState !== 'visible' || window.scrollY > 4 || !mediaFrame || !thumbButtons.length) return;
+        const rect = mediaFrame.getBoundingClientRect();
+        if (rect.bottom <= 0 || rect.top >= window.innerHeight) return;
+        const current = Number(cleanRoot.dataset.activeHeroIndex || '0');
+        void selectHero((current + 1) % thumbButtons.length, 'auto');
+      }, 8500);
+
+      const updateReadingImage = () => {
+        if (cleanRoot.dataset.readingScrollGallery !== 'true' || thumbButtons.length < 2) return;
+        const related = cleanRoot.querySelector<HTMLElement>('[data-related-start]');
+        if (!related) return;
+        const start = cleanRoot.offsetTop;
+        const end = Math.max(start + 1, related.offsetTop - window.innerHeight);
+        const progress = clamp((window.scrollY - start) / (end - start));
+        const next = Math.min(thumbButtons.length - 1, Math.floor(progress * thumbButtons.length));
+        if (Number(cleanRoot.dataset.activeHeroIndex || '0') !== next) void selectHero(next, 'scroll');
+      };
+
       const updateParallax = () => {
         frame = 0;
         cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-parallax]').forEach((media) => {
@@ -326,53 +452,114 @@ const shareFileName = `kenigevents-${event.slug}`;
             media.style.setProperty('--desktop-parallax-y', '0px');
             return;
           }
-          const rect = media.getBoundingClientRect();
           const viewport = window.innerHeight || 800;
-          const progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(1, viewport + rect.height)));
-          media.style.setProperty('--desktop-parallax-y', `${(-48 + progress * 96).toFixed(1)}px`);
+          const stage = media.closest<HTMLElement>('.desktop-prototype__stage');
+          let progress = 0;
+          let amplitude = 48;
+          if (stage && cleanRoot.dataset.desktopFamily === 'editorial') {
+            const rect = stage.getBoundingClientRect();
+            const travel = Math.max(1, rect.height - viewport + 73);
+            progress = clamp((73 - rect.top) / travel);
+            amplitude = 32;
+          } else if (cleanRoot.dataset.readingScrollGallery === 'true') {
+            const related = cleanRoot.querySelector<HTMLElement>('[data-related-start]');
+            const end = Math.max(cleanRoot.offsetTop + 1, (related?.offsetTop || document.documentElement.scrollHeight) - viewport);
+            progress = clamp((window.scrollY - cleanRoot.offsetTop) / (end - cleanRoot.offsetTop));
+            amplitude = 24;
+          } else {
+            const rect = media.getBoundingClientRect();
+            progress = clamp((viewport - rect.top) / Math.max(1, viewport + rect.height));
+          }
+          media.style.setProperty('--desktop-parallax-y', `${(-amplitude + progress * amplitude * 2).toFixed(1)}px`);
         });
+        updateReadingImage();
       };
-      const scheduleParallax = () => {
+      const scheduleMotion = () => {
         if (frame) return;
         frame = window.requestAnimationFrame(updateParallax);
       };
       updateParallax();
-      window.addEventListener('scroll', scheduleParallax, { passive: true });
-      window.addEventListener('resize', scheduleParallax, { passive: true });
-      reducedMotion.addEventListener?.('change', scheduleParallax);
+      window.addEventListener('scroll', scheduleMotion, { passive:true });
+      window.addEventListener('resize', scheduleMotion, { passive:true });
+      reducedMotion.addEventListener?.('change', scheduleMotion);
 
       const updateOcrFrame = () => {
         if (cleanRoot.dataset.mediaPolicy !== 'ocr') return;
-        const frame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
-        const image = frame?.querySelector<HTMLImageElement>('[data-clean-hero-image]');
-        if (!frame || !image) return;
+        const image = mediaFrame?.querySelector<HTMLImageElement>('[data-clean-hero-image]');
+        if (!mediaFrame || !image) return;
         const imageWidth = image.naturalWidth || Number(image.getAttribute('width'));
         const imageHeight = image.naturalHeight || Number(image.getAttribute('height'));
-        if (!frame.clientWidth || !frame.clientHeight || !imageWidth || !imageHeight) return;
-        const scale = Math.max(frame.clientWidth / imageWidth, frame.clientHeight / imageHeight);
-        const visibleFraction = (frame.clientWidth * frame.clientHeight) / (imageWidth * imageHeight * scale * scale);
-        const potentialCrop = Math.max(0, Math.min(1, 1 - visibleFraction));
-        const safeCover = frame.dataset.ocrSafeCover === 'true' && potentialCrop <= .2;
+        if (!mediaFrame.clientWidth || !mediaFrame.clientHeight || !imageWidth || !imageHeight) return;
+        const scale = Math.max(mediaFrame.clientWidth / imageWidth, mediaFrame.clientHeight / imageHeight);
+        const visibleFraction = (mediaFrame.clientWidth * mediaFrame.clientHeight) / (imageWidth * imageHeight * scale * scale);
+        const potentialCrop = clamp(1 - visibleFraction);
+        const safeCover = mediaFrame.dataset.ocrSafeCover === 'true' && potentialCrop <= .2;
         cleanRoot.classList.toggle('is-safe-cover', safeCover);
         cleanRoot.classList.toggle('is-safe-contain', !safeCover);
         cleanRoot.dataset.potentialCoverCrop = potentialCrop.toFixed(4);
         cleanRoot.dataset.measuredCrop = safeCover ? potentialCrop.toFixed(4) : '0.0000';
       };
-      const ocrImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
-      if (ocrImage && !ocrImage.complete) ocrImage.addEventListener('load', updateOcrFrame, { once:true });
+      if (heroImage && !heroImage.complete) heroImage.addEventListener('load', updateOcrFrame, { once:true });
       updateOcrFrame();
       window.addEventListener('resize', updateOcrFrame, { passive:true });
 
-      cleanRoot.querySelectorAll<HTMLButtonElement>('[data-clean-hero-thumb]').forEach((button) => {
-        button.addEventListener('click', () => {
-          const image = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
-          if (!image || !button.dataset.src) return;
-          image.src = button.dataset.src;
-          image.alt = button.dataset.alt || image.alt;
-          cleanRoot.querySelectorAll('[data-clean-hero-thumb]').forEach((item) => item.setAttribute('aria-pressed', item === button ? 'true' : 'false'));
-          cleanRoot.querySelectorAll('[data-clean-hero-thumb]').forEach((item) => item.classList.toggle('is-current', item === button));
+      const relatedGrid = cleanRoot.querySelector<HTMLElement>('[data-lab-row-normalize]');
+      let normalizeFrame = 0;
+      const normalizeRelatedRows = () => {
+        normalizeFrame = 0;
+        if (!relatedGrid) return;
+        const cards = Array.from(relatedGrid.querySelectorAll<HTMLElement>(':scope > [data-event-card]'));
+        if (window.innerWidth < 1024) {
+          cards.forEach((card) => { card.removeAttribute('data-lab-related-card'); card.removeAttribute('data-lab-row-media'); card.style.removeProperty('--lab-row-media-ratio'); });
+          return;
+        }
+        cards.forEach((card) => {
+          card.dataset.labRelatedCard = 'true';
+          const preserve = Boolean(card.querySelector('.event-card__media-shell--preserve'));
+          card.dataset.mediaTextMode = preserve ? 'ocr_text' : 'visual_only';
         });
-      });
+        const rows:Array<HTMLElement[]> = [];
+        cards.forEach((card) => {
+          const top = card.getBoundingClientRect().top;
+          const row = rows.find((items) => Math.abs(items[0].getBoundingClientRect().top - top) <= 2);
+          if (row) row.push(card); else rows.push([card]);
+        });
+        const budget = Number(relatedGrid.dataset.labCropBudget || '.15');
+        rows.forEach((row, rowIndex) => {
+          const posters = row.map((card) => ({ card, image:card.querySelector<HTMLImageElement>('.event-card__media-shell--preserve .event-card__media') }))
+            .filter((item):item is {card:HTMLElement;image:HTMLImageElement} => Boolean(item.image?.naturalWidth && item.image?.naturalHeight));
+          const ratios = posters.map(({ image }) => image.naturalWidth / image.naturalHeight).filter((value) => Number.isFinite(value) && value > 0);
+          let targetRatio = .8;
+          let mode = 'photo-only';
+          let worstCrop = 0;
+          if (ratios.length === 1) {
+            targetRatio = ratios[0];
+            mode = 'poster-natural';
+          } else if (ratios.length > 1) {
+            targetRatio = Math.sqrt(Math.min(...ratios) * Math.max(...ratios));
+            worstCrop = Math.max(...ratios.map((sourceRatio) => 1 - Math.min(sourceRatio / targetRatio, targetRatio / sourceRatio)));
+            mode = worstCrop <= budget ? 'poster-minimax' : 'poster-contain-fallback';
+          }
+          row.forEach((card) => {
+            card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
+            card.dataset.labRowMedia = mode;
+            card.dataset.labRowIndex = String(rowIndex);
+            card.dataset.labRowWorstCrop = worstCrop.toFixed(4);
+          });
+        });
+      };
+      const scheduleNormalize = () => {
+        if (normalizeFrame) return;
+        normalizeFrame = window.requestAnimationFrame(normalizeRelatedRows);
+      };
+      if (relatedGrid) {
+        const images = Array.from(relatedGrid.querySelectorAll<HTMLImageElement>('.event-card__media'));
+        images.forEach((image) => image.addEventListener('load', scheduleNormalize, { once:true }));
+        Promise.allSettled(images.map((image) => image.decode?.())).then(scheduleNormalize);
+        new ResizeObserver(scheduleNormalize).observe(relatedGrid);
+        new MutationObserver(scheduleNormalize).observe(relatedGrid, { childList:true, subtree:true });
+        scheduleNormalize();
+      }
     }
   </script>
 </main>
@@ -425,6 +612,9 @@ const shareFileName = `kenigevents-${event.slug}`;
   .desktop-prototype__media-rail button { width:68px; height:48px; padding:0; overflow:hidden; border:2px solid transparent; border-radius:10px; background:#2b2724; cursor:pointer; }
   .desktop-prototype__media-rail button.is-current { border-color:#fff; }
   .desktop-prototype__media-rail img { width:100%; height:100%; display:block; object-fit:cover; }
+  .desktop-prototype__rotation-toggle { width:auto !important; min-width:58px; padding:.25rem .55rem !important; color:#fff; font-size:.72rem; font-weight:900; letter-spacing:.04em; }
+  .desktop-prototype__rotation-toggle[aria-pressed="false"] { color:#d6c8bd; }
+  .desktop-prototype__digest { max-width:54ch; margin:0; color:#62564d; font-size:clamp(.9rem,1.1vw,1.05rem); line-height:1.48; }
 
   .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__media { position:absolute; inset:0 0 25%; }
   .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__info { position:absolute; left:3%; bottom:0; width:min(64%,820px); min-height:43%; padding:clamp(1.3rem,2.5vw,2.2rem); background:var(--clean-paper); box-shadow:0 -12px 42px rgba(47,33,23,.13); }
@@ -485,6 +675,66 @@ const shareFileName = `kenigevents-${event.slug}`;
     .desktop-clean-event { display:block; }
     :global(body.desktop-clean-event-page .site-header) { position:sticky; top:0; z-index:60; background:rgba(255,250,242,.97); box-shadow:0 1px 0 rgba(121,48,20,.12); }
     :global(body.desktop-clean-event-page .site-footer__note) { display:none; }
+
+    /* Editorial photo v3: sticky media/action layer; the white event slab remains normal document flow. */
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__canvas { overflow:visible; }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__stage { height:auto; min-height:calc(var(--stage-height) + clamp(260px,34svh,390px)); overflow:visible; background:#eadfce; }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__media { position:sticky; inset:auto; top:73px; z-index:1; width:100%; height:var(--stage-height); }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__info { position:relative; left:auto; bottom:auto; z-index:5; width:min(64%,820px); min-height:0; margin:calc(var(--stage-height) * -.26) 0 0 3%; padding:clamp(1.3rem,2.5vw,2.2rem); background:var(--clean-paper); box-shadow:0 -12px 42px rgba(47,33,23,.13); }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__action--media { position:absolute; right:3%; bottom:3%; width:min(28%,330px); border-radius:22px; }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__action--flow { display:none; }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__media-rail { right:calc(3% + min(28vw,330px) + 1rem); bottom:1rem; }
+
+    /* Editorial OCR v3: the uncropped poster owns the complete stage height and stays flush left. */
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__stage { --stage-height:calc(100svh - 73px); grid-template-columns:clamp(420px,calc(var(--stage-height) * var(--image-ratio)),calc(100vw - 320px)) minmax(320px,1fr); grid-template-rows:minmax(0,1fr) auto; padding:0; overflow:hidden; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__media { grid-column:1; grid-row:1/span 2; height:var(--stage-height); align-self:stretch; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__media-image { object-fit:contain; object-position:left top !important; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__info { grid-column:2; grid-row:1; margin:0; padding:clamp(1.2rem,2.4vw,2.7rem); box-shadow:none; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__action--flow { grid-column:2; grid-row:2; grid-template-columns:minmax(100px,.32fr) minmax(190px,1fr) auto; align-items:center; margin:0; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__action-row { grid-column:auto; }
+
+    /* Split OCR v3: readable poster floor and natural page flow instead of a clipped fixed stage. */
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__canvas { overflow:visible; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__stage { --ocr-media-width:clamp(380px,45vw,620px); height:auto; min-height:max(var(--stage-height),calc(var(--ocr-media-width) / var(--image-ratio))); overflow:visible; grid-template-columns:var(--ocr-media-width) minmax(0,1fr); grid-template-rows:min-content min-content; align-content:start; align-items:start; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__media { position:absolute; inset:0 auto auto 0; width:var(--ocr-media-width); min-width:380px; min-height:0; height:auto; align-self:start; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__media-opener { height:auto; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__media-image { width:100%; height:auto; object-fit:contain; object-position:left top !important; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__info { align-self:start; }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__action--flow { align-self:start; }
+
+    /* Sticky-media reading column: one page grid; sticky releases automatically before related cards. */
+    .desktop-clean-reading-shell { display:contents; }
+    .desktop-clean-event--reading { display:block; }
+    .desktop-clean-event--reading .desktop-clean-reading-shell { display:grid; grid-template-columns:minmax(440px,48%) minmax(0,1fr); align-items:start; }
+    .desktop-clean-event--reading .desktop-prototype,
+    .desktop-clean-event--reading .desktop-prototype__canvas,
+    .desktop-clean-event--reading .desktop-prototype__stage { display:contents; }
+    .desktop-clean-event--reading .desktop-prototype__media { grid-column:1; grid-row:1/span 5; position:sticky; top:73px; z-index:2; height:calc(100svh - 73px); align-self:start; }
+    .desktop-clean-event--reading .desktop-prototype__info { grid-column:2; grid-row:1; padding:clamp(1.5rem,3.2vw,4rem) clamp(1.5rem,3.6vw,4.5rem) 1.2rem; background:var(--clean-paper); }
+    .desktop-clean-event--reading .desktop-prototype__info h1 { max-width:15ch; }
+    .desktop-clean-event--reading .desktop-prototype__action--flow { grid-column:2; grid-row:2; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(2rem,4vw,4rem); border-radius:24px; }
+    .desktop-clean-event--reading .desktop-clean-story { grid-column:2; grid-row:3; min-height:140svh; width:auto; margin:0; padding:clamp(2.5rem,5vw,6rem) clamp(1.5rem,3.6vw,4.5rem); grid-template-columns:1fr; }
+    .desktop-clean-event--reading .desktop-clean-description h2 { font-size:clamp(2rem,3.1vw,3.8rem); }
+    .desktop-clean-event--reading .desktop-clean-feedback { margin-top:clamp(3rem,8vh,7rem); }
+    .desktop-clean-event--reading .desktop-clean-practical { grid-column:2; grid-row:4; width:auto; margin:0; padding:0 clamp(1.5rem,3.6vw,4.5rem) clamp(4rem,8vw,8rem); }
+    .desktop-clean-event--reading .desktop-clean-practical__grid { grid-template-columns:1fr; }
+    .desktop-clean-event--reading .desktop-clean-practical__grid article { min-height:130px; }
+    .desktop-clean-event--reading .desktop-clean-travel { grid-column:2; grid-row:5; width:auto; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(5rem,9vw,9rem); grid-template-columns:1fr; }
+    .desktop-clean-event--reading .desktop-prototype__media-rail { right:1rem; bottom:1rem; }
+
+    /* Lab-only related-card rows: natural single poster, minimax multi-poster crop, safe contain fallback. */
+    .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; inset:0; width:100% !important; height:100% !important; }
+    .desktop-clean-related__grid :global([data-lab-related-card][data-media-text-mode="visual_only"] .event-card__media) { object-fit:cover !important; }
+    .desktop-clean-related__grid :global([data-lab-related-card][data-lab-row-media="poster-natural"] .event-card__media-shell--preserve .event-card__media),
+    .desktop-clean-related__grid :global([data-lab-related-card][data-lab-row-media="poster-minimax"] .event-card__media-shell--preserve .event-card__media) { object-fit:cover !important; object-position:center top !important; }
+    .desktop-clean-related__grid :global([data-lab-related-card][data-lab-row-media="poster-contain-fallback"] .event-card__media-shell--preserve) { background:#181411; }
+    .desktop-clean-related__grid :global([data-lab-related-card][data-lab-row-media="poster-contain-fallback"] .event-card__media-shell--preserve .event-card__media) { object-fit:contain !important; object-position:center top !important; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
   }
   @media (min-width:1024px) and (max-height:720px) {
     .desktop-prototype__stage { --stage-height:calc(100svh - 72px); min-height:520px; }
@@ -502,13 +752,21 @@ const shareFileName = `kenigevents-${event.slug}`;
     .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__info { min-height:46%; }
     .desktop-prototype--split .desktop-prototype__info { padding:.9rem 1.4rem .5rem; }
     .desktop-prototype--split .desktop-prototype__action { margin:0 1.4rem .7rem; }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__stage { min-height:calc(var(--stage-height) + 260px); }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__info { margin-top:calc(var(--stage-height) * -.38); }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__info { padding:.9rem 1.2rem .5rem; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__digest { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__action--flow { padding:.75rem; }
   }
   @media (min-width:1024px) and (max-width:1200px) {
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__action--flow { grid-template-columns:minmax(180px,1fr) auto; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__action--flow>p { display:none; }
     .desktop-prototype--gallery .desktop-prototype__action { grid-template-columns:minmax(90px,auto) minmax(160px,1fr); }
     .desktop-prototype--gallery .desktop-prototype__action-row { grid-column:1/-1; }
     .desktop-clean-story { grid-template-columns:1fr; }
   }
   @media (prefers-reduced-motion:reduce) {
     .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { transform:none !important; }
+    .desktop-prototype__media-image { transition:none !important; }
   }
 </style>

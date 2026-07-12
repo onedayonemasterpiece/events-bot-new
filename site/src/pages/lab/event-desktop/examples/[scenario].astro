@@ -9,20 +9,22 @@ import { absoluteUrl, SITE_NAME } from '../../../../lib/events';
 type Scenario = {
   slug: string;
   eventId: number;
-  candidate: 'editorial' | 'split' | 'gallery';
+  candidate: 'editorial' | 'split' | 'gallery' | 'reading';
   mediaPolicy: 'non-ocr' | 'ocr';
   transport?: boolean;
   editorialRail?: boolean;
+  autoRotate?: boolean;
   ocrSafeCover?: boolean;
 };
 
 const scenarios: Scenario[] = [
-  { slug: 'editorial-photo', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialRail: true },
+  { slug: 'editorial-photo', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialRail: true, autoRotate: true },
   { slug: 'editorial-ocr', eventId: 4671, candidate: 'editorial', mediaPolicy: 'ocr' },
   { slug: 'split-photo', eventId: 6472, candidate: 'split', mediaPolicy: 'non-ocr' },
   { slug: 'split-ocr', eventId: 5783, candidate: 'split', mediaPolicy: 'ocr' },
   { slug: 'gallery-photo', eventId: 5259, candidate: 'gallery', mediaPolicy: 'non-ocr', transport: true },
   { slug: 'gallery-ocr', eventId: 6510, candidate: 'gallery', mediaPolicy: 'ocr', transport: true },
+  { slug: 'reading-photo', eventId: 5658, candidate: 'reading', mediaPolicy: 'non-ocr', editorialRail: true },
 ];
 
 export function getStaticPaths() {
@@ -33,6 +35,7 @@ export function getStaticPaths() {
     'split-ocr',
     'gallery-photo',
     'gallery-ocr',
+    'reading-photo',
   ].map((scenario) => ({ params: { scenario } }));
 }
 
@@ -44,8 +47,8 @@ const scenario = scenarios.find((item) => item.slug === Astro.params.scenario);
 if (!scenario) throw new Error(`Unknown clean desktop event scenario: ${Astro.params.scenario}`);
 const event = merged.get(scenario.eventId);
 if (!event) throw new Error(`Clean desktop event ${scenario.eventId} is missing`);
-const preferredRelatedIds = [5658, 6472, 5259, 4671, 5783, 6510, 5370];
-const related = preferredRelatedIds.map((id) => merged.get(id)).filter((item): item is PreviewEvent => Boolean(item && item.id !== event.id)).slice(0, 3);
+const preferredRelatedIds = [5658, 6472, 4671, 5259, 5783, 5382, 5703, 6510, 5370];
+const related = preferredRelatedIds.map((id) => merged.get(id)).filter((item): item is PreviewEvent => Boolean(item && item.id !== event.id)).slice(0, 6);
 const canonicalUrl = absoluteUrl(`/lab/event-desktop/examples/${scenario.slug}/`);
 const title = `${event.title} | ${SITE_NAME}`;
 const description = event.meta_description || event.summary || event.title;
@@ -59,6 +62,7 @@ const description = event.meta_description || event.summary || event.title;
     mediaPolicy={scenario.mediaPolicy}
     transport={scenario.transport}
     editorialRail={scenario.editorialRail}
+    autoRotate={scenario.autoRotate}
     ocrSafeCover={scenario.ocrSafeCover}
   />
 </EventLayout>
