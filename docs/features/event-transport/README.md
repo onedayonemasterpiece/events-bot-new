@@ -8,7 +8,7 @@ For eligible events outside Kaliningrad, the event page may show source-backed p
 
 - suitable outbound and return rail/bus options;
 - schedule/source freshness and timezone;
-- one summary transport card in the event media/content flow;
+- one summary transport card in the event content flow, with an optional generated gallery slide «Как добраться» governed separately;
 - separate calendar action for an actual transport leg;
 - no invented event duration or return feasibility;
 - hide/fail safe when schedule evidence is missing or stale.
@@ -47,10 +47,11 @@ A manually reviewed committed snapshot is insufficient for the public presentati
 The transport implementation is now a reusable feature slice, not the owner of the final page composition. The release-UI task must:
 
 1. port the rail/bus blocks and transport-leg calendar actions into the chosen immutable UI baseline without duplicating schedule logic/data;
-2. decide the final responsive placement (content block, gallery-adjacent summary card or another approved surface) while keeping full schedule rows accessible;
+2. keep the full schedule block as the accessible canonical surface and separately prototype the optional generated gallery slide «Как добраться» without forking schedule selection;
 3. retain fail-closed matching, source/date freshness, unknown-end warnings, keyboard/touch targets and no-JS/static fallback;
 4. run the same transport directory/preview/ICS validators after the UI merge;
-5. prove mobile/desktop visual baselines for an enabled rail event, enabled bus event, unsupported locality and stale/partial schedule.
+5. prove mobile/desktop visual baselines for an enabled rail event, enabled bus event, unsupported locality and stale/partial schedule;
+6. if the gallery candidate is included, prove at most one derived card after genuine media, SVG/WebP+CDN compliance, no hero/OG/JSON-LD use and complete no-card fail-closed cases.
 
 Until that integration is signed off, the preliminary block must not be copied into another UI branch as forked markup or a second schedule selector.
 
@@ -63,6 +64,7 @@ Keep `integration/event-transport-schedule` as the single transport integration 
 - [Static event pages](../static-site-pages/README.md)
 - [Favorites/calendar](../event-favorites-calendar/README.md)
 - [Kaggle static-site builder](../../operations/kaggle-static-site-builder.md)
+- [Optional gallery card «Как добраться»](gallery-how-to-get-there-card.md)
 - [Detailed preliminary renderer/schedule contract](../static-site-pages/event-transport-schedule.md)
 - [Rail multimodal directory](../static-site-pages/rail-multimodal-directory.md)
 - [Bus transport directory](../static-site-pages/bus-transport-directory.md)

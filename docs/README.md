@@ -28,6 +28,8 @@
 - Пайплайны/парсеры (каноника): `docs/features/source-parsing/` (в `docs/pipelines/` остаются redirect‑stub’ы для старых ссылок)
 - Фичи: `docs/features/`
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
+  - responsive navigation research/decision: `docs/features/static-site-pages/responsive-navigation.md`
+  - optional transport gallery card «Как добраться»: `docs/features/event-transport/gallery-how-to-get-there-card.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)

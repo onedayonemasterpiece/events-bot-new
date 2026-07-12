@@ -26,6 +26,7 @@
 20. **Final UI sign-off belongs to the project owner/user.** Automated visual/a11y checks and reviewers provide evidence, but only the owner accepts the exact release branch/SHA, preview and deviations.
 21. **Public search-tag curation is fully automatic and LLM-first.** There is no routine human moderation. A strict multi-pass offline LLM gate plus deterministic duplicate/result/safety thresholds decides accept/merge/reject; ambiguity/provider failure remains pending and unpublished for automatic retry.
 22. **Identity state is global across every static HTML page, and verified manual email is lightweight passwordless authorization.** One shared account shell provides Yandex login, code/link email login, logout, add/change email and device-local forget-email actions everywhere. Pending/cached email is not authentication; after verification it creates/restores the same Supabase identity class used by ordinary user-owned features, without collecting extra profile data.
+23. **Navigation is consistent in information architecture and adaptive in geometry.** Mobile keeps the stronger brand-tag disclosure pattern; desktop keeps primary destinations visible in a horizontal top bar and uses a restrained shallow version of the tag motif. Labels, order, active state, search/account semantics and accessible names remain the same. The shallow desktop hybrid is the recommended release candidate, subject to immutable-preview owner sign-off.
 
 ## Consequences
 
@@ -33,6 +34,7 @@
 - Search no longer owns authentication UI; every HTML route consumes one shared identity controller/session state, while machine artifacts remain non-interactive.
 - `Выйти` ends the browser session but does not delete durable data. `Забыть почту на этом устройстве` clears the manual-email cache/email-only browser session but does not silently withdraw consent, cancel mail or delete the account; those remain separate actions.
 - A forwarded personal-page secret remains bearer access to that page and must not be rebound to the viewer's current global identity merely because the shared account shell is visible.
+- Cross-device continuity is measured by the same destinations/order/meaning and by task transfer, not by pixel-identical navigation. The release must not assume that one visitor uses only one device; desktop and mobile variants are both acceptance surfaces.
 - The code and link cannot create two accounts or consume each other incorrectly; replay/attempt/TTL limits apply to the shared verification transaction.
 - `noindex` is discovery control, not access control. A forwarded personal-page URL intentionally grants read access to its holder.
 - Personal-page artifacts must exclude email, account id, raw/inferred profile internals, hidden scores and sensitive history.

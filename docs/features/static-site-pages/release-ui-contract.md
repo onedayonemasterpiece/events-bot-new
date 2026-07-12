@@ -8,14 +8,20 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 
 ## Required surfaces
 
-- root/index and navigation;
+- root/index and responsive navigation with one shared information architecture;
 - today, tomorrow, weekend and relevant category listings;
 - event detail, gallery and quick-read organizer/venue/festival medallion row;
 - related/search/personal feed cards;
 - favorite/calendar/share/not-interested actions;
 - shared site-wide identity/account state and anonymous fallback on every static HTML page;
-- personal page, transport, discussion signals and admin report when included in launch scope;
+- personal page, transport (including the optional gallery slide «Как добраться»), discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
+
+## Responsive navigation
+
+The release direction is **adaptive consistency**, not pixel-identical mobile/desktop chrome: mobile keeps the stronger brand tag/disclosure pattern, while desktop keeps all primary destinations in a persistent horizontal header and carries only a shallow, restrained version of the tag motif. Labels, order, active state, search/account semantics and accessible names stay invariant across breakpoints and page families.
+
+The research basis, A/B/control preview, cross-device task test and owner decision gate are canonical in [Responsive navigation decision](responsive-navigation.md). The recommended desktop candidate is the shallow hybrid; its final geometry still requires immutable-preview sign-off.
 
 ## Global identity/account UI
 
@@ -32,6 +38,10 @@ Acceptance requires:
 - forwardable personal-secret pages remain accessible by secret link and do not bind the viewer's current account to the page owner merely because the shared account control is visible.
 
 The detailed identity and action semantics live in [Site user identity](../site-user-identity/README.md#global-static-page-identity-shell-release-requirement).
+
+## Optional gallery transport card
+
+The UI-freeze task may prototype one generated non-photo gallery slide **«Как добраться»** after genuine event media. It is derived from the same validated F11 snapshot/selector as the normal transport block, fails closed for stale/unsupported data and never becomes hero/OG/JSON-LD event media. The full accessible schedule block remains canonical; the slide itself is optional and may be owner-deferred without removing F11. See [the gallery-card contract](../event-transport/gallery-how-to-get-there-card.md).
 
 ## Event medallion acceptance
 

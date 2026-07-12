@@ -288,6 +288,7 @@ features:
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
+    responsive_navigation: docs/features/static-site-pages/responsive-navigation.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
     image_framing: docs/features/static-site-pages/image-framing.md
     related_event_transport: docs/features/event-transport/README.md
@@ -314,6 +315,7 @@ features:
       production_atomic_promotion: missing
       catalog_freshness: partial_blocked
       release_ui: candidate_signoff_pending
+      responsive_navigation: adaptive_hybrid_selected_visual_signoff_pending
       sharing: preview_canvas_offline_generator_missing
       image_framing: renderer_preview_metadata_producer_missing
       event_medallions_main_baseline: partial_11_organizers_no_festival_manifest
@@ -495,6 +497,7 @@ features:
     refresh_merge: 4577b334
     draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/37
     renderer_contract: docs/features/static-site-pages/event-transport-schedule.md
+    gallery_how_to_get_there_card: docs/features/event-transport/gallery-how-to-get-there-card.md
     rail_directory: docs/features/static-site-pages/rail-multimodal-directory.md
     bus_directory: docs/features/static-site-pages/bus-transport-directory.md
     capabilities:
@@ -503,6 +506,7 @@ features:
       transport_leg_ics: preliminary_implemented
       official_route_directories: preliminary_implemented
       release_ui_integration: pending
+      gallery_how_to_get_there_card: optional_prototype_not_implemented
       nightly_kaggle_refresh: missing_p0
       atomic_last_good_publish: missing_p0
 

@@ -163,9 +163,10 @@ Runtime policy: `ocr_text`/`unknown` stay `contain`/natural-ratio no-crop; `visu
 
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
+- Responsive navigation decision/research: `docs/features/static-site-pages/responsive-navigation.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
-- Event transport: `docs/features/event-transport/README.md`.
+- Event transport: `docs/features/event-transport/README.md`; optional gallery card: `docs/features/event-transport/gallery-how-to-get-there-card.md`.
 - Event comment feedback: `docs/features/event-comment-feedback/README.md`.
 - Admin issue reporting: `docs/features/event-issue-reporting/README.md`.
 - Astro SSG preview runbook and public URLs: `docs/features/static-site-pages/astro-preview.md`.
