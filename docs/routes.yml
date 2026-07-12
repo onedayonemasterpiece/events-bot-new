@@ -475,6 +475,7 @@ features:
     operations: docs/operations/email-delivery.md
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_favorites: docs/features/event-favorites-calendar/README.md
+    post_release_attendance_feedback: docs/backlog/features/post-event-attendance-feedback/README.md
     superseded_branch: feature/event-email-notifications-static-20260702
     shared_control_plane_package: email_control/
     shared_control_plane_migration: supabase/migrations/20260711203940_email_control_plane_v1.sql
@@ -486,6 +487,7 @@ features:
       calendar_reminder_ui: design
       event_reminder_schedule_producer: missing
       cross_provider_warmup: pending
+      post_event_attendance_feedback: post_release_backlog
     postbox_worker_migration: supabase/migrations/20260712083037_email_postbox_worker_v1.sql
     postbox_worker_tests: email_control/tests/test_worker.py
 

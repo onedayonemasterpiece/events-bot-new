@@ -69,3 +69,9 @@ Release still requires:
 ## Release gates
 
 See [email delivery operations](../../operations/email-delivery.md), [favorites/calendar](../event-favorites-calendar/README.md) and [site identity](../site-user-identity/README.md).
+
+## Post-release attendance feedback
+
+After the public release and stabilization of the D-1 flow, a separate follow-up may ask a calendar saver to rate a completed **recurring/serial** event by green/yellow/red smiley, reply with free text or submit a public-review URL. It is not part of the presentation scope, does not apply to unique one-offs and requires its own consent/frequency/publication policy. Recurrence must be determined offline from historical/current canonical events by a strict LLM-first series classifier with deterministic guardrails; uncertainty sends nothing.
+
+The canonical future contract is [Post-event attendance feedback for recurring events](../../backlog/features/post-event-attendance-feedback/README.md). Calendar save alone still grants neither follow-up mail nor publication permission.

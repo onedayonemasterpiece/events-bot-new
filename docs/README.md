@@ -30,6 +30,7 @@
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
   - responsive navigation research/decision: `docs/features/static-site-pages/responsive-navigation.md`
   - optional transport gallery card «Как добраться»: `docs/features/event-transport/gallery-how-to-get-there-card.md`
+  - post-release recurring-event attendance feedback: `docs/backlog/features/post-event-attendance-feedback/README.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)

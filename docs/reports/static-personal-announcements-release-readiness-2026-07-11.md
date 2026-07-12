@@ -346,6 +346,8 @@ Smart Update является владельцем семантического 
 - [ ] Перевести ежедневные анонсы в Telegram и VK на canonical ссылки соответствующих страниц статического сайта вместо прежних целевых страниц.
 - [ ] До переключения подтвердить parity ссылок для всех eligible событий, корректные UTM/source attribution, доступность CDN и отсутствие утечки preview/personal secret URL.
 - [ ] Выполнить раздельный canary для Telegram и VK, проверить опубликованные сообщения через реальные channel surfaces и сохранить быстрый rollback на предыдущий link target до окончания post-presentation hypercare.
+- [ ] После стабилизации D-1 писем отдельно исследовать [post-event attendance feedback для повторяющихся событий](../backlog/features/post-event-attendance-feedback/README.md): одно письмо после надёжно завершившегося сохранённого occurrence, green/yellow/red rating, свободный ответ или public-review URL; unique/ambiguous series fail closed.
+- [ ] Не считать calendar save согласием на post-event письмо или публичную публикацию; до эксперимента утвердить consent purpose, frequency cap, series/edition idempotency, reply/URL privacy/moderation and withdrawal rules.
 
 ## 8. Reliability objectives to approve
 

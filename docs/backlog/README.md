@@ -15,6 +15,7 @@
 - Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
 - Poll to Repost (опрос в TG -> репост события): `docs/backlog/features/poll-to-forward/README.md`
 - Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
+- Post-event attendance feedback for recurring events (green/yellow/red email rating, reply or public-review link): `docs/backlog/features/post-event-attendance-feedback/README.md`
 
 ## Implemented (для ориентира)
 
