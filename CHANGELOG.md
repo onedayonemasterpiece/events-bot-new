@@ -14,6 +14,7 @@
 - Clarified Region Talk operator labels so historical provenance and candidate/publication ledgers cannot be mistaken for current-run additions or active backlogs.
 - Raised the bounded human-like exact-post batch from three to five so fresh direct KO links and BGE-ready rescoring rows can progress in the same CandidateReport run without increasing the one-username resolve cap.
 - Reserved one exact-fetch slot per CandidateReport run for BGE-ready rescoring so continuous keyword discovery cannot permanently starve dual-vector completion.
+- Added a distinct BGE-ready exact-rescore backlog metric and included it in adaptive exact-batch sizing instead of hiding it inside the fetched ledger.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active

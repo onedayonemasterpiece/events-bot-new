@@ -474,6 +474,27 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["telegram_entity_cache_valid_rows_total"], 1)
         self.assertEqual(metrics["post_link_queue_entity_wait_cache_now_available_total"], 1)
 
+    def test_bge_ready_exact_rescore_is_visible_and_excludes_terminal_publications(self) -> None:
+        mod = load_module()
+        links = [
+            {"post_url": "https://t.me/a/1", "post_link_status": "fetched"},
+            {"post_url": "https://t.me/b/2", "post_link_status": "fetched"},
+        ]
+        processed = [
+            {"post_url": "https://t.me/a/1", "vector_gate_status": "vector_defer_wait_bge_m3"},
+            {"post_url": "https://t.me/b/2", "current_stage": "dual_model_vector_enrichment_pending"},
+        ]
+        vectors = [
+            {"post_url": "https://t.me/a/1", "model_short": "bge_m3"},
+            {"post_url": "https://t.me/b/2", "model_id": "BAAI/bge-m3"},
+        ]
+        publications = [{"post_url": "https://t.me/b/2", "publication_status": "gemini_reject"}]
+
+        metrics = mod._bge_ready_exact_rescore_metrics(links, processed, vectors, publications)
+
+        self.assertEqual(metrics["post_link_queue_bge_ready_rescore_total"], 1)
+        self.assertEqual(metrics["post_link_queue_bge_ready_rescore_urls"], ["https://t.me/a/1"])
+
     def test_manual_keyword_hashtag_similar_inflow_metrics_are_distinct(self) -> None:
         mod = load_module()
         metrics = mod._discovery_inflow_metrics([
@@ -1132,7 +1153,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         })
         self.assertIn("canonical population: 7055", text)
         self.assertIn("Sources with broad KO/candidate evidence (legacy): 91", text)
-        self.assertIn("Exact ready/cooldown/entity-wait/fetched: 67/0/0/0", text)
+        self.assertIn("Exact pending-new / BGE-ready-rescore / cooldown / entity-wait / fetched-ledger: 67/0/0/0/0", text)
         self.assertIn("Publication ledger rows / currently Gemini-confirmed / sent-ledger / ready-unsent / deliveries-completed: 19/7/7/0/6", text)
 
     def test_strong_source_attestation_backlog_schedules_bounded_priority_pass(self) -> None:

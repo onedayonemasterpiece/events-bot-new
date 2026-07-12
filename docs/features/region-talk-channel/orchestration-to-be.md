@@ -232,6 +232,8 @@ Important invariants:
   decisions are never reopened. One exact slot per run is reserved for
   `bge_ready_rescore` (`REGION_TALK_BGE_READY_EXACT_RESCORE_PER_RUN`, default
   `1`) so continuous keyword inflow cannot starve the fusion completion lane.
+  The scorecard reports pending-new exact links and BGE-ready-rescore links as
+  separate counts; the orchestrator sizes its bounded exact batch from both.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but

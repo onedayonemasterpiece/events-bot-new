@@ -296,8 +296,9 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('source_queue_integrity_duplicate_order_rows_total')}"
         ),
         (
-            "Exact ready/cooldown/entity-wait/fetched: "
+            "Exact pending-new / BGE-ready-rescore / cooldown / entity-wait / fetched-ledger: "
             f"{value('post_link_queue_exact_ready_total')}/"
+            f"{value('post_link_queue_bge_ready_rescore_total')}/"
             f"{value('post_link_queue_cooldown_total')}/"
             f"{value('post_link_queue_entity_wait_total')}/"
             f"{value('post_link_queue_fetched_total')}"
@@ -791,6 +792,45 @@ def _post_link_queue_metrics(
     }
     metrics.update(_entity_cache_metrics(post_links, entity_cache_rows or []))
     return metrics
+
+
+def _bge_ready_exact_rescore_metrics(
+    post_links: list[dict[str, Any]],
+    processed_rows: list[dict[str, Any]],
+    vector_rows: list[dict[str, Any]],
+    publication_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    deferred = {
+        _canonical_post_url(row)
+        for row in processed_rows
+        if str(row.get("vector_gate_status") or "").startswith("vector_defer")
+        or str(row.get("current_stage") or "") == "dual_model_vector_enrichment_pending"
+    }
+    bge = {
+        _canonical_post_url(row)
+        for row in vector_rows
+        if str(row.get("model_short") or "") == "bge_m3"
+        or str(row.get("model_id") or "") == "BAAI/bge-m3"
+    }
+    terminal = {
+        _canonical_post_url(row)
+        for row in publication_rows
+        if str(row.get("publication_status") or "").startswith(("gemini_", "operator_rejected", "eligibility_"))
+        or str(row.get("publication_candidate_status") or "") in {
+            "llm_confirmed", "llm_rejected", "llm_needs_review", "sent_to_chat",
+            "accepted_for_publication", "tombstoned_reject", "revoked",
+        }
+    }
+    fetched = {
+        _canonical_post_url(row)
+        for row in post_links
+        if str(row.get("post_link_status") or "") == "fetched"
+    }
+    ready = sorted(((deferred & bge & fetched) - terminal) - {""})
+    return {
+        "post_link_queue_bge_ready_rescore_total": len(ready),
+        "post_link_queue_bge_ready_rescore_urls": ready,
+    }
 
 
 def _source_queue_integrity_metrics(source_rows: list[dict[str, Any]], cursor_position: int) -> dict[str, int]:
@@ -2587,6 +2627,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         and float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.70
     ]
     post_link_metrics = _post_link_queue_metrics(post_links, entity_cache_rows)
+    post_link_rescore_metrics = _bge_ready_exact_rescore_metrics(
+        post_links,
+        processed_post_rows,
+        vectors,
+        publications,
+    )
     post_link_source_keys = {str(r.get("canonical_source_key") or r.get("source_key") or "") for r in post_links if str(r.get("canonical_source_key") or r.get("source_key") or "").strip()}
     fast_check_rows = [r for r in source_rows if str(r.get("fast_check_status") or "").strip()]
     fast_check_hit_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "ko_hit"]
@@ -2655,6 +2701,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),
         **post_link_metrics,
+        **post_link_rescore_metrics,
         "telegram_entity_cache_row_level_rows_total": len(row_level_entity_cache_rows),
         "telegram_entity_cache_legacy_latest_state_rows_total": len(legacy_entity_cache or {}),
         "post_link_queue_unique_sources_total": len(post_link_source_keys),
@@ -2767,7 +2814,10 @@ def build_decision_plan(
     # that stops when the publication goal is reached. ``include_main`` remains
     # accepted for CLI/API compatibility, but can no longer disable this lane.
     goal_reached = int(metrics.get("publication_sent_total") or 0) >= target_confirmed or int(metrics.get("publication_confirmed_total") or 0) >= target_confirmed
-    exact_ready = int(metrics.get("post_link_queue_exact_ready_total") or 0)
+    exact_ready = (
+        int(metrics.get("post_link_queue_exact_ready_total") or 0)
+        + int(metrics.get("post_link_queue_bge_ready_rescore_total") or 0)
+    )
     exact_cache_hits = int(metrics.get("post_link_queue_entity_cache_hit_total") or 0)
     # Five is still a small human-like exact batch and lets one run consume
     # fresh pending links plus a few `bge_ready_rescore` links. Username resolve
