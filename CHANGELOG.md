@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk finalizer-backlog metrics so scan-counter changes on a still-terminal local/spam source do not repeatedly report its rejected media as pending publication work; policy or source-classification changes still trigger refresh.
 - Calibrated Region Talk publication eligibility v3 with a narrow high-postcard near-threshold lane, so an otherwise strong image at `overall=0.657` is sent to Gemini instead of being lost to a brittle `0.66` boundary; low-aesthetic near-threshold media remains rejected.
 - Reused active durable exact text for up to eight BGE-ready Region Talk rescoring rows per run outside the Telegram fetch budget; only compacted historical rows require a bounded human-like refetch, improving dual-fusion throughput without reducing fresh keyword discovery.
 - Fixed Region Talk ImageDiagnostic so the Telegram post-level `#media` marker is never downloaded as a JPG/HTML page; real media now falls through to the bounded human-like Telethon fetch. State maintenance reopens affected rows, and CandidateReport no longer writes a redundant full post body into image-ledger rows after the text verdict.

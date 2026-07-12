@@ -249,6 +249,11 @@ Important invariants:
   the Telegram fetch budget. Only older rows whose working text was already
   compacted consume the single human-like refetch slot. This clears dual-model
   lag faster while reducing Telegram requests and preserving fresh discovery.
+  Finalizer backlog metrics ignore fingerprint-only counter changes for posts
+  already tombstoned from a source that is still durably local/spam. A new
+  eligibility-gate version or an actual source-classification change still
+  reopens the row. This prevents terminal local videos from masquerading as
+  recurring publication work.
 - The default global keyword plan reserves two phrase slots for travel intent
   (`ездили`, `путешествие`, `отзыв`, `маршрут`) and rotates the remaining POI
   slots. This keeps broad geographic recall but raises the share of personal

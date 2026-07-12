@@ -1506,6 +1506,32 @@ def _publication_handoff_metrics(
         candidate_status = str(row.get("publication_candidate_status") or "").lower()
         if str(row.get("sent_to_chat") or "").lower() == "true" or candidate_status == "sent_to_chat":
             return False
+        publication_status = str(row.get("publication_status") or "").lower()
+        gate_version = str(row.get("publication_eligibility_gate_version") or "")
+        terminal_non_candidate = (
+            candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"}
+            or candidate_status.startswith(("tombstoned", "revoked"))
+            or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}
+            or publication_status.startswith("eligibility_")
+        )
+        live_source = source_by_key.get(canonical_source_key_for_row(row)) or {}
+        live_status = str(live_source.get("source_queue_status") or live_source.get("fetch_status") or "").lower()
+        live_scope = str(live_source.get("source_scope") or "").lower().replace("-", "_")
+        live_geo = str(live_source.get("source_geo_class") or "").lower().replace("-", "_")
+        live_quick = str(live_source.get("source_quick_class") or "").lower()
+        live_source_still_terminal = (
+            live_status in {"rejected_local_region_source", "rejected_spam_source"}
+            or live_scope in {"local", "local_region", "kaliningrad_local"}
+            or live_geo in {"local", "local_region", "kaliningrad_local"}
+            or live_quick in {"local_region_source", "spam_source_reject"}
+        )
+        # Source counters legitimately continue to grow after a local/spam
+        # tombstone. That changes the audit fingerprint but cannot make the
+        # post publishable, so it must not create a phantom finalizer backlog.
+        # A gate-version change or a changed source classification still
+        # reopens the row for a real eligibility refresh.
+        if terminal_non_candidate and live_source_still_terminal and gate_version == CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION:
+            return False
         live_fingerprint = str(row.get("_live_authoritative_source_fingerprint") or "")
         persisted_fingerprint = str(row.get("authoritative_source_fingerprint") or "")
         if (
@@ -1515,11 +1541,8 @@ def _publication_handoff_metrics(
         ):
             return True
         eligibility_verdict = str(row.get("publication_eligibility_verdict") or "").lower()
-        gate_version = str(row.get("publication_eligibility_gate_version") or "")
         if not eligibility_verdict or gate_version != CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION:
             return True
-        publication_status = str(row.get("publication_status") or "").lower()
-        candidate_status = str(row.get("publication_candidate_status") or "").lower()
         retryable = publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"} or candidate_status in {
             "llm_budget_deferred", "llm_error", "retry_due",
         }

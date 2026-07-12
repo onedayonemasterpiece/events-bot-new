@@ -611,6 +611,33 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(terminal_reject["publication_source_evidence_backlog_total"], 0)
 
+        local_source = {
+            "canonical_source_key": "telegram:kenig01",
+            "source_url": "https://t.me/kenig01",
+            "source_scope": "local_region",
+            "source_geo_class": "kaliningrad_local",
+            "source_queue_status": "rejected_local_region_source",
+            "posts_scanned": 9,
+        }
+        local_terminal = mod._publication_handoff_metrics(
+            [{
+                "post_url": "https://t.me/kenig01/10",
+                "image_queue_status": "not_reviewable_unsupported_media",
+                "media_kind": "video",
+            }],
+            [{
+                "post_url": "https://t.me/kenig01/10",
+                "canonical_source_key": "telegram:kenig01",
+                "publication_status": "eligibility_reject_tombstone",
+                "publication_candidate_status": "tombstoned_reject",
+                "publication_eligibility_verdict": "reject",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+                "authoritative_source_fingerprint": "older-counter-fingerprint",
+            }],
+            [local_source],
+        )
+        self.assertEqual(local_terminal["finalizer_pending_url_total"], 0)
+
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()
         metrics = {
