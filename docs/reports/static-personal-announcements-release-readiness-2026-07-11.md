@@ -60,7 +60,7 @@
 | **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
 | **F3** | Умный поиск + сохранение результата как публичного тега | **Partial** | Search UI/Edge source/canary и private feedback/tag-candidate intake существуют | Production `/poisk/`; explicit save; normalization/idempotency/result-novelty curation; current-catalog static tag generation; public anonymous tag E2E |
 | **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
-| **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; отдельная UX V3 branch активна | Design freeze + owner sign-off; shared global identity shell on 100% HTML page families; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
+| **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; medallion baseline consolidated in draft PR #38; отдельная UX V3 branch активна | Design freeze + owner sign-off; shared global identity shell; medallion P0 shortlist + final visual QA; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
 | **F6** | Views/list/detail/social-action personalization telemetry and application | **Partial** | Local profile/actions/served-list Playwright contract exists; full DB integration/application E2E missing | Detailed Gherkin/Playwright: localStorage → accepted/deduped DB rows → profile rollup → next feed; golden personas and `cards_to_first_relevant <=20` |
 | **F7** | На каждой static HTML page: Yandex identity/email или вручную введённый verified email | **Partial / search-only implementation** | Yandex PKCE login/logout сейчас фактически живёт в `/poisk/`; site-wide shell и manual passwordless email описаны только в плане | Shared controller on 100% HTML page families; Yandex email sync/fallback; one-use email code/link with TTL/replay/rate limits; both paths converge without duplicate identity/profile; real-device proof |
 | **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Partial / live worker foundation** | `main@c6396331`: disabled Supabase control plane, authenticated Postbox feedback/suppression, live transactional-only worker+monitor canary, authorized-key fix | Event-specific calendar/reminder producers; templates/UX; D-1 schedule/reschedule E2E; cross-provider placement warm-up; NotiSend recommendation flow/key gate |
@@ -73,6 +73,7 @@
 | **F15** | Share generates image | **Partial** | Preview Web Share file → generated `1080×1350` canvas → text/copy fallback | Stable offline/server assets 1200×630, 1080×1350, 1080×1080; stale regeneration; CORS; Telegram/VK/MAX real-device tests |
 | **F16** | Correct image focus/crop | **Partial** | Renderer accepts focal/face metadata and keeps OCR-safe contain fallback | Producer currently emits empty focal/face metadata; implement enrichment, confidence/manual override, golden visual corpus |
 | **F17** | Admin issue report → ArtKodex repair/history | **Partial, branch-only** | Admin Edge/UI/history design and branch implementation exist | Merge; unique active/idempotency key; atomic poller claim; real ArtKodex owner; structured repair result; end-to-end repair/rebuild/history |
+| **M1** | Event-detail medallion release readiness | **Partial / consolidated draft PR** | Draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38): clean main-based slice with 25 organizer/venue + 11 festival/venue-brand entries; 420-page preview/check and 38/38 browser image load evidence | Produce/accept P0 shortlist; refresh production gap within 48h of RC; provenance/alias/no-false-match/a11y/no-overflow gates; owner mobile/desktop visual sign-off; merge to main |
 
 **Итог:** для полного заявленного публичного релиза нет ни одного требования, которое можно честно отметить `Done` по строгому определению `main + tests + current production evidence`. Это не означает, что продукт начинается с нуля: сильные vertical slices уже есть, но release integration и эксплуатационные доказательства отстают от объёма реализации.
 
@@ -163,7 +164,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | Site identity/account | Canonical product contract expanded | Фактический Yandex login/logout сосредоточен в `/poisk/`; shared shell, email-only passwordless session and forget semantics are not implemented | One common-layout controller, 100% HTML route matrix, code/link+Yandex callback restore, logout/forget/cross-tab/session-expiry E2E |
 | Personal email/page | Canonical design v2 подготовлен | Реализация отсутствует; старая branch назначала неверного владельца | Новый main-based feature branch по принятому Supabase control-plane ADR |
 | Email delivery | Средняя, branch-only | Transactional follow и recommendation digest смешиваются концептуально | Разделить transactional/reminder и recommendation marketing streams |
-| UI/share/focus | Средняя/высокая | Решения разбросаны по длинным preview/UI review docs | Зафиксировать единственный release UI contract + visual baselines |
+| UI/share/focus/medallions | Средняя/высокая | Medallion implementation was split across mixed branches; remaining shortlist was not release-routed | Use clean PR #38 only; finish production-backed P0 shortlist, provenance/alias checks and owner visual acceptance inside the frozen UI |
 | Transport | Канонический home/route и renderer/rail/bus child contracts консолидированы; draft PR #37 прошёл directory + full preview checks | Coverage уже требования; нет nightly atomic refresh и принятой интеграции в release UI | Сохранить один reusable slice; добавить city/provider/source matrix, ops runbook, automatic last-good refresh и UI acceptance |
 | Comment feedback | Сильная design/probe | Старая ветка; нет main feature home/public implementation | Rebase architecture, отдельно storage/probe/UI/operations stages |
 | Admin incident report | Хорошая product prose | Документ переоценивает готовность ArtKodex poller/idempotency | Явно разделить UI, DB queue, poller, repair result, E2E statuses |
@@ -176,7 +177,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 - side-branch features не должны попадать в main feature index до merge, но release plan обязан явно показывать их статус;
 - названия/пути `alanytics.md`, `requitements.md`, `trip-recomendation` являются legacy typo debt; переименование допустимо только через redirect stubs;
 - часть старых review docs содержит вердикты “not canary-ready”, хотя pgvector canary уже выполнен; review artifact нельзя использовать как current status без application matrix;
-- current WIP имел один broken relative link в `event-token-medallions.md` и рассинхрон UI/check-preview assertion; исправлять нужно в соответствующих feature tasks, не в release-plan ветке.
+- historical WIP had a broken relative link in `event-token-medallions.md`; the clean PR #38 canonical doc now passes scoped link validation. The separate UI/check-preview assertion drift still belongs to the release-UI task.
 - parent static-site README всё ещё одновременно говорит “preview/auth out of scope”, описывает старый v44 как current и называет регулярный DB export следующим шагом; current status нужно сверить с Jul-02 build и реальным `origin/main` code path;
 - operations doc обещает follow-up build при update во время running build, но `main.py` не реализует это для `static_site_build` — документацию нельзя считать доказательством поведения;
 - `event_active_where`/public projection tests требуют отдельной проверки поля `silent`: текущий exporter/tests не дают уверенности, что silent rows не попадут в публичный static surface;
@@ -311,6 +312,10 @@ Smart Update является владельцем семантического 
 
 ### Stage 6 — Transport, discussion signals, admin repair, media
 
+- [x] Static medallion archaeology is consolidated in clean draft PR #38: 25 organizer/venue + 11 festival/venue-brand entries, 420-page preview/check, 38/38 lazy images loaded, zero browser errors and no 390px overflow.
+- [ ] Complete or explicitly owner-defer every canonical P0 medallion shortlist item: Понарт; Дом железнодорожников/ДКЖ; Солёная ворона; Центр «Мой бизнес»; Гусевский музей; Закхаймские ворота; Замок Тапиау; Pianissimo.
+- [ ] Re-run medallion gap audit within 48h of RC; review every uncovered venue/festival with `>=4` active current/future events, deduplicate address aliases, and record `implemented|deferred_by_owner` with reason.
+- [ ] Final medallion acceptance proves official/source-faithful provenance, no guessed/distorted logo, correct alias boundaries, no duplicate tokens/broken assets, accessible labels, no overflow and owner-approved 390px/1440px visuals in the frozen release UI.
 - [x] Preliminary rail/bus renderers, official route directories and type-prefixed event/transport ICS are consolidated in refreshed draft PR #37 and pass directory validators plus a 421-page preview/check.
 - [ ] Integrate the reusable transport slice into the frozen release UI without duplicating selector/data logic; approve mobile/desktop/no-JS/stale/unsupported visual baselines.
 - [ ] Transport city/provider matrix approved; rail/bus sources/licensing/refresh SLAs and exact-date public coverage recorded.
@@ -399,7 +404,7 @@ Smart Update является владельцем семантического 
 2. **P0 — Smart Update quality stabilization:** G2, регулярные аудиты, incident burn-down, root-cause fixes, closure-grade replay, dashboard/SLO.
 3. **P0 — Supabase ecological capacity:** fresh size/budget, compact schema, retention/compaction, growth forecast, alerts and near-cap fail-safe before remote telemetry/email activation.
 4. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
-5. **P0 — UI release freeze:** F5 plus clean preview contract and real-device/a11y evidence.
+5. **P0 — UI release freeze:** F5 plus clean preview contract, PR #38 medallion baseline, completed/owner-deferred medallion P0 shortlist and real-device/a11y/visual evidence.
 6. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12, включая Yandex/manual-email choice и видимый reminder state после save.
 7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 8. **P1 — admin repair loop:** F17 after idempotency/poller contract.

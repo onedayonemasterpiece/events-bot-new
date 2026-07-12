@@ -297,6 +297,10 @@ features:
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
+    event_token_medallions_integration_branch: integration/static-site-medallions-release-20260712
+    event_token_medallions_source_branch: feature/static-site-venue-medallions-20260703
+    event_token_medallions_content_baseline: fa367ea3
+    event_token_medallions_draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/38
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
@@ -312,6 +316,10 @@ features:
       release_ui: candidate_signoff_pending
       sharing: preview_canvas_offline_generator_missing
       image_framing: renderer_preview_metadata_producer_missing
+      event_medallions_main_baseline: partial_11_organizers_no_festival_manifest
+      event_medallions_release_branch: consolidated_25_organizers_11_festivals
+      event_medallions_release_shortlist: p0_open
+      event_medallions_visual_acceptance: pending
     entrypoints:
       - main.py
       - smart_event_update.py

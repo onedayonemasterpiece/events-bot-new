@@ -10,7 +10,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 
 - root/index and navigation;
 - today, tomorrow, weekend and relevant category listings;
-- event detail and gallery;
+- event detail, gallery and quick-read organizer/venue/festival medallion row;
 - related/search/personal feed cards;
 - favorite/calendar/share/not-interested actions;
 - shared site-wide identity/account state and anonymous fallback on every static HTML page;
@@ -32,6 +32,10 @@ Acceptance requires:
 - forwardable personal-secret pages remain accessible by secret link and do not bind the viewer's current account to the page owner merely because the shared account control is visible.
 
 The detailed identity and action semantics live in [Site user identity](../site-user-identity/README.md#global-static-page-identity-shell-release-requirement).
+
+## Event medallion acceptance
+
+The frozen event-detail UI consumes the single medallion slice from draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38); it must not copy assets/manifests from the mixed historical branches. Release acceptance requires the canonical [medallion P0 shortlist and RC gap gate](event-token-medallions.md#release-consolidation-and-remaining-shortlist), source-faithful artwork/provenance, bounded aliases, no duplicate identity tokens, loaded SVG/WebP+PNG assets, accessible labels and no overflow at mobile/desktop baselines. Listing/search-card medallion rows remain out of P0 unless separately approved.
 
 ## Acceptance matrix
 

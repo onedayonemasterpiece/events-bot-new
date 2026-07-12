@@ -1,6 +1,7 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb` and `kantata-festival` are WebP-first raster items until source SVGs are found; `act-opus` is a self-contained SVG medallion assembled from the official raster wordmark.
+> **Status:** release-candidate medallion slice consolidated from the freshest source-faithful branch state into `integration/static-site-medallions-release-20260712` from `origin/main@c6396331`; draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38), not yet in `origin/main`. Content baseline `fa367ea3` contains 25 organizer/venue entries and 11 festival/venue-brand entries. SVG is primary only for official or safely source-faithful vector marks; raster-only sources are WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb`, `act-opus`, `kantata-festival` and other documented raster exceptions remain WebP-first until trustworthy SVG sources exist.
+> **Workflow skill:** project-specific medallion archaeology/sourcing/rendering workflow is codified in `.codex/skills/static-event-medallions/SKILL.md`.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -22,6 +23,61 @@ Current scope:
 - **P0:** medallions on the concrete event page only;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
 - **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
+
+## Release consolidation and remaining shortlist
+
+### Branch archaeology decision
+
+Audit on 2026-07-12 found these relevant remote histories:
+
+- `feature/static-medallion-svg-upgrade@fb2570dc`, `agent/static-medallions-visual-tune-20260702@1959dad5`, `recovery/static-site-smart-search-full-20260701` and `integration/static-site-smart-search-20260701` are already contained in `origin/main`; do not revive them.
+- `feature/event-issue-report-artkodex-20260703` contains the first festival/venue pass but then diverges into date/decision labs and issue-report work; it is not a medallion release branch.
+- `feature/static-site-venue-medallions-20260703@d6f9d499` is the freshest source-faithfulness result, but its ancestry also contains issue-report/incident work. It is the evidence/source branch, not the merge target.
+- `integration/static-site-medallions-release-20260712` is the clean main-based projection. It carries only the medallion commits `0e4b70bf`, `1e8f42db`, `b6a5759a`, `b5d0ef12`, `d6f9d499` plus current consolidation/docs/check fixes; unrelated issue-report, Smart Update incident and date/decision lab commits are excluded.
+
+The release branch is therefore the only current integration source for static-site medallions. Old branches remain archaeological evidence until this branch is merged, after which they may be marked superseded/archived.
+
+### Already consolidated baseline
+
+- 25 organizer/venue medallions: the 11 already in main plus 14 reviewed venue additions/repairs;
+- 11 festival/venue-brand medallions, including `Симфония ветра`, `Бахослужение`, `80 историй о главном` and `Кауп`;
+- source/provenance trees, official/source-faithful SVG or WebP+PNG fallback policy;
+- event-detail renderer, medallion lab and preview assertions;
+- no listing/search-card medallion row in the P0 scope.
+
+Validation of the clean consolidation on 2026-07-12:
+
+- browser-safe preview build produced `420` pages; `npm --prefix site run check:preview` passed;
+- medallion lab rendered `38/38` lazy-loaded images after full-page scroll, with zero broken assets, zero console errors/warnings and no horizontal overflow at `390px`;
+- desktop `1440px` and mobile `390px` viewport screenshots confirmed the intended circle grid, readable marks and source/festival sections. Final owner visual sign-off still applies after P0 shortlist assets are added.
+
+### Release shortlist: medallions still to produce
+
+Read-only production snapshot on **2026-07-12** contained `326` active current/future canonical events across `124` normalized-as-stored location strings. Direct location-alias matching against the consolidated organizer manifest covered `181/326` events before festival/program matching. Counts below are prioritization evidence, not permission to guess a logo; every item still requires official/source-faithful provenance and mobile/desktop visual QA.
+
+**P0 — required before medallion release sign-off:**
+
+| Candidate | Current/future | Historical total | Why shortlisted | Source lane |
+| --- | ---: | ---: | --- | --- |
+| `Понарт` | 6 | 84 | highest uncovered recurring venue | confirm official venue/social mark; neutral initials only if normalization is proven and no clean mark exists |
+| `Дом железнодорожников / ДКЖ` | 7 combined | 21 combined | two active aliases for the same high-frequency venue family | verify canonical ownership/name and official railway/culture venue source before one alias set is created |
+| `Театральная гостиная «Солёная ворона»` | 5 | 25 | recurring regional theatre venue | official VK/ticket identity; source-faithful raster allowed |
+| `Лекторий Центра «Мой бизнес»` | 5 | 15 | concentrated current program and recognizable institutional identity | official institutional logo/source first |
+| `Гусевский музей` | 4 | 42 | recurring regional museum and release coverage outside Kaliningrad | official museum/municipal source first |
+| `Закхаймские ворота` | 3 | 32 | recurring venue with current events and stable public identity | official venue/social source first |
+| `Замок Тапиау` | 3 | 16 | recurring regional destination venue | official castle/museum source first |
+| `Pianissimo` | 9 festival-labelled events (`Pianissimo` + `PIANISSIMO`) | — | largest uncovered current festival/program family | official festival/Tretyakovka identity; one case-insensitive alias set |
+
+**P1 — make only after P0 or promote when the RC snapshot crosses the threshold:** `СКЛАD`, `HUMAN concept`, парк `ЮНОСТЬ`, `Место Силы`, `ОКЦ на Горького`, `Фридландские ворота`, Дворец спорта `Янтарный`, `BREAK SUMMER FEST`, `Балтийские сезоны`. These are not blanket approval for artwork; first confirm canonical venue/festival identity and clean source evidence.
+
+### Shortlist maintenance and release gate
+
+- Regenerate the read-only production gap report within 48 hours of release-candidate freeze.
+- Automatically add/review any uncovered canonical venue/festival with at least 4 active current/future events; product owner may explicitly promote strategic regional institutions below that threshold.
+- Deduplicate address-suffixed aliases before counting (`Янтарь холл, ...`, `Филиал Третьяковской галереи, ...`, `ДКЖ` variants).
+- P0 is complete only when every shortlist item is `implemented` or explicitly `deferred_by_owner` with reason; silence is not acceptance.
+- Each accepted asset has provenance, manifest aliases, SVG/WebP contract, preview assertion and mobile (~90px)/desktop (~112px) visual QA. Broken/ambiguous source or distorted artwork fails closed to no medallion.
+- Final release preview must prove no broken asset URLs, no duplicate organizer/festival token for the same identity, no false alias matches, no horizontal overflow and correct accessible labels.
 
 ## Visual contract
 
@@ -102,6 +158,7 @@ Overflow:
 | --- | --- | --- | --- |
 | Organizer avatar | normalized organizer/venue mapping | official avatar/logo in circle | `Организатор: …` in aria/tooltip; no visible long label on cards |
 | Пушкинская карта | existing `pushkin_card=true` plus source evidence | special Pushkin-card medallion | `Пушкинская карта` |
+| Бахослужение | `event.festival=Бахослужение` or narrow Bach+organ/Cathedral fallback | source-faithful official festival medallion | `Бахослужение` |
 | Благотворительность | LLM-first classification with evidence | heart/hand SVG pill | `Благотворительность` |
 | Детям / семейное | age/audience fields + LLM-first classification | child/star/kite SVG pill | `Детям` or `Семейное` |
 | Видеозапись | source-grounded video/stream/recording status | play/video SVG pill/circle | `Будет запись`, `Есть видео`, `Онлайн` |
@@ -119,7 +176,7 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.webp` (`.png` fallback) | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains WebP-first raster for now |
 | Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
 | Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
-| Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.svg` (`.png` fallback/QA) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`, replacing the octopus symbol, with `АКТ` inset inside the circle |
+| Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.webp` (`.png` fallback) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`; raster source is now WebP-primary rather than SVG-embedded |
 | Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the enlarged white internal `З` symbol as a root-clipped group, optically centered and clipped by the lower circle edge |
 | Фестиваль «80 историй о главном» | `kgd80` | `/assets/organizers/kgd80.svg` (`.png` fallback/QA) | KGD80 hero lockup from `site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg`; tighter medallion viewBox with safe margins and a small downward optical nudge; forced for `event.festival=80 историй о главном` |
 | Фестиваль «Кантата» | `kantata-festival` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | official Tilda PNG wordmark `КАНТАТА`; WebP-first because source is raster |
@@ -128,7 +185,7 @@ Asset inventory:
 
 - runtime optimized assets: `site/public/assets/organizers/`; primary organizer assets are SVG except explicit raster exceptions;
 - source originals + provenance README: `site/src/assets/organizers/source/`;
-- browser-facing manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`.
+- browser-facing organizer manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`; festival/venue-brand logo manifest: `site/src/data/festivalMedallions.json` with runtime assets in `site/public/assets/festivals/`.
 
 2026-07-02 SVG pass:
 
@@ -137,11 +194,82 @@ Asset inventory:
 - `tretyakovka-kaliningrad` is reconstructed as simple SVG primitives from the geometric Telegram avatar;
 - `dom-kitoboya` is intentionally not SVG because no source SVG was found (`logo.svg` candidates returned 404); it is WebP-first with PNG fallback;
 - `konb` is intentionally unchanged as the explicit raster exception for this pass;
-- `act-opus` is updated to a self-contained SVG medallion that stacks the official `АКТ` / `ОПУС` wordmark instead of using the octopus symbol, with the `АКТ` crop safely inset inside the circle;
+- `act-opus` keeps the accepted stacked `АКТ` / `ОПУС` composition from the official raster wordmark, but runtime is now WebP-primary with PNG fallback instead of an SVG container embedding raster pixels;
 - `znanie-russia` is updated to the official blue `#0501D0` full circle with the internal `З` kept white, scaled larger, browser-rendered via a root-clipped group, optically centered and clipped by the lower circle edge;
 - `kgd80` is added as an SVG festival medallion from the «80 историй о главном» hero logo, using a tighter lockup viewBox plus a small downward optical nudge for fuller circular occupancy;
 - `kantata-festival` remains a WebP-first raster medallion because the available official source is PNG;
 - `znanie-russia` is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`, and is also forced by curated policy for `event.festival=80 историй о главном`.
+
+2026-07-03 festival/Bahosluzhenie pass:
+
+- the medallion workflow is now captured as the project skill `.codex/skills/static-event-medallions/SKILL.md`; this skill must be read before new static-site medallion work;
+- recent parallel/dirty festival assets were consolidated into `site/src/data/festivalMedallions.json`, `site/public/assets/festivals/` and `site/src/assets/festivals/source/`;
+- `bahosluzhenie` is source-first, using the official festival logo from the Kaliningrad Philharmonic page (`/assets/festivals/bahosluzhenie.webp`, PNG fallback), not an invented organizer mark;
+- it renders for `event.festival=Бахослужение`; if a future Bach/organ event lacks the festival field, a narrow fallback may show the same official asset only when the text contains Bach evidence plus organ/Cathedral context;
+- broader composer/program classification remains an LLM-first future enrichment path, not a regex-only semantic classifier.
+
+
+2026-07-03 venue gap pass:
+
+- production venue-gap analysis on 2026-07-03 found recurring/future-heavy venues without organizer medallions; the first venue batch adds 13 source-grounded venue medallions plus a geometry repair for `tretyakovka-kaliningrad`;
+- source choice followed the medallion workflow: official SVG/PNG first, public Telegram avatar when the official site did not expose a clean static logo, and a neutral initials badge only for `bar-bastion` because a clean public logo was not extractable without authenticated VK access;
+- `tretyakovka-kaliningrad` now uses one clean non-overlapping SVG path for the gold `Т`, removing the visible stepped/stair artifact from the previous overlapping-rect reconstruction.
+
+| Slug | Venue/source | Runtime asset | Source / method |
+| --- | --- | --- | --- |
+| `yantar-hall` | Янтарь холл | `/assets/organizers/yantar-hall.svg` | official square YH SVG from `янтарьхолл.рф`; alias includes `Янтарь холл, Ленина 11, Светлогорск` |
+| `dramteatr39` | Калининградский драматический театр | `/assets/organizers/dramteatr39.svg` | official `dramteatr39.ru/img/logo.svg`, scaled/cropped to the left emblem |
+| `muzteatr39` | Калининградский музыкальный театр | `/assets/organizers/muzteatr39.webp` (`.png` fallback) | official square PNG, WebP-primary raster medallion, no tracing |
+| `dom-iskusstv` | Театр эстрады / Дом искусств | `/assets/organizers/dom-iskusstv.svg` | official Tilda SVG wordmark from `домискусств39.рф` |
+| `city-jazz-club` | Калининград Сити Джаз Клуб | `/assets/organizers/city-jazz-club.webp` (`.png` fallback) | official low-res `logojazz.png` from `londonpub.ru/cityjazz/events`; WebP-first source-faithful crop after manual SVG redraw was rejected as logo distortion |
+| `rostec-arena` | Ростех Арена | `/assets/organizers/rostec-arena.svg` | official site SVG `/theme/src/logo.svg` wrapped into the medallion; no Telegram-avatar redraw |
+| `bar-bastion` | Бар Бастион | `/assets/organizers/bar-bastion.webp` (`.png` fallback) | public VK avatar extracted on 2026-07-04; inner avatar mask and ring-on-top repair remove broken-circle artifacts |
+| `signal` | Сигнал | `/assets/organizers/signal.webp` (`.png` fallback) | official Telegram/Timepad oval logo preserved as WebP-first raster; previous typeset SVG was rejected because it lost the oval and shifted the caption |
+| `mumod` | Музей курортной моды | `/assets/organizers/mumod.svg` | official SVG from `mumod.ru` |
+| `kldzoo` | Калининградский зоопарк | `/assets/organizers/kldzoo.webp` (`.png` fallback) | official square PNG from `kldzoo.ru`, enlarged and WebP-primary |
+| `locostandup` | Стендап-клуб «Локация» | `/assets/organizers/locostandup.svg` | official vector wordmark from `locostandup.ru`; medallion wrapper no longer adds a non-logo subtitle |
+| `kaliningrad-art-museum` | Калининградский музей изобразительных искусств | `/assets/organizers/kaliningrad-art-museum.svg` | official inline SVG mark on brand burgundy `#871B30`, with readable `МУЗЕЙ ИСКУССТВ` label instead of the rejected abbreviation `ИЗО` |
+| `brachert` | Дом-музей Германа Брахерта | `/assets/organizers/brachert.webp` (`.png` fallback) | official PNG from `hbrachert.ru`, WebP-primary raster medallion |
+| `ruin-keepers` | Хранители руин | `/assets/organizers/ruin-keepers.webp` (`.png` fallback) | official 1-bit PNG logo from `ruin-keepers.ru`, WebP-first after manual SVG silhouettes were rejected as non-source-faithful |
+
+2026-07-04 venue visual tuning pass:
+
+- `rostec-arena` was switched from a Telegram-avatar approximation to the official site SVG lockup;
+- `signal`, `locostandup`, `city-jazz-club`, `kaliningrad-art-museum` and `ruin-keepers` were reworked after critical QA/Gemini feedback: Signal loses the rectangular card, Location uses the official vector wordmark, City Jazz becomes vector, the Art Museum uses official burgundy `#871B30`, and Ruin Keepers uses a clean manual SVG reconstruction after the traced PNG vectorization was rejected on QA;
+- `bar-bastion` keeps the public VK avatar but masks the image before drawing the gold ring, so the circle no longer breaks;
+- `mumod`, `kldzoo` and earlier `kaliningrad-art-museum` sizing fixes remain from the preceding visual tuning pass;
+- runtime contract was tightened: raster/non-vector medallions in organizer/festival manifests are served as WebP primary with PNG fallback, while SVG runtime is reserved for true vector/manual-vector/official-SVG marks.
+
+
+2026-07-04 source-faithfulness rereview:
+
+- `city-jazz-club`, `signal` and `ruin-keepers` were switched from overconfident manual SVG redraws to WebP-first source-faithful medallions with PNG fallback: the manual SVGs distorted or redesigned the official logos.
+- `locostandup` keeps the official site SVG wordmark; the added contextual `СТЕНДАП-КЛУБ` subtitle was removed from the artwork.
+- `kaliningrad-art-museum` keeps the official burgundy/mark but no longer writes the rejected abbreviation `ИЗО`; the visible text is a readable `МУЗЕЙ ИСКУССТВ` label arranged inside the circle.
+
+### Festival logo medallions
+
+The static-site medallions lab shows festival-logo medallions when a clean official logo/wordmark exists. Event detail pages also render these source-grounded festival/venue-brand medallions when `event.festival`, title, venue or a narrow fallback maps to a manifest item; unmatched festivals still fall back to the existing text pill.
+
+Initial 2026 festival set added on 2026-07-03 and expanded after official-site/social-avatar review:
+
+| Slug | Type | Festival/source | Runtime asset | Source |
+| --- | --- | --- | --- | --- |
+| `kgd80-80-stories` | festival | 80 историй о главном | `/assets/festivals/kgd80-80-stories.svg` | https://kgd80.ru/shared-assets/logo-80-istorii-hero.svg |
+| `kaliningrad-city-jazz` | festival | Kaliningrad City Jazz | `/assets/festivals/kaliningrad-city-jazz.webp` | https://t.me/jazzfestivalru (public Telegram avatar, retrieved 2026-07-03) |
+| `kaliningrad-street-food` | festival | Городской пикник Kaliningrad Street Food | `/assets/festivals/kaliningrad-street-food.svg` | https://static.tildacdn.com/tild6634-6663-4633-b138-333363653339/LOGO_black_main.svg |
+| `grozd-festival` | festival | Гроздь | `/assets/festivals/grozd-festival.svg` | https://static.tildacdn.com/tild3438-3966-4661-b131-613566643434/Layer_13.svg |
+| `koroche` | festival | Короче | `/assets/festivals/koroche.webp` | https://static.tildacdn.com/tild3861-3461-4363-b136-666532343734/__2023-07-19__012939.png |
+| `ostrova` | festival | Семейно-музейный фестиваль «Острова» | `/assets/festivals/ostrova.webp` | https://static.tildacdn.com/tild6330-6433-4135-b532-343738366262/__2.png |
+| `more-vnutri` | festival | Море внутри | `/assets/festivals/more-vnutri.svg` | https://sea-inside.ru/assets/logo.svg |
+| `simfoniya-vetra` | festival | Симфония ветра | `/assets/festivals/simfoniya-vetra.webp` | https://xn--80awafglm0a6dza.xn--p1ai/bitrix/templates/yh/assets/images/bkf.svg |
+| `bahosluzhenie` | festival | Бахослужение | `/assets/festivals/bahosluzhenie.webp` | https://filarmonia39.ru/upload/iblock/aae/6dk15dbws94827t8588xmjl2jnvmkd42.png |
+| `tolkin-fest` | festival | Толкин Фест | `/assets/festivals/tolkin-fest.webp` | https://static.tildacdn.com/tild3132-6135-4666-a466-613662666530/photo.png |
+| `kaup` | venue_brand | Кауп | `/assets/festivals/kaup.svg` | https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg |
+
+Kaup is intentionally classified as `venue_brand`: the system treats it as the location/brand `Поселение викингов Кауп`, not as a festival-only entity. Its asset is available for Kaup-hosted festival events that do not have a separate clean festival logo.
+
+Source originals and provenance live in `site/src/assets/festivals/source/`; browser-facing manifest is `site/src/data/festivalMedallions.json`. Raster festival medallions are WebP-primary with PNG fallback. Covers/posters are intentionally excluded unless a clean logo/cutout or a clean public social avatar can be extracted with separate visual QA. Telegram avatars were checked for City Jazz, Короче, Острова and Море внутри; VK public/mobile pages often did not expose usable festival-specific avatars.
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
 
