@@ -7,10 +7,12 @@ const canonicalUrl = absoluteUrl('/lab/event-desktop/');
 const title = `Desktop OCR / non-OCR lab | ${SITE_NAME}`;
 const description = 'Desktop-only сравнение Editorial Slab, Split Canvas, Gallery Exhibition и Typographic Lead на реальных событиях: свободный crop без OCR и лимит crop 20% для OCR.';
 const fullExamples = [
-  ['pianissimo-editorial', 'Editorial · landscape', 'Полная страница: hero → описание → feedback → gallery → practical → related.'],
-  ['tapiau-split-transport', 'Split · portrait + transport', 'Sticky media, длинный текст, future transport slot и гарантированный release.'],
-  ['magomaev-ocr-gallery', 'Gallery · OCR', 'Contain-постер, длинный H1 и полный скролл до похожих событий.'],
-  ['b413-semantic-primary-gate', 'Semantic primary gate', 'Контрпример: landscape есть, но геометрия не должна подменять смысл hero.'],
+  ['editorial-photo', 'Editorial Slab · без OCR', 'Широкое фото, видимый in-hero media rail, параллакс и fullscreen viewer.'],
+  ['editorial-ocr', 'Editorial Slab · OCR', 'Согласованная adjacent-slab геометрия, contain и fullscreen viewer без параллакса.'],
+  ['split-photo', 'Split Canvas · без OCR', 'Согласованный bounded 55/45 split с фото-параллаксом.'],
+  ['split-ocr', 'Split Canvas · OCR', 'Ratio-aware media-колонка и только измеренный safe-cover ≤20%.'],
+  ['gallery-photo', 'Gallery Exhibition · без OCR', 'Вертикальное фото занимает до 48% ширины, текст и действия остаются справа.'],
+  ['gallery-ocr', 'Gallery Exhibition · OCR', 'OCR-постер, длинный H1, дорога в Светлогорск и полный scroll-flow.'],
 ];
 
 const photoSamples = {
@@ -139,7 +141,7 @@ const candidates = [
           </div>
 
           <p class="desktop-lab__source">Источник desktop-разрешений: <a href="https://store.steampowered.com/hwsurvey/?platform=pc" rel="noreferrer">Steam Hardware &amp; Software Survey, June 2026</a>. Это не аналитика аудитории сайта, а практическая матрица QA; экстремально короткие viewport добавлены отдельно.</p>
-          <div class="desktop-lab__full-examples" aria-label="Полные прототипы реальных событий">
+          <div class="desktop-lab__full-examples" aria-label="Чистые страницы реальных событий">
             {fullExamples.map(([slug, label, note]) => (
               <a href={withBase(`/lab/event-desktop/examples/${slug}/`)}>
                 <strong>{label}</strong><span>{note}</span>

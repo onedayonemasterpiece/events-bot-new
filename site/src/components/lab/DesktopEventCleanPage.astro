@@ -1,0 +1,514 @@
+---
+import Icon from '../Icon.astro';
+import CalendarLink from '../CalendarLink.astro';
+import EventCard from '../EventCard.astro';
+import EventTokenMedallions from '../EventTokenMedallions.astro';
+import type { EventImageAsset, PreviewEvent } from '../../lib/types';
+import {
+  displayDate,
+  displayDateTime,
+  displayWeekdayLong,
+  eventAbsoluteUrl,
+  eventActionHref,
+  eventAdmissionLabel,
+  eventTicketActionLabel,
+  isCalendarEligible,
+  isExternalHttpUrl,
+  isTelephoneUrl,
+  isTicketSoldOut,
+  withBase,
+} from '../../lib/events';
+import { eventImageUrl } from '../../lib/assets';
+
+type Candidate = 'editorial' | 'split' | 'gallery';
+type MediaPolicy = 'non-ocr' | 'ocr';
+
+interface Props {
+  event: PreviewEvent;
+  related: PreviewEvent[];
+  candidate: Candidate;
+  mediaPolicy: MediaPolicy;
+  transport?: boolean;
+  heroImageIndex?: number;
+  editorialRail?: boolean;
+  ocrSafeCover?: boolean;
+}
+
+type GalleryImage = {
+  src: string;
+  alt: string;
+  image_text_mode: EventImageAsset['image_text_mode'];
+  width?: number;
+  height?: number;
+  position?: string;
+};
+
+const {
+  event,
+  related,
+  candidate,
+  mediaPolicy,
+  transport = false,
+  heroImageIndex = 0,
+  editorialRail = candidate === 'editorial' && mediaPolicy === 'non-ocr',
+  ocrSafeCover = false,
+} = Astro.props;
+const isOcr = mediaPolicy === 'ocr';
+const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
+const rawAssets = event.image_assets || [];
+const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
+const preferredUrl = eventImageUrl(preferredAsset?.src || event.image_url) || preferredAsset?.src || event.image_url || '';
+const preferredWidth = preferredAsset?.width || 1600;
+const preferredHeight = preferredAsset?.height || 1000;
+const ratio = preferredWidth / preferredHeight;
+const preferredPosition = preferredAsset?.recommended_object_position || event.image_object_position || '50% 50%';
+
+const galleryImages = (() => {
+  const out: GalleryImage[] = [];
+  const seen = new Set<string>();
+  const add = (asset: EventImageAsset | null | undefined, fallbackMode: PreviewEvent['image_text_mode']) => {
+    const src = eventImageUrl(asset?.src) || asset?.src || '';
+    if (!src || seen.has(src) || src.includes('files.catbox.moe')) return;
+    seen.add(src);
+    out.push({
+      src,
+      alt: asset?.alt || heroAlt,
+      image_text_mode: asset?.image_text_mode || fallbackMode || 'unknown',
+      width: asset?.width,
+      height: asset?.height,
+      position: asset?.recommended_object_position,
+    });
+  };
+  if (preferredAsset) add(preferredAsset, event.image_text_mode);
+  else if (event.image_url) {
+    const src = eventImageUrl(event.image_url) || event.image_url;
+    seen.add(src);
+    out.push({ src, alt: heroAlt, image_text_mode: event.image_text_mode, width: preferredWidth, height: preferredHeight });
+  }
+  rawAssets.forEach((asset) => add(asset, event.image_text_mode));
+  return out.slice(0, 12);
+})();
+const galleryId = `clean-hero-gallery-${event.id}`;
+const galleryTitleId = `${galleryId}-title`;
+const photoCount = galleryImages.length;
+const railImages = galleryImages.slice(0, 5);
+
+const dateLabel = displayDate(event);
+const weekdayLabel = displayWeekdayLong(event);
+const dateTimeLabel = displayDateTime(event);
+const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
+const addressLabel = event.address || event.city || 'Адрес уточняется';
+const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
+const ctaHref = eventActionHref(event);
+const ctaIsExternal = isExternalHttpUrl(ctaHref);
+const ctaIsTelephone = isTelephoneUrl(ctaHref);
+const soldOut = isTicketSoldOut(event);
+const canAddToCalendar = isCalendarEligible(event);
+const requiresExplicitBooking = event.ticket.kind === 'registration' || event.ticket.kind === 'phone';
+const calendarPrimary = canAddToCalendar && (!ctaHref || (event.ticket.is_free && !requiresExplicitBooking));
+const ctaLabel = !event.ticket.is_free && !event.ticket.price_label && ctaHref ? 'Билеты' : eventTicketActionLabel(event);
+const canonicalUrl = eventAbsoluteUrl(event);
+const likesCount = event.likes_count || 0;
+const sharesCount = event.shares_count || 0;
+const shareText = [event.title, dateTimeLabel, placeLabel, eventAdmissionLabel(event)].filter(Boolean).join('\n');
+const shareImageType = preferredUrl.toLowerCase().includes('.webp') ? 'image/webp' : preferredUrl.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
+const shareFileName = `kenigevents-${event.slug}`;
+---
+
+<main
+  class:list={['desktop-clean-event', `desktop-clean-event--${candidate}`, `desktop-clean-event--${mediaPolicy}`]}
+  data-desktop-clean-event
+  data-desktop-family={candidate}
+  data-media-policy={mediaPolicy}
+  data-event-id={event.id}
+  style={`--image-ratio:${ratio};--image-position:${preferredPosition};`}
+>
+  <article class:list={['desktop-prototype', 'desktop-prototype--clean', `desktop-prototype--${candidate}`, `desktop-prototype--${mediaPolicy}`]} data-clean-hero>
+    <div class="desktop-prototype__canvas">
+      <section class="desktop-prototype__stage" aria-labelledby={`clean-event-title-${event.id}`}>
+        <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={isOcr ? undefined : ''}>
+          {preferredUrl && (
+            <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
+              <img
+                class="desktop-prototype__media-image"
+                data-clean-hero-image
+                src={preferredUrl}
+                alt={heroAlt}
+                width={preferredWidth}
+                height={preferredHeight}
+                fetchpriority="high"
+                decoding="async"
+              />
+            </button>
+          )}
+          {photoCount > 0 && (
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}>
+              <Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span>
+            </button>
+          )}
+          {editorialRail && railImages.length > 1 && (
+            <div class="desktop-prototype__media-rail" aria-label="Выбрать фотографию в hero">
+              {railImages.map((image, index) => (
+                <button
+                  type="button"
+                  class:list={[index === 0 && 'is-current']}
+                  data-clean-hero-thumb
+                  data-src={image.src}
+                  data-alt={image.alt}
+                  data-mode={image.image_text_mode}
+                  aria-pressed={index === 0 ? 'true' : 'false'}
+                  aria-label={`Показать фото ${index + 1} из ${railImages.length}`}
+                >
+                  <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
+                </button>
+              ))}
+            </div>
+          )}
+        </figure>
+
+        <div class="desktop-prototype__info" data-title-panel>
+          <p class="desktop-prototype__kicker">
+            <span>{event.event_type || 'событие'}</span>
+            <time datetime={event.starts_at || event.start_date}>
+              <strong>{dateLabel}</strong>
+              {weekdayLabel && <b>{weekdayLabel}</b>}
+              {event.display_time && <strong>{event.display_time}</strong>}
+            </time>
+          </p>
+          <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
+          <p class="desktop-prototype__place">
+            <Icon name="pin" />
+            <span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span>
+          </p>
+          <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
+        </div>
+
+        <aside class="desktop-prototype__action" data-feedback-scope aria-label="Действия события">
+          <p><span>вход</span><strong>{admissionLabel}</strong></p>
+          {calendarPrimary ? (
+            <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+          ) : ctaHref ? (
+            <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
+              <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
+            </a>
+          ) : soldOut ? (
+            <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
+          ) : canAddToCalendar ? (
+            <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+          ) : (
+            <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
+          )}
+          <div class="desktop-prototype__action-row event-hero__metric-row">
+            {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
+            <button
+              type="button"
+              class="desktop-prototype__icon-action"
+              data-nosnippet
+              data-native-share
+              data-share-event-id={event.id}
+              data-share-event-title={event.title}
+              data-share-base-count={sharesCount}
+              data-share-title={event.title}
+              data-share-text={shareText}
+              data-share-url={canonicalUrl}
+              data-share-image={preferredUrl}
+              data-share-image-type={shareImageType}
+              data-share-file-name={shareFileName}
+              data-share-date-time={dateTimeLabel}
+              data-share-place={placeLabel}
+              data-share-admission={admissionLabel}
+              aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}
+              title="Поделиться"
+            ><Icon name="share" /><strong data-share-count>{sharesCount}</strong></button>
+            <button
+              type="button"
+              class="desktop-prototype__icon-action feedback-button--like"
+              data-nosnippet
+              data-feedback-action="like"
+              data-event-id={event.id}
+              data-event-title={event.title}
+              data-base-count={likesCount}
+              aria-pressed="false"
+              aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`}
+              title="Нравится"
+            ><Icon name="heart" /><strong data-feedback-count>{likesCount}</strong></button>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </article>
+
+  <section class="desktop-clean-story page-shell" aria-labelledby={`about-${event.id}`}>
+    <article class="desktop-clean-description">
+      <p class="eyebrow">О событии</p>
+      <h2 id={`about-${event.id}`}>{event.summary || event.title}</h2>
+      <div class="desktop-clean-description__text prose" set:html={event.description_html} />
+    </article>
+    <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
+      <span class="desktop-clean-feedback__icon"><Icon name="spark" /></span>
+      <div>
+        <p class="eyebrow">Что говорят</p>
+        <h2 id={`feedback-${event.id}`}>Общего вывода пока нет</h2>
+        <p>Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.</p>
+      </div>
+    </aside>
+  </section>
+
+  <section class="desktop-clean-practical page-shell" aria-labelledby={`practical-${event.id}`}>
+    <p class="eyebrow">Перед посещением</p>
+    <h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
+    <div class="desktop-clean-practical__grid">
+      <article><Icon name="calendar" /><span>Когда</span><strong>{dateTimeLabel}</strong></article>
+      <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
+      <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
+    </div>
+  </section>
+
+  {transport && event.city && event.city !== 'Калининград' && (
+    <section class="desktop-clean-travel page-shell" aria-labelledby={`travel-${event.id}`}>
+      <div>
+        <p class="eyebrow">Как добраться</p>
+        <h2 id={`travel-${event.id}`}>Калининград → {event.city}</h2>
+        <p>Расписание пока уточняется. Проверьте время отправления перед поездкой.</p>
+      </div>
+      <div class="desktop-clean-travel__route" aria-label={`Маршрут Калининград — ${event.city}`}>
+        <span>Калининград</span><i></i><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3l2 3h-2.3l-1.4-2H8.7l-1.4 2H5l2-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Zm0 2a1 1 0 0 0-1 1v5h12V6a1 1 0 0 0-1-1H7Zm1 8a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg> электричка · автобус</b><i></i><span>{event.city}</span>
+      </div>
+    </section>
+  )}
+
+  <section class="desktop-clean-related" data-related-start aria-labelledby={`related-${event.id}`}>
+    <div class="page-shell">
+      <header>
+        <p class="eyebrow">Продолжить выбор</p>
+        <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
+      </header>
+      <div class="cards-grid cards-grid--immersive desktop-clean-related__grid">
+        {related.map((item) => <EventCard event={item} variant="split-actions" />)}
+      </div>
+    </div>
+  </section>
+
+  {photoCount > 0 && (
+    <div class="hero-gallery" id={galleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
+      <div class="hero-gallery__chrome" aria-hidden="true"></div>
+      <div class="hero-gallery__topbar">
+        <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы"><span>Полюбить Калининград</span><strong>Анонсы</strong></a>
+        <h2 id={galleryTitleId} class="sr-only">Фото события: {event.title}</h2>
+        <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
+      </div>
+      <div class="hero-gallery__viewport">
+        <div class="hero-gallery__track" data-hero-gallery-track>
+          {galleryImages.map((image, index) => (
+            <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} aria-hidden={index === 0 ? 'false' : 'true'}>
+              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
+              <figcaption class="sr-only">Фото события: {event.title}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+      <div class="hero-gallery__caption" aria-hidden="true"><span>Фото события</span><strong>{event.title}</strong></div>
+      {photoCount > 1 && <><button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button><button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото">›</button></>}
+      <div class="hero-gallery__counter" data-hero-gallery-counter>{`1 / ${photoCount}`}</div>
+    </div>
+  )}
+
+  <script>
+    const cleanRoot = document.querySelector<HTMLElement>('[data-desktop-clean-event]');
+    if (cleanRoot) {
+      document.body.classList.add('desktop-clean-event-page');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      let frame = 0;
+      const updateParallax = () => {
+        frame = 0;
+        cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-parallax]').forEach((media) => {
+          if (reducedMotion.matches) {
+            media.style.setProperty('--desktop-parallax-y', '0px');
+            return;
+          }
+          const rect = media.getBoundingClientRect();
+          const viewport = window.innerHeight || 800;
+          const progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(1, viewport + rect.height)));
+          media.style.setProperty('--desktop-parallax-y', `${(-48 + progress * 96).toFixed(1)}px`);
+        });
+      };
+      const scheduleParallax = () => {
+        if (frame) return;
+        frame = window.requestAnimationFrame(updateParallax);
+      };
+      updateParallax();
+      window.addEventListener('scroll', scheduleParallax, { passive: true });
+      window.addEventListener('resize', scheduleParallax, { passive: true });
+      reducedMotion.addEventListener?.('change', scheduleParallax);
+
+      const updateOcrFrame = () => {
+        if (cleanRoot.dataset.mediaPolicy !== 'ocr') return;
+        const frame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
+        const image = frame?.querySelector<HTMLImageElement>('[data-clean-hero-image]');
+        if (!frame || !image) return;
+        const imageWidth = image.naturalWidth || Number(image.getAttribute('width'));
+        const imageHeight = image.naturalHeight || Number(image.getAttribute('height'));
+        if (!frame.clientWidth || !frame.clientHeight || !imageWidth || !imageHeight) return;
+        const scale = Math.max(frame.clientWidth / imageWidth, frame.clientHeight / imageHeight);
+        const visibleFraction = (frame.clientWidth * frame.clientHeight) / (imageWidth * imageHeight * scale * scale);
+        const potentialCrop = Math.max(0, Math.min(1, 1 - visibleFraction));
+        const safeCover = frame.dataset.ocrSafeCover === 'true' && potentialCrop <= .2;
+        cleanRoot.classList.toggle('is-safe-cover', safeCover);
+        cleanRoot.classList.toggle('is-safe-contain', !safeCover);
+        cleanRoot.dataset.potentialCoverCrop = potentialCrop.toFixed(4);
+        cleanRoot.dataset.measuredCrop = safeCover ? potentialCrop.toFixed(4) : '0.0000';
+      };
+      const ocrImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
+      if (ocrImage && !ocrImage.complete) ocrImage.addEventListener('load', updateOcrFrame, { once:true });
+      updateOcrFrame();
+      window.addEventListener('resize', updateOcrFrame, { passive:true });
+
+      cleanRoot.querySelectorAll<HTMLButtonElement>('[data-clean-hero-thumb]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const image = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
+          if (!image || !button.dataset.src) return;
+          image.src = button.dataset.src;
+          image.alt = button.dataset.alt || image.alt;
+          cleanRoot.querySelectorAll('[data-clean-hero-thumb]').forEach((item) => item.setAttribute('aria-pressed', item === button ? 'true' : 'false'));
+          cleanRoot.querySelectorAll('[data-clean-hero-thumb]').forEach((item) => item.classList.toggle('is-current', item === button));
+        });
+      });
+    }
+  </script>
+</main>
+
+<style>
+  .desktop-clean-event { --clean-ink:#241c17; --clean-paper:#fffaf2; --clean-accent:#b54d22; display:none; padding-top:0; color:var(--clean-ink); background:#f8f0e5; }
+  .desktop-prototype { display:grid; }
+  .desktop-prototype__canvas { overflow:clip; background:var(--clean-paper); }
+  .desktop-prototype__stage { --stage-height:clamp(560px,calc(100svh - 88px),800px); position:relative; min-height:var(--stage-height); height:var(--stage-height); overflow:hidden; background:#eadfce; }
+  .desktop-prototype__media { position:relative; margin:0; overflow:hidden; background:#e6d9c7; }
+  .desktop-prototype__media-opener { width:100%; height:100%; display:block; padding:0; border:0; background:transparent; cursor:zoom-in; }
+  .desktop-prototype__media-image { width:100%; height:100%; display:block; object-position:var(--image-position); }
+  .desktop-prototype--non-ocr .desktop-prototype__media-image { object-fit:cover; }
+  .desktop-prototype--ocr .desktop-prototype__media-image { object-fit:contain; }
+  .desktop-clean-event--ocr.is-safe-cover .desktop-prototype__media-image { object-fit:cover; }
+  .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { height:calc(100% + 112px); margin-top:-56px; transform:translate3d(0,var(--desktop-parallax-y,0),0) scale(1.025); will-change:transform; }
+  .desktop-prototype__info { z-index:2; display:grid; align-content:start; gap:clamp(.62rem,1.5vh,1rem); color:var(--clean-ink); }
+  .desktop-prototype__kicker { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:.35rem .85rem; margin:0; color:#91401d; font-size:clamp(.7rem,1.25vw,.82rem); font-weight:900; letter-spacing:.07em; text-transform:uppercase; }
+  .desktop-prototype__kicker time { display:flex; align-items:baseline; gap:.65rem; color:inherit; font-variant-numeric:tabular-nums; }
+  .desktop-prototype__kicker time strong { font-size:clamp(.9rem,1.5vw,1.18rem); }
+  .desktop-prototype__kicker time b { color:#7b6b5e; }
+  .desktop-prototype__info h1 { max-width:17ch; margin:0; font-size:clamp(2rem,min(3.7vw,6.2vh),4.55rem); line-height:.96; letter-spacing:-.055em; overflow-wrap:anywhere; }
+  .desktop-prototype__place { display:grid; grid-template-columns:1.35rem minmax(0,1fr); gap:.6rem; margin:0; }
+  .desktop-prototype__place :global(.icon) { width:1.3rem; height:1.3rem; color:#a54821; }
+  .desktop-prototype__place span { display:grid; gap:.06rem; }
+  .desktop-prototype__place strong { font-size:clamp(.88rem,1.4vw,1.02rem); }
+  .desktop-prototype__place small { color:#72645b; font-size:.8rem; font-weight:680; }
+  .desktop-prototype__medallions { min-height:0; overflow:hidden; }
+  .desktop-prototype__medallions :global(.event-token-section) { margin:0; }
+  .desktop-prototype__medallions :global(.event-token-row) { gap:.55rem; overflow:hidden; padding:.1rem 0; }
+  .desktop-prototype__medallions :global(.event-token--organizer),
+  .desktop-prototype__medallions :global(.event-token--festival),
+  .desktop-prototype__medallions :global(.event-token--source),
+  .desktop-prototype__medallions :global(.event-token--program),
+  .desktop-prototype__medallions :global(.event-token--pushkin) { --token-size:clamp(72px,7vw,94px); }
+  .desktop-prototype__action { z-index:3; display:grid; align-content:start; gap:clamp(.65rem,1.6vh,1rem); padding:clamp(1rem,2.2vw,1.4rem); color:#fffaf2; background:#292521; }
+  .desktop-prototype__action>p { display:grid; gap:.06rem; margin:0; }
+  .desktop-prototype__action>p span { color:#d7c9bc; font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+  .desktop-prototype__action>p strong { font-size:clamp(1.1rem,2vw,1.42rem); line-height:1.05; }
+  :global(.desktop-prototype__primary-action) { min-height:56px; display:inline-flex; align-items:center; justify-content:center; gap:.62rem; padding:.7rem .9rem; border-radius:18px; background:var(--clean-accent); color:#fff; font-size:.98rem; font-weight:900; text-decoration:none; box-shadow:0 12px 24px rgba(124,49,20,.25); }
+  :global(.desktop-prototype__primary-action .icon) { width:1.5rem; height:1.5rem; }
+  :global(.desktop-prototype__primary-action.is-disabled) { opacity:.7; }
+  .desktop-prototype__action-row { display:flex; gap:.45rem; }
+  :global(.desktop-prototype__icon-action) { min-width:52px; min-height:52px; display:inline-flex; align-items:center; justify-content:center; gap:.28rem; padding:.3rem; border:0; border-radius:14px; background:rgba(255,255,255,.08); color:#fffaf2; font:inherit; text-decoration:none; cursor:pointer; }
+  :global(.desktop-prototype__icon-action .icon) { width:29px; height:29px; }
+  :global(.desktop-prototype__icon-action strong) { font-size:.92rem; font-variant-numeric:tabular-nums; }
+  .desktop-prototype__photo-count { position:absolute; z-index:4; top:1rem; right:1rem; min-height:46px; display:inline-flex; align-items:center; gap:.45rem; padding:.5rem .75rem; border:1px solid rgba(255,255,255,.55); border-radius:999px; background:rgba(35,30,26,.8); color:#fff; font:inherit; font-weight:850; cursor:zoom-in; }
+  .desktop-prototype__photo-count :global(.icon) { width:1.25rem; height:1.25rem; }
+  .desktop-prototype__media-rail { position:absolute; z-index:4; right:1rem; bottom:calc(25% + .8rem); display:flex; gap:.45rem; padding:.45rem; border-radius:16px; background:rgba(31,27,24,.78); }
+  .desktop-prototype__media-rail button { width:68px; height:48px; padding:0; overflow:hidden; border:2px solid transparent; border-radius:10px; background:#2b2724; cursor:pointer; }
+  .desktop-prototype__media-rail button.is-current { border-color:#fff; }
+  .desktop-prototype__media-rail img { width:100%; height:100%; display:block; object-fit:cover; }
+
+  .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__media { position:absolute; inset:0 0 25%; }
+  .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__info { position:absolute; left:3%; bottom:0; width:min(64%,820px); min-height:43%; padding:clamp(1.3rem,2.5vw,2.2rem); background:var(--clean-paper); box-shadow:0 -12px 42px rgba(47,33,23,.13); }
+  .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__action { position:absolute; right:3%; bottom:3%; width:min(28%,330px); border-radius:22px; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__stage { display:grid; grid-template-columns:minmax(0,59%) minmax(390px,41%); grid-template-rows:minmax(0,1fr); background:#d8c9b5; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__media { grid-column:1; grid-row:1; height:100%; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__info { grid-column:2; grid-row:1; margin:3% 0 0 -2rem; padding:clamp(1.4rem,2.5vw,2.3rem) clamp(1.4rem,2.5vw,2.3rem) 12rem; background:var(--clean-paper); box-shadow:-18px 18px 48px rgba(55,37,24,.15); }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__info h1 { font-size:clamp(1.85rem,min(3.15vw,5.6vh),3.8rem); }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__action { grid-column:2; grid-row:1; align-self:end; grid-template-columns:minmax(90px,auto) minmax(170px,1fr); margin-left:-2rem; }
+  .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__action-row { grid-column:1/-1; }
+
+  .desktop-prototype--split .desktop-prototype__stage { display:grid; grid-template-rows:minmax(0,1fr) auto; background:var(--clean-paper); }
+  .desktop-prototype--split.desktop-prototype--non-ocr .desktop-prototype__stage { grid-template-columns:55% 45%; }
+  .desktop-prototype--split.desktop-prototype--ocr .desktop-prototype__stage { grid-template-columns:min(52%,calc(var(--stage-height) * var(--image-ratio))) minmax(0,1fr); }
+  .desktop-prototype--split .desktop-prototype__media { grid-column:1; grid-row:1/span 2; min-height:0; height:auto; align-self:stretch; }
+  .desktop-prototype--split .desktop-prototype__info { grid-column:2; grid-row:1; min-height:0; padding:clamp(1.3rem,3vw,3rem) clamp(1.25rem,3vw,3rem) 1rem; }
+  .desktop-prototype--split .desktop-prototype__info h1 { font-size:clamp(2rem,min(3.45vw,6vh),4.1rem); }
+  .desktop-prototype--split .desktop-prototype__action { grid-column:2; grid-row:2; margin:0 clamp(1.25rem,3vw,3rem) clamp(1.25rem,3vw,3rem); border-radius:22px; }
+
+  .desktop-prototype--gallery .desktop-prototype__stage { display:grid; grid-template-columns:min(48%,calc((var(--stage-height) - 3rem) * var(--image-ratio))) minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:1.5rem; padding:1.5rem; background:#e9dece; }
+  .desktop-prototype--gallery .desktop-prototype__media { grid-column:1; grid-row:1; height:calc(var(--stage-height) - 3rem); box-shadow:0 18px 42px rgba(53,37,25,.17); }
+  .desktop-prototype--gallery .desktop-prototype__info { grid-column:2; grid-row:1; align-self:start; padding:1.2rem clamp(1.2rem,2.5vw,2.5rem) 8rem; }
+  .desktop-prototype--gallery .desktop-prototype__info h1 { font-size:clamp(2rem,min(3.1vw,5.1vh),3.6rem); }
+  .desktop-prototype--gallery .desktop-prototype__action { grid-column:2; grid-row:1; grid-template-columns:auto minmax(180px,1fr) auto; align-self:end; align-items:center; margin:0 clamp(1.2rem,2.5vw,2.5rem) clamp(.2rem,1vh,.8rem); border-radius:22px; }
+  .desktop-prototype--gallery .desktop-prototype__action-row { min-width:112px; }
+
+  .desktop-clean-story { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(310px,.75fr); gap:clamp(2rem,5vw,5rem); padding-block:clamp(4rem,8vw,8rem); }
+  .desktop-clean-description { max-width:78ch; }
+  .desktop-clean-description>.eyebrow, .desktop-clean-feedback .eyebrow, .desktop-clean-practical>.eyebrow, .desktop-clean-travel .eyebrow, .desktop-clean-related .eyebrow { margin:0 0 .7rem; color:#a44721; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+  .desktop-clean-description h2, .desktop-clean-feedback h2, .desktop-clean-practical h2, .desktop-clean-travel h2, .desktop-clean-related h2 { margin:0; font-size:clamp(2rem,3.6vw,4.1rem); line-height:1; letter-spacing:-.045em; }
+  .desktop-clean-description__text { margin-top:1.8rem; font-size:clamp(1.05rem,1.25vw,1.22rem); line-height:1.72; }
+  .desktop-clean-feedback { align-self:start; display:grid; grid-template-columns:3rem minmax(0,1fr); gap:1rem; padding:1.6rem; border:1px solid rgba(40,88,82,.2); border-radius:28px; background:#edf3ee; }
+  .desktop-clean-feedback__icon { width:3rem; height:3rem; display:grid; place-items:center; border-radius:50%; background:#285852; color:#fff; }
+  .desktop-clean-feedback__icon :global(.icon) { width:1.45rem; height:1.45rem; }
+  .desktop-clean-feedback h2 { font-size:clamp(1.55rem,2.3vw,2.45rem); }
+  .desktop-clean-feedback p:last-child { margin:.9rem 0 0; color:#61716c; line-height:1.55; }
+  .desktop-clean-practical { padding-bottom:clamp(4rem,7vw,7rem); }
+  .desktop-clean-practical__grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; margin-top:2rem; }
+  .desktop-clean-practical__grid article { min-height:180px; display:grid; grid-template-columns:2rem 1fr; align-content:start; gap:.45rem .8rem; padding:1.4rem; border:1px solid rgba(121,48,20,.14); border-radius:24px; background:#fffaf2; }
+  .desktop-clean-practical__grid :global(.icon) { grid-row:1/span 3; width:1.7rem; height:1.7rem; color:#a54821; }
+  .desktop-clean-practical__grid span { color:#806f62; font-size:.75rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .desktop-clean-practical__grid strong { font-size:1.18rem; line-height:1.25; }
+  .desktop-clean-practical__grid small { color:#73665c; }
+  .desktop-clean-travel { display:grid; grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr); align-items:center; gap:2rem; margin-bottom:clamp(4rem,7vw,7rem); padding:clamp(1.5rem,3vw,2.5rem); border-radius:32px; background:#e4dacb; }
+  .desktop-clean-travel p:last-child { color:#716357; }
+  .desktop-clean-travel__route { min-height:190px; display:grid; grid-template-columns:auto 1fr auto 1fr auto; align-items:center; gap:.75rem; padding:2rem; border-radius:24px; background:#285852; color:#fff; }
+  .desktop-clean-travel__route i { height:2px; background:rgba(255,255,255,.45); }
+  .desktop-clean-travel__route b { display:flex; align-items:center; gap:.45rem; white-space:nowrap; }
+  .desktop-clean-travel__route svg { width:1.4rem; height:1.4rem; fill:currentColor; }
+  .desktop-clean-related { scroll-margin-top:74px; padding-block:clamp(4rem,7vw,7rem); background:#24211f; color:#fffaf2; }
+  .desktop-clean-related header { margin-bottom:2rem; }
+  .desktop-clean-related .eyebrow { color:#dd8a61; }
+  .desktop-clean-related__grid { align-items:stretch; }
+  .desktop-clean-related__grid :global(.event-card) { height:100%; background:#fffaf2; color:#241c17; }
+  .desktop-clean-related__grid :global(.event-card__body) { flex:1; }
+
+  @media (min-width:1024px) {
+    .desktop-clean-event { display:block; }
+    :global(body.desktop-clean-event-page .site-header) { position:sticky; top:0; z-index:60; background:rgba(255,250,242,.97); box-shadow:0 1px 0 rgba(121,48,20,.12); }
+    :global(body.desktop-clean-event-page .site-footer__note) { display:none; }
+  }
+  @media (min-width:1024px) and (max-height:720px) {
+    .desktop-prototype__stage { --stage-height:calc(100svh - 72px); min-height:520px; }
+    .desktop-prototype__info { gap:.5rem; }
+    .desktop-prototype__info h1 { font-size:clamp(1.75rem,min(3vw,5.45vh),3.5rem); }
+    .desktop-prototype__medallions :global(.event-token--organizer),
+    .desktop-prototype__medallions :global(.event-token--festival),
+    .desktop-prototype__medallions :global(.event-token--source),
+    .desktop-prototype__medallions :global(.event-token--program),
+    .desktop-prototype__medallions :global(.event-token--pushkin) { --token-size:72px; }
+    .desktop-prototype__medallions :global(.event-token__pill) { display:none; }
+    .desktop-prototype__action { gap:.5rem; padding:.85rem; }
+    :global(.desktop-prototype__primary-action) { min-height:50px; }
+    :global(.desktop-prototype__icon-action) { min-height:48px; }
+    .desktop-prototype--editorial.desktop-prototype--non-ocr .desktop-prototype__info { min-height:46%; }
+    .desktop-prototype--split .desktop-prototype__info { padding:.9rem 1.4rem .5rem; }
+    .desktop-prototype--split .desktop-prototype__action { margin:0 1.4rem .7rem; }
+  }
+  @media (min-width:1024px) and (max-width:1200px) {
+    .desktop-prototype--gallery .desktop-prototype__action { grid-template-columns:minmax(90px,auto) minmax(160px,1fr); }
+    .desktop-prototype--gallery .desktop-prototype__action-row { grid-column:1/-1; }
+    .desktop-clean-story { grid-template-columns:1fr; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { transform:none !important; }
+  }
+</style>

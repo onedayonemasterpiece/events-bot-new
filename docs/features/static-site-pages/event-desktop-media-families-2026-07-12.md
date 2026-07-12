@@ -1,10 +1,10 @@
 # Desktop event media families — 2026-07-12
 
-Status: **noindex desktop-only review lab + full-flow real-event prototypes; no layout is promoted to production**.
+Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current public surface: <https://kenigevents.ru/preview-20260712t-desktop-multimedia-full-flow/lab/event-desktop/>. Preserved prior matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
-This round supersedes the decision logic of the six-option 2026-07-11 lab, but the old preview remains the rollback/reference surface. The production mobile hero-overlap composition is explicitly outside this change.
+The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
 ## Core split
 
@@ -185,22 +185,33 @@ Corrected after human/data review:
 - The `>=800×720` / `>=1600×720` thresholds are operational slot contracts, not proof that an image will look good.
 - Feedback bullets and transport details in prototypes are visibly marked as planned structure; no comment or schedule fact is invented.
 
-## Full-flow real-event prototypes
+## Clean full-flow real-event pages (v2)
 
-Each URL now runs through description, planned aggregated feedback, manual gallery, practical information and `Смотрите дальше`; out-of-city examples also reserve a truthful transport-card slot.
+The overview keeps the analytics and comparison matrix. The six directly reviewable event URLs contain only event UI: no candidate labels, audit metrics, technical rationale, planned-feature labels or scenario navigation.
 
-- [Pianissimo / Editorial high-quality landscape](https://kenigevents.ru/preview-20260712t-desktop-multimedia-full-flow/lab/event-desktop/examples/pianissimo-editorial/)
-- [Замок Тапиау / Split portrait + transport](https://kenigevents.ru/preview-20260712t-desktop-multimedia-full-flow/lab/event-desktop/examples/tapiau-split-transport/)
-- [Магомаев и Анна Герман / OCR Gallery](https://kenigevents.ru/preview-20260712t-desktop-multimedia-full-flow/lab/event-desktop/examples/magomaev-ocr-gallery/)
-- [Б-413 / semantic primary gate](https://kenigevents.ru/preview-20260712t-desktop-multimedia-full-flow/lab/event-desktop/examples/b413-semantic-primary-gate/)
+| Family | No OCR / photo | OCR / poster |
+|---|---|---|
+| Editorial Slab | [Спектакль «Гараж»](https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/examples/editorial-photo/) | [«Эпидемия. Огненная рукопись»](https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/examples/editorial-ocr/) |
+| Split Canvas | [Концерт «Закрытие сезона»](https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/examples/split-photo/) | [«Великие учителя»](https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/examples/split-ocr/) |
+| Gallery Exhibition | [Экскурсия по Светлогорску](https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/examples/gallery-photo/) | [Магомаев и Анна Герман](https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/examples/gallery-ocr/) |
 
-The planned feedback card is placed immediately after the description and publishes only aggregate verified signals, never raw comments or names. The future transport card follows practical information, has separate desktop-horizontal/mobile-vertical asset contracts and displays no times until schedule data exists.
+### Product and interaction contract
 
-Multi-image behavior is deliberately explicit:
+- The accepted media-family geometry is copied from the media-families lab: Editorial photo uses the `25%` lower image inset plus `min(64%, 820px)` info slab and `min(28%, 330px)` action slab; Split photo remains `55/45`; OCR Split and Gallery widths are ratio/viewport-height aware; Gallery media never exceeds `48%` of the stage.
+- The desktop header is sticky. H1, exact date/weekday/time, venue and the primary CTA must remain fully visible in the first viewport, including `1440×650` and `1920×600` stress windows.
+- No-OCR images use a bounded `96px` in-hero parallax range inside an overflow-clipped media frame. OCR images never receive parallax. `prefers-reduced-motion: reduce` removes the transform.
+- Clicking the image or photo count opens the existing production fullscreen viewer with keyboard arrows, close/Escape and a readable counter. There is no second/lower-page gallery. Editorial photo may show an in-hero thumbnail rail without moving the event-story hierarchy.
+- The event story continues through full description, a clean consolidated-feedback empty state, practical facts, an honest transport empty state for out-of-city examples, and the dark `Смотрите дальше` release boundary.
+- `Смотрите дальше` reuses the production `EventCard` `split-actions` renderer, including normalized media/body alignment, `Не интересно`, calendar where eligible, share and like controls. The hero action row keeps stable calendar/share/like positions and shows truthful share/like values including zero; it invents no calendar count.
+- Medallions reuse `EventTokenMedallions` and remain prominent; short desktop windows reduce them only to `72px`, not to placeholder circles.
+- The whole clean event surface is `display:none` below `1024px`. No production event/mobile component or stylesheet is changed.
 
-- one image: hero plus no redundant rail;
-- two to six: one fixed hero and a manual lower-page focus viewer;
-- seven to twelve: six visible choices plus an explicit “remaining photos” disclosure;
-- no autoplay, no layout-family switch after user interaction, and no sticky media beyond the event-story boundary.
+### Gemini 3.1 Pro gate
 
-Local Chromium acceptance covers four pages at `1440×650`, `1920×600` and `1920×1080`, plus reduced-motion: `13/13` runs pass zero horizontal overflow, complete H1 and primary CTA inside the first viewport, loaded hero, working manual gallery, sticky release before related events and `transform:none` under reduced motion. Production mobile components remain unchanged.
+A fresh Antigravity `Gemini 3.1 Pro (High)` review was completed before v2 implementation. The approved `/home/dev/.local/bin/gemini` wrapper resolved its unoverridden default to `Gemini 3.1 Pro (High)` and invoked `a-agy-model`; the UTC run window was `2026-07-12 19:47:27–19:47:54`, exit status was `0`, and stderr was empty. Local evidence: `artifacts/codex/desktop-clean-event-pages-v2-20260712/gemini-pro-provenance.md`, `gemini-pro-brief.md` and `gemini-pro-review.md`.
+
+Applied findings: preserve the exact approved geometry, remove the lower gallery and all service copy, keep photo parallax clipped to the hero, disable it for OCR, use honest empty states, reuse production cards/controls and keep the sticky header below the fullscreen viewer z-layer. The review did not override the measured ratio-aware OCR Split geometry from the existing media-family contract.
+
+### Acceptance
+
+Local Chromium acceptance covers all six pages at `1024×768`, `1366×768`, `1440×650`, `1920×600`, `1920×1080`, `2560×1440` and `3440×1440` (`42` layout runs), plus six `390×844` desktop-only isolation checks and a reduced-motion run. The gate checks first-viewport H1/date/venue/CTA visibility, zero horizontal overflow, family geometry, OCR crop/parallax policy, sticky header, fullscreen gallery open/advance/Escape, production related-card controls and absence of technical copy/lower gallery.

@@ -34,10 +34,12 @@ const required = [
   'lab/date-block/index.html',
   'lab/event-decision-block/index.html',
   'lab/event-desktop/index.html',
-  'lab/event-desktop/examples/pianissimo-editorial/index.html',
-  'lab/event-desktop/examples/tapiau-split-transport/index.html',
-  'lab/event-desktop/examples/magomaev-ocr-gallery/index.html',
-  'lab/event-desktop/examples/b413-semantic-primary-gate/index.html',
+  'lab/event-desktop/examples/editorial-photo/index.html',
+  'lab/event-desktop/examples/editorial-ocr/index.html',
+  'lab/event-desktop/examples/split-photo/index.html',
+  'lab/event-desktop/examples/split-ocr/index.html',
+  'lab/event-desktop/examples/gallery-photo/index.html',
+  'lab/event-desktop/examples/gallery-ocr/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -128,10 +130,12 @@ for (const marker of [
   'Билеты',
   'safe-cover',
   '20%',
-  'pianissimo-editorial',
-  'tapiau-split-transport',
-  'magomaev-ocr-gallery',
-  'b413-semantic-primary-gate',
+  'editorial-photo',
+  'editorial-ocr',
+  'split-photo',
+  'split-ocr',
+  'gallery-photo',
+  'gallery-ocr',
   '326',
   '195',
   '26',
@@ -141,34 +145,68 @@ for (const marker of [
 if (eventDesktopLabHtml.includes('Узнать цену') || eventDesktopLabHtml.includes('Открыть условия') || eventDesktopLabHtml.includes('calendar-link__plus')) throw new Error('Desktop event lab leaks rejected CTA/icon copy');
 
 const desktopExampleContracts = [
-  ['pianissimo-editorial', 3864, 'editorial', ['Pianissimo', 'data-parallax-shell']],
-  ['tapiau-split-transport', 6651, 'split', ['будущий transport media slot', 'Расписание ещё не загружено']],
-  ['magomaev-ocr-gallery', 6510, 'gallery', ['Хиты любимых артистов', 'data-gallery-focus']],
-  ['b413-semantic-primary-gate', 6032, 'split', ['Почему не выбрали landscape автоматически', 'data-gallery-focus']],
+  ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'desktop-prototype__media-rail']],
+  ['editorial-ocr', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ']],
+  ['split-photo', 6472, 'split', 'non-ocr', ['Концерт «Закрытие сезона»']],
+  ['split-ocr', 5783, 'split', 'ocr', ['Великие учителя', 'Зарегистрироваться']],
+  ['gallery-photo', 5259, 'gallery', 'non-ocr', ['Экскурсия по Светлогорску', 'Как добраться']],
+  ['gallery-ocr', 6510, 'gallery', 'ocr', ['Хиты любимых артистов', 'Как добраться']],
 ];
-for (const [scenario, eventId, variant, scenarioMarkers] of desktopExampleContracts) {
+for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktopExampleContracts) {
   const html = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
+  const visibleHtml = html.replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<style[\s\S]*?<\/style>/giu, '');
+  const visibleText = visibleHtml.replace(/<[^>]+>/gu, ' ').replace(/\s+/gu, ' ').trim();
   for (const marker of [
-    'data-desktop-full-page',
+    'data-desktop-clean-event',
     `data-event-id="${eventId}"`,
-    `data-desktop-variant="${variant}"`,
-    'Что видно по обсуждению',
-    'Посмотреть событие ближе',
-    'Перед тем как ехать',
+    `data-desktop-family="${variant}"`,
+    `data-media-policy="${mediaPolicy}"`,
+    `desktop-prototype--${variant}`,
+    `desktop-prototype--${mediaPolicy}`,
+    'data-clean-hero',
+    'data-media-frame',
+    'data-hero-gallery-open',
+    'data-hero-gallery',
+    'О событии',
+    'Что говорят',
+    'Перед посещением',
     'Смотрите дальше',
     'data-related-start',
     'prefers-reduced-motion',
     'Добавить в календарь',
     'Поделиться',
     'Нравится',
+    'data-feedback-action="not_interested"',
+    'data-native-share',
+    'data-feedback-action="like"',
     ...scenarioMarkers,
   ]) {
     if (!html.includes(marker)) throw new Error(`Desktop full-page example ${scenario} misses marker: ${marker}`);
   }
-  if (html.includes('Узнать цену') || html.includes('Открыть условия') || html.includes('По билетам') || html.includes('calendar-link__plus')) {
+  if (/prototype|candidate|semantic-primary|будущий transport|проектируемый агрегат|служебн/iu.test(visibleText)) {
+    throw new Error(`Desktop full-page example ${scenario} leaks technical/research copy`);
+  }
+  if (visibleHtml.includes('Узнать цену') || visibleHtml.includes('Открыть условия') || visibleHtml.includes('По билетам') || html.includes('calendar-link__plus')) {
     throw new Error(`Desktop full-page example ${scenario} leaks rejected CTA/icon copy`);
   }
+  if (/data-desktop-parallax[^>]*>[\s\S]{0,250}<img[^>]+data-image-text-mode="ocr_text"/iu.test(html)) throw new Error(`OCR example ${scenario} must not receive parallax`);
 }
+
+const desktopCleanSource = readFileSync(join(siteDir, 'src/components/lab/DesktopEventCleanPage.astro'), 'utf8');
+for (const marker of [
+  '--stage-height:clamp(560px,calc(100svh - 88px),800px)',
+  'inset:0 0 25%',
+  'width:min(64%,820px)',
+  'width:min(28%,330px)',
+  'grid-template-columns:55% 45%',
+  'grid-template-columns:min(52%,calc(var(--stage-height) * var(--image-ratio)))',
+  'grid-template-columns:min(48%,calc((var(--stage-height) - 3rem) * var(--image-ratio)))',
+  'potentialCrop <= .2',
+  'prefers-reduced-motion:reduce',
+]) {
+  if (!desktopCleanSource.includes(marker)) throw new Error(`Desktop clean source misses geometry/motion contract: ${marker}`);
+}
+if (desktopCleanSource.includes('<section class="event-gallery"') || desktopCleanSource.includes('DesktopEventPagePrototype')) throw new Error('Desktop clean examples must not restore the rejected lower gallery/technical prototype shell');
 
 const genericFaviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
 if (!genericFaviconSvg.includes('viewBox="160 230 970 820"') || !genericFaviconSvg.includes('left-monogram') || !genericFaviconSvg.includes('brand-k-mark') || !genericFaviconSvg.includes('heart-block') || !genericFaviconSvg.includes('#2d3035') || !genericFaviconSvg.includes('#af481f') || genericFaviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(genericFaviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');

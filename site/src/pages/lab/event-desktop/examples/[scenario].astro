@@ -1,116 +1,64 @@
 ---
 import EventLayout from '../../../../layouts/EventLayout.astro';
-import DesktopEventPagePrototype from '../../../../components/lab/DesktopEventPagePrototype.astro';
+import DesktopEventCleanPage from '../../../../components/lab/DesktopEventCleanPage.astro';
+import previewData from '../../../../data/preview-events.json';
 import examplesData from '../../../../data/desktop-event-examples.json';
 import type { PreviewEvent } from '../../../../lib/types';
-import { absoluteUrl, SITE_NAME, withBase } from '../../../../lib/events';
+import { absoluteUrl, SITE_NAME } from '../../../../lib/events';
 
 type Scenario = {
   slug: string;
   eventId: number;
-  variant: 'editorial' | 'split' | 'gallery';
-  title: string;
-  rationale: string;
+  candidate: 'editorial' | 'split' | 'gallery';
+  mediaPolicy: 'non-ocr' | 'ocr';
   transport?: boolean;
-  semanticGate?: string;
-  feedback: Array<{ tone: 'positive' | 'neutral' | 'question'; text: string }>;
+  editorialRail?: boolean;
+  ocrSafeCover?: boolean;
 };
 
 const scenarios: Scenario[] = [
-  {
-    slug: 'pianissimo-editorial',
-    eventId: 3864,
-    variant: 'editorial',
-    title: 'Editorial Slab · качественный no-OCR landscape',
-    rationale: 'Primary уже горизонтальный, no-OCR и 2560×1707: Editorial получает сильное изображение без подмены редакционного выбора вторичным кадром.',
-    feedback: [
-      { tone: 'positive', text: 'В обсуждении заметен интерес к камерному формату и площадке.' },
-      { tone: 'question', text: 'Пользователи уточняют наличие билетов на конкретную дату.' },
-      { tone: 'neutral', text: 'Часть аудитории связывает событие с программой фестиваля Pianissimo.' },
-    ],
-  },
-  {
-    slug: 'tapiau-split-transport',
-    eventId: 6651,
-    variant: 'split',
-    title: 'Split Canvas · portrait no-OCR + дорога в область',
-    rationale: '1170×1755 достаточно для половины desktop, но недостаточно для wide Editorial. Sticky media ограничен event-story и отпускается до галереи и похожих событий.',
-    transport: true,
-    feedback: [
-      { tone: 'positive', text: 'Семейный формат и пространство замка воспринимаются как сильная причина поехать.' },
-      { tone: 'question', text: 'Ключевой практический вопрос — как вернуться из Гвардейска после события.' },
-      { tone: 'neutral', text: 'Интерес вызывает интерактивная часть постановки, а не только сюжет.' },
-    ],
-  },
-  {
-    slug: 'magomaev-ocr-gallery',
-    eventId: 6510,
-    variant: 'gallery',
-    title: 'Gallery Exhibition · OCR poster + длинный H1',
-    rationale: 'Квадратная OCR-афиша сохраняется целиком через contain; media-колонка следует высоте viewport, а длинный H1 не обрезается и остаётся в правой колонке.',
-    transport: true,
-    feedback: [
-      { tone: 'positive', text: 'Знакомая музыкальная программа снижает порог выбора для новой аудитории.' },
-      { tone: 'question', text: 'Перед поездкой в Светлогорск пользователи сверяют начало концерта и обратный транспорт.' },
-      { tone: 'neutral', text: 'Обсуждение связывает концерт с фестивалем «Симфония ветра».' },
-    ],
-  },
-  {
-    slug: 'b413-semantic-primary-gate',
-    eventId: 6032,
-    variant: 'split',
-    title: 'Semantic media gate · почему landscape не всегда hero',
-    rationale: 'Вторичные горизонтальные изображения технически крупнее и удобнее для Editorial, но показывают другие объекты музейного комплекса. Геометрия не должна подменять смысл события.',
-    semanticGate: 'primary показывает подводную лодку Б-413, а landscape-альтернативы — другое здание и другую часть комплекса. До LLM/vision relevance gate сохраняем исходный primary и Split/Gallery-компоновку.',
-    feedback: [
-      { tone: 'positive', text: 'Главный интерес связан именно с возможностью попасть внутрь подводной лодки.' },
-      { tone: 'question', text: 'Посетители уточняют, какие объекты входят в билет и сколько времени занимает осмотр.' },
-      { tone: 'neutral', text: 'Событие рассматривают как часть более длинного маршрута по музейному комплексу.' },
-    ],
-  },
+  { slug: 'editorial-photo', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialRail: true },
+  { slug: 'editorial-ocr', eventId: 4671, candidate: 'editorial', mediaPolicy: 'ocr' },
+  { slug: 'split-photo', eventId: 6472, candidate: 'split', mediaPolicy: 'non-ocr' },
+  { slug: 'split-ocr', eventId: 5783, candidate: 'split', mediaPolicy: 'ocr' },
+  { slug: 'gallery-photo', eventId: 5259, candidate: 'gallery', mediaPolicy: 'non-ocr', transport: true },
+  { slug: 'gallery-ocr', eventId: 6510, candidate: 'gallery', mediaPolicy: 'ocr', transport: true },
 ];
 
 export function getStaticPaths() {
   return [
-    'pianissimo-editorial',
-    'tapiau-split-transport',
-    'magomaev-ocr-gallery',
-    'b413-semantic-primary-gate',
+    'editorial-photo',
+    'editorial-ocr',
+    'split-photo',
+    'split-ocr',
+    'gallery-photo',
+    'gallery-ocr',
   ].map((scenario) => ({ params: { scenario } }));
 }
 
+const merged = new Map<number, PreviewEvent>();
+for (const event of previewData.events as PreviewEvent[]) merged.set(event.id, event);
+for (const event of examplesData.events as PreviewEvent[]) if (!merged.has(event.id)) merged.set(event.id, event);
+const events = [...merged.values()];
 const scenario = scenarios.find((item) => item.slug === Astro.params.scenario);
-if (!scenario) throw new Error(`Unknown desktop event scenario: ${Astro.params.scenario}`);
-const events = examplesData.events as PreviewEvent[];
-const event = events.find((item) => item.id === scenario.eventId);
-if (!event) throw new Error(`Desktop event example ${scenario.eventId} is missing`);
-const related = events.filter((item) => item.id !== event.id).slice(0, 3);
+if (!scenario) throw new Error(`Unknown clean desktop event scenario: ${Astro.params.scenario}`);
+const event = merged.get(scenario.eventId);
+if (!event) throw new Error(`Clean desktop event ${scenario.eventId} is missing`);
+const preferredRelatedIds = [5658, 6472, 5259, 4671, 5783, 6510, 5370];
+const related = preferredRelatedIds.map((id) => merged.get(id)).filter((item): item is PreviewEvent => Boolean(item && item.id !== event.id)).slice(0, 3);
 const canonicalUrl = absoluteUrl(`/lab/event-desktop/examples/${scenario.slug}/`);
-const title = `${scenario.title} | ${SITE_NAME}`;
-const description = `Полный desktop-only прототип страницы реального события #${event.id}: hero, описание, feedback, media, практическая информация, transport slot и «Смотрите дальше».`;
+const title = `${event.title} | ${SITE_NAME}`;
+const description = event.meta_description || event.summary || event.title;
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="desktop-example-page">
-    <nav class="desktop-example-nav" aria-label="Навигация по desktop-прототипам">
-      <a href={withBase('/lab/event-desktop/')}>← К обзору</a>
-      {scenarios.map((item) => <a class:list={[item.slug === scenario.slug && 'is-current']} href={withBase(`/lab/event-desktop/examples/${item.slug}/`)}>{item.title}</a>)}
-    </nav>
-    <DesktopEventPagePrototype
-      event={event}
-      related={related}
-      variant={scenario.variant}
-      rationale={scenario.rationale}
-      feedback={scenario.feedback}
-      transport={scenario.transport}
-      semanticGate={scenario.semanticGate}
-    />
-  </main>
+  <DesktopEventCleanPage
+    event={event}
+    related={related}
+    candidate={scenario.candidate}
+    mediaPolicy={scenario.mediaPolicy}
+    transport={scenario.transport}
+    editorialRail={scenario.editorialRail}
+    ocrSafeCover={scenario.ocrSafeCover}
+  />
 </EventLayout>
-
-<style>
-  .desktop-example-page { width:100%; overflow:clip; }
-  .desktop-example-nav { min-height:56px; display:flex; align-items:center; gap:.45rem; overflow-x:auto; padding:.45rem max(1rem,calc((100vw - 1500px)/2)); border-bottom:1px solid rgba(121,48,20,.13); background:#fffaf2; }
-  .desktop-example-nav a { flex:0 0 auto; padding:.48rem .65rem; border-radius:999px; color:#713416; font-size:.78rem; font-weight:850; text-decoration:none; }
-  .desktop-example-nav a.is-current { background:#2a2623; color:#fff; }
-</style>
