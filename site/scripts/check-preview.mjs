@@ -25,13 +25,13 @@ const required = [
   'assets/transport/bus-svgrepo-337651.svg',
   'assets/transport/romanovo-holmogorye-route-square.png',
   'assets/transport/romanovo-holmogorye-route-portrait.png',
-  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/outbound-2026-07-12-6725.ics',
-  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/return-2026-07-12-6730.ics',
-  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/return-2026-07-13-6700.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/outbound-2026-07-12-6717.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/outbound-2026-07-12-7213.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/return-2026-07-12-6722.ics',
-  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/return-2026-07-12-7220.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/to-svetlogorsk-20260712-6725.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/to-kaliningrad-20260712-6730.ics',
+  'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/to-kaliningrad-20260713-6700.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-svetlogorsk-20260712-6717.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-svetlogorsk-20260712-7213.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-kaliningrad-20260712-6722.ics',
+  'sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/transport/to-kaliningrad-20260712-7220.ics',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -48,6 +48,22 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+let transportIcsTotal = 0;
+for (const event of eventsData.events) {
+  const transportDir = join(root, `sobytiya/${event.slug}/transport`);
+  const files = existsSync(transportDir) ? readdirSync(transportDir).filter((name) => name.endsWith('.ics')).sort() : [];
+  const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
+  const linked = [...html.matchAll(/href="[^"]*\/transport\/([^"?#]+\.ics)(?:[?#][^"]*)?"/gu)].map((match) => match[1]);
+  const linkedUnique = [...new Set(linked)].sort();
+  const fileCeiling = html.includes('data-transport-dual-origin') ? 6 : 4;
+  if (files.length > fileCeiling) throw new Error(`Event ${event.id} exceeds its ${fileCeiling}-file transport ICS ceiling: ${files.length}`);
+  if (files.join('\n') !== linkedUnique.join('\n')) throw new Error(`Event ${event.id} transport ICS files must match interactive calendar links exactly`);
+  for (const name of files) {
+    if (!/^to-[a-z0-9-]+-\d{8}-[a-z0-9-]+\.ics$/u.test(name)) throw new Error(`Transport ICS filename is not concise semantic ASCII: ${name}`);
+  }
+  transportIcsTotal += files.length;
+}
+if (transportIcsTotal === 0) throw new Error('Preview must generate transport ICS files for the regression events');
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
@@ -361,10 +377,10 @@ if (!/data-transport-direction="outbound"[^>]*data-train-number="7213"[\s\S]*?<t
 if (!/data-transport-direction="return"[^>]*data-train-number="6722"[\s\S]*?<time[^>]*>18:54<\/time>[\s\S]*?<time[^>]*>19:48<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 first return suggestion must be train 6722, 18:54→19:48');
 if (!/data-transport-direction="return"[^>]*data-train-number="7220"[\s\S]*?<time[^>]*>19:33<\/time>[\s\S]*?<time[^>]*>20:19<\/time>/u.test(transportDemoHtml)) throw new Error('Event 6510 second return suggestion must be train 7220, 19:33→20:19');
 for (const [trip, expected] of [
-  ['outbound-2026-07-12-6717', ['UID:transport-6510-outbound-2026-07-12-6717@kenigevents.ru', 'DTSTART:20260712T131100Z', 'DTEND:20260712T140500Z', 'TRIGGER:-PT30M']],
-  ['outbound-2026-07-12-7213', ['UID:transport-6510-outbound-2026-07-12-7213@kenigevents.ru', 'DTSTART:20260712T134300Z', 'DTEND:20260712T142900Z', 'TRIGGER:-PT30M', 'LOCATION:Калининград-Северный']],
-  ['return-2026-07-12-6722', ['UID:transport-6510-return-2026-07-12-6722@kenigevents.ru', 'DTSTART:20260712T165400Z', 'TRIGGER:-PT30M']],
-  ['return-2026-07-12-7220', ['UID:transport-6510-return-2026-07-12-7220@kenigevents.ru', 'DTSTART:20260712T173300Z', 'TRIGGER:-PT30M']],
+  ['to-svetlogorsk-20260712-6717', ['UID:transport-6510-outbound-2026-07-12-6717@kenigevents.ru', 'DTSTART:20260712T131100Z', 'DTEND:20260712T140500Z', 'TRIGGER:-PT30M']],
+  ['to-svetlogorsk-20260712-7213', ['UID:transport-6510-outbound-2026-07-12-7213@kenigevents.ru', 'DTSTART:20260712T134300Z', 'DTEND:20260712T142900Z', 'TRIGGER:-PT30M', 'LOCATION:Калининград-Северный']],
+  ['to-kaliningrad-20260712-6722', ['UID:transport-6510-return-2026-07-12-6722@kenigevents.ru', 'DTSTART:20260712T165400Z', 'TRIGGER:-PT30M']],
+  ['to-kaliningrad-20260712-7220', ['UID:transport-6510-return-2026-07-12-7220@kenigevents.ru', 'DTSTART:20260712T173300Z', 'TRIGGER:-PT30M']],
 ]) {
   const href = `/sobytiya/${transportDemoEvent.slug}/transport/${trip}.ics`;
   if (!transportDemoHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6510 misses calendar CTA for ${trip}`);
@@ -381,7 +397,7 @@ if (!/data-transport-direction="outbound"[^>]*data-train-number="6725"[\s\S]*?<t
 for (const needle of ['Обратно после события', 'Последний поезд в день события — в 22:40', '22:40 → 23:35', 'Ночных рейсов нет', 'Первый поезд 13 июля — в 06:25', 'Уточните время окончания у организатора']) {
   if (!cutoffHtml.includes(needle)) throw new Error(`Event 6397 schedule-cutoff block missing ${needle}`);
 }
-for (const trip of ['outbound-2026-07-12-6725', 'return-2026-07-12-6730', 'return-2026-07-13-6700']) {
+for (const trip of ['to-svetlogorsk-20260712-6725', 'to-kaliningrad-20260712-6730', 'to-kaliningrad-20260713-6700']) {
   const href = `/sobytiya/${cutoffEvent.slug}/transport/${trip}.ics`;
   if (!cutoffHtml.includes(`href="${buildId ? `/${buildId}` : ''}${href}"`)) throw new Error(`Event 6397 misses calendar CTA for ${trip}`);
   const tripIcs = readFileSync(join(root, href.slice(1)), 'utf8');

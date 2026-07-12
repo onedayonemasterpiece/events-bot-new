@@ -42,6 +42,27 @@ function foldLine(line: string): string {
   return out + current;
 }
 
+function conciseAsciiSlug(value: string, maxLength: number): string {
+  return String(value || '')
+    .toLocaleLowerCase('en-US')
+    .replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-|-$/gu, '')
+    .split('-')
+    .reduce((result, part) => {
+      const next = result ? `${result}-${part}` : part;
+      return next.length <= maxLength ? next : result;
+    }, '') || 'calendar';
+}
+
+export function eventIcsDownloadFilename(event: Pick<PreviewEvent, 'id' | 'slug'>): string {
+  const semanticSource = event.slug.replace(new RegExp(`-${event.id}$`, 'u'), '');
+  return `kenigevents-${conciseAsciiSlug(semanticSource, 48)}-${event.id}.ics`;
+}
+
+export function transportIcsDownloadFilename(event: Pick<PreviewEvent, 'id'>, trip: string): string {
+  return `kenigevents-${conciseAsciiSlug(trip, 64)}-e${event.id}.ics`;
+}
+
 export function buildIcs(event: PreviewEvent): string {
   const now = new Date();
   const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;

@@ -32,6 +32,10 @@ const supportingSources = indexUnique(directory.supporting_sources || [], 'suppo
 
 if (directory.official_index_url !== 'https://www.kppk39.ru/raspisanie/') throw new Error('The carrier index must be the canonical КППК schedule page');
 if (sources.size !== 13) throw new Error(`Expected all 13 carrier direction/product pages, got ${sources.size}`);
+if (directory.ics_generation?.standard_max_files_per_event !== 4 || directory.ics_generation?.dual_origin_max_files_per_event !== 6) throw new Error('Transport ICS generation must keep the reviewed 4/6 per-event ceilings');
+if (directory.ics_generation?.shared_trip_review_threshold !== 1000) throw new Error('Transport ICS global sharing review threshold must remain explicit');
+if (!directory.ics_generation?.transport_filename_pattern.startsWith('to-<latin-destination>')) throw new Error('Transport ICS filenames must remain semantic ASCII destination names');
+if (!directory.ics_generation?.uid_rule.includes('UID stable')) throw new Error('Filename changes must not churn calendar UIDs');
 
 for (const source of sources.values()) {
   if (!source.page_url.startsWith('https://www.kppk39.ru/')) throw new Error(`Non-carrier source page in ${source.id}`);

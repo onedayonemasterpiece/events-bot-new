@@ -28,3 +28,11 @@ Public rendering outside Светлогорск/Зеленоградск remains
 ## Follow-up — ДС «Янтарный» / Елизаветинская
 
 The 2026-07-12 product follow-up is **Done in reference / Partial in public UI**. `о.п. Елизаветинская` is worthwhile for this venue: the reviewed pedestrian route is about `627 m / 8–10 min`, and the current official matrix has regular non-express stops. A dedicated `venue_specific_optional` route and exact venue aliases/address were added. Its display contract shows the same train once with clickable Южный (`15–18 min`) and Северный (`7–8 min`) choices, plus the official 2026 `35 ₽` up-to-10-km fare. Public activation remains gated by an exact-date calendar export and a real-event regression; no other Kaliningrad event can inherit the route by city alone.
+
+## Follow-up — ICS scale and naming
+
+The 2026-07-12 ICS follow-up is **Done**. Standard pages now generate only their rendered actions (maximum 4 files); the future dual-origin contract has a hard ceiling of 6. Explicit-end pages no longer pre-generate unused last/next-day cutoff files. Paths and saved names use concise Latin destination/date/service identifiers, while existing VEVENT UIDs remain stable. Preview acceptance rejects orphan files, non-semantic names and per-event budget violations.
+
+Validation baseline: `400` event ICS + `166` transport ICS = `566` total; `44` events have transport files, maximum `4` each, `0` non-semantic names and `0` generated-vs-linked mismatches. The transport count decreased from `169` to `166` by removing unused cutoff artifacts.
+
+The `166` files represent `127` unique destination/date/train keys. The remaining `39` are event-scoped intentionally because their calendar content points back to a different event. Global trip sharing is deferred until `1000` transport files, where its operational savings justify removing or redesigning that event context.

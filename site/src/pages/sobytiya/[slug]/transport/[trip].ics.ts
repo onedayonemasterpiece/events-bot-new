@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
-import { buildTransportIcs } from '../../../../lib/ics';
+import { buildTransportIcs, transportIcsDownloadFilename } from '../../../../lib/ics';
 import {
+  eventTransportCalendarEntries,
   eventTransportTripKey,
   getEventTransportSuggestion,
   type EventTrainOption,
@@ -21,16 +22,8 @@ export function getStaticPaths() {
   return getEvents().flatMap((event) => {
     const suggestion = getEventTransportSuggestion(event);
     if (!suggestion) return [];
-    const entries: Array<{ direction: EventTransportDirection; train: EventTrainOption }> = [
-      ...suggestion.outbound.map((train) => ({ direction: 'outbound' as const, train })),
-      ...suggestion.returns.map((train) => ({ direction: 'return' as const, train })),
-      ...[suggestion.lastSameDayReturn, suggestion.firstNightReturn, suggestion.firstNextDayReturn]
-        .filter((train): train is EventTrainOption => Boolean(train))
-        .map((train) => ({ direction: 'return' as const, train })),
-    ];
-    const unique = new Map(entries.map((entry) => [eventTransportTripKey(entry.direction, entry.train), entry]));
-    return [...unique.values()].map(({ direction, train }) => ({
-      params: { slug: event.slug, trip: eventTransportTripKey(direction, train) },
+    return eventTransportCalendarEntries(suggestion).map(({ direction, train }) => ({
+      params: { slug: event.slug, trip: eventTransportTripKey(suggestion, direction, train) },
       props: { event, suggestion, direction, train } satisfies TransportIcsProps,
     }));
   });
@@ -38,11 +31,11 @@ export function getStaticPaths() {
 
 export const GET: APIRoute = ({ props }) => {
   const { event, suggestion, direction, train } = props as TransportIcsProps;
-  const trip = eventTransportTripKey(direction, train);
+  const trip = eventTransportTripKey(suggestion, direction, train);
   return new Response(buildTransportIcs(event, suggestion, direction, train), {
     headers: {
       'content-type': 'text/calendar; charset=utf-8',
-      'content-disposition': `inline; filename="kenigevents-${event.id}-${trip}.ics"`,
+      'content-disposition': `inline; filename="${transportIcsDownloadFilename(event, trip)}"`,
       'cache-control': 'public, max-age=300',
     },
   });

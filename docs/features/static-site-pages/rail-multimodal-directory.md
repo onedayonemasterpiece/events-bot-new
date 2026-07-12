@@ -80,6 +80,8 @@ Each origin-time chip is its own calendar link because the reminder time depends
 
 On mobile the same row wraps after the origin chips; it does not become two full cards. The shared header/meta line states the fare and both travel-time bands once.
 
+The two origin actions are the only justified duplication: their `DTSTART` and `LOCATION` differ. Their concise files will be named `to-elizavetinskaya-south-<date>-<train>.ics` and `to-elizavetinskaya-north-<date>-<train>.ics`. The return produces one `to-kaliningrad-<date>-<train>.ics`, not separate North/South copies, because the departure reminder is identical.
+
 ## Runtime/export boundary
 
 The reference is deliberately broader than current UI support. A locality moves from `needs_service_calendar_export` to public rendering only after the refresh supplies:

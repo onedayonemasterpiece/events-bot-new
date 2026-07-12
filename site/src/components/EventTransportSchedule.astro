@@ -18,7 +18,7 @@ const formatWait = (option: EventTrainOption) => {
   if (typeof wait !== 'number') return '';
   return wait === 0 ? 'сразу после окончания' : `через ${wait} мин после окончания`;
 };
-const calendarHref = (direction: EventTransportDirection, train: EventTrainOption) => withBase(eventTransportCalendarPath(event, direction, train));
+const calendarHref = (direction: EventTransportDirection, train: EventTrainOption) => withBase(eventTransportCalendarPath(event, suggestion!, direction, train));
 const calendarLabel = (direction: EventTransportDirection, train: EventTrainOption) => {
   const from = direction === 'outbound' ? suggestion?.originStation : suggestion?.destinationStation;
   const to = direction === 'outbound' ? suggestion?.destinationStation : suggestion?.originStation;

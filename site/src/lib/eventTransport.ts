@@ -54,6 +54,11 @@ export interface EventTrainOption {
 export type EventTransportDirection = 'outbound' | 'return';
 export type EventEndBasis = 'explicit' | 'schedule_cutoff';
 
+export interface EventTransportCalendarEntry {
+  direction: EventTransportDirection;
+  train: EventTrainOption;
+}
+
 export interface EventTransportSuggestion {
   city: string;
   originStation: string;
@@ -182,17 +187,69 @@ function toOption(
   };
 }
 
-export function eventTransportTripKey(direction: EventTransportDirection, train: EventTrainOption): string {
-  const number = train.number.toLocaleLowerCase('ru-RU').replace(/[^a-zа-я0-9]+/gu, '-').replace(/^-|-$/gu, '');
-  return `${direction}-${train.serviceDate}-${number}`;
+function stationFileSlug(value: string): string {
+  const station = normalizeCity(value);
+  const known: Array<[string, string]> = [
+    ['елизаветинская', 'elizavetinskaya'],
+    ['светлогорск', 'svetlogorsk'],
+    ['зеленоградск', 'zelenogradsk'],
+    ['пионерский', 'pionersky'],
+    ['балтийск', 'baltiysk'],
+    ['багратионовск', 'bagrationovsk'],
+    ['железнодорожный', 'zheleznodorozhny'],
+    ['краснолесье', 'krasnolesye'],
+    ['мамоново', 'mamonovo'],
+    ['ладушкин', 'ladushkin'],
+    ['черняховск', 'chernyakhovsk'],
+    ['чернышевское', 'chernyshevskoe'],
+    ['гусев', 'gusev'],
+    ['нестеров', 'nesterov'],
+    ['знаменск', 'znamensk'],
+    ['гвардейск', 'gvardeysk'],
+    ['полесск', 'polessk'],
+    ['советск', 'sovetsk'],
+    ['неман', 'neman'],
+    ['калининград', 'kaliningrad'],
+  ];
+  return known.find(([needle]) => station.includes(needle))?.[1] || 'train';
+}
+
+export function eventTransportTripKey(
+  suggestion: Pick<EventTransportSuggestion, 'originStation' | 'destinationStation'>,
+  direction: EventTransportDirection,
+  train: EventTrainOption,
+  boardingQualifier?: string,
+): string {
+  const target = direction === 'outbound' ? suggestion.destinationStation : suggestion.originStation;
+  const targetSlug = stationFileSlug(target);
+  const qualifier = String(boardingQualifier || '').toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
+  const number = train.number.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'service';
+  const date = train.serviceDate.replace(/-/gu, '');
+  return ['to', targetSlug, qualifier, date, number].filter(Boolean).join('-');
 }
 
 export function eventTransportCalendarPath(
   event: Pick<PreviewEvent, 'slug'>,
+  suggestion: Pick<EventTransportSuggestion, 'originStation' | 'destinationStation'>,
   direction: EventTransportDirection,
   train: EventTrainOption,
+  boardingQualifier?: string,
 ): string {
-  return `/sobytiya/${event.slug}/transport/${eventTransportTripKey(direction, train)}.ics`;
+  return `/sobytiya/${event.slug}/transport/${eventTransportTripKey(suggestion, direction, train, boardingQualifier)}.ics`;
+}
+
+export function eventTransportCalendarEntries(suggestion: EventTransportSuggestion): EventTransportCalendarEntry[] {
+  const entries: EventTransportCalendarEntry[] = [
+    ...suggestion.outbound.map((train) => ({ direction: 'outbound' as const, train })),
+    ...(suggestion.eventEndBasis === 'schedule_cutoff'
+      ? [suggestion.lastSameDayReturn, suggestion.firstNightReturn || suggestion.firstNextDayReturn]
+        .filter((train): train is EventTrainOption => Boolean(train))
+        .map((train) => ({ direction: 'return' as const, train }))
+      : suggestion.returns.map((train) => ({ direction: 'return' as const, train }))),
+  ];
+  const unique = new Map(entries.map((entry) => [eventTransportTripKey(suggestion, entry.direction, entry.train), entry]));
+  if (unique.size > 6) throw new Error(`Transport ICS hard budget exceeded: ${unique.size} files`);
+  return [...unique.values()];
 }
 
 function getRoute(city: string | null | undefined): TransportRouteRecord | null {

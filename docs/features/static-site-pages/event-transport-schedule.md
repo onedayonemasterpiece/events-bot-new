@@ -37,6 +37,27 @@ The prepared directory also contains one intentional Kaliningrad exception: even
 
 The selector and calendar files are static. Public UI and `.ics` descriptions do not contain schedule-verification links.
 
+## ICS budget and filenames
+
+Static generation follows the visible actions, not the size of the timetable:
+
+- generate an ICS only when the event page renders the corresponding calendar link;
+- standard event: at most two outbound + two return/cutoff actions, therefore **4 transport ICS files**;
+- future dual-origin ДС «Янтарный»: at most four outbound origin choices + two returns, therefore **6 files**;
+- unknown-end pages generate the last same-day return and either the first night train or the first next-day train, never unused alternatives as hidden files;
+- deduplicate by destination, optional boarding origin, service date and train number;
+- preview acceptance compares generated files with actual `href` values, rejects orphan files and enforces the per-event ceiling.
+
+On the 2026-07-12 regression catalog the full build contains `400` ordinary event calendars and `166` transport calendars for `44` eligible events: `566` ICS files total, no orphan transport files and no event above four transport files. The rendered-action rule removed three unused transport files from the previous `169`-file output. There are `127` unique date/destination/train keys; the other `39` files intentionally retain different event context in `SUMMARY`, `DESCRIPTION`, `URL` and `UID`. Replacing them with global trip files would currently save little while making the calendar entry less clear. A mandatory global-sharing review is triggered if transport ICS count reaches `1000`. This is a validation snapshot, not a fixed production count.
+
+Transport paths use short semantic ASCII names:
+
+- `to-svetlogorsk-20260712-6717.ics`;
+- `to-kaliningrad-20260712-6722.ics`;
+- future dual-origin example: `to-elizavetinskaya-south-20260727-6725.ics`.
+
+The saved filename adds the event id, for example `kenigevents-to-svetlogorsk-20260712-6717-e6510.ics`. Ordinary event calendars use a shortened Latin event slug plus id instead of the unbounded full page slug. Changing the readable filename does **not** change the existing VEVENT `UID`, preventing a renamed file from becoming a duplicate calendar entry.
+
 ## Bus example: Сказочное Холмогорье
 
 The build-time coverage/topology and venue last-mile reference is maintained separately in [bus-transport-directory.md](bus-transport-directory.md). It currently inventories 30 active events across 14 logical localities and 21 venues; this does **not** automatically enable the public block. A locality needs reviewed target-stop times, a service calendar and a safe venue access leg before it can move into `busTransportSchedules.json`.
@@ -95,6 +116,6 @@ The current committed rail/bus data is a reviewed snapshot. Before the official 
 4. Resolve or create an authoritative YDB current+history lane; the 2026-07-11 accessible databases had no transport table, so it must not be described as already YDB-backed.
 5. Publish atomically only after validation. Empty/partial output keeps last-known-good, records stale age and alerts an operator.
 6. A changed validated content hash exports the existing static JSON contract and enqueues one coalesced `static_site_build:prod`; release manifest records schedule snapshot ID/hash/fetched time.
-7. Acceptance covers rail-primary Пионерский/Балтийск, parallel rail+bus inland routes, mixed train/bus directions for Знаменск, the Ладушкин transfer safety block for Бранденбург, exact-date Краснолесье, unknown-end schedule cutoffs, explicit-end no-return, intermediate-stop non-inference, stale source, partial failure and public transport ICS MIME/alarms.
+7. Acceptance covers rail-primary Пионерский/Балтийск, parallel rail+bus inland routes, mixed train/bus directions for Знаменск, the Ладушкин transfer safety block for Бранденбург, exact-date Краснолесье, unknown-end schedule cutoffs, explicit-end no-return, intermediate-stop non-inference, stale source, partial failure, semantic ASCII filenames, stable UIDs, orphan-free ICS generation, per-event file ceilings and public transport ICS MIME/alarms.
 
 Until this debt is closed, the release checklist remains blocked: the presentation candidate must be refreshed and validated manually, without adding public schedule-verification links.
