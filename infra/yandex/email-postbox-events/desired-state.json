@@ -44,6 +44,16 @@
     "visibility_timeout_seconds": 60,
     "receive_wait_seconds": 10
   },
+  "fly_runtime": {
+    "worker_service_account": "kenigevents-postbox-sender",
+    "worker_role": "postbox.sender",
+    "worker_credential_lockbox": "email-postbox-worker-auth",
+    "monitor_service_account": "email-postbox-dlq-monitor",
+    "monitor_role": "ymq.reader",
+    "monitor_credential_lockbox": "email-postbox-dlq-monitor-aws",
+    "worker_interval_seconds": 60,
+    "monitor_interval_seconds": 300
+  },
   "postbox": {
     "configuration_set": "kenigevents-transactional",
     "destination": "kenigevents-postbox-events-v1",

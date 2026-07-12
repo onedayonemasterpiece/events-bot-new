@@ -67,5 +67,18 @@ and remains disabled.
   outcomes and stable error codes. The temporary user/outboxes and synthetic
   suppressions/events were removed; only the real Send/Delivery evidence remains.
 - Destination disable/enable rollback passed and the nine-type destination is enabled.
-  Application switches remain off/dry-run-only because no production worker or
-  Monitoring notification channel was deployed in this infrastructure release.
+  Fly release `1627` deploys `origin/main@ca2b24f9` with the transactional-only
+  worker and the PII-free Supabase/YMQ monitor. The worker signs short-lived IAM
+  tokens with the dedicated sender key; the monitor uses a separate `ymq.reader`
+  key. Both credentials are deletion-protected in Lockbox and deployed as Fly
+  secrets.
+- A worker-owned canary was accepted once by Postbox and finished `delivered` after
+  authenticated/verified `Send` and `Delivery` events. An initially incorrect HMAC
+  on the temporary canary identity exercised five-item DLQ detection; after fixing
+  the fixture HMAC, controlled replay applied once, duplicates were no-ops, the
+  automatic YDS trigger probe applied, and the DLQ returned to zero.
+- Application switches remain off/dry-run-only. Event-specific enqueue producers
+  are still pending, and the fresh-domain/self-domain SpaceWeb canary was initially
+  filed as Spam even though SPF, both DKIM signatures and DMARC passed. It was moved
+  to Inbox as an explicit mailbox-training action; this is not evidence of broad
+  inbox placement.

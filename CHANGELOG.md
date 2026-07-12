@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Email / live Postbox worker release**: deployed Fly worker/monitor release `1627` from `origin/main@ca2b24f9`, provisioned isolated sender and DLQ-reader credentials in deletion-protected Lockbox/Fly secrets, proved one real worker request through authenticated `Send`/`Delivery`, exercised alerting plus five-item DLQ replay/cleanup and an automatic YDS trigger probe, and retained all database send switches off pending event producers and cross-provider placement warm-up.
 - **Email / Yandex authorized key compatibility**: accept the current `yc iam key create` key-ID warning preamble only when it matches the JSON key id, strip it before PS256 signing, and reject mismatched preambles.
 - **Email / transactional Postbox worker**: added a transactional-only Supabase claim/recovery/preflight/health RPC boundary, a Fly scheduler worker with short-lived service-account IAM tokens and ambiguity quarantine, plus PII-free outbox/DLQ monitoring with cooldown-bound Telegram superadmin alerts; recommendation/NotiSend rows remain unreachable from this worker.
 - **Email / live Postbox feedback release**: applied the correlated V2 RPC after backup, provisioned isolated zero-provisioned serverless YDB/YDS/Function/Lockbox/YMQ-DLQ resources, enabled the complete nine-type Postbox destination, and proved real Send/Delivery, duplicate idempotency, scoped suppression fixtures, six-attempt failure-to-DLQ, controlled replay, empty-DLQ cleanup and destination rollback while leaving all application send switches off.
