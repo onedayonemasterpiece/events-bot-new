@@ -12,7 +12,7 @@ from email_control.providers.base import AmbiguousDelivery, ProviderRejected
 from email_control.scheduler import EmailMonitorConfig, PostboxHealthMonitor
 from email_control.supabase_rpc import EmailControlRpcClient, EmailControlRpcTemporaryError
 from email_control.worker import EmailWorkerConfig, PostboxOutboxWorker
-from email_control.yandex_iam import YandexIamTokenProvider
+from email_control.yandex_iam import YandexIamError, YandexIamTokenProvider
 
 
 def claim(*, dry_run: bool = False, attempt: int = 1, payload: dict | None = None) -> dict:
@@ -234,6 +234,39 @@ def test_iam_provider_mints_short_lived_token_once_and_caches_it():
     assert len(calls) == 1
     assert set(calls[0][1]) == {"jwt"}
     assert "private_key" not in json.dumps(calls)
+
+
+def test_iam_provider_accepts_only_matching_yandex_cli_key_preamble():
+    private_key = _private_key()
+    key_id = "abcdefghij1234567890"
+    base = {
+        "id": key_id,
+        "service_account_id": "serviceacct1234567890",
+        "private_key": (
+            f"PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <{key_id}>\n"
+            + private_key
+        ),
+    }
+    provider = YandexIamTokenProvider(
+        json.dumps(base),
+        transport=lambda *_args: (
+            200,
+            json.dumps(
+                {
+                    "iamToken": "t1.fixture",
+                    "expiresAt": datetime.fromtimestamp(
+                        1_800_003_600, timezone.utc
+                    ).isoformat(),
+                }
+            ).encode(),
+        ),
+        now=lambda: 1_800_000_000,
+    )
+    assert provider.get_token() == "t1.fixture"
+
+    base["private_key"] = base["private_key"].replace(key_id, "wrongkeyid1234567890", 1)
+    with pytest.raises(YandexIamError, match="authorized_key_invalid"):
+        YandexIamTokenProvider(json.dumps(base))
 
 
 def test_supabase_rpc_uses_apikey_only_and_classifies_retryable_status():

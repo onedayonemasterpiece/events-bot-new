@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Email / Yandex authorized key compatibility**: accept the current `yc iam key create` key-ID warning preamble only when it matches the JSON key id, strip it before PS256 signing, and reject mismatched preambles.
 - **Email / transactional Postbox worker**: added a transactional-only Supabase claim/recovery/preflight/health RPC boundary, a Fly scheduler worker with short-lived service-account IAM tokens and ambiguity quarantine, plus PII-free outbox/DLQ monitoring with cooldown-bound Telegram superadmin alerts; recommendation/NotiSend rows remain unreachable from this worker.
 - **Email / live Postbox feedback release**: applied the correlated V2 RPC after backup, provisioned isolated zero-provisioned serverless YDB/YDS/Function/Lockbox/YMQ-DLQ resources, enabled the complete nine-type Postbox destination, and proved real Send/Delivery, duplicate idempotency, scoped suppression fixtures, six-attempt failure-to-DLQ, controlled replay, empty-DLQ cleanup and destination rollback while leaving all application send switches off.
 - **Email / Postbox event observability**: emit bounded single-line structured stdout records so event hashes, outcomes and stable error codes reach the isolated Cloud Logging group without recipient or message content, following the Yandex Python runtime contract rather than ineffective `basicConfig()` root-logger changes.

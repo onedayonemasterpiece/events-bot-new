@@ -14,6 +14,9 @@ import jwt
 
 IAM_TOKEN_URL = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
 _SAFE_ID = re.compile(r"^[a-z0-9]{10,64}$")
+_KEY_PREAMBLE = re.compile(
+    r"^PLEASE DO NOT REMOVE THIS LINE! Yandex\.Cloud SA Key ID <([a-z0-9]{10,64})>$"
+)
 TokenTransport = Callable[[str, bytes, Mapping[str, str], float], tuple[int, bytes]]
 
 
@@ -54,7 +57,14 @@ class YandexIamTokenProvider:
             raise YandexIamError("authorized_key_invalid")
         self.key_id = str(raw.get("id") or "").strip()
         self.service_account_id = str(raw.get("service_account_id") or "").strip()
-        self.private_key = str(raw.get("private_key") or "").strip()
+        private_key = str(raw.get("private_key") or "").strip()
+        pem_marker = "-----BEGIN PRIVATE KEY-----"
+        pem_offset = private_key.find(pem_marker)
+        preamble = private_key[:pem_offset].strip() if pem_offset >= 0 else ""
+        preamble_match = _KEY_PREAMBLE.fullmatch(preamble) if preamble else None
+        if preamble and (preamble_match is None or preamble_match.group(1) != self.key_id):
+            raise YandexIamError("authorized_key_invalid")
+        self.private_key = private_key[pem_offset:].strip() if pem_offset >= 0 else private_key
         if (
             not _SAFE_ID.fullmatch(self.key_id)
             or not _SAFE_ID.fullmatch(self.service_account_id)
