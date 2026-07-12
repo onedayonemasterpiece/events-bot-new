@@ -15,6 +15,9 @@
 - Raised the bounded human-like exact-post batch from three to five so fresh direct KO links and BGE-ready rescoring rows can progress in the same CandidateReport run without increasing the one-username resolve cap.
 - Reserved one exact-fetch slot per CandidateReport run for BGE-ready rescoring so continuous keyword discovery cannot permanently starve dual-vector completion.
 - Added a distinct BGE-ready exact-rescore backlog metric and included it in adaptive exact-batch sizing instead of hiding it inside the fetched ledger.
+- Stopped writing the redundant third `online_source_item` source projection and added maintenance cleanup, retaining canonical queue identity plus one live status overlay.
+- Reserved two default Telegram keyword slots for rotating travel-intent phrases while retaining broad POI/hashtag discovery, targeting higher publication-candidate yield rather than raw mention volume alone.
+- Promoted sources of strict text-passed exact posts into the bounded five-post source-attestation lane before image handoff, without bypassing local/spam checks.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active

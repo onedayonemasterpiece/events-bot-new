@@ -29,7 +29,7 @@ from scripts.region_talk_publication_finalizer import normalize_post_url, rt  # 
 
 KINDS = [
     "processed_post_item", "candidate_memory_item", "image_queue_item",
-    "publication_candidate_item", "text_vector_enrichment_item",
+    "publication_candidate_item", "text_vector_enrichment_item", "online_source_item",
 ]
 TEXT_FIELDS = {
     "text", "full_text", "text_excerpt", "short_summary", "raw",
@@ -150,6 +150,12 @@ def main() -> int:
     upserts: list[tuple[str, str, dict[str, Any]]] = []
     deletes: list[str] = []
     counters: Counter[str] = Counter()
+
+    for row in rows["online_source_item"]:
+        pk = str(row.get("_ydb_pk") or "")
+        if pk:
+            deletes.append(pk)
+            counters["legacy_online_source_rows_removed"] += 1
 
     for url, group in publication_groups.items():
         merged = merge_publications(group)

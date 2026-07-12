@@ -309,6 +309,10 @@ Region Talk must keep row-level product state compact:
 - identity/history projections use compact field allow-lists and hashes only;
 - `processed_post_item` is the single durable post record. New writes no longer
   duplicate it as `post_live_item`; the old kind is read-only migration input;
+- source state uses `source_queue_item` for ordered queue identity and
+  `source_status_item` for live status overlays. The former third copy,
+  `online_source_item`, is legacy read-only input and is removed by state
+  maintenance;
 - BGE dense vectors are stored as `f16_le_base64` plus `embedding_dim`, not a
   JSON list of decimal floats. Semantic scores and E5+BGE fusion remain intact;
 - E5 may retain the bounded source excerpt only while its paired BGE row is

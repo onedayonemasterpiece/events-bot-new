@@ -691,6 +691,87 @@ def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str
     return list(by_key.values())
 
 
+def strict_text_candidate_source_priority_updates(
+    candidate_rows: list[dict[str, Any]],
+    sources_by_key: dict[str, dict[str, Any]],
+    *,
+    now_iso: str,
+) -> list[dict[str, Any]]:
+    """Prioritize bounded source attestation before image handoff.
+
+    An exact post that already passed current KO-only E5+BGE text checks should
+    not wait in a generic source backlog merely because only one source post
+    has been observed. This lane spends up to the same five-post attestation
+    target, without bypassing local/spam or final publication gates.
+    """
+    target_posts = max(1, _env_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
+    active_stages = {
+        "image_fetch_retry_needed", "needs_image_review", "good_text_weak_media",
+        "semantic_candidate", "favorite", "low_substance_but_region_relevant",
+    }
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in candidate_rows:
+        if str(row.get("vector_gate_status") or "") != "vector_accept_candidate":
+            continue
+        if str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
+            continue
+        if not rt._rt_bool(row.get("kaliningrad_oblast_only_scope")):
+            continue
+        if str(row.get("current_stage") or "") not in active_stages:
+            continue
+        key = canonical_source_key_for_row(row)
+        source = sources_by_key.get(key) if key else None
+        if not isinstance(source, dict) or not source:
+            continue
+        terminal = rt.source_local_region_terminal_fields(source)
+        if str(terminal.get("source_queue_status") or "") in {str(rt.LOCAL_REGION_SOURCE_STATUS), str(rt.SPAM_SOURCE_STATUS)}:
+            continue
+        if str(source.get("source_scope") or "") == "external" or str(source.get("source_geo_class") or "") in {"nonlocal_russia", "external"}:
+            continue
+        try:
+            posts_scanned = int(float(source.get("posts_scanned") or 0))
+        except (TypeError, ValueError):
+            posts_scanned = 0
+        if posts_scanned >= target_posts:
+            continue
+        by_key[key] = {
+            **source,
+            "publication_source_evidence_priority": "true",
+            "publication_source_evidence_post_url": normalize_post_url(str(row.get("post_url") or "")),
+            "publication_source_evidence_requested_at": now_iso,
+            "publication_source_evidence_target_posts": target_posts,
+            "priority_lane": "publication_source_evidence",
+            "priority_reason": "strict_text_candidate_needs_source_attestation",
+            "priority_updated_at": now_iso,
+            "next_action": "scan_source_to_complete_publication_attestation_before_image",
+            "queue_item_updated_at": now_iso,
+        }
+    return list(by_key.values())
+
+
+def read_strict_text_candidate_source_priority_rows(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    *,
+    limit: int,
+    now_iso: str,
+) -> list[dict[str, Any]]:
+    def op(session: Any) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        memory = rt.ydb_select_kind_items(session, ydb, table, "candidate_memory_item", limit=limit)
+        sources = rt.ydb_select_kind_items(session, ydb, table, "source_queue_item", limit=limit)
+        statuses = rt.ydb_select_kind_items(session, ydb, table, "source_status_item", limit=limit)
+        return memory, sources, statuses
+
+    memory, sources, statuses = pool.retry_operation_sync(op)
+    source_index = authoritative_source_index(sources, statuses, {})
+    return strict_text_candidate_source_priority_updates(
+        list(memory.values()),
+        source_index,
+        now_iso=now_iso,
+    )
+
+
 def source_evidence_priority_clear_updates(rows: list[dict[str, Any]], *, now_iso: str) -> list[dict[str, Any]]:
     """Clear attestation priority after the associated post is terminally out."""
     by_key: dict[str, dict[str, Any]] = {}
@@ -1163,6 +1244,13 @@ def main() -> int:
     ydb, driver, pool, table, rows = read_live_rows(args.limit_images, args.limit_memory, reverify_existing=args.reverify_existing)
     priority_now = rt.utc_now_iso()
     source_priority_rows = source_evidence_priority_updates(rows, now_iso=priority_now)
+    source_priority_rows.extend(read_strict_text_candidate_source_priority_rows(
+        pool,
+        ydb,
+        table,
+        limit=args.limit_memory,
+        now_iso=priority_now,
+    ))
     source_priority_clear_rows = source_evidence_priority_clear_updates(rows, now_iso=priority_now)
     source_rows_by_key = {
         canonical_source_key_for_row(row): row

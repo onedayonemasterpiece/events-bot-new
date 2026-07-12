@@ -2503,8 +2503,9 @@ def _online_source_should_write_source_queue_item(payload: dict[str, Any], stage
     # `source_queue_item` is the durable ordered queue. Live progress rows such
     # as `source_selected_for_run` intentionally lack queue_order/status fields
     # and must not overwrite the durable queue row for the same source. They are
-    # still written to `online_source_item` and `source_status_item` for operator
-    # visibility and merge overlays.
+    # still written to `source_status_item` for operator visibility and merge
+    # overlays. `online_source_item` was a byte-for-byte third projection and
+    # is now legacy read-only input.
     return bool(payload.get("queue_order") or stage == "unified_source_queue_built" or payload.get("online_update_stage") == "unified_source_queue_built")
 
 
@@ -2533,7 +2534,6 @@ def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, st
             if _online_source_should_write_source_queue_item(payload, stage):
                 ydb_upsert_json(session, ydb, table_path, "source_queue_item:" + key, "source_queue_item", payload, updated_at)
             ydb_upsert_json(session, ydb, table_path, "source_status_item:" + key, "source_status_item", payload, updated_at)
-            ydb_upsert_json(session, ydb, table_path, "online_source_item:" + key, "online_source_item", payload, updated_at)
             if payload.get("source_candidate_id") or payload.get("candidate_source_status") or payload.get("frontier_status"):
                 candidate_payload = compact_record(payload, SOURCE_CANDIDATE_STATE_FIELDS, max_len=700)
                 cand_key = str(candidate_payload.get("source_candidate_id") or candidate_payload.get("canonical_source_key") or key)
@@ -3494,10 +3494,11 @@ def merge_ydb_source_queue_status_items(
     """Overlay all source/public live-status row kinds into the durable source queue.
 
     `source_queue_item` is the canonical queue row, but live runs also write
-    `source_status_item` / `online_source_item` for operator visibility while a
-    notebook is still running. The next CandidateReport run must not ignore
-    those rows, otherwise selected/skipped/status-only publics disappear from
-    the reconstructed live state until a final snapshot rewrite catches up.
+    `source_status_item` for operator visibility while a notebook is still
+    running. Historical `online_source_item` remains readable during migration
+    but no new rows are written. The next CandidateReport run must not ignore
+    those overlays, otherwise selected/skipped/status-only publics disappear
+    from reconstructed live state until a final snapshot rewrite catches up.
     """
     q = data.get("unified_source_queue") if isinstance(data.get("unified_source_queue"), dict) else {}
     q = dict(q)
@@ -4860,7 +4861,22 @@ def build_telegram_keyword_query_plan(run_id: str = "", lexicon: list[dict[str, 
         offset = int(stable_hash(run_id or RUN_STARTED_AT.strftime("%Y-%m-%d"), length=8), 16)
     keyword_candidates = _rotate_query_terms(keyword_terms, offset) if rotate and keyword_source != "env" else keyword_terms
     hashtag_candidates = _rotate_query_terms(hashtag_terms, offset) if rotate and hashtag_source != "env" else hashtag_terms
-    selected_keywords = keyword_candidates[:keyword_limit]
+    if keyword_source != "env" and keyword_limit > 0:
+        intent_normalized = {normalize_geo_text(term) for term in TELEGRAM_TRAVEL_INTENT_DISCOVERY_TERMS}
+        intent_terms = [term for term in keyword_terms if normalize_geo_text(term) in intent_normalized]
+        intent_candidates = _rotate_query_terms(intent_terms, offset) if rotate else intent_terms
+        intent_limit = min(
+            keyword_limit,
+            max(0, getenv_int("REGION_TALK_TELEGRAM_TRAVEL_INTENT_QUERIES_PER_RUN", 2)),
+        )
+        selected_intent = intent_candidates[:intent_limit]
+        # Keep the intent reservation bounded: the remaining geographic slots
+        # must not be filled by additional intent phrases merely because those
+        # phrases also occur in the broad keyword pool.
+        remaining = [term for term in keyword_candidates if normalize_geo_text(term) not in intent_normalized]
+        selected_keywords = _dedupe_keep_order(selected_intent + remaining)[:keyword_limit]
+    else:
+        selected_keywords = keyword_candidates[:keyword_limit]
     selected_hashtags = hashtag_candidates[:hashtag_limit]
     selected_queries = _dedupe_keep_order(selected_keywords + selected_hashtags)[:max_queries]
     return {
@@ -4875,6 +4891,10 @@ def build_telegram_keyword_query_plan(run_id: str = "", lexicon: list[dict[str, 
         "query_rotate": str(rotate).lower(),
         "query_rotate_offset": offset if rotate else 0,
         "selected_keyword_queries": selected_keywords,
+        "selected_travel_intent_queries": [
+            term for term in selected_keywords
+            if normalize_geo_text(term) in {normalize_geo_text(x) for x in TELEGRAM_TRAVEL_INTENT_DISCOVERY_TERMS}
+        ],
         "selected_hashtag_queries": selected_hashtags,
         "selected_queries": selected_queries,
     }

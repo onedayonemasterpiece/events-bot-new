@@ -234,6 +234,15 @@ Important invariants:
   `1`) so continuous keyword inflow cannot starve the fusion completion lane.
   The scorecard reports pending-new exact links and BGE-ready-rescore links as
   separate counts; the orchestrator sizes its bounded exact batch from both.
+- The default global keyword plan reserves two phrase slots for travel intent
+  (`ездили`, `путешествие`, `отзыв`, `маршрут`) and rotates the remaining POI
+  slots. This keeps broad geographic recall but raises the share of personal
+  travel posts over generic news/official mentions; explicit env query plans
+  remain untouched.
+- A direct post that passes KO-only fused E5+BGE text checks promotes its source
+  into the bounded five-post attestation lane before image handoff. This lets a
+  strong exact post reach image/Gemini promptly without declaring an unknown
+  source external or weakening local/spam safeguards.
 - E5 rows carry the durable source terminal decision. The BGE selector excludes
   rows already classified as local-region or spam and reports
   `bge_source_terminal_skipped_sample_total`; this removes wasted CPU work but

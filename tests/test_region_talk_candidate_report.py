@@ -1214,6 +1214,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN",
             "REGION_TALK_TELEGRAM_QUERY_ROTATE",
             "REGION_TALK_TELEGRAM_QUERY_ROTATE_OFFSET",
+            "REGION_TALK_TELEGRAM_TRAVEL_INTENT_QUERIES_PER_RUN",
         ]}
         try:
             os.environ.pop("REGION_TALK_TELEGRAM_KEYWORD_QUERIES", None)
@@ -1223,6 +1224,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"] = "3"
             os.environ["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"] = "4"
             os.environ["REGION_TALK_TELEGRAM_QUERY_ROTATE"] = "0"
+            os.environ["REGION_TALK_TELEGRAM_TRAVEL_INTENT_QUERIES_PER_RUN"] = "2"
             plan = mod.build_telegram_keyword_query_plan("unit-run")
             self.assertEqual(plan["keyword_query_source"], "place_lexicon")
             self.assertEqual(plan["hashtag_query_source"], "place_lexicon")
@@ -1232,6 +1234,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertGreaterEqual(plan["hashtag_terms_planned_total"], 70)
             self.assertGreaterEqual(plan["source_preflight_terms_planned_total"], 90)
             self.assertIn("#Калининград", plan["selected_hashtag_queries"])
+            self.assertEqual(len(plan["selected_travel_intent_queries"]), 2)
         finally:
             for key, value in old_env.items():
                 if value is None:

@@ -603,6 +603,36 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(mod.source_evidence_priority_updates([row], now_iso="2026-07-10T12:00:00+00:00"), [])
         self.assertEqual(len(mod.source_evidence_priority_clear_updates([row], now_iso="2026-07-10T12:00:00+00:00")), 1)
 
+    def test_strict_text_candidate_prioritizes_source_before_image_handoff(self) -> None:
+        mod = self.mod
+        source = {
+            "canonical_source_key": "telegram:umka_blog",
+            "source_url": "https://t.me/umka_blog",
+            "source_title": "География и факты",
+            "source_queue_status": "processed_found_ko_candidate",
+            "posts_scanned": 1,
+            "ko_posts_found": 1,
+        }
+        candidate = candidate_row(
+            post_url="https://t.me/umka_blog/2118",
+            canonical_source_key="telegram:umka_blog",
+            current_stage="image_fetch_retry_needed",
+            vector_gate_status="vector_accept_candidate",
+            text_vector_fusion_status="fused_e5_bge_m3",
+            kaliningrad_oblast_only_scope=True,
+        )
+
+        updates = mod.strict_text_candidate_source_priority_updates(
+            [candidate],
+            {"telegram:umka_blog": source},
+            now_iso="2026-07-12T11:00:00+00:00",
+        )
+
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]["publication_source_evidence_priority"], "true")
+        self.assertEqual(updates[0]["publication_source_evidence_target_posts"], 5)
+        self.assertEqual(updates[0]["priority_reason"], "strict_text_candidate_needs_source_attestation")
+
     def test_durable_budget_exhaustion_defers_without_gemini_call(self) -> None:
         mod = self.mod
         budget = mock.Mock()
