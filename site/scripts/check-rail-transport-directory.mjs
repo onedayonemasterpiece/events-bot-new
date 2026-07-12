@@ -46,6 +46,7 @@ for (const source of sources.values()) {
 
 for (const route of routes.values()) {
   for (const id of route.source_ids) if (!sources.has(id)) throw new Error(`Route ${route.id} references unknown source ${id}`);
+  for (const id of route.supporting_source_ids || []) if (!supportingSources.has(id)) throw new Error(`Route ${route.id} references unknown supporting source ${id}`);
   for (const id of [...route.origin_station_ids, ...route.destination_station_ids, ...(route.via_station_ids || [])]) {
     if (!stations.has(id)) throw new Error(`Route ${route.id} references unknown station ${id}`);
   }
@@ -111,7 +112,11 @@ if (krasnolesye.calendar.kind !== 'weekends_holidays' || krasnolesye.trips[0].de
 const yantarny = directory.venue_access.find((row) => row.id === 'kaliningrad-ds-yantarny');
 if (yantarny?.station_id !== 'elizavetinskaya' || yantarny.route_id !== 'elizavetinskaya-venue') throw new Error('DS Yantarny must use only the Elizavetinskaya venue-specific route');
 if (yantarny.walk_distance_m !== 627 || yantarny.walk_minutes !== 9 || !yantarny.journey_rule.includes('never enable it for other Kaliningrad events')) throw new Error('DS Yantarny must preserve the reviewed walk and venue-only safety rule');
-if (routes.get('elizavetinskaya-venue')?.priority_class !== 'venue_specific_optional') throw new Error('Elizavetinskaya must remain optional and venue-specific');
+const elizavetinskayaRoute = routes.get('elizavetinskaya-venue');
+if (elizavetinskayaRoute?.priority_class !== 'venue_specific_optional') throw new Error('Elizavetinskaya must remain optional and venue-specific');
+if (elizavetinskayaRoute.urban_fare?.amount_rub !== 35 || elizavetinskayaRoute.urban_fare.source_id !== 'kppk-fares-2026') throw new Error('Elizavetinskaya must keep the official 2026 city-distance fare');
+if (elizavetinskayaRoute.typical_travel_minutes?.['kaliningrad-south']?.join('-') !== '15-18' || elizavetinskayaRoute.typical_travel_minutes?.['kaliningrad-north']?.join('-') !== '7-8') throw new Error('Elizavetinskaya must show both South and North travel bands');
+if (!elizavetinskayaRoute.display_contract?.outbound_row.includes('two separately clickable origin-time chips')) throw new Error('Elizavetinskaya outbound rows must not duplicate the same physical train');
 if (!directory.excluded_services.some((row) => row.id === 'victory-echelon')) throw new Error('The exhibition train exclusion is required');
 
 console.log(`Rail transport directory checks passed: ${sources.size} official pages, ${routes.size} routes, ${policies.size} locality policies, ${patterns.size} service patterns`);

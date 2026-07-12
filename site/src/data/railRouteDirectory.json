@@ -11,6 +11,13 @@
       "url": "https://kgd.ru/news/society/item/118100-na-ulice-elizavetinskoj-v-kaliningrade-otkryli-novuyu-zheleznodorozhnuyu-ostanovku",
       "published_at": "2026-07-03",
       "note": "The new platform opened at the Elizavetinskaya/Generala Chelnokova intersection; the current carrier matrices provide the actual stopping services."
+    },
+    {
+      "id": "kppk-fares-2026",
+      "kind": "official_carrier_fare",
+      "url": "https://kppk39.ru/passengers/tarify/stoimost-razovykh-biletov/",
+      "published_at": "2026-01-03",
+      "note": "The 2026 fare is 35 RUB for a journey of up to 10 km; both Kaliningrad-South/North to Elizavetinskaya pairs are within this band."
     }
   ],
   "publication_contract": {
@@ -183,7 +190,7 @@
   ],
   "routes": [
     {"id": "coastal-frequent", "source_ids": ["coast-via-zelenogradsk", "coast-via-pereslavskoe", "sea-express"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["zelenogradsk-new", "pionersky-kurort", "svetlogorsk-2"], "vehicle": "ЭС2Г Ласточка", "priority_class": "frequent_primary", "service_data": "transportSchedules.json + next official refresh"},
-    {"id": "elizavetinskaya-venue", "source_ids": ["coast-via-pereslavskoe"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["elizavetinskaya"], "vehicle": "ЭС2Г Ласточка", "priority_class": "venue_specific_optional", "service_data": "next official refresh; never infer an Elizavetinskaya stop in an empty matrix cell"},
+    {"id": "elizavetinskaya-venue", "source_ids": ["coast-via-pereslavskoe"], "supporting_source_ids": ["elizavetinskaya-opening-2026-07-03", "kppk-fares-2026"], "origin_station_ids": ["kaliningrad-south", "kaliningrad-north"], "destination_station_ids": ["elizavetinskaya"], "vehicle": "ЭС2Г Ласточка", "priority_class": "venue_specific_optional", "urban_fare": {"amount_rub": 35, "effective_from": "2026-01-03", "distance_band_km_max": 10, "source_id": "kppk-fares-2026"}, "typical_travel_minutes": {"kaliningrad-south": [15, 18], "kaliningrad-north": [7, 8]}, "display_contract": {"header_route": "Калининград-Южный / Северный → Елизаветинская", "shared_meta": "35 ₽ · 15–18 мин от Южного · 7–8 мин от Северного · затем 8–10 мин пешком", "outbound_row": "Render one physical train once: two separately clickable origin-time chips followed by one Elizavetinskaya arrival time.", "return_row": "Render one Elizavetinskaya departure once, followed by North and South arrival times.", "calendar": "Outbound origin chips create origin-specific ICS files; a return row creates one departure reminder and includes both city-station arrival times in its description."}, "service_data": "next official refresh; never infer an Elizavetinskaya stop in an empty matrix cell"},
     {"id": "baltiysk-rail", "source_ids": ["baltiysk"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["baltiysk"], "vehicle": "РА-2", "priority_class": "seasonal_frequent_primary"},
     {"id": "eastern-main", "source_ids": ["chernyshevskoe"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["gvardeysk", "znamensk", "chernyakhovsk", "gusev", "nesterov", "chernyshevskoe"], "vehicle": "РА-2", "priority_class": "limited_parallel"},
     {"id": "zheleznodorozhny-tourist", "source_ids": ["zheleznodorozhny"], "origin_station_ids": ["kaliningrad-south"], "destination_station_ids": ["zheleznodorozhny"], "via_station_ids": ["chernyakhovsk"], "vehicle": "РА-2", "priority_class": "limited_parallel"},

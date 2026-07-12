@@ -61,9 +61,24 @@ Official route `117` reaches the correct Ushakovo corridor and remains the direc
 
 The platform `о.п. Елизаветинская` opened on **3 July 2026** at the Елизаветинская / Генерала Челнокова intersection. It appears as an explicit row in the current official Светлогорск-via-Переславское matrices; express columns with an empty cell still must not be treated as stopping services.
 
-This is a useful exception to the general “no transport block for Kaliningrad events” rule. OSM/Valhalla walking over the published intersection and current pedestrian network gives approximately **627 m / 8–10 minutes** to the venue at `Согласия, 39`. The train ride from `Калининград-Северный` is about 7–8 minutes when the service stops there, and the base table offers regular non-express options through the day.
+This is a useful exception to the general “no transport block for Kaliningrad events” rule. OSM/Valhalla walking over the published intersection and current pedestrian network gives approximately **627 m / 8–10 minutes** to the venue at `Согласия, 39`. A stopping train takes approximately **15–18 minutes from Калининград-Южный** or **7–8 minutes from Калининград-Северный**. Both pairs are within the official 2026 `до 10 км` band, so the adult one-way fare is **35 ₽**.
 
 The match must be venue-specific: exact aliases `ДС Янтарный`, `Дворец спорта Янтарный`, `Спорткомплекс Янтарный`, or the canonical address. It must never activate for unrelated Калининград events. Public rendering still waits for exact event-date calendars and a real event regression; when enabled, hide the option if no useful arrival or return survives the normal filters.
+
+Do not duplicate the same train into separate South and North cards. The compact outbound row contains two origin choices and one arrival:
+
+```text
+[19:18 Южный]  [19:26 Северный]  →  19:33 Елизаветинская
+35 ₽ · затем 8–10 мин пешком
+```
+
+Each origin-time chip is its own calendar link because the reminder time depends on the boarding station. The return row has one departure reminder and two arrivals:
+
+```text
+23:29 Елизаветинская  →  23:36 Северный · 23:43 Южный
+```
+
+On mobile the same row wraps after the origin chips; it does not become two full cards. The shared header/meta line states the fare and both travel-time bands once.
 
 ## Runtime/export boundary
 
