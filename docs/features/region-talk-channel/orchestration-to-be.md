@@ -175,6 +175,10 @@ Telegram Monitoring and Guide monitoring:
   `text read` from `dual-vector complete` and `text suitable before media`, and
   media/publication totals are explicitly marked as historical ledgers versus
   active backlog. Stable machine metric keys remain available in JSON;
+  ever-scanned coverage is derived from durable source/post scan evidence, not
+  `total - current pending`, so selecting an old source for rescan cannot make
+  historical coverage move backwards. The current primary-pending and
+  pending-with-scan-evidence counters remain visible on a separate line;
 - `image_queue_total` retained as the transparent raw/audit row count, plus
   `image_product_eligible_total` for rows accepted by the current strict gate;
   `--target-image-queue` follows the eligible delta rather than rejected rows

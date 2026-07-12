@@ -250,8 +250,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
     """
     value = lambda key: _safe_int(metrics.get(key))
     source_total = value("publics_total")
-    source_never_scanned = value("publics_primary_unscanned_pending_total")
-    source_ever_scanned = max(0, source_total - source_never_scanned)
+    # Ever-scanned is evidence-owned (source counters or canonical processed
+    # post source keys), not `total - pending`. A source temporarily selected
+    # for a rescan can re-enter a pending status and must not make historical
+    # scan coverage move backwards.
+    source_ever_scanned = min(source_total, value("publics_scanned_with_posts_total"))
+    source_never_scanned = max(0, source_total - source_ever_scanned)
     source_scanned_percent = int(round((source_ever_scanned / source_total) * 100)) if source_total else 0
     latest_outcomes = metrics.get("heuristic_ko_latest_run_outcome_counts") or {}
     if not isinstance(latest_outcomes, dict):
@@ -273,6 +277,11 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publics_needs_rescan_or_retry_total')}/"
             f"{value('publics_rejected_local_region_source_total')}/"
             f"{value('publics_rejected_spam_source_total')}"
+        ),
+        (
+            "Технический backlog — никогда не сканировались и pending / pending, но уже имеют scan evidence: "
+            f"{value('publics_primary_unscanned_pending_total')}/"
+            f"{value('publics_pending_with_scan_evidence_waiting_rescan_total')}"
         ),
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (

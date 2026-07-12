@@ -1140,6 +1140,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         text = mod.build_orchestrator_stats_message({
             "publics_total": 7055,
             "publics_primary_unscanned_pending_total": 6393,
+            "publics_scanned_with_posts_total": 662,
             "publics_with_ko_candidates_total": 91,
             "post_link_queue_exact_ready_total": 67,
             "post_link_queue_fetched_total": 0,
@@ -1152,6 +1153,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "publication_delivery_completed_total": 6,
         })
         self.assertIn("всего / хотя бы раз реально просмотрены / ещё ни разу не просмотрены: 7055/662/6393", text)
+        self.assertIn("Технический backlog", text)
         self.assertIn("Источники, где уже найден хотя бы один возможный пост о КО: 91", text)
         self.assertIn("новые тексты к чтению / готовы к повторному решению после BGE", text)
         self.assertIn("67/0/0/0/0", text)
