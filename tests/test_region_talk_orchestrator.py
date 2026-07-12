@@ -119,7 +119,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")
         self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
         self.assertEqual(main["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "1")
-        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "3")
+        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "5")
         self.assertEqual(main["env"]["REGION_TALK_TG_CACHED_ENTITY_ONLY"], "1")
         self.assertEqual(main["env"]["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
         self.assertEqual(main["env"]["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "1")
@@ -917,7 +917,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         actions = mod.build_decision_plan({}, target_confirmed=20, bge_threshold=1, image_threshold=1, include_main=False)
         main = next(action for action in actions if action["action"] == "launch_candidate_report")
         self.assertEqual(main["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "1")
-        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "3")
+        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "5")
         self.assertEqual(main["env"]["REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY"], "1")
         self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
 
@@ -1133,7 +1133,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("canonical population: 7055", text)
         self.assertIn("Sources with broad KO/candidate evidence (legacy): 91", text)
         self.assertIn("Exact ready/cooldown/entity-wait/fetched: 67/0/0/0", text)
-        self.assertIn("Publication queue/current-confirmed/sent-ledger/ready/deliveries-completed: 19/7/7/0/6", text)
+        self.assertIn("Publication ledger rows / currently Gemini-confirmed / sent-ledger / ready-unsent / deliveries-completed: 19/7/7/0/6", text)
 
     def test_strong_source_attestation_backlog_schedules_bounded_priority_pass(self) -> None:
         mod = load_module()

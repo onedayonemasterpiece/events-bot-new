@@ -284,7 +284,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('fast_check_exact_posts_text_pending_total')}"
         ),
         (
-            "Inflow manual/keyword/hashtag/similar: "
+            "Historical source provenance totals (manual/import / keyword / hashtag / similar; not this-run deltas): "
             f"{value('discovery_inflow_manual_total')}/"
             f"{value('discovery_inflow_keyword_total')}/"
             f"{value('discovery_inflow_hashtag_total')}/"
@@ -340,7 +340,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         f"Heuristic KO latest outcomes: {top_latest_outcomes}",
         (
-            "Candidate memory total/operational/local-audit/spam-audit/dual-pending/image-wait: "
+            "Candidate-memory ledger rows / active operational / local-audit / spam-audit / dual-pending / image-wait: "
             f"{value('candidate_memory_total')}/"
             f"{value('candidate_memory_operational_total')}/"
             f"{value('candidate_memory_terminal_local_audit_total')}/"
@@ -373,7 +373,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('video_manual_review_candidate_urls_total')}"
         ),
         (
-            "Publication queue/current-confirmed/sent-ledger/ready/deliveries-completed: "
+            "Publication ledger rows / currently Gemini-confirmed / sent-ledger / ready-unsent / deliveries-completed: "
             f"{value('publication_candidate_total')}/"
             f"{value('publication_confirmed_total')}/"
             f"{value('publication_sent_total')}/"
@@ -2769,11 +2769,11 @@ def build_decision_plan(
     goal_reached = int(metrics.get("publication_sent_total") or 0) >= target_confirmed or int(metrics.get("publication_confirmed_total") or 0) >= target_confirmed
     exact_ready = int(metrics.get("post_link_queue_exact_ready_total") or 0)
     exact_cache_hits = int(metrics.get("post_link_queue_entity_cache_hit_total") or 0)
-    # Three is the conservative baseline. When the queue already has private
-    # entities, a larger exact batch only adds paced get_messages calls and does
-    # not increase the dangerous username-resolve budget (which remains one).
-    exact_fetch_limit = 3
-    if exact_ready > 3 and exact_cache_hits > 3:
+    # Five is still a small human-like exact batch and lets one run consume
+    # fresh pending links plus a few `bge_ready_rescore` links. Username resolve
+    # remains capped at one; cached rows add only paced get_messages calls.
+    exact_fetch_limit = 5
+    if exact_ready > 5 and exact_cache_hits > 5:
         exact_fetch_limit = min(8, exact_ready, exact_cache_hits)
     candidate_budget = candidate_adaptive_budget(metrics)
     candidate_env = {

@@ -11,6 +11,8 @@
 - Reused the orchestrator's YC/YDB credential discovery in the local Region Talk finalizer so downstream Gemini processing does not fail when only a renewable local YC token is available.
 - Ensured short exact keyword/fast-check posts still receive BGE-M3 instead of remaining permanently in dual-vector pending; the generic short-text noise filter remains in place.
 - Reopened fetched exact-post links for one bounded rescore when their awaited BGE result arrives, while preserving terminal Gemini/operator idempotency.
+- Clarified Region Talk operator labels so historical provenance and candidate/publication ledgers cannot be mistaken for current-run additions or active backlogs.
+- Raised the bounded human-like exact-post batch from three to five so fresh direct KO links and BGE-ready rescoring rows can progress in the same CandidateReport run without increasing the one-username resolve cap.
 - **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
   split dual semantic matches from the complete publication-text gate, label
   the 98-row media population as a historical ledger rather than an active
