@@ -2199,6 +2199,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotEqual(decision["source_quick_class"], "spam_source_reject")
         self.assertNotIn("ставк", decision.get("source_spam_hits", ""))
 
+    def test_single_promo_excerpt_does_not_reject_whole_blogger_source(self) -> None:
+        mod = load_module()
+        decision = mod.source_surface_terminal_fields({
+            "source_title": "Фигаро здесь, Фигаро там",
+            "handle": "@figarotravel",
+            "keyword_hit_text_excerpt": "Маршрут по Калининграду. Для читателей есть промокод партнёра.",
+            "external_blogger_evidence_status": "confirmed_external",
+        })
+        self.assertNotIn("source_queue_status", decision)
+        self.assertEqual(decision["source_quick_class"], "candidate_keep")
+        self.assertEqual(decision["source_excerpt_spam_requires_multi_post_confirmation"], "true")
+        self.assertIn("промокод", decision["source_spam_hits"])
+
+    def test_spam_pattern_in_source_title_remains_terminal(self) -> None:
+        mod = load_module()
+        decision = mod.source_surface_terminal_fields({
+            "source_title": "Промокод и дешёвые авиабилеты каждый день",
+            "handle": "@cheap_promo_feed",
+            "keyword_hit_text_excerpt": "Сегодня Калининград",
+        })
+        self.assertEqual(decision["source_queue_status"], mod.SPAM_SOURCE_STATUS)
+
     def test_resolved_telegram_title_overrides_username_placeholder_for_local_filter(self) -> None:
         mod = load_module()
         decision = mod.source_local_region_terminal_fields({

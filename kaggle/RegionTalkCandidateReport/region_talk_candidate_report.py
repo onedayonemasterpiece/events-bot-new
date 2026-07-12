@@ -1607,6 +1607,38 @@ def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
         return {}
     decision = source_discovery_surface_filter(row)
     klass = str(decision.get("source_quick_class") or "")
+    if klass == "spam_source_reject":
+        title = str(
+            row.get("resolved_title")
+            or row.get("source_title")
+            or row.get("recommended_title")
+            or row.get("title_guess")
+            or row.get("seed_channel_title")
+            or ""
+        )
+        handle = str(
+            row.get("handle")
+            or row.get("username_or_handle")
+            or row.get("recommended_username")
+            or row.get("canonical_url")
+            or row.get("source_url")
+            or row.get("keyword_hit_source_url")
+            or ""
+        )
+        title_spam_hits = _regex_hits(SOURCE_SPAM_SURFACE_PATTERNS, " ".join([title, handle]).lower())
+        if not title_spam_hits:
+            # One exact KO post may legitimately contain a sponsor line or a
+            # promo code. That is a post-level ad signal, not proof that the
+            # whole blogger source is spam. Keep the cheap signal for audit,
+            # but require the existing repeated-post threshold during the
+            # bounded source scan before terminal source rejection.
+            decision["source_quick_class"] = "candidate_keep"
+            decision["source_excerpt_spam_requires_multi_post_confirmation"] = "true"
+            suffix = "excerpt_spam_requires_multi_post_confirmation"
+            decision["source_surface_filter_reason"] = "; ".join(filter(None, [
+                str(decision.get("source_surface_filter_reason") or ""), suffix,
+            ]))
+            klass = "candidate_keep"
     if klass == "spam_source_reject" and getenv_bool("REGION_TALK_REJECT_SPAM_SOURCES_BY_SURFACE", True):
         return {
             **decision,

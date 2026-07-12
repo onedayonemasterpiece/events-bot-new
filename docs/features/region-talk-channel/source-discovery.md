@@ -232,6 +232,15 @@ entity/FloodWait rules, and persists its cursor for continuation. Thus the
 extra budget is spent only after an author is independently confirmed as an
 external visitor, rather than slowing the generic source backlog.
 
+A commercial token in one matched post (for example a sponsor footer or
+`промокод`) is treated as a **post-level suspicion**, not as sufficient proof
+that the entire blogger channel is spam. Immediate source rejection remains
+valid for spam/bait patterns in the source title or handle. Excerpt-only spam
+signals must repeat across the bounded recent-post sample (default threshold:
+three posts) before the canonical source row becomes
+`rejected_spam_source`. This prevents a useful travel author from disappearing
+because one KO post contains an integration.
+
 The production rollback default remains `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=legacy_v1`
 with the historical two-query pair. The bounded research mode
 `adaptive_cursor_v1` may be enabled explicitly for a controlled run. It uses a
