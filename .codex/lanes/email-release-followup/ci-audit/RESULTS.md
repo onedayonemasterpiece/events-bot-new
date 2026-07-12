@@ -37,7 +37,7 @@ compile succeeded:
 - run [29153574605](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/29153574605): six-hour automatic cancellation;
 - static-site PR #24 run [29163020847](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/29163020847): six-hour automatic cancellation;
 - email PR #25 run [29169771947](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/29169771947): manually cancelled after about 12 minutes;
-- static release PR #26 run [29182395826](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/29182395826): still in the same pytest step during this audit.
+- static release PR #26 run [29182395826](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/29182395826): remained in the same pytest step until deliberately cancelled after the root cause was reproduced, freeing the runner for fixed-code validation.
 
 Recent remote release/static branches and PR #26 were inspected. None contains a CI disable or a fix
 for the busy loop/connection teardown. The change was therefore not fixed elsewhere and omitted from
@@ -72,10 +72,13 @@ process exit 0; total command elapsed 17.90s including uv environment startup
 The isolated rate-limit regression passed in `0.29s`, process exited `0`, and YAML parsing confirmed
 `jobs.python-ci.timeout-minutes == 20`. `git diff --check` passed.
 
+GitHub PR [#27](https://github.com/onedayonemasterpiece/events-bot-new/pull/27) then ran the fixed workflow as
+[run 29183316110](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/29183316110):
+`python-ci` completed successfully in 40 seconds, including dependency installation, compile and the
+incident regression test step.
+
 ## Risks and follow-up
 
-- GitHub-hosted validation is still required on the PR for this branch. Local evidence proves the
-  previous hang and bounded exit, but is not a substitute for a green Actions run.
 - Existing already-running jobs use their head commit's old workflow and will not be repaired in
   place; cancel/re-run them only after their branch includes this fix or after the fix reaches `main`.
 - The 20-minute timeout is a guardrail, not the primary fix. If this small suite approaches that bound
