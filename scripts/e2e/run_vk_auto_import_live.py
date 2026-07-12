@@ -65,6 +65,17 @@ def _message_payload(message: Any) -> dict[str, Any]:
     }
 
 
+def _terminal_response_kind(text: str | None) -> str | None:
+    normalized = str(text or "").strip().casefold()
+    if "🏁 vk auto import завершён" in normalized:
+        return "success"
+    if normalized == "not authorized" or "нет доступа" in normalized:
+        return "authorization_denied"
+    if "результат: ошибка" in normalized:
+        return "operator_error"
+    return None
+
+
 async def _main(args: argparse.Namespace) -> int:
     api_id, api_hash, session, bundle = _config()
     client = TelegramClient(
@@ -97,12 +108,16 @@ async def _main(args: argparse.Namespace) -> int:
             deadline = time.monotonic() + args.timeout_seconds
             seen: dict[int, dict[str, Any]] = {int(sent.id): _message_payload(sent)}
             terminal = False
+            terminal_kind: str | None = None
             while time.monotonic() < deadline:
                 messages = await client.get_messages(entity, limit=80, min_id=int(sent.id) - 1)
                 for message in messages:
                     seen[int(message.id)] = _message_payload(message)
-                    if not message.out and "🏁 VK auto import завершён" in str(message.raw_text or ""):
-                        terminal = True
+                    if not message.out:
+                        response_kind = _terminal_response_kind(message.raw_text)
+                        if response_kind:
+                            terminal = True
+                            terminal_kind = response_kind
                 if terminal:
                     # One extra poll captures final edits to per-row progress.
                     await asyncio.sleep(3)
@@ -116,6 +131,7 @@ async def _main(args: argparse.Namespace) -> int:
                 "command_message_id": int(sent.id),
                 "command": command,
                 "terminal_seen": terminal,
+                "terminal_kind": terminal_kind,
                 "messages": [seen[key] for key in sorted(seen)],
             }
             evidence["runs"].append(run_payload)
@@ -123,6 +139,8 @@ async def _main(args: argparse.Namespace) -> int:
             args.output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             if not terminal:
                 return 2
+            if terminal_kind != "success":
+                return 3
         evidence["finished_at"] = datetime.now(timezone.utc).isoformat()
         args.output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return 0
