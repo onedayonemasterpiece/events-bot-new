@@ -2,6 +2,8 @@
 
 > Дата аудита: **2026-07-11**
 >
+> Актуализация product scope: **2026-07-12** — D-1 event reminders, Yandex/manual-email choice и saved-search public tags.
+>
 > Базовая ревизия: `origin/main@323cb1e407c6`
 >
 > Решение на дату аудита: **NO-GO для публичной презентации полного заявленного функционала**
@@ -53,16 +55,16 @@
 | **G2** | Сокращены инциденты: дубли, локации, даты/время | **Partial / Blocked** | Bounded audits 305/305 и 308/308, repairs и regression incidents | Smart Update root-cause prevention; регулярный аудит новых/изменённых и всего active/future inventory; incident burn-down/trend/SLO; closure-grade replay для повторяющихся классов дефектов |
 | **F1** | Smart Update effect → rebuild через 15 минут | **Partial / Blocked** | Код coalesced `static_site_build` и Kaggle runner существует | Включить prod env; исправить running/deferred/stale semantics; atomic CDN promotion; prove two updates during one long build |
 | **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
-| **F3** | Умный поиск | **Partial** | Search UI/Edge source/canary preview; unauth Edge request fail-closed | Production `/poisk/`, Yandex provider/Edge deploy, live mobile login→search E2E, quota/alert/fallback evidence |
+| **F3** | Умный поиск + сохранение результата как публичного тега | **Partial** | Search UI/Edge source/canary и private feedback/tag-candidate intake существуют | Production `/poisk/`; explicit save; normalization/idempotency/result-novelty curation; current-catalog static tag generation; public anonymous tag E2E |
 | **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
 | **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; отдельная UX V3 branch активна | Design freeze + owner sign-off; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
 | **F6** | Views/list/detail/social-action personalization telemetry | **Partial** | Local profile/actions/served-list contract; remote browser writes запрещены/не включены | Consent-safe remote ingest, RLS/grants, bot/rate/dedupe/retention, list/detail/dwell/CTA/calendar/share/like/hide row evidence |
-| **F7** | Auth или verified-email user | **Partial** | Yandex PKCE login/logout code; email-only path design exists | Global identity layer; one-use email code/link with TTL/replay/rate limits; real-device proof |
-| **F8** | Sender subdomains, bounce/complaint handling | **Designed / Partial foundation** | Transactional email foundation находится в старой side branch и dry-run | Separate sender streams/subdomains; SPF/DKIM/DMARC; signed provider webhooks; suppression/unsubscribe/warmup/alerts; live canary |
+| **F7** | На выбор Yandex identity/email или вручную введённый verified email | **Partial** | Yandex PKCE login/logout работает; manual email path описан | Yandex email sync/fallback; one-use email code/link with TTL/replay/rate limits; both paths converge without duplicate identity/profile; real-device proof |
+| **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Designed / Partial foundation** | Shared disabled Supabase control plane includes verified identity/consent/outbox and `event_reminder_24h` kind | Calendar UX; D-1 scheduler; Postbox template/event ingest; separate streams; SPF/DKIM/DMARC; suppression/warmup/alerts; live canary |
 | **F9** | Избранное пользователя | **Missing** | Local `liked_event_ids` — это не durable favorites | Define favorite semantics; DB/RLS/API/page; cross-device/merge/lifecycle/delete/export |
 | **F10** | Yandex login/logout + merge personalization | **Partial** | Login/logout реализованы; merge описан только архитектурно | Explicit consent, idempotent merge API/schema, conflict/logout/unlink/delete policy and E2E |
 | **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, branch-only** | Rail Светлогорск/Зеленоградск + один bus example + leg ICS в integration branch | Merge; full city/provider matrix; nightly validated atomic last-good refresh; stale alert; real browser/ICS; persistent favorite if required |
-| **F12** | Add to calendar = favorite | **Partial** | Stable `.ics` работает; favorite mutation отсутствует | Product decision and atomic/idempotent ICS+favorite behavior; undo/cross-device/merge/lifecycle tests |
+| **F12** | Add to calendar = favorite + видимый статус D-1 email reminder | **Partial** | Stable `.ics` работает; favorite mutation/reminder UX отсутствуют | Atomic/idempotent ICS+favorite; masked reminder status or inline email/consent choice; undo/cross-device/reschedule/cancel tests |
 | **F13** | Site events do not become stale vs bot/core DB | **Partial / Blocked** | Candidate freshness filters and rebuild design exist | Production rebuild/promotion loop, two-update race fix, catalog parity manifest, max-staleness alert and SLO |
 | **F14** | Comment-derived event feedback on page | **Partial research, branch-only** | Offline Kaggle probe/strict gates and static manifest design in stale branch | Rebase; YDB incremental collector; optional verifier; production manifest/Astro UI; PII/safety/canary evidence |
 | **F15** | Share generates image | **Partial** | Preview Web Share file → generated `1080×1350` canvas → text/copy fallback | Stable offline/server assets 1200×630, 1080×1350, 1080×1080; stale regeneration; CORS; Telegram/VK/MAX real-device tests |
@@ -233,6 +235,10 @@ Smart Update является владельцем семантического 
 - [ ] Production `/poisk/` published; Yandex OAuth/Edge env enabled.
 - [ ] Latest mobile browser E2E: login → callback → quota → search → result cards → fallback/logout.
 - [ ] Quota, latency, provider error, fallback and storage alerts visible.
+- [ ] После полезной выдачи авторизованный пользователь может идемпотентно выбрать `Сохранить как тег`; сохраняются normalized intent и immutable served-list evidence, но не публикуется identity автора.
+- [ ] Curation сравнивает candidate со всеми pending/accepted tags по normalized hash, semantic intent и top-K result-set overlap; эквивалентный запрос привязывается к существующему canonical tag.
+- [ ] Новый публичный тег принимается только при доказанной заметной новизне выдачи на утверждённом multi-user golden pack; числовые overlap/novelty thresholds и минимальный объём качественных результатов зафиксированы до implementation acceptance.
+- [ ] Каждый static build пересчитывает accepted tag по текущему каталогу, публикует canonical anonymous HTML/JSON + manifest/fingerprint, suppresses empty/stale tags и не вызывает embedding/LLM при обычном просмотре страницы.
 
 ### Stage 4 — Identity, telemetry, favorites, calendar
 
@@ -241,11 +247,13 @@ Smart Update является владельцем семантического 
 - [ ] Remote telemetry write path passes RLS/grant/body/rate/dedupe/bot/retention tests.
 - [ ] Valid impressions, detail views, dwell, card click, ticket/calendar/share/like/hide contain surface/rank/layout context.
 - [ ] Verified email supports both one-time code and one-click link for the same identity/transaction, with TTL and replay/attempt limits.
+- [ ] На всех email-dependent surfaces есть одинаковый выбор: Yandex login/email или ручной ввод почты; Yandex без usable email переводит в manual verification, не ломая identity и не создавая второй профиль.
 - [ ] Anonymous→authorized merge explicit, idempotent, auditable, reversible; logout behavior defined.
 - [ ] Favorite, like and calendar semantics no longer conflated.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
+- [ ] После save UI показывает либо `Напомним за день на a***@domain`, либо inline action для email verification/transactional consent; при старте менее чем через 24 часа обещание D-1 не показывается.
 
-### Stage 5 — Email recommendations and deliverability
+### Stage 5 — Email recommendations, event reminders and deliverability
 
 - [ ] Personal issue schema, profile snapshot, deterministic hero+3 selection and 12–24 recommendation page.
 - [ ] Personal page is published before email enqueue; forwardable public secret URL works without login, token is high-entropy/hash-only/revocable, page is `noindex` and outbound navigation cannot leak the token.
@@ -255,6 +263,9 @@ Smart Update является владельцем семантического 
 - [ ] Hard bounce/complaint/unsubscribe suppression blocks future sends.
 - [ ] Warm-up, per-domain limits, delivery dashboard and kill switch exist.
 - [ ] Canary list only; no broad send before live evidence review.
+- [ ] D-1 scheduler derives `send_at` from the current canonical start/timezone, revalidates event + verified identity + transactional consent + suppression before claim and emits at most one reminder per user/event/start-version.
+- [ ] Save retry, undo, event merge, cancellation, reschedule, late save (<24h), scheduler restart and provider retry cannot duplicate or misdirect a reminder; calendar/ICS remains usable when mail is unavailable.
+- [ ] Real Postbox seed E2E proves calendar save → visible masked promise → scheduled `event_reminder_24h` → provider message id/event, plus opt-out/suppression/kill-switch rollback.
 
 ### Stage 6 — Transport, discussion signals, admin repair, media
 
@@ -321,23 +332,24 @@ Smart Update является владельцем семантического 
 1. **Scope — решено:** все F1–F17 обязательны для первого публичного релиза/презентации; staged canaries only manage risk.
 2. **Personalization storage — решено:** Supabase/Postgres owns current identity/profile/favorites/subscriptions/email control plane; YDB owns analytics/history and the independent comment-feedback sidecar. См. `docs/architecture/personalization-data-ownership.md`.
 3. **Identity — решено на product level:** email-only user becomes a Supabase Auth identity through code or link; anonymous profile links automatically/intelligently under eligible personalization consent.
-4. **Favorites:** favorite, like и calendar-follow — одна сущность или три связанные сущности?
-5. **Email:** cadence/quiet hours/fatigue, transactional vs recommendation classification, sender subdomains and legal unsubscribe policy.
+4. **Favorites — решено:** calendar save и favorite — один durable saved-event state; like остаётся отдельным сигналом; email reminder — отдельный explicit transactional opt-in.
+5. **Email reminder — решено на product level:** один D-1 (`24h`) reminder для saved event при verified email + consent; остаются implementation decisions по quiet hours/catch-up и общая legal unsubscribe policy.
 6. **UI freeze:** какая ветка/preview является release baseline и кто даёт product/design sign-off?
 7. **Transport:** первый provider/city matrix, источник истины, лицензирование/кэширование и acceptable stale window.
 8. **Discussion signals:** допустимые источники комментариев, retention/PII/moderation и правила показа negative/price signals.
 9. **ArtKodex:** API/poller owner, task/thread contract, retry/idempotency and structured repair-result schema.
 10. **SLO:** availability, publication freshness, event-quality error budget and canary duration.
 11. **Related semantics:** strict Gemma acceptance for “Похожие” vs pgvector-only neutral continuation; required precision@K/coverage/diversity thresholds.
+12. **Public search-tag novelty:** утвердить числовые semantic/result-overlap thresholds, minimum result count и moderator/owner для accept/merge/reject; product rule о mandatory normalization/idempotency/material difference уже принят.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
 1. **P0 — static release platform:** F1/F13/G1, coalesce race, atomic promotion/rollback/monitoring.
 2. **P0 — Smart Update quality stabilization:** G2, регулярные аудиты, incident burn-down, root-cause fixes, closure-grade replay, dashboard/SLO.
-3. **P0 — vector/search integration:** F2/F3, prod `/poisk/`, whole-catalog sync, golden review.
+3. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
 4. **P0 — UI release freeze:** F5 plus clean preview contract and real-device/a11y evidence.
-5. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12.
-6. **P1 — email recommendations/deliverability:** F4/F8 after identity/consent foundation, using the accepted storage ADR.
+5. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12, включая Yandex/manual-email choice и видимый reminder state после save.
+6. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 7. **P1 — admin repair loop:** F17 after idempotency/poller contract.
 8. **P1 — media quality/share:** F15/F16.
 9. **P2 — transport:** F11 after nightly source pipeline is production-safe.

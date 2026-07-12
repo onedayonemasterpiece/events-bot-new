@@ -26,6 +26,15 @@ Search-specific UI remains in [authorized event search](../unsigned-personalizat
 - Reset/unlink/delete are explicit operations with clear scope.
 - Identity/email presence never grants recommendation-email consent.
 
+## Email acquisition journey
+
+Every surface that needs a deliverable email, including the calendar D-1 reminder, must offer two equal entry paths:
+
+1. **«Войти через Яндекс».** If Yandex supplies an email that Supabase Auth treats as verified, synchronize that address to the email control plane and show it masked before consent. If Yandex does not return a usable verified email, keep the Yandex identity and ask the user to complete manual email verification; never invent an address or claim that reminders are enabled.
+2. **«Ввести почту».** Create or recover the Supabase email identity through one verification transaction that can be completed by either the six-digit code or the one-click link. Both methods must converge on the same identity and must not create a parallel subscription-only account.
+
+The user can start this journey from the calendar-save confirmation, account/profile entry point or an email-subscription surface. A verified address is reusable across those surfaces, but every purpose (`transactional_event`, recommendations, and any later purpose) has separate explicit consent. Address replacement requires verification of the new address and atomic migration/cancellation of pending reminder destinations.
+
 ## Required states
 
 - `anonymous_local`
@@ -33,6 +42,7 @@ Search-specific UI remains in [authorized event search](../unsigned-personalizat
 - `email_verification_pending`
 - `authenticated_email`
 - `authenticated_yandex`
+- `authenticated_yandex_email_missing`
 - `link_pending`
 - `linked`
 - `unlink_pending`
@@ -49,6 +59,7 @@ The exact schema belongs to a dedicated implementation task, but one identity mu
 - inferred interests are merged with confidence/recency decay and conflict checks; raw browsing history is not copied blindly;
 - result is visible to the user and reset/unlink remains available;
 - session expiry/callback failure restores a usable anonymous static page;
+- Yandex-with-email, Yandex-without-email→manual verification, and email-only code/link paths converge without duplicate user/profile/favorite/reminder rows;
 - deletion propagates to profile-owned Supabase rows and eligible YDB raw/history projections.
 
 ## Data ownership

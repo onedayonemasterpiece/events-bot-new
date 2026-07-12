@@ -1,13 +1,13 @@
 # Transactional event email notifications
 
-> Status: **prototype foundation in a stale side branch; clean port required**. Production sending is not enabled.
+> Status: **production-disabled control-plane foundation in `origin/main`**. Verified-identity/consent/outbox guards and the `event_reminder_24h` message kind exist; calendar UX, reminder scheduling, templates, provider-event ingestion and live sending are not complete.
 
 ## Scope
 
 User-requested transactional mail for a saved/followed event:
 
 - save/follow confirmation;
-- optional reminder;
+- explicit reminder **24 hours before the canonical event start**;
 - cancellation;
 - reschedule or material date/time/location change.
 
@@ -19,19 +19,30 @@ Supabase owns authenticated email profile, follow/favorite relation, transaction
 
 Yandex Cloud Postbox is the exclusive transactional transport, with the intended sender `Kenig Events <notify@kenigevents.ru>` and `Reply-To: info@kenigevents.ru` after identity/DNS verification. NotiSend is reserved for opt-in personal recommendations and must not be a transactional fallback.
 
-## Porting status
+## Calendar-to-reminder product flow
 
-The historical branch `feature/event-email-notifications-static-20260702` contains a dry-run foundation, migration, Edge Function, Postbox worker, smoke and tests, but is far behind `origin/main`. It must not be rebased or merged wholesale. A new main-based branch must selectively port and harden it.
+Adding an event to the calendar/favorites state does not silently grant email consent. The save result must show one truthful state:
 
-Required corrections during port:
+- verified email plus active `transactional_event` consent: **«Событие сохранено. Напомним за день на a***@domain»**;
+- verified email without consent: an explicit **«Напомнить за день по почте»** opt-in;
+- no verified email: a choice between **«Войти через Яндекс»** and **«Ввести почту»**, followed by the same explicit reminder opt-in;
+- event starts in less than 24 hours or has no trustworthy start: explain that a D-1 reminder cannot be promised; never show the success promise or enqueue a misleading reminder.
 
-- personalization project env only; never silently fall back to legacy Supabase;
-- keyed HMAC for email lookup, not ordinary SHA;
-- server-owned event snapshot from canonical export, not client-trusted facts;
-- least-privilege grants/RLS;
-- one shared email control plane with personal announcements;
-- provider callback/suppression and live dry-run evidence.
+Changing/removing a saved event or changing/cancelling/merging the canonical event must cancel or recompute the pending reminder. Exactly one logical reminder may be sent per `user + canonical event + start-version`; retries reuse the same idempotency key.
+
+## Current foundation and missing implementation
+
+The shared Supabase email control plane in `origin/main` already accepts only verified synchronized identities, purpose-specific transactional consent, suppression checks and the fixed Postbox route for `event_reminder_24h`. All outbound switches remain disabled/dry-run-only.
+
+Release still requires:
+
+- calendar/favorite UI states and explicit consent capture described above;
+- a scheduler that derives `send_at = canonical start - 24h`, handles timezone/reschedule/cancel/merge races and performs bounded catch-up without duplicates;
+- server-owned event snapshots from Fly SQLite/static export, never client-trusted event facts;
+- confirmation/reminder/reschedule/cancellation templates and accessible preference/undo surfaces;
+- Postbox delivery-event ingestion, suppression/alert proof, seed canary and live E2E;
+- retirement of the historical stale branch `feature/event-email-notifications-static-20260702` without merging it wholesale.
 
 ## Release gates
 
-See [email delivery operations](../../operations/email-delivery.md) and [favorites/calendar](../event-favorites-calendar/README.md).
+See [email delivery operations](../../operations/email-delivery.md), [favorites/calendar](../event-favorites-calendar/README.md) and [site identity](../site-user-identity/README.md).

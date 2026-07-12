@@ -15,16 +15,16 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 |---|---|---|---|
 | F1 | Smart Update effect → coalesced static rebuild | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production disabled |
 | F2 | Vector-based related events | [Semantic retrieval](../unsigned-personalization/semantic-vector-retrieval.md) | canary / partial |
-| F3 | Smart authorized search | [Authorized search](../unsigned-personalization/authorized-event-search.md) | canary / production root pending |
+| F3 | Smart authorized search + saved public search tags | [Authorized search](../unsigned-personalization/authorized-event-search.md) | search canary; tag save/curation/static generation missing |
 | F4 | Email with exactly three recommendations + published personal page, delivered through NotiSend to at most 200 actively consented users at launch | [Personal email announcements](../personal-email-announcements/README.md) | design / provider routing accepted |
 | F5 | Frozen public release UI | [Release UI contract](../static-site-pages/release-ui-contract.md) | candidate / sign-off pending |
 | F6 | List/detail/action personalization telemetry | [Unsigned personalization](../unsigned-personalization/README.md), [production integration](../unsigned-personalization/production-integration.md) | local preview; remote ingest design |
-| F7 | Yandex or verified-email identity | [Site user identity](../site-user-identity/README.md) | partial/design |
-| F8 | SpaceWeb retained mailbox, read-only Yandex IMAP copy pipeline, direct Mail Trigger canary, Postbox transactional delivery, NotiSend recommendation delivery, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md) | inbound live / outbound production gated |
+| F7 | Choice of Yandex identity/email or manually entered verified email | [Site user identity](../site-user-identity/README.md) | Yandex partial; manual email journey design |
+| F8 | SpaceWeb retained mailbox, read-only Yandex IMAP copy pipeline, direct Mail Trigger canary, Postbox transactional delivery including D-1 event reminders, NotiSend recommendation delivery, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md), [event notifications](../event-email-notifications/README.md) | inbound live / outbound production gated |
 | F9 | Durable favorites | [Favorites and calendar](../event-favorites-calendar/README.md) | design |
 | F10 | Login/logout and profile linking | [Site user identity](../site-user-identity/README.md) | login partial; merge design |
 | F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md) | implementation branch / refresh blocker |
-| F12 | Calendar action backed by favorite state | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save design |
+| F12 | Calendar action backed by favorite state, with visible D-1 email-reminder status | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save/reminder UX design |
 | F13 | Catalog freshness vs canonical bot DB | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production blocked |
 | F14 | Comment-derived discussion signals | [Event comment feedback](../event-comment-feedback/README.md) | docs/probe; production missing |
 | F15 | Share with generated image | [Event sharing](../static-site-pages/event-sharing.md) | preview canvas; durable assets missing |

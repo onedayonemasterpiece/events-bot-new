@@ -386,6 +386,8 @@ features:
       local_anonymous_profile: preview
       related_pgvector: canary_partial
       authorized_search: canary_partial
+      search_feedback_tag_candidate_intake: partial
+      saved_search_public_tag: design_required_for_release
       remote_telemetry_ingest: design
       durable_profile: design
       profile_merge: design
@@ -411,7 +413,9 @@ features:
     related_favorites: docs/features/event-favorites-calendar/README.md
     capabilities:
       yandex_login_logout: partial
+      yandex_verified_email_sync: design
       verified_email_identity: design
+      manual_email_code_or_link: design
       profile_linking: design
 
   event_favorites_calendar:
@@ -424,6 +428,7 @@ features:
       ics_export: preview
       durable_favorite: design
       calendar_favorite_atomic_state: design
+      reminder_status_after_save: design
 
   personal_email_announcements:
     status: design_v3_provider_routing_accepted
@@ -438,7 +443,7 @@ features:
     control_plane_tests: email_control/tests/test_control_plane.py
 
   event_email_notifications:
-    status: prototype_clean_port_required
+    status: production_disabled_control_plane_ux_scheduler_missing
     docs: docs/features/event-email-notifications/README.md
     operations: docs/operations/email-delivery.md
     data_ownership: docs/architecture/personalization-data-ownership.md
@@ -446,6 +451,12 @@ features:
     superseded_branch: feature/event-email-notifications-static-20260702
     shared_control_plane_package: email_control/
     shared_control_plane_migration: supabase/migrations/20260711203940_email_control_plane_v1.sql
+    capabilities:
+      verified_identity_consent_outbox_guard: production_disabled_foundation
+      event_reminder_24h_kind: production_disabled_foundation
+      calendar_reminder_ui: design
+      reminder_scheduler: missing
+      postbox_live_e2e: missing
 
   event_transport:
     status: branch_candidate_refresh_blocked_by_wip

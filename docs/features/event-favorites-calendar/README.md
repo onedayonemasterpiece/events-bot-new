@@ -11,8 +11,16 @@ For the release, “Добавить в календарь” and “Избра�
 - repeating the action is idempotent;
 - removing the favorite does not delete an already imported external calendar entry;
 - calendar/favorite does not imply email consent;
-- reminder/cancellation email is a separate explicit transactional opt-in;
+- a D-1 reminder/cancellation email is a separate explicit transactional opt-in;
 - like, favorite and “не интересно” are different signals.
+
+After a successful save, the UI must immediately make reminder state understandable:
+
+- when verified email and transactional-event consent already exist, show the masked destination and the promise to remind 24 hours before the canonical start;
+- when email or consent is missing, show the next action inline: Yandex login or manual verified-email entry, then explicit reminder opt-in;
+- when less than 24 hours remain or the event start is not trustworthy, do not promise a D-1 message.
+
+Calendar export must remain successful even when email verification, consent capture or the mail provider is unavailable. Conversely, an email/reminder failure must not roll back the durable saved-event state or ICS download.
 
 ## Surfaces
 
@@ -32,6 +40,7 @@ Supabase/Postgres owns favorite/follow state with RLS by user identity. Local an
 - one saved row per user+event;
 - repeat/undo and concurrent-device safety;
 - Yandex/email identity linking without duplicate favorites;
+- one idempotent D-1 reminder schedule per user+canonical-event+start-version, cancelled/recomputed on undo, merge, cancellation or reschedule;
 - cancelled/rescheduled event visibility and notification choice;
 - deleted/merged event redirect or migration policy;
 - export/delete/account purge;
