@@ -169,6 +169,16 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(failed_tail["history_sources"], 4)
         self.assertEqual(failed_tail["incomplete_late_tail_observed"], 1)
 
+        old_sources = os.environ.get("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES")
+        try:
+            os.environ["REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES"] = "1"
+            self.assertEqual(mod.candidate_adaptive_budget({})["fast_check_sources"], 1)
+        finally:
+            if old_sources is None:
+                os.environ.pop("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES", None)
+            else:
+                os.environ["REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES"] = old_sources
+
 
     def test_bge_batch_limit_is_configurable_for_backlog_catchup(self) -> None:
         old_limit = os.environ.get("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT")

@@ -188,6 +188,9 @@ KO URLs. It is not the long-term breadth/depth scheduling default.
 The probe also sets both the general and exact-link network-resolve budgets to
 zero; cached `channel_id/access_hash` rows are the only allowed Telegram entity
 path during the comparison.
+The orchestrator honors an explicit one-source canary budget; the normal
+default remains ten sources, but a safety/debug override is no longer silently
+raised to five.
 
 Algorithm:
 

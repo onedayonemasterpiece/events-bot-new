@@ -2423,7 +2423,7 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     # links, not from reading 20 posts in eight uncertain channels.
     history_sources = max(2, min(6, _env_int("REGION_TALK_ORCHESTRATOR_HISTORY_SOURCES", 4)))
     fast_check_sources = max(
-        5,
+        1,
         min(12, _env_int("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES", 10)),
     )
     return {
