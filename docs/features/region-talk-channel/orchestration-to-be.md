@@ -811,10 +811,18 @@ deferred low-priority posts do not displace keyword/fast-check evidence. The
 limit; `source_queue_build_done.source_queue_handoff_write_seconds` exposes the
 actual queue-write cost.
 
+Current funnel-calibration allocation favors direct KO evidence without
+disabling discovery: up to eight exact links are read first when cached entity
+capacity exists, fast-check uses ten sources, keyword discovery uses six
+queries, while generic history is limited to four sources and ten posts per
+source. A similar-discovered source receives at most one additional cached-only
+scan slot and only when it has a persisted direct KO URL/fast-check hit/KO post
+or publication-source evidence. Mere similarity never earns that slot and no
+extra Telegram resolve allowance is created.
+
 If the latest Candidate heartbeat stops in `state_write_started` or
-`report_write_started` without a terminal runtime, the next orchestrator cycle
-must treat it as a near-limit failure and select the conservative five-source
-budget. A missing runtime is not interpreted as unlimited headroom.
+`report_write_started`, this is reported as a late-tail failure. It does not
+justify replacing high-yield exact/fast-check work with deeper generic history.
 
 Transient YDB failures (`ConnectionLost`, deadline/timeout) close the cached
 driver and retry on the next write, but must not disable all online writes for

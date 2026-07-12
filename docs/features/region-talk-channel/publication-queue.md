@@ -59,7 +59,11 @@ not be added together. The operator surface uses these stages:
    — exact hit links persisted and then fetched/scored.
 3. `fast_check_exact_posts_dual_vectorized_total` — exact posts with both E5
    and BGE-M3.
-4. `fast_check_exact_posts_strict_text_accepted_total` and
+4. `fast_check_exact_posts_dual_semantic_accept_total` — E5+BGE semantic match;
+   this is not yet a publication candidate. Then
+   `fast_check_exact_posts_strict_text_accepted_total` means the **complete
+   publication text gate**: current freshness, external/non-spam source,
+   KO-only scope, dual semantic match and no terminal text rejection. It and
    `fast_check_exact_posts_text_rejected_total` plus
    `fast_check_exact_posts_text_rejection_reasons` — the real text-gate result.
 5. `fast_check_exact_posts_image_queue_total` and
@@ -68,6 +72,15 @@ not be added together. The operator surface uses these stages:
 6. `fast_check_exact_posts_publication_queue_total`,
    `publication_confirmed_total`, `publication_sent_total` — Gemini and chat
    conversion.
+
+The phrase “strict gate passed” must never be presented as “ready for
+publication”. Ready means Gemini-confirmed and not yet sent; sent is a separate
+terminal ledger.
+
+Operator feedback is durable and idempotent through
+`scripts/region_talk_operator_feedback.py`. A reject tombstones exact-link,
+candidate, media and publication projections; a review request records human
+calibration evidence but does not bypass freshness/source/Gemini safeguards.
 
 Keyword source metrics likewise distinguish
 `keyword_sources_with_preliminary_candidates_total` from

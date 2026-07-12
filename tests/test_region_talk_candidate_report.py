@@ -2144,7 +2144,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
         posts = [
             {"post_id":"post_ad", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/1", "platform_post_key":"tg:src:1", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: зарегистрируйтесь на географический диктант, билеты и программа мероприятия", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"},
-            {"post_id":"post_old", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/2", "platform_post_key":"tg:src:2", "post_date":"2025-12-31T12:00:00+00:00", "text":"Калининград, Зеленоградск и Куршская коса — красивый маршрут, впечатления и полезные детали поездки", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"},
+            {"post_id":"post_old", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/2", "platform_post_key":"tg:src:2", "post_date":"2025-06-01T12:00:00+00:00", "text":"Калининград, Зеленоградск и Куршская коса — красивый маршрут, впечатления и полезные детали поездки", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"},
         ]
         with tempfile.TemporaryDirectory() as td:
             payload = mod.build_report(seeds, [], posts, "gate-run", Path(td))
@@ -3296,6 +3296,24 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(mod.parse_public_telegram_post_url("http://t.me/travel_yutturizm/36480?single"), ("travel_yutturizm", 36480))
         self.assertIsNone(mod.parse_public_telegram_post_url("https://t.me/c/123/456"))
         self.assertIsNone(mod.parse_public_telegram_post_url("https://vk.com/wall-1_2"))
+
+    def test_freshness_gate_uses_rolling_one_year_window_without_fixed_override(self) -> None:
+        mod = load_module()
+        old_min = os.environ.pop("REGION_TALK_MIN_POST_DATE", None)
+        old_days = os.environ.get("REGION_TALK_HISTORY_MAX_POST_AGE_DAYS")
+        try:
+            os.environ["REGION_TALK_HISTORY_MAX_POST_AGE_DAYS"] = "365"
+            within_year = (mod.RUN_STARTED_AT - __import__("datetime").timedelta(days=330)).isoformat()
+            older = (mod.RUN_STARTED_AT - __import__("datetime").timedelta(days=400)).isoformat()
+            self.assertTrue(mod.freshness_gate(within_year)["fresh_enough"])
+            self.assertFalse(mod.freshness_gate(older)["fresh_enough"])
+        finally:
+            if old_min is not None:
+                os.environ["REGION_TALK_MIN_POST_DATE"] = old_min
+            if old_days is None:
+                os.environ.pop("REGION_TALK_HISTORY_MAX_POST_AGE_DAYS", None)
+            else:
+                os.environ["REGION_TALK_HISTORY_MAX_POST_AGE_DAYS"] = old_days
 
     def test_permanent_exact_post_identity_errors_are_terminal(self) -> None:
         mod = load_module()
@@ -4467,6 +4485,49 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(captured["table"], "/db/table")
             self.assertEqual(len(captured["items"]), 3)
             self.assertEqual(captured["chunk_size"], 100)
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_publication_online_writer_uses_normalized_url_primary_key(self) -> None:
+        mod = load_module()
+        captured: dict[str, object] = {}
+
+        class Pool:
+            def retry_operation_sync(self, op, retry_settings=None):
+                return op(object())
+
+        def fake_bulk(_driver, _ydb, _table, items, _updated_at, *, chunk_size):
+            captured["items"] = items
+            return len(items)
+
+        old = {name: os.environ.get(name) for name in [
+            "REGION_TALK_STATE_BACKEND", "REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT",
+        ]}
+        try:
+            os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
+            os.environ["REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT"] = "1"
+            with mock.patch.object(mod, "_ydb_online_write_allowed", return_value=True), \
+                 mock.patch.object(mod, "_get_business_heartbeat_pool", return_value=(object(), object(), Pool(), "/db/table")), \
+                 mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
+                 mock.patch.object(mod, "ydb_retry_settings", return_value=None), \
+                 mock.patch.object(mod, "ydb_bulk_upsert_json_many", side_effect=fake_bulk):
+                written = mod.write_region_talk_online_queue_items(
+                    [{"publication_candidate_id": "pubcand_old", "post_url": "https://t.me/SomeChannel/42?single"}],
+                    kind="publication_candidate_item",
+                    id_fields=["publication_candidate_id", "post_url"],
+                    fields=["publication_candidate_id", "post_url"],
+                    run_id="unit",
+                    stage="unit",
+                )
+            self.assertEqual(written, 1)
+            pk, kind, payload = captured["items"][0]
+            self.assertEqual(kind, "publication_candidate_item")
+            self.assertEqual(pk, "publication_candidate_item:https://t.me/somechannel/42")
+            self.assertEqual(payload["publication_candidate_id"], "pubcand_old")
         finally:
             for name, value in old.items():
                 if value is None:

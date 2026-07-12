@@ -977,6 +977,29 @@ def source_product_priority_score(seed: Seed, queue_row: dict[str, Any] | None =
     return round(score, 3)
 
 
+def similar_source_has_direct_ko_evidence(row: dict[str, Any] | None) -> bool:
+    """Grant extra scan budget only to a similar source with direct KO proof."""
+    item = row if isinstance(row, dict) else {}
+    discovery = " ".join(str(item.get(key) or "") for key in [
+        "added_from", "discovery_type", "discovery_types", "edge_type",
+        "edge_types_all", "frontier_reason",
+    ]).lower()
+    if "similar" not in discovery:
+        return False
+    direct_url = str(item.get("fast_check_hit_post_url") or item.get("keyword_hit_post_url") or "").strip()
+    fast_hit = str(item.get("fast_check_status") or "").lower() == "ko_hit"
+    try:
+        ko_posts = int(float(item.get("ko_posts_found") or 0))
+    except (TypeError, ValueError):
+        ko_posts = 0
+    return bool(
+        direct_url
+        or fast_hit
+        or ko_posts > 0
+        or _rt_bool(item.get("publication_source_evidence_priority"))
+    )
+
+
 def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str, Any] | None = None) -> int:
     """Rank scan candidates so the durable cursor queue wins over legacy seeds.
 
@@ -1127,7 +1150,22 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         }
         for seed, due in ordered[:20]
     ]
-    return selected[:max(0, max_sources)]
+    normal_selected = selected[:max(0, max_sources)]
+    extra_limit = max(0, getenv_int("REGION_TALK_SIMILAR_DIRECT_EVIDENCE_EXTRA_SOURCES_PER_RUN", 0))
+    extra_candidates = [
+        seed for seed, due in ordered
+        if bool(due.get("due"))
+        and seed not in normal_selected
+        and similar_source_has_direct_ko_evidence(due.get("queue_row"))
+        # An extra product slot must not create another network resolve. It is
+        # for cached entities only and remains governed by normal request pace.
+        and source_selection_cache_bucket(seed, previous_state) == 0
+    ]
+    extra_selected = extra_candidates[:extra_limit]
+    _REGION_TALK_TELEGRAM_RUNTIME["similar_direct_evidence_extra_eligible_total"] = len(extra_candidates)
+    _REGION_TALK_TELEGRAM_RUNTIME["similar_direct_evidence_extra_selected_total"] = len(extra_selected)
+    _REGION_TALK_TELEGRAM_RUNTIME["similar_direct_evidence_extra_deferred_total"] = max(0, len(extra_candidates) - len(extra_selected))
+    return normal_selected + extra_selected
 
 
 def seed_from_frontier_row(row: dict[str, Any], idx: int) -> Seed | None:
@@ -1804,7 +1842,7 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
     "media_kind", "manual_media_review_required", "video_manual_review_eligible",
     "vk_media_photo_urls", "vk_media_prefetch_status", "vk_media_prefetch_source", "vk_media_prefetch_at",
-    "has_media", "media_count", "primary_media_path",
+    "has_media", "media_count", "primary_media_path", "full_text", "text_hash",
     "image_product_gate_status", "image_product_gate_reason",
     "publication_eligibility_decision", "publication_eligibility_gate_version",
     "publication_eligibility_reason", "publication_eligibility_evidence_json",
@@ -1827,6 +1865,9 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "drop_gate", "rejection_reason", "rejection_reason_primary", "rejection_reason_details",
     "vector_content_type", "vector_rejection_reason", "text_vector_fusion_status",
     "media_kind", "manual_media_review_required", "video_manual_review_eligible",
+    "regex_ko_raw", "regex_ko_filtered", "regex_ko_has_substance",
+    "regex_ko_is_ad_or_promo", "regex_ko_is_news_or_event",
+    "regex_ko_is_multi_region", "regex_ko_diagnostic_version",
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
@@ -1838,7 +1879,7 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "external_geo_mentions", "mentioned_external_regions", "is_ad_or_promo",
     "vector_gate_status", "vector_content_type", "text_vector_fusion_status",
     "external_bge_m3_status", "bge_m3_enrichment_id", "bge_m3_match_mode",
-    "first_seen_run_id", "seen_run_count",
+    "first_seen_run_id", "seen_run_count", "full_text", "text_hash",
     "short_summary", "why_selected", "final_verifier_status", "final_verifier_decision",
     "final_verifier_reason", "final_verifier_model", "llm_gate_status", "llm_decision",
     "has_media", "media_count", "primary_media_path", "image_status",
@@ -1873,6 +1914,36 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "created_at", "last_seen_run_id", "last_confirmed_run_id",
 ]
 PUBLICATION_CONFIRMED_STATUSES = {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
+
+
+def canonical_post_url_for_storage(value: Any) -> str:
+    """Return one cross-writer URL identity for post-level YDB rows.
+
+    CandidateReport historically keyed publication rows by ``pubcand_*`` while
+    the finalizer keyed them by URL.  Both rows then existed for one post and a
+    stale CandidateReport projection could mask a terminal/sent finalizer row.
+    Keep the helper local (the Kaggle notebook cannot import the local
+    finalizer) but intentionally mirror its normalization contract.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    candidate = raw if re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I) else "https://" + raw.lstrip("/")
+    try:
+        parsed = urllib.parse.urlsplit(candidate)
+    except ValueError:
+        return raw.rstrip("/")
+    host = (parsed.hostname or "").lower()
+    parts = [urllib.parse.unquote(part) for part in parsed.path.split("/") if part]
+    if host in {"t.me", "www.t.me", "telegram.me", "www.telegram.me"}:
+        if parts and parts[0].lower() == "s":
+            parts = parts[1:]
+        if parts and parts[0].lower() not in {"c", "joinchat"} and not parts[0].startswith("+"):
+            parts[0] = parts[0].lstrip("@").lower()
+        return "https://t.me/" + "/".join(parts) if parts else "https://t.me"
+    if host in {"vk.com", "www.vk.com", "m.vk.com"}:
+        return "https://vk.com/" + "/".join(parts) if parts else "https://vk.com"
+    return urllib.parse.urlunsplit(((parsed.scheme or "https").lower(), parsed.netloc.lower(), parsed.path.rstrip("/"), "", ""))
 
 
 def durable_processed_post_key(row: dict[str, Any]) -> str:
@@ -2485,6 +2556,25 @@ def _online_post_payload(row: dict[str, Any], *, run_id: str, stage: str, status
         "text_hash": stable_hash(text) if text else row.get("text_hash", ""),
         "text_excerpt_hash": stable_hash(str(row.get("text_excerpt") or "")) if row.get("text_excerpt") else "",
     }
+    low = normalize_geo_text(text)
+    regex_raw = bool(
+        str(row.get("matched_place_names") or "").strip()
+        or re.search(r"\bкалининград(?:ская\s+область|е|а|ом|у)?\b|\bк[её]нигсберг\b|куршск\w*\s+кос", low, flags=re.I)
+    )
+    scope_ok = _rt_bool(row.get("kaliningrad_oblast_only_scope"))
+    ad = _rt_bool(row.get("is_ad_or_promo")) or str(row.get("vector_gate_status") or "") == "vector_reject_ad_promo"
+    news = str(row.get("vector_gate_status") or "") == "vector_reject_news_event"
+    multi = str(row.get("vector_gate_status") or "") in {"vector_reject_multi_region_roundup", "vector_reject_roundup"}
+    substance = str(row.get("vector_gate_status") or "") != "vector_reject_low_substance"
+    payload.update({
+        "regex_ko_raw": regex_raw,
+        "regex_ko_filtered": bool(regex_raw and scope_ok and substance and not ad and not news and not multi),
+        "regex_ko_has_substance": substance,
+        "regex_ko_is_ad_or_promo": ad,
+        "regex_ko_is_news_or_event": news,
+        "regex_ko_is_multi_region": multi,
+        "regex_ko_diagnostic_version": "region_talk_compact_regex_v1",
+    })
     payload.pop("text", None)
     payload.pop("raw", None)
     return compact_record(payload, POST_LIVE_STATE_FIELDS, max_len=900)
@@ -2542,6 +2632,11 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
         items: list[tuple[str, str, dict[str, Any]]] = []
         for row in rows:
             payload = compact_record({**row, "run_id": run_id, "updated_at": now, "last_seen_run_id": run_id, "online_update_stage": stage}, CANDIDATE_MEMORY_STATE_FIELDS + ["run_id", "updated_at", "online_update_stage"], max_len=900)
+            # Full text is transient working state for a candidate that still
+            # needs image/video + Gemini decisions. Preserve it losslessly;
+            # terminal maintenance removes it immediately after the verdict.
+            if str(row.get("full_text") or ""):
+                payload["full_text"] = str(row.get("full_text"))
             key = str(payload.get("candidate_memory_id") or payload.get("post_id") or payload.get("post_url") or "")
             if key:
                 items.append(("candidate_memory_item:" + key.replace("candidate_memory_item:", ""), "candidate_memory_item", payload))
@@ -2636,11 +2731,24 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         items: list[tuple[str, str, dict[str, Any]]] = []
         for row in rows:
             payload = compact_record({**row, "run_id": run_id, "updated_at": now, "last_seen_run_id": run_id, "online_update_stage": stage}, fields + ["run_id", "updated_at", "last_seen_run_id", "online_update_stage"], max_len=900)
+            if kind == "image_queue_item" and str(row.get("full_text") or ""):
+                # Do not silently truncate the text that the final Gemini
+                # verifier must judge. It is retained only while this media
+                # handoff is active and is pruned on a terminal verdict.
+                payload["full_text"] = str(row.get("full_text"))
             key = ""
-            for f in id_fields:
-                if payload.get(f):
-                    key = str(payload.get(f))
-                    break
+            if kind == "publication_candidate_item":
+                # CandidateReport and the local finalizer must converge on the
+                # same URL-level PK.  ``publication_candidate_id`` remains a
+                # payload attribute only; it is not a competing storage key.
+                key = canonical_post_url_for_storage(payload.get("post_url"))
+                if key:
+                    payload["post_url"] = key
+            else:
+                for f in id_fields:
+                    if payload.get(f):
+                        key = str(payload.get(f))
+                        break
             if key:
                 items.append((kind + ":" + key.replace(kind + ":", ""), kind, payload))
         if not items:
@@ -2980,6 +3088,7 @@ def build_e5_text_vector_enrichment_rows(
             "keyword_hit_hashtag": post.get("keyword_hit_hashtag") or post.get("matched_hashtag") or "",
             "text_hash": text_sha,
             "text_excerpt": text[:getenv_int("REGION_TALK_TEXT_VECTOR_TEXT_EXCERPT_CHARS", 3000)],
+            "full_text": str(post.get("text") or post.get("full_text") or text),
             "text_source_fields": ["text_embedding_input_for_post"],
             "model_id": E5_TEXT_MODEL_ID,
             "model_short": "e5",
@@ -4876,16 +4985,20 @@ def parse_post_datetime(value: Any) -> datetime | None:
 
 
 def freshness_gate(post_date: Any) -> dict[str, Any]:
-    min_raw = os.getenv("REGION_TALK_MIN_POST_DATE", "2026-01-01")
-    min_dt = datetime.fromisoformat(min_raw).replace(tzinfo=timezone.utc)
     now = RUN_STARTED_AT
+    min_raw = (os.getenv("REGION_TALK_MIN_POST_DATE") or "").strip()
+    if min_raw:
+        min_dt = datetime.fromisoformat(min_raw).replace(tzinfo=timezone.utc)
+    else:
+        min_dt = history_min_post_datetime(now) or datetime.min.replace(tzinfo=timezone.utc)
+        min_raw = min_dt.date().isoformat()
     dt = parse_post_datetime(post_date)
     if dt is None:
         return {"fresh_enough": False, "post_age_days": "", "freshness_score": 0.0, "freshness_reason": "reject: missing post date", "min_post_date": min_raw}
     age_days = max(0, (now - dt).days)
     half_life = max(1, getenv_int("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", 30))
     score = round(1 / (1 + age_days / half_life), 3)
-    ok = dt >= min_dt and dt.year >= min_dt.year
+    ok = dt >= min_dt
     return {"fresh_enough": ok, "post_age_days": age_days, "freshness_score": score if ok else 0.0, "freshness_reason": "accepted" if ok else f"reject: post_date before {min_raw}", "min_post_date": min_raw}
 
 
@@ -5454,6 +5567,8 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "best_candidate_score_ever": round(best_score, 3), "candidate_score_current": row.get("candidate_score", ""), "candidate_score_delta": score_delta,
             "best_media_score_ever": round(best_media, 3), "media_score_current": row.get("overall_media_score", ""), "media_score_delta": media_delta,
             "short_summary": row.get("short_summary", prev.get("short_summary", "")),
+            "full_text": row.get("text") or row.get("full_text") or prev.get("full_text", ""),
+            "text_hash": row.get("text_hash") or prev.get("text_hash", ""),
             "kaliningrad_oblast_only_scope": row.get("kaliningrad_oblast_only_scope", prev.get("kaliningrad_oblast_only_scope", "")),
             "matched_place_names": row.get("matched_place_names", prev.get("matched_place_names", "")),
             "matched_place_accepted_as_region_evidence": row.get("matched_place_accepted_as_region_evidence", prev.get("matched_place_accepted_as_region_evidence", "")),
@@ -5673,12 +5788,15 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
         row["bge_m3_match_mode"] = fused.get("bge_m3_match_mode", row.get("bge_m3_match_mode", ""))
         row["external_bge_m3_fusion_changed_this_run"] = "true"
         if str(gate.get("vector_gate_status") or "").startswith("vector_reject"):
+            row.pop("full_text", None)
             row["current_stage"] = "dropped_text_gate"
             row["current_lifecycle_status"] = "vector_reject_after_bge_m3"
             row["why_not_publication_ready"] = str(gate.get("vector_rejection_reason") or gate.get("vector_gate_status") or "")
             row["next_action"] = "skip_after_external_bge_m3_fusion"
             stats["rejected"] += 1
         else:
+            row["full_text"] = str(e5_row.get("full_text") or e5_row.get("text_excerpt") or row.get("full_text") or "")
+            row["text_hash"] = str(e5_row.get("text_hash") or row.get("text_hash") or "")
             row["current_stage"] = "image_fetch_retry_needed"
             row["current_lifecycle_status"] = "image_fetch_retry_needed"
             row["image_status"] = "needs_actual_image_fetch"
@@ -6870,6 +6988,8 @@ def build_image_candidate_queue(
             "has_media": str(has_image_media(row, media)).lower(),
             "media_count": row.get("media_count", media.get("media_count", entries[key].get("media_count", ""))),
             "primary_media_path": row.get("primary_media_path", media.get("primary_media_path", entries[key].get("primary_media_path", ""))),
+            "full_text": row.get("text") or row.get("full_text") or entries[key].get("full_text", ""),
+            "text_hash": row.get("text_hash") or entries[key].get("text_hash", ""),
             "image_product_gate_status": "accepted_for_image_analysis",
             "image_product_gate_reason": "",
             "publication_eligibility_decision": eligibility.get("decision"),
@@ -8850,7 +8970,10 @@ def candidate_link_rows_for_fetch(
         return []
     current = now or datetime.now(timezone.utc)
     cached_handles = {str(h or "").lower().lstrip("@") for h in (cached_entity_handles or set())}
-    terminal_link_statuses = {"fetched", "scored", "terminal_no_text", "terminal_bad_url", "terminal_source_rejected"}
+    terminal_link_statuses = {
+        "fetched", "scored", "terminal_no_text", "terminal_bad_url",
+        "terminal_source_rejected", "operator_rejected",
+    }
     blocked_urls: set[str] = set()
     for row in raw_rows:
         if str(row.get("_kind") or "") != "post_link_queue_item":

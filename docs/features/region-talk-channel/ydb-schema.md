@@ -199,8 +199,13 @@ Fields: `run_id` PK, `started_at`, `finished_at`, `status`, `sources_checked`, `
 
 For the 1 GB sidecar budget, the production adapter writes the LZ4-compressed
 `region_talk_compact_state_kv` table rather than raw Telegram/VK payloads. The
-legacy `region_talk_state_kv` table is a rollback source only after the verified
-2026-07-11 compaction. The singleton keys are:
+legacy `region_talk_state_kv` table was removed on 2026-07-12 after a complete
+ordered YDB CLI dump, SHA-256 manifest, compact parity checks and more than
+13 hours without legacy writes. The rollback dump is an operational artifact,
+not another live YDB copy. Obsolete product/smoke/test tables were removed at
+the same time. The database now contains the 46.2 MB compact Region Talk table
+plus three small acquisition tables (well below the 1 GB budget). The singleton
+keys are:
 
 - `latest_state` — small restart checkpoint for the next run;
 - `run:<run_id>` — retention-limited copy of that checkpoint;
@@ -234,8 +239,9 @@ technical heartbeats. The core Region Talk funnel is:
    error/reason.
 3. **Source cursor advanced** — the current scan/queue cursor and current source
    are visible while the notebook is still running.
-4. **Post fetched/scored** — compact post rows are written without raw full text
-   or raw platform payloads.
+4. **Post fetched/scored** — canonical `processed_post_item` is an identity,
+   status and hash projection; it does not retain the post body after E5 has
+   taken ownership of the working text. Raw platform payloads are never stored.
 5. **Region/text candidate** — the post passed/failed Kaliningrad-only,
    non-ad/non-news/text-value gates and candidate memory is updated.
 6. **Media queue** — text-confirmed posts with media are queued for
@@ -249,6 +255,31 @@ technical heartbeats. The core Region Talk funnel is:
    to operator review without inventing visual scores.
 9. **Final verifier/operator notification** — Gemini Lite decision and local
    notification status are visible per candidate.
+
+### Working-text lifecycle
+
+Post text is operational state, not historical content storage:
+
+1. CandidateReport keeps the complete fetched text only in the active
+   E5/candidate/media handoff needed by BGE, image/video routing and Gemini.
+   It is not silently truncated to an arbitrary 500/180-character database
+   excerpt when a downstream verifier still needs the complete post.
+2. `processed_post_item` keeps identity, date, hashes, stage and reasons; its
+   duplicate excerpt is removed once a matching E5 row exists.
+3. E5+BGE scores remain durable, but text fields are removed from processed,
+   candidate, image, publication and vector projections immediately after a
+   terminal reject/accept/needs-review/sent verdict.
+4. `scripts/region_talk_state_maintenance.py` performs dry-run-first historical
+   cleanup and compacts terminal image-ledger payloads. The publication
+   finalizer performs the same text deletion for newly terminal posts.
+
+`image_queue_item` is a historical idempotency ledger. Operator metrics must
+label its total as a ledger size, while active photo backlog, scored photos,
+broken media and manual-video review are reported separately.
+
+`publication_candidate_item` has exactly one storage key per normalized post
+URL. `publication_candidate_id` remains metadata; CandidateReport and the local
+finalizer must never create competing PKs for the same URL.
 
 Comments are source-discovery evidence only: if comment discovery is enabled,
 YDB stores a redacted `comment_link_item` with comment/link/status hashes and

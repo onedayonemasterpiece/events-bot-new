@@ -505,6 +505,10 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
         memory = memory_by_url.get(post_url, {})
         publication = publication_by_url.get(post_url, {})
         row = {**memory, **image}
+        row["_image_ydb_pk"] = str(image.get("_ydb_pk") or "")
+        row["_memory_ydb_pk"] = str(memory.get("_ydb_pk") or "")
+        row["_image_payload"] = dict(image)
+        row["_memory_payload"] = dict(memory)
         if video_manual_review:
             row["media_kind"] = "video"
             row["manual_media_review_required"] = "true"
@@ -544,7 +548,13 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
         if not authoritative_source:
             row["source_class_guess"] = "unknown_source"
         row["short_summary"] = memory.get("short_summary") or image.get("short_summary") or ""
-        row["text"] = memory.get("text") or memory.get("text_excerpt") or ""
+        row["text"] = (
+            image.get("full_text")
+            or memory.get("full_text")
+            or memory.get("text")
+            or memory.get("text_excerpt")
+            or ""
+        )
         row["publication_pre_score"] = publication_pre_score(row)
         previous = rows_by_url.get(post_url)
         if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(previous.get("updated_at") or previous.get("_ydb_updated_at") or ""):
@@ -964,6 +974,9 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         )
         if terminal_text:
             durable_row.pop("text", None)
+            durable_row.pop("full_text", None)
+            durable_row.pop("text_excerpt", None)
+            durable_row.pop("short_summary", None)
         payload = rt.compact_record(
             {
                 **durable_row,
@@ -987,6 +1000,71 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
 
     return int(pool.retry_operation_sync(op) or 0)
+
+
+def prune_terminal_working_text(pool: Any, ydb: Any, table: str, rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Remove post text after a final publication verdict becomes durable.
+
+    Full text is legitimate working state while E5/BGE, media and Gemini still
+    need it. After accept/reject/sent it has no operational purpose. Keep only
+    hashes, model scores and decision evidence across every projection.
+    """
+    terminal_urls = {
+        normalize_post_url(str(row.get("post_url") or ""))
+        for row in rows
+        if (
+            str(row.get("sent_to_chat") or "").lower() == "true"
+            or str(row.get("finalization_status") or "").lower() == "terminal"
+            or str(row.get("llm_decision") or "").lower() in {"accept", "reject", "needs_review"}
+            or str(row.get("publication_status") or "").lower().startswith(
+                ("gemini_accept", "gemini_reject", "gemini_needs_review", "operator_rejected")
+            )
+        )
+    } - {""}
+    if not terminal_urls:
+        return {"terminal_urls": 0, "rows_pruned": 0}
+
+    def read(session: Any) -> list[tuple[str, str, dict[str, Any]]]:
+        out: list[tuple[str, str, dict[str, Any]]] = []
+        for kind, limit in [
+            ("processed_post_item", 20000),
+            ("candidate_memory_item", 5000),
+            ("image_queue_item", 5000),
+            ("text_vector_enrichment_item", 20000),
+        ]:
+            for pk, payload in rt.ydb_select_kind_items(session, ydb, table, kind, limit=limit).items():
+                if normalize_post_url(str(payload.get("post_url") or "")) in terminal_urls:
+                    out.append((pk, kind, dict(payload)))
+        return out
+
+    matched = pool.retry_operation_sync(read)
+    now = rt.utc_now_iso()
+    items: list[tuple[str, str, dict[str, Any]]] = []
+    for pk, kind, payload in matched:
+        changed = False
+        for field in (
+            "text", "full_text", "text_excerpt", "short_summary", "raw",
+            "why_keep_in_memory", "keyword_hit_text_excerpt",
+        ):
+            if field in payload:
+                payload.pop(field, None)
+                changed = True
+        if not changed:
+            continue
+        payload["text_payload_pruned_terminal"] = True
+        payload["text_payload_pruned_at"] = now
+        items.append((pk, kind, {k: v for k, v in payload.items() if not str(k).startswith("_ydb_")}))
+    if not items:
+        return {"terminal_urls": len(terminal_urls), "rows_pruned": 0}
+
+    def write(session: Any) -> int:
+        rt.ensure_ydb_kv_table(ydb, session, table)
+        return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=50, timeout_seconds=8)
+
+    return {
+        "terminal_urls": len(terminal_urls),
+        "rows_pruned": int(pool.retry_operation_sync(write) or 0),
+    }
 
 
 def write_xlsx(path: Path, verified: list[dict[str, Any]], all_rows: list[dict[str, Any]], include_unverified: int) -> Path:
@@ -1099,6 +1177,11 @@ def main() -> int:
         durable_budget=durable_budget,
     )
     written = 0 if args.dry_run else write_publication_rows(pool, ydb, table, verified, run_id)
+    text_prune = (
+        {"terminal_urls": 0, "rows_pruned": 0}
+        if args.dry_run
+        else prune_terminal_working_text(pool, ydb, table, verified)
+    )
     shortlist_artifact = write_xlsx(out_dir / "region-talk-publication-shortlist.xlsx", verified, rows, include_unverified=50)
     payload = {
         "run_id": run_id,
@@ -1109,6 +1192,8 @@ def main() -> int:
         "accepted_new": sum(1 for row in verified if is_newly_accepted_in_run(row)),
         "accepted_total": sum(1 for row in rows if row.get("publication_status") == "gemini_accept" or row.get("publication_candidate_status") == "llm_confirmed"),
         "written": written,
+        "terminal_text_urls_pruned": int(text_prune.get("terminal_urls") or 0),
+        "terminal_text_rows_pruned": int(text_prune.get("rows_pruned") or 0),
         "source_evidence_priority_total": len(source_priority_rows),
         "source_evidence_priority_written": source_priority_written,
         "source_evidence_priority_cleared_total": len(source_priority_clear_rows),
@@ -1123,7 +1208,7 @@ def main() -> int:
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "accepted_new", "accepted_total", "written", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "accepted_new", "accepted_total", "written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

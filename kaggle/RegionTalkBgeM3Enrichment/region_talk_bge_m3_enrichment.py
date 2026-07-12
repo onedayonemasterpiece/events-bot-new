@@ -979,10 +979,16 @@ def write_result_rows(rows: list[dict[str, Any]], summary: dict[str, Any]) -> in
         )
         for row in rows
     ]
+    # The original post text remains transiently available after pairing so a
+    # later CandidateReport/Image/Gemini pass can judge the complete post
+    # without refetching Telegram. Terminal-state maintenance removes it after
+    # accept/reject/sent. The old immediate-prune mode remains opt-in for
+    # research probes that do not run the publication tail.
     paired_e5_rows = [
         (str(row["_paired_e5_pk"]), "text_vector_enrichment_item", dict(row["_paired_e5_payload"]))
         for row in rows
-        if row.get("_paired_e5_pk") and isinstance(row.get("_paired_e5_payload"), dict)
+        if getenv_bool("REGION_TALK_BGE_PRUNE_E5_TEXT_AFTER_PAIR", False)
+        and row.get("_paired_e5_pk") and isinstance(row.get("_paired_e5_payload"), dict)
     ]
 
     def op(session: Any) -> int:

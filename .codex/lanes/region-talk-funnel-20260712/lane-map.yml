@@ -1,0 +1,73 @@
+mode: read_only_parallel_then_serial_integrator
+repo: /home/dev/projects/events-bot-new-region-talk-bge-m3-test
+base_ref: 0e8f5e3be2a561bfa73deb55ac125ce01379c607
+base_branch: agent/region-talk/bge-m3-enrichment-test
+integration_branch: agent/region-talk/bge-m3-enrichment-test
+global_constraints:
+  - Keep E5 + BGE-M3 dual-vector text scoring.
+  - Keep discovery enabled and Telegram access human-like.
+  - Do not treat videos as failed images when text is publication-worthy.
+  - Prefer direct-KO evidence while retaining lower-priority generic discovery.
+  - Keep live Gemini calls within the existing shared limiter and the user budget.
+verification_owner: parent integrator
+stop_conditions:
+  - Unsafe or ambiguous YDB destructive migration.
+  - Telegram session/auth conflict.
+  - Two similar external-tool failures without official-doc research.
+lanes:
+  - id: L1
+    role: planner
+    requirement_ids: [R01, R02, R05, R06]
+    target: strict-gate meaning, live post states, operator feedback, video path, product metrics
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-region-talk-bge-m3-test
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: read-only map with exact code/data evidence
+    verification_scope: inspection_only
+    effort: medium
+    status: merged
+  - id: L2
+    role: planner
+    requirement_ids: [R03, R04, R07, R08]
+    target: YDB legacy cleanup, text/media retention, idempotency
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-region-talk-bge-m3-test
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: safe migration and code-path map
+    verification_scope: inspection_only
+    effort: medium
+    status: merged
+  - id: L3
+    role: planner
+    requirement_ids: [R09, R10, R11]
+    target: data-driven orchestrator prioritization and performance metrics
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-region-talk-bge-m3-test
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: orchestration map and bounded target behavior
+    verification_scope: inspection_only
+    effort: medium
+    status: merged
+  - id: L4
+    role: worker
+    requirement_ids: [R12]
+    target: serial integration, tests, controlled live backfill/run, before/after metrics
+    depends_on: [L1, L2, L3]
+    execution_mode: serial_after_dependency
+    branch: agent/region-talk/bge-m3-enrichment-test
+    worktree: /home/dev/projects/events-bot-new-region-talk-bge-m3-test
+    writable_files: ['Region Talk implementation, tests, canonical docs, CHANGELOG.md']
+    forbidden_files: ['unrelated user work']
+    expected_output: committed and pushed integrated implementation with live evidence
+    verification_scope: full_local
+    effort: extra-high
+    status: in_progress

@@ -151,7 +151,8 @@ A post must be substantively about Kaliningrad Oblast only. Multiple oblast citi
 
 Gate order:
 
-1. freshness (`REGION_TALK_MIN_POST_DATE=2026-01-01` for current run);
+1. freshness (rolling `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365`; an explicit
+   `REGION_TALK_MIN_POST_DATE` is only an operator override);
 2. `kaliningrad_oblast_only_scope_gate` as an LLM-owned semantic decision; the place lexicon only supplies recall/evidence;
 3. LLM-owned ad/promo/announcement decision, with keyword/lexicon hints passed only as evidence;
 4. LLM-owned content substance / visit-impression decision;

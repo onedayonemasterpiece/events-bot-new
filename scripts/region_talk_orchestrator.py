@@ -140,11 +140,14 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # toward Telegram: a few similar-channel seeds and a few travel-intent
     # keyword queries per run are enough to make the public/source frontier grow
     # without filling the queue with local Kaliningrad-only publics.
-    "REGION_TALK_HISTORY_SOURCES_TARGET": "6",
+    # During funnel calibration, breadth from direct KO evidence is more
+    # productive than repeatedly reading deep generic histories. Generic
+    # discovery remains enabled; it receives a smaller bounded share.
+    "REGION_TALK_HISTORY_SOURCES_TARGET": "4",
     "REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY": "1",
-    "REGION_TALK_MAX_POSTS_PER_SOURCE": "20",
-    "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": "6",
-    "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "20",
+    "REGION_TALK_MAX_POSTS_PER_SOURCE": "10",
+    "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": "4",
+    "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "10",
     "REGION_TALK_HISTORY_MAX_POST_AGE_DAYS": "365",
     "REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD": "30",
     "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": "6",
@@ -156,16 +159,16 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": "15",
     "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": "1",
     "REGION_TALK_TELEGRAM_QUERY_SOURCE": "place_lexicon",
-    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "4",
-    "REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES": "2",
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "6",
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES": "4",
     "REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN": "2",
     "REGION_TALK_TELEGRAM_QUERY_ROTATE": "1",
-    "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
-    "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "10",
+    "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "8",
+    "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "20",
     # Manual and discovered exact URLs are the first bounded intake lane.  They
     # do not replace source/history/similar/keyword/hashtag discovery below.
     "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
-    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "3",
+    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "8",
     "REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT": "5000",
     "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
     "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
@@ -180,12 +183,17 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS": "8",
     "REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR": "1",
     "REGION_TALK_FAST_CHECK_KO_ENABLED": "1",
-    "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "5",
+    "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "10",
     "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
     "REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY": "2",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS": "330",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "300",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": "240",
+    # Known-KO/direct-evidence sources may use a small additional scan slot;
+    # generic similar recommendations never receive it merely for being
+    # similar. Telegram governor/cooldown limits remain unchanged.
+    "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+    "REGION_TALK_SIMILAR_DIRECT_EVIDENCE_EXTRA_SOURCES_PER_RUN": "1",
 }
 
 ORCHESTRATOR_YDB_METRIC_LIMITS = {
@@ -258,10 +266,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('keyword_external_sources_with_confirmed_ko_posts_total')}"
         ),
         (
-            "Fast-check keyword matches/exact processed/dual/text accepted/image/video/publication: "
+            "Fast-check sources with keyword hit / exact posts read / dual-vector posts / "
+            "text semantically matched / full publication-text gate passed / photo handoff / video handoff / Gemini queue: "
             f"{value('fast_check_keyword_match_sources_total')}/"
             f"{value('fast_check_exact_posts_processed_unique_total')}/"
             f"{value('fast_check_exact_posts_dual_vectorized_total')}/"
+            f"{value('fast_check_exact_posts_dual_semantic_accept_total')}/"
             f"{value('fast_check_exact_posts_strict_text_accepted_total')}/"
             f"{value('fast_check_exact_posts_image_queue_total')}/"
             f"{value('fast_check_exact_posts_video_manual_review_total')}/"
@@ -349,10 +359,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('bge_source_terminal_skipped_sample_total')}"
         ),
         (
-            "Images pending/actual/strong>=0.70: "
+            "Image ledger historical / active photo backlog / photos scored / strong photos>=0.70 / video manual-review: "
+            f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
             f"{value('image_actual_scored_total')}/"
-            f"{value('image_strong_actual_ge_0_70_total')}"
+            f"{value('image_strong_actual_ge_0_70_total')}/"
+            f"{value('video_manual_review_candidate_urls_total')}"
         ),
         (
             "Publication queue/current-confirmed/sent-ledger/ready/deliveries-completed: "
@@ -1244,9 +1256,20 @@ def _heuristic_ko_funnel_metrics(
     heuristic_rows: list[tuple[dict[str, Any], dict[str, Any], str]] = []
     for row in rows:
         text = _row_text_for_regex(row)
-        if not text:
+        if text:
+            diagnostic = _regex_ko_diagnostic(text)
+        elif str(row.get("regex_ko_raw") or "").lower() in {"1", "true", "yes"}:
+            diagnostic = {
+                "regex_ko_raw": True,
+                "regex_ko_filtered": str(row.get("regex_ko_filtered") or "").lower() in {"1", "true", "yes"},
+                "regex_has_substance": str(row.get("regex_ko_has_substance") or "").lower() in {"1", "true", "yes"},
+                "regex_is_ad_or_promo": str(row.get("regex_ko_is_ad_or_promo") or "").lower() in {"1", "true", "yes"},
+                "regex_is_news_or_event": str(row.get("regex_ko_is_news_or_event") or "").lower() in {"1", "true", "yes"},
+                "regex_is_multi_region": str(row.get("regex_ko_is_multi_region") or "").lower() in {"1", "true", "yes"},
+                "regex_has_external_geo": bool(str(row.get("external_geo_mentions") or row.get("mentioned_external_regions") or "").strip()),
+            }
+        else:
             continue
-        diagnostic = _regex_ko_diagnostic(text)
         if not diagnostic.get("regex_ko_raw"):
             continue
         source = source_by_key.get(_post_source_merge_key(row), {})
@@ -1293,7 +1316,17 @@ def _heuristic_ko_funnel_metrics(
 
 
 def _image_queue_status_metrics(images: list[dict[str, Any]]) -> dict[str, int]:
+    terminal_statuses = {
+        "actual_scored", "not_reviewable_no_media", "not_reviewable_unsupported_media",
+        "rejected_text_gate", "rejected_publication_eligibility", "rejected_low_score",
+        "rejected_image_quality", "broken_media",
+    }
     return {
+        # This is a durable historical ledger, not an active queue.
+        "image_ledger_rows_total": len(images),
+        "image_ledger_terminal_rows_total": sum(
+            1 for r in images if str(r.get("image_queue_status") or "") in terminal_statuses
+        ),
         "image_not_reviewable_no_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_no_media"),
         "image_not_reviewable_unsupported_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_unsupported_media"),
         "image_rejected_text_gate_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "rejected_text_gate"),
@@ -1718,6 +1751,7 @@ def _fast_check_exact_post_metrics(
         and any("bge" in model for model in vector_models.get(url, set()))
     }
     accepted_urls: set[str] = set()
+    semantic_accept_urls: set[str] = set()
     rejection_counts: dict[str, int] = {}
     for url in fetched_urls:
         processed_row = processed.get(url) or {}
@@ -1735,7 +1769,19 @@ def _fast_check_exact_post_metrics(
         ko_only = bool(scope_values) and all(scope_values)
         fresh = not fresh_values or all(fresh_values)
         source_ok = source_status not in {"rejected_local_region_source", "rejected_spam_source"}
-        if source_ok and vector_status == "vector_accept_candidate" and fused and ko_only and fresh:
+        semantic_ok = source_ok and vector_status == "vector_accept_candidate" and fused and ko_only
+        if semantic_ok:
+            semantic_accept_urls.add(url)
+        current_stage = str(row.get("current_stage") or "").lower()
+        drop_gate = str(row.get("drop_gate") or "").lower()
+        rejection = str(row.get("rejection_reason") or row.get("rejection_reason_primary") or "").lower()
+        terminal_text_drop = (
+            current_stage.startswith("dropped_")
+            or bool(drop_gate)
+            or rejection.startswith("reject_")
+            or vector_status.startswith("vector_reject")
+        )
+        if semantic_ok and fresh and not terminal_text_drop:
             accepted_urls.add(url)
             continue
         if source_status == "rejected_local_region_source":
@@ -1760,6 +1806,11 @@ def _fast_check_exact_post_metrics(
         "fast_check_exact_hit_post_urls_total": len(urls),
         "fast_check_exact_posts_processed_unique_total": len(fetched_urls),
         "fast_check_exact_posts_dual_vectorized_total": len(paired_urls),
+        "fast_check_exact_posts_dual_semantic_accept_total": len(semantic_accept_urls),
+        "fast_check_exact_posts_dual_semantic_accept_urls": sorted(semantic_accept_urls),
+        # Compatibility name: this now means the complete publication text
+        # gate (fresh + external source + KO-only + dual semantic accept + no
+        # terminal text rejection), not merely semantic similarity.
         "fast_check_exact_posts_strict_text_accepted_total": len(accepted_urls),
         "fast_check_exact_posts_strict_text_accepted_urls": sorted(accepted_urls),
         "fast_check_exact_posts_text_rejected_total": max(0, len(fetched_urls) - len(accepted_urls)),
@@ -2208,18 +2259,14 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
         or heartbeat_event in {"state_write_started", "report_write_started"}
         or heartbeat_phase in {"state_write", "report_write"}
     )
-    if runtime_seconds > 1050 or incomplete_late_tail or bge_backlog > bge_capacity:
-        history_sources = 5
-    elif runtime_seconds > 900 or bge_backlog >= int(round(bge_capacity * 0.75)):
-        history_sources = 6
-    else:
-        # Two profiled production runs completed in about 13-14 minutes with
-        # six sources. Use part of the measured headroom for breadth, not depth.
-        history_sources = 8
-    history_sources = max(4, min(10, _env_int("REGION_TALK_ORCHESTRATOR_HISTORY_SOURCES", history_sources)))
+    # Generic history is currently the lowest-yield Telegram lane. Keep it
+    # alive, but hold it at four sources while exact/fast-check/keyword work is
+    # abundant. Product breadth comes from ten fast checks and direct post
+    # links, not from reading 20 posts in eight uncertain channels.
+    history_sources = max(2, min(6, _env_int("REGION_TALK_ORCHESTRATOR_HISTORY_SOURCES", 4)))
     fast_check_sources = max(
         5,
-        min(10, _env_int("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES", history_sources)),
+        min(12, _env_int("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES", 10)),
     )
     return {
         "history_sources": history_sources,
@@ -2610,7 +2657,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "candidate_memory_dual_pending_total": len(candidate_memory_dual_pending),
         "candidate_memory_image_wait_total": len(candidate_memory_image_wait),
         "candidate_memory_operational_total": max(0, len(candidates) - len({str(row.get("_ydb_pk") or id(row)) for row in candidate_memory_terminal_local + candidate_memory_terminal_spam})),
-        "image_queue_total": len(images),
+        "image_queue_total": len(images),  # compatibility; historical ledger size
+        "image_ledger_rows_total": len(images),
         "image_product_eligible_total": len(image_product_eligible),
         "image_pending_total": len(image_pending),
         "image_pending_vk_without_url_total": len(image_pending_vk_without_url),

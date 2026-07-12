@@ -533,7 +533,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_SEED_FILE": os.environ.get("REGION_TALK_SEED_FILE", "seed-sources-v2.csv"),
         "REGION_TALK_PLACE_LEXICON_FILE": os.environ.get("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv"),
         "REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE": os.environ.get("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", "public_travel_blogger_channel_links.xlsx"),
-        "REGION_TALK_MIN_POST_DATE": os.environ.get("REGION_TALK_MIN_POST_DATE", "2026-01-01"),
+        "REGION_TALK_MIN_POST_DATE": os.environ.get("REGION_TALK_MIN_POST_DATE", ""),
         "REGION_TALK_FRESHNESS_HALF_LIFE_DAYS": os.environ.get("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30"),
         "REGION_TALK_OUTPUT_DIR": f"artifacts/region-talk/runs/{run_id}",
     }
@@ -893,7 +893,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "0")
     os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE", "10")
     os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", "20")
-    os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")
+    os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "")
     os.environ.setdefault("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30")
     preflight_ydb_access()
     kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=args.kernel_slug)

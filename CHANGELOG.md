@@ -1,6 +1,24 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / product-funnel clarity, idempotency and storage lifecycle**:
+  split dual semantic matches from the complete publication-text gate, label
+  the 98-row media population as a historical ledger rather than an active
+  backlog, and report photo backlog/scored/video paths separately. Unified
+  CandidateReport/finalizer publication PKs on normalized post URL, added
+  durable idempotent operator feedback, and made operator-rejected exact links
+  terminal. Active candidates retain complete working text for E5/BGE and
+  Gemini without arbitrary database truncation; terminal verdicts now remove
+  that text from all projections while preserving hashes, scores and reasons.
+  Added dry-run-first state maintenance for historical text/image compaction,
+  video backfill and publication-key convergence. Qwen research defaults to the
+  compact namespace, removing the last code default that could write the
+  legacy table. Orchestration now favors ten fast checks, broader keyword
+  search and exact KO links while bounding generic history to four sources ×
+  ten posts; similar discovery remains enabled and gets one extra cached scan
+  only with direct KO/publication evidence. Replaced the hard-coded
+  `2026-01-01` freshness boundary with the required rolling 365-day window;
+  this restores valid posts such as the August 2025 Gvardeysk calibration case.
 - **Region Talk / YDB 1 GB sustainability and daily funnel evidence**: live
   audit found 644 MB physical storage for ~171 MiB current JSON, driven by two
   15.9 MB full snapshots per CandidateReport run and whole-frontier rewrites for
@@ -25,10 +43,9 @@
   to the operator chat, and `accepted_new` now excludes historical re-accepts.
   Source-queue sequence repairs now scope transient repair markers to the
   current run, preventing stale flags from rewriting thousands of rows.
-  Publication rows now cap retained verifier text at 700 characters; full
-  source post bodies remain outside YDB. Terminal publication rows now drop the
-  verifier text completely, and every successful BGE write prunes the already
-  consumed excerpt from its paired E5 row while preserving both models' scores,
+  Terminal publication rows drop verifier text completely. A later lifecycle
+  refinement keeps complete text only as transient working state until the
+  media/Gemini verdict, then prunes it while preserving both models' scores,
   hashes and dual-fusion contract.
   Repeated Kaggle `CreateDataset` failures now trigger bounded six-hour-TTL
   cleanup of leaked Region Talk no-wait input datasets before one final retry.

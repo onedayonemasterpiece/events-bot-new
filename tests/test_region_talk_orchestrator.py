@@ -114,8 +114,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF"], "0")
         self.assertEqual(main["env"]["REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS"], "1200")
         self.assertEqual(main["env"]["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"], "1")
-        self.assertEqual(main["env"]["REGION_TALK_MAX_POSTS_PER_SOURCE"], "20")
-        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "8")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_POSTS_PER_SOURCE"], "10")
+        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "4")
         self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")
         self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
         self.assertEqual(main["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "1")
@@ -128,15 +128,15 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
         self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "20000")
         self.assertIn("--max-sources", main["cmd"])
-        self.assertIn("8", main["cmd"])
-        self.assertEqual(main["env"]["REGION_TALK_HISTORY_SOURCES_TARGET"], "8")
-        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "8")
-        self.assertEqual(main["env"]["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"], "8")
+        self.assertIn("4", main["cmd"])
+        self.assertEqual(main["env"]["REGION_TALK_HISTORY_SOURCES_TARGET"], "4")
+        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "4")
+        self.assertEqual(main["env"]["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"], "10")
         self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
         self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN"], "3")
         self.assertEqual(main["env"]["REGION_TALK_TELEGRAM_QUERY_SOURCE"], "place_lexicon")
-        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "4")
-        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"], "2")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "6")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"], "4")
         self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"], "2")
         self.assertEqual(main["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "300")
         self.assertEqual(main["env"]["REGION_TALK_RUNTIME_FIXED_TAIL_SECONDS"], "300")
@@ -145,20 +145,25 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_YDB_STATE_WRITE_REQUEST_TIMEOUT_SECONDS"], "20")
         self.assertEqual(main["env"]["REGION_TALK_YDB_RETENTION_PRUNE"], "0")
 
-    def test_candidate_adaptive_budget_reduces_breadth_near_runtime_limit(self) -> None:
+    def test_candidate_adaptive_budget_keeps_generic_history_small_and_fast_check_wide(self) -> None:
         mod = load_module()
-        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800})["history_sources"], 8)
-        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 960})["history_sources"], 6)
-        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 1100})["history_sources"], 5)
-        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 36})["history_sources"], 6)
-        self.assertEqual(mod.candidate_adaptive_budget({"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 60})["history_sources"], 5)
+        for metrics in [
+            {"candidate_heartbeat_runtime_elapsed_seconds": 800},
+            {"candidate_heartbeat_runtime_elapsed_seconds": 960},
+            {"candidate_heartbeat_runtime_elapsed_seconds": 1100},
+            {"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 36},
+            {"candidate_heartbeat_runtime_elapsed_seconds": 800, "bge_pending_sample_total": 60},
+        ]:
+            budget = mod.candidate_adaptive_budget(metrics)
+            self.assertEqual(budget["history_sources"], 4)
+            self.assertEqual(budget["fast_check_sources"], 10)
         failed_tail = mod.candidate_adaptive_budget({
             "candidate_heartbeat_runtime_elapsed_seconds": 0,
             "candidate_heartbeat_event_name": "state_write_started",
             "candidate_heartbeat_phase": "state_write",
             "candidate_heartbeat_status": "running",
         })
-        self.assertEqual(failed_tail["history_sources"], 5)
+        self.assertEqual(failed_tail["history_sources"], 4)
         self.assertEqual(failed_tail["incomplete_late_tail_observed"], 1)
 
 
@@ -700,7 +705,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             {"fast_check_status": "ko_hit", "fast_check_hit_post_url": "https://t.me/b/2", "source_queue_status": "processed_found_ko_candidate"},
         ]
         processed = [
-            {"post_url": "https://t.me/a/1", "updated_at": "2", "fresh_enough": True, "kaliningrad_oblast_only_scope": True, "vector_gate_status": "vector_accept_candidate"},
+            {"post_url": "https://t.me/a/1", "updated_at": "2", "current_stage": "needs_image_review", "fresh_enough": True, "kaliningrad_oblast_only_scope": True, "vector_gate_status": "vector_accept_candidate"},
             {"post_url": "https://t.me/b/2", "updated_at": "2", "fresh_enough": True, "kaliningrad_oblast_only_scope": False, "vector_gate_status": "vector_reject_multi_region_roundup"},
         ]
         candidates = [{"post_url": "https://t.me/a/1", "updated_at": "3", "kaliningrad_oblast_only_scope": True, "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"}]
@@ -713,6 +718,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["fast_check_keyword_match_sources_total"], 2)
         self.assertEqual(metrics["fast_check_exact_posts_processed_unique_total"], 2)
         self.assertEqual(metrics["fast_check_exact_posts_dual_vectorized_total"], 2)
+        self.assertEqual(metrics["fast_check_exact_posts_dual_semantic_accept_total"], 1)
         self.assertEqual(metrics["fast_check_exact_posts_strict_text_accepted_total"], 1)
         self.assertEqual(metrics["fast_check_exact_posts_video_manual_review_total"], 1)
         self.assertEqual(metrics["fast_check_exact_posts_text_rejection_reasons"], {"vector_reject_multi_region_roundup": 1})

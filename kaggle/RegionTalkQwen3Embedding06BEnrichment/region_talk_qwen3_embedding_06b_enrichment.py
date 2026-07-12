@@ -225,13 +225,13 @@ def ydb_config_status() -> dict[str, str]:
         if not database:
             database = database_part
     endpoint = endpoint.rstrip("/")
-    namespace = (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk"
+    namespace = (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip() or "region_talk_compact"
     missing = [k for k, v in {"REGION_TALK_YDB_ENDPOINT": endpoint, "REGION_TALK_YDB_DATABASE": database}.items() if not v]
     return {"endpoint": endpoint, "database": database, "namespace": namespace, "missing": ",".join(missing)}
 
 
 def ydb_table_name(suffix: str = "state_kv") -> str:
-    namespace = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk").strip("_") or "region_talk"
+    namespace = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip() or "region_talk_compact").strip("_") or "region_talk_compact"
     return f"{namespace}_{suffix}"
 
 
