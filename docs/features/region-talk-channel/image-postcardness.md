@@ -152,3 +152,9 @@ contract is `region_talk_publication_eligibility_v4`. The narrow high-postcard
 lane applies a `0.001` tolerance only to its three-decimal aesthetic boundary,
 so a score reported as `0.519` is not discarded against `0.520`; `0.518` still
 fails. The overall, postcardness and technical floors are unchanged.
+
+Final Gemini verifier prompt v5 treats a short recurring author footer with
+links to excursions, useful services or the author's other profiles as neutral
+unless the commercial offer/price/discount/promo/booking CTA dominates the
+post body. This preserves the ban on advertising without rejecting an
+otherwise independent travel story solely because of its standard footer.

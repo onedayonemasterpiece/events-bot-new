@@ -453,6 +453,10 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             mod.finalization_trigger(previous, now_iso="2026-07-11T10:00:00+00:00"),
             "",
         )
+        self.assertEqual(
+            mod.finalization_trigger(previous, now_iso="2026-07-11T10:00:00+00:00", reverify_existing=True),
+            "",
+        )
         replayed = {
             "publication_status": "gemini_accept",
             "_previous_publication": previous,

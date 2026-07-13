@@ -5537,6 +5537,17 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(low_aesthetic["eligible"])
         self.assertEqual(low_aesthetic["primary_reason"], "overall_media_score_below_threshold")
 
+    def test_final_verifier_prompt_does_not_treat_short_author_footer_as_ad(self) -> None:
+        mod = load_module()
+        prompt = mod.llm_text_gate_prompt({
+            "source_title": "Travel author",
+            "post_url": "https://t.me/travel/1",
+            "text": "Личный рассказ о Правдинске. Экскурсии. Полезные сервисы.",
+        }, {"stage": "final_publication_verifier"})
+        self.assertIn("short recurring footer", prompt)
+        self.assertIn("is not by itself advertising", prompt)
+        self.assertEqual(mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION, "region_talk_final_verifier_v5")
+
     def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
         mod = load_module()
         row = {

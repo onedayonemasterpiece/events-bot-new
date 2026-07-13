@@ -11018,7 +11018,7 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
     return text[:max(300, limit)]
 
 
-REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v4"
+REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v5"
 
 
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
@@ -11047,7 +11047,8 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
         "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "rules": [
             "accept only if Kaliningrad Oblast is the main subject",
-            "reject commercial CTA/price/booking/promo, news/trash and multi-region roundups",
+            "reject when a commercial offer, price, discount, promo code, booking urgency or sales CTA dominates the post body",
+            "a short recurring footer with links to the author's excursions, useful services or other social profiles is not by itself advertising when the main body is an independent travel story and contains no price/discount/promo/booking urgency",
             "require firsthand visit or attributed subscriber report",
             "require emotion/review and a memorable/useful detail",
             "reject generic cards/coordinates/official routes/impersonal promotion",

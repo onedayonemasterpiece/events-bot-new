@@ -357,8 +357,6 @@ def _parse_time(value: Any) -> datetime | None:
 
 def finalization_trigger(publication: dict[str, Any] | None, *, now_iso: str, reverify_existing: bool = False) -> str:
     """Classify one normalized URL as never-finalized, retry-due, or inactive."""
-    if reverify_existing:
-        return "reverify_requested"
     if not publication:
         return "never_finalized"
     status = str(publication.get("publication_status") or "").strip().lower()
@@ -369,6 +367,8 @@ def finalization_trigger(publication: dict[str, Any] | None, *, now_iso: str, re
     # second Gemini request or masquerade as a newly accepted candidate.
     if str(publication.get("sent_to_chat") or "").strip().lower() == "true" or candidate_status == "sent_to_chat":
         return ""
+    if reverify_existing:
+        return "reverify_requested"
     if status.startswith("eligibility_") or candidate_status.startswith(("tombstoned", "revoked", "eligibility_")):
         return "never_finalized"
     if status in TERMINAL_PUBLICATION_STATUSES or candidate_status in TERMINAL_CANDIDATE_STATUSES:
