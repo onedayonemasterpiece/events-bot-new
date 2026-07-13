@@ -35,6 +35,8 @@
   - responsive navigation research/decision: `docs/features/static-site-pages/responsive-navigation.md`
   - optional transport gallery card «Как добраться»: `docs/features/event-transport/gallery-how-to-get-there-card.md`
   - post-release recurring-event attendance feedback: `docs/backlog/features/post-event-attendance-feedback/README.md`
+  - separate post-release static festival section: `docs/features/festivals/static-site-release.md`
+  - important post-release operations control dashboard: `docs/backlog/features/operations-control-dashboard/README.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)

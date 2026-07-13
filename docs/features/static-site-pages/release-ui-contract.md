@@ -12,7 +12,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - today, tomorrow, weekend and relevant category listings;
 - event detail, gallery and quick-read organizer/venue/festival medallion row;
 - related/search/personal feed cards;
-- favorite/calendar/share/not-interested actions;
+- favorite/calendar/share/not-interested actions plus global `Моё избранное` count and `/izbrannoe/` complete list;
 - shared site-wide identity/account state and anonymous fallback on every static HTML page;
 - personal page, transport (including the optional gallery slide «Как добраться»), discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
@@ -22,6 +22,8 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 The release direction is **adaptive consistency**, not pixel-identical mobile/desktop chrome: mobile keeps the stronger brand tag/disclosure pattern, while desktop keeps all primary destinations in a persistent horizontal header and carries only a shallow, restrained version of the tag motif. Labels, order, active state, search/account semantics and accessible names stay invariant across breakpoints and page families.
 
 The research basis, A/B/control preview, cross-device task test and owner decision gate are canonical in [Responsive navigation decision](responsive-navigation.md). The recommended desktop candidate is the shallow hybrid; its final geometry still requires immutable-preview sign-off.
+
+`Моё избранное` is one invariant navigation destination on mobile and desktop. After state restore its accessible badge is rendered only for distinct durable saved-event count `N>0`; likes, ICS downloads, reminder count and transport legs never inflate it. It opens the privacy-safe `/izbrannoe/` shell defined by [Favorites and calendar](../event-favorites-calendar/README.md#global-menu-and-saved-events-page).
 
 ## Global identity/account UI
 

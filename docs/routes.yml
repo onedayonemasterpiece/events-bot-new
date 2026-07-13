@@ -85,6 +85,8 @@ sections:
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
+      festival_monitoring_debt: docs/backlog/features/festival-monitoring-debt/README.md
+      operations_control_dashboard: docs/backlog/features/operations-control-dashboard/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
       poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
@@ -461,6 +463,9 @@ features:
       durable_favorite: design
       calendar_favorite_atomic_state: design
       reminder_status_after_save: design
+      global_favorites_menu_count: design
+      saved_events_page: design
+      cross_tab_device_sync: design
 
   personal_email_announcements:
     status: design_v3_provider_routing_accepted
@@ -515,6 +520,10 @@ features:
       release_ui_integration: pending
       gallery_how_to_get_there_card: optional_prototype_not_implemented
       nightly_kaggle_refresh: missing_p0
+      kppk_provider_refresh: missing_p0
+      bus_provider_refresh: missing_p0
+      combined_manifest_fan_in: missing_p0
+      single_coalesced_rebuild: missing_p0
       atomic_last_good_publish: missing_p0
 
   event_comment_feedback:
@@ -629,6 +638,7 @@ features:
   general_stats:
     status: in_progress
     docs: docs/features/general-stats/README.md
+    post_release_operations_dashboard: docs/backlog/features/operations-control-dashboard/README.md
     entrypoints:
       - scheduling.py
       - main.py
@@ -650,8 +660,20 @@ features:
       - vk_intake.py
       - main.py
   festivals:
-    status: in_progress
+    status: legacy_telegraph_partial_static_release_planned
     docs: docs/features/festivals/README.md
+    static_site_release: docs/features/festivals/static-site-release.md
+    monitoring_debt: docs/backlog/features/festival-monitoring-debt/README.md
+    parser: docs/features/source-parsing/sources/festival-parser/README.md
+    capabilities:
+      series_edition_model: partial
+      telegraph_pages_index: implemented_legacy
+      queue: partial_default_off
+      one_shot_website_parser: partial_legacy_model
+      permanent_website_monitoring: missing
+      astro_index_detail_pages: missing
+      stable_event_edition_relation: missing
+      static_refresh_promotion: missing
     entrypoints:
       - main.py
       - main_part2.py

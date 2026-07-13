@@ -64,9 +64,9 @@
 | **F6** | Views/list/detail/social-action personalization telemetry and application | **Partial** | Local profile/actions/served-list Playwright contract exists; full DB integration/application E2E missing | Detailed Gherkin/Playwright: localStorage → accepted/deduped DB rows → profile rollup → next feed; golden personas and `cards_to_first_relevant <=20` |
 | **F7** | На каждой static HTML page: Yandex identity/email или вручную введённый verified email | **Partial / search-only implementation** | Yandex PKCE login/logout сейчас фактически живёт в `/poisk/`; site-wide shell и manual passwordless email описаны только в плане | Shared controller on 100% HTML page families; Yandex email sync/fallback; one-use email code/link with TTL/replay/rate limits; both paths converge without duplicate identity/profile; real-device proof |
 | **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Partial / live worker foundation** | `main@c6396331`: disabled Supabase control plane, authenticated Postbox feedback/suppression, live transactional-only worker+monitor canary, authorized-key fix | Event-specific calendar/reminder producers; templates/UX; D-1 schedule/reschedule E2E; cross-provider placement warm-up; NotiSend recommendation flow/key gate |
-| **F9** | Избранное пользователя | **Missing** | Local `liked_event_ids` — это не durable favorites | Define favorite semantics; DB/RLS/API/page; cross-device/merge/lifecycle/delete/export |
+| **F9** | Избранное пользователя, count в меню и полный список | **Missing** | Local `liked_event_ids` — это likes, не durable favorites; `/izbrannoe/`, shared-menu badge and RLS store отсутствуют | Supabase DB/RLS/batch API; global `Моё избранное` badge only at `N>0`; complete lifecycle-aware `/izbrannoe/`; cross-tab/device/merge/logout/privacy/delete/export E2E |
 | **F10** | Site-wide login/logout/account state + personalization merge | **Partial / search-only implementation** | Search has Yandex account state; other static pages do not yet share it; email-only auth/forget and merge are design-only | Global restore/login/logout/add-email/forget-email across navigation/reload/tabs; explicit consent, idempotent merge API/schema, conflict/unlink/delete policy and E2E |
-| **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, validated draft PR** | Draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) at `4577b334`: rail/bus blocks, route directories, type-prefixed event/transport ICS, directory validators and a 421-page preview/check pass; optional gallery-card contract documented | Integrate into frozen release UI without forking logic; prototype/accept or owner-defer the optional «Как добраться» gallery slide; full exact-date city/provider coverage; nightly validated atomic last-good refresh; stale alert; real browser/ICS; persistent favorite if required |
+| **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, validated draft PR** | Draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) at `4577b334`: rail/bus blocks, route directories, type-prefixed event/transport ICS, directory validators and a 421-page preview/check pass; no automatic provider notebooks/orchestrator yet | Integrate into frozen UI; KPPK+bus provider jobs (separate Kaggle notebooks allowed) → one schema/fan-in/combined atomic manifest → exactly one changed-hash rebuild; provider last-good/stale alerts; exact-date matrix, gallery decision and browser/ICS evidence |
 | **F12** | Add to calendar = favorite + видимый статус D-1 email reminder | **Partial** | Stable `.ics` работает; favorite mutation/reminder UX отсутствуют | Atomic/idempotent ICS+favorite; masked reminder status or inline email/consent choice; undo/cross-device/reschedule/cancel tests |
 | **F13** | Site events do not become stale vs bot/core DB | **Partial / Blocked** | Candidate freshness filters and rebuild design exist | Production rebuild/promotion loop, two-update race fix, catalog parity manifest, max-staleness alert and SLO |
 | **F14** | Comment-derived event feedback on page | **Partial research, branch-only** | Offline Kaggle probe/strict gates and static manifest design in stale branch | Rebase; YDB incremental collector; optional verifier; production manifest/Astro UI; PII/safety/canary evidence |
@@ -242,6 +242,7 @@ Smart Update является владельцем семантического 
 - [ ] Catalog parity check: every eligible core event has expected HTML/JSON/ICS and no ineligible event leaks.
 - [ ] Max-staleness and missed-build alerts; operator runbook and catch-up command.
 - [ ] Capacity/retention guard for `/data`, `/tmp`, downloaded Kaggle outputs and retained release trees; low disk blocks a new build before `ENOSPC`.
+- [ ] Protected pre-release operations scorecard reconciles expected slot → run → accepted delivery for static promotion/CDN, KPPK/bus refresh, current image-dedup audit and promo fulfilment; missing evidence is `unknown/critical`, transition/recovery alerts are deduplicated, and an immutable RC snapshot is attached. The full [web dashboard](../backlog/features/operations-control-dashboard/README.md) remains a separate post-release release.
 
 ### Stage 3 — Related/search readiness
 
@@ -277,7 +278,10 @@ Smart Update является владельцем семантического 
 - [ ] Manual-email path writes/reuses versioned `ke_contact_email_v1`: one entry per browser, pending/verified state survives reload and later saves, global `Забыть почту на этом устройстве` works, and local cache never substitutes for server verification/consent.
 - [ ] Automatic anonymous→authorized merge is idempotent, auditable and reversible; logout/unlink/delete behavior is distinct and defined.
 - [ ] Favorite, like and calendar semantics no longer conflated.
+- [ ] Shared mobile/desktop navigation contains one `Моё избранное` item on every interactive static HTML family; after restore its accessible numeric badge appears only for distinct durable saved-event count `N>0` and never reuses likes, downloads, reminders or transport legs.
+- [ ] `/izbrannoe/` is a `noindex` static shell with no user data in CDN HTML/cache; authenticated batch/RLS loading shows all saved upcoming/rescheduled/cancelled/merged/past rows without silent disappearance or per-card remote loops.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
+- [ ] Playwright `FAV-MENU/PAGE/LINK/PRIVACY/DEGRADED` scenarios prove count/list updates, cross-tab/device convergence, Yandex/email merge, logout/account-switch isolation and ICS independence during favorite-backend failure.
 - [ ] После save UI показывает либо `Напомним за день на a***@domain`, либо inline action для email verification/transactional consent; при старте менее чем через 24 часа обещание D-1 не показывается.
 
 ### Stage 4A — Supabase capacity and ecological storage
@@ -330,7 +334,8 @@ Smart Update является владельцем семантического 
 - [ ] Integrate the reusable transport slice into the frozen release UI without duplicating selector/data logic; approve mobile/desktop/no-JS/stale/unsupported visual baselines.
 - [ ] Prototype the optional single gallery slide **«Как добраться»** after genuine event media; generate it from the canonical validated selector as safe SVG/lightweight WebP, retain the full accessible block, exclude it from hero/OG/event-image JSON-LD, and either accept or explicitly owner-defer it without weakening F11.
 - [ ] Transport city/provider matrix approved; rail/bus sources/licensing/refresh SLAs and exact-date public coverage recorded.
-- [ ] Nightly Kaggle transport refresh uses lease/status/validator/bounded diff/atomic last-good/stale alert and one coalesced static rebuild.
+- [ ] Nightly/manual KPPK rail and bus refresh jobs run automatically; provider-specific Kaggle notebooks are permitted, but each has its own lease/heartbeat/retry/catch-up and both feed one versioned normalized schema plus server-side fan-in.
+- [ ] Provider atomic last-good and combined-manifest promotion pass empty/partial/excessive-diff/layout-drift drills; one provider failure never erases the other, stale age alerts/fails closed after the approved limit, and a changed combined hash triggers exactly one coalesced static rebuild.
 - [ ] Comment feedback: incremental YDB state, PII redaction, phrase-bank/vector-first gates, cached group verifier, static manifest, Astro fallback and manual canary.
 - [ ] Admin report: allowlisted auth, event snapshot, idempotency key/unique active constraint, atomic poller claim, crash/retry safety, structured repair result/history/re-report.
 - [ ] Offline focal/face/saliency enrichment with confidence/fallback/manual override and golden crop corpus.
@@ -360,6 +365,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] Full active/future image-uniqueness ledger is attached to the RC evidence pack and current static/Telegraph/TG/VK surfaces have no confirmed within-event duplicate images.
 - [ ] Engagement reconciliation on the RC snapshot proves the shared function equals distinct TG/VK latest snapshots plus accepted site summaries; all named consumers use it and storage/freshness/last-good evidence is attached.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
+- [ ] Favorites RC evidence covers every page-family menu surface and `/izbrannoe/`: save/repeat/undo, `N>0` badge, lifecycle rows, cross-tab/device, identity merge, logout/account switch, back/cache isolation and degraded Supabase with working ICS.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
 - [ ] M4 SEO/GEO gate is complete on this exact RC SHA: all three audit lanes, reconciled ledger, remediation and final acceptance evidence are attached.
@@ -377,6 +383,26 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] Выполнить раздельный canary для Telegram и VK, проверить опубликованные сообщения через реальные channel surfaces и сохранить быстрый rollback на предыдущий link target до окончания post-presentation hypercare.
 - [ ] После стабилизации D-1 писем отдельно исследовать [post-event attendance feedback для повторяющихся событий](../backlog/features/post-event-attendance-feedback/README.md): одно письмо после надёжно завершившегося сохранённого occurrence, green/yellow/red rating, свободный ответ или public-review URL; unique/ambiguous series fail closed.
 - [ ] Не считать calendar save согласием на post-event письмо или публичную публикацию; до эксперимента утвердить consent purpose, frequency cap, series/edition idempotency, reply/URL privacy/moderation and withdrawal rules.
+
+### Stage 9 — Отдельный пострелизный релиз раздела «Фестивали»
+
+Эта стадия является самостоятельным release scope после первой публичной презентации и имеет собственные UI freeze, RC и evidence; она не расширяет задним числом F1–F17 presentation GO.
+
+- [ ] Закрыть root causes фестивальной очереди: atomic claim/lease, normalized source idempotency, retry/quarantine/stale recovery, видимый backlog/run result и реально существующие live VK/TG/site queue E2E.
+- [ ] Запустить универсальный мониторинг как минимум официальных сайтов: source registry/cadence, changed-content fingerprints, bounded Playwright/PDF fetch, LLM-first evidence extraction, model migration/eval, atomic last-good and freshness alerts.
+- [ ] Перевести публичную связь со строки `event.festival` на стабильную identity выпуска с merge/rename redirects and versioned static projection.
+- [ ] После owner decision опубликовать `/festivali/` и stable edition pages: current/upcoming index + archive, distinct `Фестиваль` card, separately labelled programme-only rows and reverse list of linked events.
+- [ ] На event cards/details показать canonical `В рамках фестиваля …` link; медальон не заменяет relationship semantics.
+- [ ] Festival-only and relation changes schedule one coalesced standard build; checked artifact, manifest, atomic current pointer, CDN parity, stale/rollback and catalog/link parity pass.
+- [ ] После собственного festival UI/UX freeze rerun Playwright/a11y/no-JS and SEO/GEO audits for the new page family. Canonical contract: [static festival release](../features/festivals/static-site-release.md).
+
+### Stage 10 — Важный пострелизный релиз operations dashboard
+
+- [ ] Нормализовать versioned check registry with owner/criticality/expected slot/freshness/SLO/last attempt/last success/last delivery/status/reason/evidence; missing evidence never becomes green.
+- [ ] Reconcile event source ingestion, video target publication, promo fulfilment, KPPK/bus transport, static build/promotion/CDN, current image-dedup coverage, event quality, email and runtime/capacity.
+- [ ] Ship a protected admin-only read-only dashboard with summary, trends, filters and redacted evidence/incident drill-down; ordinary site auth, `noindex` or a bearer link are not access control.
+- [ ] Store only compact current rows and bounded transition history with TTL; do not duplicate raw logs/provider payloads/history or expose PII/secrets/service keys.
+- [ ] Add mutation/retry/catch-up/kill-switch controls only as a later separately accepted phase with confirmation, idempotency and immutable audit. Canonical plan: [operations control dashboard](../backlog/features/operations-control-dashboard/README.md).
 
 ## 8. Reliability objectives to approve
 
@@ -432,6 +458,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 12. **Public search-tag governance — решено:** strict fully automated LLM-first accept/merge/reject, no manual process, fail-closed private pending/retry. Implementation/eval task утверждает numerical semantic/result-overlap thresholds и minimum result count against the golden pack.
 13. **Personalization production KPI:** golden release gate `<=20` принят; после canary утвердить production percentile/SLO и minimum relevant-supply coverage, не смешивая mature/cold-start/no-supply cohorts.
 14. **Retention/ecological budget — требуется понятное product решение:** забывать/анонимизировать ли compact interest profile после `365d` без визита? Короткие technical logs всё равно удаляются раньше; consent/suppression/send-critical evidence живёт по отдельной safety/legal policy.
+15. **Festival release:** owner approves `/festivali/<edition-slug>/`, current/upcoming index plus archive, stable edition-id migration, daily changed-only website monitoring/max stale age and separately labelled public programme-only rows.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
@@ -450,6 +477,8 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 
 Все двенадцать streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.
 
+После них идут два самостоятельных не-блокирующих presentation GO, но важных релиза: **PR-FEST** по [static festival section](../features/festivals/static-site-release.md) и **PR-OPS** по [operations control dashboard](../backlog/features/operations-control-dashboard/README.md). Минимальный operator scorecard из Stage 2 при этом остаётся текущим release blocker.
+
 ## 12. Closure checklist этого аудита
 
 | ID | Результат аудита | Статус |
@@ -457,6 +486,10 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 | G1 | Надёжность разложена на build/promotion/rollback/SLO/security/canary gates | **Done (planning only)** |
 | G2 | Активные incident families, Smart Update ownership и регулярный audit/incident/root-cause/replay workflow перечислены | **Done (planning only)** |
 | F1–F17 | Каждое исходное требование имеет отдельный статус, evidence class и gate | **Done (planning only)** |
+| F9 navigation | `Моё избранное`, positive-count badge, complete lifecycle page and privacy/E2E gates documented | **Done (planning only; implementation missing)** |
+| F11 refresh | KPPK/bus provider jobs, combined atomic manifest, provider last-good and single rebuild contract documented | **Done (planning only; implementation missing)** |
+| PR-FEST | Separate festival release has R01–R06 scope, stages, decisions, evidence and canonical routing | **Done (planning only; release missing)** |
+| PR-OPS | Pre-release scorecard boundary and separate protected dashboard release documented | **Done (planning only; implementation missing)** |
 | Документация | Main docs и side-branch feature homes разведены; gaps перечислены | **Done (planning only)** |
 | M4 SEO/GEO | Post-UI/UX sequence, three independent audit lanes, detailed scope, synthesis and acceptance gates documented | **Done (planning only)** |
 | Реализация | В этой задаче намеренно не менялась | **Not in scope** |

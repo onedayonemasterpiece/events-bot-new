@@ -111,11 +111,11 @@ Additional release scenarios:
 The current committed rail/bus data is a reviewed snapshot. Before the official presentation, implement a Kaggle refresh patterned after `ParseTheatres`:
 
 1. `scheduling.py` starts nightly and manual `transport_schedule_refresh` with `max_instances=1`, `coalesce=True` and resource lease `transport_schedule:refresh`.
-2. A `KaggleClient` runner pushes `ParseTransportSchedule`, uses the shared status dataset/heartbeats/report contract and downloads normalized rail+bus JSON.
+2. Provider-isolated Kaggle runners may use separate KPPK and bus notebooks, but both use the shared status dataset/heartbeats/report contract and return the same versioned normalized schema to one server-side fan-in.
 3. Validator requires source page and exact image URL/hash, `effective_from`, `fetched_at`, timezone, route/trip/stop identity, service calendar, Russian production-calendar semantics, dated override precedence, monotonic departure/arrival, non-empty output and bounded diff size.
-4. Resolve or create an authoritative YDB current+history lane; the 2026-07-11 accessible databases had no transport table, so it must not be described as already YDB-backed.
-5. Publish atomically only after validation. Empty/partial output keeps last-known-good, records stale age and alerts an operator.
-6. A changed validated content hash exports the existing static JSON contract and enqueues one coalesced `static_site_build:prod`; release manifest records schedule snapshot ID/hash/fetched time.
+4. Immutable versioned JSON/Object Storage plus one combined current manifest is the authoritative static-build input. YDB is optional bounded history/audit only and must not become a release prerequisite or browser runtime dependency.
+5. Publish each provider last-good and the combined manifest atomically only after validation. Empty/partial output keeps that provider's last-known-good, records stale age and alerts an operator without erasing the healthy provider.
+6. A changed validated **combined** content hash exports the existing static JSON contract and enqueues exactly one coalesced `static_site_build:prod`; release manifest records combined and provider snapshot IDs/hashes/fetched/effective times.
 7. Acceptance covers rail-primary Пионерский/Балтийск, parallel rail+bus inland routes, mixed train/bus directions for Знаменск, the Ладушкин transfer safety block for Бранденбург, exact-date Краснолесье, unknown-end schedule cutoffs, explicit-end no-return, intermediate-stop non-inference, stale source, partial failure, semantic ASCII filenames, stable UIDs, orphan-free ICS generation, per-event file ceilings and public transport ICS MIME/alarms.
 
 Until this debt is closed, the release checklist remains blocked: the presentation candidate must be refreshed and validated manually, without adding public schedule-verification links.

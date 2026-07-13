@@ -17,7 +17,7 @@ The invariant across breakpoints and every generated HTML page is:
 
 1. the same primary destinations, labels and relative order;
 2. the same active/current-location semantics;
-3. the same search and global identity/account actions;
+3. the same search, global identity/account actions and `Моё избранное` destination/count semantics;
 4. consistent accessible names, focus behavior and brand vocabulary;
 5. static/no-JS access to the primary destinations.
 
@@ -50,6 +50,7 @@ Acceptance at `375`, `768`, `1366` and `1440` CSS px:
 - the tag/header never covers the hero, title, focus ring or browser zoomed content and causes no horizontal overflow or layout shift;
 - keyboard order is logical; `Esc`, outside-click and focus return work for any disclosed menu; `prefers-reduced-motion` and no-JS remain usable;
 - identity/search controls retain the same meaning and account state on all pages;
+- `Моё избранное` remains findable at every breakpoint, opens `/izbrannoe/`, and shows an accessible badge only when the restored distinct durable count is greater than zero, with no prior-user/count flash;
 - at least one test session deliberately moves through the same find-event/search/account tasks on mobile and desktop; record first-click success, wrong destination, completion time and qualitative confusion rather than asking only which mockup “looks better”.
 
 The release plan must not decide from aggregate device share alone. Analytics can choose the canary emphasis, but both responsive variants remain release surfaces.

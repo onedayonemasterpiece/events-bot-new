@@ -26,21 +26,33 @@ Prepared directory coverage is not the same as public schedule enablement. Gusev
 ## Ownership
 
 - Fly SQLite owns canonical event/city/time facts.
-- The transport refresh pipeline owns normalized source snapshots/history; its final storage lane must be explicitly selected before implementation.
+- Immutable versioned provider JSON plus a combined current manifest in Object Storage is the canonical static-build input. YDB may keep optional bounded history/audit, but is not a release prerequisite or browser/runtime dependency.
+- The transport refresh pipeline owns normalized source snapshots, validation and atomic provider/combined last-good promotion.
 - Static builder consumes an immutable validated transport snapshot and generates HTML/JSON/ICS.
 - Browser runtime is not a journey planner and does not call schedule providers.
 
 ## Release blocker
 
-A manually reviewed committed snapshot is insufficient for the public presentation. Required production path:
+A manually reviewed committed snapshot is insufficient for the public presentation. KPPK rail and regional-bus refreshes may be implemented as two independently runnable Kaggle notebooks because their sources and failure modes differ, but they must expose one orchestrated validation/promotion contract and cause at most one coalesced site rebuild. Required production path:
 
-1. nightly/manual Kaggle `transport_schedule_refresh` with resource lease and status ledger;
+1. nightly/manual provider jobs, for example `transport_schedule_refresh_kppk` and `transport_schedule_refresh_bus`, each with provider-scoped resource lease, heartbeat/status ledger, retry and manual catch-up;
 2. source URL, fetched/effective time, timezone, route/trip/stop identity and service-calendar validation;
 3. bounded-diff checks and empty/partial fail-safe;
-4. atomic last-known-good publication and stale-age alert;
-5. one coalesced static rebuild when validated content hash changes;
-6. release manifest records transport snapshot id/hash/time;
-7. full city/provider, weekday/weekend/holiday and unknown-end acceptance matrix.
+4. provider-specific atomic last-known-good: one failed provider retains its own accepted snapshot within the approved stale window and never erases the healthy provider; beyond the limit its affected blocks fail closed;
+5. server-side fan-in validates a common versioned schema and publishes one combined current manifest; Kaggle notebooks never promote directly to the public site;
+6. exactly one coalesced static rebuild when the accepted combined content hash changes, not one build per notebook/provider;
+7. release manifest records combined and provider snapshot ids/hashes/fetched/effective times plus stale state;
+8. full city/provider, weekday/weekend/holiday/exception and unknown-end acceptance matrix;
+9. operations status exposes last attempt/success, next expected run, provider stale age, combined promotion and downstream rebuild; a missed daily slot triggers alert and catch-up.
+
+## Automatic refresh acceptance
+
+- one scheduled and one manual run for both provider jobs have heartbeat, terminal report and immutable source evidence;
+- official KPPK and bus sources pass nonempty, monotonic-time, route/trip/stop identity, timezone, Russian workday/weekend/holiday and dated-exception precedence checks;
+- empty, partial, source-layout drift and excessive-diff drills cannot replace provider last-good;
+- a KPPK-only or bus-only accepted change updates the combined hash and produces exactly one checked static rebuild; unchanged provider output produces none;
+- a simulated one-provider outage keeps the other provider current, marks the affected provider stale and eventually hides affected guidance after the approved maximum age;
+- public browser/ICS tests prove exact-date data, source/freshness display, MIME/UID/VALARM validity, unknown-end/no-return/unsupported locality fail-closed behavior and no orphan transport artifacts.
 
 ## New release UI integration
 

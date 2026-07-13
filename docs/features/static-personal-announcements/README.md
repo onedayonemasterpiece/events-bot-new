@@ -21,9 +21,9 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 | F6 | List/detail/action personalization telemetry | [Unsigned personalization](../unsigned-personalization/README.md), [production integration](../unsigned-personalization/production-integration.md) | local preview; remote ingest design |
 | F7 | Site-wide choice of Yandex identity/email or manually entered verified email | [Site user identity](../site-user-identity/README.md) | Yandex works only in search; global shell and passwordless email journey design |
 | F8 | SpaceWeb retained mailbox, read-only Yandex IMAP copy pipeline, direct Mail Trigger canary, Postbox transactional delivery including D-1 event reminders, NotiSend recommendation delivery, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md), [event notifications](../event-email-notifications/README.md) | Postbox feedback+worker live/verified; event producers, warm-up and NotiSend application flow gated |
-| F9 | Durable favorites | [Favorites and calendar](../event-favorites-calendar/README.md) | design |
+| F9 | Durable favorites, global count and complete saved-events page | [Favorites and calendar](../event-favorites-calendar/README.md) | design; menu badge and `/izbrannoe/` missing |
 | F10 | Global login/logout/account state and profile linking | [Site user identity](../site-user-identity/README.md) | search-only account state; global restore/logout/forget and merge design |
-| F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md), [optional «Как добраться» gallery card](../event-transport/gallery-how-to-get-there-card.md) | preliminary rail+bus slice validated in refreshed draft PR #37; optional gallery prototype, release-UI integration and automatic refresh pending |
+| F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md), [optional «Как добраться» gallery card](../event-transport/gallery-how-to-get-there-card.md) | preliminary rail+bus slice validated in refreshed draft PR #37; KPPK/bus provider jobs, combined atomic promotion, optional gallery prototype and release-UI integration pending |
 | F12 | Calendar action backed by favorite state, with visible D-1 email-reminder status | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save/reminder UX design |
 | F13 | Catalog freshness vs canonical bot DB | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production blocked |
 | F14 | Comment-derived discussion signals | [Event comment feedback](../event-comment-feedback/README.md) | docs/probe; production missing |
@@ -67,6 +67,13 @@ Current decisions and questions that affect several feature families live in [gl
 - Only after the public presentation, daily Telegram and VK announcements move their event links to canonical static-site pages through a channel-by-channel canary and rollback. This is tracked in [Stage 8](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-8--после-публичной-презентации), not as a presentation GO blocker.
 - Personalization release acceptance requires the [full Playwright/Gherkin E2E and KPI contract](../unsigned-personalization/e2e-acceptance.md), including browser localStorage, DB/profile evidence and `cards_to_first_relevant <= 20` for eligible mature golden personas.
 - Personalization remote writes remain release-gated by the [Supabase 500 MB storage/compaction contract](../../operations/personalization-storage-budget.md): compact current state, bounded evidence, Green-band launch and fail-safe shedding of disposable telemetry.
+- `Моё избранное` is a site-wide destination: after state restore its badge shows the distinct durable saved-event count only when greater than zero, and `/izbrannoe/` opens the complete lifecycle-aware saved list without embedding private data into CDN HTML.
+- KPPK rail and bus refresh may run in separate provider Kaggle notebooks, but they share one versioned schema, server-side validation/fan-in, provider last-good policy and exactly one coalesced rebuild for a changed combined manifest.
+
+## Separate post-release releases
+
+- [Static festival section](../festivals/static-site-release.md): queue/root-cause cleanup, permanent website monitoring, a distinct festival card, stable event↔edition relations and festival index/detail pages through the standard static promotion pipeline. It is explicitly outside the first F1–F17 presentation GO scope and has its own UI freeze/RC/SEO-GEO evidence.
+- [Operations control dashboard](../../backlog/features/operations-control-dashboard/README.md): protected read-only control centre for ingestion, video, promo, transport, static publishing, image dedup and other critical deliveries. A compact operator readiness scorecard remains a first-release reliability prerequisite; the polished web dashboard is an important later release.
 
 ## Documentation completion rule
 
