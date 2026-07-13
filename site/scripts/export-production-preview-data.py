@@ -197,6 +197,15 @@ def clean_place(value: Any) -> str | None:
     return clean_text(text) or None
 
 
+def drop_city_only_venue(venue: str | None, city: str | None) -> str | None:
+    """Keep an honest city fallback without pretending that it is a venue."""
+    venue_key = re.sub(r"\s+", " ", str(venue or "")).strip(" #,;–—").casefold()
+    city_key = re.sub(r"\s+", " ", str(city or "")).strip(" #,;–—").casefold()
+    if venue_key and city_key and venue_key == city_key:
+        return None
+    return venue
+
+
 def slugify(value: str, fallback: str = "event") -> str:
     out = []
     for ch in value.lower():
@@ -959,6 +968,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     event_type = infer_event_type(row, topics)
     city = clean_place(row["city"])
     venue = clean_place(row["location_name"])
+    venue = drop_city_only_venue(venue, city)
     address = clean_place(row["location_address"])
     start_date = normalize_date(row["date"]) or current_date
     end_date = normalize_date(row["end_date"])

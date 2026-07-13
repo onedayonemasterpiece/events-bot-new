@@ -187,6 +187,9 @@ The audit repair queue was also applied:
 - [x] Reuse the canonical location composer in Telegram and managed VK public
   headers so a city-level fallback renders once (`Янтарный`), without the
   redundant `Янтарный, #Янтарный` projection.
+- [x] Project an exact city-only fallback to static/vector data as city with no
+  synthetic `venue_name`, so `search_v3`/`related_v1` and future static pages do
+  not encode `Янтарный · Янтарный`.
 
 ## Follow-up Actions
 

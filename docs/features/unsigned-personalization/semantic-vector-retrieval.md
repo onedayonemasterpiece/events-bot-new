@@ -91,6 +91,7 @@ The current implementation deliberately uses **one embedding model and one table
 
 - `search_v3` — broad query-search document. It includes weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday language, free/registration/paid/sold-out status, charity/family/tourist/Pushkin-card hints and query-friendly synonyms. This is the document kind used by `/poisk/`.
 - `related_v1` — cleaner event-to-event document. It emphasizes title, event type, category, format, themes, concise meaning, venue/context and audience. Calendar/admission noise is intentionally reduced so “бесплатно вечером” does not beat true thematic similarity in related cards. This is the document kind used by static related generation.
+- When canonical `location_name` is only the same settlement fallback as `city`, the preview/vector projection exports no synthetic `venue_name`; both `search_v3` and `related_v1` keep the city once. Exact presentation deduplication does not infer a venue and does not replace the LLM grounding verdict.
 
 Why this is not “two vector databases”: both kinds use `gemini-embedding-2/vector(768)` and live in `event_embeddings`; the key difference is `embedding_doc_kind`. RPCs filter by `embedding_model`, `embedding_dim` and `embedding_doc_kind`, so search and related retrieval cannot accidentally mix representations.
 
