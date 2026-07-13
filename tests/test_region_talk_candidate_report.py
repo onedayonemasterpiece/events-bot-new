@@ -1002,6 +1002,35 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["source_quick_class"], "local_region_source")
         self.assertEqual(row["posts_scanned"], 50)
 
+    def test_ydb_source_merge_ignores_stale_terminal_overlay_after_repair(self) -> None:
+        mod = load_module()
+        state = {"unified_source_queue": {}}
+        mod.merge_ydb_source_queue_status_items(
+            state,
+            {
+                "source_queue_item:telegram:blogger": {
+                    "canonical_source_key": "telegram:blogger",
+                    "source_queue_status": "pending_scan",
+                    "source_quick_class": "candidate_keep",
+                    "posts_scanned": 0,
+                    "_ydb_updated_at": "2026-07-13T00:00:00+00:00",
+                }
+            },
+            {
+                "source_status_item:telegram:blogger": {
+                    "canonical_source_key": "telegram:blogger",
+                    "source_queue_status": mod.SPAM_SOURCE_STATUS,
+                    "source_quick_class": "spam_source_reject",
+                    "posts_scanned": 4,
+                    "_ydb_updated_at": "2026-07-12T23:00:00+00:00",
+                }
+            },
+        )
+        row = state["unified_source_queue"]["telegram:blogger"]
+        self.assertEqual(row["source_queue_status"], "pending_scan")
+        self.assertEqual(row["source_quick_class"], "candidate_keep")
+        self.assertEqual(row["posts_scanned"], 4)
+
     def test_ydb_online_write_circuit_breaker_disables_retries_after_auth_error(self) -> None:
         mod = load_module()
         old_env = os.environ.get("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR")

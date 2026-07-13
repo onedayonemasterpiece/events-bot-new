@@ -3707,12 +3707,29 @@ def merge_ydb_source_queue_status_items(
             if not key:
                 continue
             current = dict(q.get(key) or {})
+            current_updated_at = max(
+                str(current.get("_ydb_updated_at") or ""),
+                str(current.get("updated_at") or current.get("queue_item_updated_at") or ""),
+            )
+            incoming_updated_at = max(
+                str(item.get("_ydb_updated_at") or ""),
+                str(item.get("updated_at") or item.get("queue_item_updated_at") or ""),
+            )
+            incoming_is_stale = bool(
+                current_updated_at and incoming_updated_at and incoming_updated_at < current_updated_at
+            )
             numeric_max_fields = {
                 "posts_scanned", "ko_posts_found", "candidate_posts_found",
                 "actual_images_scored_count", "low_actual_image_count",
             }
             for field, value in item.items():
                 if value in (None, ""):
+                    continue
+                if incoming_is_stale and field not in numeric_max_fields:
+                    # `source_queue_item` is canonical. A late read of an older
+                    # status/live projection may contribute monotonic counters
+                    # but must not resurrect an obsolete terminal verdict or
+                    # overwrite a newer repair/admission decision.
                     continue
                 if field == "queue_seq":
                     try:

@@ -252,6 +252,12 @@ be `pending_scan` is retained separately as
 `confirmed_external_blogger_queue_pending_status_total`; it is not presented
 as the unscanned backlog.
 
+When the canonical queue is reconstructed from YDB, an older
+`source_status_item`/legacy live projection may add only monotonic scan
+counters; it cannot overwrite a newer canonical queue repair with a stale
+terminal local/spam verdict. This is required for false-positive backfills to
+remain effective on the next notebook run.
+
 The orchestrated product run now defaults to
 `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=adaptive_cursor_v1`; an explicit
 `legacy_v1` environment override remains the immediate rollback to the
