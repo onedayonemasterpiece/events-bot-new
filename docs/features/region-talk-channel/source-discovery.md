@@ -198,7 +198,9 @@ instead of repeating cached Telegram channels merely to preserve TG/VK/TG/VK
 symmetry. The in-memory selection pool is widened only enough to expose the
 single controlled uncached Telegram lane even when cached/VK evidence rows
 exceed the generic pool size; network resolve quotas, FloodWait policy and
-human-like pauses are unchanged. Confirmed VK rows use their evidence locations in
+human-like pauses are unchanged. A never-attempted uncached Telegram blogger
+owns that lane before an older unresolved/retry row, preventing one bad handle
+from starving every fresh evidence source behind it. Confirmed VK rows use their evidence locations in
 a bounded `wall.search` pass (default up to eight evidence-specific queries,
 stop on the first fresh exact-text hit) in addition to the recent wall slice;
 this avoids treating ten recent non-trip posts as a meaningful check of a
@@ -211,8 +213,17 @@ domain failure triggers `utils.resolveScreenName` and a single retry with the
 signed owner id (positive user, negative community). If the official resolver
 successfully returns no object, the stale/deleted/renamed evidence URL is kept
 for audit but marked `rejected_unresolvable_vk_source` so it cannot consume a
-confirmed-blogger slot on every run. Resolver/API failures themselves remain
+confirmed-blogger slot on every run; VK error 18 (deleted/banned profile) uses
+the same terminal audit state. This terminal state is reported separately and
+is not included in the active unscanned blogger backlog. Resolver/API failures themselves remain
 retryable rather than falsely rejecting a live profile.
+
+VK-heavy batches are runtime-bounded before Telegram fast-check/discovery: the
+remaining wall time is divided across remaining VK sources after preserving
+the downstream/report reserve, and each source's evidence-search query count is
+capped to that worst-case request budget. A source that cannot safely fit even
+one wall read is deferred to the next run instead of starving the rest of the
+pipeline.
 
 In `adaptive_cursor_v1`, known locations from the evidence row are moved to the
 front of that source's otherwise unchanged place bank. Thus a blogger known to

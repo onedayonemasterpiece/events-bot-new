@@ -304,6 +304,39 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_selected"], 1)
         self.assertGreater(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_selection_pool_effective"], 40)
 
+    def test_uncached_lane_prefers_never_attempted_source_over_retry(self) -> None:
+        mod = load_module()
+        queue = {
+            "telegram:oldretry": {
+                "canonical_source_key": "telegram:oldretry",
+                "platform": "telegram",
+                "handle": "@oldretry",
+                "source_url": "https://t.me/oldretry",
+                "source_queue_status": "needs_rescan_or_retry",
+                "fetch_status": "error_floodwait_resolve",
+                "queue_order": 1,
+                "external_blogger_evidence_status": "confirmed_external",
+            },
+            "telegram:fresh": {
+                "canonical_source_key": "telegram:fresh",
+                "platform": "telegram",
+                "handle": "@fresh",
+                "source_url": "https://t.me/fresh",
+                "source_queue_status": "pending_scan",
+                "queue_order": 2,
+                "external_blogger_evidence_status": "confirmed_external",
+            },
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue, "telegram_entity_cache": {}}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
+        }, clear=False):
+            seeds = mod.unified_queue_dynamic_seeds(previous, 40)
+        urls = {seed.canonical_url for seed in seeds}
+        self.assertIn("https://t.me/fresh", urls)
+        self.assertNotIn("https://t.me/oldretry", urls)
+
     def test_fast_check_message_is_reused_same_run_with_exact_fetch_identity(self) -> None:
         mod = load_module()
         seed = self._seed(mod, "@travelwriter", seed_id="writer")
@@ -3560,6 +3593,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(mod.vk_domain_from_seed(wall), "intravel39")
             club = mod.Seed("s3", "vk", "Club", "@club219148079", "https://vk.com/club219148079", "", "", 1, "", "", "", "", "", "", True, "", "")
             self.assertEqual(mod.vk_domain_from_seed(club), "club219148079")
+            self.assertEqual(mod.canonical_source_url("vk", "", "https://vk.com/club219148079"), "https://vk.com/club219148079")
+            self.assertEqual(mod.canonical_source_url("vk", "", "https://vk.com/public219148079"), "https://vk.com/public219148079")
+            self.assertEqual(mod.canonical_source_url("vk", "", "https://vk.com/id61694047"), "https://vk.com/id61694047")
+            self.assertEqual(mod.canonical_source_url("vk", "", "https://vk.com/publicist"), "https://vk.com/publicist")
+            self.assertEqual(mod.canonical_source_url("vk", "", "https://vk.com/clubhouse"), "https://vk.com/clubhouse")
         finally:
             for k, v in old.items():
                 if v is None: os.environ.pop(k, None)
@@ -3691,6 +3729,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(source["fetch_status"], "ok")
         self.assertEqual(source["vk_wall_resolve_status"], "group")
         self.assertEqual(posts[0]["post_url"], "https://vk.com/wall-321_7")
+
+    def test_vk_deleted_profile_is_terminal(self) -> None:
+        mod = load_module()
+
+        class Response:
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def read(self):
+                return json.dumps({"error": {"error_code": 18, "error_msg": "User was deleted or banned"}}).encode("utf-8")
+
+        seed = mod.Seed("vk-deleted", "vk", "Deleted VK", "@deletedvk", "https://vk.com/deletedvk", "unit", "external", 1, "unit", "", "", "", "", "", True, "", "")
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {
+            "VK_SERVICE_KEY": "service-token",
+            "REGION_TALK_VK_READ_SERVICE_FIRST": "1",
+        }, clear=False), mock.patch("urllib.request.urlopen", return_value=Response()):
+            source, posts = mod.fetch_vk_wall_for_seed(seed, Path(td), 10, source_row={"external_blogger_evidence_status": "confirmed_external"})
+
+        self.assertEqual(posts, [])
+        self.assertEqual(source["fetch_status"], mod.UNRESOLVABLE_VK_SOURCE_STATUS)
+        self.assertEqual(source["source_queue_status"], mod.UNRESOLVABLE_VK_SOURCE_STATUS)
 
     def test_source_frontier_dedupes_by_canonical_key_across_discovery_types(self) -> None:
         mod = load_module()

@@ -359,9 +359,15 @@ def canonical_source_url(platform: str, handle: str, url: str) -> str:
             if m:
                 return "https://t.me/" + m.group(1).lstrip("@")
         if platform in {"vk", "vkvideo"}:
-            m = re.search(r"vk\.com/(?:club|public)?([A-Za-z0-9_.-]+)", raw, re.I)
+            m = re.search(r"vk\.com/([A-Za-z0-9_.-]+)", raw, re.I)
             if m:
                 ident = m.group(1)
+                # `club<ID>`, `public<ID>` and `id<ID>` are complete VK
+                # identities.  Prefix stripping used to turn a community into
+                # a positive user id and even corrupted ordinary aliases such
+                # as `publicist` -> `ist` and `clubhouse` -> `house`.
+                if re.fullmatch(r"(?:club|public|id)\d+", ident, flags=re.I):
+                    return "https://vk.com/" + ident
                 if ident.isdigit():
                     return "https://vk.com/club" + ident
                 return "https://vk.com/" + ident
@@ -1434,6 +1440,33 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         int(r.get("queue_order") or 999999999) <= cursor,
         int(r.get("queue_order") or 999999999),
     ))
+    # Choose the one safe uncached Telegram lane from never-attempted rows
+    # before retry/deferred rows. Without this preselection an old retry at the
+    # head consumed the lane forever and every fresh uncached confirmed blogger
+    # behind it was discarded before the first-scan scheduler could see it.
+    uncached_telegram_pairs: list[tuple[Seed, dict[str, Any]]] = []
+    uncached_seen: set[str] = set()
+    for index, row in enumerate(rows, start=1):
+        candidate = seed_from_unified_queue_row(row, index)
+        if not candidate or candidate.platform != "telegram" or source_queue_row_has_cached_entity(row, previous_state):
+            continue
+        candidate_key = canonical_source_key(candidate.platform, candidate.handle, candidate.canonical_url)
+        if candidate_key in uncached_seen:
+            continue
+        uncached_seen.add(candidate_key)
+        uncached_telegram_pairs.append((candidate, row))
+    uncached_telegram_pairs = sorted(uncached_telegram_pairs, key=lambda pair: (
+        _source_has_primary_scan_evidence(
+            pair[1],
+            _source_cursor_for_seed(pair[0], previous_state),
+            str(pair[1].get("source_queue_status") or pair[1].get("fetch_status") or ""),
+        ),
+        int(pair[1].get("queue_order") or 999999999),
+    ))
+    preferred_uncached_keys = {
+        canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+        for seed, _row in uncached_telegram_pairs[:uncached_lane_quota]
+    }
     selected: list[Seed] = []
     seen: set[str] = set()
     uncached_lane_keys: list[str] = []
@@ -1446,7 +1479,8 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
             continue
         is_uncached_telegram = seed.platform == "telegram" and not source_queue_row_has_cached_entity(row, previous_state)
         if cached_entity_only and is_uncached_telegram:
-            if len(uncached_lane_keys) >= uncached_lane_quota:
+            seed_key = canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+            if seed_key not in preferred_uncached_keys or len(uncached_lane_keys) >= uncached_lane_quota:
                 continue
             uncached_lane_keys.append("telegram:username:" + seed.handle.lstrip("@").lower())
         seen.add(key)
@@ -9733,6 +9767,7 @@ def fetch_vk_wall_for_seed(
     max_posts: int,
     *,
     source_row: dict[str, Any] | None = None,
+    max_search_queries: int | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     token = vk_wall_token()
@@ -9780,6 +9815,18 @@ def fetch_vk_wall_for_seed(
         if payload.get("error"):
             err = payload["error"] or {}
             code = int(err.get("error_code") or 0)
+            if code == 18:
+                src.update({
+                    "fetch_status": UNRESOLVABLE_VK_SOURCE_STATUS,
+                    "source_queue_status": UNRESOLVABLE_VK_SOURCE_STATUS,
+                    "vk_wall_probe_status": "deleted_or_banned",
+                    "fetch_error_code": code,
+                    "fetch_error_message": str(err.get("error_msg") or "")[:180],
+                    "source_probe_reason": "VK reports that the profile was deleted or banned; retain evidence for audit but do not retry it as an active source.",
+                    "next_action": "keep_in_evidence_audit_do_not_rescan_until_source_url_is_repaired",
+                    "vk_token_kind": vk_wall_token_kind(),
+                })
+                return src, []
             status = "skipped_vk_wall_access_denied" if code in {15, 18, 30} else "error_vk_wall_api"
             probe = "access_denied" if code in {15, 18, 30} else "error"
             src.update({"fetch_status": status, "vk_wall_probe_status": probe, "fetch_error_code": err.get("error_code"), "fetch_error_message": str(err.get("error_msg") or "")[:180], "vk_token_kind": vk_wall_token_kind()})
@@ -9791,12 +9838,13 @@ def fetch_vk_wall_for_seed(
         vk_search_hits = 0
         if evidence_fields and getenv_bool("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED", True):
             owner_id = next((item.get("owner_id") or item.get("from_id") for item in items if isinstance(item, dict) and (item.get("owner_id") or item.get("from_id"))), None)
-            query_limit = max(1, getenv_int("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE", 8))
+            configured_query_limit = max(1, getenv_int("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE", 8))
+            query_limit = min(configured_query_limit, max(0, int(max_search_queries))) if max_search_queries is not None else configured_query_limit
             evidence_queries = source_fast_check_evidence_priority_queries(source_row)[:query_limit]
             if not evidence_queries:
                 evidence_queries = source_fast_check_query_bank()[: min(3, query_limit)]
             cutoff_ts = int(history_min_post_datetime().timestamp())
-            if owner_id:
+            if owner_id and query_limit > 0:
                 for query in evidence_queries:
                     time.sleep(random.uniform(
                         getenv_float("REGION_TALK_VK_SEARCH_DELAY_MIN_SECONDS", 0.6),
@@ -10838,13 +10886,48 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         "sources_total": len(selected),
         "progress_label": f"selected sources {len(selected)}",
     })
+    vk_selected_total = sum(1 for seed in selected if seed.platform == "vk")
+    vk_selected_done = 0
     for seed in selected:
         selected_queue_row = _source_queue_row_for_seed(seed, previous_state)
         if seed.platform == "telegram":
             continue
         if seed.platform == "vk":
+            vk_selected_done += 1
             if fetch_enabled:
-                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts, source_row=selected_queue_row)
+                remaining_vk = max(1, vk_selected_total - vk_selected_done + 1)
+                vk_timeout = max(1, getenv_int("REGION_TALK_VK_TIMEOUT_SECONDS", 20))
+                vk_delay_max = max(0.0, getenv_float("REGION_TALK_VK_SEARCH_DELAY_MAX_SECONDS", 1.2))
+                downstream_reserve = max(
+                    getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+                    getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300),
+                    discovery_tail_reserve_seconds(),
+                )
+                per_source_budget = max(0.0, (runtime_remaining_seconds() - downstream_reserve) / remaining_vk)
+                if per_source_budget < vk_timeout:
+                    vk_row = source_status_row(
+                        seed,
+                        "skipped_runtime_budget_before_vk_wall",
+                        vk_wall_probe_status="runtime_deferred",
+                        source_probe_reason="VK source deferred to preserve exact-link, fast-check, discovery and durable report tail.",
+                        next_action="retry_vk_source_next_run",
+                    )
+                    vk_posts = []
+                else:
+                    max_search_queries = max(0, int((per_source_budget - vk_timeout) // max(1.0, vk_timeout + vk_delay_max)))
+                    max_search_queries = min(
+                        max_search_queries,
+                        max(0, getenv_int("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE", 8)),
+                    )
+                    vk_row, vk_posts = fetch_vk_wall_for_seed(
+                        seed,
+                        output_dir,
+                        max_posts,
+                        source_row=selected_queue_row,
+                        max_search_queries=max_search_queries,
+                    )
+                    vk_row["vk_wall_search_runtime_cap"] = max_search_queries
+                    vk_row["vk_wall_per_source_runtime_budget_seconds"] = round(per_source_budget, 1)
                 append_source_row_online(source_rows, vk_row, run_id=run_id, stage="source_fetch", sources_total=len(selected))
                 posts.extend(vk_posts)
             else:

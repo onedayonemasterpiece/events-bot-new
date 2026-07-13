@@ -152,6 +152,25 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["confirmed_external_blogger_sources_with_processed_posts_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_sources_with_delivery_completed_posts_total"], 1)
 
+    def test_terminal_unresolvable_vk_is_not_reported_as_active_unscanned_backlog(self) -> None:
+        mod = load_module()
+        metrics = mod._confirmed_external_blogger_funnel_metrics(
+            [{
+                "canonical_source_key": "vk:missing",
+                "platform": "vk",
+                "source_url": "https://vk.com/missing",
+                "external_blogger_evidence_status": "confirmed_external",
+                "source_queue_status": "rejected_unresolvable_vk_source",
+                "fetch_status": "rejected_unresolvable_vk_source",
+            }],
+            [], [], [], [],
+        )
+        self.assertEqual(metrics["confirmed_external_blogger_scanned_total"], 0)
+        self.assertEqual(metrics["confirmed_external_blogger_pending_total"], 0)
+        self.assertEqual(metrics["confirmed_external_blogger_unscanned_total"], 0)
+        self.assertEqual(metrics["confirmed_external_blogger_terminal_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_rejected_unresolvable_vk_total"], 1)
+
     def test_latest_llm_budget_is_not_summed_across_daily_rows(self) -> None:
         mod = load_module()
         latest = mod._latest_llm_budget_row([

@@ -309,7 +309,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
             "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
-            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё не просмотрено / ошибочно локальный / спам: "
+            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё активно ждут просмотра / ошибочно локальный / спам / недоступный VK: "
             f"{value('confirmed_external_blogger_sources_total')}/"
             f"{value('confirmed_external_blogger_scanned_total')}/"
             f"{value('confirmed_external_blogger_with_ko_total')}/"
@@ -318,7 +318,8 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('confirmed_external_blogger_vk_search_hit_total')}/"
             f"{value('confirmed_external_blogger_pending_total')}/"
             f"{value('confirmed_external_blogger_rejected_local_total')}/"
-            f"{value('confirmed_external_blogger_rejected_spam_total')}"
+            f"{value('confirmed_external_blogger_rejected_spam_total')}/"
+            f"{value('confirmed_external_blogger_rejected_unresolvable_vk_total')}"
         ),
         (
             "Посты подтверждённых внешних блогеров — обработано / текстовый dual-вектор пропустил / "
@@ -671,6 +672,11 @@ def _confirmed_external_blogger_funnel_metrics(
         if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
     ]
     scanned = [row for row in sources if _source_has_scan_evidence(row)]
+    terminal_sources = [
+        row for row in sources
+        if str(row.get("source_queue_status") or row.get("fetch_status") or "").strip().lower().startswith("rejected_")
+    ]
+    active_pending = [row for row in sources if row not in scanned and row not in terminal_sources]
     source_aliases: dict[str, set[str]] = {}
     source_platforms: dict[str, str] = {}
     for index, row in enumerate(sources):
@@ -755,8 +761,9 @@ def _confirmed_external_blogger_funnel_metrics(
         "confirmed_external_blogger_sources_total": len(sources),
         "confirmed_external_blogger_telegram_total": sum(1 for row in sources if str(row.get("platform") or "") == "telegram"),
         "confirmed_external_blogger_vk_total": sum(1 for row in sources if str(row.get("platform") or "") == "vk"),
-        "confirmed_external_blogger_pending_total": len(sources) - len(scanned),
-        "confirmed_external_blogger_unscanned_total": len(sources) - len(scanned),
+        "confirmed_external_blogger_pending_total": len(active_pending),
+        "confirmed_external_blogger_unscanned_total": len(active_pending),
+        "confirmed_external_blogger_terminal_total": len(terminal_sources),
         "confirmed_external_blogger_queue_pending_status_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "pending_scan"),
         "confirmed_external_blogger_scanned_total": len(scanned),
         "confirmed_external_blogger_with_ko_total": len(sources_with_ko_keys),
