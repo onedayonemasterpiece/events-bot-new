@@ -3,6 +3,22 @@
 `event_media.py` — канонический слой изображений событий. Он является частью
 Smart Update, а не отдельным ручным процессом и не renderer-side фильтром.
 
+## CDN invariant
+
+В production (`EVENT_MEDIA_REQUIRE_CDN=1`) изображение не может попасть в
+`approved` projection, пока Smart Update media gate не материализует его в
+текущем Yandex bucket и не получит URL
+`https://static.kenigevents.ru/...`. Исходный URL остаётся provenance в
+`catbox_url`, а публичные consumers получают CDN URL из `supabase_url`.
+Raw URL `storage.yandexcloud.net/kenigevents.ru/...` безопасно меняет host на
+CDN без копирования объекта; source/Supabase/legacy-bucket URL скачиваются,
+нормализуются в WebP и загружаются в deterministic `p/dh16/...`.
+
+Ошибка оставляет `review_status=pending_review`,
+`review_reason=cdn_mirror_pending` и durable retry `event_media_review`. Это
+единый путь для новых событий, existing-event parser updates, source rehydrate
+и TelegramMonitor; static/Telegraph/Telegram/VK только читают projection.
+
 ## Инвариант
 
 - `EventPoster` — ledger логических изображений и их alternate locations.

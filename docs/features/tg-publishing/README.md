@@ -101,7 +101,7 @@
 - Если late media rehydration всё же произошёл после первого public fanout (например, video popular-review восстановил фото из исходного VK-поста), URL сначала materialize'ятся в managed storage, а затем обычные `tg_event_publish`/`vk_sync` автоматически re-arm'ятся. Сохранить `event.photo_urls`, оставив старые text-only Telegram/VK posts, запрещено.
 - Если у события одно выбранное изображение, канонический пост — `sendPhoto` с uploaded file, caption, кнопкой календаря и всеми ссылками в одном сообщении.
 - Если выбранных изображений несколько, канонический пост — `sendMediaGroup` с uploaded files: caption ставится на первое изображение, а календарь добавляется как текстовая ссылка в caption, потому что Telegram Bot API не поддерживает inline-кнопки у media group.
-- Если у события есть выбранные `photo_urls`, text-only публикация не считается успешной деградацией: ошибка materialize/upload должна оставить `tg_event_publish` в retry/error и быть расследована. Text post допустим только для событий без изображений.
+- В production event announcement всегда требует хотя бы одно approved CDN-изображение. Пустая gallery или любой non-CDN URL fail-closed: `tg_event_publish` остаётся в retry/error, ожидает `event_media_review`, не отправляет text-only пост и не удаляет существующий media post. Это запрещает и первую text-only публикацию, и downgrade `photo_caption/album_caption -> text`.
 - Caption всегда удерживается в `1000` видимых символов: если LLM hook или инфоблок всё ещё длинные, deterministic safety-net режет только narrative body; заголовок, инфоблок, хештеги и footer links сохраняются.
 
 ## Проверки

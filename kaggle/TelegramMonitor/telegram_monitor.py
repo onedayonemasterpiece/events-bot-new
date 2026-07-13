@@ -713,8 +713,13 @@ SUPABASE_VIDEOS_PREFIX = (os.getenv('TG_MONITORING_VIDEOS_PREFIX') or 'v').strip
 
 YC_STORAGE_ACCESS_KEY = (os.getenv('YC_SA_BOT_STORAGE') or os.getenv('YC_SA_ML_DEV') or '').strip()
 YC_STORAGE_SECRET_KEY = (os.getenv('YC_SA_BOT_STORAGE_KEY') or os.getenv('YC_SA_ML_DEV_key') or os.getenv('YC_SA_ML_DEV_KEY') or '').strip()
-YC_STORAGE_BUCKET = (os.getenv('YC_STORAGE_BUCKET') or 'kenigevents').strip() or 'kenigevents'
+YC_STORAGE_BUCKET = (os.getenv('YC_STORAGE_BUCKET') or 'kenigevents.ru').strip() or 'kenigevents.ru'
 YC_STORAGE_ENDPOINT = (os.getenv('YC_STORAGE_ENDPOINT') or 'https://storage.yandexcloud.net').strip() or 'https://storage.yandexcloud.net'
+YC_STORAGE_PUBLIC_BASE_URL = (
+    os.getenv('YC_STORAGE_PUBLIC_BASE_URL')
+    or os.getenv('PUBLIC_ASSET_BASE_URL')
+    or ('https://static.kenigevents.ru' if YC_STORAGE_BUCKET == 'kenigevents.ru' else '')
+).strip().rstrip('/')
 YC_STORAGE_ENABLED = bool(YC_STORAGE_ACCESS_KEY and YC_STORAGE_SECRET_KEY and YC_STORAGE_BUCKET)
 POSTER_STORAGE_ENABLED = bool(YC_STORAGE_ENABLED or SUPABASE_STORAGE_ENABLED)
 
@@ -789,6 +794,8 @@ _YANDEX_STORAGE_CLIENT = None
 
 
 def _yandex_public_url(bucket: str, object_path: str) -> str:
+    if YC_STORAGE_PUBLIC_BASE_URL and bucket == YC_STORAGE_BUCKET:
+        return f"{YC_STORAGE_PUBLIC_BASE_URL}/{str(object_path or '').strip().lstrip('/')}"
     return f"https://storage.yandexcloud.net/{bucket}/{str(object_path or '').strip().lstrip('/')}"
 
 

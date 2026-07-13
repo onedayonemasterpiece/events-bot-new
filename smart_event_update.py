@@ -18084,10 +18084,18 @@ async def _apply_posters(
         PENDING_REVIEW,
         REJECTED,
         ensure_event_media_reviews,
+        event_media_require_cdn,
+        materialize_event_media_candidate_to_cdn,
         resolve_poster_display_url,
         sync_event_gallery_projection,
     )
 
+    cdn_ready: dict[int, bool] = {}
+    if event_media_require_cdn():
+        for candidate in posters:
+            cdn_ready[id(candidate)] = await materialize_event_media_candidate_to_cdn(
+                candidate
+            )
     posters = _dedup_poster_candidates_by_identity(posters)
     existing_rows = list(
         (
@@ -18180,6 +18188,10 @@ async def _apply_posters(
                 row.review_status = PENDING_REVIEW
                 row.review_reason = "source_scope_reintroduced"
                 row.reviewed_at = None
+            if event_media_require_cdn() and not cdn_ready.get(id(poster), False):
+                row.review_status = PENDING_REVIEW
+                row.review_reason = "cdn_mirror_pending"
+                row.reviewed_at = None
             row.updated_at = now
             session.add(row)
             if duplicate_reason and duplicate_reason != "poster_hash":
@@ -18198,7 +18210,12 @@ async def _apply_posters(
                 raw_sha256=digest if digest_is_content else None,
                 phash=poster_phash,
                 review_status=PENDING_REVIEW,
-                review_reason="awaiting_automated_pair_review",
+                review_reason=(
+                    "cdn_mirror_pending"
+                    if event_media_require_cdn()
+                    and not cdn_ready.get(id(poster), False)
+                    else "awaiting_automated_pair_review"
+                ),
                 display_order=next_order,
                 ocr_text=poster_ocr_text,
                 ocr_title=poster_ocr_title,

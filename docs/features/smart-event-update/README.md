@@ -10,6 +10,9 @@ SHA решается детерминированно, остальные пар
 feature budgets и автоматическим retry. Только `approved` проецируется в
 `Event.photo_urls` и читается Telegraph/TG/VK/static. Каноника, все ingestion
 paths и rollout: [Event media](../event-media/README.md).
+В production тот же gate до approval обязан materialize каждый source poster в
+`static.kenigevents.ru`; existing-event ticket-status fast path не является
+исключением и также передаёт текущие parser photos в `_apply_posters()`.
 
 ## Fact-first (внедрено)
 

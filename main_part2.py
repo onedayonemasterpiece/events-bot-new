@@ -6391,6 +6391,20 @@ async def publish_tg_event_announcement(
             _tg_event_publish_media_urls(event)
         )
     )[:TG_EVENT_MAX_MEDIA]
+    from event_media import event_media_require_cdn, is_event_media_cdn_url
+
+    if event_media_require_cdn():
+        non_cdn = [url for url in photo_urls if not is_event_media_cdn_url(url)]
+        if non_cdn:
+            raise RuntimeError(
+                f"tg_event_publish_non_cdn_media:event_id={getattr(event, 'id', None)}"
+            )
+        if not photo_urls:
+            # Never silently downgrade a photo publication to text. The durable
+            # event_media_review job must repair/materialize media first.
+            raise RuntimeError(
+                f"tg_event_publish_missing_approved_cdn_media:event_id={getattr(event, 'id', None)}"
+            )
     chunks = _chunked_tg_media(photo_urls)
     if len(photo_urls) == 1:
         desired_mode = "photo_caption"

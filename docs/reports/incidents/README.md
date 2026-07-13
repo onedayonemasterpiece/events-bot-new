@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-13-tg-media-downgrade-non-cdn-posters.md`
+  - Scope: Smart Update media materialization, existing-event source media repair, TelegramMonitor storage URLs, static galleries and `@kldevents` publishing.
+  - Must not regress: public event gallery URLs are strictly `static.kenigevents.ru`; missing source media stays in durable retry and can never create or downgrade to a Telegram text-only event post.
+
 - `INC-2026-07-13-runtime-logging-recurring-event-quality.md`
   - Scope: bounded permanent runtime logs, Fly volume hygiene, reversible production Telegram E2E authorization, complete future-event quality acceptance and vector/LLM evidence.
   - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator.

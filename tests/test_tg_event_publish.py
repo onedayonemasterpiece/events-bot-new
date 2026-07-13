@@ -1212,6 +1212,59 @@ async def test_tg_event_publish_fails_closed_when_materialized_media_unavailable
 
 
 @pytest.mark.asyncio
+async def test_tg_event_publish_never_downgrades_to_text_in_strict_cdn_mode(
+    monkeypatch,
+):
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    event = _event(
+        photo_urls=[],
+        tg_event_post_id=77,
+        tg_event_post_mode="photo_caption",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+    )
+    bot = DummyTgBot()
+
+    with pytest.raises(RuntimeError, match="missing_approved_cdn_media"):
+        await main.publish_tg_event_announcement(event, "Описание", None, bot)
+
+    assert not bot.messages
+    assert not bot.photos
+    assert not bot.deleted
+
+
+@pytest.mark.asyncio
+async def test_strict_cdn_schedule_puts_media_repair_before_public_fanout(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls = []
+
+    async def fake_enqueue_job(_db, eid, task, **kwargs):
+        calls.append((task, kwargs.get("depends_on")))
+        return f"{task.value}:{eid}"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    event = _event(id=None, date="2027-08-20", photo_urls=[])
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert (main.JobTask.event_media_review, None) in calls
+    assert (
+        main.JobTask.telegraph_build,
+        [f"event_media_review:{event.id}"],
+    ) in calls
+    tg_calls = [item for item in calls if item[0] == main.JobTask.tg_event_publish]
+    assert tg_calls and f"telegraph_build:{event.id}" in tg_calls[0][1]
+
+
+@pytest.mark.asyncio
 async def test_tg_event_publish_suppresses_retry_on_uncertain_send_timeout(monkeypatch):
     event = _event(photo_urls=["https://img.example/0.jpg"])
     bot = DummyTgBot()

@@ -72,6 +72,62 @@ def test_fingerprints_distinguish_raw_container_but_match_pixels() -> None:
 
 
 @pytest.mark.asyncio
+async def test_current_yandex_bucket_url_is_canonicalized_to_cdn(monkeypatch) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    candidate = PosterCandidate(
+        supabase_url=(
+            "https://storage.yandexcloud.net/kenigevents.ru/"
+            "p/dh16/aa/abcdef.webp"
+        )
+    )
+
+    assert await event_media.materialize_event_media_candidate_to_cdn(candidate)
+    assert candidate.supabase_url == (
+        "https://static.kenigevents.ru/p/dh16/aa/abcdef.webp"
+    )
+    assert candidate.supabase_path == "p/dh16/aa/abcdef.webp"
+
+
+@pytest.mark.asyncio
+async def test_strict_cdn_gate_does_not_project_unmaterialized_source_url(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+
+    async def fail_materialize(_candidate) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        event_media, "materialize_event_media_candidate_to_cdn", fail_materialize
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        await _apply_posters(
+            session,
+            event.id,
+            [PosterCandidate(catbox_url="https://source.example/poster.jpg")],
+        )
+        await session.commit()
+        await session.refresh(event)
+        row = (
+            await session.execute(
+                select(EventPoster).where(EventPoster.event_id == event.id)
+            )
+        ).scalar_one()
+
+    assert row.review_status == PENDING_REVIEW
+    assert row.review_reason == "cdn_mirror_pending"
+    assert event.photo_urls == []
+    assert event.photo_count == 0
+
+
+@pytest.mark.asyncio
 async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) -> None:
     captured: dict[str, object] = {}
 

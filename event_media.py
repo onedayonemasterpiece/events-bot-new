@@ -91,6 +91,36 @@ def _env_float(name: str, default: float, *, lo: float = 0.0, hi: float = 1.0) -
     return max(lo, min(hi, value))
 
 
+def event_media_require_cdn() -> bool:
+    """Whether public event galleries must contain CDN URLs only."""
+
+    return str(os.getenv("EVENT_MEDIA_REQUIRE_CDN") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def is_event_media_cdn_url(url: str | None) -> bool:
+    raw = str(url or "").strip()
+    if not raw:
+        return False
+    try:
+        host = (urlsplit(raw).hostname or "").casefold()
+        expected = (
+            urlsplit(
+                os.getenv("EVENT_MEDIA_CDN_BASE_URL")
+                or os.getenv("PUBLIC_ASSET_BASE_URL")
+                or "https://static.kenigevents.ru"
+            ).hostname
+            or ""
+        ).casefold()
+    except Exception:
+        return False
+    return bool(expected and host == expected)
+
+
 def _is_managed_url(url: str | None) -> bool:
     raw = str(url or "").strip()
     if not raw:
@@ -113,10 +143,14 @@ def resolve_poster_display_url(poster: EventPoster) -> str | None:
         if str(value or "").strip() and _is_managed_url(str(value))
     ]
     if managed_candidates:
-        return managed_candidates[0]
+        from yandex_storage import canonicalize_yandex_public_url
+
+        canonical = canonicalize_yandex_public_url(managed_candidates[0])
+        if canonical and (not event_media_require_cdn() or is_event_media_cdn_url(canonical)):
+            return canonical
     for value in (poster.supabase_url, poster.catbox_url):
         raw = str(value or "").strip()
-        if raw:
+        if raw and (not event_media_require_cdn() or is_event_media_cdn_url(raw)):
             return raw
     return None
 
@@ -440,6 +474,136 @@ def _download_url(url: str, *, max_bytes: int, timeout: float) -> DownloadedPost
         mime = str(response.headers.get("Content-Type") or "application/octet-stream").split(";", 1)[0]
         final_url = str(getattr(response, "url", None) or url)
         return DownloadedPoster(data=data, mime_type=mime, source_url=final_url)
+
+
+async def materialize_event_media_candidate_to_cdn(candidate: Any) -> bool:
+    """Materialize one Smart Update candidate in the canonical CDN bucket.
+
+    The original source URL remains provenance in ``catbox_url``.  Public
+    projection always uses ``supabase_url``/``supabase_path`` pointing at the
+    CDN.  Existing raw Object Storage URLs for the current origin bucket are
+    host-canonicalized without downloading or copying the object.
+    """
+
+    from media_dedup import build_supabase_poster_object_path, prepare_image_for_supabase
+    from yandex_storage import (
+        canonicalize_yandex_public_url,
+        parse_yandex_storage_url,
+        upload_yandex_public_bytes,
+    )
+
+    values = [
+        str(getattr(candidate, name, None) or "").strip()
+        for name in ("supabase_url", "catbox_url")
+    ]
+    urls = [value for value in values if value]
+    for url in urls:
+        canonical = canonicalize_yandex_public_url(url)
+        parsed = parse_yandex_storage_url(url)
+        if canonical and parsed and is_event_media_cdn_url(canonical):
+            candidate.supabase_url = canonical
+            candidate.supabase_path = parsed[1]
+            return True
+        if is_event_media_cdn_url(url):
+            candidate.supabase_url = url
+            if parsed:
+                candidate.supabase_path = parsed[1]
+            return True
+
+    if not urls:
+        return False
+    max_bytes = _env_int(
+        "EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=36_700_160
+    )
+    timeout = float(
+        _env_int("EVENT_MEDIA_REVIEW_DOWNLOAD_TIMEOUT_SEC", 25, lo=3, hi=120)
+    )
+    downloaded: DownloadedPoster | None = None
+    last_error: Exception | None = None
+    for url in urls:
+        try:
+            downloaded = await asyncio.to_thread(
+                _download_url, url, max_bytes=max_bytes, timeout=timeout
+            )
+            break
+        except Exception as exc:
+            last_error = exc
+    if downloaded is None:
+        logger.warning("event_media.cdn_download_failed url=%s err=%s", urls[0], last_error)
+        return False
+
+    quality = _env_int("SUPABASE_POSTERS_WEBP_QUALITY", 82, lo=1, hi=100)
+    prepared = await asyncio.to_thread(
+        prepare_image_for_supabase,
+        downloaded.data,
+        dhash_size=16,
+        webp_quality=quality,
+    )
+    if prepared is None:
+        logger.warning("event_media.cdn_prepare_failed url=%s", downloaded.source_url)
+        return False
+    object_path = build_supabase_poster_object_path(
+        prepared.dhash_hex,
+        prefix=(os.getenv("SUPABASE_POSTERS_PREFIX") or "p").strip() or "p",
+        dhash_size=16,
+    )
+    hosted = await asyncio.to_thread(
+        upload_yandex_public_bytes,
+        prepared.webp_bytes,
+        object_path=object_path,
+        content_type="image/webp",
+    )
+    hosted = canonicalize_yandex_public_url(hosted)
+    if not hosted or not is_event_media_cdn_url(hosted):
+        logger.warning("event_media.cdn_upload_failed path=%s", object_path)
+        return False
+    candidate.supabase_url = hosted
+    candidate.supabase_path = object_path
+    if not str(getattr(candidate, "catbox_url", None) or "").strip():
+        candidate.catbox_url = downloaded.source_url
+    digest = hashlib.sha256(downloaded.data).hexdigest()
+    if hasattr(candidate, "raw_sha256"):
+        candidate.raw_sha256 = digest
+    else:
+        candidate.sha256 = digest
+    candidate.phash = prepared.dhash_hex
+    return True
+
+
+async def materialize_event_posters_to_cdn(session: Any, event_id: int) -> tuple[int, int]:
+    """Retry CDN materialization for ledger rows; return (updated, failed)."""
+
+    rows = (
+        await session.execute(
+            select(EventPoster)
+            .where(
+                EventPoster.event_id == int(event_id),
+                EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+            )
+            .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
+        )
+    ).scalars().all()
+    updated = 0
+    failed = 0
+    for row in rows:
+        before = (row.supabase_url, row.supabase_path, row.raw_sha256, row.phash)
+        ok = await materialize_event_media_candidate_to_cdn(row)
+        if not ok:
+            row.review_status = PENDING_REVIEW
+            row.review_reason = "cdn_mirror_pending"
+            row.reviewed_at = None
+            row.updated_at = datetime.now(timezone.utc)
+            session.add(row)
+            failed += 1
+            continue
+        if row.review_reason == "cdn_mirror_pending":
+            row.review_reason = "awaiting_automated_pair_review"
+        after = (row.supabase_url, row.supabase_path, row.raw_sha256, row.phash)
+        if before != after:
+            row.updated_at = datetime.now(timezone.utc)
+            session.add(row)
+            updated += 1
+    return updated, failed
 
 
 async def _download_poster(poster: EventPoster) -> DownloadedPoster:

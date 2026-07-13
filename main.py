@@ -15313,6 +15313,23 @@ async def schedule_event_update_tasks(
             eid,
         )
         skip_vk_sync = True
+    media_dep_key: str | None = None
+    from event_media import event_media_require_cdn, is_event_media_cdn_url
+
+    event_photo_urls = [
+        str(value or "").strip()
+        for value in list(getattr(ev, "photo_urls", None) or [])
+        if str(value or "").strip()
+    ]
+    needs_media_reconcile = event_media_require_cdn() and (
+        not event_photo_urls
+        or any(not is_event_media_cdn_url(url) for url in event_photo_urls)
+    )
+    if needs_media_reconcile and "event_media_review" in JOB_HANDLERS:
+        media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
+        results[JobTask.event_media_review] = await enqueue_job(
+            db, eid, JobTask.event_media_review
+        )
     telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
     tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
     vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
@@ -15322,7 +15339,11 @@ async def schedule_event_update_tasks(
         results[JobTask.ics_publish] = ics_dep
         await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
     results[JobTask.telegraph_build] = await enqueue_job(
-        db, eid, JobTask.telegraph_build, depends_on=None
+        db,
+        eid,
+        JobTask.telegraph_build,
+        depends_on=[media_dep_key] if media_dep_key else None,
+        replace_depends_on=True,
     )
     if (not disable_ics_jobs) and has_calendar_schedule and "tg_ics_post" in JOB_HANDLERS:
         tg_ics_deps = [telegraph_dep_key]
@@ -18318,11 +18339,6 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
             .limit(max_sources)
         )
     ).all()
-    # Regression contract INC-2026-05-05: source aggregation is a repair for a
-    # multi-source gap, not a reason to refetch every ordinary single-source row.
-    if len(source_rows) < 2:
-        return 0
-
     source_urls = [str(row[1] or "").strip() for row in source_rows if str(row[1] or "").strip()]
     source_counts = (
         await session.execute(
@@ -18348,6 +18364,11 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
         ).scalar_one()
         or 0
     )
+    # INC-2026-05-05 still protects ordinary single-source rows from repeated
+    # aggregation.  A single-source event with no usable media is different:
+    # it must be allowed to recover through the same media gate.
+    if len(source_rows) < 2 and existing_count > 0:
+        return 0
     if existing_count >= len(source_rows):
         return 0
 
@@ -21569,6 +21590,8 @@ async def job_event_media_review(
     """Rehydrate source media and adjudicate one cached pair automatically."""
 
     rehydrated = 0
+    cdn_updated = 0
+    cdn_failed = 0
     async with db.get_session() as session:
         event = await session.get(Event, int(event_id))
         if event is None:
@@ -21578,17 +21601,32 @@ async def job_event_media_review(
             event,
             event_id=int(event_id),
         )
+        from event_media import (
+            event_media_require_cdn,
+            materialize_event_posters_to_cdn,
+            sync_event_gallery_projection,
+        )
+
+        if event_media_require_cdn():
+            cdn_updated, cdn_failed = await materialize_event_posters_to_cdn(
+                session, int(event_id)
+            )
+            await sync_event_gallery_projection(session, int(event_id))
         await session.commit()
 
     from event_media import review_next_event_media_pair
 
     projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
-    if rehydrated and not projection_changed:
+    if (rehydrated or cdn_updated) and not projection_changed:
         async with db.get_session() as session:
             fresh = await session.get(Event, int(event_id))
         if fresh is not None:
             await schedule_event_update_tasks(db, fresh)
-    return bool(rehydrated or projection_changed)
+    if cdn_failed:
+        raise RuntimeError(
+            f"event_media_cdn_materialization_pending:event_id={event_id}:failed={cdn_failed}"
+        )
+    return bool(rehydrated or cdn_updated or projection_changed)
 
 
 JOB_HANDLERS = {

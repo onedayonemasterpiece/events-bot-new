@@ -131,6 +131,26 @@ def build_yandex_public_url(*, bucket: str | None = None, object_path: str) -> s
     return f"{get_yandex_storage_public_base_url(bucket=b)}/{quote(p, safe='/')}"
 
 
+def canonicalize_yandex_public_url(url: str | None) -> str | None:
+    """Return the CDN URL for objects in the current CDN-fronted bucket.
+
+    Older producers persisted ``storage.yandexcloud.net/kenigevents.ru`` URLs
+    even though the same object is available through ``static.kenigevents.ru``.
+    Rewriting the host is safe because the object key and origin bucket do not
+    change.  Objects in the legacy ``kenigevents`` bucket are intentionally not
+    rewritten: that bucket is not the configured CDN origin.
+    """
+
+    raw = str(url or "").strip()
+    parsed = parse_yandex_storage_url(raw)
+    if not parsed:
+        return raw or None
+    bucket, object_path = parsed
+    if bucket != _DEFAULT_BUCKET:
+        return raw or None
+    return build_yandex_public_url(bucket=bucket, object_path=object_path)
+
+
 def parse_yandex_storage_url(url: str | None) -> tuple[str, str] | None:
     raw = str(url or "").strip()
     if not raw:
