@@ -241,6 +241,14 @@ three posts) before the canonical source row becomes
 `rejected_spam_source`. This prevents a useful travel author from disappearing
 because one KO post contains an integration.
 
+The operator scorecard reports this cohort as a disjoint product funnel:
+`total / scanned / unscanned / sources with KO`, followed by its processed
+posts, dual-vector accepts, media handoffs, publication-ledger rows and chat
+deliveries. The mutable technical count of rows whose queue status happens to
+be `pending_scan` is retained separately as
+`confirmed_external_blogger_queue_pending_status_total`; it is not presented
+as the unscanned backlog.
+
 The production rollback default remains `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=legacy_v1`
 with the historical two-query pair. The bounded research mode
 `adaptive_cursor_v1` may be enabled explicitly for a controlled run. It uses a

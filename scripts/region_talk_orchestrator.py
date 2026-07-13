@@ -308,7 +308,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
             "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
-            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё pending / ошибочно локальный / спам: "
+            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё не просмотрено / ошибочно локальный / спам: "
             f"{value('confirmed_external_blogger_sources_total')}/"
             f"{value('confirmed_external_blogger_scanned_total')}/"
             f"{value('confirmed_external_blogger_with_ko_total')}/"
@@ -318,6 +318,15 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('confirmed_external_blogger_pending_total')}/"
             f"{value('confirmed_external_blogger_rejected_local_total')}/"
             f"{value('confirmed_external_blogger_rejected_spam_total')}"
+        ),
+        (
+            "Посты подтверждённых внешних блогеров — обработано / текстовый dual-вектор пропустил / "
+            "передано на медиа / дошло до публикационного реестра / отправлено в чат: "
+            f"{value('confirmed_external_blogger_posts_processed_total')}/"
+            f"{value('confirmed_external_blogger_vector_accepted_posts_total')}/"
+            f"{value('confirmed_external_blogger_image_queue_posts_total')}/"
+            f"{value('confirmed_external_blogger_publication_posts_total')}/"
+            f"{value('confirmed_external_blogger_delivery_completed_posts_total')}"
         ),
         (
             "Поиск по словам/хештегам — найдено источников / реально просмотрено / "
@@ -2742,6 +2751,31 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     confirmed_external_blogger_fast_hit_rows = [
         row for row in confirmed_external_blogger_rows if str(row.get("fast_check_status") or "") == "ko_hit"
     ]
+    confirmed_external_blogger_aliases: set[str] = set()
+    for row in confirmed_external_blogger_rows:
+        confirmed_external_blogger_aliases.update(_source_alias_keys(row))
+    confirmed_external_blogger_post_rows = [
+        row for row in processed_post_rows
+        if _source_alias_keys(row) & confirmed_external_blogger_aliases
+    ]
+    confirmed_external_blogger_post_urls = {
+        str(row.get("post_url") or "").strip().rstrip("/")
+        for row in confirmed_external_blogger_post_rows
+        if str(row.get("post_url") or "").strip()
+    }
+    confirmed_external_blogger_image_rows = [
+        row for row in images
+        if str(row.get("post_url") or "").strip().rstrip("/") in confirmed_external_blogger_post_urls
+    ]
+    confirmed_external_blogger_publication_rows = [
+        row for row in publications
+        if str(row.get("post_url") or "").strip().rstrip("/") in confirmed_external_blogger_post_urls
+    ]
+    confirmed_external_blogger_delivery_rows = [
+        row for row in deliveries
+        if str(row.get("post_url") or "").strip().rstrip("/") in confirmed_external_blogger_post_urls
+        and str(row.get("delivery_status") or row.get("status") or "").strip().lower() in {"completed", "sent", "delivered"}
+    ]
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_unique_keys)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
@@ -2821,7 +2855,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "confirmed_external_blogger_sources_total": len(confirmed_external_blogger_rows),
         "confirmed_external_blogger_telegram_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("platform") or "") == "telegram"),
         "confirmed_external_blogger_vk_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("platform") or "") == "vk"),
-        "confirmed_external_blogger_pending_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "pending_scan"),
+        # Product pending is disjoint from scanned. Keep the mutable raw queue
+        # status under an explicitly technical name so it cannot be mistaken
+        # for the number of bloggers that have never been inspected.
+        "confirmed_external_blogger_pending_total": len(confirmed_external_blogger_rows) - len(confirmed_external_blogger_scanned_rows),
+        "confirmed_external_blogger_unscanned_total": len(confirmed_external_blogger_rows) - len(confirmed_external_blogger_scanned_rows),
+        "confirmed_external_blogger_queue_pending_status_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "pending_scan"),
         "confirmed_external_blogger_scanned_total": len(confirmed_external_blogger_scanned_rows),
         "confirmed_external_blogger_with_ko_total": len(confirmed_external_blogger_ko_rows),
         "confirmed_external_blogger_fast_check_hit_total": len(confirmed_external_blogger_fast_hit_rows),
@@ -2829,6 +2868,30 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "confirmed_external_blogger_vk_search_hit_total": sum(1 for row in confirmed_external_blogger_rows if _safe_int(row.get("vk_wall_search_hits")) > 0),
         "confirmed_external_blogger_rejected_local_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
         "confirmed_external_blogger_rejected_spam_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
+        "confirmed_external_blogger_posts_processed_total": len({
+            str(row.get("platform_post_key") or row.get("post_url") or row.get("post_id") or "")
+            for row in confirmed_external_blogger_post_rows
+            if str(row.get("platform_post_key") or row.get("post_url") or row.get("post_id") or "").strip()
+        }),
+        "confirmed_external_blogger_vector_accepted_posts_total": sum(
+            1 for row in confirmed_external_blogger_post_rows
+            if str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
+        ),
+        "confirmed_external_blogger_image_queue_posts_total": len({
+            str(row.get("post_url") or "").strip().rstrip("/")
+            for row in confirmed_external_blogger_image_rows
+            if str(row.get("post_url") or "").strip()
+        }),
+        "confirmed_external_blogger_publication_posts_total": len({
+            str(row.get("post_url") or "").strip().rstrip("/")
+            for row in confirmed_external_blogger_publication_rows
+            if str(row.get("post_url") or "").strip()
+        }),
+        "confirmed_external_blogger_delivery_completed_posts_total": len({
+            str(row.get("post_url") or "").strip().rstrip("/")
+            for row in confirmed_external_blogger_delivery_rows
+            if str(row.get("post_url") or "").strip()
+        }),
         "rejected_sources_total": len(rejected_sources),
         "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
         "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,
