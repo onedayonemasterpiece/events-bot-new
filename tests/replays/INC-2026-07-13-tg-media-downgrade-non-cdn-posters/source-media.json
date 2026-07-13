@@ -1,0 +1,29 @@
+{
+  "incident_id": "INC-2026-07-13-tg-media-downgrade-non-cdn-posters",
+  "events": [
+    {
+      "event_id": 5296,
+      "source_type": "tretyakov",
+      "title": "Фестиваль Pianissimo: Жуан Нету Виейра",
+      "date_raw": "24 июля 2026 19:00",
+      "ticket_status": "available",
+      "url": "https://kaliningrad.tretyakovgallery.ru/events/festival-pianissimo-zhuan-netu-vieyra/",
+      "photos": [
+        "https://kaliningrad.tretyakovgallery.ru/upload/iblock/bbf/fvwmyhcx2n1ey2n26rs8kdam9hjozw6m/tjdyjytjj.jpg"
+      ],
+      "location": "Третьяковская галерея"
+    },
+    {
+      "event_id": 6318,
+      "source_type": "dramteatr",
+      "title": "Спектакль «Ромео и Джульетта»",
+      "date_raw": "2 ноября 2026 18:30",
+      "ticket_status": "available",
+      "url": "https://dramteatr39.ru/spektakli/romeo-i-djuletta",
+      "photos": [],
+      "location": "Драматический театр",
+      "page_html": "<html><head><meta property=\"og:image\" content=\"/storage/ARENDA/romeo-big.jpg\"></head><body><img src=\"/storage/uploads/!spektakli/romeo/gallery-1.jpg\"></body></html>",
+      "expected_cover": "https://dramteatr39.ru/storage/ARENDA/romeo-big.jpg"
+    }
+  ]
+}

@@ -136,6 +136,44 @@ def clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def canonical_event_media_cdn_url(value: Any) -> str | None:
+    """Return a CDN event-media URL, rejecting every source/origin fallback."""
+
+    url = clean_text(value)
+    if not url:
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        cdn_base = clean_text(
+            os.getenv("PUBLIC_ASSET_BASE_URL") or "https://static.kenigevents.ru"
+        ).rstrip("/")
+        cdn = urllib.parse.urlsplit(cdn_base)
+    except Exception:
+        return None
+    if parsed.scheme not in {"http", "https"} or not cdn.netloc:
+        return None
+    if parsed.netloc.lower() == cdn.netloc.lower():
+        return urllib.parse.urlunsplit(
+            (cdn.scheme or "https", cdn.netloc, parsed.path, parsed.query, parsed.fragment)
+        )
+    current_bucket_prefix = "/kenigevents.ru/"
+    if (
+        parsed.netloc.lower() == "storage.yandexcloud.net"
+        and parsed.path.startswith(current_bucket_prefix)
+    ):
+        object_path = parsed.path[len(current_bucket_prefix) :]
+        return urllib.parse.urlunsplit(
+            (
+                cdn.scheme or "https",
+                cdn.netloc,
+                "/" + object_path,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+    return None
+
+
 def description_looks_truncated(description: str, source_text: str) -> bool:
     """Detect an incomplete LLM-written description and safely fall back to source text.
 
@@ -689,7 +727,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     for row in rows:
         # One EventPoster is one logical gallery item.  Its managed and source
         # URLs are alternate locations, never two public images.
-        url = clean_text(row["supabase_url"]) or clean_text(row["catbox_url"])
+        url = canonical_event_media_cdn_url(row["supabase_url"])
         if not url:
             continue
         poster_urls.append(url)
@@ -702,12 +740,12 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     # for rows that have not yet been materialized by the audited backfill.
     source_urls = poster_urls if canonical_ledger_present else list(photo_urls or [])
     for url in source_urls:
-        url = clean_text(url)
+        url = canonical_event_media_cdn_url(url)
         if not url or url in seen:
             continue
         seen.add(url)
         urls.append(url)
-    override_url = IMAGE_URL_OVERRIDES.get(event_id)
+    override_url = canonical_event_media_cdn_url(IMAGE_URL_OVERRIDES.get(event_id))
     if override_url:
         urls = [override_url] + [url for url in urls if image_url_key(url) != image_url_key(override_url)]
     assets: list[dict[str, Any]] = []
@@ -836,6 +874,8 @@ def event_active_where(
     clauses = ["date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"]
     if available is None or "lifecycle_status" in available:
         clauses.append("coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'")
+    if available is None or "silent" in available:
+        clauses.append("coalesce(silent,0) = 0")
     if available is None or "end_date" in available:
         clauses.append(
             f"({start_not_elapsed} or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"

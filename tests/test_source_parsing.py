@@ -234,3 +234,151 @@ class TestShortDescriptionFallback:
         first_sentence = description.split('.')[0].strip() if description else ""
         result = first_sentence + '.' if first_sentence else title
         assert result == title
+
+
+@pytest.mark.asyncio
+async def test_inc_20260713_existing_source_media_replay_uses_smart_update_cdn_gate(
+    tmp_path, monkeypatch
+):
+    """Replay the two parser shapes that produced text-only announcements."""
+
+    import json
+    import sys
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from sqlmodel import select
+
+    import event_media
+    import source_parsing.handlers as handlers
+    from db import Database
+    from models import Event, EventPoster
+
+    replay_path = (
+        Path(__file__).parent
+        / "replays"
+        / "INC-2026-07-13-tg-media-downgrade-non-cdn-posters"
+        / "source-media.json"
+    )
+    replay = json.loads(replay_path.read_text(encoding="utf-8"))
+    dram_raw = next(item for item in replay["events"] if item["source_type"] == "dramteatr")
+
+    class FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def text(self):
+            return dram_raw["page_html"]
+
+    class FakeSession:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def get(self, _url):
+            return FakeResponse()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "aiohttp",
+        SimpleNamespace(ClientTimeout=lambda **_kwargs: object(), ClientSession=FakeSession),
+    )
+    cover = await handlers._fetch_og_image_for_dramteatr(dram_raw["url"])
+    assert cover == dram_raw["expected_cover"]
+
+    raw_events = []
+    for item in replay["events"]:
+        payload = dict(item)
+        payload.pop("event_id", None)
+        payload.pop("page_html", None)
+        payload.pop("expected_cover", None)
+        if payload["source_type"] == "dramteatr":
+            payload["photos"] = [cover]
+        raw_events.append(payload)
+    parsed = []
+    for payload in raw_events:
+        parsed.extend(parse_theatre_json(payload, payload["source_type"]))
+    assert len(parsed) == 2
+
+    db = Database(str(tmp_path / "replay.sqlite"))
+    await db.init()
+    event_ids = {}
+    async with db.get_session() as session:
+        for source_event in parsed:
+            stored = Event(
+                title=source_event.title,
+                description="Replay",
+                date=str(source_event.parsed_date),
+                time=source_event.parsed_time,
+                location_name=source_event.location,
+                source_text="Replay source",
+                photo_urls=[],
+                photo_count=0,
+            )
+            session.add(stored)
+            await session.flush()
+            event_ids[source_event.title] = int(stored.id)
+        await session.commit()
+
+    async def find_existing(_db, _location, _date, _time, title):
+        return event_ids[title], False
+
+    async def true_result(*_args, **_kwargs):
+        return True
+
+    async def no_result(*_args, **_kwargs):
+        return None
+
+    async def materialize(candidate):
+        digest = __import__("hashlib").sha256(candidate.catbox_url.encode()).hexdigest()
+        candidate.supabase_url = f"https://static.kenigevents.ru/p/replay/{digest}.webp"
+        candidate.supabase_path = f"p/replay/{digest}.webp"
+        candidate.phash = digest[:64]
+        return True
+
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setattr(handlers, "find_existing_event", find_existing)
+    monkeypatch.setattr(handlers, "event_has_parser_source", true_result)
+    monkeypatch.setattr(handlers, "update_event_ticket_status", true_result)
+    monkeypatch.setattr(handlers, "update_linked_events", no_result)
+    monkeypatch.setattr(handlers, "schedule_existing_event_update", no_result)
+    monkeypatch.setattr(event_media, "materialize_event_media_candidate_to_cdn", materialize)
+
+    stats, _ = await handlers.process_source_events(
+        db,
+        None,
+        parsed,
+        source="replay",
+        start_index=0,
+        total_count=len(parsed),
+    )
+    assert stats.failed == 0
+    assert stats.ticket_updated == 2
+
+    async with db.get_session() as session:
+        rows = list((await session.execute(select(EventPoster).order_by(EventPoster.id))).scalars())
+        stored_events = list((await session.execute(select(Event).order_by(Event.id))).scalars())
+    await db.engine.dispose()
+
+    assert len(rows) == 2
+    assert all(row.review_status == "approved" for row in rows)
+    assert all(row.supabase_url.startswith("https://static.kenigevents.ru/") for row in rows)
+    assert {row.catbox_url for row in rows} == {
+        raw_events[0]["photos"][0],
+        dram_raw["expected_cover"],
+    }
+    assert all(event.photo_count == 1 for event in stored_events)
+    assert all(
+        event.photo_urls[0].startswith("https://static.kenigevents.ru/")
+        for event in stored_events
+    )

@@ -10,6 +10,12 @@
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать `image_text_mode` из существующего OCR/media-контура. В hero `ocr_text`/`unknown` идут в `poster-stage` (full poster on solid slab), `visual_only` — в `photo-cover`; в discovery cards `ocr_text`/`unknown` рендерятся в натуральном соотношении без crop/backdrop, `visual_only` допускает cover-кроп в вертикальной 4:5 карточке; date-listing thumbnails (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) являются компактным навигационным preview и используют crop в левой колонке, при этом detail page остаётся источником полного постера. Astro build сам OCR не запускает.
+Event gallery media имеет отдельный fail-closed CDN contract: exporter читает
+только approved `EventPoster.supabase_url` на `static.kenigevents.ru`, допускает
+только host-canonicalization raw URL текущего `kenigevents.ru` bucket и никогда
+не откатывается к `catbox_url`, source CDN, Supabase или legacy bucket. Silent
+rows исключаются тем же static predicate; продолжающиеся события остаются
+eligible по `end_date`.
 
 
 

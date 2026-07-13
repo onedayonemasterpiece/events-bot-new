@@ -28,6 +28,7 @@ def _connect_with_public_gate_columns() -> sqlite3.Connection:
             location_name text,
             location_address text,
             city text,
+            silent integer default 0,
             lifecycle_status text,
             status text,
             moderation_status text,
@@ -49,6 +50,7 @@ def _insert_event(con: sqlite3.Connection, event_id: int, **overrides: object) -
         "location_name": "Кафедральный собор",
         "location_address": "Канта 1",
         "city": "Калининград",
+        "silent": 0,
         "lifecycle_status": "active",
         "status": "active",
         "moderation_status": "accepted",
@@ -70,8 +72,9 @@ def test_public_projection_gate_applies_to_include_ids() -> None:
     _insert_event(con, 4, lifecycle_status="review")
     _insert_event(con, 5, status="quarantine")
     _insert_event(con, 6, moderation_status="rejected")
+    _insert_event(con, 7, silent=1)
 
-    rows = exporter.fetch_rows(con, limit=20, current_date="2026-07-01", include_ids=[1, 2, 3, 4, 5, 6])
+    rows = exporter.fetch_rows(con, limit=20, current_date="2026-07-01", include_ids=[1, 2, 3, 4, 5, 6, 7])
 
     assert [row["id"] for row in rows] == [1]
 
@@ -137,8 +140,8 @@ def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
     con.executemany(
         "insert into eventposter values(?, ?, ?, ?, ?, ?, ?)",
         [
-            (1, 7, "https://managed.example/a.webp", "https://source.example/a.jpg", "A", "approved", 0),
-            (2, 7, "https://managed.example/b.webp", None, "B", "pending_review", 1),
+            (1, 7, "https://static.kenigevents.ru/a.webp", "https://source.example/a.jpg", "A", "approved", 0),
+            (2, 7, "https://static.kenigevents.ru/b.webp", None, "B", "pending_review", 1),
             (3, 7, None, "https://source.example/c.jpg", "C", "duplicate", 2),
             (4, 7, None, "https://source.example/d.jpg", "D", "approved", 3),
         ],
@@ -152,8 +155,39 @@ def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
     )
 
     assert [asset["src"] for asset in assets] == [
-        "https://managed.example/a.webp",
-        "https://source.example/d.jpg",
+        "https://static.kenigevents.ru/a.webp",
+    ]
+
+
+def test_collect_images_canonicalizes_current_bucket_and_rejects_other_hosts() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        "create table eventposter(id integer primary key, event_id integer, supabase_url text, catbox_url text, ocr_text text, review_status text, display_order integer)"
+    )
+    con.executemany(
+        "insert into eventposter values(?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                1,
+                9,
+                "https://storage.yandexcloud.net/kenigevents.ru/p/a.webp",
+                None,
+                None,
+                "approved",
+                0,
+            ),
+            (2, 9, "https://legacy.example/b.webp", None, None, "approved", 1),
+        ],
+    )
+
+    primary, _mode, assets = exporter.collect_images(con, 9, "[]", "Событие")
+
+    assert primary == "https://static.kenigevents.ru/p/a.webp"
+    assert [asset["src"] for asset in assets] == [
+        "https://static.kenigevents.ru/p/a.webp"
     ]
 
 

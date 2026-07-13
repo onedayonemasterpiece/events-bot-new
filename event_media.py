@@ -476,7 +476,9 @@ def _download_url(url: str, *, max_bytes: int, timeout: float) -> DownloadedPost
         return DownloadedPoster(data=data, mime_type=mime, source_url=final_url)
 
 
-async def materialize_event_media_candidate_to_cdn(candidate: Any) -> bool:
+async def materialize_event_media_candidate_to_cdn(
+    candidate: Any, *, session: Any | None = None
+) -> bool:
     """Materialize one Smart Update candidate in the canonical CDN bucket.
 
     The original source URL remains provenance in ``catbox_url``.  Public
@@ -563,7 +565,33 @@ async def materialize_event_media_candidate_to_cdn(candidate: Any) -> bool:
         candidate.catbox_url = downloaded.source_url
     digest = hashlib.sha256(downloaded.data).hexdigest()
     if hasattr(candidate, "raw_sha256"):
-        candidate.raw_sha256 = digest
+        conflicting_poster_id: int | None = None
+        event_id = getattr(candidate, "event_id", None)
+        poster_id = getattr(candidate, "id", None)
+        if session is not None and event_id is not None:
+            conflict_stmt = select(EventPoster.id).where(
+                EventPoster.event_id == int(event_id),
+                EventPoster.raw_sha256 == digest,
+            )
+            if poster_id is not None:
+                conflict_stmt = conflict_stmt.where(EventPoster.id != int(poster_id))
+            conflicting_poster_id = (
+                await session.execute(conflict_stmt.limit(1))
+            ).scalar_one_or_none()
+        if conflicting_poster_id is None:
+            candidate.raw_sha256 = digest
+        else:
+            # Production has a partial unique index on
+            # (event_id, raw_sha256).  Keep byte identity on the existing
+            # survivor and let the pair-review row preserve/adjudicate the
+            # equality instead of aborting the whole CDN retry transaction.
+            candidate.raw_sha256 = None
+            logger.info(
+                "event_media.cdn_raw_sha_conflict event_id=%s poster_id=%s survivor_id=%s",
+                event_id,
+                poster_id,
+                conflicting_poster_id,
+            )
     else:
         candidate.sha256 = digest
     candidate.phash = prepared.dhash_hex
@@ -587,7 +615,7 @@ async def materialize_event_posters_to_cdn(session: Any, event_id: int) -> tuple
     failed = 0
     for row in rows:
         before = (row.supabase_url, row.supabase_path, row.raw_sha256, row.phash)
-        ok = await materialize_event_media_candidate_to_cdn(row)
+        ok = await materialize_event_media_candidate_to_cdn(row, session=session)
         if not ok:
             row.review_status = PENDING_REVIEW
             row.review_reason = "cdn_mirror_pending"

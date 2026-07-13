@@ -18,6 +18,10 @@ CDN без копирования объекта; source/Supabase/legacy-bucket 
 `review_reason=cdn_mirror_pending` и durable retry `event_media_review`. Это
 единый путь для новых событий, existing-event parser updates, source rehydrate
 и TelegramMonitor; static/Telegraph/Telegram/VK только читают projection.
+Static exporter дополнительно fail-close фильтрует gallery refs: принимает только
+`static.kenigevents.ru`, а raw URL текущего bucket
+`storage.yandexcloud.net/kenigevents.ru/...` канонизирует на CDN host. Source
+CDN, Supabase и legacy bucket не могут быть renderer fallback.
 
 ## Инвариант
 
@@ -68,6 +72,9 @@ Festival media — отдельная модель `Festival` и не входи
 OCR или SSIM само по себе никогда не удаляет и не скрывает approved media.
 Повтор одного и того же resolved display URL схлопывается ещё раньше, до
 download/hash/VLM; связанные deferred pair rows закрываются детерминированно.
+При retry CDN-materialization одинаковый raw SHA сохраняется только на уже
+существующем survivor: второй ledger row не нарушает partial unique index
+`(event_id, raw_sha256)`, а exact-equality остаётся в pair-review evidence.
 
 ### Автоматический VLM review
 

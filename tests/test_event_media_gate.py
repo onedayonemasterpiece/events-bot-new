@@ -90,6 +90,71 @@ async def test_current_yandex_bucket_url_is_canonicalized_to_cdn(monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_cdn_retry_preserves_unique_raw_sha_survivor(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    source_bytes = _pattern_png_bytes()
+    digest = hashlib.sha256(source_bytes).hexdigest()
+
+    def download(_url: str, *, max_bytes: int, timeout: float) -> DownloadedPoster:
+        del max_bytes, timeout
+        return DownloadedPoster(
+            data=source_bytes,
+            mime_type="image/png",
+            source_url="https://source.example/duplicate.png",
+        )
+
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr(
+        "yandex_storage.upload_yandex_public_bytes",
+        lambda _data, *, object_path, content_type: (
+            f"https://static.kenigevents.ru/{object_path}"
+        ),
+    )
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        survivor = EventPoster(
+            event_id=int(event.id),
+            poster_hash="survivor",
+            supabase_url="https://static.kenigevents.ru/p/dh16/aa/survivor.webp",
+            raw_sha256=digest,
+            review_status=APPROVED,
+            display_order=0,
+        )
+        retry = EventPoster(
+            event_id=int(event.id),
+            poster_hash="retry",
+            catbox_url="https://source.example/duplicate.png",
+            review_status=PENDING_REVIEW,
+            display_order=1,
+        )
+        session.add(survivor)
+        session.add(retry)
+        await session.commit()
+        await session.refresh(retry)
+
+        updated, failed = await event_media.materialize_event_posters_to_cdn(
+            session, int(event.id)
+        )
+        await session.commit()
+        await session.refresh(retry)
+
+    await db.engine.dispose()
+    assert updated == 2
+    assert failed == 0
+    assert retry.supabase_url.startswith("https://static.kenigevents.ru/p/dh16/")
+    assert retry.raw_sha256 is None
+
+
+@pytest.mark.asyncio
 async def test_strict_cdn_gate_does_not_project_unmaterialized_source_url(
     tmp_path, monkeypatch
 ) -> None:
