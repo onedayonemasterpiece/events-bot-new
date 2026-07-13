@@ -230,6 +230,11 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 
 - `ENSURE_JPEG_MAX_PIXELS` (по умолчанию `20000000`) — ограничение на конвертацию WEBP/AVIF→JPEG: слишком большие изображения пропускаются вместо риска OOM.
 - `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) — отдельный runtime cap для auto-import, чтобы тяжёлые VK posts не тащили в row одновременно 10-12 больших афиш и не раздували RAM/OCR/upload path.
+- Для multi-event source один `VK_MEDIA_ASSIGN_MODEL` call (default
+  `gemma-4-31b-it`) распределяет все source posters между всеми draft events и
+  может явно назвать одиночную roundup-афишу shared. Retrieval scores только
+  формируют подсказку; LLM принимает semantic decision. Это фиксированно один
+  запрос на source post, а не N×M запросов по событиям и изображениям.
 
 ### LLM budget for poster OCR
 

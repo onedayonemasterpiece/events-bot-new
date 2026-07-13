@@ -14372,17 +14372,37 @@ def _event_has_managed_vk_post(ev: Event) -> bool:
     return str(abs(int(owner_ids[0]))) == target_group_id
 
 
-async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
+def _vk_wall_item_has_photo(item: dict | None) -> bool:
+    return bool(
+        item
+        and any(
+            isinstance(att, dict) and str(att.get("type") or "") == "photo"
+            for att in (item.get("attachments") or [])
+        )
+    )
+
+
+async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
+    """Return ``(exists, media_complete)`` for our managed VK projection.
+
+    Existence alone is not enough for idempotency: a previous text-only post
+    must be edited when canonical ``photo_urls`` later become available.
+    Provider/probe failures fail safe as complete to avoid duplicate wall posts.
+    """
+
     if not _event_has_managed_vk_post(ev):
-        return False
+        return False, False
     existing_vk_url = (getattr(ev, "source_vk_post_url", None) or "").strip()
     ids = _vk_owner_and_post_id(existing_vk_url)
     if not ids:
-        return False
+        return False, False
+    expected_media = bool(list(getattr(ev, "photo_urls", None) or []))
     try:
         response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
-        if _vk_wall_get_by_id_items(response):
-            return True
+        items = _vk_wall_get_by_id_items(response)
+        if items:
+            complete = (not expected_media) or _vk_wall_item_has_photo(items[0])
+            return True, complete
     except Exception:
         logging.warning(
             "managed VK post existence probe failed event_id=%s url=%s",
@@ -14390,22 +14410,24 @@ async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
             existing_vk_url,
             exc_info=True,
         )
-        return True
+        return True, True
     try:
-        resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
+        item = await _find_vk_postponed_wall_item_any_actor(
             owner_id=int(ids[0]),
             post_id=int(ids[1]),
             db=None,
             bot=None,
         )
-        if resolved_id:
+        if item:
+            resolved_id = int(item.get("id") or ids[1])
             logging.info(
                 "managed VK post exists via postponed lookup event_id=%s url=%s resolved_id=%s",
                 getattr(ev, "id", None),
                 existing_vk_url,
                 resolved_id,
             )
-            return True
+            complete = (not expected_media) or _vk_wall_item_has_photo(item)
+            return True, complete
     except Exception:
         logging.warning(
             "managed VK postponed existence probe failed event_id=%s url=%s",
@@ -14413,8 +14435,20 @@ async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
             existing_vk_url,
             exc_info=True,
         )
-        return True
-    return False
+        return True, True
+    return False, False
+
+
+async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
+    exists, media_complete = await _managed_vk_post_state(ev)
+    if exists and not media_complete:
+        logging.warning(
+            "managed VK post media incomplete event_id=%s url=%s expected_photos=%s",
+            getattr(ev, "id", None),
+            getattr(ev, "source_vk_post_url", None),
+            len(list(getattr(ev, "photo_urls", None) or [])),
+        )
+    return bool(exists and media_complete)
 
 
 def _event_vk_publish_end_date(ev: Event) -> date | None:
@@ -21052,21 +21086,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
         managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        post_exists = True
-        try:
-            ids = _vk_owner_and_post_id(existing_vk_post_url)
-            if ids:
-                response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
-                items = _vk_wall_get_by_id_items(response)
-                post_exists = bool(items)
-        except Exception:
-            logging.warning(
-                "job_sync_vk_source_post: managed VK post existence probe failed event_id=%s url=%s",
-                event_id,
-                existing_vk_post_url,
-                exc_info=True,
-            )
-        if post_exists:
+        post_exists, media_complete = await _managed_vk_post_state(ev)
+        if post_exists and media_complete:
             await _copy_same_day_linked_vk_publication(
                 db,
                 source_event=ev,
@@ -21075,13 +21096,21 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 vk_source_hash=new_hash,
             )
             return
-        logging.warning(
-            "job_sync_vk_source_post: managed VK post missing, republishing event_id=%s url=%s",
-            event_id,
-            existing_vk_post_url,
-        )
-        ev.source_vk_post_url = None
-        ev.vk_source_hash = None
+        if post_exists:
+            logging.warning(
+                "job_sync_vk_source_post: managed VK post media incomplete; editing event_id=%s url=%s expected_photos=%s",
+                event_id,
+                existing_vk_post_url,
+                len(list(getattr(ev, "photo_urls", None) or [])),
+            )
+        else:
+            logging.warning(
+                "job_sync_vk_source_post: managed VK post missing, republishing event_id=%s url=%s",
+                event_id,
+                existing_vk_post_url,
+            )
+            ev.source_vk_post_url = None
+            ev.vk_source_hash = None
     replace_existing_text = len(same_day_group) >= 3 and all(
         _event_is_feeding_series_item(item) for item in same_day_group
     )

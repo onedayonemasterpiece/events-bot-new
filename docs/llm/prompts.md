@@ -107,6 +107,11 @@ If an array of events is returned, `search_digest` must be present in every obje
 - Detection heuristic: 3+ bulleted items (e.g. lines starting with `🌿`, `•`, `-`, `🟥`, or numbered) where every item is just date+city+title (and optional ticket marker) without further details. Such posts point readers to other organizers' standalone announcements; the bot ingests each concrete event from its own dedicated post.
 - Anti-fabrication: do NOT pick the longest line and call the whole post one event; do NOT mix `city` from one bullet with `location_name` or `time` from another; do NOT invent a programme to compensate for the missing per-event detail.
 
+**exhibition opening versus exhibition range:**
+- A public opening/vernissage and the exhibition's visitable date range are different occurrence roles. If the source explicitly invites visitors to a future opening at one exact date/time **and** gives a longer exhibition range, return two events: `Открытие выставки «Название»` on the one opening date/time, and `Выставка «Название»` for the full start/end range with no daily `time` unless daily hours are explicitly stated.
+- Do not copy the opening time onto every day of the exhibition. Do not collapse the exhibition to its closing date.
+- If the opening is already earlier than `Today`, omit the past opening and keep only the still-active exhibition range.
+
 **venue / city grounding rule (anti-fabrication):**
 - `location_name`, `location_address`, and `city` MUST be grounded in the source text or poster OCR. Do NOT invent a venue or address that does not appear in the source.
 - `location_name` must be a venue, address, meeting point, room, or physical landmark. Never put prose/reaction fragments there (for example `мы его очень ждали`); if no venue/address/meeting point is present, return an empty `location_name`.

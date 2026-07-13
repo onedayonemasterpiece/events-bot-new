@@ -39,6 +39,9 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 6. **The primary Smart Update model could exhaust output on hidden reasoning.** Hosted Gemma 4 rejected `thinking_budget`, while small capped contracts sometimes returned only thought/MAX_TOKENS. The generic 4o JSON fallback also reused an incident-specific bundle example and allowed unrelated generated fields to survive after only title rejection; one dynamic schema name contained a provider-invalid colon.
 7. **Occurrence and anchor roles were under-adjudicated.** Retrieval could find the right source/event, but the pipeline did not require one LLM decision to bind date and city to the same occurrence or distinguish doors/opening from event-wide start/range time.
 8. **The live replay exposed a VK idempotency regression.** `wall.getById` and `wall.get(filter=all)` did not expose an existing postponed managed post, although the same authenticated user saw it through `filter=postponed`. The helper incorrectly treated `all` as a superset and scheduled a second post.
+9. **The staged-model mitigation was over-broad.** `SMART_UPDATE_FORCE_STAGED_GEMINI=1` moved every Smart Update contract onto Gemini Lite. The accepted two-event E2E replay made 20 Lite calls (10/event), while the production quota registry intentionally budgets 450 RPD for that model versus 1,500 RPD for Gemma. This was not a sub-hundred-call fallback and could exhaust the shared project lane after about 45 similar events.
+10. **Media completeness was not part of publication idempotency.** Multi-event VK intake dropped ambiguous/shared roundup posters; a later popular-review path rehydrated `event.photo_urls` but neither materialized raw VK CDN links durably nor rearmed Telegram/VK publication. Separately, VK hash/existence fast paths accepted text-only managed posts even when canonical media existed.
+11. **Opening and exhibition range were forced into one occurrence.** The anchor-role repair correctly noticed that `16:00` was an opening-only time, but the single-candidate contract had no explicit split rule. Event `6661` was consequently collapsed to the closing date instead of retaining the active 4–31 July exhibition (and, at initial future import time, a separate 4 July 16:00 opening occurrence).
 
 ## Contributing Factors
 
@@ -99,6 +102,9 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 - [x] deliver LLM-first/vector-first prevention for every confirmed fresh recurrence, not blanket regex mutation;
 - [ ] distinguish legacy-debt repairs from rows created after each prevention SHA in monitoring metrics.
 - [x] delete the replay-created postponed duplicate `wall-231920894_7265`, restore event `6857` to `wall-231920894_7250`, and make postponed lookup use the correct authenticated collection;
+- [x] immediately stop the unbounded Lite route in production and retain Gemini Lite only for bounded facts/writer/grounding stages;
+- [ ] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API;
+- [ ] repair event `6661` to the active exhibition range on canonical/public surfaces (do not create a new historical opening row after the opening has passed);
 
 ## Follow-up Actions
 
@@ -112,6 +118,26 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 - deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update) and `1633` (VK postponed idempotency/E2E acceptance)
 - regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch). The broad VK test files also expose 13 pre-existing mock-signature failures for newer location-marker/reservation kwargs; those are test-debt, not accepted as a pass.
 - post-deploy verification: `/healthz ready=true`, disk `408 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
+- quota containment: Fly release after the operator escalation has effective `SMART_UPDATE_FORCE_STAGED_GEMINI=0`, `SMART_UPDATE_G4_SPLIT_CREATE=1`, `/healthz ready=true`. Day-of-request accounting showed 74 Smart Update provider calls before containment (37 Gemma, 37 Lite); the exact live two-event replay accounted for 20 Lite calls. Recent completed production days created 19–42 rows (856/30 days), before merge-only updates; therefore 10/event had no safe headroom. The steady-state route normally budgets one Lite writer stage per matched update or about two Lite stages per create (facts + writer); core merge/revise/coverage/short-description/digest stays on Gemma, and rare grounding adds only a bounded call.
+
+## 2026-07-13 media surface audit
+
+Direct authenticated inspection found eight text-only `@kldevents` messages in
+the last-day window (`2293`, `2295`, `2311`, `2313`–`2317`) and multiple
+text-only managed VK items. This was not evidence that sources lacked images:
+`wall-39437155_17143` and `wall-194927034_4750` both have authenticated VK photo
+attachments. Events `6844` and `6849` still had zero canonical media; events
+`6841`–`6843`, `6846`, `6847` gained raw VK URLs only at 07:44 from
+`video_announce.popular_review`, after their public posts had already gone out.
+Event `6850` gained two managed posters later from a second Telegram source,
+while its earlier text announcement remained stale.
+
+The prevention contract is now: multi-event poster ownership is one bounded
+Gemma adjudication per source post with retrieval scores as hints; late VK
+rehydration materializes managed URLs and rearms ordinary public projections;
+VK existence/hash idempotency requires an actual photo attachment whenever
+canonical `photo_urls` are non-empty. Production data/public repair remains a
+closure gate above.
 
 ## 2026-07-13 complete future audit
 

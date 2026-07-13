@@ -383,7 +383,37 @@ async def _rehydrate_vk_photo_urls(source_post_url: str | None) -> list[str]:
             status.kind,
         )
         return []
-    return _renderable_photo_urls([str(url or "").strip() for url in photos])
+    raw_urls = _renderable_photo_urls([str(url or "").strip() for url in photos])
+    if not raw_urls:
+        return []
+
+    # VK CDN links are not durable catalog media.  Materialize them through the
+    # normal managed-storage uploader before persisting whenever possible.
+    try:
+        from poster_media import process_media
+        from vk_intake import _download_photo_media
+
+        images = await _download_photo_media(raw_urls)
+        media, _storage_msg = await process_media(
+            images,
+            need_catbox=True,
+            need_ocr=False,
+        )
+        managed = _renderable_photo_urls(
+            [
+                str(item.supabase_url or item.catbox_url or "").strip()
+                for item in media
+            ]
+        )
+        if managed:
+            return managed
+    except Exception:
+        logger.warning(
+            "video_announce.popular_review: managed VK poster materialization failed url=%s",
+            source_post_url,
+            exc_info=True,
+        )
+    return raw_urls
 
 
 async def _persist_rehydrated_photo_urls(
@@ -433,6 +463,38 @@ async def _persist_rehydrated_photo_urls(
     return False
 
 
+async def _schedule_rehydrated_media_projection_repair(db, *, event_id: int | None) -> None:
+    """Rebuild public projections after durable media rehydration.
+
+    Persisting ``event.photo_urls`` without rearming publication left existing
+    Telegram and VK posts text-only.  The ordinary scheduler already knows how
+    to replace a Telegram text post with a photo post and how to edit VK; use it
+    instead of a video-pipeline-specific publication path.
+    """
+
+    if event_id is None:
+        return
+    try:
+        from main import schedule_event_update_tasks
+
+        async with db.get_session() as session:
+            event = await session.get(Event, int(event_id))
+        if event is None:
+            return
+        results = await schedule_event_update_tasks(db, event)
+        logger.info(
+            "video_announce.popular_review: scheduled media projection repair event_id=%s tasks=%s",
+            event_id,
+            sorted(str(getattr(task, "value", task)) for task in results),
+        )
+    except Exception:
+        logger.warning(
+            "video_announce.popular_review: failed to schedule media projection repair event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+
+
 async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
     direct_urls = _renderable_photo_urls(_event_photo_urls(ev))
     if direct_urls:
@@ -473,6 +535,10 @@ async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
                         len(refreshed),
                     )
                     return []
+                await _schedule_rehydrated_media_projection_repair(
+                    db,
+                    event_id=getattr(ev, "id", None),
+                )
             logger.info(
                 "video_announce.popular_review: rehydrated poster urls event_id=%s source=%s count=%s",
                 getattr(ev, "id", None),

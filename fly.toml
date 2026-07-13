@@ -152,7 +152,10 @@ app = "events-bot-new-wngqia"
   SMART_UPDATE_IDENTITY_EMBEDDING_MODEL = "gemini-embedding-2"
   SMART_UPDATE_IDENTITY_EMBEDDING_DIM = "768"
   SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV = "GOOGLE_API_KEY4"
-  SMART_UPDATE_FORCE_STAGED_GEMINI = "1"
+  # Keep Lite on the bounded facts/writer stages only.  Forcing every Smart
+  # Update contract onto Lite costs roughly ten requests per imported event
+  # and can exhaust the shared daily project quota.
+  SMART_UPDATE_FORCE_STAGED_GEMINI = "0"
   SMART_UPDATE_G4_SPLIT_CREATE = "1"
   SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK = "0"
   SMART_UPDATE_GEMMA_NATIVE_SCHEMA = "1"

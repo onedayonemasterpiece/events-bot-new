@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import hashlib
+import json
 import logging
 import os
 import random
@@ -1469,6 +1470,116 @@ class EventDraft:
     reject_reason: str | None = None
 
 
+async def _llm_assign_source_posters_to_drafts(
+    *,
+    source_text: str,
+    drafts: Sequence[EventDraft],
+    posters: Sequence[PosterMedia],
+    score_matrix: Sequence[Sequence[float]],
+) -> dict[int, list[int]] | None:
+    """Adjudicate a multi-event source's media in one bounded Gemma call.
+
+    Lexical/date scores are retrieval hints only.  The LLM owns the semantic
+    decision, including whether one roundup poster is shared by all extracted
+    events.  One request is made per multi-event source, never per event/photo.
+    """
+
+    if not drafts or not posters:
+        return None
+    try:
+        get_client = require_main_attr("_get_event_parse_gemma_client")
+        extract_json = require_main_attr("_event_parse_extract_json")
+        client = get_client()
+    except Exception:
+        logger.warning("vk_intake.media_assignment client unavailable", exc_info=True)
+        return None
+    if client is None:
+        return None
+    payload = {
+        "source_text": str(source_text or "")[:6000],
+        "events": [
+            {
+                "index": idx,
+                "title": draft.title,
+                "date": draft.date,
+                "time": draft.time,
+                "venue": draft.venue,
+            }
+            for idx, draft in enumerate(drafts[:16])
+        ],
+        "posters": [
+            {
+                "index": idx,
+                "ocr_title": str(poster.ocr_title or "")[:300],
+                "ocr_text": str(poster.ocr_text or "")[:1400],
+                "retrieval_scores": list(score_matrix[idx])[:16]
+                if idx < len(score_matrix)
+                else [],
+            }
+            for idx, poster in enumerate(posters[:10])
+        ],
+    }
+    prompt = (
+        "Ты распределяешь изображения ОДНОГО исходного VK-поста между уже извлечёнными событиями. "
+        "Векторы/lexical retrieval_scores — только кандидаты, окончательное смысловое решение твоё.\n"
+        "Для каждого poster верни event_indices, к каким событиям он действительно относится. "
+        "Если единственное изображение является общей афишей/обложкой roundup-поста и источник явно "
+        "перечисляет все events, его можно назначить всем событиям. Если это афиша одного пункта, не "
+        "назначай соседним. Если связь не подтверждается source/OCR — оставь event_indices пустым. "
+        "Ничего не придумывай. Верни только JSON вида "
+        "{\"assignments\":[{\"poster_index\":0,\"event_indices\":[0],\"confidence\":0.9}]}.\n"
+        f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    model = (os.getenv("VK_MEDIA_ASSIGN_MODEL", "gemma-4-31b-it") or "").strip() or "gemma-4-31b-it"
+    try:
+        raw, _usage = await client.generate_content_async(
+            model=model,
+            prompt=prompt,
+            generation_config={"temperature": 0},
+            max_output_tokens=900,
+        )
+        data = extract_json(raw or "")
+    except Exception:
+        logger.warning(
+            "vk_intake.media_assignment failed model=%s drafts=%s posters=%s",
+            model,
+            len(drafts),
+            len(posters),
+            exc_info=True,
+        )
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("assignments"), list):
+        return None
+    result: dict[int, list[int]] = {}
+    for item in data["assignments"]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            poster_idx = int(item.get("poster_index"))
+            confidence = float(item.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if not (0 <= poster_idx < len(posters)) or confidence < 0.75:
+            continue
+        event_indices: list[int] = []
+        for raw_idx in item.get("event_indices") or []:
+            try:
+                event_idx = int(raw_idx)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= event_idx < len(drafts) and event_idx not in event_indices:
+                event_indices.append(event_idx)
+        result[poster_idx] = event_indices
+    logger.info(
+        "vk_intake.media_assignment model=%s drafts=%s posters=%s assigned=%s",
+        model,
+        len(drafts),
+        len(posters),
+        result,
+    )
+    return result
+
+
 _VK_GENERIC_LOCATION_TOKENS = {
     "калининград",
     "кенигсберг",
@@ -2810,8 +2921,32 @@ async def build_event_drafts_from_vk(
             max_per_draft = 3
             assigned: dict[int, list[PosterMedia]] = {i: [] for i in range(len(drafts))}
 
-            for poster in poster_items:
-                scores = [(_poster_score(d, poster), idx) for idx, d in enumerate(drafts)]
+            score_matrix: list[list[float]] = [
+                [_poster_score(draft, poster) for draft in drafts]
+                for poster in poster_items
+            ]
+            llm_assignment = await _llm_assign_source_posters_to_drafts(
+                source_text=text,
+                drafts=drafts,
+                posters=poster_items,
+                score_matrix=score_matrix,
+            )
+
+            for poster_idx, poster in enumerate(poster_items):
+                if llm_assignment is not None and poster_idx in llm_assignment:
+                    for event_idx in llm_assignment[poster_idx]:
+                        if len(assigned[event_idx]) < max_per_draft:
+                            assigned[event_idx].append(poster)
+                    continue
+
+                # Fail-closed fallback when the one bounded LLM adjudication is
+                # unavailable or omitted this poster: keep only an unambiguous
+                # high-confidence retrieval match. Retrieval never assigns a
+                # shared/ambiguous image by itself.
+                scores = [
+                    (score, idx)
+                    for idx, score in enumerate(score_matrix[poster_idx])
+                ]
                 scores.sort(key=lambda x: x[0], reverse=True)
                 best_score, best_idx = scores[0]
                 second = scores[1][0] if len(scores) > 1 else 0.0
