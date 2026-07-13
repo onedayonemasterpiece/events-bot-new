@@ -210,7 +210,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(ydb, object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
-            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
         ):
             _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
@@ -262,7 +262,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         with (
             mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
             mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
-            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds[kind]),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
         ):
             _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
@@ -271,6 +271,117 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(rows[0]["media_kind"], "video")
         self.assertEqual(rows[0]["media_review_mode"], "operator_video_review")
         self.assertEqual(rows[0]["manual_media_review_required"], "true")
+
+    def test_source_onboarding_evidence_is_compact_deduplicated_and_traceable(self) -> None:
+        mod = self.mod
+        source = external_source("travelcase")
+        source.update({
+            "external_blogger_name": "Анна",
+            "external_blogger_segment": "travel blogger",
+            "external_blogger_visit_period": "2026-06",
+            "external_blogger_evidence_url": "https://example.test/anna",
+        })
+        memory = [
+            {
+                "canonical_source_key": "telegram:travelcase",
+                "post_url": "https://t.me/travelcase/10",
+                "post_date": "2026-06-10T10:00:00+00:00",
+                "full_text": "Личный рассказ о прогулке по Балтийской косе. " * 80,
+            },
+            {
+                "canonical_source_key": "telegram:travelcase",
+                "post_url": "https://t.me/travelcase/10",
+                "post_date": "2026-06-10T10:00:00+00:00",
+                "full_text": "Личный рассказ о прогулке по Балтийской косе. " * 80,
+            },
+        ]
+        evidence = mod.build_source_onboarding_evidence(source, memory, candidate_row())
+        items = json.loads(evidence["evidence_pack_json"])
+        self.assertEqual(evidence["evidence_status"], "sufficient")
+        self.assertLessEqual(len(items), 8)
+        self.assertEqual(len({item["evidence_id"] for item in items}), len(items))
+        self.assertTrue(all(len(item["excerpt"]) <= 500 for item in items))
+        self.assertEqual(sum(1 for item in items if item["url"] == "https://t.me/travelcase/10"), 1)
+
+    def test_source_onboarding_profile_and_writer_fail_closed_on_unsupported_references(self) -> None:
+        mod = self.mod
+        evidence = mod.build_source_onboarding_evidence(
+            external_source("travelcase"),
+            [{"post_url": "https://t.me/travelcase/10", "text": "Путешествие по Калининграду"}],
+            candidate_row(),
+        )
+        bad_profile = mod.normalize_source_onboarding_profile(
+            {
+                "llm_gate_status": "ok",
+                "data": {
+                    "status": "ready",
+                    "entity_type": "person",
+                    "profile_summary": "Автор путешествует.",
+                    "claims": [{"claim_id": "C1", "text": "Живёт в Москве", "evidence_ids": ["E999"]}],
+                    "candidate_angles": [],
+                },
+            },
+            evidence,
+            model="gemini-test",
+            profile_fingerprint="profile-fp",
+        )
+        self.assertEqual(bad_profile["profile_status"], "needs_review")
+        self.assertEqual(json.loads(bad_profile["claims_json"]), [])
+
+        good_profile = dict(bad_profile)
+        good_profile.update({
+            "profile_status": "ready",
+            "entity_type": "person",
+            "claims_json": json.dumps([{"claim_id": "C1", "text": "Автор пишет о поездке", "evidence_ids": ["E1"]}]),
+            "candidate_angles_json": json.dumps([{"angle_id": "A1", "text": "личный взгляд", "claim_ids": ["C1"], "evidence_ids": ["E1"]}]),
+        })
+        paragraph = "Автор тревел-канала делится проверяемым личным опытом поездок и в этом материале показывает Калининградскую область через конкретные наблюдения и детали маршрута. Вводный ракурс основан на опубликованном рассказе автора и помогает понять, почему его взгляд на регион может быть полезен читателю перед переходом к оригинальному посту."
+        ready = mod.normalize_candidate_onboarding(
+            {"llm_gate_status": "ok", "data": {
+                "status": "ready", "onboarding_paragraph": paragraph,
+                "claim_ids": ["C1"], "evidence_ids": ["E1"], "selected_angle_id": "A1",
+            }},
+            profile=good_profile,
+            evidence_row=evidence,
+            writer_fingerprint="writer-fp",
+        )
+        self.assertEqual(ready["source_onboarding_status"], "ready")
+        self.assertGreaterEqual(len(ready["source_onboarding_paragraph"]), 300)
+
+    def test_onboarding_reuses_current_profile_and_spends_only_writer_call(self) -> None:
+        mod = self.mod
+        row = candidate_row(publication_status="gemini_accept", sent_to_chat="false")
+        evidence = mod.build_source_onboarding_evidence(
+            row["_authoritative_source"],
+            [{"post_url": row["post_url"], "text": row["text"]}],
+            row,
+        )
+        profile = {
+            "source_profile_id": evidence["source_profile_id"],
+            "profile_status": "ready",
+            "entity_type": "thematic_channel",
+            "profile_summary": "Канал публикует личные заметки о поездках.",
+            "claims_json": json.dumps([{"claim_id": "C1", "text": "Пишет о поездках", "evidence_ids": ["E1"]}]),
+            "candidate_angles_json": json.dumps([{"angle_id": "A1", "text": "личный опыт", "claim_ids": ["C1"], "evidence_ids": ["E1"]}]),
+            "evidence_fingerprint": evidence["evidence_fingerprint"],
+            "profile_prompt_version": mod.SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION,
+            "profile_fingerprint": "current-profile",
+        }
+        row["_source_onboarding_evidence"] = evidence
+        row["_source_onboarding_profile"] = profile
+        paragraph = "Тревел-канал публикует личные заметки о поездках и в этом посте показывает Калининградскую область через конкретные впечатления автора. Такой ракурс помогает заранее понять, что перед читателем не рекламная подборка, а опыт посещения с деталями маршрута, наблюдениями и собственным отношением к увиденному в регионе."
+        with mock.patch.object(mod, "_call_structured_with_budget", return_value=({
+            "llm_gate_status": "ok",
+            "data": {"status": "ready", "onboarding_paragraph": paragraph, "claim_ids": ["C1"], "evidence_ids": ["E1"], "selected_angle_id": "A1"},
+        }, True)) as call:
+            enriched, profiles, stats = mod.enrich_accepted_rows_with_onboarding(
+                [row], max_llm=1, model="gemini-test", default_env_var_name="KEY", durable_budget=None,
+            )
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(profiles, [])
+        self.assertEqual(stats["profiles_reused"], 1)
+        self.assertEqual(stats["writer_calls"], 1)
+        self.assertEqual(enriched[0]["source_onboarding_status"], "ready")
 
     def test_eligibility_helper_receives_authoritative_source_and_fields_persist(self) -> None:
         mod = self.mod
@@ -576,6 +687,38 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["publication_status"], "gemini_accept")
         self.assertEqual(result[0]["publication_eligibility_verdict"], "eligible")
+        self.assertEqual(result[0]["llm_attempted_this_run"], "false")
+        llm_mock.assert_not_called()
+
+    def test_existing_unsent_accept_finishes_onboarding_without_repeating_gemini(self) -> None:
+        mod = self.mod
+        source = external_source()
+        row = candidate_row(_authoritative_source=source)
+        with mock.patch.object(mod.rt, "publication_eligibility", create=True, return_value=eligibility("eligible")):
+            mod._eligibility_fields(row)
+        previous = {
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "llm_confirmed",
+            "sent_to_chat": "false",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": row["publication_eligibility_gate_version"],
+            "publication_eligibility_evidence": row["publication_eligibility_evidence"],
+            "authoritative_source_fingerprint": row["authoritative_source_fingerprint"],
+            "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+        }
+        row.update(previous)
+        row["_previous_publication"] = previous
+        row["finalization_trigger"] = ""
+        with (
+            mock.patch.object(mod.rt, "publication_eligibility", create=True, return_value=eligibility("eligible")),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [row], max_llm=3, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-07-13T10:00:00+00:00",
+            )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["publication_status"], "gemini_accept")
         self.assertEqual(result[0]["llm_attempted_this_run"], "false")
         llm_mock.assert_not_called()
 

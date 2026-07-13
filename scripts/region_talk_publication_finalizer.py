@@ -11,6 +11,8 @@ operator review.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import concurrent.futures
 import csv
 import hashlib
 import html
@@ -43,6 +45,10 @@ import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
 PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v4"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
+SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v1"
+SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v1"
+SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v1"
+SOURCE_ONBOARDING_ENTITY_TYPES = {"person", "collective", "thematic_channel", "media_brand", "unknown"}
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
 TERMINAL_PUBLICATION_STATUSES = {
     "gemini_accept",
@@ -513,12 +519,152 @@ def publication_pre_score(row: dict[str, Any]) -> float:
     return round(nonlocal_bonus + visual * 0.45 + postcard * 0.20 + candidate * 0.15 + vector + manual_video, 4)
 
 
+def source_profile_id(source_key: str) -> str:
+    return "rtsp_" + hashlib.sha256(str(source_key or "").encode("utf-8")).hexdigest()[:20]
+
+
+def _compact_evidence_text(value: Any, limit: int = 500) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text[:limit].rstrip()
+
+
+def build_source_onboarding_evidence(
+    source: dict[str, Any] | None,
+    source_memory_rows: list[dict[str, Any]],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a compact, public, auditable evidence pack for one source.
+
+    This stage performs no biographical inference. It only consolidates the
+    authoritative source ledger, the externally verified blogger registry and
+    a bounded set of authored post excerpts already present in candidate
+    memory. Every future claim must cite one of the generated evidence ids.
+    """
+    source = dict(source or {})
+    source_key = canonical_source_key_for_row(source or candidate)
+    title = str(source.get("source_title") or source.get("resolved_title") or candidate.get("source_title") or "").strip()
+    source_url = str(source.get("source_url") or source.get("canonical_url") or candidate.get("source_url") or "").strip()
+    evidence: list[dict[str, Any]] = []
+
+    def add(kind: str, text: Any, *, url: str = "", date: str = "") -> None:
+        excerpt = _compact_evidence_text(text)
+        if not excerpt:
+            return
+        identity = (kind, excerpt.lower(), normalize_post_url(url) if url else "")
+        if any((item["kind"], str(item["excerpt"]).lower(), str(item.get("url") or "")) == identity for item in evidence):
+            return
+        evidence.append({
+            "evidence_id": f"E{len(evidence) + 1}",
+            "kind": kind,
+            "excerpt": excerpt,
+            "url": normalize_post_url(url) if url else "",
+            "date": str(date or "")[:40],
+        })
+
+    if title or source_url:
+        add("authoritative_source_identity", f"Название: {title}. Публичный адрес: {source_url}.", url=source_url)
+
+    external_parts = []
+    external_field_labels = [
+        ("external_blogger_name", "имя/название"),
+        ("external_blogger_segment", "тип"),
+        ("external_blogger_region_relation", "отношение к региону"),
+        ("external_blogger_visit_period", "период поездки"),
+        ("external_blogger_locations", "упомянутые места"),
+        ("external_blogger_confirmation_basis", "основание подтверждения"),
+    ]
+    for field, label in external_field_labels:
+        value = source.get(field) or candidate.get(field)
+        if value not in (None, ""):
+            external_parts.append(f"{label}: {value}")
+    evidence_url = str(
+        source.get("external_blogger_evidence_url")
+        or source.get("evidence_url")
+        or candidate.get("external_blogger_evidence_url")
+        or ""
+    )
+    if external_parts:
+        add("external_open_source_registry", "; ".join(external_parts), url=evidence_url)
+
+    ordered_memory = sorted(
+        [dict(row) for row in source_memory_rows if isinstance(row, dict)],
+        key=lambda row: str(row.get("post_date") or row.get("updated_at") or ""),
+        reverse=True,
+    )
+    candidate_url = normalize_post_url(str(candidate.get("post_url") or ""))
+    if candidate_url and not any(normalize_post_url(str(row.get("post_url") or "")) == candidate_url for row in ordered_memory):
+        ordered_memory.insert(0, candidate)
+    for row in ordered_memory:
+        if len(evidence) >= 8:
+            break
+        post_url = str(row.get("post_url") or "")
+        excerpt = (
+            row.get("full_text")
+            or row.get("text")
+            or row.get("text_excerpt")
+            or row.get("short_summary")
+            or row.get("why_keep_in_memory")
+            or ""
+        )
+        add("authored_post_excerpt", excerpt, url=post_url, date=str(row.get("post_date") or ""))
+
+    fingerprint_payload = {
+        "version": SOURCE_ONBOARDING_EVIDENCE_VERSION,
+        "source_key": source_key,
+        "title": title,
+        "source_url": source_url,
+        "evidence": evidence,
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    authored_count = sum(1 for item in evidence if item["kind"] == "authored_post_excerpt")
+    external_count = sum(1 for item in evidence if item["kind"] == "external_open_source_registry")
+    status = "sufficient" if source_key and title and (authored_count >= 1 or external_count >= 1) else "insufficient"
+    return {
+        "source_profile_id": source_profile_id(source_key),
+        "canonical_source_key": source_key,
+        "source_title": title,
+        "source_url": source_url,
+        "evidence_status": status,
+        "evidence_version": SOURCE_ONBOARDING_EVIDENCE_VERSION,
+        "evidence_fingerprint": fingerprint,
+        "evidence_pack_json": json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
+        "evidence_items_total": len(evidence),
+        "authored_post_evidence_total": authored_count,
+        "external_registry_evidence_total": external_count,
+        "candidate_post_url": candidate_url,
+    }
+
+
+def _profile_index(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows.values():
+        key = str(row.get("canonical_source_key") or "").strip().lower()
+        if not key:
+            continue
+        previous = out.get(key)
+        if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(previous.get("updated_at") or previous.get("_ydb_updated_at") or ""):
+            out[key] = dict(row)
+    return out
+
+
+def _memory_rows_by_source(memory_rows: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in memory_rows.values():
+        key = canonical_source_key_for_row(row)
+        if key:
+            out.setdefault(key, []).append(dict(row))
+    return out
+
+
 def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: bool = False) -> tuple[Any, Any, Any, str, list[dict[str, Any]]]:
     ydb, driver, cfg = rt.ydb_connect()
     table = rt.ydb_kv_table_path(cfg)
     pool = ydb.SessionPool(driver)
 
     def op(session: Any) -> tuple[
+        dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
@@ -532,7 +678,8 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
         sources = rt.ydb_select_kind_items(session, ydb, table, "source_queue_item", limit=limit_memory)
         source_statuses = rt.ydb_select_kind_items(session, ydb, table, "source_status_item", limit=limit_memory)
         online_sources = rt.ydb_select_kind_items(session, ydb, table, "online_source_item", limit=limit_memory)
-        return images, memory, publications, sources, source_statuses, online_sources
+        onboarding_profiles = rt.ydb_select_kind_items(session, ydb, table, "source_onboarding_profile_item", limit=limit_memory)
+        return images, memory, publications, sources, source_statuses, online_sources, onboarding_profiles
 
     (
         images_by_pk,
@@ -541,10 +688,13 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
         source_items,
         source_status_items,
         online_source_items,
+        onboarding_profile_items,
     ) = pool.retry_operation_sync(op)
     memory_by_url = _publication_by_normalized_url(memory_by_pk)
     publication_by_url = _publication_by_normalized_url(publications_by_pk)
     sources_by_key = authoritative_source_index(source_items, source_status_items, online_source_items)
+    memory_by_source = _memory_rows_by_source(memory_by_pk)
+    onboarding_profiles_by_source = _profile_index(onboarding_profile_items)
     now_iso = rt.utc_now_iso()
     rows_by_url: dict[str, dict[str, Any]] = {}
     for image in images_by_pk.values():
@@ -589,6 +739,10 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
                 "llm_model", "content_type", "visit_evidence_type", "next_attempt_after", "last_attempt_at",
                 "publication_eligibility_verdict", "publication_eligibility_evidence", "publication_eligibility_gate_version",
                 "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
+                "source_onboarding_status", "source_onboarding_paragraph", "source_onboarding_profile_id",
+                "source_onboarding_profile_fingerprint", "source_onboarding_writer_fingerprint",
+                "source_onboarding_entity_type", "source_onboarding_claim_ids_json",
+                "source_onboarding_evidence_ids_json", "source_onboarding_selected_angle_id",
             ]:
                 if publication.get(key) not in (None, ""):
                     row[key] = publication.get(key)
@@ -609,6 +763,13 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
             or memory.get("text_excerpt")
             or ""
         )
+        onboarding_evidence = build_source_onboarding_evidence(
+            authoritative_source,
+            memory_by_source.get(source_key, []),
+            row,
+        )
+        row["_source_onboarding_evidence"] = onboarding_evidence
+        row["_source_onboarding_profile"] = onboarding_profiles_by_source.get(source_key, {})
         row["publication_pre_score"] = publication_pre_score(row)
         previous = rows_by_url.get(post_url)
         if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or "") >= str(previous.get("updated_at") or previous.get("_ydb_updated_at") or ""):
@@ -979,6 +1140,22 @@ def verify_rows(
                 row["finalization_status"] = "terminal"
                 row["next_attempt_after"] = ""
                 results.append(row)
+            elif (
+                previous
+                and str(previous.get("publication_status") or "") == "gemini_accept"
+                and str(previous.get("sent_to_chat") or "").lower() != "true"
+                and not (
+                    str(previous.get("source_onboarding_status") or "") == "ready"
+                    and str(previous.get("source_onboarding_paragraph") or "").strip()
+                )
+            ):
+                # Gemini verdict is terminal and must not be repeated. Keep the
+                # accepted unsent row in this run only so the bounded profile/
+                # writer tail can finish before operator delivery.
+                row["llm_attempted_this_run"] = "false"
+                row["finalization_status"] = "terminal"
+                row["next_attempt_after"] = ""
+                results.append(row)
             continue
         if not row.get("text"):
             row["text"] = telegram_public_text(str(row.get("post_url") or ""))
@@ -1079,6 +1256,400 @@ def verify_rows(
     return results
 
 
+def _evidence_items(evidence_row: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = evidence_row.get("evidence_pack_json")
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError, json.JSONDecodeError):
+        value = []
+    return [dict(item) for item in (value or []) if isinstance(item, dict)]
+
+
+def _json_list(value: Any) -> list[Any]:
+    try:
+        parsed = json.loads(value) if isinstance(value, str) else value
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = []
+    return list(parsed) if isinstance(parsed, list) else []
+
+
+def _structured_llm_call(
+    prompt: str,
+    *,
+    model: str,
+    default_env_var_name: str,
+    max_output_tokens: int = 1200,
+) -> dict[str, Any]:
+    """Call the existing Supabase-governed Gemini gateway for JSON output."""
+    timeout = max(1.0, float(os.getenv("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS") or "45"))
+    try:
+        client = rt.get_region_talk_llm_gateway(default_env_var_name)
+
+        async def call() -> tuple[str, Any]:
+            return await client.generate_content_async(
+                model=model,
+                prompt=prompt,
+                generation_config={"temperature": 0.1, "response_mime_type": "application/json"},
+                max_output_tokens=max_output_tokens,
+            )
+
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="region-talk-onboarding")
+        future = executor.submit(lambda: asyncio.run(call()))
+        timed_out = False
+        try:
+            text, usage = future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            timed_out = True
+            future.cancel()
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise
+        finally:
+            if not timed_out:
+                executor.shutdown(wait=True, cancel_futures=False)
+        return {
+            "llm_gate_status": "ok",
+            "data": rt.parse_llm_json(text),
+            "llm_model": model,
+            "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
+            "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
+            "llm_usage_total_tokens": getattr(usage, "total_tokens", ""),
+        }
+    except concurrent.futures.TimeoutError:
+        return {"llm_gate_status": "error", "llm_model": model, "llm_reason": f"TimeoutError after {timeout:.1f}s"}
+    except Exception as exc:
+        message = f"{type(exc).__name__}: {str(exc)[:240]}"
+        lowered = message.lower()
+        status = "rate_limited" if "429" in lowered or "rate limit" in lowered or "resource_exhausted" in lowered else "error"
+        return {"llm_gate_status": status, "llm_model": model, "llm_reason": message}
+
+
+def _call_structured_with_budget(
+    prompt: str,
+    *,
+    fingerprint: str,
+    model: str,
+    default_env_var_name: str,
+    durable_budget: DurableGeminiBudget | None,
+) -> tuple[dict[str, Any], bool]:
+    if durable_budget is not None:
+        reservation = durable_budget.reserve(fingerprint)
+        status = str(reservation.get("status") or "")
+        if status == "replay":
+            return dict(reservation.get("result") or {}), False
+        if status in {"busy", "exhausted"}:
+            return {"llm_gate_status": "rate_limited", "llm_reason": "durable_budget_" + status}, False
+    result = _structured_llm_call(
+        prompt,
+        model=model,
+        default_env_var_name=default_env_var_name,
+    )
+    if durable_budget is not None:
+        durable_budget.complete(fingerprint, result)
+    return result, True
+
+
+def _source_profile_prompt(evidence_row: dict[str, Any]) -> str:
+    return """Ты готовишь доказательный профиль автора/канала для редактора Region Talk.
+Используй ТОЛЬКО факты из evidence_pack. Не угадывай место жительства, профессию, популярность или мотивацию.
+Верни только JSON:
+{
+  "status": "ready|needs_review",
+  "entity_type": "person|collective|thematic_channel|media_brand|unknown",
+  "profile_summary": "краткое нейтральное резюме",
+  "claims": [{"claim_id":"C1","text":"один атомарный факт","evidence_ids":["E1"]}],
+  "candidate_angles": [{"angle_id":"A1","text":"релевантный ракурс","claim_ids":["C1"],"evidence_ids":["E1"]}],
+  "conflicts": [],
+  "missing_fields": []
+}
+Каждый claim и angle обязан ссылаться на существующие evidence_ids. Если данных мало, status=needs_review.
+
+SOURCE:
+""" + json.dumps({
+        "canonical_source_key": evidence_row.get("canonical_source_key"),
+        "source_title": evidence_row.get("source_title"),
+        "source_url": evidence_row.get("source_url"),
+        "evidence_pack": _evidence_items(evidence_row),
+    }, ensure_ascii=False, indent=2)
+
+
+def normalize_source_onboarding_profile(
+    result: dict[str, Any],
+    evidence_row: dict[str, Any],
+    *,
+    model: str,
+    profile_fingerprint: str,
+) -> dict[str, Any]:
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    evidence_ids = {str(item.get("evidence_id") or "") for item in _evidence_items(evidence_row)} - {""}
+    claims: list[dict[str, Any]] = []
+    claim_ids: set[str] = set()
+    invalid_refs: list[str] = []
+    for index, raw in enumerate(data.get("claims") or [], start=1):
+        if not isinstance(raw, dict):
+            continue
+        claim_id = str(raw.get("claim_id") or f"C{index}")
+        refs = [str(ref) for ref in (raw.get("evidence_ids") or []) if str(ref)]
+        if not refs or not set(refs).issubset(evidence_ids):
+            invalid_refs.append(claim_id)
+            continue
+        text = _compact_evidence_text(raw.get("text"), 320)
+        if text:
+            claims.append({"claim_id": claim_id, "text": text, "evidence_ids": refs})
+            claim_ids.add(claim_id)
+    angles: list[dict[str, Any]] = []
+    for index, raw in enumerate(data.get("candidate_angles") or [], start=1):
+        if not isinstance(raw, dict):
+            continue
+        angle_id = str(raw.get("angle_id") or f"A{index}")
+        refs = [str(ref) for ref in (raw.get("evidence_ids") or []) if str(ref)]
+        cited_claims = [str(ref) for ref in (raw.get("claim_ids") or []) if str(ref)]
+        if (refs and not set(refs).issubset(evidence_ids)) or (cited_claims and not set(cited_claims).issubset(claim_ids)):
+            invalid_refs.append(angle_id)
+            continue
+        text = _compact_evidence_text(raw.get("text"), 320)
+        if text and (refs or cited_claims):
+            angles.append({"angle_id": angle_id, "text": text, "claim_ids": cited_claims, "evidence_ids": refs})
+    entity_type = str(data.get("entity_type") or "unknown")
+    if entity_type not in SOURCE_ONBOARDING_ENTITY_TYPES:
+        entity_type = "unknown"
+    requested_status = str(data.get("status") or "needs_review").lower()
+    status = "ready" if (
+        result.get("llm_gate_status") == "ok"
+        and requested_status == "ready"
+        and claims
+        and not invalid_refs
+        and evidence_row.get("evidence_status") == "sufficient"
+    ) else "needs_review"
+    return {
+        "source_profile_id": evidence_row.get("source_profile_id"),
+        "canonical_source_key": evidence_row.get("canonical_source_key"),
+        "source_title": evidence_row.get("source_title"),
+        "source_url": evidence_row.get("source_url"),
+        "profile_status": status,
+        "entity_type": entity_type,
+        "profile_summary": _compact_evidence_text(data.get("profile_summary"), 600),
+        "claims_json": json.dumps(claims, ensure_ascii=False, separators=(",", ":")),
+        "candidate_angles_json": json.dumps(angles, ensure_ascii=False, separators=(",", ":")),
+        "conflicts_json": json.dumps(data.get("conflicts") or [], ensure_ascii=False, separators=(",", ":")),
+        "missing_fields_json": json.dumps(data.get("missing_fields") or [], ensure_ascii=False, separators=(",", ":")),
+        "invalid_reference_ids_json": json.dumps(invalid_refs, ensure_ascii=False),
+        "evidence_version": evidence_row.get("evidence_version"),
+        "evidence_fingerprint": evidence_row.get("evidence_fingerprint"),
+        "profile_prompt_version": SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION,
+        "profile_fingerprint": profile_fingerprint,
+        "profile_model": model,
+        "profile_llm_status": result.get("llm_gate_status"),
+        "profile_llm_reason": result.get("llm_reason", ""),
+    }
+
+
+def _candidate_onboarding_prompt(row: dict[str, Any], profile: dict[str, Any], evidence_row: dict[str, Any]) -> str:
+    return """Напиши один доказательный вводный абзац о блогере/канале для редактора Region Talk.
+Длина строго 300–600 знаков, русский язык, без рекламы и превосходных степеней.
+Абзац должен объяснить, кто автор, его подтверждённый ракурс и почему именно этот пост интересен.
+Используй ТОЛЬКО claims/angles профиля и evidence_pack. Не называй человека жителем региона без прямого доказательства.
+Верни только JSON:
+{"status":"ready|needs_review","onboarding_paragraph":"...","claim_ids":["C1"],"evidence_ids":["E1"],"selected_angle_id":"A1"}
+
+INPUT:
+""" + json.dumps({
+        "candidate_post_url": row.get("post_url"),
+        "candidate_post_summary": row.get("short_summary") or row.get("llm_reason") or "",
+        "source_title": row.get("source_title"),
+        "profile_summary": profile.get("profile_summary"),
+        "claims": _json_list(profile.get("claims_json")),
+        "candidate_angles": _json_list(profile.get("candidate_angles_json")),
+        "evidence_pack": _evidence_items(evidence_row),
+    }, ensure_ascii=False, indent=2)
+
+
+def normalize_candidate_onboarding(
+    result: dict[str, Any],
+    *,
+    profile: dict[str, Any],
+    evidence_row: dict[str, Any],
+    writer_fingerprint: str,
+) -> dict[str, Any]:
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    paragraph = re.sub(r"\s+", " ", str(data.get("onboarding_paragraph") or "")).strip()
+    claims = _json_list(profile.get("claims_json"))
+    angles = _json_list(profile.get("candidate_angles_json"))
+    valid_claims = {str(item.get("claim_id") or "") for item in claims if isinstance(item, dict)} - {""}
+    valid_angles = {str(item.get("angle_id") or "") for item in angles if isinstance(item, dict)} - {""}
+    valid_evidence = {str(item.get("evidence_id") or "") for item in _evidence_items(evidence_row)} - {""}
+    claim_refs = [str(value) for value in (data.get("claim_ids") or []) if str(value)]
+    evidence_refs = [str(value) for value in (data.get("evidence_ids") or []) if str(value)]
+    angle_id = str(data.get("selected_angle_id") or "")
+    refs_valid = bool(
+        claim_refs
+        and evidence_refs
+        and set(claim_refs).issubset(valid_claims)
+        and set(evidence_refs).issubset(valid_evidence)
+        and (not angle_id or angle_id in valid_angles)
+    )
+    status = "ready" if (
+        result.get("llm_gate_status") == "ok"
+        and str(data.get("status") or "").lower() == "ready"
+        and 300 <= len(paragraph) <= 600
+        and refs_valid
+    ) else "needs_review"
+    return {
+        "source_onboarding_status": status,
+        "source_onboarding_paragraph": paragraph if status == "ready" else "",
+        "source_onboarding_profile_id": profile.get("source_profile_id"),
+        "source_onboarding_profile_fingerprint": profile.get("profile_fingerprint"),
+        "source_onboarding_writer_fingerprint": writer_fingerprint,
+        "source_onboarding_writer_prompt_version": SOURCE_ONBOARDING_WRITER_PROMPT_VERSION,
+        "source_onboarding_entity_type": profile.get("entity_type"),
+        "source_onboarding_claim_ids_json": json.dumps(claim_refs, ensure_ascii=False),
+        "source_onboarding_evidence_ids_json": json.dumps(evidence_refs, ensure_ascii=False),
+        "source_onboarding_selected_angle_id": angle_id,
+        "source_onboarding_llm_status": result.get("llm_gate_status"),
+        "source_onboarding_llm_reason": result.get("llm_reason", ""),
+        "source_onboarding_paragraph_chars": len(paragraph),
+    }
+
+
+def enrich_accepted_rows_with_onboarding(
+    rows: list[dict[str, Any]],
+    *,
+    max_llm: int,
+    model: str,
+    default_env_var_name: str,
+    durable_budget: DurableGeminiBudget | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    profiles_to_write: dict[str, dict[str, Any]] = {}
+    calls = 0
+    stats = {"profile_calls": 0, "writer_calls": 0, "profiles_reused": 0, "paragraphs_ready": 0, "needs_review": 0}
+    for row in rows:
+        if str(row.get("publication_status") or "") != "gemini_accept":
+            continue
+        if str(row.get("sent_to_chat") or "").lower() == "true":
+            continue
+        if str(row.get("source_onboarding_status") or "") == "ready" and row.get("source_onboarding_paragraph"):
+            stats["paragraphs_ready"] += 1
+            continue
+        evidence_row = row.get("_source_onboarding_evidence") if isinstance(row.get("_source_onboarding_evidence"), dict) else {}
+        if evidence_row.get("evidence_status") != "sufficient":
+            row["source_onboarding_status"] = "needs_review"
+            row["source_onboarding_llm_reason"] = "insufficient_public_evidence"
+            stats["needs_review"] += 1
+            continue
+        profile = row.get("_source_onboarding_profile") if isinstance(row.get("_source_onboarding_profile"), dict) else {}
+        profile_is_current = bool(
+            profile
+            and str(profile.get("profile_status") or "") == "ready"
+            and str(profile.get("evidence_fingerprint") or "") == str(evidence_row.get("evidence_fingerprint") or "")
+            and str(profile.get("profile_prompt_version") or "") == SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION
+        )
+        if profile_is_current:
+            stats["profiles_reused"] += 1
+        elif calls < max_llm:
+            profile_fingerprint = hashlib.sha256(json.dumps({
+                "kind": "source_onboarding_profile",
+                "evidence_fingerprint": evidence_row.get("evidence_fingerprint"),
+                "prompt_version": SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION,
+                "model": model,
+            }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+            result, attempted = _call_structured_with_budget(
+                _source_profile_prompt(evidence_row),
+                fingerprint="onboarding-profile-" + profile_fingerprint,
+                model=model,
+                default_env_var_name=default_env_var_name,
+                durable_budget=durable_budget,
+            )
+            calls += int(attempted)
+            stats["profile_calls"] += int(attempted)
+            profile = normalize_source_onboarding_profile(
+                result, evidence_row, model=model, profile_fingerprint=profile_fingerprint,
+            )
+            profiles_to_write[str(profile.get("source_profile_id") or evidence_row.get("canonical_source_key") or "")] = profile
+        else:
+            profile = {}
+
+        if str(profile.get("profile_status") or "") != "ready":
+            row["source_onboarding_status"] = "needs_review"
+            row["source_onboarding_profile_id"] = evidence_row.get("source_profile_id")
+            row["source_onboarding_llm_reason"] = "profile_not_ready_or_llm_budget_exhausted"
+            stats["needs_review"] += 1
+            continue
+        if calls >= max_llm:
+            row["source_onboarding_status"] = "needs_review"
+            row["source_onboarding_profile_id"] = profile.get("source_profile_id")
+            row["source_onboarding_llm_reason"] = "writer_llm_budget_exhausted"
+            stats["needs_review"] += 1
+            continue
+        writer_fingerprint = hashlib.sha256(json.dumps({
+            "kind": "source_onboarding_writer",
+            "post_url": normalize_post_url(str(row.get("post_url") or "")),
+            "profile_fingerprint": profile.get("profile_fingerprint"),
+            "prompt_version": SOURCE_ONBOARDING_WRITER_PROMPT_VERSION,
+            "model": model,
+        }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        result, attempted = _call_structured_with_budget(
+            _candidate_onboarding_prompt(row, profile, evidence_row),
+            fingerprint="onboarding-writer-" + writer_fingerprint,
+            model=model,
+            default_env_var_name=default_env_var_name,
+            durable_budget=durable_budget,
+        )
+        calls += int(attempted)
+        stats["writer_calls"] += int(attempted)
+        row.update(normalize_candidate_onboarding(
+            result,
+            profile=profile,
+            evidence_row=evidence_row,
+            writer_fingerprint=writer_fingerprint,
+        ))
+        if row.get("source_onboarding_status") == "ready":
+            stats["paragraphs_ready"] += 1
+        else:
+            stats["needs_review"] += 1
+    return rows, list(profiles_to_write.values()), stats
+
+
+def write_source_onboarding_rows(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    *,
+    evidence_rows: list[dict[str, Any]],
+    profile_rows: list[dict[str, Any]],
+    run_id: str,
+) -> dict[str, int]:
+    now = rt.utc_now_iso()
+    items: list[tuple[str, str, dict[str, Any]]] = []
+    seen: set[tuple[str, str]] = set()
+    for kind, rows, id_field in (
+        ("source_onboarding_evidence_item", evidence_rows, "source_profile_id"),
+        ("source_onboarding_profile_item", profile_rows, "source_profile_id"),
+    ):
+        for row in rows:
+            item_id = str(row.get(id_field) or "")
+            if not item_id or (kind, item_id) in seen:
+                continue
+            seen.add((kind, item_id))
+            payload = {
+                **{k: v for k, v in row.items() if not str(k).startswith("_")},
+                "run_id": run_id,
+                "updated_at": now,
+                "last_seen_run_id": run_id,
+            }
+            items.append((f"{kind}:{item_id}", kind, payload))
+    if not items:
+        return {"evidence_written": 0, "profiles_written": 0}
+
+    def op(session: Any) -> int:
+        rt.ensure_ydb_kv_table(ydb, session, table)
+        return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
+
+    pool.retry_operation_sync(op)
+    return {
+        "evidence_written": sum(1 for _pk, kind, _payload in items if kind == "source_onboarding_evidence_item"),
+        "profiles_written": sum(1 for _pk, kind, _payload in items if kind == "source_onboarding_profile_item"),
+    }
+
+
 def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str, Any]], run_id: str) -> int:
     now = rt.utc_now_iso()
     fields = [
@@ -1097,6 +1668,12 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "publication_tombstone", "publication_revoked", "revoked_at", "finalization_status", "finalization_trigger",
         "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run", "finalizer_state_version",
         "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",
+        "source_onboarding_status", "source_onboarding_paragraph", "source_onboarding_profile_id",
+        "source_onboarding_profile_fingerprint", "source_onboarding_writer_fingerprint",
+        "source_onboarding_writer_prompt_version", "source_onboarding_entity_type",
+        "source_onboarding_claim_ids_json", "source_onboarding_evidence_ids_json",
+        "source_onboarding_selected_angle_id", "source_onboarding_llm_status",
+        "source_onboarding_llm_reason", "source_onboarding_paragraph_chars",
         "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
     ]
     items = []
@@ -1212,7 +1789,8 @@ def write_xlsx(path: Path, verified: list[dict[str, Any]], all_rows: list[dict[s
     cols = [
         "publication_rank", "publication_status", "llm_decision", "publication_pre_score", "post_url", "source_title",
         "source_class_guess", "overall_media_score", "postcardness_score", "aesthetic_score", "candidate_score",
-        "vector_gate_status", "content_type", "visit_evidence_type", "llm_reason", "short_summary", "text",
+        "vector_gate_status", "content_type", "visit_evidence_type", "llm_reason",
+        "source_onboarding_status", "source_onboarding_paragraph", "short_summary", "text",
     ]
     verified_ids = {row.get("post_url") for row in verified}
     export_rows = verified + [row for row in all_rows if row.get("post_url") not in verified_ids][:include_unverified]
@@ -1329,6 +1907,39 @@ def main() -> int:
         default_env_var_name=args.default_env_var_name,
         durable_budget=durable_budget,
     )
+    verifier_provider_calls = len([row for row in verified if row.get("llm_attempted_this_run") == "true"])
+    onboarding_stats = {"profile_calls": 0, "writer_calls": 0, "profiles_reused": 0, "paragraphs_ready": 0, "needs_review": 0}
+    onboarding_profile_rows: list[dict[str, Any]] = []
+    if not args.dry_run and not args.prioritize_source_evidence_only:
+        verified, onboarding_profile_rows, onboarding_stats = enrich_accepted_rows_with_onboarding(
+            verified,
+            max_llm=max(0, min(100, int(args.max_llm)) - verifier_provider_calls),
+            model=args.model,
+            default_env_var_name=args.default_env_var_name,
+            durable_budget=durable_budget,
+        )
+    evidence_by_profile = {
+        str(evidence.get("source_profile_id") or ""): evidence
+        for row in verified
+        for evidence in [row.get("_source_onboarding_evidence")]
+        if (
+            str(row.get("publication_status") or "") == "gemini_accept"
+            and isinstance(evidence, dict)
+            and evidence.get("source_profile_id")
+        )
+    }
+    onboarding_write = (
+        {"evidence_written": 0, "profiles_written": 0}
+        if args.dry_run
+        else write_source_onboarding_rows(
+            pool,
+            ydb,
+            table,
+            evidence_rows=list(evidence_by_profile.values()),
+            profile_rows=onboarding_profile_rows,
+            run_id=run_id,
+        )
+    )
     written = 0 if args.dry_run else write_publication_rows(pool, ydb, table, verified, run_id)
     text_prune = (
         {"terminal_urls": 0, "rows_pruned": 0}
@@ -1341,7 +1952,15 @@ def main() -> int:
         "finalizer_input_rows": len(rows),
         "actual_scored_rows": sum(1 for row in rows if row.get("image_queue_status") == "actual_scored" and row.get("image_model_input_type") == "actual_image"),
         "video_manual_review_rows": sum(1 for row in rows if rt.is_video_media_candidate(row)),
-        "llm_calls": len([row for row in verified if row.get("llm_attempted_this_run") == "true"]),
+        "llm_calls": verifier_provider_calls + onboarding_stats["profile_calls"] + onboarding_stats["writer_calls"],
+        "verifier_llm_calls": verifier_provider_calls,
+        "onboarding_profile_llm_calls": onboarding_stats["profile_calls"],
+        "onboarding_writer_llm_calls": onboarding_stats["writer_calls"],
+        "onboarding_profiles_reused": onboarding_stats["profiles_reused"],
+        "onboarding_paragraphs_ready": onboarding_stats["paragraphs_ready"],
+        "onboarding_needs_review": onboarding_stats["needs_review"],
+        "onboarding_evidence_rows_written": onboarding_write["evidence_written"],
+        "onboarding_profile_rows_written": onboarding_write["profiles_written"],
         "accepted_new": sum(1 for row in verified if is_newly_accepted_in_run(row)),
         "accepted_total": sum(1 for row in rows if row.get("publication_status") == "gemini_accept" or row.get("publication_candidate_status") == "llm_confirmed"),
         "written": written,
@@ -1361,7 +1980,7 @@ def main() -> int:
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "accepted_new", "accepted_total", "written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "verifier_llm_calls", "onboarding_profile_llm_calls", "onboarding_writer_llm_calls", "onboarding_profiles_reused", "onboarding_paragraphs_ready", "onboarding_needs_review", "onboarding_evidence_rows_written", "onboarding_profile_rows_written", "accepted_new", "accepted_total", "written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

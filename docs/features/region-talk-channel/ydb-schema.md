@@ -61,6 +61,10 @@ Dedupe requirements:
 - store `text_hash` for posts and perceptual hash for images;
 - run semantic duplicate checks for near-identical reposts;
 - repeated source/post observations update cumulative state (`first_seen_run_id`, `last_seen_run_id`, `seen_run_count`) instead of creating duplicate candidates.
+- vector work is additionally idempotent by `post_processing_fingerprint`
+  (post text hash + active E5/BGE encoder contracts + semantic-bank version).
+  A source rescan may update observation counters, but it does not recompute a
+  current E5 row; arrival of BGE opens exactly one fusion pass.
 - legacy `processed_post_item:post_hash_*` duplicates are normalized only by
   the dry-run-first `scripts/region_talk_post_row_normalize.py`: it UPSERTs the
   merged stable row before deleting redundant keys. The same maintenance pass
@@ -73,6 +77,19 @@ durably local-region or spam are retained but moved to
 excluded from operational candidate, BGE, image and Gemini capacity. Metrics
 must expose total, operational, local-audit, spam-audit, dual-pending and
 image-wait populations separately.
+
+The live KV table also contains two compact source-onboarding projections:
+
+- `source_onboarding_evidence_item:<source_profile_id>` — canonical source
+  identity, up to eight public evidence excerpts with URL/date, evidence
+  status/version and fingerprint;
+- `source_onboarding_profile_item:<source_profile_id>` — reusable entity type,
+  evidence-backed atomic claims/angles, conflicts/missing fields, prompt/model
+  version and profile fingerprint.
+
+The candidate-specific `source_onboarding_paragraph` and its claim/evidence
+references live on `publication_candidate_item`. Evidence/profile rows never
+contain media bytes or an unbounded source archive.
 
 ## Table overview
 

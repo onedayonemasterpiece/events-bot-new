@@ -520,10 +520,16 @@ def candidate_message(row: dict[str, Any]) -> str:
     )
     summary = row.get("short_summary") or ""
     reason = str(row.get("publication_llm_reason") or row.get("llm_reason") or row.get("final_verifier_reason") or "")[:280]
+    onboarding = (
+        str(row.get("source_onboarding_paragraph") or "").strip()
+        if str(row.get("source_onboarding_status") or "") == "ready"
+        else ""
+    )
     return "\n".join([
         f"✅ Region Talk candidate #{rank}",
         str(url),
         f"Почему: {why}",
+        f"О блогере: {onboarding}" if onboarding else "",
         "🎬 Видео: требуется ручной просмотр" if video_manual else "",
         f"Кратко: {summary}" if summary else "",
         f"Gemini: {reason}" if reason else "",

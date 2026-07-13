@@ -63,6 +63,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
     "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
+    "REGION_TALK_ENABLE_POST_WORK_IDEMPOTENCY": "1",
     "REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION": CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
     "REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS": "5",
     # CandidateReport owns discovery/E5/fusion/image handoff only. The local
@@ -230,6 +231,8 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "source_edge_item": 20000,
     "comment_link_item": 4000,
     "telegram_entity_cache_item": 20000,
+    "source_onboarding_evidence_item": 2500,
+    "source_onboarding_profile_item": 2500,
 }
 
 
@@ -420,6 +423,17 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('candidate_heartbeat_runtime_elapsed_seconds')}"
         ),
         (
+            "Полезная работа с постами последнего запуска — actionable / новый E5 / fusion готового BGE / "
+            "policy refresh / ждут BGE без повтора E5 / пропущены как неизменные / legacy dual уже готов: "
+            f"{value('candidate_run_posts_actionable_after_idempotency')}/"
+            f"{value('candidate_run_posts_needing_new_e5')}/"
+            f"{value('candidate_run_posts_reusing_e5_for_bge_fusion')}/"
+            f"{value('candidate_run_posts_reusing_e5_for_policy_refresh')}/"
+            f"{value('candidate_run_posts_waiting_for_bge_without_e5_recompute')}/"
+            f"{value('candidate_run_posts_skipped_unchanged_current')}/"
+            f"{value('candidate_run_posts_skipped_legacy_current_dual')}"
+        ),
+        (
             "Последний основной ноутбук, KO-воронка — эвристически KO / проверены векторами / "
             "текст подходит / передано медиа / дошло до публикационного отбора / отправлено в чат: "
             f"{value('heuristic_ko_latest_run_raw_posts_total')}/"
@@ -498,6 +512,16 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('image_actual_scored_urls_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}/"
             f"{value('finalizer_pending_url_total')}"
+        ),
+        (
+            "Онбординг источника — evidence packs / профилей / профилей готовы / "
+            "кандидатов с готовым абзацем / требуют проверки / приняты и не отправлены, ждут абзац: "
+            f"{value('source_onboarding_evidence_total')}/"
+            f"{value('source_onboarding_profile_total')}/"
+            f"{value('source_onboarding_profile_ready_total')}/"
+            f"{value('publication_onboarding_ready_total')}/"
+            f"{value('publication_onboarding_needs_review_total')}/"
+            f"{value('publication_onboarding_pending_unsent_total')}"
         ),
     ])
 
@@ -2751,6 +2775,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "publication_candidate_item",
             "region_talk_llm_budget_item",
             "publication_delivery_item",
+            "source_onboarding_evidence_item",
+            "source_onboarding_profile_item",
             "post_link_queue_item",
             "text_vector_enrichment_item",
             "processed_post_item",
@@ -2783,11 +2809,14 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     finally:
         driver.stop()
 
+    latest_run_funnel = latest_state.get("run_funnel_metrics") if isinstance(latest_state.get("run_funnel_metrics"), dict) else {}
     candidates = rows_by_kind["candidate_memory_item"]
     images = rows_by_kind["image_queue_item"]
     publications = rows_by_kind["publication_candidate_item"]
     llm_budgets = rows_by_kind["region_talk_llm_budget_item"]
     deliveries = rows_by_kind["publication_delivery_item"]
+    onboarding_evidence_rows = rows_by_kind["source_onboarding_evidence_item"]
+    onboarding_profile_rows = rows_by_kind["source_onboarding_profile_item"]
     post_links = rows_by_kind["post_link_queue_item"]
     vectors = rows_by_kind["text_vector_enrichment_item"]
     source_candidates = rows_by_kind["source_candidate_item"]
@@ -3108,6 +3137,13 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "processed_post_duplicate_identity_rows_total": max(0, len(processed_post_rows) - processed_posts_unique_total),
         "processed_posts_latest_candidate_run_id": latest_candidate_run_id,
         **processed_post_latest_run_metrics,
+        "candidate_run_posts_actionable_after_idempotency": _safe_int(latest_run_funnel.get("posts_actionable_after_idempotency")),
+        "candidate_run_posts_needing_new_e5": _safe_int(latest_run_funnel.get("posts_needing_new_e5")),
+        "candidate_run_posts_reusing_e5_for_bge_fusion": _safe_int(latest_run_funnel.get("posts_reusing_e5_for_bge_fusion")),
+        "candidate_run_posts_reusing_e5_for_policy_refresh": _safe_int(latest_run_funnel.get("posts_reusing_e5_for_policy_refresh")),
+        "candidate_run_posts_waiting_for_bge_without_e5_recompute": _safe_int(latest_run_funnel.get("posts_waiting_for_bge_without_e5_recompute")),
+        "candidate_run_posts_skipped_unchanged_current": _safe_int(latest_run_funnel.get("posts_skipped_unchanged_current")),
+        "candidate_run_posts_skipped_legacy_current_dual": _safe_int(latest_run_funnel.get("posts_skipped_legacy_current_dual")),
         "candidate_memory_total": len(candidates),
         "candidate_memory_terminal_local_audit_total": len(candidate_memory_terminal_local),
         "candidate_memory_terminal_spam_audit_total": len(candidate_memory_terminal_spam),
@@ -3127,6 +3163,17 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **publication_metrics,
         "publication_delivery_rows_total": len(deliveries),
         "publication_delivery_completed_total": sum(1 for row in deliveries if str(row.get("status") or "") == "delivered"),
+        "source_onboarding_evidence_total": len(onboarding_evidence_rows),
+        "source_onboarding_profile_total": len(onboarding_profile_rows),
+        "source_onboarding_profile_ready_total": sum(1 for row in onboarding_profile_rows if str(row.get("profile_status") or "") == "ready"),
+        "publication_onboarding_ready_total": sum(1 for row in publications if str(row.get("source_onboarding_status") or "") == "ready" and bool(row.get("source_onboarding_paragraph"))),
+        "publication_onboarding_needs_review_total": sum(1 for row in publications if str(row.get("source_onboarding_status") or "") == "needs_review"),
+        "publication_onboarding_pending_unsent_total": sum(
+            1 for row in publications
+            if str(row.get("publication_status") or "") == "gemini_accept"
+            and str(row.get("sent_to_chat") or "").lower() != "true"
+            and not (str(row.get("source_onboarding_status") or "") == "ready" and bool(row.get("source_onboarding_paragraph")))
+        ),
         "publication_llm_budget_id": str(latest_llm_budget.get("budget_id") or ""),
         "publication_llm_budget_reserved_total": _safe_int(latest_llm_budget.get("reserved_total")),
         "publication_llm_budget_remaining_total": _safe_int(latest_llm_budget.get("remaining")),
@@ -3372,11 +3419,13 @@ def build_decision_plan(
             resource="local:ydb-source-evidence",
             timeout_seconds=300,
         ))
-    if int(metrics.get("finalizer_pending_url_total") or 0) > 0:
+    finalizer_pending = int(metrics.get("finalizer_pending_url_total") or 0)
+    onboarding_pending = int(metrics.get("publication_onboarding_pending_unsent_total") or 0)
+    if finalizer_pending > 0 or onboarding_pending > 0:
         actions.append(_action(
             "run_finalizer",
             ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"],
-            f"{int(metrics.get('finalizer_pending_url_total') or 0)} actual-image/video post URLs require finalization or eligibility refresh",
+            f"{finalizer_pending} post URLs require finalization/eligibility refresh; {onboarding_pending} accepted unsent rows need source onboarding",
             resource="local:gemini",
             timeout_seconds=900,
         ))

@@ -2975,6 +2975,87 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(incomplete["text_vector_fusion_status"], "external_bge_m3_fusion_incomplete")
         self.assertEqual(incomplete["external_bge_m3_status"], "stale_text_hash")
 
+    def test_post_work_plan_reuses_durable_dual_vectors_and_skips_unchanged_rescans(self) -> None:
+        mod = load_module()
+        post = {
+            "post_id": "p-idempotent",
+            "post_url": "https://t.me/travelcase/42",
+            "platform": "telegram",
+            "platform_post_key": "tg:travelcase:42",
+            "source_id": "src-travelcase",
+            "source_title": "Travel Case",
+            "text": "Личный рассказ о поездке в Калининград и на Куршскую косу.",
+            "post_date": "2026-07-12T10:00:00+00:00",
+            "has_media": True,
+        }
+        text = mod.text_embedding_input_for_post(post)
+        text_hash = mod.text_vector_text_hash(text)
+        bank_version, bank_hash = mod.semantic_bank_version_and_hash(mod.semantic_bank_v1())
+        scores = {
+            "ko_visit_impression": 0.82,
+            "ko_route_useful": 0.61,
+            "other_region_travel": 0.10,
+        }
+        e5 = {
+            "post_id": post["post_id"], "post_url": post["post_url"], "text_hash": text_hash,
+            "model_id": mod.E5_TEXT_MODEL_ID, "model_short": "e5",
+            "encoder_contract": mod.E5_ENCODER_CONTRACT,
+            "semantic_bank_version": bank_version, "semantic_bank_hash": bank_hash[:16],
+            "semantic_scores_by_class": scores,
+        }
+        bge = {
+            "post_id": post["post_id"], "post_url": post["post_url"], "text_hash": text_hash,
+            "model_id": mod.BGE_M3_TEXT_MODEL_ID, "model_short": "bge_m3",
+            "encoder_contract": mod.BGE_M3_ENCODER_CONTRACT,
+            "semantic_bank_version": bank_version, "semantic_bank_hash": bank_hash[:16],
+            "semantic_scores_by_class": scores,
+        }
+        e5_index = mod.build_text_vector_enrichment_index({"text_vector_enrichment": {"e5": e5}}, model="e5")
+        bge_index = mod.build_text_vector_enrichment_index({"text_vector_enrichment": {"bge": bge}}, model="bge_m3")
+        durable_key = mod.durable_processed_post_key(post)
+
+        actionable, stats = mod.plan_posts_for_vector_scoring(
+            [post], previous_posts={durable_key: {"current_stage": "dual_model_vector_enrichment_pending"}},
+            e5_index=e5_index, bge_m3_index=bge_index, require_bge_m3=True,
+        )
+        self.assertEqual(stats["posts_reuse_e5_bge_fusion"], 1)
+        self.assertEqual(actionable[0]["_rt_work_kind"], "reuse_e5_bge_fusion")
+
+        fingerprint = mod.post_processing_fingerprint(text_hash=text_hash, require_bge_m3=True)
+        actionable, stats = mod.plan_posts_for_vector_scoring(
+            [post], previous_posts={durable_key: {
+                "current_stage": "dropped_text_gate",
+                "post_processing_fingerprint": fingerprint,
+            }}, e5_index=e5_index, bge_m3_index=bge_index, require_bge_m3=True,
+        )
+        self.assertEqual(actionable, [])
+        self.assertEqual(stats["posts_skipped_unchanged"], 1)
+
+    def test_post_work_plan_waits_for_bge_without_reencoding_e5(self) -> None:
+        mod = load_module()
+        post = {
+            "post_id": "p-wait", "post_url": "https://t.me/travelcase/43",
+            "platform": "telegram", "platform_post_key": "tg:travelcase:43",
+            "text": "Поездка в Калининградскую область.",
+        }
+        text_hash = mod.text_vector_text_hash(mod.text_embedding_input_for_post(post))
+        bank_version, bank_hash = mod.semantic_bank_version_and_hash(mod.semantic_bank_v1())
+        e5 = {
+            "post_id": post["post_id"], "post_url": post["post_url"], "text_hash": text_hash,
+            "model_id": mod.E5_TEXT_MODEL_ID, "model_short": "e5",
+            "encoder_contract": mod.E5_ENCODER_CONTRACT,
+            "semantic_bank_version": bank_version, "semantic_bank_hash": bank_hash[:16],
+            "semantic_scores_by_class": {"ko_visit_impression": 0.75, "other_region_travel": 0.12},
+        }
+        e5_index = mod.build_text_vector_enrichment_index({"text_vector_enrichment": {"e5": e5}}, model="e5")
+        key = mod.durable_processed_post_key(post)
+        actionable, stats = mod.plan_posts_for_vector_scoring(
+            [post], previous_posts={key: {"current_stage": "dual_model_vector_enrichment_pending"}},
+            e5_index=e5_index, bge_m3_index={}, require_bge_m3=True,
+        )
+        self.assertEqual(actionable, [])
+        self.assertEqual(stats["posts_wait_bge_existing_e5"], 1)
+
     def test_publication_source_evidence_completion_is_selected_before_backlog(self) -> None:
         mod = load_module()
         finalist = mod.Seed(

@@ -134,6 +134,23 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertIn("текст прошёл строгую E5+BGE", message)
         self.assertNotIn("визуальному score", message)
 
+    def test_candidate_message_includes_only_ready_source_onboarding(self) -> None:
+        mod = load_module()
+        ready = mod.candidate_message({
+            "publication_rank": 2,
+            "post_url": "https://t.me/travel/2",
+            "source_onboarding_status": "ready",
+            "source_onboarding_paragraph": "Проверенный вводный абзац о тревел-блогере.",
+        })
+        self.assertIn("О блогере: Проверенный вводный абзац", ready)
+        review = mod.candidate_message({
+            "publication_rank": 3,
+            "post_url": "https://t.me/travel/3",
+            "source_onboarding_status": "needs_review",
+            "source_onboarding_paragraph": "Непроверенный текст",
+        })
+        self.assertNotIn("О блогере:", review)
+
 
 if __name__ == "__main__":
     unittest.main()

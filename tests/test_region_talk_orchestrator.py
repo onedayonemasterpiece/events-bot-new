@@ -1502,6 +1502,27 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
     def test_candidate_profile_uses_lightweight_report_tail(self) -> None:
         mod = load_module()
         self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_LIGHTWEIGHT_REPORT"], "1")
+        self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_ENABLE_POST_WORK_IDEMPOTENCY"], "1")
+
+    def test_accepted_unsent_candidate_missing_onboarding_schedules_finalizer_without_reverification_hint(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "publication_confirmed_total": 1,
+                "publication_sent_total": 0,
+                "publication_unsent_confirmed_total": 0,
+                "publication_onboarding_pending_unsent_total": 1,
+                "bge_pending_sample_total": 0,
+                "image_pending_total": 0,
+                "finalizer_pending_url_total": 0,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        finalizer = next(action for action in actions if action["action"] == "run_finalizer")
+        self.assertIn("1 accepted unsent rows need source onboarding", finalizer["reason"])
+        self.assertNotIn("--reverify-existing", finalizer["cmd"])
 
     def test_vk_image_without_direct_url_schedules_server_prefetch(self) -> None:
         mod = load_module()

@@ -2145,6 +2145,8 @@ POST_STATE_FIELDS = [
     "image_model_input_type", "image_download_status", "image_reviewable", "image_publication_ready",
     "vector_gate_status", "llm_gate_status", "llm_decision", "llm_reason", "content_type",
     "is_forwarded_or_repost", "forwarded_from_post_url",
+    "post_processing_policy_version", "post_processing_fingerprint", "processed_text_hash",
+    "post_work_kind", "e5_vector_status", "bge_m3_vector_status",
 ]
 POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "has_media",
@@ -2158,6 +2160,8 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "regex_ko_raw", "regex_ko_filtered", "regex_ko_has_substance",
     "regex_ko_is_ad_or_promo", "regex_ko_is_news_or_event",
     "regex_ko_is_multi_region", "regex_ko_diagnostic_version",
+    "post_processing_policy_version", "post_processing_fingerprint", "processed_text_hash",
+    "post_work_kind", "e5_vector_status", "bge_m3_vector_status",
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
@@ -2201,6 +2205,12 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run",
     "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",
     "llm_gate_status", "llm_decision", "llm_reason", "llm_model", "llm_limit_source",
+    "source_onboarding_status", "source_onboarding_paragraph", "source_onboarding_profile_id",
+    "source_onboarding_profile_fingerprint", "source_onboarding_writer_fingerprint",
+    "source_onboarding_writer_prompt_version", "source_onboarding_entity_type",
+    "source_onboarding_claim_ids_json", "source_onboarding_evidence_ids_json",
+    "source_onboarding_selected_angle_id", "source_onboarding_llm_status",
+    "source_onboarding_llm_reason", "source_onboarding_paragraph_chars",
     "publication_tombstone", "publication_revoked", "revoked_at",
     "created_at", "last_seen_run_id", "last_confirmed_run_id",
 ]
@@ -12369,6 +12379,7 @@ E5_TEXT_MODEL_ID = "intfloat/multilingual-e5-base"
 BGE_M3_TEXT_MODEL_ID = "BAAI/bge-m3"
 BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
 E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
+POST_PROCESSING_POLICY_VERSION = "region_talk_post_processing_v2_idempotent_dual"
 TEXT_EMBEDDING_MODELS = [E5_TEXT_MODEL_ID, BGE_M3_TEXT_MODEL_ID]
 
 
@@ -12871,6 +12882,186 @@ def find_text_vector_enrichment_for_post(
         if rows:
             return rows[0], mode
     return None, ""
+
+
+def text_vector_enrichment_is_current(
+    row: dict[str, Any] | None,
+    *,
+    model: str,
+    text_hash: str,
+) -> bool:
+    """Return whether a durable score row matches the active model contract.
+
+    URL identity alone is deliberately insufficient: changed post text, an
+    encoder change or a semantic-bank revision must schedule exactly one new
+    enrichment pass.  Conversely, a row satisfying this contract must never be
+    recomputed merely because the source was scanned again.
+    """
+    if not isinstance(row, dict) or not row or not text_hash:
+        return False
+    bank_version, bank_hash = semantic_bank_version_and_hash(semantic_bank_v1())
+    expected_contract = BGE_M3_ENCODER_CONTRACT if model == "bge_m3" else E5_ENCODER_CONTRACT
+    expected_model = BGE_M3_TEXT_MODEL_ID if model == "bge_m3" else E5_TEXT_MODEL_ID
+    model_id = str(row.get("model_id") or "")
+    model_short = str(row.get("model_short") or "")
+    model_matches = (
+        model_id == expected_model
+        or (model == "bge_m3" and model_short == "bge_m3")
+        or (model == "e5" and (model_short == "e5" or model_id.startswith("intfloat/multilingual-e5")))
+    )
+    return bool(
+        model_matches
+        and str(row.get("text_hash") or "") == text_hash
+        and str(row.get("encoder_contract") or "") == expected_contract
+        and str(row.get("semantic_bank_version") or "") == bank_version
+        and str(row.get("semantic_bank_hash") or "") == bank_hash[:16]
+        and _scores_by_class_from_embedding_scores(row, expected_model)
+    )
+
+
+def post_processing_fingerprint(*, text_hash: str, require_bge_m3: bool) -> str:
+    bank_version, bank_hash = semantic_bank_version_and_hash(semantic_bank_v1())
+    payload = {
+        "policy": POST_PROCESSING_POLICY_VERSION,
+        "text_hash": text_hash,
+        "semantic_bank_version": bank_version,
+        "semantic_bank_hash": bank_hash[:16],
+        "e5_model": E5_TEXT_MODEL_ID,
+        "e5_contract": E5_ENCODER_CONTRACT,
+        "bge_model": BGE_M3_TEXT_MODEL_ID if require_bge_m3 else "disabled",
+        "bge_contract": BGE_M3_ENCODER_CONTRACT if require_bge_m3 else "disabled",
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _post_work_priority(row: dict[str, Any], previous_post: dict[str, Any] | None) -> tuple[Any, ...]:
+    """Prioritise explicit KO evidence without starving first-seen posts."""
+    discovery = " ".join(str(row.get(k) or "") for k in (
+        "discovery_method", "discovery_priority", "priority_reason", "added_from",
+        "ydb_candidate_link_kind", "fast_check_status", "matched_query", "keyword_hit_query",
+    )).lower()
+    exact = bool(
+        row.get("ydb_candidate_link_pk")
+        or row.get("post_link_queue_id")
+        or row.get("keyword_hit_post_url")
+        or "exact" in discovery
+        or "post_link" in discovery
+    )
+    confirmed = bool(
+        str(row.get("external_blogger_evidence_status") or "").lower() in {"confirmed", "verified", "accepted"}
+        or "confirmed_external" in discovery
+        or "external_blogger" in discovery
+    )
+    ko_recall = bool(
+        row.get("keyword_hit_query")
+        or row.get("matched_query")
+        or "fast_check" in discovery
+        or "keyword" in discovery
+    )
+    lane = 0 if exact else 1 if confirmed else 2 if ko_recall else 3
+    first_seen = not bool(previous_post)
+    return (
+        lane,
+        0 if first_seen else 1,
+        -int(bool(row.get("has_media") or row.get("primary_media_path"))),
+        str(row.get("post_date") or ""),
+    )
+
+
+def plan_posts_for_vector_scoring(
+    posts: list[dict[str, Any]],
+    *,
+    previous_posts: dict[str, Any],
+    e5_index: dict[str, list[dict[str, Any]]],
+    bge_m3_index: dict[str, list[dict[str, Any]]],
+    require_bge_m3: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Choose only product-relevant post work for the current run.
+
+    A source rescan may observe the same post again, but that observation is not
+    vector work.  Known posts are reopened only for changed text/model policy,
+    the first durable state handoff, or the one-time fusion pass after BGE-M3
+    arrives. Image/Gemini retries are owned by their own durable queues.
+    """
+    actionable: list[dict[str, Any]] = []
+    reasons: dict[str, int] = {}
+    for original in posts:
+        row = dict(original)
+        text = text_embedding_input_for_post(row)
+        text_hash = text_vector_text_hash(text) if text else ""
+        durable_key = durable_processed_post_key(row) or str(row.get("post_id") or row.get("post_url") or "")
+        previous = previous_posts.get(durable_key) if isinstance(previous_posts, dict) else None
+        if not isinstance(previous, dict):
+            previous = None
+        e5_row, _ = find_text_vector_enrichment_for_post(e5_index, row, text_hash=text_hash)
+        bge_row, _ = find_text_vector_enrichment_for_post(bge_m3_index, row, text_hash=text_hash)
+        e5_current = text_vector_enrichment_is_current(e5_row, model="e5", text_hash=text_hash)
+        bge_current = (
+            text_vector_enrichment_is_current(bge_row, model="bge_m3", text_hash=text_hash)
+            if require_bge_m3 else True
+        )
+        fingerprint = post_processing_fingerprint(text_hash=text_hash, require_bge_m3=require_bge_m3)
+        previous_fingerprint = str((previous or {}).get("post_processing_fingerprint") or "")
+        previous_stage = str((previous or {}).get("current_stage") or "")
+
+        if not text_hash:
+            kind = "skip_no_text"
+        elif not e5_current:
+            kind = "needs_e5"
+        elif require_bge_m3 and not bge_current:
+            # E5 is already durable and the external BGE notebook consumes that
+            # ledger directly. Re-encoding E5 cannot advance the product.
+            kind = "reuse_e5_wait_bge" if previous is None else "wait_bge_existing_e5"
+        elif previous_stage == "dual_model_vector_enrichment_pending":
+            kind = "reuse_e5_bge_fusion"
+        elif previous_fingerprint == fingerprint:
+            kind = "skip_unchanged_current"
+        elif (
+            previous
+            and not previous_fingerprint
+            and str(previous.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3"
+            and str(previous.get("vector_gate_status") or "")
+        ):
+            # Pre-fingerprint rows that already carry a complete current dual
+            # verdict are known work, not a mandatory migration batch. An
+            # explicit model/bank/text change is already caught above by the
+            # vector-contract checks.
+            kind = "skip_legacy_current_dual"
+        else:
+            # Legacy rows have no fingerprint. Re-open them once, using durable
+            # E5+BGE scores, then persist the fingerprint so later rescans skip.
+            kind = "reuse_e5_bge_policy_refresh"
+
+        reasons[kind] = reasons.get(kind, 0) + 1
+        row.update({
+            "_rt_work_kind": kind,
+            "_rt_embedding_text": text,
+            "_rt_embedding_text_hash": text_hash,
+            "_rt_e5_row": e5_row if e5_current else None,
+            "_rt_bge_row": bge_row if bge_current and require_bge_m3 else None,
+            "_rt_processing_fingerprint": fingerprint,
+            "_rt_previous_post": previous or {},
+            "_rt_work_priority": _post_work_priority(row, previous),
+        })
+        if kind in {"needs_e5", "reuse_e5_wait_bge", "reuse_e5_bge_fusion", "reuse_e5_bge_policy_refresh"}:
+            actionable.append(row)
+
+    actionable.sort(key=lambda r: r.get("_rt_work_priority") or (9, 9, 9, ""))
+    return actionable, {
+        "posts_fetched": len(posts),
+        "posts_actionable": len(actionable),
+        "posts_needs_e5": reasons.get("needs_e5", 0),
+        "posts_reuse_e5_wait_bge": reasons.get("reuse_e5_wait_bge", 0),
+        "posts_reuse_e5_bge_fusion": reasons.get("reuse_e5_bge_fusion", 0),
+        "posts_reuse_e5_bge_policy_refresh": reasons.get("reuse_e5_bge_policy_refresh", 0),
+        "posts_wait_bge_existing_e5": reasons.get("wait_bge_existing_e5", 0),
+        "posts_skipped_unchanged": reasons.get("skip_unchanged_current", 0),
+        "posts_skipped_legacy_current_dual": reasons.get("skip_legacy_current_dual", 0),
+        "posts_skipped_no_text": reasons.get("skip_no_text", 0),
+        "post_work_reasons_json": json.dumps(reasons, ensure_ascii=False, sort_keys=True),
+    }
 
 
 def fuse_e5_with_external_bge_m3(
@@ -13390,7 +13581,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
     previous_image_scores_by_url = {str(r.get("post_url") or ""): r for r in previous_image_queue_rows if str(r.get("post_url") or "")}
     bge_m3_enrichment_index = build_text_vector_enrichment_index(previous_state, model="bge_m3") if external_bge_m3_fusion_enabled() else {}
-    e5_enrichment_index = build_text_vector_enrichment_index(previous_state, model="e5") if external_bge_m3_fusion_enabled() else {}
+    # E5 is also a durable queue. It must be reused independently of whether
+    # external BGE fusion is enabled for this particular run.
+    e5_enrichment_index = build_text_vector_enrichment_index(previous_state, model="e5")
     external_bge_required = require_external_bge_m3_for_image_queue()
     previous_discovered = previous_state.get("discovered_sources") if isinstance(previous_state.get("discovered_sources"), dict) else {}
     updated_posts_state: dict[str, Any] = dict(previous_posts)
@@ -13406,7 +13599,31 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     max_posts_to_score = getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180)
     if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
         max_posts_to_score = min(max_posts_to_score, getenv_int("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", 40))
+    post_work_plan: dict[str, Any] = {
+        "posts_fetched": len(posts),
+        "posts_actionable": len(posts),
+        "post_work_reasons_json": json.dumps({"legacy_all_rows": len(posts)}, ensure_ascii=False),
+    }
     scoring_pool = list(posts)
+    post_work_idempotency_enabled = (
+        getenv_bool("REGION_TALK_ENABLE_POST_WORK_IDEMPOTENCY", True)
+        and getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
+        and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}
+    )
+    if post_work_idempotency_enabled:
+        scoring_pool, post_work_plan = plan_posts_for_vector_scoring(
+            posts,
+            previous_posts=previous_posts,
+            e5_index=e5_enrichment_index,
+            bge_m3_index=bge_m3_enrichment_index,
+            require_bge_m3=external_bge_required,
+        )
+        report_event(
+            "post_work_plan_built",
+            phase="candidate_processing",
+            status="running",
+            **post_work_plan,
+        )
     if getenv_bool("REGION_TALK_PRIORITIZE_REGION_TEXT_BEFORE_VECTOR", True):
         def _pre_vector_region_priority(row: dict[str, Any]) -> tuple[Any, ...]:
             text = text_main_content_for_geo(str(row.get("text") or ""))
@@ -13414,15 +13631,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             strong_matches = [m for m in matches if m.get("accepted_as_region_evidence") == "true"]
             anchor_hits = sum(1 for a in DEFAULT_ANCHORS if term_in_text(normalize_geo_text(a), normalize_geo_text(text)))
             has_media = bool(row.get("has_media") or row.get("primary_media_path") or row.get("image_url_or_local_path"))
-            return (
-                1 if strong_matches else 0,
-                min(12, len(strong_matches)),
-                min(12, anchor_hits),
-                1 if has_media else 0,
-                min(3000, len(text)),
-                str(row.get("post_date") or ""),
+            region_rank = (
+                -(1 if strong_matches else 0),
+                -min(12, len(strong_matches)),
+                -min(12, anchor_hits),
+                -(1 if has_media else 0),
+                -min(3000, len(text)),
             )
-        scoring_pool = sorted(scoring_pool, key=_pre_vector_region_priority, reverse=True)
+            if post_work_idempotency_enabled:
+                return tuple(row.get("_rt_work_priority") or (9, 9, 9, "")) + region_rank
+            return region_rank
+        scoring_pool = sorted(scoring_pool, key=_pre_vector_region_priority)
         report_event(
             "pre_vector_region_priority_applied",
             phase="candidate_processing",
@@ -13540,17 +13759,46 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     embedding_batch_deferred_error = ""
     if posts_for_scoring and vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
         try:
-            embedding_texts_for_scoring = [text_embedding_input_for_post(p) for p in posts_for_scoring]
-            precomputed_embedding_scores = dual_model_semantic_scores_batch(embedding_texts_for_scoring, report_event=report_event)
-            e5_rows = build_e5_text_vector_enrichment_rows(posts_for_scoring, precomputed_embedding_scores, embedding_texts_for_scoring, run_id=run_id)
+            embedding_texts_for_scoring = [
+                str(p.get("_rt_embedding_text") or text_embedding_input_for_post(p))
+                for p in posts_for_scoring
+            ]
+            needs_e5_positions = [
+                idx for idx, p in enumerate(posts_for_scoring)
+                if str(p.get("_rt_work_kind") or "needs_e5") == "needs_e5"
+            ]
+            needs_e5_posts = [posts_for_scoring[idx] for idx in needs_e5_positions]
+            needs_e5_texts = [embedding_texts_for_scoring[idx] for idx in needs_e5_positions]
+            needs_e5_scores = (
+                dual_model_semantic_scores_batch(needs_e5_texts, report_event=report_event)
+                if needs_e5_texts else []
+            )
+            score_by_position = {
+                pos: needs_e5_scores[score_idx]
+                for score_idx, pos in enumerate(needs_e5_positions)
+                if score_idx < len(needs_e5_scores)
+            }
+            precomputed_embedding_scores = []
+            for pos, post in enumerate(posts_for_scoring):
+                if pos in score_by_position:
+                    precomputed_embedding_scores.append(score_by_position[pos])
+                else:
+                    precomputed_embedding_scores.append(dict(post.get("_rt_e5_row") or {}))
+            e5_rows = build_e5_text_vector_enrichment_rows(
+                needs_e5_posts,
+                needs_e5_scores,
+                needs_e5_texts,
+                run_id=run_id,
+            )
             e5_rows_written = write_region_talk_text_vector_enrichment_items(e5_rows, run_id=run_id, stage="candidate_report_e5_scored")
-            if e5_rows or e5_rows_written:
+            if e5_rows or e5_rows_written or posts_for_scoring:
                 report_event(
                     "e5_text_vector_enrichment_written",
                     phase="text_embedding",
                     status="running",
                     e5_text_vector_rows=len(e5_rows),
                     e5_text_vector_rows_written=e5_rows_written,
+                    e5_text_vector_rows_reused=len(posts_for_scoring) - len(needs_e5_posts),
                     next_action="run_region_talk_bge_m3_enrichment",
                 )
         except Exception as exc:
@@ -13845,8 +14093,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
 
         semantic_visit_fields = infer_visit_semantic_fields(text, llm_gate, substance, p)
         image_status_fields = normalize_image_status(current_stage, ms)
+        public_post = {k: v for k, v in p.items() if not str(k).startswith("_rt_")}
         row = {
-            **p, **ts, **scope, **fresh, **ad_gate, **substance, **ms, **semantic_visit_fields, **image_status_fields,
+            **public_post, **ts, **scope, **fresh, **ad_gate, **substance, **ms, **semantic_visit_fields, **image_status_fields,
             "candidate_id": cid, "candidate_score": score, "current_stage": current_stage,
             "drop_gate": drop_gate, "rejection_reason": rejection,
             "short_summary": make_summary(text),
@@ -13872,6 +14121,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "rejection_reason_details": visual_skip_reason or str(llm_gate.get("llm_reason") or ""),
             "semantic_gate_mode": semantic_gate_mode,
             "deterministic_semantic_gate_override": str(deterministic_override).lower(),
+            "post_processing_policy_version": POST_PROCESSING_POLICY_VERSION,
+            "post_processing_fingerprint": str(p.get("_rt_processing_fingerprint") or post_processing_fingerprint(text_hash=embedding_text_hash, require_bge_m3=external_bge_required)),
+            "processed_text_hash": embedding_text_hash,
+            "post_work_kind": str(p.get("_rt_work_kind") or "needs_e5"),
+            "e5_vector_status": "reused_current" if p.get("_rt_e5_row") else "computed_this_run",
+            "bge_m3_vector_status": "reused_current" if bge_row else ("pending" if external_bge_required else "disabled"),
             "semantic_enrichment_stage": "dual_model_vector_enrichment_pending" if current_stage == "dual_model_vector_enrichment_pending" else ("final_llm_verifier_pending" if str(vector_gate.get("needs_llm_final_verify")) == "true" and current_stage in {"semantic_candidate", "favorite", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media", "low_substance_but_region_relevant"} else ("text_vector_fusion_done" if str(vector_gate.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3" and current_stage in {"semantic_candidate", "favorite", "needs_image_review", "low_substance_but_region_relevant"} else "skipped_by_text_gate")),
         }
         row.pop("place_matches", None)
@@ -13911,6 +14166,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "source_title": p.get("source_title"),
             "platform_post_key": p.get("platform_post_key"),
             "post_date": p.get("post_date"),
+            "post_processing_policy_version": POST_PROCESSING_POLICY_VERSION,
+            "post_processing_fingerprint": str(row.get("post_processing_fingerprint") or ""),
+            "processed_text_hash": embedding_text_hash,
+            "post_work_kind": str(row.get("post_work_kind") or ""),
+            "e5_vector_status": str(row.get("e5_vector_status") or ""),
+            "bge_m3_vector_status": str(row.get("bge_m3_vector_status") or ""),
         }
         if current_stage in {"favorite", "semantic_candidate"}:
             candidates.append(row)
@@ -14751,6 +15012,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "posts_fetched": len(posts),
         "posts_scored": posts_scored_count,
         "posts_deferred": len(runtime_deferred_posts),
+        "posts_actionable_after_idempotency": int(post_work_plan.get("posts_actionable") or 0),
+        "posts_needing_new_e5": int(post_work_plan.get("posts_needs_e5") or 0),
+        "posts_reusing_e5_for_bge_fusion": int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
+        "posts_reusing_e5_for_policy_refresh": int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
+        "posts_waiting_for_bge_without_e5_recompute": int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
+        "posts_skipped_unchanged_current": int(post_work_plan.get("posts_skipped_unchanged") or 0),
+        "posts_skipped_legacy_current_dual": int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
         "posts_with_ko_scope": sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
         "post_outcome_counts": post_outcome_counts,
         "candidates_created": len(candidates),
@@ -14827,6 +15095,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
         "posts_scored":posts_scored_count,"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
+        "posts_actionable_after_idempotency":int(post_work_plan.get("posts_actionable") or 0),
+        "posts_needing_new_e5":int(post_work_plan.get("posts_needs_e5") or 0),
+        "posts_reusing_e5_for_bge_fusion":int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
+        "posts_reusing_e5_for_policy_refresh":int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
+        "posts_waiting_for_bge_without_e5_recompute":int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
+        "posts_skipped_unchanged_current":int(post_work_plan.get("posts_skipped_unchanged") or 0),
+        "posts_skipped_legacy_current_dual":int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
+        "post_work_reasons_json":post_work_plan.get("post_work_reasons_json") or "{}",
         "scoring_stopped_by_runtime_budget":str(scoring_stopped_by_runtime_budget).lower(),
         "source_count_selected":len(source_rows),"source_count_attempted":sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true" or str(s.get("fetch_status") or "").startswith(("ok", "error"))),
         "source_count_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
@@ -15429,7 +15705,19 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "23_vk_wall_setup":vk_wall_setup_sheet,
         "24_source_yield_metrics":source_yield_metrics_sheet,
     }
-    report_event("vector_scoring_done", phase="vector_scoring", status="running", posts_scored=posts_scored_count, posts_deferred=len(runtime_deferred_posts), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet), scoring_stopped_by_runtime_budget=str(scoring_stopped_by_runtime_budget).lower())
+    report_event(
+        "vector_scoring_done",
+        phase="vector_scoring",
+        status="running",
+        posts_scored=posts_scored_count,
+        posts_deferred=len(runtime_deferred_posts),
+        posts_skipped_unchanged=int(post_work_plan.get("posts_skipped_unchanged") or 0),
+        posts_skipped_legacy_current_dual=int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
+        posts_waiting_for_bge_without_e5_recompute=int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
+        candidates_created=len(candidates),
+        image_queue_total=len(image_candidate_queue_sheet),
+        scoring_stopped_by_runtime_budget=str(scoring_stopped_by_runtime_budget).lower(),
+    )
     if getenv_bool("REGION_TALK_LIGHTWEIGHT_REPORT", False):
         lightweight_sheet_names = {
             "00_product_summary", "00_readme", "01_run_summary", "02_increment",

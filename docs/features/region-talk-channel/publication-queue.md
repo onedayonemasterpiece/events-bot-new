@@ -48,6 +48,33 @@ but must preserve every `finalizer_state_version` terminal status, eligibility
 attestation, retry field and delivery marker; it must never reopen a
 Gemini-rejected URL as pending after a later discovery run.
 
+### Post-level idempotent vector work
+
+A source rescan is allowed, but it is not permission to re-encode every known
+post. CandidateReport now builds a work plan before applying the per-run E5
+limit. A post is actionable only when its text/model/semantic-bank contract is
+new or changed, when BGE-M3 has arrived for a row that was waiting for fusion,
+or when a legacy row needs one policy-fingerprint refresh. Current unchanged
+rows are skipped; a current E5 row waiting for BGE is not encoded again.
+
+The durable `post_processing_fingerprint` includes text hash, policy version,
+E5/BGE model contracts and semantic-bank version/hash. Exact post links,
+confirmed external-blogger evidence, fast-check and keyword hits are ordered
+ahead of generic history within the actionable set. Image and Gemini retries
+remain owned by their own queues. Run summaries expose new E5 work, reused
+fusion work, BGE waits without E5 recomputation and unchanged skips separately.
+
+### Source onboarding for the operator
+
+After Gemini accepts a post, the finalizer builds/reuses the evidence-backed
+source profile described in [Source onboarding profile](source-onboarding-profile.md).
+It stores `source_onboarding_evidence_item` and
+`source_onboarding_profile_item`, then writes the candidate-specific paragraph
+and all claim/evidence references into `publication_candidate_item`. The
+notifier renders `О блогере: …` only when the deterministic support and
+300–600-character checks return `source_onboarding_status=ready`; otherwise the
+candidate remains reviewable without an invented biography.
+
 Video is not treated as a weak image and is never assigned a fabricated visual
 score. Gemini verifies only the text/product criteria. The notifier sends a
 Gemini-confirmed video link to the same operator chat, where the operator makes

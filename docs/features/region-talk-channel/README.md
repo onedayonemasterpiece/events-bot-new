@@ -14,6 +14,7 @@
 - [Kaliningrad place lexicon](kaliningrad-place-lexicon.md) + [CSV](kaliningrad-place-lexicon-v1.csv) — regional place recall/scope guardrail.
 - [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
+- [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
 - [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
@@ -47,7 +48,8 @@ Pipeline должен уметь:
 7. Сохранять source/post/media/candidate/run state в **YDB sidecar**.
 8. Формировать MVP candidate report / favorites table, прежде всего **XLSX** для ручного просмотра.
 9. Запускать final LLM/VLM verifier только на top candidates.
-10. В будущем генерировать короткий пост, ставить в очередь, публиковать в Telegram и VK и вести ledger.
+10. Для финального кандидата собирать компактный публичный evidence pack, переиспользуемый профиль источника и один проверяемый абзац `О блогере`.
+11. В будущем генерировать короткий пост, ставить в очередь, публиковать в Telegram и VK и вести ledger.
 
 ## Non-goals for MVP
 
