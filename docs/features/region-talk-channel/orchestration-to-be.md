@@ -159,6 +159,12 @@ Telegram Monitoring and Guide monitoring:
 - row-level YDB queue metrics read through primary-key prefix ranges, not
   table-wide `kind` scans, so `ResourceExhausted` in one queue does not stall the
   whole loop;
+- a loop cycle retries transient YDB endpoint/session failures up to three
+  times with bounded exponential backoff (15/30/60 seconds by default). A
+  one-off `Deadline exceeded` or endpoint-discovery outage therefore cannot
+  terminate a long-running orchestrator while Kaggle notebooks continue
+  unmanaged. Authentication, configuration and code errors remain fail-fast;
+  successful snapshots expose `cycle_transient_retries` for audit;
 - exact latest Candidate/BGE/Image heartbeat rows included in every metric
   snapshot with `run_id`, event, phase, status, timestamp and sequence, so an
   active Kaggle status cannot be attributed to an older YDB run;

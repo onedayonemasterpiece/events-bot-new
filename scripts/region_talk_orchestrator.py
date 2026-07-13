@@ -3382,6 +3382,67 @@ def orchestrator_poll_sleep_seconds(metrics: dict[str, Any], *, normal_seconds: 
     return normal
 
 
+_TRANSIENT_CYCLE_ERROR_MARKERS = (
+    "connectionfailure",
+    "deadline exceeded",
+    "failed to resolve endpoints",
+    "connection reset",
+    "temporarily unavailable",
+    "resource exhausted",
+    "overloaded",
+)
+
+
+def _is_transient_cycle_error(exc: BaseException) -> bool:
+    """Return True only for bounded infrastructure/read failures.
+
+    Authentication, configuration and code errors must still fail the loop
+    immediately.  The retry contour exists for short YDB endpoint/session
+    outages observed between otherwise successful metric snapshots.
+    """
+
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _TRANSIENT_CYCLE_ERROR_MARKERS)
+
+
+def run_orchestrator_cycle_with_retries(
+    args: argparse.Namespace,
+    *,
+    allow_yc_fallback: bool,
+    cycle_index: int,
+    retry_limit: int,
+    backoff_seconds: float,
+    sleep_fn: Any = time.sleep,
+) -> dict[str, Any]:
+    """Run one loop cycle and survive a bounded transient YDB read outage."""
+
+    retry_events: list[dict[str, Any]] = []
+    retries = max(0, int(retry_limit or 0))
+    base_backoff = max(0.0, float(backoff_seconds or 0.0))
+    for attempt in range(retries + 1):
+        try:
+            result = run_orchestrator_cycle(
+                args,
+                allow_yc_fallback=allow_yc_fallback,
+                cycle_index=cycle_index,
+            )
+        except Exception as exc:
+            if attempt >= retries or not _is_transient_cycle_error(exc):
+                raise
+            wait_seconds = min(60.0, base_backoff * (2**attempt))
+            retry_events.append({
+                "attempt": attempt + 1,
+                "error": f"{type(exc).__name__}: {str(exc)[:500]}",
+                "wait_seconds": wait_seconds,
+            })
+            sleep_fn(wait_seconds)
+            continue
+        if retry_events:
+            result["cycle_transient_retries"] = retry_events
+        return result
+    raise AssertionError("unreachable orchestrator retry loop")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Region Talk YDB orchestrator dry-run")
     parser.add_argument("--env-file", default=str(ROOT / ".env"))
@@ -3404,6 +3465,8 @@ def main() -> int:
     parser.add_argument("--max-cycles", type=int, default=0, help="maximum loop cycles; 0 means unlimited until other limits")
     parser.add_argument("--max-runtime-minutes", type=int, default=0, help="maximum wall-clock loop runtime; 0 disables")
     parser.add_argument("--no-progress-cycles", type=int, default=8, help="stop loop after this many idle no-progress cycles with no active kernels")
+    parser.add_argument("--cycle-error-retries", type=int, default=3, help="bounded retries for transient YDB endpoint/session failures inside --loop")
+    parser.add_argument("--cycle-error-backoff-seconds", type=float, default=15.0, help="initial exponential backoff for transient loop-cycle failures")
     parser.add_argument("--target-new-publics", type=int, default=0, help="loop goal: stop after this many new source/public rows versus loop baseline")
     parser.add_argument("--target-processed-posts", type=int, default=0, help="loop goal: stop after this many newly processed unique posts versus loop baseline")
     parser.add_argument("--target-ko-sources", type=int, default=0, help="loop goal: stop after this many additional KO candidate sources versus loop baseline")
@@ -3469,7 +3532,13 @@ def main() -> int:
     while True:
         cycle += 1
         try:
-            result = run_orchestrator_cycle(args, allow_yc_fallback=allow_yc_fallback, cycle_index=cycle)
+            result = run_orchestrator_cycle_with_retries(
+                args,
+                allow_yc_fallback=allow_yc_fallback,
+                cycle_index=cycle,
+                retry_limit=int(args.cycle_error_retries or 0),
+                backoff_seconds=float(args.cycle_error_backoff_seconds or 0.0),
+            )
         except Exception as exc:
             result = {
                 "ok": False,

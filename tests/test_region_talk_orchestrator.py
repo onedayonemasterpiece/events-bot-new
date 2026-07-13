@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import contextlib
 import importlib.util
 import io
@@ -1246,6 +1247,53 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(result["status"], "skipped_active_kernel_race")
         self.assertEqual(result["reason"], "launcher_detected_active_kernel_after_status_snapshot")
         self.assertEqual(result["returncode"], 1)
+
+    def test_loop_cycle_retries_transient_ydb_endpoint_failure(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace()
+        success = {"ok": True, "cycle": 4, "metrics": {}, "actions": []}
+        sleeps: list[float] = []
+        with mock.patch.object(
+            mod,
+            "run_orchestrator_cycle",
+            side_effect=[
+                RuntimeError("ConnectionFailure: Failed to resolve endpoints; Deadline exceeded on request"),
+                success,
+            ],
+        ) as run_cycle:
+            result = mod.run_orchestrator_cycle_with_retries(
+                args,
+                allow_yc_fallback=True,
+                cycle_index=4,
+                retry_limit=3,
+                backoff_seconds=2.0,
+                sleep_fn=sleeps.append,
+            )
+        self.assertEqual(run_cycle.call_count, 2)
+        self.assertEqual(sleeps, [2.0])
+        self.assertEqual(result["cycle_transient_retries"][0]["attempt"], 1)
+        self.assertIn("Failed to resolve endpoints", result["cycle_transient_retries"][0]["error"])
+
+    def test_loop_cycle_does_not_retry_configuration_error(self) -> None:
+        mod = load_module()
+        args = argparse.Namespace()
+        sleeps: list[float] = []
+        with mock.patch.object(
+            mod,
+            "run_orchestrator_cycle",
+            side_effect=RuntimeError("missing_ydb_config"),
+        ) as run_cycle:
+            with self.assertRaisesRegex(RuntimeError, "missing_ydb_config"):
+                mod.run_orchestrator_cycle_with_retries(
+                    args,
+                    allow_yc_fallback=False,
+                    cycle_index=1,
+                    retry_limit=3,
+                    backoff_seconds=2.0,
+                    sleep_fn=sleeps.append,
+                )
+        run_cycle.assert_called_once()
+        self.assertEqual(sleeps, [])
 
     def test_main_missing_config_is_noninteractive_by_default(self) -> None:
         mod = load_module()
