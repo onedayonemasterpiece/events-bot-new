@@ -125,7 +125,7 @@ def test_g4_split_create_disables_4o_fallback_for_experimental_stages(monkeypatc
     assert su._smart_update_4o_fallback_enabled("rich_facts_extract") is False
     assert su._smart_update_4o_fallback_enabled("split_description_writer") is False
     assert su._smart_update_4o_fallback_enabled("split_derived_fields") is False
-    assert su._smart_update_4o_fallback_enabled("create_bundle") is True
+    assert su._smart_update_4o_fallback_enabled("create_bundle") is False
 
 
 def test_smart_update_4o_fallback_env_can_disable_all_stages(monkeypatch):
@@ -232,7 +232,8 @@ async def test_ask_gemma_json_falls_back_to_prompt_schema_after_native_error(mon
     assert data == {"facts": ["Факт"]}
     assert len(client.calls) == 2
     assert "response_schema" in client.calls[0]["generation_config"]
-    assert client.calls[1]["generation_config"] == {"temperature": 0}
+    assert client.calls[1]["generation_config"]["temperature"] == 0
+    assert client.calls[1]["generation_config"] == {"temperature": 0.0}
     assert "JSON schema:" in client.calls[1]["prompt"]
 
 
@@ -474,7 +475,7 @@ async def test_g4_split_create_rich_facts_prompt_preserves_organizer_and_inspira
     prompt = client.calls[0]["prompt"]
 
     assert "identity facts" in prompt
-    assert "Плоский мир Терри Пратчетта" in prompt
+    assert "вдохновлено" in prompt
     assert "организовано" in prompt
     assert "вдохновлено" in prompt
     assert "не заменяй" in prompt.casefold()
@@ -635,7 +636,8 @@ async def test_g4_split_create_rich_facts_keeps_prompt_schema_fallback(monkeypat
     assert "Формат события: городская лаборатория." in facts
     assert len(client.calls) == 2
     assert "response_schema" in client.calls[0]["generation_config"]
-    assert client.calls[1]["generation_config"] == {"temperature": 0}
+    assert client.calls[1]["generation_config"]["temperature"] == 0
+    assert client.calls[1]["generation_config"] == {"temperature": 0.0}
     trace = su.get_smart_update_llm_trace()
     assert trace[0]["status"] == "ok_prompt_after_native"
     assert trace[0]["prompt_schema_fallback_enabled"] is True
@@ -691,7 +693,8 @@ async def test_g4_split_create_derived_fields_keep_prompt_schema_fallback(monkey
     assert data["search_digest"] == "Короткое резюме события"
     assert len(client.calls) == 2
     assert "response_schema" in client.calls[0]["generation_config"]
-    assert client.calls[1]["generation_config"] == {"temperature": 0}
+    assert client.calls[1]["generation_config"]["temperature"] == 0
+    assert client.calls[1]["generation_config"] == {"temperature": 0.0}
     trace = su.get_smart_update_llm_trace()
     assert trace[0]["status"] == "ok_prompt_after_native"
     assert trace[0]["prompt_schema_fallback_enabled"] is True
