@@ -22,8 +22,14 @@
 - Final-dist Playwright at `1536×864` and `1440×900`: zero console errors; decoded pinned image top-safe; continuous exact ratio; Split exact half width; low-resolution remainder `0`; duplicate-only rails absent; real rail `124.78px` high with aspect buckets; OCR companion poster `276.47×388.8` / `259.19×392`; companion gallery requested/active/source `1/1/0`; rail gallery requested/active/source `3/3/2`; per-row related-card heights normalized.
 - Photo Editorial order is rail `1` then CTA `2`; OCR Editorial order is CTA `1`, companion `2`, rail `3`.
 - At `390×844`, the desktop lab root computes to `display:none`, has a zero rectangle and horizontal overflow is `0`.
-- Public preview, public Playwright and final Gemini browser acceptance remain the deployment closure steps.
+- Public overview plus all nine direct scenario routes return HTTP `200`; the public CSS contains the enlarged OCR companion contract.
+- Public Playwright repeated the two desktop viewports and all interactions with `passed=true`, `failures=[]`, decoded media and zero console/page errors. The relevant HTML/CSS/JS/assets were uploaded; the idempotent stable-ICS mirror tail was interrupted only after acceptance because the previous v8 deploy had already completed all `410` stable ICS objects and this follow-up changed no event/ICS data.
+- Antigravity Gemini 3.1 Pro (High) inspected the public Playwright captures/metrics, rated all six main routes `PASS`, ranked Hybrid over Ambient over Cover, found no material blocker and returned **SHIP**.
 
-## L04 closure review — running
+## L04 closure review — completed
 
 Checklist reviewer: `019f5bf5-9b01-7973-b957-e198dc67228d` (`Meitner`).
+
+- Final re-audit found R01–R11 fully implemented and publicly accepted; its only R12 finding was stale closure bookkeeping, corrected in the lane map, integration report and canonical document.
+- Reviewer additionally noticed that the equal-ratio Continuous frame was visually no-crop but computed `object-fit:cover` because an older high-specificity selector won the cascade. The final selector now explicitly wins with computed `object-fit:contain`; the repeated full local Playwright gate passes at both viewports.
+- Remaining notes are production-promotion boundaries, not noindex-preview blockers: reconcile current `origin/main`, replace lab duplicate mappings with canonical media identity, and run production accessibility/performance/mobile regression coverage.

@@ -92,7 +92,7 @@ lanes:
       - .env
     expected_output: Clean committed and pushed v8 branch plus public preview evidence.
     verification_scope: full_local
-    status: in_progress
+    status: completed
   - id: L04-closure-review
     role: merge_reviewer
     requirement_ids: []
@@ -106,4 +106,4 @@ lanes:
     forbidden_files: ['*']
     expected_output: Closure matrix with pass/fail evidence and unresolved risks.
     verification_scope: full_local
-    status: running
+    status: completed
