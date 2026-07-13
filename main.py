@@ -14487,11 +14487,35 @@ async def _recover_managed_vk_live_url(
     if event_id <= 0:
         return False
     async with db.get_session() as session:
+        from models import EventSource
+
         stored = await session.get(Event, event_id)
         if stored is None or not _event_has_managed_vk_post(stored):
             return False
         stored.source_vk_post_url = live_url
         session.add(stored)
+        source_rows = list(
+            (
+                await session.execute(
+                    select(EventSource).where(
+                        EventSource.event_id == event_id,
+                        EventSource.source_url.in_([current_url, live_url]),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        has_live_source = any(row.source_url == live_url for row in source_rows)
+        for source_row in source_rows:
+            if source_row.source_url != current_url:
+                continue
+            if has_live_source:
+                await session.delete(source_row)
+            else:
+                source_row.source_url = live_url
+                session.add(source_row)
+                has_live_source = True
         await session.commit()
     ev.source_vk_post_url = live_url
     logging.warning(

@@ -50,7 +50,8 @@ bounded recent managed-wall window and accepts a replacement id only for one
 unique item whose generated title and date header both match exactly. Zero or
 multiple matches fail closed; semantic/vector similarity is deliberately not
 used for this transport-identity repair. The recovered live URL is persisted
-before the worker can publish again.
+on both the canonical event and its managed `event_source` row before the
+worker can publish again.
 Existence is not sufficient when canonical `photo_urls` are non-empty: a stored
 text-only live/postponed item is treated as an incomplete projection and is
 edited with media rather than skipped by the content-hash fast path.

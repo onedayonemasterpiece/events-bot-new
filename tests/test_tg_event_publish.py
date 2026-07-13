@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 import main
-from models import PromoActivity, PromoCampaign, PromoTarget
+from models import EventSource, PromoActivity, PromoCampaign, PromoTarget
 from promo import PROMO_SURFACE_TG_BUTTON_HIGHLIGHT, PROMO_TG_BUTTON_HIGHLIGHT_PROFILE
 
 
@@ -1492,6 +1492,14 @@ async def test_recover_managed_vk_live_url_persists_unique_title_date_match(
         await session.commit()
         await session.refresh(event)
         event_id = int(event.id)
+        session.add(
+            EventSource(
+                event_id=event_id,
+                source_type="vk",
+                source_url="https://vk.com/wall-231920894_7266",
+            )
+        )
+        await session.commit()
 
     async def fake_state(ev):
         return False, False
@@ -1507,7 +1515,15 @@ async def test_recover_managed_vk_live_url_persists_unique_title_date_match(
     assert event.source_vk_post_url == "https://vk.com/wall-231920894_7269"
     async with db.get_session() as session:
         saved = await session.get(main.Event, event_id)
+        source_urls = list(
+            (
+                await session.execute(
+                    main.select(EventSource.source_url).where(EventSource.event_id == event_id)
+                )
+            ).scalars()
+        )
     assert saved.source_vk_post_url == "https://vk.com/wall-231920894_7269"
+    assert source_urls == ["https://vk.com/wall-231920894_7269"]
     await db.close()
 
 
