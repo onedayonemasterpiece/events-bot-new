@@ -43,6 +43,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 10. **Media completeness was not part of publication idempotency.** Multi-event VK intake dropped ambiguous/shared roundup posters; a later popular-review path rehydrated `event.photo_urls` but neither materialized raw VK CDN links durably nor rearmed Telegram/VK publication. Separately, VK hash/existence fast paths accepted text-only managed posts even when canonical media existed.
 11. **Opening and exhibition range were forced into one occurrence.** The anchor-role repair correctly noticed that `16:00` was an opening-only time, but the single-candidate contract had no explicit split rule. Event `6661` was consequently collapsed to the closing date instead of retaining the active 4–31 July exhibition (and, at initial future import time, a separate 4 July 16:00 opening occurrence).
 12. **VK could change a postponed id at the live transition.** Editing a post close to its publish slot could return/persist the old postponed id while VK exposed the public item under a new wall id. Exact-id and postponed lookups then both missed it, so an otherwise idempotent retry could create another post. Three repaired projections (`6661`, `6843`, `6846`) exposed this transition shape; their live ids were reconciled to `7269`, `7267`, `7268`.
+13. **A projection hook competed for the scarce Lite lane on every retry.** `TG_EVENT_REWRITE_MODEL` defaulted to Gemini Lite and ran once per Telegram publication attempt, including old media jobs already at attempt 14. Runtime evidence at 10:04 showed the shared provider returning `429` on its 15-request minute quota while the internal lane had already reserved calls for several consecutive retries. Changing only the requested default to Gemma was insufficient: the global provider chain still retried Gemma three times and then fell through to Lite. This was not a bounded Smart Update semantic contract.
 
 ## Contributing Factors
 
@@ -104,9 +105,10 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 - [ ] distinguish legacy-debt repairs from rows created after each prevention SHA in monitoring metrics.
 - [x] delete the replay-created postponed duplicate `wall-231920894_7265`, restore event `6857` to `wall-231920894_7250`, and make postponed lookup use the correct authenticated collection;
 - [x] immediately stop the unbounded Lite route in production and retain Gemini Lite only for bounded facts/writer/grounding stages;
-- [ ] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API (VK complete; Telegram throttled catch-up is still running);
+- [x] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API;
 - [x] repair event `6661` to the active exhibition range on canonical/public surfaces (do not create a new historical opening row after the opening has passed);
 - [x] reconcile changed postponed-to-live VK ids and add unique exact title+date live-id recovery before republish;
+- [x] remove per-publication/retry Telegram hook rewriting from the shared Lite lane; keep Gemma plus canonical grounded fallback;
 
 ## Follow-up Actions
 
@@ -116,11 +118,12 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 ## Release And Closure Evidence
 
-- deployed SHA before final live-id guard: `4f378510` (`origin/main`), including `533db6fa` quota/media prevention, `8fd50472` Smart Update prevention and the earlier bounded logging/retention commits
-- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update), `1633` (VK postponed idempotency/E2E acceptance), `1635` (quota/media prevention) and `1636` (durable VK media materialization)
-- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch). The broad VK test files also expose 13 pre-existing mock-signature failures for newer location-marker/reservation kwargs; those are test-debt, not accepted as a pass.
-- post-deploy verification: `/healthz ready=true`, disk `408 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
+- deployed SHA: `c9e11dbb` (`origin/main`), including `533db6fa` quota/media prevention, `1b1364c8` exact live-id recovery, `cb22ff3d` managed source-ledger reconciliation, `0a96da95` partial-media repair, `0e9dbb12` hook default isolation and `c9e11dbb` strict no-Lite fallback
+- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update), `1633` (VK postponed idempotency/E2E acceptance), `1635`/`1636` (quota/media), `1637`/`1638` (live-id + source ledger), `1639` (partial late media), `1640` (Telegram hook default) and `1641` (one-attempt/no-Lite hook chain)
+- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; Telegram hook quota isolation `3 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch). The broad VK test files also expose 13 pre-existing mock-signature failures for newer location-marker/reservation kwargs; those are test-debt, not accepted as a pass.
+- post-deploy verification: `/healthz ready=true`, disk `406 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
 - quota containment: Fly release after the operator escalation has effective `SMART_UPDATE_FORCE_STAGED_GEMINI=0`, `SMART_UPDATE_G4_SPLIT_CREATE=1`, `/healthz ready=true`. Day-of-request accounting showed 74 Smart Update provider calls before containment (37 Gemma, 37 Lite); the old exact live two-event replay accounted for 20 Lite calls. Recent completed production days created 19–42 rows (856/30 days), before merge-only updates; therefore 10/event had no safe headroom. The post-fix replay of the same source (`ops_run=3684`) used **5 Lite + 14 Gemma calls for two event updates**: Lite was limited to 2/3 bounded occurrence/fact-writer contracts per event while core match/merge/coverage/derived work remained on Gemma, a 75% reduction in Lite load. Vector sync `ops_run=3685/3686` then completed both document kinds with two changed embeddings per run and no call-cap omissions.
+- shared-lane containment: the same log audit found `tg_event_publish` spending one additional Lite request on every publication/retry; at 10:04 the provider enforced its 15-RPM project quota while old jobs were already on attempt 14. The final media catch-up then proved release `1640` still inherited the global fallback chain: three thought-only Gemma attempts consumed one Lite request. Release `1641` limits this hook to one Gemma attempt and an empty model chain. A live failure-path smoke (`request_uid=df1e9e11-1477-4c55-a852-fa097ba1d18a`) recorded one Gemma reservation, one thought-only error, no retry/model-fallback/Lite reservation, and successful canonical fallback text.
 
 ## 2026-07-13 media surface audit
 
@@ -140,9 +143,22 @@ rehydration materializes managed URLs and rearms ordinary public projections;
 VK existence/hash idempotency requires an actual photo attachment whenever
 canonical `photo_urls` are non-empty. All eight target VK projections now have
 photo attachments; the source rows were reconciled to live ids where VK changed
-them during postponed publication. Telegram replacements remain intentionally
-serialized by the normal ten-minute public-send gate and are a closure gate
-above rather than being bypassed in an incident script.
+them during postponed publication. Telegram replacements were intentionally
+serialized by the normal ten-minute public-send gate rather than bypassed in an
+incident script. Catch-up completed at message ids `2319`, `2321`–`2327`;
+Telethon verified photo media on all eight replacement captions, including the
+two-photo album for event `6850` at `2327`.
+
+The final live-wall crawl also found two unreferenced text-only transition
+duplicates: `7255` beside canonical photo post `7268` (event `6846`) and `7257`
+beside canonical photo post `7262` (event `6851`). Both duplicates were deleted;
+event/source/outbox state for `6851` was reconciled from stale `7244` to `7262`.
+Production regression events then exercised the prevention itself: `6802`
+recovered `6924→6994`, persisted the live id and gained a photo; `6732` recovered
+`6502→6648`, updated the managed source ledger and gained two photos. The first
+`6732` pass exposed a partial-upload branch that preserved an empty attachment
+set; that branch now attaches the successfully uploaded subset to text-only
+posts while retaining already-present media on an illustrated post.
 
 ## 2026-07-13 complete future audit
 
