@@ -5859,19 +5859,14 @@ def build_tg_event_announcement(
         time_part = ""
     lines.append(html.escape(f"📅 {day}{(' ' + time_part) if time_part else ''}"))
 
-    loc_parts: list[str] = []
-    loc = (event.location_name or "").strip()
+    loc = _compose_event_location(
+        event.location_name,
+        event.location_address,
+        event.city,
+        city_hashtag=True,
+    )
     if loc:
-        loc_parts.append(loc)
-    addr = event.location_address
-    if addr and event.city:
-        addr = strip_city_from_address(addr, event.city)
-    if addr:
-        loc_parts.append(addr)
-    if event.city:
-        loc_parts.append(_tg_event_city_hashtag(event.city) or event.city)
-    if loc_parts:
-        lines.append("📍 " + html.escape(", ".join(loc_parts)))
+        lines.append("📍 " + html.escape(loc))
 
     if event.pushkin_card:
         lines.append("✅ Пушкинская карта")
@@ -6596,15 +6591,14 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
         time_part = ""
     lines.append(f"\U0001f4c5 {day}{(' ' + time_part) if time_part else ''}")
 
-    loc = event.location_name
-    addr = event.location_address
-    if addr and event.city:
-        addr = strip_city_from_address(addr, event.city)
-    if addr:
-        loc += f", {addr}"
-    if event.city:
-        loc += f", #{event.city}"
-    lines.append(f"\U0001f4cd {loc}")
+    loc = _compose_event_location(
+        event.location_name,
+        event.location_address,
+        event.city,
+        city_hashtag=True,
+    )
+    if loc:
+        lines.append(f"\U0001f4cd {loc}")
 
     if event.pushkin_card:
         lines.append("\u2705 Пушкинская карта")

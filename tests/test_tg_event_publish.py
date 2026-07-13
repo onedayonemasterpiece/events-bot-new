@@ -120,6 +120,19 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert "Подписаться" not in text
 
 
+def test_build_tg_event_announcement_does_not_repeat_city_as_venue() -> None:
+    event = _event(
+        location_name="Янтарный",
+        location_address=None,
+        city="Янтарный",
+    )
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert "📍 Янтарный" in text
+    assert "📍 Янтарный, #Янтарный" not in text
+
+
 def test_tg_event_hashtag_line_drops_long_title_like_festival_slug():
     event = _event(
         festival="По одёжке встречают: Народный костюм, традиции и смыслы",

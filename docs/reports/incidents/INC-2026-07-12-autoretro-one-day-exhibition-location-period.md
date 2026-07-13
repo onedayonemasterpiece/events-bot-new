@@ -184,6 +184,9 @@ The audit repair queue was also applied:
 - [x] Add exact Autoretro recurrence and genuine unrelated-venue negative
   controls; no new per-event LLM stage or deterministic venue inference was
   introduced.
+- [x] Reuse the canonical location composer in Telegram and managed VK public
+  headers so a city-level fallback renders once (`Янтарный`), without the
+  redundant `Янтарный, #Янтарный` projection.
 
 ## Follow-up Actions
 
