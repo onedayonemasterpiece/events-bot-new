@@ -210,8 +210,9 @@ Gemini-confirmed row can fail its source fingerprint check merely because a
 live progress overlay contains zero counters.
 
 CandidateReport also reconciles source locality from the durable candidate
-ledger before image/publication handoff. Seven strict dual-accepted KO rows
-spread over at least 42 days are treated as persistent regional-author evidence, not as a
+ledger before image/publication handoff. This durable-ledger lane treats seven
+strict dual-accepted KO rows spread over at least 42 days as persistent
+regional-author evidence, not as a
 single visitor's trip burst. The source and its unsent candidate projections
 are routed to the local-region audit lane unless an authoritative
 `confirmed_external` evidence record explicitly overrides that inference.
@@ -221,6 +222,9 @@ row spanned 49 days). Candidate-ledger repairs carry explicit run lineage and
 are mandatory in the bounded source-queue handoff even when that source was
 not selected for the current history batch. Gemini's
 post-level approval can never override this source-level terminal decision.
+The broader recent-history source classifier keeps the more conservative
+eight-post threshold; the seven-post boundary is limited to already
+dual-accepted durable KO evidence.
 
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the

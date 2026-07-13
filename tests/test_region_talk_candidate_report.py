@@ -3094,6 +3094,18 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(profile["source_repeated_ko_posts"], 8)
         self.assertEqual(profile["source_repeated_ko_span_days"], 49.0)
 
+        seven_sample_rows = sampled[:7]
+        seven_profile = mod.classify_source_profile(
+            {
+                "platform": "vk",
+                "canonical_source_key": "vk:generic-photo-diary-seven",
+                "canonical_url": "https://vk.com/generic_photo_diary_seven",
+                "source_title": "Красивые места и прогулки",
+            },
+            seven_sample_rows,
+        )
+        self.assertEqual(seven_profile["source_geo_class"], "unknown")
+
     def test_candidate_ledger_repairs_zero_ko_source_and_routes_persistent_creator_local(self) -> None:
         mod = load_module()
         start = datetime(2026, 5, 17, tzinfo=timezone.utc)

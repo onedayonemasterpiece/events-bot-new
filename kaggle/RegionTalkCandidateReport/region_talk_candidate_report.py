@@ -92,7 +92,8 @@ LOCAL_REGION_RATIO_MIN_POSTS = 30
 LOCAL_REGION_RATIO_MIN_KO_POSTS = 10
 LOCAL_REGION_RATIO_MIN_KO_RATIO = 0.35
 LOCAL_REGION_RATIO_MIN_CANDIDATE_RATIO = 0.55
-SOURCE_PROFILE_REPEATED_KO_MIN_POSTS = 7
+SOURCE_PROFILE_REPEATED_KO_MIN_POSTS = 8
+SOURCE_LEDGER_REPEATED_KO_MIN_POSTS = 7
 SOURCE_PROFILE_REPEATED_KO_MIN_RATIO = 0.60
 SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS = 42
 LOCAL_INSTITUTION_PROFILE_MIN_POSTS = 8
@@ -5850,7 +5851,11 @@ def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: 
     }
 
 
-def repeated_ko_over_time_source_evidence(sampled: list[dict[str, Any]]) -> dict[str, Any]:
+def repeated_ko_over_time_source_evidence(
+    sampled: list[dict[str, Any]],
+    *,
+    min_posts: int = SOURCE_PROFILE_REPEATED_KO_MIN_POSTS,
+) -> dict[str, Any]:
     """Build conservative source-local evidence from repeated dated KO posts.
 
     A short trip series may contain many consecutive Kaliningrad posts, so the
@@ -5878,8 +5883,8 @@ def repeated_ko_over_time_source_evidence(sampled: list[dict[str, Any]]) -> dict
     ko_ratio = ko_count / max(1, sample_count)
     span_days = (ko_dates[-1] - ko_dates[0]).total_seconds() / 86400 if len(ko_dates) >= 2 else 0.0
     confirmed = bool(
-        ko_count >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
-        and len(ko_dates) >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+        ko_count >= min_posts
+        and len(ko_dates) >= min_posts
         and ko_ratio >= SOURCE_PROFILE_REPEATED_KO_MIN_RATIO
         and span_days >= SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS
     )
@@ -5925,10 +5930,15 @@ def reconcile_source_profile_locality(srow: dict[str, Any], sampled: list[dict[s
         durable_span_days = float(srow.get("source_repeated_ko_span_days") or 0)
     except Exception:
         durable_span_days = 0.0
+    durable_min_posts = (
+        SOURCE_LEDGER_REPEATED_KO_MIN_POSTS
+        if durable_repeated_status == "persistent_ko_creator_over_time"
+        else SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+    )
     if (
         durable_repeated_status in {"confirmed_local_over_time", "persistent_ko_creator_over_time"}
-        and durable_ko_posts >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
-        and durable_dated_posts >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+        and durable_ko_posts >= durable_min_posts
+        and durable_dated_posts >= durable_min_posts
         and durable_span_days >= SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS
     ):
         repeated.update({
@@ -6149,7 +6159,10 @@ def reconcile_persistent_ko_source_evidence(
         item["candidate_posts_found"] = max(old_candidate, ko_count)
         if count_stats and (int(item["ko_posts_found"]) != old_ko or int(item["candidate_posts_found"]) != old_candidate):
             stats["source_counter_repairs"] += 1
-        repeated = repeated_ko_over_time_source_evidence(rows)
+        repeated = repeated_ko_over_time_source_evidence(
+            rows,
+            min_posts=SOURCE_LEDGER_REPEATED_KO_MIN_POSTS,
+        )
         item.update(repeated)
         if repeated.get("source_repeated_ko_evidence_status") != "confirmed_local_over_time":
             mark_reconciled_if_changed()
