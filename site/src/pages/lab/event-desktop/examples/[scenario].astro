@@ -18,13 +18,14 @@ type Scenario = {
   editorialRail?: boolean;
   autoRotate?: boolean;
   ocrSafeCover?: boolean;
+  ocrSourceIndexes?: number[];
 };
 
 const scenarios: Scenario[] = [
-  { slug: 'editorial-photo', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialRail: true, autoRotate: false },
+  { slug: 'editorial-photo', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4] },
   { slug: 'editorial-ocr', eventId: 4671, candidate: 'editorial', mediaPolicy: 'ocr', heroImageIndex: 3, heroWidth: 2560, heroHeight: 1709, editorialRail: true, autoRotate: false },
   { slug: 'split-photo', eventId: 6472, candidate: 'split', mediaPolicy: 'non-ocr' },
-  { slug: 'split-ocr', eventId: 5783, candidate: 'split', mediaPolicy: 'ocr' },
+  { slug: 'split-ocr', eventId: 5783, candidate: 'split', mediaPolicy: 'ocr', ocrSourceIndexes: [2] },
   { slug: 'gallery-photo', eventId: 5259, candidate: 'gallery', mediaPolicy: 'non-ocr', transport: true },
   { slug: 'gallery-ocr', eventId: 6510, candidate: 'gallery', mediaPolicy: 'ocr', transport: true },
   { slug: 'reading-photo', eventId: 5658, candidate: 'reading', mediaPolicy: 'non-ocr', editorialRail: true },
@@ -72,5 +73,6 @@ const description = event.meta_description || event.summary || event.title;
     editorialRail={scenario.editorialRail}
     autoRotate={scenario.autoRotate}
     ocrSafeCover={scenario.ocrSafeCover}
+    ocrSourceIndexes={scenario.ocrSourceIndexes}
   />
 </EventLayout>

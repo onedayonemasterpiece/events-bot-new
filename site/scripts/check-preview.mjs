@@ -228,8 +228,19 @@ for (const marker of [
   '--ocr-media-width:clamp(380px,45vw,620px)',
   'min-height:max(var(--stage-height),calc(var(--ocr-media-width) / var(--image-ratio)))',
   'grid-template-columns:minmax(440px,48%) minmax(0,1fr)',
-  'Math.sqrt(Math.min(...ratios) * Math.max(...ratios))',
-  'poster-contain-fallback',
+  'Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios))',
+  'data-lab-media-kind',
+  'document-minimax-contained',
+  'visual-squareish',
+  'data-hero-rail-more',
+  'data-remaining-count',
+  'forcedOcrSourceIndexes',
+  'amplitude = 64',
+  'height:calc(100% + 160px)',
+  'position:sticky; top:calc(73px + .75rem)',
+  'box-shadow:0 -.75rem 0 var(--clean-paper)',
+  'bottom:100%; height:.85rem; background:var(--clean-paper)',
+  'linear-gradient(135deg,#e4ddd2,#d4c7b9)',
   'prefers-reduced-motion:reduce',
 ]) {
   if (!desktopCleanSource.includes(marker)) throw new Error(`Desktop clean source misses geometry/motion contract: ${marker}`);
@@ -628,7 +639,7 @@ const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
 const preserveContainRules = css.match(/[^}]*event-card__media-shell--preserve[^{}]*\{[^}]*object-fit:\s*contain[^}]*\}/giu) || [];
-if (preserveContainRules.some((rule) => !rule.includes('desktop-clean-related__grid') || !rule.includes('poster-contain-fallback'))) throw new Error('Production OCR-safe card media must not use contain over a fixed frame');
+if (preserveContainRules.some((rule) => !rule.includes('desktop-clean-related__grid') || (!rule.includes('poster-contain-fallback') && !rule.includes('data-lab-media-kind')))) throw new Error('Production OCR-safe card media must not use contain over a fixed frame');
 if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
