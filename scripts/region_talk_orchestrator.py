@@ -824,6 +824,39 @@ def _ko_candidate_source_keys(rows: Iterable[dict[str, Any]]) -> set[str]:
 
 def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
+    # ``source_queue_item`` is the canonical durable source verdict and is
+    # passed first.  Later ``source_status_item`` / ``online_source_item`` rows
+    # are deliberately sparse execution overlays.  A historical online row can
+    # therefore still say ``processed_found_ko_candidate`` + ``unknown`` after
+    # the canonical queue has terminally classified the same source as local or
+    # spam.  Such an overlay may add counters/fetch details, but it must never
+    # resurrect the source into the external publication funnel.
+    terminal_classification_fields = {
+        "source_queue_status",
+        "source_scope",
+        "source_geo_class",
+        "source_topic_class",
+        "source_quick_class",
+        "source_surface_filter_version",
+        "source_surface_filter_reason",
+        "source_local_hits",
+        "source_spam_hits",
+        "source_spam_hashtags",
+        "monitoring_exclusion_reason",
+        "source_locality_reconciliation_status",
+        "source_locality_reconciliation_reason",
+        "source_locality_surface_class",
+        "source_locality_class",
+        "source_repeated_ko_evidence_status",
+        "source_repeated_ko_sampled_posts",
+        "source_repeated_ko_posts",
+        "source_repeated_ko_dated_posts",
+        "source_repeated_ko_ratio",
+        "source_repeated_ko_span_days",
+        "source_repeated_ko_oldest_date",
+        "source_repeated_ko_newest_date",
+        "next_action",
+    }
     for rows in row_lists:
         for row in rows:
             if not isinstance(row, dict):
@@ -839,11 +872,15 @@ def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "actual_images_scored_count",
                 "low_actual_image_count",
             }
+            current_is_terminal = _vector_source_terminal_excluded(current)
+            incoming_is_terminal = _vector_source_terminal_excluded(row)
             for k, v in row.items():
                 if v in (None, ""):
                     continue
                 if k in numeric_max_fields:
                     current[k] = max(_safe_int(current.get(k)), _safe_int(v))
+                elif current_is_terminal and not incoming_is_terminal and k in terminal_classification_fields:
+                    continue
                 else:
                     current[k] = v
             merged[key] = current

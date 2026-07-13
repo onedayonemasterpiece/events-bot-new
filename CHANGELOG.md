@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk orchestrator source reconstruction so sparse historical status/online overlays cannot erase a canonical terminal local/spam verdict. This removes phantom Gemini-finalizer work for already tombstoned local-source media while retaining monotonic scan counters and fetch diagnostics.
 - Fixed the live `vk:krasivo_s_evgo` locality reconciliation boundary and durability gap: the observed seven dual-accepted KO posts across 49 days now classify the source as local, unresolved `confirmed_external` research evidence can no longer overrule persistent-local evidence, and off-batch candidate-ledger repairs outrank routine scan rollups in the bounded YDB source-queue handoff.
 - Fixed Region Talk notification so its small delivery limit no longer truncates the YDB publication-ledger scan and silently misses a confirmed candidate ordered after older tombstones.
 - Fixed Region Talk finalizer cost/idempotency around provider failures: it now requires the official `google-genai` SDK before reserving product budget, never replays completed error/rate-limit payloads as final answers, and excludes monotonic source scan counters from paid Gemini request identity while still invalidating on material source-class changes.

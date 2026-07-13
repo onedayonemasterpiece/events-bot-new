@@ -514,6 +514,61 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(rows[0]["ko_posts_found"], 2)
         self.assertEqual(rows[0]["fetch_status"], "ok")
 
+    def test_source_merge_does_not_resurrect_terminal_local_queue_from_online_overlay(self) -> None:
+        mod = load_module()
+        rows = mod._merge_source_rows(
+            [{
+                "canonical_source_key": "telegram:goneagain_russia",
+                "source_queue_status": "rejected_local_region_source",
+                "source_scope": "local_region",
+                "source_geo_class": "kaliningrad_local",
+                "source_quick_class": "local_region_source",
+                "source_locality_reconciliation_status": "local_repeated_ko_over_time",
+                "next_action": "do_not_rescan_rejected_source",
+                "posts_scanned": 13,
+                "ko_posts_found": 9,
+            }],
+            [{
+                "canonical_source_key": "telegram:goneagain_russia",
+                "source_queue_status": "processed_found_ko_candidate",
+                "source_scope": "unknown",
+                "source_geo_class": "unknown",
+                "source_quick_class": "candidate_keep",
+                "fetch_status": "ok",
+                "posts_scanned": 7,
+                "ko_posts_found": 2,
+            }],
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["source_queue_status"], "rejected_local_region_source")
+        self.assertEqual(rows[0]["source_scope"], "local_region")
+        self.assertEqual(rows[0]["source_geo_class"], "kaliningrad_local")
+        self.assertEqual(rows[0]["source_quick_class"], "local_region_source")
+        self.assertEqual(rows[0]["source_locality_reconciliation_status"], "local_repeated_ko_over_time")
+        self.assertEqual(rows[0]["next_action"], "do_not_rescan_rejected_source")
+        self.assertEqual(rows[0]["posts_scanned"], 13)
+        self.assertEqual(rows[0]["ko_posts_found"], 9)
+        self.assertEqual(rows[0]["fetch_status"], "ok")
+
+        images = [{
+            "post_url": "https://t.me/goneagain_russia/7599",
+            "source_url": "https://t.me/goneagain_russia",
+            "canonical_source_key": "telegram:goneagain_russia",
+            "image_queue_status": "actual_scored",
+            "image_model_input_type": "actual_image",
+        }]
+        publications = [{
+            "post_url": "https://t.me/goneagain_russia/7599",
+            "canonical_source_key": "telegram:goneagain_russia",
+            "publication_status": "eligibility_reject_tombstone",
+            "publication_candidate_status": "tombstoned_reject",
+            "publication_eligibility_verdict": "reject",
+            "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            "authoritative_source_fingerprint": "older-counter-fingerprint",
+        }]
+        metrics = mod._publication_handoff_metrics(images, publications, rows)
+        self.assertEqual(metrics["finalizer_pending_url_total"], 0)
+
     def test_numeric_aggregate_helpers_for_history_depth(self) -> None:
         mod = load_module()
         rows = [{"age": "1.5"}, {"age": 2}, {"age": ""}]

@@ -236,6 +236,14 @@ erase seven durable KO posts across six weeks. This distinction is required
 for rows such as `vk:krasivo_s_evgo`, which entered the research table before
 the author's locality was established.
 
+The orchestrator reconstructs one live source view from the canonical
+`source_queue_item` plus sparse status/online overlays.  Terminal local/spam
+classification fields from the canonical queue are monotonic during this
+merge: later historical overlays may add larger scan counters or current fetch
+diagnostics, but cannot replace `rejected_local_region_source` / local-region
+scope with `processed_found_ko_candidate` / `unknown`.  This prevents already
+tombstoned media from reappearing as a phantom Gemini-finalizer backlog.
+
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
 expected numeric peer and fail closed on a wrong target; the prepared chat is
