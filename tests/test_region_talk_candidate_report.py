@@ -5589,6 +5589,55 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 else:
                     os.environ[name] = value
 
+    def test_image_queue_changed_only_writer_skips_stale_historical_snapshot_rows(self) -> None:
+        mod = load_module()
+        run_now = "2026-07-13T08:46:00+00:00"
+        rows = [
+            {
+                "image_queue_id": "imgq_old_in_progress",
+                "post_url": "https://t.me/blog/1",
+                "added_at": "2026-07-13T07:00:00+00:00",
+                "image_queue_status": "image_analysis_in_progress",
+                "status_changed_this_run": "false",
+            },
+            {
+                "image_queue_id": "imgq_new",
+                "post_url": "https://t.me/blog/2",
+                "added_at": run_now,
+                "image_queue_status": "needs_actual_image_fetch",
+                "status_changed_this_run": "false",
+            },
+            {
+                "image_queue_id": "imgq_reactivated",
+                "post_url": "https://t.me/blog/3",
+                "added_at": "2026-07-12T07:00:00+00:00",
+                "image_queue_status": "needs_actual_image_fetch",
+                "status_changed_this_run": "true",
+            },
+        ]
+        selected = mod.image_queue_rows_for_ydb_write(rows, run_now=run_now)
+        self.assertEqual(
+            [row["image_queue_id"] for row in selected],
+            ["imgq_new", "imgq_reactivated"],
+        )
+
+    def test_image_queue_final_handoff_does_not_rewrite_rows_written_early(self) -> None:
+        mod = load_module()
+        run_now = "2026-07-13T08:46:00+00:00"
+        row = {
+            "image_queue_id": "imgq_new",
+            "post_url": "https://t.me/blog/2",
+            "added_at": run_now,
+            "image_queue_status": "needs_actual_image_fetch",
+            "status_changed_this_run": "false",
+        }
+        selected = mod.image_queue_rows_for_ydb_write(
+            [row],
+            run_now=run_now,
+            exclude_keys={"imgq_new"},
+        )
+        self.assertEqual(selected, [])
+
     def test_publication_online_writer_uses_normalized_url_primary_key(self) -> None:
         mod = load_module()
         captured: dict[str, object] = {}

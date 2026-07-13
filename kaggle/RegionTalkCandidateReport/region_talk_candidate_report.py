@@ -2662,10 +2662,20 @@ def write_region_talk_business_heartbeat(payload: dict[str, Any]) -> None:
         "REGION_TALK_YDB_HEARTBEAT_REQUEST_TIMEOUT_SECONDS",
         getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 5),
     )
+    heartbeat_max_retries = getenv_int("REGION_TALK_YDB_HEARTBEAT_MAX_RETRIES", 0)
+    # A terminal heartbeat is the durable completion contract consumed by the
+    # orchestrator.  Parallel Candidate/BGE/Image writes can briefly exhaust a
+    # small YDB serverless partition even though the report itself completed.
+    # Retry terminal events a little more patiently instead of leaving the
+    # latest heartbeat at ``report_write_started`` forever.  Ordinary progress
+    # events keep the lower configured retry budget and therefore cannot add
+    # sustained write pressure.
+    if event_name in {"report_written", "run_failed", "run_error", "failed"}:
+        heartbeat_max_retries = max(3, heartbeat_max_retries)
     retry_settings = ydb_retry_settings(
         ydb,
         timeout_seconds=timeout_seconds,
-        max_retries=getenv_int("REGION_TALK_YDB_HEARTBEAT_MAX_RETRIES", 0),
+        max_retries=heartbeat_max_retries,
     )
 
     def op(session: Any) -> None:
@@ -3001,6 +3011,44 @@ def candidate_memory_rows_for_ydb_write(
             changed.append((priority, row_index, row))
             continue
     return [row for _priority, _row_index, row in sorted(changed, key=lambda item: (item[0], item[1]))]
+
+
+def image_queue_row_key(row: dict[str, Any]) -> str:
+    return str(row.get("image_queue_id") or row.get("post_url") or "").strip()
+
+
+def image_queue_rows_for_ydb_write(
+    rows: list[dict[str, Any]],
+    *,
+    run_now: str,
+    exclude_keys: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return only CandidateReport-owned image queue transitions.
+
+    ImageDiagnostic and CandidateReport intentionally run in parallel.  The
+    former owns leases and actual-image scores, while the latter owns creation
+    and publication-eligibility transitions.  Re-upserting every historical
+    image row from CandidateReport's start-of-run snapshot can overwrite a
+    score written seconds earlier by ImageDiagnostic.  Only new rows and rows
+    whose queue status changed in this CandidateReport run are therefore safe
+    to hand off.  Rows already written by the early handoff are excluded from
+    the final handoff so a newly created row cannot be scored between two stale
+    CandidateReport writes and then be downgraded.
+    """
+    if not getenv_bool("REGION_TALK_YDB_IMAGE_QUEUE_WRITE_CHANGED_ONLY", True):
+        excluded = exclude_keys or set()
+        return [row for row in rows if image_queue_row_key(row) not in excluded]
+    excluded = exclude_keys or set()
+    selected: list[dict[str, Any]] = []
+    for row in rows:
+        key = image_queue_row_key(row)
+        if not key or key in excluded:
+            continue
+        is_new = str(row.get("added_at") or "") == str(run_now or "")
+        status_changed = str(row.get("status_changed_this_run") or "").strip().lower() == "true"
+        if is_new or status_changed:
+            selected.append(row)
+    return selected
 
 
 def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: str, id_fields: list[str], fields: list[str], run_id: str, stage: str) -> int:
@@ -13316,6 +13364,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         posts_for_scoring = posts_for_scoring[:posts_scored_count]
         precomputed_embedding_scores = precomputed_embedding_scores[:posts_scored_count]
 
+    early_image_queue_keys_written: set[str] = set()
     if getenv_bool("REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY", True):
         report_event(
             "early_image_queue_handoff_started",
@@ -13328,7 +13377,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         early_image_queue_rows, _early_image_top_rows, early_image_queue_metrics = build_image_candidate_queue(
             previous_state, new_posts, [], media_rows, run_id, run_now,
         )
-        early_image_rows_to_write = [r for r in early_image_queue_rows if isinstance(r, dict) and not r.get("_sheet_note")]
+        early_image_rows_to_write = image_queue_rows_for_ydb_write(
+            [r for r in early_image_queue_rows if isinstance(r, dict) and not r.get("_sheet_note")],
+            run_now=run_now,
+        )
         early_image_items_written = write_region_talk_online_queue_items(
             early_image_rows_to_write,
             kind="image_queue_item",
@@ -13337,6 +13389,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             run_id=run_id,
             stage="early_image_queue_handoff",
         )
+        early_image_queue_keys_written = {
+            image_queue_row_key(row) for row in early_image_rows_to_write if image_queue_row_key(row)
+        }
         write_region_talk_live_cursor("image", {
             "run_id": run_id,
             "queue_name": "image_candidate_queue",
@@ -13864,8 +13919,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
             previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
         )
-        online_image_queue_items_written = write_region_talk_online_queue_items(
+        online_image_queue_rows = image_queue_rows_for_ydb_write(
             [r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+            run_now=run_now,
+            exclude_keys=early_image_queue_keys_written,
+        )
+        online_image_queue_items_written = write_region_talk_online_queue_items(
+            online_image_queue_rows,
             kind="image_queue_item",
             id_fields=["image_queue_id", "post_url"],
             fields=IMAGE_QUEUE_STATE_FIELDS,

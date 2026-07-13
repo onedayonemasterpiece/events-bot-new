@@ -97,6 +97,22 @@ Qwen 4B/8B out of the CPU plan and kept EmbeddingGemma-300M as research-only.
 
 Uses a separate Telegram auth role when it has to download Telegram media. Target role: `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`. It may run in parallel with CandidateReport only when it does not share the same Telegram auth key.
 
+Parallel Telegram sessions are necessary but not sufficient: the two notebooks
+also share `image_queue_item` in YDB. Writer ownership is therefore explicit:
+
+- CandidateReport owns creation of a new image row and text/source/publication-
+  eligibility status transitions;
+- ImageDiagnostic owns leases, media-download fields and actual visual scores;
+- CandidateReport writes only new/status-changed image rows and writes each
+  such row at most once per run. It must never replay every historical image
+  row from its start-of-run snapshot, because that can overwrite an
+  `actual_scored` result written concurrently by ImageDiagnostic.
+
+The final `report_written` business heartbeat is also a durable orchestration
+contract. It receives a bounded extra retry budget on transient YDB
+`RESOURCE_EXHAUSTED`; ordinary progress heartbeats retain the small default
+budget so observability recovery does not create sustained write pressure.
+
 Responsibilities stay unchanged:
 
 - lease `image_queue_item` rows that already passed text/source/vector gates;
