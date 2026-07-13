@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Production observability / bounded runtime logs (INC-2026-07-13)**: re-enable the persistent Fly runtime mirror with 8 MiB size rotation, a 64 MiB hard log budget, up to 48-hour rotated retention and a 256 MiB volume free-space floor, so daily incident/E2E evidence remains available without allowing logs to exhaust SQLite storage.
 - **Production event quality repair (INC-2026-07-12)**: repaired the Autoretro 18 July Янтарный event across canonical DB, Telegram, VK, Telegraph and both vector documents; source-adjudicated and repaired/tombstoned the additional duplicate, period, location, roundup-bleed and non-event rows found by the complete `326/326` current/future audit; vector catch-up `ops_run=3655` completed with no call-cap remainder.
 - **Email / live Postbox worker release**: deployed Fly worker/monitor release `1627` from `origin/main@ca2b24f9`, provisioned isolated sender and DLQ-reader credentials in deletion-protected Lockbox/Fly secrets, proved one real worker request through authenticated `Send`/`Delivery`, exercised alerting plus five-item DLQ replay/cleanup and an automatic YDS trigger probe, and retained all database send switches off pending event producers and cross-provider placement warm-up.
 - **Email / Yandex authorized key compatibility**: accept the current `yc iam key create` key-ID warning preamble only when it matches the JSON key id, strip it before PS256 signing, and reject mismatched preambles.
