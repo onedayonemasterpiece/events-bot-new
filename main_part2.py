@@ -6238,7 +6238,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_channel_medallion_editor_v8",
+                "tg_event_format=free_hashtag_premium_editor_channel_medallion_editor_v9_city_location_dedupe",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),

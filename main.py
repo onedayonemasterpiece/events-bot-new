@@ -14585,7 +14585,7 @@ def _event_start_has_passed_for_publication(
     return start_dt <= local_now
 
 
-VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v2"
+VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v3-city-location-dedupe"
 
 
 def _tg_event_publish_window_hours() -> tuple[int, int]:
