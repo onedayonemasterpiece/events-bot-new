@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Site identity / VK 152-FZ storage correction**: moved the post-release VK challenge, verified identity, purpose consent and eligible friend-edge source of truth from Supabase to an isolated Managed Service for YDB personal-data contour in `ru-central1`; Supabase/YDB analytics receive no stable VK/friend subject, and the docs now distinguish Russian data-localization infrastructure from complete legal/organizational compliance.
 - **Guide media volume retention (INC-2026-07-13)**: add DB-aware pre/post-import pruning for old unprotected guide media and generated carousel caches, preserve current/future/recent/current-digest assets, heal only proven stale aligned JSON references, and enforce bounded production targets without following symlinks or deleting outside the store.
 - **Guide monitoring recovery-store budget (INC-2026-07-13)**: tighten the existing persistent Kaggle-results guard in production to two runs, 128 MiB and a 350 MiB volume free-space target, while always excluding the bundle currently being persisted.
 - **Production observability / bounded runtime logs (INC-2026-07-13)**: re-enable the persistent Fly runtime mirror with 8 MiB size rotation, a 64 MiB hard log budget, up to 48-hour rotated retention and a 256 MiB volume free-space floor, so daily incident/E2E evidence remains available without allowing logs to exhaust SQLite storage. `/healthz` now exposes volume usage and fails at the same 256 MiB critical floor.
@@ -24,7 +25,7 @@
 
 ### Added
 
-- **Site identity / post-release VK message linking**: specified a six-digit, short-lived VK direct-message challenge that links the authenticated Supabase user to the verified sender VK ID, transiently intersects public friends only against double-opted-in linked users, persists no full friend list/message body, and requires an honest personal-data policy, separate VK-link consent and user agreement before canary activation.
+- **Site identity / post-release VK message linking**: specified a six-digit, short-lived VK direct-message challenge that links the authenticated site subject to the verified sender VK ID in the isolated YDB personal-data contour, transiently intersects public friends only against double-opted-in linked users, persists no full friend list/message body, and requires an honest personal-data policy, separate VK-link consent and user agreement before canary activation.
 
 - **Email infrastructure / inbound core**: added isolated Yandex Mail Trigger intake and YMQ delivery Cloud Function contracts with keyed idempotency, private normalized-envelope pointers, HMAC-authenticated minimized backend receipts, PII-safe logging, retry/DLQ fixtures, and a conservative plan-by-default desired-state reconciler that never touches Fly or mutates secretful/live traffic resources implicitly.
 - **Email infrastructure / retained mailbox adapter**: added a public-invoker but HMAC-authenticated Yandex receipt adapter, service-only idempotent Supabase receipt RPC, and read-only SpaceWeb IMAP collector that bootstraps from the current UID, uses `BODY.PEEK[]`, advances its private cursor only after storage/queue success, and leaves the mailbox item present and unread.

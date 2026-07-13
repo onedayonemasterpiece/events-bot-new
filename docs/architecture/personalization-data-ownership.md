@@ -1,6 +1,6 @@
 # Personalization data ownership
 
-> Status: **accepted release architecture** (2026-07-11).
+> Status: **accepted release architecture with a post-release VK/152-FZ correction** (2026-07-13). Existing Supabase account/email storage still requires a separate localization/data-flow audit before it may be represented as 152-FZ compliant.
 > Scope: static-site identity, personalization, favorites/calendar, email recommendations, transactional event email, analytics and comment-feedback sidecars.
 
 ## Decision
@@ -10,6 +10,7 @@ The project has one current user/profile and email control-plane system of recor
 - **Fly SQLite `/data/db.sqlite`** owns canonical events, sources, lifecycle, publication state, event-bound scheduler/outbox state and static-page generation metadata tied to an event.
 - **Personalization Supabase/Postgres** owns identity, consent, durable user/profile state, favorites/follows, subscriptions, email send-control state, active recommendation issues and personal-page token metadata.
 - **YDB** owns service-only high-volume/history/analytics projections and the independent event-comment-feedback sidecar. YDB is **not** a second user-profile or email-control-plane owner.
+- **An isolated YDB personal-data contour in `ru-central1`** owns the post-release VK proof-of-control link, VK-purpose consent and eligible friend edges. It is separated by database/namespace and IAM from YDB analytics; this is a narrow compliance vault, not a competing personalization profile.
 - **Object Storage/CDN** owns generated HTML/JSON/media artifacts. It does not own consent, profile, subscription, send state or token validity.
 
 Email providers are transports and ingress surfaces, not additional systems of record:
@@ -27,8 +28,8 @@ This decision follows the implementation already present in `origin/main`: Supab
 |---|---|---|
 | Yandex identity and sessions | Supabase Auth | Opaque/HMAC subject id in YDB analytics |
 | Verified email-only identity | Supabase Auth email OTP/magic-link | Keyed email HMAC in YDB analytics |
-| Post-release verified VK identity/link consent | Private Supabase schema | Dedicated keyed VK subject HMAC only in an approved service bridge; no raw VK ID in YDB |
-| Post-release eligible VK friend edges | Private Supabase schema | Aggregate friend-signal metrics only; never the full public friend list |
+| Post-release verified VK identity/link consent | Isolated YDB personal-data contour (`ru-central1`) | De-identified aggregate only; no stable subject/VK key in Supabase/YDB analytics |
+| Post-release eligible VK friend edges | Isolated YDB personal-data contour (`ru-central1`) | Aggregate friend-signal metric through an authorized same-origin service; never the full public friend list |
 | Anonymous device/identity link | Private Supabase schema after server materialization | HMAC subject id in YDB |
 | Current anonymous/auth profile | Private Supabase schema | Sanitized immutable Kaggle export; de-identified YDB analytics |
 | Browser `localStorage` profile | Local cache/offline projection, never SOR | None |
@@ -52,6 +53,8 @@ This decision follows the implementation already present in `origin/main`: Supab
 ## Profile materialization rule
 
 Before consent/server sync, browser state is device-local and not a durable identity claim. After materialization, the current durable profile belongs to Supabase. The project must not maintain competing `visitor_profile_snapshot`/`profile_revision` rows in Supabase and `pa_profile_snapshot` rows in YDB with unclear precedence.
+
+The post-release VK privacy vault is a scoped exception: it stores only VK subject proof, VK consent, eligible friend edges and their lifecycle in YDB. It does not copy or independently rank the current personalization profile. A separate 152-FZ audit must decide whether the broader Supabase Auth/email/profile flow may remain as implemented or must migrate to a Russian primary store; the VK feature cannot be used to claim that unresolved broader flow is compliant.
 
 ## Required flows
 
@@ -107,13 +110,13 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 
 ## Forbidden designs
 
-- YDB-owned user profile alongside a Supabase-owned profile.
+- A competing YDB personalization profile alongside a Supabase-owned profile. The isolated purpose-specific VK personal-data vault is allowed and must not contain ranking/profile snapshots.
 - Parallel YDB and Supabase subscription/suppression/outbox systems.
 - Cross-database transactions in the send-critical path.
 - YDB analytics used for send eligibility.
 - Browser direct writes to YDB or raw/private Supabase profile tables.
 - Plain email, bearer tokens or raw profile vectors in YDB analytics.
-- Raw VK IDs, VK message bodies, complete public friend lists or friendship edges in YDB analytics, core Fly SQLite or static artifacts.
+- Raw VK IDs, VK message bodies, complete public friend lists or friendship edges in Supabase, YDB analytics, core Fly SQLite or static artifacts. The encrypted/HMAC VK identity and eligible pair edge may exist only in the isolated YDB personal-data contour.
 - Plain/unsalted SHA for email or bearer-token lookup.
 - `anon_id` alone treated as proof of profile ownership.
 - Full canonical event copies in Supabase/YDB.
@@ -130,9 +133,10 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Authorization never trusts `user_metadata`.
 - Emails are stored only where sending requires them; lookup uses keyed HMAC.
 - Bearer tokens have at least 128 bits of entropy and are stored only as keyed hashes; page, click, unsubscribe and feedback tokens are separate.
-- YDB is service-credential-only, with TTL and minimized HMAC subject identifiers.
+- Both YDB analytics and the YDB personal-data contour are service-credential-only, but use separate least-privilege service accounts/namespaces; the browser never receives YDB credentials.
 - Account/profile deletion emits a purge request for eligible YDB raw/history state; irreversibly anonymized aggregates follow a documented retention policy.
 - VK message-link challenges use a keyed code hash, short TTL and atomic one-time consume; the full VK friend list is intersected transiently and is not persisted.
+- The existing `ru-central1` YDB resource does not by itself establish compliance: privacy tables require an isolated IAM/KMS/audit/retention boundary, and broader Supabase PII flows remain a release/legal audit item.
 - Recommendation admission and every send claim fail closed above the 200-user launch ceiling.
 - Provider credentials and mailbox passwords stay in the approved secret manager and never enter Git, artifacts or application logs.
 

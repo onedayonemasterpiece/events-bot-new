@@ -408,6 +408,7 @@ features:
     status: partial_design
     docs: docs/features/site-user-identity/README.md
     vk_message_link_postrelease: docs/features/site-user-identity/vk-message-link.md
+    vk_personal_data_store: ydb_ru_central1_isolated
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_search: docs/features/unsigned-personalization/authorized-event-search.md
     related_favorites: docs/features/event-favorites-calendar/README.md

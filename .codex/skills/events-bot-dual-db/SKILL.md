@@ -1,13 +1,13 @@
 ---
 name: events-bot-dual-db
-description: Use for events-bot-new database, Supabase, PostgreSQL, static-site personalization, analytics, storage, or production DB tasks where Codex must route between the existing Fly SQLite core database and the separate Supabase/Postgres personalization database. Triggers include Supabase access, PERSONALIZATION_SUPABASE_* env vars, PERSONALIZATION_DIRECT_CONNECTION_STRING, pg_database_size, anonymous personalization, static-site dynamic feeds, RLS, Data API, Fly /data/db.sqlite health, or questions about which database should store a feature.
+description: Use for events-bot-new database, Supabase, PostgreSQL, YDB personal-data/analytics contours, static-site personalization, analytics, storage, or production DB tasks where Codex must route between Fly SQLite, Supabase/Postgres and YDB. Triggers include Supabase access, PERSONALIZATION_SUPABASE_* env vars, YDB, VK identity/friend graphs, 152-FZ localization, static-site dynamic feeds, RLS, Data API, Fly /data/db.sqlite health, or questions about which database should store a feature.
 ---
 
 # Events Bot Dual DB
 
 ## Boundary
 
-This repository now has **two different databases for different jobs**:
+This repository now has **three storage contours for different jobs**:
 
 1. **Core production DB** — Fly.io SQLite at `/data/db.sqlite`.
    - Owns bot state, canonical events, source imports, Telegram/VK publication state, guide tables, job queues, pages/Telegraph metadata, and operational scheduler state.
@@ -24,6 +24,12 @@ This repository now has **two different databases for different jobs**:
    - A YDB outage must not block a user action, profile update or send-control transaction.
 
 Never silently move core bot data into the personalization DB, personalization state into Fly SQLite, or create a competing YDB user profile/email control plane. Canonical ADR: `docs/architecture/personalization-data-ownership.md`.
+
+### 152-FZ / post-release VK override
+
+The post-release VK message-link/friend-graph feature is an explicit exception to the generic Supabase route. VK identity, VK-link consent, verification challenges, eligible friend edges, withdrawal and deletion audit belong to an isolated Managed Service for YDB personal-data contour in Yandex Cloud `ru-central1`. This vault is not a competing personalization/ranking profile. Supabase may receive only genuinely de-identified aggregates without a stable site/VK/friend subject key.
+
+Do not mix this privacy contour with ordinary YDB analytics tables. Require a separate database or permission-isolated namespace, least-privilege service accounts, no browser credentials, encryption/key policy, Audit Trails and approved retention. YDB infrastructure supports the chosen Russian localization design but is not by itself proof of complete 152-FZ compliance. Existing Supabase Auth/email/profile flows need their own localization/data-flow decision.
 
 ## Required startup checks
 
@@ -74,11 +80,20 @@ Store in **personalization Supabase/Postgres**:
 - short/mid/long-term interest profiles;
 - recommendation cache and ranking inputs/outputs;
 - browser-facing RPCs/views for dynamic event feed personalization;
-- E2E personalization personas and debug snapshots.
-- Yandex/verified-email identity-linked profile state, consent evidence and merge audit;
+- E2E personalization personas and debug snapshots;
+- Yandex/verified-email identity-linked profile state, consent evidence and merge audit, subject to the separate 152-FZ localization/data-flow decision;
 - durable favorites/event follows/calendar-save state;
 - recommendation/transactional subscriptions, suppressions, outbox/send guards and delivery control evidence;
 - personal recommendation issue/card rows and personal-page token metadata.
+
+Store in the isolated **YDB personal-data contour** for the post-release VK feature:
+
+- verification challenge hashes/state;
+- encrypted/HMAC VK subject link and purpose-specific consent evidence;
+- eligible double-opt-in friend edges and their TTL/withdrawal state;
+- unlink/deletion audit required by the approved retention policy.
+
+Never put the VK link/graph, raw message bodies or the complete public friend list in Supabase, core SQLite, YDB analytics or static artifacts.
 
 Store in **YDB sidecars/analytics**:
 

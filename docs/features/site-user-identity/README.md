@@ -61,4 +61,4 @@ See [personalization data ownership](../../architecture/personalization-data-own
 
 See the umbrella [global product decisions](../static-personal-announcements/global-product-decisions.md), especially verified-email UX and profile-link consent.
 
-The VK message-link extension additionally requires approved retention, a dedicated VK inbox, a purpose-specific VK-link consent, a personal-data processing policy and a user agreement. The live identity/friend graph is pseudonymous personal data, not anonymous data.
+The VK message-link extension additionally requires approved retention, a dedicated VK inbox, a purpose-specific VK-link consent, a personal-data processing policy and a user agreement. Its live identity/friend graph is pseudonymous personal data, not anonymous data, and its canonical store is an isolated Managed Service for YDB personal-data contour in `ru-central1`, not Supabase.

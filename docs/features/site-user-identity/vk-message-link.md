@@ -10,7 +10,7 @@ The proposed two-channel flow is technically workable:
 2. the backend creates a short-lived one-time challenge;
 3. the page shows a numeric code and a link to a dedicated VK inbox;
 4. the user sends the exact code from their VK account;
-5. a server-side VK message worker obtains the sender's VK ID, atomically consumes the challenge and links that VK identity to the current Supabase user;
+5. a server-side VK message worker obtains the sender's VK ID, atomically consumes the challenge and links that VK identity to the current site subject in the Russian YDB personal-data contour;
 6. the worker calls `friends.get` for the verified sender and intersects the currently public friend IDs with other opted-in linked identities;
 7. the site may use only the permitted intersection to build friend-interest signals.
 
@@ -63,7 +63,7 @@ Before activation the chosen inbox must pass:
 
 ### 1. Start
 
-`POST /api/v1/identity/vk-link/challenges` requires a valid Supabase JWT, current VK-link consent and accepted current legal-document versions. The backend returns:
+`POST /api/v1/identity/vk-link/challenges` requires a valid site session, current VK-link consent and accepted current legal-document versions. The same-origin backend, not the browser, resolves that session to the YDB-owned subject. A Supabase JWT may be accepted only as a transitional authentication assertion after the separate 152-FZ localization review proves that the account-identity flow is permissible; it is not the VK personal-data store. The backend returns:
 
 ```json
 {
@@ -87,7 +87,7 @@ The Fly worker receives a new incoming VK message and:
 5. stores minimal deduplication metadata, not the message body;
 6. exposes success to the site status endpoint.
 
-There must be a unique one-to-one relation between an active VK identity and an active Supabase identity. Relinking an identity owned by another account requires an explicit recovery/manual-review flow; it must never silently merge accounts.
+There must be a unique one-to-one relation between an active VK identity and an active YDB-owned site subject. Relinking an identity owned by another account requires an explicit recovery/manual-review flow; it must never silently merge accounts.
 
 ### 3. Fetch friends
 
@@ -123,18 +123,22 @@ Downloading an ICS file is not equivalent to `пойдёт` and must not be desc
 
 ## Data ownership and minimization
 
-Supabase/Postgres remains the system of record for site identity, consent, link state and eligible friend edges. Fly hosts the background VK receiver but must not place this identity graph in core SQLite. KGD80 may project social actions through a service-only, purpose-limited bridge using a dedicated keyed external-identity identifier; it must not share raw email/FIO or its existing registration blind-index secret.
+For this feature, **Managed Service for YDB in Yandex Cloud `ru-central1` is the system of record for the personal-data contour**: site subject mapping, VK identity, purpose consent, challenge state, eligible friend edges, withdrawal and deletion audit. Fly may host the background VK receiver, but it is a stateless/service layer and must not place this graph in core SQLite. Supabase/Postgres may receive only genuinely de-identified aggregate event metrics with no stable site/VK/friend subject key; it must not own or mirror the VK link or graph.
+
+KGD80 may project social actions through a service-only, purpose-limited YDB bridge using a new dedicated keyed external-identity identifier. It must not share raw email/FIO or reuse the registration `PII_FINGERPRINT_SECRET` as the cross-system key.
+
+A read-only infrastructure check on 2026-07-13 found an existing running serverless YDB database in `ru-central1`, but its current tables belong to acquisition/Region Talk state and contain no site-identity/VK privacy schema. Its existence proves the Russian YDB contour is available; it does **not** authorize mixing personal data into the existing analytics tables. Before implementation, create an isolated personal-data database or a separately permissioned namespace with dedicated service accounts, KMS/secret policy, Audit Trails and approved retention.
 
 Minimum private entities:
 
 ```text
 vk_link_challenge(
-  id, user_id, code_hmac, state, expires_at,
+  id, subject_id, code_hmac, state, expires_at,
   failed_attempts, created_at, consumed_at
 )
 
 user_external_identity(
-  user_id, provider='vk', provider_subject_ciphertext,
+  subject_id, provider='vk', provider_subject_ciphertext,
   provider_subject_hmac, linked_at, last_verified_at,
   consent_version, sharing_state, revoked_at
 )
@@ -148,8 +152,8 @@ vk_friend_edge(
 Security boundary:
 
 - provider subject lookup uses a dedicated keyed HMAC; reversible VK ID, if operationally required, is encrypted server-side;
-- browser roles cannot read raw identity links, challenges or edges;
-- RLS/RPC returns only the current viewer's allowed aggregate signal;
+- the browser has no direct YDB credentials and cannot read raw identity links, challenges or edges;
+- a same-origin service authorizes the session and returns only the current viewer's allowed aggregate signal;
 - challenge/message content and complete public friend lists are not retained;
 - consent evidence is versioned and auditable;
 - unlink/account deletion removes the active identity and incident edges and creates the required downstream purge request;
@@ -157,7 +161,9 @@ Security boundary:
 
 ## Legal-document requirement
 
-The product cannot truthfully claim “personal data is not stored, only anonymized information”. A VK ID linked to a Supabase user and a recoverable friendship edge identify or indirectly identify people. Encryption, HMAC and pseudonymous internal IDs reduce exposure but do not make the live link anonymous. The legal review must use the current definitions and purpose/minimization/consent requirements of Federal Law No. 152-FZ rather than treating technical pseudonymization as irreversible anonymization: <https://ips.pravo.gov.ru/api/ips/legislation/document?baseid=None&hash=98490812b3409e2a8d78a11ca9010f434ea3d9250a11dbbdb78690cd5551bdd6>.
+The product cannot truthfully claim “personal data is not stored, only anonymized information”. A VK ID linked to a site subject and a recoverable friendship edge identify or indirectly identify people. Encryption, HMAC and pseudonymous internal IDs reduce exposure but do not make the live link anonymous. The legal review must use the current definitions and purpose/minimization/consent requirements of Federal Law No. 152-FZ rather than treating technical pseudonymization as irreversible anonymization: <https://ips.pravo.gov.ru/api/ips/legislation/document?baseid=None&hash=98490812b3409e2a8d78a11ca9010f434ea3d9250a11dbbdb78690cd5551bdd6>.
+
+YDB is the correct localization/technical protection contour, but using YDB alone does not complete compliance. The operator still owns purpose/legal-basis documentation, notification and organizational measures, access model, threat/protection model, processor terms, retention, incident response, subject requests and any cross-border transfer assessment. Yandex Cloud documents that its platform supports 152-FZ/УЗ-1 controls and that the customer remains the personal-data operator commissioning processing: <https://yandex.cloud/ru/docs/security/conform>.
 
 Before the first canary the static site needs three separate surfaces:
 
@@ -186,7 +192,7 @@ Draft legal texts must be reviewed by the product owner/legal reviewer. The curr
 
 1. Approve policy, VK consent, user agreement, retention and product copy.
 2. Choose a dedicated VK inbox and complete read-only plus one controlled live-message canary.
-3. Add Supabase private schema, RLS, atomic challenge RPCs and deletion flow.
+3. Provision an isolated YDB personal-data namespace, IAM/KMS/audit boundary, atomic challenge queries and deletion flow.
 4. Add Fly VK Long Poll/Callback receiver with idempotency and abuse controls.
 5. Launch account-only VK linking without friends or event signals.
 6. Add transient `friends.get` intersection and aggregate-only double-opt-in signals.
@@ -197,13 +203,13 @@ Draft legal texts must be reviewed by the product owner/legal reviewer. The curr
 
 - no three-digit production challenges;
 - no raw message-body or full friend-list retention;
-- no personal data in core Fly SQLite, logs, YDB analytics or static artifacts;
+- personal data exists only in the isolated YDB personal-data contour; none in Supabase, core Fly SQLite, logs, YDB analytics tables or static artifacts;
 - strict one-to-one/recovery semantics and concurrent-consume test;
-- RLS negative tests for challenges, identities and edges;
+- IAM/service-authorization negative tests for challenges, identities and edges, including proof that browsers cannot connect directly to YDB;
 - public/private/deleted VK profile cases tested;
 - unlink, consent withdrawal and account deletion verified end to end;
 - aggregate friend signal requires both permission flags;
-- static-site fallback works during VK/Supabase outage;
+- static-site fallback works during VK/YDB/auth-service outage;
 - legal-document versions and retention are owner-approved;
 - production remains disabled until a canary report is attached.
 
