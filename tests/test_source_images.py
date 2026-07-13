@@ -374,6 +374,29 @@ async def test_build_source_page_content_summary_block_free(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_one_day_exhibition_summary_does_not_render_open_ended_period(monkeypatch):
+    summary = main.SourcePageEventSummary(
+        date="2026-07-18",
+        end_date=None,
+        event_type="выставка",
+        location_name="День города в Янтарном",
+        city="Янтарный",
+    )
+    html, _, _ = await main.build_source_page_content(
+        "Выставка ретроавтомобилей",
+        "Однодневная уличная выставка.",
+        None,
+        None,
+        None,
+        None,
+        None,
+        event_summary=summary,
+    )
+    assert "🗓 18 июля" in html
+    assert "🗓 с 18 июля" not in html
+
+
+@pytest.mark.asyncio
 async def test_build_source_page_content_summary_block_missing_fields():
     summary = main.SourcePageEventSummary()
     html, _, _ = await main.build_source_page_content(
