@@ -1,10 +1,10 @@
 # INC-2026-07-13 Telegram media downgrade and non-CDN posters
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Smart Update event media / `@kldevents` / static site
 Opened: 2026-07-13
-Closed: —
+Closed: 2026-07-13
 Owners: events-bot production
 Related incidents: `INC-2026-06-09-event-media-duplicates`, `INC-2026-05-11-poster-near-duplicate-and-tram-photo-dropped`, `INC-2026-05-05-event-source-media-aggregation-gap`, `INC-2026-06-07-tg-event-publishing-media-calendar-dedup`
 Related docs: `docs/features/event-media/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/tg-publishing/README.md`, `docs/features/static-site-pages/README.md`
@@ -49,7 +49,10 @@ source-CDN hosts rather than the required `static.kenigevents.ru` CDN.
   refs, zero non-CDN projections after a bounded retry.
 - 2026-07-13 — fresh static preview built from the final snapshot: `267` public
   events and `14,656` rendered HTML image references, all on
-  `static.kenigevents.ru`.
+  `static.kenigevents.ru`. The prefix was published and the public root landing
+  was promoted to it.
+- 2026-07-13 18:55 UTC — final hardening SHA `215c7c36` deployed as Fly
+  release `v1660`; health ready, DB ok, machine check passing.
 
 ## Root Cause
 
@@ -177,16 +180,21 @@ Public surface evidence:
 - [x] Backup and repair all six affected events through the media gate.
 - [x] Backfill the complete canonical active non-silent current/ongoing inventory.
 - [x] Verify Telegram, Telegraph and managed VK public surfaces.
-- [ ] Publish/promote and verify the fresh strict-CDN static preview.
-- [ ] Deploy the final static consumer/retry hardening SHA from `origin/main`.
+- [x] Publish/promote and verify the fresh strict-CDN static preview.
+- [x] Deploy the final static consumer/retry hardening SHA from `origin/main`.
 
 ## Release And Closure Evidence
 
 - core deployed SHAs: `2c6ba2fe`, `33b20342` (both in `origin/main`);
-- final hardening SHA: pending;
-- Fly release: pending final hardening deploy;
+- final hardening SHA: `215c7c36`, reachable from `origin/main`;
+- Fly release: `v1660`, machine `2860d45f312248`, check `1/1` passing;
+- post-deploy health: `ok=true`, `ready=true`, DB `ok`, issues `[]`;
 - targeted regression suite: `58 passed` plus incident source replay `1 passed`;
-- public/static post-deploy verification: pending final promotion.
+- post-deploy production audit: `272` eligible / `672` approved / `672`
+  projections, zero non-CDN refs;
+- public static preview: <https://kenigevents.ru/preview-20260713t183933-4dc287e3/__preview/>;
+  all `288/288` HTML pages returned 200 and all `14,656` image refs used
+  `static.kenigevents.ru`; root landing points to this build.
 
 ## Prevention
 
