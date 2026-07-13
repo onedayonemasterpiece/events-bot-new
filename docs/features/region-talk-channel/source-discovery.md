@@ -249,18 +249,19 @@ be `pending_scan` is retained separately as
 `confirmed_external_blogger_queue_pending_status_total`; it is not presented
 as the unscanned backlog.
 
-The production rollback default remains `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=legacy_v1`
-with the historical two-query pair. The bounded research mode
-`adaptive_cursor_v1` may be enabled explicitly for a controlled run. It uses a
+The orchestrated product run now defaults to
+`REGION_TALK_FAST_CHECK_QUERY_STRATEGY=adaptive_cursor_v1`; an explicit
+`legacy_v1` environment override remains the immediate rollback to the
+historical two-query pair. Adaptive mode uses a
 stable, diversity-aware place bank, persists progress on the canonical source
 row, and resumes from that cursor on a later run instead of randomly rotating
 or repeating the first terms. A first live probe is capped at five cached
 sources, ten queries per source, two returned messages per query, 5–9 second
 human-like pauses, zero username resolves and stop-on-first-hit.
-For the comparison only,
 `REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS=1` selects cached legacy
 two-query no-hits first; this directly measures whether positions 3+ add fresh
-KO URLs. It is not the long-term breadth/depth scheduling default.
+KO URLs when a dedicated continuation audit is needed. Normal breadth-first
+product runs leave it disabled.
 The probe also sets both the general and exact-link network-resolve budgets to
 zero; cached `channel_id/access_hash` rows are the only allowed Telegram entity
 path during the comparison.

@@ -1138,8 +1138,8 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         ]
         confirmed_external_priority = [
             seed for seed, due in sorted(confirmed_external_pairs, key=lambda item: (
-                source_selection_cache_bucket(item[0], previous_state),
                 bool(item[1].get("is_rescan")),
+                source_selection_cache_bucket(item[0], previous_state),
                 str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
                 item[0].canonical_url,
             ))

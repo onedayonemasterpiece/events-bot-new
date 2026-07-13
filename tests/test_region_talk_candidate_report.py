@@ -175,6 +175,42 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
         self.assertEqual({seed.platform for seed in selected[:2]}, {"telegram", "vk"})
 
+    def test_unscanned_confirmed_blogger_beats_cached_confirmed_rescan(self) -> None:
+        mod = load_module()
+        cached_rescan = self._seed(mod, "@cachedrescan", seed_id="cached_rescan")
+        fresh = self._seed(mod, "@freshblogger", seed_id="fresh_blogger")
+        queue = {}
+        for idx, seed in enumerate([cached_rescan, fresh]):
+            key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+            queue[key] = {
+                "canonical_source_key": key,
+                "platform": "telegram",
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+                "canonical_url": seed.canonical_url,
+                "source_queue_status": "processed_found_ko_candidate" if seed is cached_rescan else "pending_scan",
+                "posts_scanned": 10 if seed is cached_rescan else 0,
+                "ko_posts_found": 1 if seed is cached_rescan else 0,
+                "external_blogger_evidence_status": "confirmed_external",
+                "queue_order": idx + 1,
+            }
+        previous = {
+            "unified_source_queue_cursor_position": 0,
+            "unified_source_queue": queue,
+            "telegram_entity_cache": {
+                "telegram:username:cachedrescan": {
+                    "channel_id_private": "123",
+                    "access_hash_private": "456",
+                },
+            },
+        }
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "1",
+        }, clear=False):
+            selected = mod.selected_sources_for_run([cached_rescan, fresh], 1, previous_state=previous)
+        self.assertEqual([seed.canonical_url for seed in selected], [fresh.canonical_url])
+
     def test_source_cursor_never_regresses_when_pending_gap_is_before_previous_cursor(self) -> None:
         mod = load_module()
         seed = self._seed(mod, "@freshcursor", seed_id="seed_cursor")
