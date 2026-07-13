@@ -491,15 +491,20 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
         "лица принимается не более 4 шин."
     )
     event = _event(title="Прием шин", source_text=source)
+    clients = []
 
     class FakeGoogleAIClient:
         def __init__(self, *args, **kwargs):
-            pass
+            self.fallback_models = ["gemini-3.1-flash-lite"]
+            self.max_retries = 3
+            clients.append(self)
 
         async def generate_content_async(self, **kwargs):
             prompt = kwargs["prompt"]
             assert "Вопрос не обязателен" in prompt
             assert "какую пользу это даёт" in prompt
+            assert self.fallback_models == []
+            assert self.max_retries == 1
             return (
                 "Можно сдать до 4 чистых шин на переработку: из них сделают "
                 "резиновую крошку и другие полезные материалы.",
@@ -510,6 +515,7 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
 
     hook = await main.build_tg_event_hook_text(event, source)
 
+    assert len(clients) == 1
     assert hook.startswith("Можно сдать")
     assert "Что здесь стоит увидеть?" not in hook
 

@@ -6009,6 +6009,13 @@ async def build_tg_event_hook_text(
             consumer="tg_event_publish",
             incident_notifier=notify_llm_incident,
         )
+        # This projection has a source-grounded local fallback and may run again
+        # for every outbox retry.  Do not inherit the process-wide model chain:
+        # in production a failed Gemma hook otherwise fell through to the scarce
+        # Gemini Lite lane after three hosted attempts.  One best-effort Gemma
+        # call is enough here; publication must continue with canonical text.
+        client.fallback_models = []
+        client.max_retries = 1
         raw, _usage = await client.generate_content_async(
             model=TG_EVENT_REWRITE_MODEL,
             prompt=prompt,
