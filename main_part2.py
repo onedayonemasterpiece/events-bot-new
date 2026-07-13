@@ -5215,7 +5215,13 @@ TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
 TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
-TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
+# This projection-only hook runs once per Telegram publication attempt, including
+# retries.  Keep it on the higher-RPD Gemma lane by default; using the shared
+# Lite lane here caused retry backlogs to collide with Smart Update's bounded
+# semantic stages at the provider's minute quota.  Operators can still opt in
+# explicitly, and the existing grounded fallback keeps publication available
+# when the hosted Gemma response is unusable.
+TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemma-4-31b-it")
 TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
