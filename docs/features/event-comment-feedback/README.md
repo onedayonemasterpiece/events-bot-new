@@ -1,6 +1,6 @@
 # Сигналы обсуждения события
 
-> Canonical slug: `event-comment-feedback`. English working name: **Event Comment Feedback**. Status: **docs-first design + stale branch-only offline probe**; production YDB collection, export and Astro UI are not implemented in `origin/main`.
+> Canonical slug: `event-comment-feedback`. English working name: **Event Comment Feedback**. Status: **docs-first design + stale branch-only offline probe**; mandatory Region Talk audit/skill-first gate, production YDB collection, export and Astro UI are not implemented in `origin/main`.
 
 **Короткое название фичи:** **Сигналы обсуждения**. Оно намеренно не использует слово “отзывы”: фича показывает не оценки посетителей и не рейтинг, а агрегированные смысловые сигналы из открытых комментариев к источникам события.
 
@@ -14,6 +14,7 @@
 - [LLM verifier contract](llm-verifier-contract.md) — group-level batch verifier, cache keys, forbidden patterns.
 - [Static-site contract](static-site-contract.md) — JSON manifest, UI block, carousel, icon semantics.
 - [Probe/evaluation plan](probe-plan.md) — first offline probe and acceptance gates.
+- [Region Talk reuse audit and skill-first gate](region-talk-reuse-audit.md) — mandatory F14-0 audit, adoption matrix and reusable-skill creation before implementation.
 
 ## Product intent
 
@@ -97,6 +98,12 @@ Related docs: [`docs/features/subscriber-acquisition/requirements.md`](../subscr
 Related docs/code: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `scripts/run_static_site_builder_kaggle.py`, `kaggle/StaticSiteBuilder/static_site_builder.py`, `kaggle_registry.py`, `kaggle_status.py`.
 
 The discovery job should be a separate offline job, proposed job kind: `event_comment_feedback_discovery` (short CLI/module alias: `comment_feedback_discovery`). It should publish run/audit state through the same status-ledger style as other Kaggle jobs and feed the static-site builder by manifest artifact, not by runtime API.
+
+### Region Talk experience
+
+Region Talk is mandatory prior art, not a merge dependency. Before implementing this feature, audit its compact YDB state, queue/funnel orchestration, stable identities, pre-network dedup, vector-first/LLM-late gates, Telegram cooldown/session discipline, data minimization, compaction and delivery metrics. Classify each pattern as `reuse|adapt|reject|defer`, then create and validate the required reusable project skills.
+
+Do not copy Region Talk's source frontier, blogger/nonlocal gates, image pipeline, publication queue or generated post writer: F14 starts from current `EventSource` rows and exports only fixed-phrase aggregate feedback to static event pages. The complete pre-implementation contract is [Region Talk reuse audit and skill-first gate](region-talk-reuse-audit.md).
 
 ## External references
 
@@ -329,9 +336,8 @@ Allowed framing:
 
 ## Suggested implementation milestones
 
-### MVP-0 Documentation
+### Existing MVP-0 documentation baseline
 
-- docs only;
 - phrase bank v1;
 - YDB schema draft;
 - verifier contract;
@@ -339,8 +345,27 @@ Allowed framing:
 - probe plan;
 - architecture review checklist.
 
+This baseline is input to F14-0A and does not waive the Region Talk audit/skills gate.
+
+### F14-0A Region Talk audit and consolidation
+
+- bind current main, Region Talk and F14 probe evidence to exact SHAs;
+- inventory YDB, queue/orchestration, identity/dedup, vector/LLM, Telegram/session, privacy/retention, compaction, observability and tests;
+- produce the canonical audit report and `reuse|adapt|reject|defer` adoption matrix;
+- select clean-port behavior only; never merge/rebase a stale product branch wholesale;
+- accept the [Region Talk reuse gate](region-talk-reuse-audit.md).
+
+### F14-0B Reusable skills
+
+- create and validate `region-talk-ydb-funnel-audit`;
+- create and validate `event-comment-feedback-pipeline`;
+- add `social-comment-collection-ops` only if a real Telegram/VK spike proves repeated cross-feature work;
+- use the canonical `skill-creator` lifecycle, concise progressive disclosure, generated agent metadata, validation and fresh forward tests;
+- no F14 production implementation starts before the first two skills pass their acceptance gate.
+
 ### MVP-1 Offline probe
 
+- clean-port/reimplement only the audited behavior from `origin/agent/event-comment-feedback-kaggle-runner`; do not use that stale branch as integration base;
 - `scripts/probe_event_comment_feedback.py` with manually loaded sample comments or a limited real-comment sample;
 - vector matching in a script/notebook;
 - no public site change;
@@ -384,6 +409,9 @@ Allowed framing:
 
 ## First implementation acceptance checklist
 
+- [ ] Formal Region Talk audit/adoption matrix is accepted and exact-SHA-bound.
+- [ ] Required `region-talk-ydb-funnel-audit` and `event-comment-feedback-pipeline` skills exist and pass validation/forward tests before feature implementation.
+- [ ] No Region Talk-only frontier/image/publication/writer behavior or credential/session lane is copied into F14.
 - [ ] No new SQLite tables for comments/embeddings/matches/verifier/public feedback.
 - [ ] No public page runtime dependency on YDB/LLM/VK/TG/embedding provider.
 - [ ] No per-comment LLM architecture.

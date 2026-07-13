@@ -2,6 +2,8 @@
 
 Status: draft. First implementation script name: `scripts/probe_event_comment_feedback.py` (documented only in MVP-0; not implemented here).
 
+Prerequisite: the [Region Talk reuse audit and skill-first gate](region-talk-reuse-audit.md) is accepted. The stale F14 probe branch may supply test evidence, but it is not the integration base.
+
 ## Goal
 
 Validate whether fixed phrase-bank vector matching plus group-level verifier can produce safe, specific, useful public comment-discussion signals for static event pages.
@@ -64,13 +66,15 @@ Artifacts belong under `artifacts/codex/<run_id>/` unless a curated summary is i
 
 ## Probe stages
 
-1. **Fixture smoke**: run on hand-written comments covering every risk class, ticket conflicts, sarcasm, resale spam and practical questions.
-2. **Golden events**: choose 20–40 future events with known active TG/VK source discussions.
-3. **Vector-only audit**: disable verifier and confirm only low-risk strict phrases publish.
-4. **Verifier audit**: enable verifier for medium/high-risk groups and inspect downgrade/reject behavior.
-5. **Static export audit**: validate manifest schema and forbidden-field absence.
-6. **Human review**: manually review top N proposed items and all red/high-risk items.
-7. **Cost/cache report**: rerun unchanged evidence and require zero provider calls on cache hit.
+1. **Region Talk transfer fixtures**: adapt the accepted failure corpus for stable identity/dedup, stale overlay, cursor retry, false-green run, cooldown, vector false positive, raw-text leak and delivery reconciliation.
+2. **Fixture smoke**: run on hand-written comments covering every risk class, ticket conflicts, sarcasm, resale spam and practical questions.
+3. **Golden events**: choose 20–40 future events with known active TG/VK source discussions.
+4. **Vector-only audit**: disable verifier and confirm only low-risk strict phrases publish; compare one- vs dual-model cost/quality only if the adoption matrix marks dual-model evaluation relevant.
+5. **Verifier audit**: enable verifier for medium/high-risk groups and inspect downgrade/reject behavior.
+6. **YDB/funnel audit**: verify online row identity, compact state, terminal/retry/freshness metrics and that a heartbeat without accepted public state cannot be green.
+7. **Static export audit**: validate manifest schema, forbidden-field absence, changed-hash handoff and checked build delivery.
+8. **Human review**: manually review top N proposed items and all red/high-risk items.
+9. **Cost/cache report**: rerun unchanged evidence and require zero provider calls on cache hit.
 
 ## Manual review rubric
 

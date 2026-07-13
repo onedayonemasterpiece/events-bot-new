@@ -527,8 +527,9 @@ features:
       atomic_last_good_publish: missing_p0
 
   event_comment_feedback:
-    status: design_probe_port_required
+    status: design_region_talk_audit_and_skills_required_before_probe_port
     docs: docs/features/event-comment-feedback/README.md
+    region_talk_reuse_audit: docs/features/event-comment-feedback/region-talk-reuse-audit.md
     ydb_schema: docs/features/event-comment-feedback/ydb-schema.md
     static_site_contract: docs/features/event-comment-feedback/static-site-contract.md
     llm_verifier_contract: docs/features/event-comment-feedback/llm-verifier-contract.md
@@ -537,6 +538,16 @@ features:
     data_ownership: docs/architecture/personalization-data-ownership.md
     docs_source_branch: origin/docs/event-comment-feedback-docs
     superseded_runner_branch: agent/event-comment-feedback-kaggle-runner
+    region_talk_evidence_branch: origin/agent/region-talk/bge-m3-enrichment-test
+    capabilities:
+      region_talk_formal_audit: required_preimplementation
+      reuse_adapt_reject_defer_matrix: required_preimplementation
+      region_talk_ydb_funnel_audit_skill: planned_required
+      event_comment_feedback_pipeline_skill: planned_required
+      social_comment_collection_ops_skill: conditional_on_repeated_work
+      clean_probe_port: blocked_by_audit_and_skills
+      production_ydb_collection: missing
+      static_export_astro_ui: missing
 
   event_issue_reporting:
     status: prototype_clean_port_required

@@ -34,6 +34,7 @@
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
   - responsive navigation research/decision: `docs/features/static-site-pages/responsive-navigation.md`
   - optional transport gallery card «Как добраться»: `docs/features/event-transport/gallery-how-to-get-there-card.md`
+  - Event Comment Feedback Region Talk audit/skills gate: `docs/features/event-comment-feedback/region-talk-reuse-audit.md`
   - post-release recurring-event attendance feedback: `docs/backlog/features/post-event-attendance-feedback/README.md`
   - separate post-release static festival section: `docs/features/festivals/static-site-release.md`
   - important post-release operations control dashboard: `docs/backlog/features/operations-control-dashboard/README.md`

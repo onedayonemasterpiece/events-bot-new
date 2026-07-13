@@ -26,7 +26,7 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 | F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md), [optional «Как добраться» gallery card](../event-transport/gallery-how-to-get-there-card.md) | preliminary rail+bus slice validated in refreshed draft PR #37; KPPK/bus provider jobs, combined atomic promotion, optional gallery prototype and release-UI integration pending |
 | F12 | Calendar action backed by favorite state, with visible D-1 email-reminder status | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save/reminder UX design |
 | F13 | Catalog freshness vs canonical bot DB | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production blocked |
-| F14 | Comment-derived discussion signals | [Event comment feedback](../event-comment-feedback/README.md) | docs/probe; production missing |
+| F14 | Comment-derived discussion signals | [Event comment feedback](../event-comment-feedback/README.md), [Region Talk reuse/skills gate](../event-comment-feedback/region-talk-reuse-audit.md) | docs/stale probe evidence; formal Region Talk audit, reusable skills and production path missing |
 | F15 | Share with generated image | [Event sharing](../static-site-pages/event-sharing.md) | preview canvas; durable assets missing |
 | F16 | Correct image focus/crop | [Image framing](../static-site-pages/image-framing.md) | renderer preview; metadata producer missing |
 | F17 | Admin issue report → ArtKodex repair history | [Event issue reporting](../event-issue-reporting/README.md) | prototype branch; clean port required |
@@ -69,6 +69,7 @@ Current decisions and questions that affect several feature families live in [gl
 - Personalization remote writes remain release-gated by the [Supabase 500 MB storage/compaction contract](../../operations/personalization-storage-budget.md): compact current state, bounded evidence, Green-band launch and fail-safe shedding of disposable telemetry.
 - `Моё избранное` is a site-wide destination: after state restore its badge shows the distinct durable saved-event count only when greater than zero, and `/izbrannoe/` opens the complete lifecycle-aware saved list without embedding private data into CDN HTML.
 - KPPK rail and bus refresh may run in separate provider Kaggle notebooks, but they share one versioned schema, server-side validation/fan-in, provider last-good policy and exactly one coalesced rebuild for a changed combined manifest.
+- F14 implementation is skill-first: before porting its stale probe or writing YDB/Astro code, audit Region Talk at exact SHAs, classify patterns as `reuse|adapt|reject|defer`, consolidate only proven main-compatible contracts, and ship validated `region-talk-ydb-funnel-audit` plus `event-comment-feedback-pipeline` project skills. Region Talk source-discovery/image/publication behavior and session lanes do not transfer.
 
 ## Separate post-release releases
 
