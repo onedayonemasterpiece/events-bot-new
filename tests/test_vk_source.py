@@ -1,9 +1,29 @@
 import pytest
 from pathlib import Path
+import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
 import main
+
+
+def _expected_vk_source_hash(event, text):
+    return main.content_hash(
+        "\n".join(
+            [
+                main.VK_SOURCE_POST_FORMAT_VERSION,
+                str(event.title or ""),
+                str(event.date or ""),
+                str(event.time or ""),
+                str(event.location_name or ""),
+                str(event.location_address or ""),
+                str(event.city or ""),
+                str(event.ticket_link or ""),
+                json.dumps(list(event.photo_urls or []), ensure_ascii=False),
+                text,
+            ]
+        )
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -819,7 +839,9 @@ async def test_sync_vk_source_post_updates_attachments(monkeypatch):
 
     edited: dict[str, list[str] | None] = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["attachments"] = attachments
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
@@ -859,7 +881,9 @@ async def test_sync_vk_source_post_does_not_run_afishaengagement_shadow_on_updat
     async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
         return "ph1"
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         return None
 
     calls: list[dict[str, object]] = []
@@ -1020,7 +1044,9 @@ async def test_sync_vk_source_post_dedupes_photo_list_on_update_without_shadow(m
 
     edited: dict[str, object] = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["attachments"] = attachments
 
     calls: list[dict[str, object]] = []
@@ -1149,7 +1175,9 @@ async def test_sync_vk_source_post_resolves_stale_postponed_id(monkeypatch):
 
     edited: dict[str, str] = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["url"] = url
 
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
@@ -1191,7 +1219,9 @@ async def test_sync_vk_source_post_keeps_existing_same_id_postponed_post(monkeyp
 
     edited: dict[str, str] = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["url"] = url
 
     async def fail_post(*args, **kwargs):
@@ -1521,7 +1551,9 @@ async def test_sync_vk_source_post_does_not_preserve_old_hashtag_tail(monkeypatc
 
     edited = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["text"] = message
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
@@ -1575,9 +1607,7 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     assert calls == [("New title", "Same body")]
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
-    assert updated.vk_source_hash == main.content_hash(
-        f"{main.VK_SOURCE_POST_FORMAT_VERSION}\nNew title\nSame body"
-    )
+    assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
 
 
 @pytest.mark.asyncio
@@ -1597,10 +1627,8 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
         location_name="Place",
         city="Калининград",
         source_vk_post_url="https://vk.com/wall-231920894_2375",
-        vk_source_hash=main.content_hash(
-            f"{main.VK_SOURCE_POST_FORMAT_VERSION}\nConcert\nSame body"
-        ),
     )
+    event.vk_source_hash = _expected_vk_source_hash(event, "Same body")
     async with db.get_session() as session:
         session.add(event)
         await session.commit()
@@ -1618,7 +1646,19 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
         calls.append((ev.source_vk_post_url, text_for_vk))
         return "https://vk.com/wall-231920894_2389"
 
+    async def fake_no_postponed(**kwargs):
+        return None
+
+    async def fake_no_live(*args, **kwargs):
+        return None
+
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(
+        main, "_find_vk_postponed_wall_item_any_actor", fake_no_postponed
+    )
+    monkeypatch.setattr(
+        main, "_find_unique_live_managed_vk_item_for_event", fake_no_live
+    )
     monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
 
     await main.job_sync_vk_source_post(event_id, db, None)
@@ -1627,9 +1667,7 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
     assert updated.source_vk_post_url == "https://vk.com/wall-231920894_2389"
-    assert updated.vk_source_hash == main.content_hash(
-        f"{main.VK_SOURCE_POST_FORMAT_VERSION}\nConcert\nSame body"
-    )
+    assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
 
 
 @pytest.mark.asyncio

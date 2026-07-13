@@ -144,13 +144,15 @@ Source truth is frozen: one day `2026-07-18`, time unknown, city `Янтарны
 outdoor City Day auto exhibition; exact square/address is not source-grounded.
 The primary repair must use no end date and no invented indoor venue/address.
 
-Production event `6853` is now repaired to one day (`2026-07-18`), location
-`День города в Янтарном`, city `Янтарный`, no address/end date and an
-event-local description. The wrong Telegram album `2297–2300` was deleted and
-replaced by `https://t.me/kldevents/2301`; managed VK `7233` and the existing
-Telegraph page were edited in place. The replacement still uses prior
-Autoretro show photos as illustrations, but its caption no longer presents the
-past cars/performance as the future program.
+Production event `6853` is now repaired to one day (`2026-07-18`), honest
+city-level location `Янтарный`, no address/end date/time and an event-local
+description. The obsolete Telegram albums, including the operator-reported
+`@kenigevents/4405–4408`, were deleted. The current four-photo projections are
+`https://t.me/kldevents/2361` and forwarded
+`https://t.me/kenigevents/4418`; managed VK `7233` and the existing Telegraph
+page were edited in place. The public text states that exact place and time are
+not present in the source and does not promote recap details as the future
+program.
 
 The audit repair queue was also applied:
 
@@ -212,6 +214,41 @@ The audit repair queue was also applied:
 
 ## Release And Closure Evidence
 
+### 2026-07-13 prose-location recurrence
+
+- prevention and repair SHAs through `97b6c087` are reachable from
+  `origin/main`; the final clean-worktree Fly release is machine version `1659`,
+  image `deployment-01KXE76XX5B4A286464SSHA7XV`.
+- `/healthz` returned `ok=true`, `ready=true`, DB/scheduler/tasks all `ok`;
+  runtime file logging is enabled at `/data/runtime_logs` with 48-hour,
+  64-MiB bounded retention. The data volume had `315 MiB` free, above the
+  `256 MiB` critical threshold, and reported only the configured disk warning.
+- recurrence backup tables:
+  `codex_backup_event_20260713_autoretro_prose_location`,
+  `codex_backup_event_source_20260713_autoretro_prose_location`,
+  `codex_backup_joboutbox_20260713_autoretro_prose_location`;
+  final `PRAGMA quick_check=ok`.
+- final canonical event `6853`: `2026-07-18`, no end date/time/address,
+  `location_name=city=Янтарный`. All relevant outbox projections are `done`.
+- public verification:
+  - obsolete `@kenigevents/4405` and the matching old source album are absent;
+    current four-photo albums are `https://t.me/kldevents/2361` and
+    `https://t.me/kenigevents/4418`, both rendering only `📍 Янтарный`;
+  - `https://vk.com/wall-231920894_7233` renders `📍 Янтарный`, one canonical
+    body, no managed-body separator/duplicate and four photo attachments;
+  - `https://telegra.ph/Den-goroda-v-YAntarnom-07-12` renders `📍 Янтарный`
+    without an invented venue or range.
+- vector catch-up `ops_run=3713` completed with two provider calls/two embedding
+  writes and no cap remainder. Event `6853` has fresh 768-dimensional
+  `gemini-embedding-2` `search_v3` and `related_v1` documents; `venue_name` is
+  absent and city is `Янтарный`.
+- regression checks: exact occasion-as-venue candidate entered the existing
+  grounding boundary; an unrelated real venue remained a negative control;
+  focused Smart Update/location/TG/VK/static/vector tests passed. The final VK
+  exact-text idempotency tests passed `3/3`; after aligning older mocks and hash
+  fixtures with the current managed-post contract, the complete VK module
+  passed `48/48`.
+
 - deployed SHA: `59312251` (prevention `e95a596f` + atomic exhibition date
   renderer); both commits are ancestors of `origin/main`. Local E2E diagnostic
   hardening `130d228f` is also on `origin/main` and requires no runtime deploy.
@@ -253,10 +290,8 @@ The audit repair queue was also applied:
   immediately (`terminal_kind=authorization_denied`) instead of timing out.
   Authorization must be restored by the operator/security owner before a real
   1-row live import can close this check; no privilege was granted implicitly.
-- Production file-mirror logging remains intentionally disabled after the prior
-  Fly disk-pressure incident (`ENABLE_RUNTIME_FILE_LOGGING=0`). Current evidence
-  therefore comes from `ops_run`, DB, Telegram UI, VK API and provider logs.
-  A bounded-volume/retention design is required before re-enabling it.
+- The former production-file-log blocker is resolved: bounded logging is active
+  at `/data/runtime_logs` and was verified after the recurrence release.
 - Static-site Kaggle production handoff is disabled and no `static_site_build`
   outbox exists. The old advertised static path was 404 (not stale wrong data);
   the corrected vector card now points at the new canonical path, but publishing
