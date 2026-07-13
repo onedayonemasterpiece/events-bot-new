@@ -1631,6 +1631,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old
 
+    def test_locality_ledger_repair_wins_bounded_handoff_over_scan_rollups(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS")
+        try:
+            os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "3"
+            run_id = "locality-repair-run"
+            rows = [
+                {
+                    "canonical_source_key": f"telegram:scan{idx}",
+                    "source_url": f"https://t.me/scan{idx}",
+                    "platform": "telegram",
+                    "queue_order": idx + 1,
+                    "source_queue_status": "processed_no_ko",
+                    "last_scan_run_id": run_id,
+                }
+                for idx in range(10)
+            ]
+            rows.append({
+                "canonical_source_key": "vk:krasivo_s_evgo",
+                "source_url": "https://vk.com/krasivo_s_evgo",
+                "platform": "vk",
+                "queue_order": 9000,
+                "source_queue_status": mod.LOCAL_REGION_SOURCE_STATUS,
+                "source_scope": "local_region",
+                "source_geo_class": "kaliningrad_local",
+                "source_locality_ledger_reconciled_run_id": run_id,
+            })
+
+            handoff = mod._source_queue_handoff_rows(rows, 1, run_id)
+
+            self.assertEqual(len(handoff), 3)
+            self.assertIn("vk:krasivo_s_evgo", {row["canonical_source_key"] for row in handoff})
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old
+
     def test_confirmed_blogger_locations_lead_adaptive_queries(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")

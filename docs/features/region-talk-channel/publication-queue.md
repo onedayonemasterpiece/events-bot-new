@@ -220,7 +220,9 @@ This closes the observed `vk:krasivo_s_evgo` failure mode (22 scanned/0 KO in a
 sparse status row while seven accepted KO candidates plus one vector-rejected
 row spanned 49 days). Candidate-ledger repairs carry explicit run lineage and
 are mandatory in the bounded source-queue handoff even when that source was
-not selected for the current history batch. Gemini's
+not selected for the current history batch. A terminal locality correction
+also outranks routine current-run scan rollups when the bounded handoff is
+full. Gemini's
 post-level approval can never override this source-level terminal decision.
 The broader recent-history source classifier keeps the more conservative
 eight-post threshold; the seven-post boundary is limited to already

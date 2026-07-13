@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Fixed the live `vk:krasivo_s_evgo` locality reconciliation boundary and durability gap: the observed seven dual-accepted KO posts across 49 days now classify the source as local, and off-batch candidate-ledger repairs are explicitly retained by the bounded YDB source-queue handoff.
+- Fixed the live `vk:krasivo_s_evgo` locality reconciliation boundary and durability gap: the observed seven dual-accepted KO posts across 49 days now classify the source as local, and off-batch candidate-ledger repairs outrank routine scan rollups in the bounded YDB source-queue handoff.
 - Fixed Region Talk notification so its small delivery limit no longer truncates the YDB publication-ledger scan and silently misses a confirmed candidate ordered after older tombstones.
 - Fixed Region Talk finalizer cost/idempotency around provider failures: it now requires the official `google-genai` SDK before reserving product budget, never replays completed error/rate-limit payloads as final answers, and excludes monotonic source scan counters from paid Gemini request identity while still invalidating on material source-class changes.
 - Fixed the Region Talk long-running orchestrator so one transient YDB endpoint/session timeout no longer terminates the control loop while Kaggle notebooks keep running. Loop cycles now use three bounded exponential retries and expose successful retry evidence; auth/config/code failures remain fail-fast.

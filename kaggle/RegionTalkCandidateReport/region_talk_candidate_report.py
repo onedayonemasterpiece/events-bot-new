@@ -7652,19 +7652,22 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             return 0
         if str(row.get("admitted_run_id") or "") == run_id:
             return 0
+        # A terminal local-source correction protects the publication funnel
+        # and must not be displaced by dozens of routine scan rollups in the
+        # same bounded handoff.
+        if str(row.get("source_locality_ledger_reconciled_run_id") or "") == run_id:
+            return 0
         if str(row.get("last_fast_check_run_id") or "") == run_id:
             return 1
         if str(row.get("keyword_evidence_run_id") or "") == run_id:
             return 2
         if str(row.get("last_scan_run_id") or "") == run_id:
             return 3
-        if str(row.get("source_locality_ledger_reconciled_run_id") or "") == run_id:
-            return 4
         if str(row.get("status_changed_this_run") or "").lower() == "true":
-            return 5
+            return 4
         if str(row.get("queue_seq_repaired_this_run") or "").lower() == "true":
-            return 6
-        return 7
+            return 5
+        return 6
 
     ordered_selected = sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))
     if len(ordered_selected) <= max_rows:
