@@ -20,6 +20,12 @@ def load_module():
 
 
 class RegionTalkGoalNotifyTests(unittest.TestCase):
+    def test_delivery_batch_limit_does_not_truncate_publication_ledger_scan(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.publication_scan_limit(1), 5000)
+        self.assertEqual(mod.publication_scan_limit(20), 5000)
+        self.assertEqual(mod.publication_scan_limit(2000), 10000)
+
     def test_only_current_eligibility_attested_confirmed_rows_are_sendable(self) -> None:
         mod = load_module()
         base = {

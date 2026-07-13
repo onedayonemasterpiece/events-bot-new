@@ -3120,25 +3120,39 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "post_date": (start + timedelta(days=offset)).isoformat(),
                 "kaliningrad_oblast_only_scope": True,
                 "kaliningrad_mention_role": "main_subject",
-                "vector_gate_status": "vector_accept_candidate",
+                # The live ledger has eight candidate-memory rows, but one was
+                # rejected by dual-vector fusion. Seven strict rows across 49
+                # days are the actual durable locality evidence.
+                "vector_gate_status": (
+                    "vector_reject_not_kaliningrad_oblast"
+                    if index == 2
+                    else "vector_accept_candidate"
+                ),
                 "current_stage": "semantic_candidate",
             }
             for index, offset in enumerate(offsets)
         ]
         previous = {"unified_source_queue": {"vk:krasivo_s_evgo": dict(source)}}
 
-        rows, stats = mod.reconcile_persistent_ko_source_evidence([source], candidates, previous)
+        rows, stats = mod.reconcile_persistent_ko_source_evidence(
+            [source], candidates, previous, run_id="locality-repair-run"
+        )
 
         self.assertEqual(stats["source_counter_repairs"], 1)
         self.assertEqual(stats["persistent_local_sources"], 1)
-        self.assertEqual(rows[0]["ko_posts_found"], 8)
+        self.assertEqual(rows[0]["ko_posts_found"], 7)
         self.assertEqual(rows[0]["posts_scanned"], 22)
         self.assertEqual(rows[0]["source_scope"], "local_region")
         self.assertEqual(rows[0]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
         self.assertEqual(rows[0]["source_repeated_ko_span_days"], 49.0)
+        self.assertEqual(rows[0]["source_locality_ledger_reconciled_run_id"], "locality-repair-run")
         self.assertEqual(
             previous["unified_source_queue"]["vk:krasivo_s_evgo"]["source_queue_status"],
             mod.LOCAL_REGION_SOURCE_STATUS,
+        )
+        self.assertEqual(
+            previous["unified_source_queue"]["vk:krasivo_s_evgo"]["source_locality_ledger_reconciled_run_id"],
+            "locality-repair-run",
         )
         self.assertTrue(all(row["source_scope"] == "local_region" for row in candidates))
 

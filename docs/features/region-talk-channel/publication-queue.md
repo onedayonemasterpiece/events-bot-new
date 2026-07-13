@@ -198,6 +198,10 @@ also takes a local exclusive lock. After Telegram acceptance it records chat,
 random id, message id and timestamps both in the delivery ledger and candidate
 row. Finalizer/CandidateReport writers preserve these sent markers.
 
+The small per-run send limit is applied only after scanning the durable
+publication ledger. YDB primary-key order is not a readiness order, so older
+tombstones cannot hide a later confirmed unsent candidate from notification.
+
 Before delivery, the notifier reconstructs the authoritative source with the
 same monotonic merge semantics as the finalizer: scan/KO/candidate counters use
 their maximum and terminal local/spam classification cannot be erased by a
@@ -206,13 +210,16 @@ Gemini-confirmed row can fail its source fingerprint check merely because a
 live progress overlay contains zero counters.
 
 CandidateReport also reconciles source locality from the durable candidate
-ledger before image/publication handoff. Eight strict KO rows spread over at
-least 42 days are treated as persistent regional-author evidence, not as a
+ledger before image/publication handoff. Seven strict dual-accepted KO rows
+spread over at least 42 days are treated as persistent regional-author evidence, not as a
 single visitor's trip burst. The source and its unsent candidate projections
 are routed to the local-region audit lane unless an authoritative
 `confirmed_external` evidence record explicitly overrides that inference.
 This closes the observed `vk:krasivo_s_evgo` failure mode (22 scanned/0 KO in a
-sparse status row while eight KO candidate rows spanned 49 days). Gemini's
+sparse status row while seven accepted KO candidates plus one vector-rejected
+row spanned 49 days). Candidate-ledger repairs carry explicit run lineage and
+are mandatory in the bounded source-queue handoff even when that source was
+not selected for the current history batch. Gemini's
 post-level approval can never override this source-level terminal decision.
 
 Invite links are checked without joining first. A one-time join requires the

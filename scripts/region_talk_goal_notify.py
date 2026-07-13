@@ -27,6 +27,7 @@ PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
 DEFAULT_NOTIFY_CHAT_ID = "-5563945596"
+DEFAULT_PUBLICATION_SCAN_LIMIT = 5000
 
 
 def load_env(path: Path) -> None:
@@ -241,6 +242,17 @@ def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_r
         row["_live_authoritative_source_found"] = str(bool(source)).lower()
 
 
+def publication_scan_limit(send_limit: int) -> int:
+    """Scan the ledger before applying the much smaller delivery batch limit.
+
+    Publication rows are ordered by YDB primary key, not by readiness or
+    recency. Reading only ``send_limit * 5`` rows can hide a confirmed unsent
+    candidate behind older tombstones after the ledger grows.
+    """
+    configured = int(os.getenv("REGION_TALK_NOTIFY_PUBLICATION_SCAN_LIMIT") or DEFAULT_PUBLICATION_SCAN_LIMIT)
+    return max(DEFAULT_PUBLICATION_SCAN_LIMIT, configured, max(1, int(send_limit)) * 5)
+
+
 def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str, Any]]]:
     ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
@@ -248,7 +260,7 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     driver.wait(timeout=20, fail_fast=True)
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
-    out = read_kind_rows(pool, ydb, table, "publication_candidate_item", max(1, int(limit) * 5))
+    out = read_kind_rows(pool, ydb, table, "publication_candidate_item", publication_scan_limit(limit))
     source_limit = max(5000, int(os.getenv("REGION_TALK_NOTIFY_SOURCE_SCAN_LIMIT") or "20000"))
     source_rows = read_kind_rows(pool, ydb, table, "source_queue_item", source_limit)
     source_rows += read_kind_rows(pool, ydb, table, "source_status_item", source_limit)

@@ -92,7 +92,7 @@ LOCAL_REGION_RATIO_MIN_POSTS = 30
 LOCAL_REGION_RATIO_MIN_KO_POSTS = 10
 LOCAL_REGION_RATIO_MIN_KO_RATIO = 0.35
 LOCAL_REGION_RATIO_MIN_CANDIDATE_RATIO = 0.55
-SOURCE_PROFILE_REPEATED_KO_MIN_POSTS = 8
+SOURCE_PROFILE_REPEATED_KO_MIN_POSTS = 7
 SOURCE_PROFILE_REPEATED_KO_MIN_RATIO = 0.60
 SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS = 42
 LOCAL_INSTITUTION_PROFILE_MIN_POSTS = 8
@@ -2044,6 +2044,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
     "publication_source_evidence_priority", "publication_source_evidence_post_url",
     "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
+    "source_locality_ledger_reconciled_run_id", "source_locality_ledger_reconciled_at",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
 SOURCE_CANDIDATE_STATE_FIELDS = [
@@ -6044,6 +6045,8 @@ def reconcile_persistent_ko_source_evidence(
     source_rows: list[dict[str, Any]],
     candidate_rows: list[dict[str, Any]],
     previous_state: dict[str, Any] | None = None,
+    *,
+    run_id: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Reconcile source counters/locality from the durable KO candidate ledger.
 
@@ -6055,7 +6058,8 @@ def reconcile_persistent_ko_source_evidence(
     persistent-over-time evidence to all matching source projections.
 
     A compact visit burst remains non-local/unknown.  Local terminal routing is
-    applied only for at least eight dated KO rows spanning six weeks and never
+    applied only for at least seven dated dual-accepted KO rows spanning six
+    weeks and never
     overrides explicit authoritative confirmed-external evidence.
     """
     candidates_by_alias: dict[str, dict[str, dict[str, Any]]] = {}
@@ -6112,6 +6116,22 @@ def reconcile_persistent_ko_source_evidence(
 
     def reconciled(row: dict[str, Any], *, count_stats: bool = True) -> dict[str, Any]:
         item = dict(row)
+        before = {
+            field: item.get(field)
+            for field in [
+                "ko_posts_found", "candidate_posts_found", "source_scope",
+                "source_geo_class", "source_quick_class", "source_queue_status",
+                "fetch_status", *SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS,
+            ]
+        }
+
+        def mark_reconciled_if_changed() -> None:
+            after = {field: item.get(field) for field in before}
+            if before == after:
+                return
+            item["source_locality_ledger_reconciled_run_id"] = run_id or str(os.getenv("REGION_TALK_RUN_ID") or "")
+            item["source_locality_ledger_reconciled_at"] = utc_now_iso()
+
         evidence_rows: dict[str, dict[str, Any]] = {}
         for alias in aliases(item):
             evidence_rows.update(candidates_by_alias.get(alias) or {})
@@ -6132,21 +6152,23 @@ def reconcile_persistent_ko_source_evidence(
         repeated = repeated_ko_over_time_source_evidence(rows)
         item.update(repeated)
         if repeated.get("source_repeated_ko_evidence_status") != "confirmed_local_over_time":
+            mark_reconciled_if_changed()
             return item
         if source_has_authoritative_confirmed_external_evidence(item):
             if count_stats:
                 stats["authoritative_external_overrides"] += 1
             item.update(reconcile_source_profile_locality(item, []))
-            return item
-        item["source_repeated_ko_evidence_status"] = "persistent_ko_creator_over_time"
-        locality = reconcile_source_profile_locality(item, [])
-        item.update(locality)
-        if locality.get("source_locality_class") == "kaliningrad_local":
-            if count_stats:
-                stats["persistent_local_sources"] += 1
-            reason = str(locality.get("source_locality_reconciliation_reason") or "persistent KO creator over time")
-            item.update(source_scope_terminal_fields_for_local_region(reason, hits="persistent_ko_creator_over_time"))
+        else:
+            item["source_repeated_ko_evidence_status"] = "persistent_ko_creator_over_time"
+            locality = reconcile_source_profile_locality(item, [])
             item.update(locality)
+            if locality.get("source_locality_class") == "kaliningrad_local":
+                if count_stats:
+                    stats["persistent_local_sources"] += 1
+                reason = str(locality.get("source_locality_reconciliation_reason") or "persistent KO creator over time")
+                item.update(source_scope_terminal_fields_for_local_region(reason, hits="persistent_ko_creator_over_time"))
+                item.update(locality)
+        mark_reconciled_if_changed()
         return item
 
     out = [reconciled(row) if isinstance(row, dict) else row for row in source_rows]
@@ -7554,6 +7576,7 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             or str(row.get("last_fast_check_run_id") or "") == run_id
             or str(row.get("admitted_run_id") or "") == run_id
             or str(row.get("external_blogger_evidence_attached_run_id") or "") == run_id
+            or str(row.get("source_locality_ledger_reconciled_run_id") or "") == run_id
             or str(row.get("status_changed_this_run") or "").lower() == "true"
             or str(row.get("queue_seq_repaired_this_run") or "").lower() == "true"
         )
@@ -7622,11 +7645,13 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             return 2
         if str(row.get("last_scan_run_id") or "") == run_id:
             return 3
-        if str(row.get("status_changed_this_run") or "").lower() == "true":
+        if str(row.get("source_locality_ledger_reconciled_run_id") or "") == run_id:
             return 4
-        if str(row.get("queue_seq_repaired_this_run") or "").lower() == "true":
+        if str(row.get("status_changed_this_run") or "").lower() == "true":
             return 5
-        return 6
+        if str(row.get("queue_seq_repaired_this_run") or "").lower() == "true":
+            return 6
+        return 7
 
     ordered_selected = sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))
     if len(ordered_selected) <= max_rows:
@@ -14284,6 +14309,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         source_rows,
         candidate_memory_rows,
         previous_state,
+        run_id=run_id,
     )
     report_event(
         "source_locality_candidate_ledger_reconciled",
