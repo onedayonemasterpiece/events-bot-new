@@ -14,6 +14,7 @@ import argparse
 import csv
 import hashlib
 import html
+import importlib.util
 import json
 import os
 import re
@@ -80,12 +81,59 @@ def gemini_request_fingerprint(row: dict[str, Any], *, model: str) -> str:
         "post_url": normalize_post_url(str(row.get("post_url") or "")),
         "text_hash": hashlib.sha256(str(row.get("text") or row.get("short_summary") or "").encode("utf-8")).hexdigest(),
         "image": [row.get("overall_media_score"), row.get("postcardness_score"), row.get("image_queue_status")],
-        "source": row.get("authoritative_source_fingerprint"),
+        # Eligibility uses the complete authoritative-source fingerprint,
+        # including monotonic scan counters. Gemini request identity must not:
+        # scanning one more post without changing source classification cannot
+        # justify another paid provider call.
+        "source": gemini_source_context_fingerprint(row),
         "gate": row.get("publication_eligibility_gate_version"),
         "prompt": rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "model": model,
     }
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def gemini_source_context_fingerprint(row: dict[str, Any]) -> str:
+    source = row.get("_authoritative_source")
+    if not isinstance(source, dict) or not source:
+        # Compatibility for persisted/test rows that predate the dedicated
+        # context contract. Live finalizer rows always carry the source join.
+        return str(row.get("authoritative_source_fingerprint") or "")
+    payload = {
+        "version": "region_talk_gemini_source_context_v1",
+        "canonical_source_key": canonical_source_key_for_row(source),
+        "source_queue_status": source.get("source_queue_status") or "",
+        "source_scope": source.get("source_scope") or "",
+        "source_geo_class": source.get("source_geo_class") or "",
+        "source_topic_class": source.get("source_topic_class") or "",
+        "source_quick_class": source.get("source_quick_class") or "",
+        "external_blogger_evidence_status": source.get("external_blogger_evidence_status") or "",
+        "monitoring_exclusion_reason": source.get("monitoring_exclusion_reason") or "",
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _completed_llm_result_is_replayable(result: dict[str, Any]) -> bool:
+    gate_status = str(result.get("llm_gate_status") or "").strip().lower()
+    if gate_status == "ok":
+        return True
+    if gate_status in {"error", "rate_limited", "unknown"}:
+        return False
+    return str(result.get("llm_decision") or "").strip().lower() in {"accept", "reject", "review"}
+
+
+def require_google_genai_runtime() -> None:
+    """Fail before reserving product budget when the provider SDK is absent."""
+
+    try:
+        available = importlib.util.find_spec("google.genai") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        available = False
+    if not available:
+        raise RuntimeError(
+            "Region Talk finalizer requires the official google-genai runtime before reserving Gemini budget"
+        )
 
 
 class DurableGeminiBudget:
@@ -141,7 +189,11 @@ class DurableGeminiBudget:
             tx = session.transaction(self.ydb.SerializableReadWrite())
             budget = self._payload(tx.execute(select, {"$pk": self.budget_pk}, commit_tx=False))
             request = self._payload(tx.execute(select, {"$pk": request_pk}, commit_tx=False))
-            if str(request.get("status") or "") == "completed" and isinstance(request.get("result"), dict):
+            if (
+                str(request.get("status") or "") == "completed"
+                and isinstance(request.get("result"), dict)
+                and _completed_llm_result_is_replayable(request["result"])
+            ):
                 tx.commit()
                 return {"status": "replay", "result": request["result"], "request": request, "budget": budget}
             lease = _parse_time(request.get("lease_until"))
@@ -1262,6 +1314,7 @@ def main() -> int:
     )
     durable_budget = None
     if not args.dry_run and not args.prioritize_source_evidence_only and args.max_llm > 0:
+        require_google_genai_runtime()
         durable_budget = DurableGeminiBudget(
             pool,
             ydb,

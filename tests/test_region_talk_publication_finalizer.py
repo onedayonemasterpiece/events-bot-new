@@ -81,6 +81,33 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             self.mod.rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = old
         self.assertNotEqual(first, second)
 
+    def test_gemini_fingerprint_ignores_source_counter_growth(self) -> None:
+        source = external_source()
+        source.update({"posts_scanned": 5, "ko_posts_found": 1, "candidate_posts_found": 1})
+        row = candidate_row(_authoritative_source=source)
+        first = self.mod.gemini_request_fingerprint(row, model="fake")
+        source.update({"posts_scanned": 25, "ko_posts_found": 4, "candidate_posts_found": 3})
+        second = self.mod.gemini_request_fingerprint(row, model="fake")
+        self.assertEqual(first, second)
+        source["source_scope"] = "local_region"
+        self.assertNotEqual(second, self.mod.gemini_request_fingerprint(row, model="fake"))
+
+    def test_only_terminal_provider_results_are_replayed(self) -> None:
+        self.assertTrue(self.mod._completed_llm_result_is_replayable({
+            "llm_gate_status": "ok", "llm_decision": "reject",
+        }))
+        self.assertFalse(self.mod._completed_llm_result_is_replayable({
+            "llm_gate_status": "error", "llm_reason": "local ImportError",
+        }))
+        self.assertFalse(self.mod._completed_llm_result_is_replayable({
+            "llm_gate_status": "rate_limited", "llm_reason": "429",
+        }))
+
+    def test_provider_preflight_fails_before_budget_reservation(self) -> None:
+        with mock.patch.object(self.mod.importlib.util, "find_spec", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "official google-genai runtime"):
+                self.mod.require_google_genai_runtime()
+
     def test_source_class_guess_uses_region_talk_local_source_filter(self) -> None:
         self.assertEqual(
             self.mod.source_class_guess("Дом китобоя", "https://t.me/domkitoboya", {}),

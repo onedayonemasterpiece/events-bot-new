@@ -173,6 +173,15 @@ Local finalizer calls additionally use durable YDB rows:
 - `region_talk_llm_request_item:<budget_id>:<fingerprint>` — deterministic
   request identity and completed result replay.
 
+Only terminal provider results (`llm_gate_status=ok`) are replayed. Errors,
+rate limits and unknown responses keep the same reservation retryable rather
+than becoming a permanent cached failure. The local finalizer verifies that
+the official `google-genai` SDK is importable **before** creating a Region Talk
+budget reservation. Gemini request identity includes stable source
+classification but excludes monotonic `posts_scanned`/KO/candidate counters,
+so a deeper scan with the same external/local verdict cannot spend another
+request by changing an unrelated source fingerprint.
+
 The shared Supabase `google_ai_reserve` remains the cross-service RPM/TPM/RPD
 authority. The Region Talk ledger is an extra product-run ceiling. Internal
 provider retries are set to one attempt; retryable rows are retried by the
