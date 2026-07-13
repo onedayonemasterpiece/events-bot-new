@@ -102,7 +102,11 @@ class RegionTalkLowFrequencyResearchTests(unittest.TestCase):
         self.assertEqual(tuple(taxonomy["buckets"]), self.mod.URL_TAXONOMY)
         self.assertEqual(taxonomy["buckets"]["baseline_replay"], ["https://t.me/one/1"])
         self.assertEqual(taxonomy["buckets"]["experiment_repeat"], ["https://t.me/new/2"])
-        self.assertEqual(taxonomy["buckets"]["dedup_eligible"], ["https://t.me/new/2", "https://t.me/one/1"])
+        self.assertEqual(
+            taxonomy["buckets"]["dedup_eligible"],
+            ["https://t.me/new/2", "https://t.me/new/3", "https://t.me/one/1"],
+        )
+        self.assertEqual(taxonomy["buckets"]["new"], ["https://t.me/new/2", "https://t.me/new/3"])
         self.assertEqual(taxonomy["buckets"]["new_KO"], ["https://t.me/new/2"])
         self.assertEqual(taxonomy["buckets"]["downstream_accepted"], ["https://t.me/new/2"])
 
@@ -256,11 +260,103 @@ class RegionTalkLowFrequencyResearchTests(unittest.TestCase):
         self.assertTrue(replay["rows"][0]["anchor_window_replay"])
         self.assertFalse(replay["rows"][1]["anchor_window_replay"])
         self.assertEqual(replay["messages_truncated"], 3)
+        self.assertEqual(replay["request_metrics"]["A_current"]["attempted"], 1)
+
+    def test_visible_text_guard_accepts_place_cases_but_rejects_telegram_stemming_noise(self) -> None:
+        self.assertFalse(self.mod.source_query_matches_visible_text("Советск", "Советский район Москвы"))
+        self.assertTrue(self.mod.source_query_matches_visible_text("Советск", "Выходные в Советске"))
+        self.assertTrue(self.mod.source_query_matches_visible_text("Калининград", "Вернулись из Калининграда"))
+        self.assertTrue(self.mod.source_query_matches_visible_text("Бальга", "Поехали к замку Бальга"))
+        self.assertTrue(self.mod.source_query_matches_visible_text("Виштынец", "Отдыхали на Виштынце"))
+        self.assertTrue(self.mod.source_query_matches_visible_text("Тапиау", "Увидели замок Тапиау"))
+
+    def test_report_exposes_request_normalised_metrics_by_structure(self) -> None:
+        manifest = self.manifest()
+        raw = [
+            {
+                "schema": self.mod.RAW_SCHEMA_VERSION,
+                "manifest_hash": manifest["manifest_hash"],
+                "request": {
+                    "request_index": 1,
+                    "source_id": "one",
+                    "structure": "A_current",
+                    "query": "Калининград",
+                    "query_hash": self.mod.stable_hash("Калининград"),
+                },
+                "response": {
+                    "messages": [{
+                        "url": "https://t.me/one/9",
+                        "post_date": "2026-07-01T00:00:00Z",
+                        "text": "Поездка в Калининград",
+                        "is_KO": True,
+                    }]
+                },
+            },
+            {
+                "schema": self.mod.RAW_SCHEMA_VERSION,
+                "manifest_hash": manifest["manifest_hash"],
+                "request": {
+                    "request_index": 2,
+                    "source_id": "one",
+                    "structure": "B_expanded",
+                    "query": "Тапиау",
+                    "query_hash": self.mod.stable_hash("Тапиау"),
+                },
+                "response": {"messages": []},
+            },
+        ]
+        replay = self.mod.replay_capture(manifest, raw)
+        report = self.mod.build_report(manifest, replay)
+        self.assertEqual(report["by_structure"]["A_current"]["requests"]["attempted"], 1)
+        self.assertEqual(report["by_structure"]["A_current"]["counts"]["new_KO"], 1)
+        self.assertEqual(report["by_structure"]["A_current"]["new_KO_urls_per_100_requests"], 100.0)
+        self.assertEqual(report["by_structure"]["B_expanded"]["requests"]["attempted"], 1)
+        self.assertIsNone(report["by_structure"]["D_anchor_window_replay"]["new_urls_per_100_requests"])
 
     def test_only_explicit_discovery_roles_are_accepted(self) -> None:
         for role in ("E2E", "S22", "", "discovery3"):
             with self.assertRaises(self.mod.SafetyGateError):
                 self.mod.select_auth_bundle(role, os.environ)
+
+    def test_live_adapter_requires_pacing_and_records_delays_without_real_sleep(self) -> None:
+        class LiveFake(FakeAdapter):
+            requires_human_pacing = True
+
+        adapter = LiveFake()
+        manifest = self.manifest(
+            current_queries=["a"],
+            expanded_queries=["b"],
+            continuation_queries=["c"],
+            request_ceilings={"total_requests": 2, "per_source_requests": 2},
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "raw.jsonl"
+            with self.assertRaisesRegex(self.mod.SafetyGateError, "human-like pacing"):
+                self.mod.run_capture(
+                    manifest,
+                    path,
+                    adapter,
+                    allow_telegram_read=True,
+                    auth_role="DISCOVERY1",
+                    environ={"TELEGRAM_AUTH_BUNDLE_DISCOVERY1": "secret"},
+                )
+            sleeps = []
+            summary = self.mod.run_capture(
+                manifest,
+                path,
+                adapter,
+                allow_telegram_read=True,
+                auth_role="DISCOVERY1",
+                environ={"TELEGRAM_AUTH_BUNDLE_DISCOVERY1": "secret"},
+                pace_requests=True,
+                sleep_fn=sleeps.append,
+                uniform_fn=lambda low, high: low,
+            )
+            rows = [json.loads(line) for line in path.read_text().splitlines()]
+        self.assertEqual(summary["requests_attempted"], 2)
+        self.assertTrue(summary["human_pacing_enabled"])
+        self.assertEqual(sleeps, [5.0, 10.0])
+        self.assertEqual([row["request"]["paced_delay_seconds"] for row in rows], sleeps)
 
 
 if __name__ == "__main__":

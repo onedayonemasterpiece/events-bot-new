@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """Fail-closed, research-only source-local Telegram keyword harness.
 
-The module is deliberately standalone and standard-library-only.  Network
-access is possible only through an explicitly supplied read adapter and an
-explicit command-line consent flag.  Replay and reporting are offline.
+The module is standalone and uses only the standard library for manifest,
+replay, and reporting.  The optional live adapter imports Telethon lazily.
+Network access is possible only with an explicit read-consent flag and a
+role-scoped DISCOVERY1/2 bundle.  Replay and reporting are always offline.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import base64
 import hashlib
 import json
 import os
+import random
+import re
 import shlex
 import subprocess
 import sys
+import time
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -65,6 +71,14 @@ HARD_REQUEST_CEILINGS: dict[str, int | float] = {
     "concurrency": 1,
     "retries": 0,
 }
+HUMAN_PACING = {
+    "same_source_min_seconds": 5.0,
+    "same_source_max_seconds": 9.0,
+    "source_change_min_seconds": 10.0,
+    "source_change_max_seconds": 20.0,
+    "no_new_request_after_seconds": 900.0,
+    "batch_wall_seconds": 1200.0,
+}
 
 
 class ResearchHarnessError(RuntimeError):
@@ -97,6 +111,9 @@ class TelegramReadAdapter(Protocol):
 
     def search(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         """Return one raw response for one cached-peer source-local search."""
+
+    def close(self) -> None:
+        """Release the one role-scoped client without changing its session."""
 
 
 def canonical_json(value: Any) -> str:
@@ -274,6 +291,7 @@ def build_manifest(
         "source_identities_hash": stable_hash(identities),
         "query_hashes": query_hashes(queries),
         "request_ceilings": bounded_request_ceilings(request_ceilings),
+        "human_pacing": dict(HUMAN_PACING),
         "structures": {
             STRUCTURE_A: {"kind": "source_local_current", "queries": queries[STRUCTURE_A]},
             STRUCTURE_B: {"kind": "source_local_expanded", "queries": queries[STRUCTURE_B]},
@@ -315,6 +333,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     ceilings = bounded_request_ceilings(copy.get("request_ceilings") or {})
     if ceilings != copy.get("request_ceilings"):
         raise ManifestError("manifest request ceilings are not canonical")
+    if copy.get("human_pacing") != HUMAN_PACING:
+        raise ManifestError("manifest human pacing contract mismatch")
     sources = _normalise_sources(copy.get("source_identities") or [])
     if sources != copy.get("source_identities"):
         raise ManifestError("manifest source identities are not canonical cached peers")
@@ -366,6 +386,7 @@ class ContinuationScheduler:
         source = lane["source"]
         item = {
             "source_id": str(source["source_id"]),
+            "username": str(source.get("username") or ""),
             "peer_id": int(source["peer_id"]),
             "access_hash": int(source["access_hash"]),
             "structure": STRUCTURE_C,
@@ -404,6 +425,7 @@ def build_request_schedule(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
                 schedule.append(
                     {
                         "source_id": source["source_id"],
+                        "username": source.get("username") or "",
                         "peer_id": source["peer_id"],
                         "access_hash": source["access_hash"],
                         "structure": structure_name,
@@ -536,6 +558,7 @@ def _public_request(request: Mapping[str, Any], *, request_index: int, result_li
     return {
         "request_index": request_index,
         "source_id": str(request["source_id"]),
+        "username": str(request.get("username") or ""),
         "peer_id": int(request["peer_id"]),
         "structure": str(request["structure"]),
         "query": str(request["query"]),
@@ -579,6 +602,10 @@ def run_capture(
     allow_telegram_read: bool = False,
     auth_role: str = "",
     environ: Mapping[str, str] | None = None,
+    pace_requests: bool = False,
+    sleep_fn: Any = time.sleep,
+    monotonic_fn: Any = time.monotonic,
+    uniform_fn: Any = random.SystemRandom().uniform,
 ) -> dict[str, Any]:
     """Execute bounded serial reads, append every raw outcome, and never retry."""
 
@@ -586,12 +613,20 @@ def run_capture(
         raise SafetyGateError("capture requires explicit --allow-telegram-read")
     checked = validate_manifest(manifest)
     auth_env_name, _ = select_auth_bundle(auth_role, environ)
+    if bool(getattr(adapter, "requires_human_pacing", False)) and not pace_requests:
+        raise SafetyGateError("the live Telegram adapter requires human-like pacing")
     schedule = build_request_schedule(checked)
     budget = RequestBudget(checked["request_ceilings"])
     result_limit = int(checked["request_ceilings"]["results_per_request"])
     stop_reason = "schedule_exhausted"
+    capture_started = monotonic_fn()
+    last_source_id = ""
 
     for request in schedule:
+        elapsed = monotonic_fn() - capture_started
+        if elapsed >= float(HUMAN_PACING["no_new_request_after_seconds"]):
+            stop_reason = "no_new_request_after_wall_cutoff"
+            break
         try:
             request_index = budget.reserve(request)
         except RequestCeilingReached as exc:
@@ -602,6 +637,14 @@ def run_capture(
             stop_reason = "partial_request_ceiling"
             continue
         public = _public_request(request, request_index=request_index, result_limit=result_limit)
+        if pace_requests:
+            source_changed = bool(last_source_id and last_source_id != str(request.get("source_id") or ""))
+            minimum = HUMAN_PACING["source_change_min_seconds" if source_changed else "same_source_min_seconds"]
+            maximum = HUMAN_PACING["source_change_max_seconds" if source_changed else "same_source_max_seconds"]
+            delay = round(float(uniform_fn(float(minimum), float(maximum))), 3)
+            sleep_fn(delay)
+            public["paced_delay_seconds"] = delay
+            public["pacing_class"] = "source_change" if source_changed else "same_source_or_first"
         private = _adapter_request(
             request,
             request_index=request_index,
@@ -610,6 +653,7 @@ def run_capture(
         )
         try:
             response = adapter.search(private)
+            last_source_id = str(request.get("source_id") or "")
             if not isinstance(response, Mapping):
                 raise TypeError("adapter response must be a mapping")
             append_jsonl(raw_capture_path, _capture_row(public, checked["manifest_hash"], response=response))
@@ -637,7 +681,12 @@ def run_capture(
     # normal exhaustion, however, the observed final rate is always enforced.
     budget.assert_error_rate()
     summary = budget.summary()
-    summary.update({"stop_reason": stop_reason, "manifest_hash": checked["manifest_hash"]})
+    summary.update({
+        "stop_reason": stop_reason,
+        "manifest_hash": checked["manifest_hash"],
+        "capture_elapsed_seconds": round(monotonic_fn() - capture_started, 3),
+        "human_pacing_enabled": bool(pace_requests),
+    })
     return summary
 
 
@@ -680,6 +729,149 @@ class CommandAdapter:
         if not isinstance(response, dict):
             raise TypeError("adapter JSON response must be an object")
         return response
+
+    def close(self) -> None:
+        return None
+
+
+def _decode_role_bundle(bundle_value: str) -> dict[str, Any]:
+    raw = str(bundle_value or "").strip()
+    if not raw:
+        raise SafetyGateError("empty role-scoped Telegram bundle")
+    try:
+        padded = raw + "=" * ((4 - len(raw) % 4) % 4)
+        value = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+    except Exception as exc:
+        raise SafetyGateError("role-scoped Telegram bundle is not valid base64 JSON") from exc
+    if not isinstance(value, dict) or not str(value.get("session") or "").strip():
+        raise SafetyGateError("role-scoped Telegram bundle has no StringSession")
+    return value
+
+
+class TelethonCachedPeerAdapter:
+    """One persistent, read-only Telethon client using direct cached peers.
+
+    Every ``search`` call issues exactly one ``messages.SearchRequest``.  It
+    never calls ``get_entity``, ``get_input_entity`` or ``ResolveUsername`` and
+    cannot fall back to a username.  Telethon's request/connection retries and
+    automatic FloodWait sleep are disabled so the outer harness sees and
+    records the first failure.
+    """
+
+    requires_human_pacing = True
+
+    def __init__(
+        self,
+        *,
+        selected_auth_env: str,
+        timeout_seconds: int,
+        environ: Mapping[str, str] | None = None,
+    ) -> None:
+        env = os.environ if environ is None else environ
+        if selected_auth_env not in ALLOWED_AUTH_ENV_BY_ROLE.values():
+            raise SafetyGateError("Telethon adapter requires a DISCOVERY1/2 bundle")
+        bundle = _decode_role_bundle(str(env.get(selected_auth_env) or ""))
+        api_id = str(env.get("TELEGRAM_API_ID") or env.get("TG_API_ID") or "").strip()
+        api_hash = str(env.get("TELEGRAM_API_HASH") or env.get("TG_API_HASH") or "").strip()
+        if not api_id or not api_hash:
+            raise SafetyGateError("TELEGRAM_API_ID/API_HASH (or TG_ aliases) are required")
+        try:
+            from telethon import TelegramClient  # type: ignore
+            from telethon.sessions import StringSession  # type: ignore
+        except Exception as exc:
+            raise SafetyGateError("Telethon is required for --adapter-mode telethon-cached") from exc
+        self._timeout_seconds = int(timeout_seconds)
+        self._loop = asyncio.new_event_loop()
+        self._client = TelegramClient(
+            StringSession(str(bundle["session"])),
+            int(api_id),
+            api_hash,
+            loop=self._loop,
+            request_retries=0,
+            connection_retries=0,
+            retry_delay=0,
+            auto_reconnect=False,
+            flood_sleep_threshold=0,
+            raise_last_call_error=True,
+            receive_updates=False,
+            sequential_updates=True,
+            device_model=str(bundle.get("device_model") or "Region Talk research"),
+            system_version=str(bundle.get("system_version") or "Linux"),
+            app_version=str(bundle.get("app_version") or "1.0"),
+            lang_code=str(bundle.get("lang_code") or "ru"),
+            system_lang_code=str(bundle.get("system_lang_code") or "ru"),
+        )
+        try:
+            self._loop.run_until_complete(
+                asyncio.wait_for(self._client.connect(), timeout=self._timeout_seconds)
+            )
+        except Exception:
+            self.close()
+            raise
+
+    def search(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        if not request.get("cached_peer_only") or request.get("allow_entity_resolve"):
+            raise CaptureAborted("entity_resolve_attempt")
+        try:
+            from telethon import functions, types  # type: ignore
+        except Exception as exc:
+            raise SafetyGateError("Telethon import disappeared during capture") from exc
+        peer = types.InputPeerChannel(
+            channel_id=int(request["peer_id"]),
+            access_hash=int(request["access_hash"]),
+        )
+        rpc = functions.messages.SearchRequest(
+            peer=peer,
+            q=str(request["query"]),
+            filter=types.InputMessagesFilterEmpty(),
+            min_date=None,
+            max_date=None,
+            offset_id=0,
+            add_offset=0,
+            limit=int(request["result_limit"]),
+            max_id=0,
+            min_id=0,
+            hash=0,
+        )
+        result = self._loop.run_until_complete(
+            asyncio.wait_for(self._client(rpc), timeout=self._timeout_seconds)
+        )
+        username = str(request.get("username") or request.get("source_id") or "").strip().lstrip("@")
+        if username.startswith("telegram:"):
+            username = username.split(":", 1)[1]
+        messages: list[dict[str, Any]] = []
+        for message in list(getattr(result, "messages", None) or [])[: int(request["result_limit"])]:
+            message_id = int(getattr(message, "id", 0) or 0)
+            if not message_id:
+                continue
+            date = getattr(message, "date", None)
+            media = getattr(message, "media", None)
+            messages.append({
+                "url": f"https://t.me/{username}/{message_id}" if username else "",
+                "message_id": message_id,
+                "post_date": iso_utc(date) if date else "",
+                "text": str(getattr(message, "message", "") or ""),
+                "has_media": bool(media),
+                "media_kind": media.__class__.__name__ if media is not None else "",
+            })
+        return {
+            "messages": messages,
+            "rpc_method": "messages.SearchRequest",
+            "underlying_rpc_requests": 1,
+            "entity_resolved": False,
+            "cached_peer_only": True,
+        }
+
+    def close(self) -> None:
+        client = getattr(self, "_client", None)
+        loop = getattr(self, "_loop", None)
+        if client is not None and loop is not None and not loop.is_closed():
+            try:
+                loop.run_until_complete(asyncio.wait_for(client.disconnect(), timeout=10))
+            except Exception:
+                pass
+        if loop is not None and not loop.is_closed():
+            loop.close()
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -748,6 +940,49 @@ def _flatten_capture_rows(raw_rows: Sequence[Mapping[str, Any]], manifest_hash: 
     return messages, ignored
 
 
+def source_query_matches_visible_text(query: str, text: str) -> bool:
+    """Reject Telegram stemming noise (notably ``Советск``/``советский``)."""
+    normalise = lambda value: re.sub(
+        r"\s+", " ", re.sub(r"[^0-9a-zа-я]+", " ", str(value or "").lower().replace("ё", "е"))
+    ).strip()
+    q = normalise(query)
+    body = normalise(text)
+    if not q or not body:
+        return False
+    phrase_patterns = {
+        "куршская коса": r"(?<![0-9a-zа-я])куршск(?:ая|ой|ую)\s+кос(?:а|е|ы|у|ой)(?![0-9a-zа-я])",
+        "балтийская коса": r"(?<![0-9a-zа-я])балтийск(?:ая|ой|ую)\s+кос(?:а|е|ы|у|ой)(?![0-9a-zа-я])",
+        "роминтенская пуща": r"(?<![0-9a-zа-я])роминтенск(?:ая|ой|ую)\s+пущ(?:а|е|и|у|ей)(?![0-9a-zа-я])",
+        "куршский залив": r"(?<![0-9a-zа-я])куршск(?:ий|ого|ом|ому|им)\s+залив(?:а|е|ом|у)?(?![0-9a-zа-я])",
+    }
+    if q in phrase_patterns:
+        return re.search(phrase_patterns[q], body, flags=re.I) is not None
+    if q == "янтарный":
+        return re.search(
+            r"(?<![0-9a-zа-я])(?:поселок|город)\s+янтарный(?![0-9a-zа-я])"
+            r"|(?<![0-9a-zа-я])(?:в|из|до|под|около)\s+янтарн(?:ом|ого|ому)(?![0-9a-zа-я])",
+            body,
+            flags=re.I,
+        ) is not None
+    simple_place_patterns = {
+        "калининград": r"калининград(?:а|е|ом|у)?",
+        "нойхаузен": r"нойхаузен(?:а|е|ом|у)?",
+        "бальга": r"бальг(?:а|е|и|у|ой)",
+        "тапиау": r"тапиау",
+        "талпаки": r"талпак(?:и|ах|ами|ов)",
+        "виштынец": r"виштын(?:ец|ца|це|цем|цу)",
+    }
+    if q in simple_place_patterns:
+        return re.search(
+            rf"(?<![0-9a-zа-я]){simple_place_patterns[q]}(?![0-9a-zа-я])",
+            body,
+            flags=re.I,
+        ) is not None
+    if re.fullmatch(r"[a-zа-я]+ск", q, flags=re.I):
+        return re.search(rf"(?<![0-9a-zа-я]){re.escape(q)}(?:а|е|ом|у)?(?![0-9a-zа-я])", body, flags=re.I) is not None
+    return re.search(rf"(?<![0-9a-zа-я]){re.escape(q)}(?![0-9a-zа-я])", body, flags=re.I) is not None
+
+
 def _mark_anchor_windows(rows: Sequence[Mapping[str, Any]], structure_d: Mapping[str, Any]) -> list[dict[str, Any]]:
     window = timedelta(days=int(structure_d.get("anchor_window_days") or 0))
     by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -773,8 +1008,34 @@ def replay_capture(manifest: Mapping[str, Any], raw_rows: Sequence[Mapping[str, 
     checked = validate_manifest(manifest)
     flattened, ignored = _flatten_capture_rows(raw_rows, checked["manifest_hash"])
     kept = truncate_to_window(flattened, checked["T0"], days=WINDOW_DAYS)
+    for row in kept:
+        row["exact_query_text_match"] = source_query_matches_visible_text(
+            str(row.get("query") or ""),
+            str(row.get("text") or ""),
+        )
     kept = _mark_anchor_windows(kept, checked["structures"][STRUCTURE_D])
     kept.sort(key=lambda row: (int(row.get("request_index") or 0), int(row.get("result_index") or 0), str(row.get("url") or "")))
+    request_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    for raw in raw_rows:
+        if raw.get("schema") != RAW_SCHEMA_VERSION or raw.get("manifest_hash") != checked["manifest_hash"]:
+            continue
+        request = raw.get("request") if isinstance(raw.get("request"), Mapping) else {}
+        structure = str(request.get("structure") or "")
+        if structure not in (STRUCTURE_A, STRUCTURE_B, STRUCTURE_C):
+            continue
+        request_counts[structure]["attempted"] += 1
+        if isinstance(raw.get("error"), Mapping):
+            request_counts[structure]["errors"] += 1
+        else:
+            request_counts[structure]["succeeded"] += 1
+    request_metrics = {
+        structure: {
+            "attempted": request_counts[structure]["attempted"],
+            "succeeded": request_counts[structure]["succeeded"],
+            "errors": request_counts[structure]["errors"],
+        }
+        for structure in (STRUCTURE_A, STRUCTURE_B, STRUCTURE_C)
+    }
     return {
         "schema": SCHEMA_VERSION,
         "manifest_hash": checked["manifest_hash"],
@@ -785,6 +1046,9 @@ def replay_capture(manifest: Mapping[str, Any], raw_rows: Sequence[Mapping[str, 
         "messages_before_window_truncation": len(flattened),
         "messages_after_window_truncation": len(kept),
         "messages_truncated": len(flattened) - len(kept),
+        "exact_guard_accepted": sum(1 for row in kept if row.get("exact_query_text_match") is True),
+        "exact_guard_rejected": sum(1 for row in kept if row.get("exact_query_text_match") is False),
+        "request_metrics": request_metrics,
     }
 
 
@@ -808,6 +1072,7 @@ def classify_url_taxonomy(
 ) -> dict[str, Any]:
     baseline = {url for url in (canonical_url(value) for value in baseline_urls) if url}
     occurrences: Counter[str] = Counter()
+    eligible_urls: set[str] = set()
     ko_urls: set[str] = set()
     downstream: set[str] = set()
     for row in rows:
@@ -815,6 +1080,8 @@ def classify_url_taxonomy(
         if not url:
             continue
         occurrences[url] += 1
+        if row.get("exact_query_text_match") is not False:
+            eligible_urls.add(url)
         if _truthy_ko(row):
             ko_urls.add(url)
         if _truthy_downstream(row):
@@ -830,10 +1097,10 @@ def classify_url_taxonomy(
         flags = {
             "baseline_replay": url in baseline,
             "experiment_repeat": occurrences[url] > 1,
-            "dedup_eligible": url in baseline or occurrences[url] > 1,
-            "new": url not in baseline,
-            "new_KO": url not in baseline and url in ko_urls,
-            "downstream_accepted": url in downstream,
+            "dedup_eligible": url in eligible_urls,
+            "new": url in eligible_urls and url not in baseline,
+            "new_KO": url in eligible_urls and url not in baseline and url in ko_urls,
+            "downstream_accepted": url in eligible_urls and url in downstream,
         }
         for name in URL_TAXONOMY:
             if flags[name]:
@@ -856,12 +1123,54 @@ def build_report(
         raise ManifestError("replay/manifest hash mismatch")
     rows = replay.get("rows") if isinstance(replay.get("rows"), list) else []
     taxonomy = classify_url_taxonomy(rows, checked["K0_urls"], downstream_rows=downstream_rows)
+    request_metrics = replay.get("request_metrics") if isinstance(replay.get("request_metrics"), Mapping) else {}
+    by_structure: dict[str, Any] = {}
+    for structure in STRUCTURE_NAMES:
+        if structure == STRUCTURE_D:
+            structure_rows = [row for row in rows if row.get("anchor_window_replay") is True]
+            requests = {"attempted": 0, "succeeded": 0, "errors": 0}
+        else:
+            structure_rows = [row for row in rows if row.get("structure") == structure]
+            raw_requests = request_metrics.get(structure) if isinstance(request_metrics, Mapping) else {}
+            requests = {
+                "attempted": int((raw_requests or {}).get("attempted") or 0),
+                "succeeded": int((raw_requests or {}).get("succeeded") or 0),
+                "errors": int((raw_requests or {}).get("errors") or 0),
+            }
+        structure_taxonomy = classify_url_taxonomy(
+            structure_rows,
+            checked["K0_urls"],
+            downstream_rows=downstream_rows,
+        )
+        structure_counts = {
+            name: len(structure_taxonomy["buckets"][name]) for name in URL_TAXONOMY
+        }
+        attempted = requests["attempted"]
+        by_structure[structure] = {
+            "requests": requests,
+            "message_occurrences": len(structure_rows),
+            "distinct_urls": len(structure_taxonomy["rows"]),
+            "exact_guard_accepted_occurrences": sum(
+                1 for row in structure_rows if row.get("exact_query_text_match") is True
+            ),
+            "exact_guard_rejected_occurrences": sum(
+                1 for row in structure_rows if row.get("exact_query_text_match") is False
+            ),
+            "counts": structure_counts,
+            "new_urls_per_100_requests": (
+                round(100.0 * structure_counts["new"] / attempted, 3) if attempted else None
+            ),
+            "new_KO_urls_per_100_requests": (
+                round(100.0 * structure_counts["new_KO"] / attempted, 3) if attempted else None
+            ),
+        }
     return {
         "schema": SCHEMA_VERSION,
         "manifest_hash": checked["manifest_hash"],
         "K0_hash": checked["K0_hash"],
         "URL_taxonomy": taxonomy,
         "counts": {name: len(taxonomy["buckets"][name]) for name in URL_TAXONOMY},
+        "by_structure": by_structure,
         "window": {
             "T0": checked["T0"],
             "window_start": checked["window_start"],
@@ -910,7 +1219,8 @@ def make_parser() -> argparse.ArgumentParser:
     capture_parser = subparsers.add_parser("capture", help="perform explicitly authorized bounded Telegram reads")
     capture_parser.add_argument("--manifest", type=Path, required=True)
     capture_parser.add_argument("--raw-capture", type=Path, required=True)
-    capture_parser.add_argument("--adapter-command", required=True)
+    capture_parser.add_argument("--adapter-mode", choices=("command", "telethon-cached"), default="command")
+    capture_parser.add_argument("--adapter-command")
     capture_parser.add_argument("--auth-role", choices=sorted(ALLOWED_AUTH_ENV_BY_ROLE), required=True)
     capture_parser.add_argument("--allow-telegram-read", action="store_true")
 
@@ -947,18 +1257,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest = _read_json(args.manifest)
             checked = validate_manifest(manifest)
             auth_env_name, _ = select_auth_bundle(args.auth_role)
-            adapter = CommandAdapter(
-                shlex.split(args.adapter_command),
-                timeout_seconds=int(checked["request_ceilings"]["request_timeout_seconds"]),
-                selected_auth_env=auth_env_name,
-            )
-            summary = run_capture(
-                checked,
-                args.raw_capture,
-                adapter,
-                allow_telegram_read=True,
-                auth_role=args.auth_role,
-            )
+            if args.adapter_mode == "command":
+                if not args.adapter_command:
+                    raise SafetyGateError("--adapter-command is required in command mode")
+                adapter: TelegramReadAdapter = CommandAdapter(
+                    shlex.split(args.adapter_command),
+                    timeout_seconds=int(checked["request_ceilings"]["request_timeout_seconds"]),
+                    selected_auth_env=auth_env_name,
+                )
+                pace = False
+            else:
+                adapter = TelethonCachedPeerAdapter(
+                    selected_auth_env=auth_env_name,
+                    timeout_seconds=int(checked["request_ceilings"]["request_timeout_seconds"]),
+                )
+                pace = True
+            try:
+                summary = run_capture(
+                    checked,
+                    args.raw_capture,
+                    adapter,
+                    allow_telegram_read=True,
+                    auth_role=args.auth_role,
+                    pace_requests=pace,
+                )
+            finally:
+                close = getattr(adapter, "close", None)
+                if callable(close):
+                    close()
             _emit_json(summary, None)
             return 0
         if args.command == "replay":
