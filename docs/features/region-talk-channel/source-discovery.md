@@ -182,14 +182,17 @@ username resolve and can process VK evidence rows directly. This prevents a
 ten-source generic adaptive wave from running before the high-probability
 cohort.
 
-The history selector reserves two of the normal four source slots per run for
-due confirmed-blogger rows (`REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN=2`).
-The remaining slots still serve already text-passed source attestation and
-known-KO rescans, so discovery does not starve the publication tail and the
-publication tail cannot consume every source slot indefinitely.
-Those two evidence slots are platform-balanced: one Telegram source steadily
-warms/uses the single controlled entity-resolve lane while one VK source can be
-processed without Telegram. Confirmed VK rows use their evidence locations in
+The history selector assigns up to all four bounded deep-history source slots
+per run to due confirmed-blogger rows
+(`REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN=4`). If a post has
+already passed both text vectors and only lacks source attestation, one of the
+four slots is reserved for that near-publication source and the evidence cohort
+uses the other three. Keyword and similar discovery are separate stages and
+remain enabled, so this allocation accelerates the high-probability cohort
+without stopping discovery or bypassing the publication tail.
+Evidence slots are platform-balanced: Telegram and VK alternate while both are
+available. Telegram steadily warms/uses the single controlled entity-resolve
+lane while VK can be processed without Telegram. Confirmed VK rows use their evidence locations in
 a bounded `wall.search` pass (default up to eight evidence-specific queries,
 stop on the first fresh exact-text hit) in addition to the recent wall slice;
 this avoids treating ten recent non-trip posts as a meaningful check of a
@@ -252,7 +255,11 @@ confirmed rows are separate counters, so reaching the ledger cannot be read as
 acceptance. The mutable technical count of rows whose queue status happens to
 be `pending_scan` is retained separately as
 `confirmed_external_blogger_queue_pending_status_total`; it is not presented
-as the unscanned backlog.
+as the unscanned backlog. The same downstream stages are also reported by
+**unique source count** (`sources_with_processed_posts`, dual accept, media,
+publication, Gemini and delivery), because several successful posts from one
+blogger must not look like broad cohort coverage, while a pending source status
+must not hide a post that already passed the text gate.
 
 When the canonical queue is reconstructed from YDB, an older
 `source_status_item`/legacy live projection may add only monotonic scan
@@ -347,13 +354,18 @@ Implementation invariants:
   3+, partial no-hits and full-bank exhaustion. `fast_check_query_count` is
   per-source; the run-wide count is reported separately;
 - a keyword/preflight post hit is not a final candidate, but its URL must not be
-  lost: CandidateReport writes it as `post_link_queue_item`, and the next normal
-  CandidateReport run first refetches a bounded batch of these exact links
+  lost: CandidateReport writes it as `post_link_queue_item`. For a source-local
+  fast-check hit, the complete Telethon message already returned by the paced
+  search RPC is also appended to the current run's normal post batch; no second
+  Telegram request is made. The durable link row is marked fetched only after
+  that in-memory handoff, and stable `platform_post_key` identity prevents the
+  exact-fetch path from creating a duplicate. Older/global keyword links still
+  enter the next normal CandidateReport run's bounded exact-link batch
   (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`) before spending history-scan
   budget; the baseline is three links, but the orchestrator raises the batch to
   at most eight when the actionable queue already has cached
   `channel_id/access_hash`, without raising the one-username-resolve budget;
-  fetched links then pass the normal E5+BGE/text/image/LLM funnel;
+  all links then pass the same normal E5+BGE/text/image/LLM funnel;
 - permanent exact-link identity failures (`ChannelInvalid`, invalid/unoccupied
   username/peer) become `terminal_invalid_public_post_source` instead of
   retrying forever at the head of the high-priority lane; FloodWait and

@@ -1144,9 +1144,26 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
                 item[0].canonical_url,
             ))
         ]
+        publication_completion_pairs = [
+            (seed, due) for seed, due in annotated
+            if bool(due.get("due")) and str(due.get("reason") or "") == "publication_source_evidence_completion"
+        ]
+        publication_completion = [
+            seed for seed, due in sorted(publication_completion_pairs, key=lambda item: (
+                source_selection_cache_bucket(item[0], previous_state),
+                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+                item[0].canonical_url,
+            ))
+        ]
+        # Confirmed-blogger evidence owns the full bounded history batch while
+        # that high-probability backlog exists, except for one source whose
+        # text has already passed both vectors and only needs final source
+        # attestation.  Discovery/keyword/similar stages are separate and stay
+        # enabled; this only reallocates the four deep-history slots.
+        publication_completion_reserve = 1 if publication_completion else 0
         confirmed_external_slots = min(
-            max(0, max_sources),
-            max(0, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN", 2)),
+            max(0, max_sources - publication_completion_reserve),
+            max(0, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN", 4)),
             len(confirmed_external_priority),
         )
         evidence_telegram = [seed for seed in confirmed_external_priority if seed.platform == "telegram"]
@@ -1164,17 +1181,6 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             if evidence_other and len(balanced_evidence) < confirmed_external_slots:
                 balanced_evidence.append(evidence_other.pop(0))
         confirmed_external_selected = balanced_evidence
-        publication_completion_pairs = [
-            (seed, due) for seed, due in annotated
-            if bool(due.get("due")) and str(due.get("reason") or "") == "publication_source_evidence_completion"
-        ]
-        publication_completion = [
-            seed for seed, due in sorted(publication_completion_pairs, key=lambda item: (
-                source_selection_cache_bucket(item[0], previous_state),
-                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
-                item[0].canonical_url,
-            ))
-        ]
         high_yield_rescan_pairs = [
             (seed, due) for seed, due in annotated
             if bool(due.get("due")) and bool(due.get("is_rescan")) and str(due.get("reason") or "") == "publication_goal_known_ko_rescan"
@@ -8925,26 +8931,132 @@ def fast_check_priority_source_queue_row(
     }
 
 
+def telegram_fast_check_message_post_row(
+    seed: Seed,
+    source_title: str,
+    message: Any,
+    *,
+    matched_query: str,
+) -> dict[str, Any]:
+    """Reuse a source-local search result in the current scoring run.
+
+    Fast-check already owns the paced Telegram RPC and returns the complete
+    Telethon message.  Turning that object into the normal post contract avoids
+    an unnecessary second ``get_messages`` request and removes one full
+    CandidateReport-cycle of product latency.  The durable exact-link queue is
+    still written as the idempotency/audit ledger.
+    """
+    mid = int(getattr(message, "id", 0) or 0)
+    handle = str(seed.handle or "").strip().lstrip("@")
+    text = str(getattr(message, "message", None) or "").strip()
+    dt = getattr(message, "date", None)
+    has_media = bool(
+        getattr(message, "photo", None)
+        or getattr(message, "document", None)
+        or getattr(message, "media", None)
+    )
+    post_url = f"https://t.me/{handle}/{mid}"
+    embedded_links = telegram_message_embedded_links(message)
+    return {
+        # Match the exact-post queue identity so either fetch path UPSERTs the
+        # same logical processed post and cannot create a duplicate.
+        "post_id": "post_" + stable_hash("telegram_ydb_link", handle, mid),
+        "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
+        "source_seed_id": "source_local_fast_check",
+        "source_title": source_title or seed.source_title or handle,
+        "platform": "telegram",
+        "handle": handle,
+        "post_url": post_url,
+        "platform_post_key": f"tg:{handle}:{mid}",
+        "post_date": dt.isoformat() if dt else "",
+        "text": text,
+        "text_excerpt": re.sub(r"\s+", " ", text)[:500],
+        "embedded_links": embedded_links,
+        "embedded_links_json": serialize_embedded_links(embedded_links),
+        "has_media": has_media,
+        "media_count": 1 if has_media else 0,
+        "primary_media_path": "",
+        "local_media_paths": "",
+        "rights_policy": seed.rights_policy,
+        "source_kind": seed.source_kind or "source_local_fast_check",
+        "source_type": seed.source_kind or "source_local_fast_check",
+        "source_url": seed.canonical_url,
+        "is_forwarded_or_repost": False,
+        "forwarded_from_source_title": "",
+        "forwarded_from_source_id": "",
+        "forwarded_from_platform": "",
+        "forwarded_from_handle": "",
+        "forwarded_from_url": "",
+        "forwarded_from_post_url": "",
+        "forwarded_from_confidence": 0.0,
+        "original_source_candidate_id": "",
+        "discovery_method": "source_local_fast_check_exact_message",
+        "discovery_priority": "0",
+        "post_link_priority": 0,
+        "priority_reason": "source_local_fast_check_exact_message",
+        "keyword_hit_post_url": post_url,
+        "keyword_hit_source_url": seed.canonical_url,
+        "keyword_hit_query": matched_query,
+        "matched_query": matched_query,
+        "matched_hashtag": "",
+    }
+
+
+def append_fast_check_posts_for_same_run(
+    posts: list[dict[str, Any]],
+    fast_check_posts: list[dict[str, Any]],
+    *,
+    run_id: str,
+) -> int:
+    """Append new fast-check messages once and close their durable link rows."""
+    seen = {
+        str(row.get("platform_post_key") or row.get("post_url") or "").strip().lower()
+        for row in posts
+        if isinstance(row, dict)
+    }
+    appended = 0
+    for post_row in fast_check_posts:
+        identity = str(post_row.get("platform_post_key") or post_row.get("post_url") or "").strip().lower()
+        if not identity or identity in seen:
+            continue
+        append_post_online(posts, post_row, run_id=run_id, stage="fast_check_ko_same_run_post")
+        seen.add(identity)
+        appended += 1
+        write_region_talk_post_link_queue_items([{
+            **post_row,
+            "post_link_status": "fetched",
+            "last_attempt_run_id": run_id,
+            "last_attempt_at": utc_now_iso(),
+            "fetched_post_id": post_row.get("post_id") or "",
+            "fetch_error_code": "",
+            "fetch_error_message": "",
+            "next_action": "score_text_vectors_in_current_candidate_run",
+        }], run_id=run_id, stage="fast_check_ko_same_run_post")
+    _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_same_run_posts_appended"] = appended
+    return appended
+
+
 async def run_source_fast_check_ko(
     client: Any,
     governor: TelegramRequestGovernor,
     previous_state: dict[str, Any],
     run_id: str,
     status: Status,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     if not getenv_bool("REGION_TALK_FAST_CHECK_KO_ENABLED", False):
         _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_status"] = "disabled"
-        return [], []
+        return [], [], []
     max_sources = getenv_int("REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN", 0)
     if max_sources <= 0:
         _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_status"] = "disabled_zero_budget"
-        return [], []
+        return [], [], []
     seeds = source_fast_check_backlog_seeds(previous_state, max_sources)
     if not seeds:
         _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_status"] = "empty_backlog"
-        return [], []
+        return [], [], []
     rows: list[dict[str, Any]] = []
     post_hits: list[dict[str, Any]] = []
+    same_run_posts: list[dict[str, Any]] = []
     queried = 0
     hits = 0
     control_hits = 0
@@ -9032,6 +9144,7 @@ async def run_source_fast_check_ko(
                 source_row=previous_queue_row,
             )
             hit_row: dict[str, Any] | None = None
+            hit_message: Any | None = None
             for q in queries:
                 if not governor.has_total_request_budget("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url):
                     break
@@ -9132,6 +9245,7 @@ async def run_source_fast_check_ko(
                         "edge_type": "source_local_keyword_fast_check",
                         "next_action": "prioritize_source_after_cursor_and_fetch_exact_post",
                     }
+                    hit_message = msg
                     break
                 if hit_row:
                     break
@@ -9148,6 +9262,15 @@ async def run_source_fast_check_ko(
                     incremental_hits += 1
                 rows.append(hit_row)
                 post_hits.append(hit_row)
+                if hit_message is not None:
+                    same_run_posts.append(
+                        telegram_fast_check_message_post_row(
+                            seed,
+                            title,
+                            hit_message,
+                            matched_query=str(hit_row.get("matched_query") or ""),
+                        )
+                    )
                 write_region_talk_online_source_item(hit_row, run_id=run_id, stage="fast_check_ko", status="fast_check_ko_hit")
                 # The end-of-run unified queue handoff is the only writer of
                 # durable source priority. A second immediate queue write used
@@ -9260,7 +9383,7 @@ async def run_source_fast_check_ko(
         local_rejected=local_rejected, spam_rejected=spam_rejected,
         progress_label=f"fast-check KO done {hits}/{len(rows)}; q={queried}",
     )
-    return rows, post_hits
+    return rows, post_hits, same_run_posts
 
 
 def score_text(text: str) -> dict[str, Any]:
@@ -10675,7 +10798,11 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             if governor.degraded:
                 status.event("telegram_fetch_deferred_by_cooldown", phase="fetch", status="deferred", run_id=run_id, cooldown_until=governor.floodwait_cooldown_until, floodwait_method=governor.floodwait_method, max_floodwait_seconds=governor.max_floodwait_seconds, progress_label=f"Telegram cooldown active until {governor.floodwait_cooldown_until}; stopping Telethon fetch phases")
                 return source_rows, posts
-        fast_check_rows, fast_check_hits = await run_source_fast_check_ko(client, governor, previous_state, run_id, status)
+        fast_check_rows, fast_check_hits, fast_check_posts = await run_source_fast_check_ko(
+            client, governor, previous_state, run_id, status
+        )
+        if fast_check_posts:
+            append_fast_check_posts_for_same_run(posts, fast_check_posts, run_id=run_id)
         if governor.degraded:
             status.event("telegram_fetch_deferred_by_cooldown", phase="fetch", status="deferred", run_id=run_id, cooldown_until=governor.floodwait_cooldown_until, floodwait_method=governor.floodwait_method, max_floodwait_seconds=governor.max_floodwait_seconds, progress_label=f"Telegram cooldown active until {governor.floodwait_cooldown_until}; stopping Telethon fetch phases")
             if fast_check_rows:

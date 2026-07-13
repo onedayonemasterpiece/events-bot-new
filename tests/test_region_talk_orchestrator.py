@@ -61,10 +61,17 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["confirmed_external_blogger_scanned_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_unscanned_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_posts_processed_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_processed_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_with_ko_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_vector_accepted_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_vector_accepted_posts_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_image_queue_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_image_queue_posts_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_publication_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_publication_posts_total"], 1)
         self.assertEqual(metrics["confirmed_external_blogger_publication_confirmed_posts_total"], 0)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_publication_confirmed_posts_total"], 0)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_delivery_completed_posts_total"], 0)
 
     def test_heuristic_ko_funnel_uses_exclusive_product_outcomes(self) -> None:
         mod = load_module()
@@ -173,6 +180,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("4", main["cmd"])
         self.assertEqual(main["env"]["REGION_TALK_HISTORY_SOURCES_TARGET"], "4")
         self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "4")
+        self.assertEqual(main["env"]["REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN"], "4")
         self.assertEqual(main["env"]["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"], "10")
         self.assertEqual(main["env"]["REGION_TALK_FAST_CHECK_QUERY_STRATEGY"], "adaptive_cursor_v1")
         self.assertEqual(main["env"]["REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS"], "0")
@@ -1238,6 +1246,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "confirmed_external_blogger_image_queue_posts_total": 3,
             "confirmed_external_blogger_publication_posts_total": 2,
             "confirmed_external_blogger_delivery_completed_posts_total": 1,
+            "confirmed_external_blogger_sources_with_processed_posts_total": 8,
+            "confirmed_external_blogger_sources_with_vector_accepted_posts_total": 3,
+            "confirmed_external_blogger_sources_with_image_queue_posts_total": 2,
+            "confirmed_external_blogger_sources_with_publication_posts_total": 2,
+            "confirmed_external_blogger_sources_with_publication_confirmed_posts_total": 1,
+            "confirmed_external_blogger_sources_with_delivery_completed_posts_total": 1,
             "post_link_queue_exact_ready_total": 67,
             "post_link_queue_fetched_total": 0,
             "processed_posts_unique_total": 10756,
@@ -1253,6 +1267,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("Источники, где уже найден хотя бы один возможный пост о КО: 91", text)
         self.assertIn("Подтверждённые внешние блогеры", text)
         self.assertIn("53/8/5/3/7/4/45/0/0", text)
+        self.assertIn("Конверсия подтверждённых блогеров по уникальным источникам", text)
+        self.assertIn("8/3/2/2/1/1", text)
         self.assertIn("новые тексты к чтению / готовы к повторному решению после BGE", text)
         self.assertIn("67/0/0/0/0", text)
         self.assertIn("Публикационный отбор", text)

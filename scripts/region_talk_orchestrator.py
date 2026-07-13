@@ -193,7 +193,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS": "2000",
     "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "10",
     "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_RESULTS_PER_QUERY": "20",
-    "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "2",
+    "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "4",
     "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED": "1",
     "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_QUERIES_PER_SOURCE": "8",
     "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_RESULTS_PER_QUERY": "20",
@@ -329,6 +329,16 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('confirmed_external_blogger_publication_posts_total')}/"
             f"{value('confirmed_external_blogger_publication_confirmed_posts_total')}/"
             f"{value('confirmed_external_blogger_delivery_completed_posts_total')}"
+        ),
+        (
+            "Конверсия подтверждённых блогеров по уникальным источникам — есть прочитанные посты / "
+            "есть dual-текстовый кандидат / передано медиа / публикационный реестр / Gemini / доставлено: "
+            f"{value('confirmed_external_blogger_sources_with_processed_posts_total')}/"
+            f"{value('confirmed_external_blogger_sources_with_vector_accepted_posts_total')}/"
+            f"{value('confirmed_external_blogger_sources_with_image_queue_posts_total')}/"
+            f"{value('confirmed_external_blogger_sources_with_publication_posts_total')}/"
+            f"{value('confirmed_external_blogger_sources_with_publication_confirmed_posts_total')}/"
+            f"{value('confirmed_external_blogger_sources_with_delivery_completed_posts_total')}"
         ),
         (
             "Поиск по словам/хештегам — найдено источников / реально просмотрено / "
@@ -657,15 +667,45 @@ def _confirmed_external_blogger_funnel_metrics(
         if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
     ]
     scanned = [row for row in sources if _source_has_scan_evidence(row)]
-    aliases: set[str] = set()
-    for row in sources:
-        aliases.update(_source_alias_keys(row))
+    source_aliases: dict[str, set[str]] = {}
+    source_platforms: dict[str, str] = {}
+    for index, row in enumerate(sources):
+        source_key = str(
+            row.get("canonical_source_key")
+            or row.get("source_url")
+            or row.get("canonical_url")
+            or _source_merge_key(row)
+            or f"source-{index}"
+        ).strip().lower().rstrip("/")
+        source_aliases[source_key] = _source_alias_keys(row)
+        source_platforms[source_key] = str(row.get("platform") or "").strip().lower()
+    aliases = set().union(*source_aliases.values()) if source_aliases else set()
     posts = [row for row in processed_post_rows if _source_alias_keys(row) & aliases]
+
+    def matching_source_keys(row: dict[str, Any]) -> set[str]:
+        row_aliases = _source_alias_keys(row)
+        row_platform = str(row.get("platform") or "").strip().lower()
+        return {
+            key for key, values in source_aliases.items()
+            if row_aliases & values
+            and (not row_platform or not source_platforms.get(key) or source_platforms[key] == row_platform)
+        }
 
     def identity(row: dict[str, Any]) -> str:
         return str(row.get("platform_post_key") or row.get("post_url") or row.get("post_id") or "").strip().rstrip("/")
 
     unique_posts = {identity(row): row for row in posts if identity(row)}
+    processed_source_keys: set[str] = set()
+    vector_accepted_source_keys: set[str] = set()
+    post_url_source_keys: dict[str, set[str]] = {}
+    for row in unique_posts.values():
+        keys = matching_source_keys(row)
+        processed_source_keys.update(keys)
+        if str(row.get("vector_gate_status") or "") == "vector_accept_candidate":
+            vector_accepted_source_keys.update(keys)
+        url = str(row.get("post_url") or "").strip().rstrip("/")
+        if url:
+            post_url_source_keys.setdefault(url, set()).update(keys)
     post_urls = {
         str(row.get("post_url") or "").strip().rstrip("/")
         for row in unique_posts.values() if str(row.get("post_url") or "").strip()
@@ -691,6 +731,22 @@ def _confirmed_external_blogger_funnel_metrics(
         if str(row.get("post_url") or "").strip().rstrip("/") in post_urls
         and str(row.get("delivery_status") or row.get("status") or "").strip().lower() in {"completed", "sent", "delivered"}
     }
+    image_source_keys = set().union(*(post_url_source_keys.get(url, set()) for url in image_urls)) if image_urls else set()
+    publication_source_keys = set().union(*(post_url_source_keys.get(url, set()) for url in publication_urls)) if publication_urls else set()
+    confirmed_source_keys = set().union(*(post_url_source_keys.get(url, set()) for url in publication_confirmed_urls)) if publication_confirmed_urls else set()
+    delivered_source_keys = set().union(*(post_url_source_keys.get(url, set()) for url in delivery_urls)) if delivery_urls else set()
+    source_level_ko_keys = {
+        str(
+            row.get("canonical_source_key")
+            or row.get("source_url")
+            or row.get("canonical_url")
+            or _source_merge_key(row)
+            or ""
+        ).strip().lower().rstrip("/")
+        for row in sources
+        if _source_has_ko_candidate(row) or str(row.get("fast_check_status") or "") == "ko_hit"
+    }
+    sources_with_ko_keys = {key for key in source_level_ko_keys if key} | vector_accepted_source_keys
     return {
         "confirmed_external_blogger_sources_total": len(sources),
         "confirmed_external_blogger_telegram_total": sum(1 for row in sources if str(row.get("platform") or "") == "telegram"),
@@ -699,21 +755,27 @@ def _confirmed_external_blogger_funnel_metrics(
         "confirmed_external_blogger_unscanned_total": len(sources) - len(scanned),
         "confirmed_external_blogger_queue_pending_status_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "pending_scan"),
         "confirmed_external_blogger_scanned_total": len(scanned),
-        "confirmed_external_blogger_with_ko_total": sum(1 for row in sources if _source_has_ko_candidate(row)),
+        "confirmed_external_blogger_with_ko_total": len(sources_with_ko_keys),
         "confirmed_external_blogger_fast_check_hit_total": sum(1 for row in sources if str(row.get("fast_check_status") or "") == "ko_hit"),
         "confirmed_external_blogger_vk_search_checked_total": sum(1 for row in sources if _safe_int(row.get("vk_wall_search_query_count")) > 0),
         "confirmed_external_blogger_vk_search_hit_total": sum(1 for row in sources if _safe_int(row.get("vk_wall_search_hits")) > 0),
         "confirmed_external_blogger_rejected_local_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
         "confirmed_external_blogger_rejected_spam_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
         "confirmed_external_blogger_posts_processed_total": len(unique_posts),
+        "confirmed_external_blogger_sources_with_processed_posts_total": len(processed_source_keys),
         "confirmed_external_blogger_vector_accepted_posts_total": len({
             identity(row) for row in unique_posts.values()
             if str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
         }),
+        "confirmed_external_blogger_sources_with_vector_accepted_posts_total": len(vector_accepted_source_keys),
         "confirmed_external_blogger_image_queue_posts_total": len(image_urls),
+        "confirmed_external_blogger_sources_with_image_queue_posts_total": len(image_source_keys),
         "confirmed_external_blogger_publication_posts_total": len(publication_urls),
+        "confirmed_external_blogger_sources_with_publication_posts_total": len(publication_source_keys),
         "confirmed_external_blogger_publication_confirmed_posts_total": len(publication_confirmed_urls),
+        "confirmed_external_blogger_sources_with_publication_confirmed_posts_total": len(confirmed_source_keys),
         "confirmed_external_blogger_delivery_completed_posts_total": len(delivery_urls),
+        "confirmed_external_blogger_sources_with_delivery_completed_posts_total": len(delivered_source_keys),
     }
 
 
@@ -3046,7 +3108,7 @@ def build_decision_plan(
             os.getenv("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS") or "2000"
         ),
         "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": (
-            os.getenv("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN") or "2"
+            os.getenv("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN") or "4"
         ),
         "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED": (
             "1" if (os.getenv("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED") or "1").strip().lower()

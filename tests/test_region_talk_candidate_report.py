@@ -175,6 +175,114 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
         self.assertEqual({seed.platform for seed in selected[:2]}, {"telegram", "vk"})
 
+    def test_four_confirmed_blogger_slots_fill_bounded_history_batch(self) -> None:
+        mod = load_module()
+        telegram = [self._seed(mod, f"@evidencetg{idx}", seed_id=f"tg_{idx}") for idx in range(3)]
+        vk = [
+            mod.Seed(
+                source_seed_id=f"vk_{idx}", platform="vk", source_title=f"Evidence VK {idx}",
+                handle=f"@evidencevk{idx}", url=f"https://vk.com/evidencevk{idx}", source_kind="unit",
+                source_scope_guess="external", priority=0, discovered_from="unit", discovered_from_url="",
+                why_seeded="unit", expected_value="unit", known_risks="", initial_status="pending_scan",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            for idx in range(3)
+        ]
+        seeds = telegram + vk
+        queue = {}
+        for idx, seed in enumerate(seeds):
+            key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+            queue[key] = {
+                "canonical_source_key": key,
+                "platform": seed.platform,
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": idx + 1,
+                "external_blogger_evidence_status": "confirmed_external",
+            }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "4",
+        }, clear=False):
+            selected = mod.selected_sources_for_run(seeds, 4, previous_state=previous)
+        self.assertEqual(len(selected), 4)
+        self.assertEqual([seed.platform for seed in selected], ["telegram", "vk", "telegram", "vk"])
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"], 4)
+
+    def test_four_confirmed_slots_leave_one_for_text_passed_source_attestation(self) -> None:
+        mod = load_module()
+        evidence = [self._seed(mod, f"@evidence{idx}", seed_id=f"evidence_{idx}") for idx in range(4)]
+        publication = self._seed(mod, "@publicationready", seed_id="publication_ready")
+        seeds = evidence + [publication]
+        queue = {}
+        for idx, seed in enumerate(seeds):
+            key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+            queue[key] = {
+                "canonical_source_key": key,
+                "platform": seed.platform,
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": idx + 1,
+                **({"external_blogger_evidence_status": "confirmed_external"} if seed in evidence else {
+                    "publication_source_evidence_priority": "true",
+                    "publication_source_evidence_target_posts": 5,
+                }),
+            }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "4",
+        }, clear=False):
+            selected = mod.selected_sources_for_run(seeds, 4, previous_state=previous)
+        self.assertEqual(len(selected), 4)
+        self.assertEqual(selected[-1].canonical_url, publication.canonical_url)
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"], 3)
+
+    def test_fast_check_message_is_reused_same_run_with_exact_fetch_identity(self) -> None:
+        mod = load_module()
+        seed = self._seed(mod, "@travelwriter", seed_id="writer")
+        message = types.SimpleNamespace(
+            id=42,
+            date=__import__("datetime").datetime(2026, 7, 12, 12, 0, tzinfo=__import__("datetime").timezone.utc),
+            message="Нойхаузен и Бальга: " + ("личные впечатления от поездки " * 40),
+            photo=object(),
+            document=None,
+            media=object(),
+            entities=[],
+        )
+        post = mod.telegram_fast_check_message_post_row(seed, "Travel Writer", message, matched_query="Нойхаузен")
+        self.assertEqual(post["post_id"], "post_" + mod.stable_hash("telegram_ydb_link", "travelwriter", 42))
+        self.assertEqual(post["platform_post_key"], "tg:travelwriter:42")
+        self.assertEqual(post["post_url"], "https://t.me/travelwriter/42")
+        self.assertGreater(len(post["text"]), 500)
+        self.assertEqual(len(post["text_excerpt"]), 500)
+        self.assertEqual(post["discovery_method"], "source_local_fast_check_exact_message")
+
+    def test_same_run_fast_check_append_is_idempotent_and_marks_link_fetched(self) -> None:
+        mod = load_module()
+        existing = {"platform_post_key": "tg:travelwriter:41", "post_url": "https://t.me/travelwriter/41"}
+        new = {
+            "post_id": "post_new",
+            "platform_post_key": "tg:travelwriter:42",
+            "post_url": "https://t.me/travelwriter/42",
+            "source_url": "https://t.me/travelwriter",
+            "keyword_hit_post_url": "https://t.me/travelwriter/42",
+        }
+        posts = [existing]
+        written = []
+        with mock.patch.object(mod, "write_region_talk_online_post_item"), mock.patch.object(
+            mod, "write_region_talk_post_link_queue_items", side_effect=lambda rows, **kwargs: written.extend(rows) or len(rows)
+        ):
+            appended = mod.append_fast_check_posts_for_same_run(posts, [existing, new, dict(new)], run_id="same-run")
+        self.assertEqual(appended, 1)
+        self.assertEqual([row["platform_post_key"] for row in posts], ["tg:travelwriter:41", "tg:travelwriter:42"])
+        self.assertEqual(len(written), 1)
+        self.assertEqual(written[0]["post_link_status"], "fetched")
+        self.assertEqual(written[0]["fetched_post_id"], "post_new")
+
     def test_unscanned_confirmed_blogger_beats_cached_confirmed_rescan(self) -> None:
         mod = load_module()
         cached_rescan = self._seed(mod, "@cachedrescan", seed_id="cached_rescan")
