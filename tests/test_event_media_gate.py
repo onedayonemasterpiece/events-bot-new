@@ -483,6 +483,48 @@ def test_production_media_writers_are_restricted_to_the_gate() -> None:
     assert offenders == []
 
 
+def test_audit_cleanup_marks_only_confirmed_telegram_duplicate_for_priority(
+    tmp_path,
+) -> None:
+    audit_dir = tmp_path / "audit"
+    audit_dir.mkdir()
+    (audit_dir / "inventory.jsonl").write_text(
+        json.dumps(
+            {
+                "event": {"id": 1, "title": "t", "date": "2026-08-01"},
+                "static_gallery": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (audit_dir / "visual-review.csv").write_text(
+        "event_id,confirmed_duplicate_groups,classification,visual_review_status\n"
+        '1,"[]",legitimate_distinct,reviewed_complete\n',
+        encoding="utf-8",
+    )
+    (audit_dir / "downloaded-media-manifest.json").write_text(
+        json.dumps({"items": []}), encoding="utf-8"
+    )
+    (audit_dir / "public-telegram-surfaces.json").write_text(
+        json.dumps([{"event_id": 1, "duplicate_visible": True}]), encoding="utf-8"
+    )
+
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "apply_event_media_audit_cleanup.py"
+    )
+    spec = importlib.util.spec_from_file_location("apply_event_media_audit_cleanup", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    plan = module.build_plan(audit_dir)
+
+    assert plan["events"][0]["telegram_duplicate_visible"] is True
+
+
 @pytest.mark.asyncio
 async def test_backfill_stages_legacy_multi_image_event_without_deleting_evidence(tmp_path) -> None:
     db_path = tmp_path / "db.sqlite"

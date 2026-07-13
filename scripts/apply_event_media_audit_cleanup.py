@@ -97,6 +97,14 @@ def build_plan(audit_dir: Path) -> dict[str, Any]:
     inventory = _load_inventory(audit_dir / "inventory.jsonl")
     reviews = _load_reviews(audit_dir / "visual-review.csv")
     downloads = _load_downloads(audit_dir / "downloaded-media-manifest.json")
+    telegram_surfaces: dict[int, dict[str, Any]] = {}
+    telegram_surface_path = audit_dir / "public-telegram-surfaces.json"
+    if telegram_surface_path.exists():
+        telegram_surfaces = {
+            int(row["event_id"]): row
+            for row in json.loads(telegram_surface_path.read_text(encoding="utf-8"))
+            if row.get("event_id") is not None
+        }
     events: list[dict[str, Any]] = []
     for event_id, ledger in sorted(inventory.items()):
         gallery = list(ledger.get("static_gallery") or [])
@@ -136,6 +144,9 @@ def build_plan(audit_dir: Path) -> dict[str, Any]:
                 "unavailable_positions": sorted(unavailable_positions),
                 "classification": review.get("classification") if review else "single_or_empty",
                 "visual_review_status": review.get("visual_review_status") if review else "not_required_lt2",
+                "telegram_duplicate_visible": bool(
+                    telegram_surfaces.get(event_id, {}).get("duplicate_visible")
+                ),
             }
         )
     return {
@@ -172,27 +183,41 @@ def _insert_job(
     task: str,
     next_run_at: datetime,
     coalesce_key: str,
+    payload: dict[str, Any] | None = None,
 ) -> None:
     exists = con.execute(
         """
-        SELECT 1 FROM joboutbox
+        SELECT id FROM joboutbox
         WHERE event_id=? AND task=? AND status IN ('pending','running')
         LIMIT 1
         """,
         (event_id, task),
     ).fetchone()
     if exists:
+        if payload is not None:
+            con.execute(
+                "UPDATE joboutbox SET payload=? WHERE id=?",
+                (json.dumps(payload, ensure_ascii=False, sort_keys=True), int(exists[0])),
+            )
         return
     con.execute(
         """
         INSERT INTO joboutbox(
-            event_id, task, status, attempts, updated_at, next_run_at, coalesce_key
-        ) VALUES (?, ?, 'pending', 0, CURRENT_TIMESTAMP, ?, ?)
+            event_id, task, payload, status, attempts, updated_at, next_run_at, coalesce_key
+        ) VALUES (?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP, ?, ?)
         """,
         # SQLAlchemy's SQLite DateTime binder uses a space separator.  A raw
         # ISO `T` string sorts after every same-day bound datetime and would
         # leave the row invisible to `next_run_at <= now` until tomorrow.
-        (event_id, task, next_run_at.astimezone(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f"), coalesce_key),
+        (
+            event_id,
+            task,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True) if payload is not None else None,
+            next_run_at.astimezone(timezone.utc)
+            .replace(tzinfo=None)
+            .strftime("%Y-%m-%d %H:%M:%S.%f"),
+            coalesce_key,
+        ),
     )
 
 
@@ -542,6 +567,14 @@ def apply_plan(con: sqlite3.Connection, plan: dict[str, Any], *, apply: bool) ->
                 task="tg_event_publish",
                 next_run_at=now + timedelta(seconds=ordinal * 90),
                 coalesce_key=f"tg_event_publish:{event_id}",
+                payload=(
+                    {
+                        "public_repair_priority": True,
+                        "reason": "confirmed_event_media_duplicate",
+                    }
+                    if change.get("telegram_duplicate_visible")
+                    else None
+                ),
             )
             stats["public_rebuild_jobs"]["tg_event_publish"] += 1
 

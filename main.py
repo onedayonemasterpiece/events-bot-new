@@ -17483,6 +17483,15 @@ async def _run_due_jobs_once_locked(
             event_id = int(j.event_id)
             added_at = tg_event_added_at.get(event_id)
             has_existing_tg_post = bool(tg_event_post_id.get(event_id))
+            payload = j.payload if isinstance(j.payload, dict) else {}
+            # A bounded, evidence-backed public repair must not sit forever
+            # behind the ordinary announcement/backfill lanes.  The regular
+            # Telegram spacing guard still applies, so this changes ordering,
+            # not the channel rate limit.  Producers may set this only for an
+            # already-published post whose public defect was independently
+            # confirmed.
+            if has_existing_tg_post and payload.get("public_repair_priority") is True:
+                return (task_priority, 0, j.id, 0)
             # When an old catch-up/backfill backlog is being throttled one post at
             # a time, fresh Smart Update imports must not be starved behind rows
             # that can be safely announced later. Within the fresh lane, newest
