@@ -82,7 +82,7 @@ lanes:
     expected_output: public desktop v5 preview URLs
     verification_scope: full_local_and_public
     effort: high
-    status: in_progress
+    status: completed
   - id: closure-review
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09]
@@ -96,7 +96,7 @@ lanes:
     expected_output: Done/Partial/Missing closure matrix
     verification_scope: inspection_only
     effort: high
-    status: in_progress
+    status: completed
 ```
 
 ## Requirement matrix

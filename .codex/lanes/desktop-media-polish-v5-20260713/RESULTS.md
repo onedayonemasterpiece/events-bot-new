@@ -1,7 +1,7 @@
 # Desktop event media polish v5 — integration results
 
 ## Status
-in-progress
+complete
 
 ## Branch
 `feature/event-page-desktop-media-polish-v5-20260713`
@@ -23,4 +23,10 @@ in-progress
 
 ## Public verification
 
-Pending commit, push and preview deploy.
+- Initial implementation commit: `883de77b256548983c362553d8367bdae461d1fa`; pushed to `origin/feature/event-page-desktop-media-polish-v5-20260713`.
+- Preview: `https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/`.
+- Public HTTP `200`: overview, Editorial photo/OCR, Split OCR, physical strip, Bento, preview index and generated CSS.
+- Public Chromium at `1440×900`: Editorial offset `32 → 21 → 9.9px`, one six-item rail row, no duplicate photo pill, selected gallery index `3`; Split/Bento ratio `0.5`; Bento real wide cell `338×162px` and selected index `5`; inverse related computed colors; zero page errors/overflow.
+- Public Chromium at `390×844`: desktop lab surface remains `display:none`.
+- The complete versioned preview tree and hashed assets were uploaded. The later redundant metadata pass over every preview/stable `.ics` mirror was intentionally stopped after public page/asset verification; it does not affect the desktop review surface.
+- Closure reviewer: R01–R09 Done after the explicit visual-center vs OCR/unknown-top Bento runtime probe and static preview guards.
