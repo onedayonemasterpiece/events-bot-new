@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -345,3 +345,50 @@ Antigravity resolved the unoverridden consultant request to **Gemini 3.1 Pro (Hi
 Acceptance requires desktop geometry at `1024×768`, `1440×650`, `1440×900`, `1920×600` and `1920×1080`; selected-index fullscreen opening; pinned normal-speed release; continuous monotonically upward `~0.65x` movement; exact Split half width; full poster-track travel; a CTA-to-related gap of at least `64px`; zero horizontal overflow; reduced-motion reset; and a `390×844` isolation smoke proving the laboratory root stays hidden.
 
 The final local and public Playwright runs passed `57/57` checks. A targeted public boundary sample measured `64.28125px` between the sticky CTA and `Смотрите дальше`. In the related grid the light image/body/utility surface remains one card, while share and like intentionally sit without a second footer container on the common graphite section background (white share, red like), matching the approved inversion contract. Gemini 3.1 Pro (High) re-read these two pieces of evidence after its first-pass ambiguity, revised both items to `PASS` and returned the final recommendation **SHIP**.
+
+## Desktop focus v8: top-safe Editorial, semantic rails and field-free related media
+
+V8 is another noindex desktop-only laboratory correction. Its selectors remain under `@media (min-width:1024px)`; production event pages, `EventHero.astro`, `EventDetail.astro` and every accepted mobile rule remain outside the diff. V7 stays published as the rollback/reference surface.
+
+### Editorial image and side-stack contracts
+
+- **Pinned Editorial:** the horizontal source is rendered from its uncropped top edge at its natural full-width height. The sticky viewport clips only the initially unavailable lower overflow; bounded upward motion can reveal up to `240px` of measured real overflow. At the Full-HD/125% equivalent CSS viewport `1536×864`, the `1280×853` source renders as `1536×1023.59`, starts at `y=73`, and therefore keeps both faces in the initial frame. A future production classifier may provide a source-grounded salient/focal bounding box, but the lab does not fabricate one.
+- **Continuous Editorial:** the media frame itself follows the exact natural full-width ratio (`1536×1023.59` at the same viewport). The image uses `contain` in that matching frame, so neither top nor bottom is cropped and no letterbox is introduced. It moves continuously at measured net screen speed `~0.65x`, without a sticky release jump.
+- **Photo side stack:** the compact count-aware gallery rail is restored **before** the CTA. The rail opens the existing fullscreen gallery at the selected source index; the separate floating photo-count control stays absent.
+- **OCR companion side stack:** CTA remains first because it is the primary action, followed by a substantially larger contained poster (`192×267.83` at `1536×864`) and then the rail when distinct additional photos exist. The poster opens its exact fullscreen source index.
+
+The image policy follows the browser contract rather than visual masking: `object-fit:cover` necessarily crops when frame and source ratios differ, while `contain` preserves the full source but may leave unused space ([MDN `object-fit`](https://developer.mozilla.org/docs/Web/CSS/object-fit)). Responsive art direction or an explicit focal crop is the appropriate future source-level mechanism for keeping important regions visible, not a blind center crop ([web.dev responsive images](https://web.dev/learn/design/responsive-images)).
+
+### Split/Fallback rail and low-resolution contract
+
+- The fullscreen gallery keeps stable source indexes and all supplied renditions. The compact rail advertises only **distinct media identities**. In the current lab, event `5077` source indexes `0/1` and event `6550` indexes `0/1/2` are explicit near-duplicate renditions, so their Split pages correctly render no rail.
+- The production/exporter follow-up contract is `canonical_media_id` plus optional `duplicate_of_source_order`; client-side perceptual clustering is intentionally rejected. The lab-only `duplicateSourceIndexes` fixture input demonstrates the behavior without pretending the current export already supplies canonical identity.
+- A real multi-image rail uses a `124px` band with `104px` images and deterministic width buckets: portrait `88px`, square `116px`, landscape `156px`. OCR/unknown thumbs remain contained; a `+N` cell retains the first hidden gallery index.
+- The `800×602` low-resolution hero uses a bounded `viewport-cover` fallback: the rail and image exactly fill the `791px` desktop media viewport, eliminating the previous `~126px` graphite remainder. At `1536×864`, the image occupies `768×666.22`; the resulting scale is about `1.11×` with a modest horizontal crop rather than an expanding empty field.
+
+### `Смотрите дальше`: three compared treatments
+
+V8 keeps the graphite section and the accepted light card/body surface with share and like directly on the common graphite background. It adds three full-flow comparison routes instead of judging isolated tiles:
+
+| Treatment | Contract | Review route |
+|---|---|---|
+| Aggressive cover control | Shared compact row; both visuals and OCR documents use top-aligned `cover`. It is deliberately retained as a crop-risk control, not the recommendation. | `/lab/event-desktop/examples/related-cover/` |
+| Ambient contain | Shared square row; OCR documents are fully contained over a quiet blurred duplicate of the same source, removing flat side fields without inventing unrelated decoration. | `/lab/event-desktop/examples/related-ambient/` |
+| Adaptive hybrid | The row chooses the nearest `4:5`, `1:1` or `4:3` bucket from its document ratios; ordinary photos use `cover`, OCR/unknown documents use ambient `contain`. | `/lab/event-desktop/examples/related-hybrid/` |
+
+**Selected laboratory default: adaptive hybrid.** Blind OCR cover loses up to `43.99%` of a real poster in the control row. Hybrid keeps OCR readable, avoids uniform black/graphite side bars, shortens rows when their media permits it, and still normalizes every card in a row to the same complete height. This is the only deliberate ambient duplicate in the experiment; it is not used to conceal hero-layout failure.
+
+### V8 routes and acceptance
+
+| Reality | Public review route |
+|---|---|
+| Strong horizontal, top-safe pinned reveal | <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/examples/editorial-photo/> |
+| Same source, exact-ratio continuous no-crop motion | <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/examples/editorial-photo-continuous/> |
+| Strong horizontal plus enlarged OCR companion | <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/examples/editorial-ocr-companion/> |
+| OCR with one distinct semantic image | <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/examples/split-ocr/> |
+| Portrait-only duplicate renditions | <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/examples/split-portrait/> |
+| Low-resolution multi-image fallback | <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/examples/split-low-resolution/> |
+
+The local Playwright gate covers `1536×864` (Full HD at 125% browser/UI scaling) and `1440×900`. It records no console errors, exact half-width Split media, zero low-resolution remainder, absent rails for duplicate-only sets, aspect-bucket rails for real multi-image sets, exact selected-index fullscreen opening (`requested=3`, `active=3`), normalized related-card row heights, top-safe pinned geometry and continuous exact-ratio geometry. The implementation adds no selectors below `1024px` and changes no production mobile file.
+
+Antigravity **Gemini 3.1 Pro (High)** completed the pre-design review without Flash/Lite substitution. It selected top-aligned pinned media, rail-before-CTA for photo Editorial, a larger contained OCR companion, bounded low-resolution cover and a hybrid related-card solution; it rejected flat graphite fields and blind OCR crop. Final public browser acceptance is required after the v8 prefix is uploaded; prompt, raw response and Playwright evidence remain in ignored `artifacts/codex/desktop-event-focus-v8-20260713/`.

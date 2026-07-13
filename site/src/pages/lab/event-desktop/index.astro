@@ -3,28 +3,45 @@ import EventLayout from '../../../layouts/EventLayout.astro';
 import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/event-desktop/');
-const title = `Два итоговых desktop-шаблона события | ${SITE_NAME}`;
-const description = 'Desktop-only проверка Editorial для сильных горизонтальных фотографий и Split/Fallback для OCR, портретов и слабых изображений. Mobile не изменён.';
+const title = `Desktop media focus v8 | ${SITE_NAME}`;
+const description = 'Desktop-only проверка Editorial и Split/Fallback: безопасный hero, крупная OCR-афиша, адаптивные превью и три обработки похожих карточек. Mobile не изменён.';
 const examples = [
-  ['editorial-photo', 'Editorial · закреплённый hero', 'Сильный внутренний параллакс; native sticky сам отпускает изображение с обычной скоростью.'],
-  ['editorial-photo-continuous', 'Editorial · непрерывный параллакс', 'Hero никогда не фиксируется и всё время движется вверх медленнее контента, без скачка в конце.'],
-  ['editorial-ocr-companion', 'Editorial · фото + OCR-афиша', 'Горизонтальный кадр остаётся hero, оригинальная афиша видна отдельным компактным документом.'],
-  ['split-ocr', 'Split · OCR без сильного landscape', 'Афиша занимает ровно 50% ширины и физически прокручивается до нижнего края.'],
-  ['split-portrait', 'Split · portrait-only', 'Портретная серия не растягивается в слабый полноэкранный hero.'],
-  ['split-low-resolution', 'Split · низкое разрешение', 'Горизонталь 800×602 остаётся в половине полотна и не апскейлится на всю ширину.'],
+  ['editorial-photo', 'Editorial · закреплённый hero', 'Верх фотографии защищён от кропа; нижняя часть раскрывается внутренним параллаксом.'],
+  ['editorial-photo-continuous', 'Editorial · непрерывный hero без кропа', 'Полная естественная высота фотографии движется вверх медленнее контента, без фиксации.'],
+  ['editorial-ocr-companion', 'Editorial · фото + крупная OCR-афиша', 'Горизонтальный кадр остаётся hero, оригинальная афиша получает самостоятельный читаемый блок.'],
+  ['split-ocr', 'Split · одна OCR-афиша', 'Афиша занимает ровно 50% ширины; лента не появляется для повторного rendition той же картинки.'],
+  ['split-portrait', 'Split · одна portrait-композиция', 'Семантически одинаковые варианты не создают ложную галерею.'],
+  ['split-low-resolution', 'Split · низкое разрешение', 'Умеренный cover до 20% убирает пустой остаток; настоящие дополнительные изображения остаются в высокой ленте.'],
+];
+const relatedExamples = [
+  ['related-cover', '01 · Compact cover', 'Самый короткий ряд, но агрессивно кропает OCR. Контрольный рискованный вариант.'],
+  ['related-ambient', '02 · Ambient preserve', 'Полная афиша поверх размытого продолжения изображения — без плоских полей и без потери текста.'],
+  ['related-hybrid', '03 · Adaptive hybrid', 'Рекомендуемый: ряд выбирает 4:5, 1:1 или 4:3; фото кропаются по фокусу, OCR полностью сохраняется поверх ambient.'],
 ];
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v7>
+  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v8>
     <div class="page-shell desktop-focus__shell">
-      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v7</span></nav>
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v8</span></nav>
 
       <section class="section-card desktop-focus__intro">
         <div class="section-card__inner">
           <p class="eyebrow">desktop only · mobile production untouched</p>
           <h1>Два итоговых семейства вместо набора технических эскизов</h1>
           <p class="lead"><strong>Editorial</strong> используется только для доказанно сильной горизонтальной фотографии. <strong>Split/Fallback</strong> принимает OCR-документы, портретные серии и изображения, которым не хватает разрешения для полноэкранного hero.</p>
+        </div>
+      </section>
+
+      <section class="desktop-focus__examples" aria-labelledby="related-title">
+        <header><p class="eyebrow">одни реальные карточки · три media-контракта</p><h2 id="related-title">Без плоских полей</h2></header>
+        <p class="lead">Все ссылки ведут к полному событию и сразу к блоку «Смотрите дальше». Сравниваются сохранность OCR, высота ряда и качество фотографии; действия остаются на общем графитовом фоне.</p>
+        <div>
+          {relatedExamples.map(([slug, label, note]) => (
+            <a href={`${withBase(`/lab/event-desktop/examples/${slug}/`)}#related-5658`} data-related-media-example={slug}>
+              <span aria-hidden="true">↳</span><strong>{label}</strong><p>{note}</p>
+            </a>
+          ))}
         </div>
       </section>
 

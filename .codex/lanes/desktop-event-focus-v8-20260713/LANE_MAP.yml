@@ -1,0 +1,109 @@
+mode: full_fanout_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: 7ca67641a0047846c3d2d1c171a8a53fac9f9d71
+base_branch: feature/event-page-desktop-focus-v7-20260713
+integration_branch: feature/event-page-desktop-focus-v8-20260713
+global_constraints:
+  - Desktop-only; do not alter mobile markup or behavior below 1024px.
+  - Preserve the published v7 preview and publish v8 under a new prefix.
+  - Shared Astro component has one writable owner; discovery lanes are read-only.
+  - Validate FHD at 125% as a 1536x864 CSS viewport.
+  - Gemini consultation must use gemini-3.1-pro-preview or gemini-3-pro-preview.
+verification_owner: L04-closure-review
+stop_conditions:
+  - Any mobile visual or interaction regression.
+  - Flat media remainder in split-low-resolution at 1536x864.
+  - OCR copy made unreadable by the selected related-card treatment.
+  - Gemini Pro unavailable without recorded blocker evidence.
+requirements:
+  - id: R01
+    original: Prevent top face crop in pinned Editorial at FHD 125%, using no-top-crop or salient bbox logic.
+  - id: R02
+    original: Make Editorial continuous show the hero without top or bottom crop.
+  - id: R03
+    original: Restore the photo preview rail before the CTA on Editorial photo pages.
+  - id: R04
+    original: Enlarge the OCR companion poster while preserving immediate readability and fullscreen opening.
+  - id: R05
+    original: Hide the Split rail when there is only one distinct source image; map duplicate-source semantics.
+  - id: R06
+    original: Make Split preview rails taller with constrained adaptive widths in 2-3 aspect-ratio buckets.
+  - id: R07
+    original: Eliminate the low-resolution empty remainder with modest bounded scaling/crop.
+  - id: R08
+    original: Research and prototype several no-flat-field treatments for related-card media.
+  - id: R09
+    original: Apply the selected hybrid to every See-next block without changing graphite action-row semantics.
+  - id: R10
+    original: Obtain Gemini Pro design criticism and final browser acceptance.
+  - id: R11
+    original: Prove desktop-only scope and no mobile behavior change.
+  - id: R12
+    original: Build, test, document, changelog, publish a new preview, commit, and push.
+lanes:
+  - id: L01-media-mapper
+    role: planner
+    requirement_ids: [R05]
+    target: Map event image identities, dedup metadata, rail rendering, and conflicting CSS/JS behavior.
+    depends_on: []
+    execution_mode: parallel
+    effort: medium
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-multimedia-analysis
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: Read-only findings with exact source indexes/URLs and implementation constraints.
+    verification_scope: inspection_only
+    status: completed
+  - id: L02-design-research
+    role: planner
+    requirement_ids: [R08, R10]
+    target: Research image-fitting patterns and run Gemini Pro pre-design critique against real v7 pages.
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-multimedia-analysis
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: Ranked design treatments, risks, and acceptance criteria for public browser audit.
+    verification_scope: inspection_only
+    status: completed
+  - id: L03-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R06, R07, R09, R11, R12]
+    target: Implement the desktop-only v8 composition, comparison lab, tests, docs, preview, and release handoff.
+    depends_on: [L01-media-mapper, L02-design-research]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: feature/event-page-desktop-focus-v8-20260713
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-multimedia-analysis
+    writable_files:
+      - site/src/components/lab/DesktopEventCleanPage.astro
+      - site/src/pages/lab/event-desktop/**
+      - site/scripts/check-preview.mjs
+      - docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md
+      - CHANGELOG.md
+      - .codex/lanes/desktop-event-focus-v8-20260713/**
+      - .codex/integration/desktop-event-focus-v8-20260713-INTEGRATION_REPORT.md
+    forbidden_files:
+      - site/src/pages/sobytiya/**
+      - site/src/components/EventDetail.astro
+      - .env
+    expected_output: Clean committed and pushed v8 branch plus public preview evidence.
+    verification_scope: full_local
+    status: in_progress
+  - id: L04-closure-review
+    role: merge_reviewer
+    requirement_ids: []
+    target: Audit every requirement, public Playwright interaction, responsive desktop gate, and mobile diff prohibition.
+    depends_on: [L03-integrator]
+    execution_mode: serial_after_dependency
+    effort: high
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-multimedia-analysis
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: Closure matrix with pass/fail evidence and unresolved risks.
+    verification_scope: full_local
+    status: running

@@ -15,6 +15,8 @@ import { eventImageUrl } from '../../lib/assets';
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
 type EditorialMotion = 'pinned' | 'continuous';
+type SplitMediaFit = 'natural' | 'viewport-cover';
+type RelatedMediaTreatment = 'cover' | 'ambient' | 'hybrid';
 
 interface Props {
   event: PreviewEvent;
@@ -32,6 +34,9 @@ interface Props {
   autoRotate?: boolean;
   ocrSafeCover?: boolean;
   ocrSourceIndexes?: number[];
+  duplicateSourceIndexes?: number[];
+  splitMediaFit?: SplitMediaFit;
+  relatedMediaTreatment?: RelatedMediaTreatment;
 }
 
 type GalleryImage = {
@@ -60,8 +65,12 @@ const {
   autoRotate = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   ocrSafeCover = false,
   ocrSourceIndexes = [],
+  duplicateSourceIndexes = [],
+  splitMediaFit = 'natural',
+  relatedMediaTreatment = 'hybrid',
 } = Astro.props;
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
+const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
@@ -114,9 +123,17 @@ const ocrCompanion = ocrCompanionImageIndex === undefined
 const editorialRailCandidates = indexedGalleryImages.filter(({ galleryIndex }) => galleryIndex !== ocrCompanion?.galleryIndex);
 const editorialRailImages = editorialRailCandidates.slice(0, editorialRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
 const editorialRailRemainingCount = editorialRailCandidates.length - editorialRailImages.length;
-const splitRailCandidates = indexedGalleryImages.filter(({ galleryIndex }) => galleryIndex !== 0);
+// Gallery keeps every source rendition so its source indexes remain stable. The compact rail,
+// however, only advertises distinct media identities supplied by the upstream/lab contract.
+const splitRailCandidates = indexedGalleryImages.filter(({ image, galleryIndex }) => galleryIndex !== 0 && !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
 const splitRailImages = splitRailCandidates.slice(0, splitRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
 const splitRailRemainingCount = splitRailCandidates.length - splitRailImages.length;
+const railAspectBucket = (image: GalleryImage) => {
+  const imageRatio = image.width && image.height ? image.width / image.height : 1;
+  if (imageRatio < .9) return 'portrait';
+  if (imageRatio > 1.18) return 'landscape';
+  return 'square';
+};
 const usesLongFlow = true;
 
 const dateLabel = displayDate(event);
@@ -140,6 +157,8 @@ const descriptionHtml = (event.description_html || '')
   data-media-policy={mediaPolicy}
   data-selected-media-policy={selectedMediaMode}
   data-editorial-motion={candidate === 'editorial' ? editorialMotion : undefined}
+  data-split-media-fit={candidate === 'split' ? splitMediaFit : undefined}
+  data-related-media-treatment={relatedMediaTreatment}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
   data-event-id={event.id}
   style={`--image-ratio:${ratio};--image-position:${preferredPosition};--media-count:${Math.max(1, photoCount)};`}
@@ -154,7 +173,7 @@ const descriptionHtml = (event.description_html || '')
         aria-labelledby={`clean-event-title-${event.id}`}
       >
         {candidate === 'split' ? (
-          <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport>
+          <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport data-split-media-fit={splitMediaFit}>
             <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.36">
               <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть афишу события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
@@ -162,7 +181,7 @@ const descriptionHtml = (event.description_html || '')
               {splitRailImages.length > 0 && (
                 <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail aria-label="Другие изображения события">
                   {splitRailImages.map(({ image, galleryIndex }) => (
-                    <button type="button" data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу, изображение ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1}`}>
+                    <button type="button" data-rail-aspect={railAspectBucket(image)} data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу, изображение ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1}`}>
                       <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
                       {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
                     </button>
@@ -315,7 +334,7 @@ const descriptionHtml = (event.description_html || '')
   )}
   </div>
 
-  <section class="desktop-clean-related" data-related-start aria-labelledby={`related-${event.id}`}>
+  <section class="desktop-clean-related" data-related-start data-related-treatment={relatedMediaTreatment} aria-labelledby={`related-${event.id}`}>
     <div class="page-shell">
       <header>
         <p class="eyebrow">Продолжить выбор</p>
@@ -511,7 +530,8 @@ const descriptionHtml = (event.description_html || '')
               media.style.removeProperty('transform');
               const image = media.querySelector<HTMLImageElement>('[data-clean-hero-image]');
               const availableBleed = Math.max(0, (image?.offsetHeight || media.offsetHeight) - media.clientHeight);
-              const internalTravel = Math.min(140, availableBleed);
+              // Start at the uncropped top edge and reveal virtually the whole lower overflow.
+              const internalTravel = Math.min(240, availableBleed);
               const progress = clamp(stageTravel / scrollRange);
               const offset = -internalTravel * progress;
               media.style.setProperty('--desktop-parallax-y', `${offset.toFixed(1)}px`);
@@ -577,6 +597,7 @@ const descriptionHtml = (event.description_html || '')
       window.addEventListener('resize', updateOcrFrame, { passive:true });
 
       const relatedGrid = cleanRoot.querySelector<HTMLElement>('[data-lab-row-normalize]');
+      const relatedMediaTreatment = cleanRoot.dataset.relatedMediaTreatment || 'hybrid';
       let normalizeFrame = 0;
       const normalizeRelatedRows = () => {
         normalizeFrame = 0;
@@ -589,8 +610,11 @@ const descriptionHtml = (event.description_html || '')
             card.removeAttribute('data-lab-row-media');
             card.removeAttribute('data-lab-row-index');
             card.removeAttribute('data-lab-row-worst-crop');
+            card.removeAttribute('data-lab-media-treatment');
+            card.removeAttribute('data-lab-cover-crop');
             card.removeAttribute('data-media-text-mode');
             card.style.removeProperty('--lab-row-media-ratio');
+            card.querySelector<HTMLElement>('.event-card__media-shell')?.style.removeProperty('--lab-ambient-image');
           });
           return;
         }
@@ -627,7 +651,18 @@ const descriptionHtml = (event.description_html || '')
             targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
             mode = 'visual-squareish';
           } else if (visuals.length > 0) {
-            mode = 'mixed-square-contained';
+            if (relatedMediaTreatment === 'cover') {
+              targetRatio = 1.12;
+              mode = 'mixed-compact-cover';
+            } else if (relatedMediaTreatment === 'ambient') {
+              targetRatio = 1;
+              mode = 'mixed-square-ambient';
+            } else {
+              const buckets = [.8, 1, 4 / 3];
+              const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
+              targetRatio = buckets.sort((a, b) => Math.abs(Math.log(a / documentCenter)) - Math.abs(Math.log(b / documentCenter)))[0];
+              mode = 'mixed-adaptive-ambient';
+            }
           } else if (documentRatios.length === 1) {
             targetRatio = documentRatios[0];
             mode = 'document-natural';
@@ -641,7 +676,21 @@ const descriptionHtml = (event.description_html || '')
             card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
             card.dataset.labRowMedia = mode;
             card.dataset.labRowIndex = String(rowIndex);
-            card.removeAttribute('data-lab-row-worst-crop');
+            const shell = card.querySelector<HTMLElement>('.event-card__media-shell');
+            const image = card.querySelector<HTMLImageElement>('.event-card__media');
+            const imageRatio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
+            const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
+            const isDocument = card.dataset.labMediaKind === 'document';
+            let cardTreatment = 'visual-cover';
+            if (isDocument) {
+              if (relatedMediaTreatment === 'ambient') cardTreatment = 'ambient';
+              else if (relatedMediaTreatment === 'cover') cardTreatment = 'document-cover';
+              else cardTreatment = 'ambient';
+            }
+            card.dataset.labMediaTreatment = cardTreatment;
+            card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
+            card.dataset.labRowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
+            if (shell && image?.currentSrc) shell.style.setProperty('--lab-ambient-image', `url(${JSON.stringify(image.currentSrc)})`);
           });
         });
       };
@@ -820,15 +869,18 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-clean-travel { grid-column:2; grid-row:5; width:auto; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(5rem,9vw,9rem); grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-prototype__media-rail { right:1rem; bottom:1rem; }
 
-    /* Lab-only related-card rows: compact visual crops, contained documents and a neutral slow-image placeholder. */
+    /* Lab-only related-card rows: normalized geometry with explicit cover/ambient/hybrid media contracts. */
     .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; inset:0; width:100% !important; height:100% !important; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; z-index:2; inset:0; width:100% !important; height:100% !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; object-fit:cover !important; }
-    .desktop-clean-related__grid :global([data-lab-media-kind="document"] .event-card__media-shell) { background:#181411; }
-    .desktop-clean-related__grid :global([data-lab-media-kind="document"] .event-card__media) { object-fit:contain !important; object-position:center top !important; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) { object-fit:cover !important; object-position:center top !important; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="ambient"] .event-card__media-shell::before) { content:""; position:absolute; z-index:0; inset:-12%; background-image:var(--lab-ambient-image); background-position:center; background-size:cover; filter:blur(22px) saturate(.82) brightness(.8); transform:translateZ(0) scale(1.08); }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="ambient"] .event-card__media-shell::after) { content:""; position:absolute; z-index:1; inset:0; background:linear-gradient(90deg,rgba(35,29,25,.12),rgba(255,250,242,.04),rgba(35,29,25,.12)); }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="ambient"] .event-card__media) { object-fit:contain !important; object-position:center top !important; background:transparent !important; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
@@ -1017,23 +1069,27 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(336px,28vw,480px); position:relative; display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; inset:auto; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; overflow:hidden; will-change:transform; }
     .desktop-clean-event--editorial[data-editorial-motion="pinned"] .desktop-prototype--editorial .desktop-prototype__media { position:sticky; top:73px; transform:none; }
-    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; transform:translate3d(0,0,0); }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; height:calc(100vw / var(--image-ratio)); overflow:visible; transform:translate3d(0,0,0); }
     .desktop-clean-event--editorial .desktop-prototype__media-opener { position:absolute; inset:0; }
     .desktop-clean-event--editorial .desktop-prototype__media-image,
     .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__media-image,
-    .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { position:absolute; inset:auto 0 0; width:100%; height:max(calc(100% + 112px),calc(100vw / var(--image-ratio))) !important; min-height:0; margin:0 !important; object-fit:cover !important; object-position:var(--image-position) !important; background:#d9cbb8; transform:translate3d(0,var(--desktop-parallax-y,0),0) !important; transition:none; will-change:transform; }
-    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype__media-image { transform:none !important; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { position:absolute; inset:0 0 auto; width:100%; height:calc(100vw / var(--image-ratio)) !important; min-height:0; margin:0 !important; object-fit:cover !important; object-position:top center !important; background:#d9cbb8; transform:translate3d(0,var(--desktop-parallax-y,0),0) !important; transition:none; will-change:transform; }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype__media-image { inset:0; height:100% !important; object-fit:contain !important; transform:none !important; }
     .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100vw - var(--editorial-side) - 6vw)); min-width:0; min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
     .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; justify-items:stretch; gap:.8rem; width:calc(100% - 1rem); max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 3rem 0; overflow:auto; scrollbar-width:thin; }
-    .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { order:1; width:100%; }
-    .desktop-editorial-companion { order:2; width:100%; min-height:136px; display:grid; grid-template-columns:92px minmax(0,1fr) 1.35rem; align-items:center; gap:.8rem; padding:.65rem; border:1px solid rgba(255,255,255,.22); border-radius:18px; background:rgba(36,31,27,.94); color:#fffaf2; text-align:left; box-shadow:0 16px 32px rgba(31,23,18,.2); cursor:zoom-in; }
-    .desktop-editorial-companion__image { width:92px; height:118px; display:block; overflow:hidden; border-radius:11px; background:#171412; }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side { margin-top:clamp(390px,57svh,620px); }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side { margin-top:clamp(250px,34svh,420px); }
+    .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { order:2; width:100%; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side :global(.desktop-prototype__action) { order:1; }
+    .desktop-editorial-companion { order:2; width:100%; min-height:clamp(246px,32svh,292px); display:grid; grid-template-columns:clamp(168px,12.5vw,196px) minmax(0,1fr) 1.35rem; align-items:center; gap:.8rem; padding:.7rem; border:1px solid rgba(255,255,255,.22); border-radius:18px; background:rgba(36,31,27,.94); color:#fffaf2; text-align:left; box-shadow:0 16px 32px rgba(31,23,18,.2); cursor:zoom-in; }
+    .desktop-editorial-companion__image { width:clamp(168px,12.5vw,196px); height:clamp(230px,31svh,284px); display:block; overflow:hidden; border-radius:11px; background:#171412; }
     .desktop-editorial-companion__image img { width:100%; height:100%; display:block; object-fit:contain; object-position:center; }
     .desktop-editorial-companion__copy { display:grid; gap:.25rem; }
     .desktop-editorial-companion__copy small { color:#d8c9bc; font-size:.68rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
     .desktop-editorial-companion__copy strong { font-size:.92rem; line-height:1.15; }
     .desktop-editorial-companion :global(.icon) { width:1.35rem; height:1.35rem; color:#dd8a61; }
-    .desktop-clean-event--editorial .desktop-prototype__media-rail { order:3; }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail { order:1; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__media-rail { order:3; }
 
     /* Split/Fallback: exact half-canvas media, natural poster track and one bounded sticky CTA. */
     .desktop-clean-event--split .desktop-prototype__canvas { overflow:visible; }
@@ -1047,13 +1103,18 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--split .desktop-poster-track { position:relative; width:100%; height:auto; min-height:0; display:grid; align-content:start; transform:translate3d(0,0,0); will-change:transform; }
     .desktop-clean-event--split .desktop-prototype__media--poster-scroll .desktop-prototype__media-opener { position:relative; inset:auto; width:100%; height:auto; min-height:0; }
     .desktop-clean-event--split .desktop-prototype__media--poster-scroll .desktop-prototype__media-image { position:relative; inset:auto; width:100%; height:auto !important; min-height:0; display:block; margin:0; object-fit:contain !important; object-position:center top !important; transform:none !important; background:#1d1916; }
-    .desktop-prototype__media-rail--poster { position:relative; inset:auto; width:100%; display:flex; flex-wrap:nowrap; gap:.5rem; padding:.65rem; overflow:hidden; border-radius:0; background:#292521; }
-    .desktop-prototype__media-rail--poster button { position:relative; flex:1 1 0; width:auto; min-width:54px; max-width:none; height:66px; }
+    .desktop-prototype__media-rail--poster { position:relative; inset:auto; width:100%; min-height:124px; display:flex; flex-wrap:nowrap; align-items:stretch; gap:.5rem; padding:.65rem; overflow:hidden; border-radius:0; background:#292521; }
+    .desktop-prototype__media-rail--poster button { position:relative; flex:0 0 116px; width:116px; min-width:0; max-width:none; height:104px; }
+    .desktop-prototype__media-rail--poster button[data-rail-aspect="portrait"] { flex-basis:88px; width:88px; }
+    .desktop-prototype__media-rail--poster button[data-rail-aspect="landscape"] { flex-basis:156px; width:156px; }
     .desktop-prototype__media-rail--poster button[data-image-text-mode="ocr_text"] img,
     .desktop-prototype__media-rail--poster button[data-image-text-mode="unknown"] img { object-fit:contain; background:#181411; }
     .desktop-prototype__media-rail--poster button span { position:absolute; inset:auto .25rem .2rem; padding:.12rem .3rem; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:.62rem; font-weight:850; }
     .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more { display:grid; place-content:center; gap:.05rem; border:1px solid rgba(255,255,255,.2); background:#fffaf2; color:#241c17; line-height:1; }
     .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more span { position:static; padding:0; background:transparent; color:#6f6157; font-size:.58rem; }
+    .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-poster-track { height:calc(100svh - 73px); grid-template-rows:minmax(0,1fr) auto; }
+    .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-prototype__media--poster-scroll .desktop-prototype__media-opener { height:100%; min-height:0; overflow:hidden; }
+    .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-prototype__media--poster-scroll .desktop-prototype__media-image { position:absolute; inset:0; height:100% !important; object-fit:cover !important; object-position:center center !important; }
   }
 
   @media (min-width:1024px) and (max-width:1279px) {

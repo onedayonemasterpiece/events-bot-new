@@ -22,15 +22,21 @@ type Scenario = {
   autoRotate?: boolean;
   ocrSafeCover?: boolean;
   ocrSourceIndexes?: number[];
+  duplicateSourceIndexes?: number[];
+  splitMediaFit?: 'natural' | 'viewport-cover';
+  relatedMediaTreatment?: 'cover' | 'ambient' | 'hybrid';
 };
 
 const scenarios: Scenario[] = [
   { slug: 'editorial-photo', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4] },
   { slug: 'editorial-photo-continuous', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'continuous', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4] },
   { slug: 'editorial-ocr-companion', eventId: 5783, candidate: 'editorial', mediaPolicy: 'ocr', editorialMotion: 'pinned', heroImageIndex: 3, heroWidth: 2560, heroHeight: 1707, heroObjectPosition: '50% 52%', ocrCompanionImageIndex: 0, editorialRail: true, autoRotate: false },
-  { slug: 'split-ocr', eventId: 5077, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0 },
-  { slug: 'split-portrait', eventId: 6550, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
-  { slug: 'split-low-resolution', eventId: 5761, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 5, heroWidth: 800, heroHeight: 602 },
+  { slug: 'split-ocr', eventId: 5077, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0, duplicateSourceIndexes: [1] },
+  { slug: 'split-portrait', eventId: 6550, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0, duplicateSourceIndexes: [1, 2] },
+  { slug: 'split-low-resolution', eventId: 5761, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 5, heroWidth: 800, heroHeight: 602, splitMediaFit: 'viewport-cover' },
+  { slug: 'related-cover', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'cover' },
+  { slug: 'related-ambient', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'ambient' },
+  { slug: 'related-hybrid', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'hybrid' },
 ];
 
 export function getStaticPaths() {
@@ -41,6 +47,9 @@ export function getStaticPaths() {
     'split-ocr',
     'split-portrait',
     'split-low-resolution',
+    'related-cover',
+    'related-ambient',
+    'related-hybrid',
   ].map((scenario) => ({ params: { scenario } }));
 }
 
@@ -76,5 +85,8 @@ const description = event.meta_description || event.summary || event.title;
     autoRotate={scenario.autoRotate}
     ocrSafeCover={scenario.ocrSafeCover}
     ocrSourceIndexes={scenario.ocrSourceIndexes}
+    duplicateSourceIndexes={scenario.duplicateSourceIndexes}
+    splitMediaFit={scenario.splitMediaFit}
+    relatedMediaTreatment={scenario.relatedMediaTreatment}
   />
 </EventLayout>

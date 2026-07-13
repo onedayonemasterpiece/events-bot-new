@@ -40,6 +40,9 @@ const required = [
   'lab/event-desktop/examples/split-ocr/index.html',
   'lab/event-desktop/examples/split-portrait/index.html',
   'lab/event-desktop/examples/split-low-resolution/index.html',
+  'lab/event-desktop/examples/related-cover/index.html',
+  'lab/event-desktop/examples/related-ambient/index.html',
+  'lab/event-desktop/examples/related-hybrid/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -112,8 +115,9 @@ const eventDesktopLabHtml = readFileSync(join(root, 'lab/event-desktop/index.htm
 for (const marker of [
   'data-desktop-event-lab',
   'data-desktop-media-families',
-  'data-desktop-focus-v7',
+  'data-desktop-focus-v8',
   'Два итоговых семейства',
+  'Без плоских полей',
   'Editorial motion',
   'Закреплённый',
   'Непрерывный',
@@ -123,6 +127,9 @@ for (const marker of [
   'split-ocr',
   'split-portrait',
   'split-low-resolution',
+  'related-cover',
+  'related-ambient',
+  'related-hybrid',
   'OCR + сильная horizontal',
   'Горизонталь низкого разрешения',
 ]) {
@@ -134,9 +141,12 @@ const desktopExampleContracts = [
   ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'data-editorial-motion="pinned"', '--image-position:50% 80%', 'desktop-prototype__media-rail', 'data-continuous-event-body']],
   ['editorial-photo-continuous', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'data-editorial-motion="continuous"', '--image-position:50% 80%', 'desktop-prototype__media-rail']],
   ['editorial-ocr-companion', 5783, 'editorial', 'ocr', ['Великие учителя', 'data-selected-media-policy="visual_only"', 'data-editorial-ocr-companion', 'Оригинальная афиша', 'data-source-index="0"']],
-  ['split-ocr', 5077, 'split', 'ocr', ['Калининград и область как кинодекорация', 'data-slow-media-track', 'data-split-media-rail', 'data-continuous-event-body']],
-  ['split-portrait', 6550, 'split', 'non-ocr', ['Концерт 21-го военного оркестра', 'data-split-media-rail', 'data-slow-media-speed="0.36"']],
-  ['split-low-resolution', 5761, 'split', 'non-ocr', ['Выставка фэнтези-картин', 'data-split-media-rail', 'data-remaining-count']],
+  ['split-ocr', 5077, 'split', 'ocr', ['Калининград и область как кинодекорация', 'data-slow-media-track', 'data-continuous-event-body']],
+  ['split-portrait', 6550, 'split', 'non-ocr', ['Концерт 21-го военного оркестра', 'data-slow-media-speed="0.36"']],
+  ['split-low-resolution', 5761, 'split', 'non-ocr', ['Выставка фэнтези-картин', 'data-split-media-fit="viewport-cover"', 'data-split-media-rail', 'data-rail-aspect', 'data-remaining-count']],
+  ['related-cover', 5658, 'editorial', 'non-ocr', ['data-related-media-treatment="cover"', 'data-related-treatment="cover"']],
+  ['related-ambient', 5658, 'editorial', 'non-ocr', ['data-related-media-treatment="ambient"', 'data-related-treatment="ambient"']],
+  ['related-hybrid', 5658, 'editorial', 'non-ocr', ['data-related-media-treatment="hybrid"', 'data-related-treatment="hybrid"']],
 ];
 for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktopExampleContracts) {
   const html = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
@@ -179,6 +189,7 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
   }
   if (/data-desktop-parallax[^>]*>[\s\S]{0,250}<img[^>]+data-image-text-mode="ocr_text"/iu.test(html)) throw new Error(`OCR example ${scenario} must not receive parallax`);
   if (variant === 'editorial' && visibleHtml.includes('desktop-prototype__photo-count')) throw new Error(`Editorial example ${scenario} must not duplicate its compact rail with a photo-count pill`);
+  if ((scenario === 'split-ocr' || scenario === 'split-portrait') && visibleHtml.includes('data-split-media-rail')) throw new Error(`Semantic-single example ${scenario} must not render a duplicate-only rail`);
 }
 
 const desktopCleanSource = readFileSync(join(siteDir, 'src/components/lab/DesktopEventCleanPage.astro'), 'utf8');
@@ -188,12 +199,15 @@ for (const marker of [
   "motion === 'continuous'",
   'stageTravel * .35',
   "sticky-then-1.00",
-  'height:max(calc(100% + 112px),calc(100vw / var(--image-ratio)))',
-  'object-position:var(--image-position) !important',
+  'height:calc(100vw / var(--image-ratio)) !important',
+  'object-position:top center !important',
   'data-editorial-ocr-companion',
   '.desktop-editorial-companion__image img',
   'object-fit:contain; object-position:center',
   'data-split-media-rail',
+  'data-rail-aspect',
+  'duplicateSourceIndexes',
+  'viewport-cover',
   'data-slow-media-track',
   'data-continuous-event-body',
   'data-hero-gallery-index',
@@ -206,6 +220,10 @@ for (const marker of [
   'data-lab-media-kind',
   'document-minimax-contained',
   'visual-squareish',
+  'mixed-adaptive-ambient',
+  'data-lab-media-treatment',
+  '--lab-ambient-image',
+  'filter:blur(22px)',
   'data-hero-rail-more',
   'data-remaining-count',
   'forcedOcrSourceIndexes',
@@ -607,7 +625,13 @@ if (astroAssetBaseUrl) {
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
-if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
+// Production cards must never conceal fitting failures with duplicated/blurred posters. The
+// noindex desktop lab has one explicit ambient comparison; remove only that tightly scoped rule
+// before applying the unchanged production guard.
+const labAmbientRules = css.match(/[^{}]*desktop-clean-related__grid[^{}]*data-lab-media-treatment=ambient[^{}]*\{[^{}]*background-image:var\(--lab-ambient-image\)[^{}]*filter:blur\(22px\)[^{}]*\}/giu) || [];
+if (!labAmbientRules.length) throw new Error('Desktop related-media lab misses its explicitly scoped ambient comparison rule');
+const productionCss = labAmbientRules.reduce((remainingCss, rule) => remainingCss.replace(rule, ''), css);
+if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(productionCss)) throw new Error('Duplicate/backdrop poster fill leaked into production CSS');
 const preserveContainRules = css.match(/[^}]*event-card__media-shell--preserve[^{}]*\{[^}]*object-fit:\s*contain[^}]*\}/giu) || [];
 if (preserveContainRules.some((rule) => !rule.includes('desktop-clean-related__grid') || (!rule.includes('poster-contain-fallback') && !rule.includes('data-lab-media-kind')))) throw new Error('Production OCR-safe card media must not use contain over a fixed frame');
 if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
