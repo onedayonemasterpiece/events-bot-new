@@ -226,7 +226,10 @@ the high-probability exception to the generic two-query wave. With adaptive
 search enabled they may consume up to
 `REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE=10` source-local
 queries in one run, ordered by evidence-specific locations and then by the
-diverse regional place/POI bank. The pass still stops on the first fresh exact
+diverse regional place/POI bank. Up to 20 server-side matches per query are
+ranked by proximity to `visit_period_text` before choosing the exact link; this
+prevents a newer incidental mention (for example a Moscow miniature containing
+Kaliningrad) from hiding the independently evidenced 2025 trip. The pass still stops on the first fresh exact
 KO post, uses the same 5–9 second human-like pauses, never bypasses cached
 entity/FloodWait rules, and persists its cursor for continuation. Thus the
 extra budget is spent only after an author is independently confirmed as an

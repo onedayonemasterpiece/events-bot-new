@@ -8771,6 +8771,59 @@ def source_fast_check_evidence_priority_queries(
     return list(dict.fromkeys(matched))
 
 
+def source_fast_check_evidence_visit_date(source_row: dict[str, Any] | None = None) -> datetime | None:
+    """Best-effort midpoint for ranking search hits near a confirmed visit."""
+    row = source_row if isinstance(source_row, dict) else {}
+    raw = str(row.get("external_blogger_visit_period_text") or "").strip().lower().replace("ё", "е")
+    if not raw:
+        return None
+    exact = re.search(r"(\d{1,2})(?:\s*[–—-]\s*\d{1,2})?[./](\d{1,2})[./](20\d{2})", raw)
+    if exact:
+        try:
+            return datetime(int(exact.group(3)), int(exact.group(2)), int(exact.group(1)), tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    year_match = re.search(r"\b(20\d{2})\b", raw)
+    if not year_match:
+        return None
+    year = int(year_match.group(1))
+    month_patterns = {
+        r"январ[а-я]*": 1, r"феврал[а-я]*": 2, r"март[а-я]*": 3,
+        r"апрел[а-я]*": 4, r"(?:май|мая|мае)": 5, r"июн[а-я]*": 6,
+        r"июл[а-я]*": 7, r"август[а-я]*": 8, r"сентябр[а-я]*": 9,
+        r"октябр[а-я]*": 10, r"ноябр[а-я]*": 11, r"декабр[а-я]*": 12,
+    }
+    months: list[int] = []
+    for pattern, month in month_patterns.items():
+        if re.search(rf"(?<![а-я]){pattern}(?![а-я])", raw):
+            months.append(month)
+    if not months:
+        return datetime(year, 7, 1, tzinfo=timezone.utc)
+    month = round(sum(set(months)) / len(set(months)))
+    return datetime(year, max(1, min(12, month)), 15, tzinfo=timezone.utc)
+
+
+def source_fast_check_order_messages(
+    messages: list[Any],
+    source_row: dict[str, Any] | None = None,
+) -> list[Any]:
+    """Prefer posts near the independently evidenced trip period."""
+    row = source_row if isinstance(source_row, dict) else {}
+    if str(row.get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external":
+        return messages
+    target = source_fast_check_evidence_visit_date(row)
+    if target is None:
+        return messages
+
+    def key(message: Any) -> tuple[float, float]:
+        dt = normalize_post_datetime(getattr(message, "date", None))
+        if dt is None:
+            return (float("inf"), 0.0)
+        return (abs((dt - target).total_seconds()), -dt.timestamp())
+
+    return sorted(messages, key=key)
+
+
 def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key in [
@@ -8978,10 +9031,17 @@ async def run_source_fast_check_ko(
                 governor.total_attempted += 1
                 governor.requests_by_method["iter_messages.fast_check_ko"] = governor.requests_by_method.get("iter_messages.fast_check_ko", 0) + 1
                 try:
+                    result_limit = getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2)
+                    if str(previous_queue_row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external":
+                        result_limit = max(
+                            result_limit,
+                            getenv_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_RESULTS_PER_QUERY", 20),
+                        )
                     messages = await telethon_iter_messages_list(
                         client, entity, method_name="iter_messages.fast_check_ko", search=q,
-                        limit=getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2),
+                        limit=result_limit,
                     )
+                    messages = source_fast_check_order_messages(messages, previous_queue_row)
                 except Exception:
                     governor.total_error += 1
                     raise

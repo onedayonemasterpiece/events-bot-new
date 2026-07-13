@@ -1397,6 +1397,26 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             )
         self.assertEqual(len(queries), 2)
 
+    def test_confirmed_blogger_search_hits_are_ranked_near_visit_period(self) -> None:
+        mod = load_module()
+        recent_mention = types.SimpleNamespace(
+            id=2, date=mod.datetime(2026, 6, 1, tzinfo=mod.timezone.utc),
+            message="Макет Калининграда в Москве",
+        )
+        actual_trip = types.SimpleNamespace(
+            id=1, date=mod.datetime(2025, 9, 24, tzinfo=mod.timezone.utc),
+            message="Наш маршрут по Калининградской области",
+        )
+        ordered = mod.source_fast_check_order_messages([recent_mention, actual_trip], {
+            "external_blogger_evidence_status": "confirmed_external",
+            "external_blogger_visit_period_text": "22–25.09.2025",
+        })
+        self.assertEqual([message.id for message in ordered], [1, 2])
+        month_range = mod.source_fast_check_evidence_visit_date({
+            "external_blogger_visit_period_text": "май–июнь 2025",
+        })
+        self.assertEqual((month_range.year, month_range.month), (2025, 6))
+
     def test_confirmed_blogger_backlog_does_not_spend_fast_check_on_generic_sources(self) -> None:
         mod = load_module()
         old_cached = os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY")
