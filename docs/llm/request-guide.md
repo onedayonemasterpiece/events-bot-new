@@ -54,6 +54,15 @@ Avoid deterministic “editorial” rewrites (e.g. renaming, adding semantic pre
 rewriting sentences) unless it’s a narrowly scoped safety invariant and it’s
 explicitly documented as an exception.
 
+Separate high-volume event processing from final public-copy generation. Model
+routing may optimize extraction, matching, grounding and other internal
+processing contracts independently, but must not silently change the approved
+writer for a public surface. In particular, the `tg_event_publish` intro is a
+Gemini Lite-only public-copy contract: it must not inherit a Gemma fallback
+chain. If Lite is unavailable or its answer fails validation, use the existing
+source-grounded canonical text rather than asking another model to author the
+public hook.
+
 Documented exceptions (rare, guardrail-only):
 - Collapsing duplicate drafts produced from a single umbrella “program/schedule” post
   into one event with a `time` range (prevents accidental duplicates).

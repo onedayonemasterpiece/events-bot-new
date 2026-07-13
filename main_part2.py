@@ -5215,13 +5215,11 @@ TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
 TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
-# This projection-only hook runs once per Telegram publication attempt, including
-# retries.  Keep it on the higher-RPD Gemma lane by default; using the shared
-# Lite lane here caused retry backlogs to collide with Smart Update's bounded
-# semantic stages at the provider's minute quota.  Operators can still opt in
-# explicitly, and the existing grounded fallback keeps publication available
-# when the hosted Gemma response is unusable.
-TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemma-4-31b-it")
+# This is a final public-copy writer, not an internal processing stage.  Keep it
+# on Gemini Lite by policy; the call site disables cross-model fallbacks and
+# bounds each publication attempt to one request so a retry backlog cannot
+# multiply Lite calls within the same attempt.
+TG_EVENT_REWRITE_MODEL = "gemini-3.1-flash-lite"
 TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
@@ -6009,11 +6007,11 @@ async def build_tg_event_hook_text(
             consumer="tg_event_publish",
             incident_notifier=notify_llm_incident,
         )
-        # This projection has a source-grounded local fallback and may run again
-        # for every outbox retry.  Do not inherit the process-wide model chain:
-        # in production a failed Gemma hook otherwise fell through to the scarce
-        # Gemini Lite lane after three hosted attempts.  One best-effort Gemma
-        # call is enough here; publication must continue with canonical text.
+        # This is a public-copy writer, not an event-processing stage.  Project
+        # policy requires Gemini Lite for public Telegram prose and forbids a
+        # provider fallback to Gemma.  Keep the call bounded to one attempt; if
+        # Lite is unavailable, publication continues with canonical grounded
+        # text instead of letting another model author the public hook.
         client.fallback_models = []
         client.max_retries = 1
         raw, _usage = await client.generate_content_async(
