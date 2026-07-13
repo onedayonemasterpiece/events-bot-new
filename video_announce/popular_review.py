@@ -391,9 +391,9 @@ async def _rehydrate_vk_photo_urls(source_post_url: str | None) -> list[str]:
     # normal managed-storage uploader before persisting whenever possible.
     try:
         from poster_media import process_media
-        from vk_intake import download_photos
+        from vk_intake import _download_photo_media
 
-        images = await download_photos(raw_urls)
+        images = await _download_photo_media(raw_urls)
         media, _storage_msg = await process_media(
             images,
             need_catbox=True,
