@@ -456,31 +456,6 @@ def test_tg_event_utility_hashtags_ignore_conflicting_description():
     assert "#концерт" not in text
 
 
-def test_tg_event_utility_fallback_is_practical_not_generic_question():
-    text = (
-        "Собранное сырье будет направлено на перерабатывающее предприятие. "
-        "От одного физического лица принимается не более 4 шин."
-    )
-    event = _event(title="Прием шин", source_text=text)
-
-    hook = main._fallback_tg_event_hook_text(event, text)
-
-    assert "до 4 чистых шин" in hook
-    assert not hook.startswith("Что здесь стоит увидеть?")
-
-
-def test_tg_event_fallback_skips_repetitive_openers():
-    event = _event(
-        short_description="Хотите камерный вечер в музее?",
-        search_digest="Редкая камерная программа в спокойном формате.",
-        source_text="Готовы услышать редкую программу?",
-    )
-
-    hook = main._fallback_tg_event_hook_text(event, event.source_text)
-
-    assert hook == "Редкая камерная программа в спокойном формате."
-
-
 @pytest.mark.asyncio
 async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     import google_ai
@@ -519,6 +494,98 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     assert len(clients) == 1
     assert hook.startswith("Можно сдать")
     assert "Что здесь стоит увидеть?" not in hook
+
+
+@pytest.mark.asyncio
+async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(monkeypatch):
+    import google_ai
+
+    source = "Музыканты исполнят редкую камерную программу."
+    event = _event(id=81, title="Камерный концерт", source_text=source)
+
+    class FailingLiteClient:
+        def __init__(self, *args, **kwargs):
+            self.fallback_models = ["gemma-4-31b-it"]
+            self.max_retries = 3
+
+        async def generate_content_async(self, **kwargs):
+            assert kwargs["model"] == "gemini-3.1-flash-lite"
+            assert self.fallback_models == []
+            assert self.max_retries == 1
+            raise RuntimeError("lite unavailable")
+
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FailingLiteClient)
+
+    async def fake_reserve(db, *, event_id):
+        assert db == "db"
+        assert event_id == 81
+        return 7
+
+    calls = []
+
+    async def fake_ask_4o(prompt, **kwargs):
+        calls.append((prompt, kwargs))
+        return "Редкая камерная программа прозвучит в живом исполнении."
+
+    monkeypatch.setattr(main, "_reserve_tg_event_4o_fallback", fake_reserve)
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    hook = await main.build_tg_event_hook_text(event, source, db="db")
+
+    assert hook.startswith("Редкая камерная программа")
+    assert len(calls) == 1
+    assert calls[0][1]["model"] == "gpt-4o"
+    assert calls[0][1]["allow_model_fallback"] is False
+    assert calls[0][1]["meta"]["consumer"] == "tg_event_publish_fallback"
+    assert calls[0][1]["meta"]["daily_request_no"] == 7
+
+
+@pytest.mark.asyncio
+async def test_tg_event_hook_has_no_deterministic_fallback_when_budget_exhausted(monkeypatch):
+    import google_ai
+
+    event = _event(id=82, title="Камерный концерт", source_text="Текст события")
+
+    class InvalidLiteClient:
+        def __init__(self, *args, **kwargs):
+            self.fallback_models = []
+            self.max_retries = 1
+
+        async def generate_content_async(self, **kwargs):
+            return "Хотите камерный вечер?", {}
+
+    monkeypatch.setattr(google_ai, "GoogleAIClient", InvalidLiteClient)
+    monkeypatch.setattr(
+        main,
+        "_reserve_tg_event_4o_fallback",
+        lambda *args, **kwargs: main.asyncio.sleep(0, result=None),
+    )
+
+    async def unexpected_4o(*args, **kwargs):
+        raise AssertionError("4o must not run without a reservation")
+
+    monkeypatch.setattr(main, "ask_4o", unexpected_4o)
+
+    with pytest.raises(main.TelegramEventPublicWriterUnavailable):
+        await main.build_tg_event_hook_text(event, event.source_text, db="db")
+
+
+@pytest.mark.asyncio
+async def test_tg_event_4o_fallback_budget_is_persisted_and_hard_capped(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "TG_EVENT_4O_FALLBACK_DAILY_LIMIT", 2)
+
+    assert await main._reserve_tg_event_4o_fallback(db, event_id=1) == 1
+    assert await main._reserve_tg_event_4o_fallback(db, event_id=2) == 2
+    assert await main._reserve_tg_event_4o_fallback(db, event_id=3) is None
+    rows = await db.exec_driver_sql(
+        "SELECT used, limit_value FROM llm_daily_request_budget "
+        "WHERE budget_key = ?",
+        (main.TG_EVENT_4O_FALLBACK_BUDGET_KEY,),
+    )
+    assert rows == [(2, 2)]
+    await db.close()
 
 
 @pytest.mark.asyncio

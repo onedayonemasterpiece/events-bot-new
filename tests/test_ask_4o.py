@@ -112,3 +112,24 @@ async def test_ask_4o_falls_back_to_mini_near_daily_budget(monkeypatch):
             {},
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_ask_4o_strict_model_fails_instead_of_using_mini(monkeypatch):
+    monkeypatch.setenv("FOUR_O_TOKEN", "test-token")
+    session = DummySession({})
+    monkeypatch.setattr(main, "get_http_session", lambda: session)
+
+    async def fake_resolve(*args, **kwargs):
+        return "gpt-4o-mini"
+
+    monkeypatch.setattr(main, "_resolve_openai_model_for_budget", fake_resolve)
+
+    with pytest.raises(RuntimeError, match="Strict 4o request blocked"):
+        await main.ask_4o(
+            "public text",
+            model="gpt-4o",
+            allow_model_fallback=False,
+        )
+
+    assert session.post_calls == []

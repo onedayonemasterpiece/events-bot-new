@@ -10159,6 +10159,7 @@ async def ask_4o(
     model: str | None = None,
     meta: Mapping[str, Any] | None = None,
     temperature: float = 0.0,
+    allow_model_fallback: bool = True,
 ) -> str:
     token = os.getenv("FOUR_O_TOKEN")
     if not token:
@@ -10182,6 +10183,11 @@ async def ask_4o(
         operation="ask",
         meta=meta,
     )
+    if not allow_model_fallback and selected_model != requested_model:
+        raise RuntimeError(
+            "Strict 4o request blocked by the daily token budget; "
+            f"requested={requested_model} selected={selected_model}"
+        )
     payload: dict[str, Any] = {
         "model": selected_model,
         "messages": messages,

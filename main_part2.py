@@ -5220,6 +5220,9 @@ TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 # bounds each publication attempt to one request so a retry backlog cannot
 # multiply Lite calls within the same attempt.
 TG_EVENT_REWRITE_MODEL = "gemini-3.1-flash-lite"
+TG_EVENT_4O_FALLBACK_MODEL = "gpt-4o"
+TG_EVENT_4O_FALLBACK_DAILY_LIMIT = 100
+TG_EVENT_4O_FALLBACK_BUDGET_KEY = "tg_event_public_writer_4o"
 TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
@@ -5231,6 +5234,10 @@ _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
 
 class TelegramEventPublishUncertainSendError(RuntimeError):
     """Telegram may have accepted a channel message, but the Bot API reply was lost."""
+
+
+class TelegramEventPublicWriterUnavailable(RuntimeError):
+    """No approved LLM writer could produce a valid Telegram public hook."""
 
 
 def _is_telegram_event_uncertain_send_error(exc: Exception) -> bool:
@@ -5930,34 +5937,126 @@ def _tg_event_date_label(event: Event) -> str:
     return str(getattr(event, "date", "") or "")
 
 
-def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
-    if _tg_event_source_is_utility_service(text):
-        return (
-            "Можно сдать до 4 чистых шин на переработку: их отправят на предприятие "
-            "и сделают из сырья новые полезные материалы."
-        )
-    for raw in (
-        getattr(event, "short_description", None),
-        getattr(event, "search_digest", None),
-        text,
-        getattr(event, "description", None),
-        getattr(event, "title", None),
+def _clean_tg_event_hook_candidate(
+    event: Event,
+    source: str,
+    raw: Any,
+    *,
+    max_chars: int,
+) -> str | None:
+    cleaned = re.sub(r"\s+", " ", str(raw or "")).strip().strip("\"'“”«»")
+    cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
+    cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
+    if not cleaned or _TG_EVENT_REPETITIVE_OPENING_RE.match(cleaned):
+        return None
+    if _tg_event_source_is_utility_service(source) and any(
+        marker in cleaned.casefold()
+        for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
     ):
-        value = re.sub(r"\s+", " ", str(raw or "")).strip()
-        if value:
-            sentence = re.split(r"(?<=[.!?])\s+", value, maxsplit=1)[0].strip()
-            sentence = re.sub(r",?\s*подробнее\s*\([^)]+\)\s*$", "", sentence, flags=re.I).strip()
-            if not sentence:
-                continue
-            if _TG_EVENT_REPETITIVE_OPENING_RE.match(sentence):
-                continue
-            base = sentence.rstrip(".!?").strip()
-            if sentence.endswith("?"):
-                return sentence
-            if len(base) > 1:
-                return f"{base}."
-            return base
-    return ""
+        return None
+    if len(cleaned) > max_chars + 30:
+        cleaned = _truncate_tg_plain_body(cleaned, max_chars + 30)
+    return cleaned or None
+
+
+async def _reserve_tg_event_4o_fallback(
+    db: Database | None,
+    *,
+    event_id: int | None,
+) -> int | None:
+    """Atomically reserve one of the 100 persisted UTC-day fallback requests."""
+
+    if db is None or TG_EVENT_4O_FALLBACK_DAILY_LIMIT <= 0:
+        return None
+    day = datetime.now(timezone.utc).date().isoformat()
+    limit = min(max(int(TG_EVENT_4O_FALLBACK_DAILY_LIMIT), 0), 100)
+    await db.exec_driver_sql(
+        """
+        INSERT OR IGNORE INTO llm_daily_request_budget(
+            budget_key, day, used, limit_value, updated_at
+        ) VALUES (?, ?, 0, ?, CURRENT_TIMESTAMP)
+        """,
+        (TG_EVENT_4O_FALLBACK_BUDGET_KEY, day, limit),
+    )
+    rows = await db.exec_driver_sql(
+        """
+        UPDATE llm_daily_request_budget
+        SET used = used + 1,
+            limit_value = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE budget_key = ? AND day = ? AND used < ?
+        RETURNING used
+        """,
+        (limit, TG_EVENT_4O_FALLBACK_BUDGET_KEY, day, limit),
+    )
+    if not rows:
+        logging.error(
+            "tg_event.public_writer_4o_budget_exhausted event_id=%s day=%s limit=%s",
+            event_id,
+            day,
+            limit,
+        )
+        return None
+    used = int(rows[0][0])
+    logging.warning(
+        "tg_event.public_writer_4o_reserved event_id=%s day=%s used=%s limit=%s",
+        event_id,
+        day,
+        used,
+        limit,
+    )
+    return used
+
+
+async def _build_tg_event_hook_via_4o(
+    event: Event,
+    source: str,
+    prompt: str,
+    *,
+    db: Database | None,
+    max_chars: int,
+    max_output_tokens: int,
+) -> str:
+    event_id = getattr(event, "id", None)
+    reserved = await _reserve_tg_event_4o_fallback(db, event_id=event_id)
+    if reserved is None:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: 4o fallback budget is exhausted or unavailable"
+        )
+    try:
+        raw = await ask_4o(
+            prompt,
+            model=TG_EVENT_4O_FALLBACK_MODEL,
+            max_tokens=max_output_tokens,
+            temperature=0.4,
+            allow_model_fallback=False,
+            meta={
+                "consumer": "tg_event_publish_fallback",
+                "event_id": event_id,
+                "daily_request_no": reserved,
+                "daily_request_limit": min(TG_EVENT_4O_FALLBACK_DAILY_LIMIT, 100),
+            },
+        )
+    except Exception as exc:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: strict 4o fallback failed"
+        ) from exc
+    cleaned = _clean_tg_event_hook_candidate(
+        event,
+        source,
+        raw,
+        max_chars=max_chars,
+    )
+    if not cleaned:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: strict 4o fallback returned invalid text"
+        )
+    logging.warning(
+        "tg_event.public_writer_4o_used event_id=%s daily_request_no=%s",
+        event_id,
+        reserved,
+    )
+    return cleaned
 
 
 async def build_tg_event_hook_text(
@@ -5965,10 +6064,18 @@ async def build_tg_event_hook_text(
     text: str,
     *,
     promo_highlight: bool = False,
+    db: Database | None = None,
 ) -> str:
-    source = (text or "").strip()
-    if not source:
-        return _fallback_tg_event_hook_text(event, text)
+    source = (text or "").strip() or "\n".join(
+        str(value).strip()
+        for value in (
+            getattr(event, "description", None),
+            getattr(event, "short_description", None),
+            getattr(event, "search_digest", None),
+            getattr(event, "title", None),
+        )
+        if str(value or "").strip()
+    )
     max_chars = TG_EVENT_PROMO_INTRO_MAX_CHARS if promo_highlight else TG_EVENT_INTRO_MAX_CHARS
     promo_instruction = ""
     if promo_highlight:
@@ -6007,11 +6114,8 @@ async def build_tg_event_hook_text(
             consumer="tg_event_publish",
             incident_notifier=notify_llm_incident,
         )
-        # This is a public-copy writer, not an event-processing stage.  Project
-        # policy requires Gemini Lite for public Telegram prose and forbids a
-        # provider fallback to Gemma.  Keep the call bounded to one attempt; if
-        # Lite is unavailable, publication continues with canonical grounded
-        # text instead of letting another model author the public hook.
+        # This is a public-copy writer, not an event-processing stage. Project
+        # policy requires Gemini Lite first and forbids a Gemma fallback.
         client.fallback_models = []
         client.max_retries = 1
         raw, _usage = await client.generate_content_async(
@@ -6026,22 +6130,27 @@ async def build_tg_event_hook_text(
             getattr(event, "id", None),
             exc_info=True,
         )
-        return _fallback_tg_event_hook_text(event, text)
-    cleaned = re.sub(r"\s+", " ", str(raw or "")).strip().strip("\"'“”«»")
-    cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
-    cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
-    if not cleaned:
-        return _fallback_tg_event_hook_text(event, text)
-    if _TG_EVENT_REPETITIVE_OPENING_RE.match(cleaned):
-        return _fallback_tg_event_hook_text(event, text)
-    if _tg_event_source_is_utility_service(text) and any(
-        marker in cleaned.casefold()
-        for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
-    ):
-        return _fallback_tg_event_hook_text(event, text)
-    if len(cleaned) > max_chars + 30:
-        cleaned = _truncate_tg_plain_body(cleaned, max_chars + 30)
-    return cleaned
+        raw = None
+    cleaned = _clean_tg_event_hook_candidate(
+        event,
+        source,
+        raw,
+        max_chars=max_chars,
+    )
+    if cleaned:
+        return cleaned
+    logging.warning(
+        "tg_event.public_writer_lite_invalid event_id=%s; trying strict 4o fallback",
+        getattr(event, "id", None),
+    )
+    return await _build_tg_event_hook_via_4o(
+        event,
+        source,
+        prompt,
+        db=db,
+        max_chars=max_chars,
+        max_output_tokens=260 if promo_highlight else 180,
+    )
 
 
 def _truncate_tg_plain_body(text: str, max_chars: int) -> str:
@@ -6064,6 +6173,7 @@ async def build_tg_event_announcement_for_publish(
     text: str,
     festival: Festival | None = None,
     *,
+    db: Database | None = None,
     force_caption_limit: bool = False,
     include_calendar_link: bool = False,
     promo_highlight: bool = False,
@@ -6076,6 +6186,7 @@ async def build_tg_event_announcement_for_publish(
         event,
         text,
         promo_highlight=promo_highlight,
+        db=db,
     )
     message_html = build_tg_event_announcement(
         event,
@@ -6333,6 +6444,7 @@ async def publish_tg_event_announcement(
         event,
         text,
         festival=festival,
+        db=db,
         force_caption_limit=bool(chunks),
         include_calendar_link=desired_mode == "album_caption",
         promo_highlight=promo_highlight,

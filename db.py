@@ -2387,6 +2387,22 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_kaggle_resource_lease_status ON kaggle_resource_lease(status, expires_at)"
             )
 
+            dbg("llm_daily_request_budget")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS llm_daily_request_budget(
+                    budget_key TEXT NOT NULL,
+                    day TEXT NOT NULL,
+                    used INTEGER NOT NULL DEFAULT 0,
+                    limit_value INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(budget_key, day),
+                    CHECK(used >= 0),
+                    CHECK(limit_value >= 0)
+                )
+                """
+            )
+
             await conn.commit()
 
     async def _ensure_conn(self) -> aiosqlite.Connection:
