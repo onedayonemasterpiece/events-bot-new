@@ -195,6 +195,9 @@ The audit repair queue was also applied:
   support; a thin teaser must produce conservative copy rather than importing
   recap details or inventing activities. No verifier call or deterministic
   narrative fallback was added.
+- [x] Make managed VK re-sync exact-text idempotent: distinct historical body
+  versions remain separated, but identical adjacent copies collapse and a
+  location-only repair cannot append the same description again.
 
 ## Follow-up Actions
 

@@ -7091,10 +7091,23 @@ async def sync_vk_source_post(
             lines = _strip_vk_source_tail_lines(lines)
             texts.append("\n".join(lines).strip())
 
+        # Managed re-syncs may carry the same canonical body again (for
+        # example, a location-only repair). Preserve genuinely different text
+        # versions, but collapse exact adjacent copies so an idempotent repair
+        # cannot grow separator/body duplicates on every retry.
+        deduped_texts: list[str] = []
+        for previous_text in texts:
+            if previous_text and (
+                not deduped_texts or previous_text != deduped_texts[-1]
+            ):
+                deduped_texts.append(previous_text)
+        texts = deduped_texts
+
         text_clean = sanitize_for_vk(text).strip()
         if texts:
             if append_text:
-                texts.append(text_clean)
+                if text_clean and text_clean != texts[-1]:
+                    texts.append(text_clean)
             else:
                 texts[-1] = text_clean
         else:

@@ -1787,7 +1787,9 @@ async def test_sync_vk_source_post_appends_only_text(monkeypatch):
 
     edited = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["text"] = message
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
@@ -1813,6 +1815,46 @@ async def test_sync_vk_source_post_appends_only_text(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_does_not_append_identical_text(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    event = main.Event(
+        title="Выставка",
+        description="",
+        date="2026-07-18",
+        time="",
+        location_name="Янтарный",
+        city="Янтарный",
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_1"
+    existing = main.build_vk_source_message(event, "Однодневная уличная выставка.")
+
+    async def fake_vk_api(method, *_, **__):
+        return {"response": [{"text": existing}]}
+
+    edited = {}
+
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
+        edited["text"] = message
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+
+    await main.sync_vk_source_post(
+        event,
+        "Однодневная уличная выставка.",
+        None,
+        None,
+        append_text=True,
+    )
+
+    assert edited["text"].count("Однодневная уличная выставка.") == 1
+    assert main.CONTENT_SEPARATOR not in edited["text"]
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_updates_without_append(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     event = main.Event(
@@ -1831,7 +1873,9 @@ async def test_sync_vk_source_post_updates_without_append(monkeypatch):
 
     edited = {}
 
-    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(
+        url, message, db=None, bot=None, attachments=None, **kwargs
+    ):
         edited["text"] = message
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
