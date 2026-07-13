@@ -14,7 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 import urllib.request
 
@@ -221,12 +221,37 @@ SMART_UPDATE_WRITER_MODEL = (
     os.getenv("SMART_UPDATE_WRITER_MODEL", "gemini-3.1-flash-lite").strip()
     or SMART_UPDATE_MODEL
 )
+SMART_UPDATE_FORCE_STAGED_GEMINI = (
+    os.getenv("SMART_UPDATE_FORCE_STAGED_GEMINI", "0") or ""
+).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _resolve_smart_update_model(label: str | None) -> str:
     label_l = (label or "").strip().lower()
+    if SMART_UPDATE_FORCE_STAGED_GEMINI:
+        if (
+            label_l in {
+                "facts_extract",
+                "rich_facts_extract",
+                "title_recover",
+                "title_recover_public",
+                "anchor_role_review",
+                "create_bundle_grounding",
+                "occurrence_scope_review",
+            }
+            or label_l.endswith(":fact_first_cov")
+        ):
+            return SMART_UPDATE_FACTS_MODEL
+        return SMART_UPDATE_WRITER_MODEL
     # Pure facts extraction stages (split-create / fact-first paths).
-    if label_l in {"facts_extract", "rich_facts_extract", "title_recover", "title_recover_public"}:
+    if label_l in {
+        "facts_extract",
+        "rich_facts_extract",
+        "title_recover",
+        "title_recover_public",
+        "anchor_role_review",
+        "create_bundle_grounding",
+    }:
         return SMART_UPDATE_FACTS_MODEL
     # Pure writer stages (split-create / fact-first paths). The fact-first
     # writer label is composed as ``f"{label}:fact_first_desc"`` (e.g.
@@ -380,6 +405,16 @@ SMART_UPDATE_REWRITE_MAX_TOKENS = _env_int(
     # Default kept fairly high: we want a full description, not a short snippet.
     "SMART_UPDATE_REWRITE_MAX_TOKENS", 1400, lo=120, hi=6500
 )
+def _smart_update_gemma_generation_config(*, temperature: float = 0.0) -> dict[str, Any]:
+    """Shared bounded-stage config.
+
+    The hosted Gemma 4 endpoint rejects ``thinking_budget`` and previously used
+    the complete answer cap for thought-only output. Production therefore routes
+    Smart Update's small staged contracts to Gemini; do not send an unsupported
+    thinking config as a retry workaround.
+    """
+
+    return {"temperature": temperature}
 SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC = _env_int(
     "SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC",
     0,
@@ -705,6 +740,48 @@ OCCURRENCE_SCOPE_REVIEW_SCHEMA = {
         "reason_short": {"type": "string"},
     },
     "required": ["decision", "confidence", "selected_excerpts", "reason_short"],
+    "additionalProperties": False,
+}
+
+ANCHOR_ROLE_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "decision": {"type": "string", "enum": ["keep", "repair", "uncertain"]},
+        "confidence": {"type": "number"},
+        "date": {"type": ["string", "null"]},
+        "end_date": {"type": ["string", "null"]},
+        "time": {"type": ["string", "null"]},
+        "evidence_quotes": {"type": "array", "items": {"type": "string"}},
+        "reason_short": {"type": "string"},
+    },
+    "required": [
+        "decision",
+        "confidence",
+        "date",
+        "end_date",
+        "time",
+        "evidence_quotes",
+        "reason_short",
+    ],
+    "additionalProperties": False,
+}
+
+CREATE_BUNDLE_GROUNDING_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "decision": {"type": "string", "enum": ["grounded", "ungrounded", "uncertain"]},
+        "confidence": {"type": "number"},
+        "unsupported_fields": {"type": "array", "items": {"type": "string"}},
+        "evidence_quotes": {"type": "array", "items": {"type": "string"}},
+        "reason_short": {"type": "string"},
+    },
+    "required": [
+        "decision",
+        "confidence",
+        "unsupported_fields",
+        "evidence_quotes",
+        "reason_short",
+    ],
     "additionalProperties": False,
 }
 
@@ -4442,7 +4519,9 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         "Смысловое решение принадлежит тебе; даты и векторы — только подсказки.\n"
         "Выбери только блок target и общие строки, которые явно относятся ко всем пунктам "
         "(например общая цена/ужин/адрес). Не включай названия, программу, артистов или "
-        "описания соседних дат. Верни selected_excerpts как короткие ДОСЛОВНЫЕ непрерывные "
+        "описания соседних дат. Целевой блок должен одновременно поддерживать дату и "
+        "локацию/город target; если дата в источнике связана с другим городом/площадкой, верни uncertain. "
+        "Верни selected_excerpts как короткие ДОСЛОВНЫЕ непрерывные "
         "фрагменты source_text. Если принадлежность строк неясна — uncertain. Если источник "
         "действительно описывает одну многодневную программу, верни single_event. Только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
@@ -4475,8 +4554,167 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     target_date = _parse_iso_date(candidate.date)
     if target_date and (target_date.day, target_date.month) not in _extract_day_month_pairs(scoped):
         return False, "llm_scope_missing_target_date"
+    # Narrow grounding rail: when the full multi-occurrence source explicitly
+    # contains the candidate city, the selected occurrence must preserve it.
+    # This catches a date from one city being paired with a venue from another;
+    # the LLM still owns selection, while this only validates its evidence.
+    if (
+        candidate.city
+        and _source_supports_location_value(corpus, candidate.city)
+        and not _source_supports_location_value(scoped, candidate.city)
+    ):
+        return False, "llm_scope_missing_target_city"
     candidate.occurrence_scope_text = scoped
     return True, "llm_scoped"
+
+
+def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tuple[bool, str]:
+    """High-recall router only; the LLM owns the date/time role decision."""
+
+    if str(candidate.source_type or "").strip().lower() not in {"vk", "tg", "telegram"}:
+        return False, "non_social_source"
+    corpus = _candidate_location_grounding_corpus(candidate)
+    if not corpus:
+        return False, "empty_source"
+    times = {
+        f"{int(hour):02d}:{minute}"
+        for hour, minute in re.findall(r"(?<!\d)([01]?\d|2[0-3])[.:]([0-5]\d)(?!\d)", corpus)
+    }
+    if len(times) >= 2 and re.search(
+        r"(?iu)\b(?:сбор\s+гостей|сбор\s+участников|doors|начал[оа]|start|открытие)\b",
+        corpus,
+    ):
+        return True, "multiple_role_times"
+    if _has_long_event_duration_signals(corpus):
+        return True, "explicit_range"
+    return False, "no_role_ambiguity"
+
+
+def _valid_hhmm_or_none(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", raw)
+    return raw if match else None
+
+
+async def _llm_review_candidate_anchor_roles(
+    candidate: "EventCandidate",
+    *,
+    trigger_reason: str,
+) -> tuple[bool, str]:
+    """Ground date/range/start-time roles in exact source/OCR evidence."""
+
+    corpus = _candidate_location_grounding_corpus(candidate)
+    payload = {
+        "today": date.today().isoformat(),
+        "trigger": trigger_reason,
+        "candidate": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "end_date": candidate.end_date,
+            "time": candidate.time,
+            "event_type": candidate.event_type,
+        },
+        "source_and_ocr": _clip(corpus, 8000),
+    }
+    prompt = (
+        "Ты проверяешь роли дат и времени одного публичного события по source/OCR. "
+        "Отличай время начала события от doors/сбора гостей/открытия, дату открытия "
+        "от полного периода работы и несколько отдельных occurrences от непрерывного range. "
+        "Для многодневного периода ставь time=null, если единственное время относится "
+        "только к открытию/вернисажу, а не к ежедневному расписанию всего периода. "
+        "Если evidence однозначно поддерживает candidate — keep. Если однозначно даёт другие "
+        "date/end_date/time — repair. Иначе uncertain. date/end_date только YYYY-MM-DD, time "
+        "только HH:MM; null означает, что поле не подтверждено. evidence_quotes должны быть "
+        "короткими ДОСЛОВНЫМИ фрагментами source_and_ocr. Не додумывай период. Только JSON.\n"
+        f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        ANCHOR_ROLE_REVIEW_SCHEMA,
+        max_tokens=500,
+        label="anchor_role_review",
+    )
+    if not isinstance(data, dict):
+        return False, "llm_unavailable"
+    decision = str(data.get("decision") or "uncertain").strip().lower()
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
+    corpus_norm = _norm_text_for_grounding(corpus)
+    if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
+        return False, "llm_evidence_not_verbatim"
+    if decision == "keep" and confidence >= 0.9:
+        return True, "llm_keep"
+    if decision != "repair" or confidence < 0.85:
+        return False, f"llm_{decision or 'uncertain'}"
+    repaired_date = str(data.get("date") or "").strip() or None
+    repaired_end = str(data.get("end_date") or "").strip() or None
+    repaired_time = _valid_hhmm_or_none(data.get("time"))
+    if repaired_date and _parse_iso_date(repaired_date) is None:
+        return False, "llm_invalid_date"
+    if repaired_end and _parse_iso_date(repaired_end) is None:
+        return False, "llm_invalid_end_date"
+    if data.get("time") and repaired_time is None:
+        return False, "llm_invalid_time"
+    if not repaired_date:
+        return False, "llm_missing_date"
+    if repaired_end and _parse_iso_date(repaired_end) < _parse_iso_date(repaired_date):
+        return False, "llm_inverted_range"
+    candidate.date = repaired_date
+    candidate.end_date = repaired_end
+    candidate.end_date_is_inferred = False
+    candidate.time = repaired_time
+    candidate.time_is_default = False
+    return True, "llm_repair"
+
+
+async def _llm_review_create_bundle_grounding(
+    bundle: Mapping[str, Any],
+    candidate: "EventCandidate",
+) -> tuple[bool, str]:
+    """LLM-first, source-only entailment gate for every generated public field."""
+
+    corpus = _candidate_location_grounding_corpus(candidate)
+    if not corpus:
+        return False, "empty_source"
+    public_bundle = {
+        key: bundle.get(key)
+        for key in ("title", "description", "facts", "search_digest", "short_description")
+    }
+    prompt = (
+        "Ты fail-closed проверяешь, что ВСЕ поля generated_bundle относятся только к одному "
+        "событию и семантически следуют из source_and_ocr. Перефразирование допустимо; новые "
+        "имена, организаторы, миры/франшизы, программа, условия или утверждения запрещены. "
+        "Проверь title, description, каждый facts, search_digest и short_description. "
+        "grounded ставь только если unsupported_fields пуст и confidence >= 0.9; при сомнении "
+        "uncertain. evidence_quotes — короткие ДОСЛОВНЫЕ фрагменты источника. Только JSON.\n"
+        f"INPUT:\n{json.dumps({'source_and_ocr': _clip(corpus, 9000), 'generated_bundle': public_bundle}, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        CREATE_BUNDLE_GROUNDING_REVIEW_SCHEMA,
+        max_tokens=500,
+        label="create_bundle_grounding",
+    )
+    if not isinstance(data, dict):
+        return False, "llm_unavailable"
+    decision = str(data.get("decision") or "uncertain").strip().lower()
+    unsupported = [str(item or "").strip() for item in (data.get("unsupported_fields") or []) if str(item or "").strip()]
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
+    corpus_norm = _norm_text_for_grounding(corpus)
+    if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
+        return False, "llm_evidence_not_verbatim"
+    if decision != "grounded" or confidence < 0.9 or unsupported:
+        return False, f"llm_{decision or 'uncertain'}"
+    return True, "llm_grounded"
 
 
 def _candidate_needs_llm_location_grounding_review(
@@ -6431,6 +6669,12 @@ def _strip_code_fences(text: str) -> str:
     return cleaned.strip()
 
 
+def _safe_openai_schema_name(label: str, *, prefix: str = "SmartUpdate") -> str:
+    raw = f"{prefix}_{label}"
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", raw).strip("_-")
+    return (safe or prefix or "SmartUpdate")[:64]
+
+
 def _extract_json(text: str) -> dict[str, Any] | None:
     if not text:
         return None
@@ -6530,6 +6774,12 @@ def _smart_update_4o_fallback_budget_allows(label: str) -> bool:
 def _smart_update_4o_fallback_enabled(label: str) -> bool:
     env_value = (os.getenv("SMART_UPDATE_4O_FALLBACK", "1") or "").strip().lower()
     if env_value in {"0", "false", "no", "off"}:
+        return False
+    # These stages can create or approve every public field.  A second writer
+    # must not become an unreviewed semantic authority after the primary model
+    # failed/returned thought-only output.  The split-create path and the
+    # dedicated grounding reviewer are the supported recovery boundary.
+    if label in {"create_bundle", "match_create_bundle", "create_bundle_grounding"}:
         return False
     if SMART_UPDATE_G4_SPLIT_CREATE and label in {
         "rich_facts_extract",
@@ -6678,12 +6928,12 @@ async def _ask_gemma_json_unbounded(
             (os.getenv("SMART_UPDATE_GEMMA_JSON_MIME", "0") or "").strip().lower()
             in {"1", "true", "yes", "on"}
         )
-    json_gen_cfg = {"temperature": 0}
+    json_gen_cfg = _smart_update_gemma_generation_config(temperature=0)
     if _GEMMA_JSON_MIME_SUPPORTED:
         json_gen_cfg["response_mime_type"] = "application/json"
     native_schema_enabled = _smart_update_native_schema_enabled(label)
     native_gen_cfg = {
-        "temperature": 0,
+        **_smart_update_gemma_generation_config(temperature=0),
         "response_mime_type": "application/json",
         "response_schema": _gemma_native_response_schema(schema),
     }
@@ -6780,7 +7030,7 @@ async def _ask_gemma_json_unbounded(
                         ):
                             # Provider/library does not support this key; disable for the rest of the process.
                             _GEMMA_JSON_MIME_SUPPORTED = False  # type: ignore[assignment]
-                            json_gen_cfg = {"temperature": 0}
+                            json_gen_cfg = _smart_update_gemma_generation_config(temperature=0)
                             continue
                         # Rate-limit handling: wait and retry without consuming an attempt.
                         try:
@@ -6843,7 +7093,7 @@ async def _ask_gemma_json_unbounded(
                             )
                         ):
                             _GEMMA_JSON_MIME_SUPPORTED = False  # type: ignore[assignment]
-                            json_gen_cfg = {"temperature": 0}
+                            json_gen_cfg = _smart_update_gemma_generation_config(temperature=0)
                             continue
                         try:
                             from google_ai.exceptions import (
@@ -6942,7 +7192,7 @@ async def _ask_gemma_json_unbounded(
             )
         response_format = {
             "type": "json_schema",
-            "json_schema": {"name": f"SmartUpdate_{label}", "schema": schema},
+            "json_schema": {"name": _safe_openai_schema_name(label), "schema": schema},
         }
         raw_4o = await ask_4o(
             prompt,
@@ -7037,7 +7287,9 @@ async def _ask_gemma_text_unbounded(
                         raw, _usage = await client.generate_content_async(
                             model=model,
                             prompt=prompt,
-                            generation_config={"temperature": temperature},
+                            generation_config=_smart_update_gemma_generation_config(
+                                temperature=temperature
+                            ),
                             max_output_tokens=max_tokens,
                         )
                         break
@@ -7402,7 +7654,7 @@ async def _ask_gemma_json_direct_native(
                     model=SMART_UPDATE_MODEL,
                     prompt=json.dumps(user_payload, ensure_ascii=False, indent=2),
                     generation_config={
-                        "temperature": 0,
+                        **_smart_update_gemma_generation_config(temperature=0),
                         "max_output_tokens": max_tokens,
                         "response_mime_type": "application/json",
                         "system_instruction": system_prompt.strip(),
@@ -7805,7 +8057,7 @@ async def _llm_extract_candidate_facts(
             "- context_methodology_facts: методология, исследование, источник концепции, важные числа, background, который объясняет событие.\n"
             "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры. "
             "Имена организаторов/сообществ/площадок, а также названия вымышленных миров, франшиз и культурных источников "
-            "(например `Плоский мир Терри Пратчетта`) — identity facts: сохраняй их буквально из source_text/raw_excerpt/poster_texts. "
+            "— identity facts: сохраняй их буквально из source_text/raw_excerpt/poster_texts. "
             "Не заменяй организатора тематическим сообществом, площадку организатором или источник вдохновения названием другого сообщества. "
             "Если в источнике есть формула `организовано ...`, `от ...`, `вокруг ...`, `вдохновлено ...`, верни отдельный точный факт "
             "про организатора/сообщество/источник вдохновения; при противоречии разных строк помести сомнительную строку в uncertain_or_drop, "
@@ -8552,6 +8804,12 @@ def _has_long_event_duration_signals(text: str | None) -> bool:
     if re.search(r"\b\d{1,2}[./]\d{1,2}\s*[-–—]\s*\d{1,2}[./]\d{1,2}\b", raw):
         return True
     if month_pat:
+        if re.search(
+            rf"\b(?:с\s+)?\d{{1,2}}\s+(?:по\s+|[-–—]\s*)\d{{1,2}}\s+(?:{month_pat})\b",
+            raw,
+            flags=re.IGNORECASE,
+        ):
+            return True
         if re.search(
             rf"\bс\s+\d{{1,2}}\s+(?:{month_pat})\b.*\bпо\s+\d{{1,2}}\s+(?:{month_pat})\b",
             raw,
@@ -9541,7 +9799,7 @@ async def _llm_create_description_facts_and_digest(
         "- Напиши ПОЛНОЕ развернутое описание события как культурный журналист.\n"
         "- Сохрани ВСЕ значимые факты из source_text/raw_excerpt/poster_texts (кроме логистики).\n"
         "- Организаторы, сообщества, площадки, названия миров/франшиз/источников вдохновения и связи вида `организовано ...`/`вдохновлено ...` переписывай только из явного source evidence. "
-        "Не выводи организатора из тематики, названия сообщества или декоративного текста; если source_text говорит `ОКЦ на Горького 116` и `Плоский мир Терри Пратчетта`, нельзя заменить это на другое сообщество или `мир <сообщества>`.\n"
+        "Не выводи организатора из тематики, названия сообщества или декоративного текста; явные `<ОРГАНИЗАТОР>` и `<ИСТОЧНИК_ВДОХНОВЕНИЯ>` нельзя заменять другим сообществом или придуманным миром.\n"
         "- Если source_text короткий или пустой, опирайся на poster_texts (OCR афиш) как на основной источник фактов.\n"
         "- Объём: описание должно быть близко по объёму к источникам и НЕ превышать `description_budget_chars` символов.\n"
         "  Если источники короткие, описание тоже должно быть коротким (без воды/«атмосферных» вступлений).\n"
@@ -13749,6 +14007,29 @@ async def _smart_event_update_impl(
                 status="invalid",
                 reason="mixed_occurrence_role_ungrounded_location",
             )
+    anchor_review_needed, anchor_review_trigger = _candidate_needs_llm_anchor_role_review(candidate)
+    if anchor_review_needed and not SMART_UPDATE_LLM_DISABLED:
+        anchor_ok, anchor_result = await _llm_review_candidate_anchor_roles(
+            candidate,
+            trigger_reason=anchor_review_trigger,
+        )
+        logger.info(
+            "smart_update.anchor_role_review trigger=%s result=%s ok=%s source_type=%s source_url=%s title=%s date=%s end_date=%s time=%s",
+            anchor_review_trigger,
+            anchor_result,
+            int(anchor_ok),
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.title),
+            candidate.date,
+            candidate.end_date,
+            candidate.time,
+        )
+        if not anchor_ok:
+            return SmartUpdateResult(
+                status="invalid",
+                reason=f"anchor_role_review:{anchor_result}",
+            )
     if _candidate_needs_llm_occurrence_scope_review(candidate) and not SMART_UPDATE_LLM_DISABLED:
         scope_ok, scope_result = await _llm_scope_candidate_occurrence(candidate)
         logger.info(
@@ -15419,6 +15700,26 @@ async def _smart_event_update_impl(
                 )
         except Exception:  # pragma: no cover - provider failures
             bundled = None
+        if (
+            isinstance(bundled, dict)
+            and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
+        ):
+            bundle_ok, bundle_grounding_result = await _llm_review_create_bundle_grounding(
+                bundled,
+                candidate,
+            )
+            logger.info(
+                "smart_update.create_bundle_grounding result=%s ok=%s source_type=%s source_url=%s",
+                bundle_grounding_result,
+                int(bundle_ok),
+                candidate.source_type,
+                candidate.source_url,
+            )
+            if not bundle_ok:
+                return SmartUpdateResult(
+                    status="invalid",
+                    reason=f"create_bundle_grounding:{bundle_grounding_result}",
+                )
         if isinstance(bundled, dict):
             bundled_title_raw = bundled.get("title")
             if isinstance(bundled_title_raw, str) and bundled_title_raw.strip():
@@ -15486,7 +15787,10 @@ async def _smart_event_update_impl(
                 text_filter_facts.append(
                     f"Заголовок отклонён: {clean_title} -> {bundled_title} (причина: ungrounded_title)"
                 )
-                bundled_title = None
+                return SmartUpdateResult(
+                    status="invalid",
+                    reason="ungrounded_create_bundle_title",
+                )
             elif (
                 _title_has_meaningful_tokens(clean_title)
                 and (not _titles_look_related(bundled_title, clean_title))

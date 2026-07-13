@@ -4,6 +4,13 @@ This document describes how the bot communicates with model **4o**.
 
 ## LLM-first policy (applies to all LLM providers)
 
+Prompts and few-shot material must be domain-generic. Do not embed names,
+franchises, organizers or narrative facts from a production incident as a
+positive example in a reusable prompt: a later fallback can copy them into an
+unrelated event. Validate generated public fields against the current
+source/OCR bundle in a separate, small LLM contract and fail closed when the
+evidence is not verbatim/grounded.
+
 If a change affects the *meaning* or perceived quality of event data, prefer
 doing it **inside the LLM** (prompt rules in `docs/llm/prompts.md`, provider
 prompts such as `kaggle/TelegramMonitor/telegram_monitor.py`, or Smart Update

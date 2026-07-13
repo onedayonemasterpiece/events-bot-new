@@ -6,6 +6,31 @@
 
 Smart Update по умолчанию строит публичный текст (`description`, `short_description`, `search_digest`) по схеме **sources → facts → text** (вариант C+D из dry‑run), то есть **строго из извлечённых фактов**, а не из “сырых” текстов источников.
 
+## Production staged contracts (INC-2026-07-13)
+
+Production sets `SMART_UPDATE_FORCE_STAGED_GEMINI=1` and
+`SMART_UPDATE_G4_SPLIT_CREATE=1`. Small semantic contracts (facts, occurrence
+scope, anchor-role and bundle-grounding review) use the configured Gemini facts
+model; writers use the configured Gemini writer model. This is not a
+deterministic semantic fallback: vectors/reference matching only retrieve
+candidates, while the LLM still decides meaning from exact source/OCR evidence.
+
+The hosted Gemma 4 API rejected `thinking_budget` and, under the old small token
+caps, could spend the response on thought-only output. Therefore Smart Update
+does not send an unsupported thinking config and does not use that endpoint for
+the bounded production stages. Create uses native-schema split stages; the
+legacy generated bundle cannot fall through to an unreviewed 4o response.
+
+Before merge/create, social candidates now receive targeted LLM-first checks:
+
+- occurrence scope must support the target date and target city/venue together;
+- doors/guest gathering/opening times are distinguished from the public start;
+- an opening time is not copied to every day of a multi-day range;
+- every generated public field is source/OCR-grounded, otherwise the candidate
+  fails closed;
+- dynamic OpenAI schema names are provider-safe, but this fallback remains
+  disabled for create bundles.
+
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
 - `SMART_UPDATE_FACT_FIRST=0` — rollback на прежний rewrite/merge‑first путь.

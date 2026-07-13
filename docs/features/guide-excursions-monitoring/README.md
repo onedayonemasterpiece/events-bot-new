@@ -192,6 +192,7 @@ Guide track должен быть проверяемым так же, как Sma
   - `GUIDE_MONITORING_RESULTS_STORE_MAX_MB=256`;
   - `GUIDE_MONITORING_RESULTS_STORE_MIN_FREE_MB=256`.
   Эти defaults можно расширять только вместе с явным disk budget; иначе Guide recovery artifacts могут повторно заполнить `/data` и сломать SQLite-backed scheduler/video jobs.
+  Production использует более строгий override: `MAX_RUNS=2`, `MAX_MB=128`, `MIN_FREE_MB=350`. Текущий persist target всегда передаётся в `exclude`, поэтому guard удаляет только предыдущие recovery bundles и не может удалить импортируемый run.
 - Scheduler `kaggle_recovery` проверяет и `guide_monitoring`, так же как остальные Kaggle jobs:
   - если kernel ещё работает, запись остаётся в реестре;
   - если output уже был скачан до рестарта, recovery сначала поднимает import из сохранённого `results_path` без повторного запроса в Kaggle;

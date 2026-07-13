@@ -36,6 +36,8 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 3. **Quality acceptance was too narrow.** The scheduled exhibition duplicate audit covers one event type and high-confidence duplicate heuristics. It cannot attest eventness, occurrence roles, source-grounded location/date/description/media, or all future rows.
 4. **Vector recall was not durable incident memory.** Active-catalog embeddings are useful for duplicate recall but repaired/cancelled regression examples are pruned; vectors do not themselves approve semantic correctness.
 5. **Live acceptance lacked reversible role automation.** The E2E harness correctly failed on authorization, but the authorized temporary grant/restore procedure was not completed in the incident run.
+6. **The primary Smart Update model could exhaust output on hidden reasoning.** Hosted Gemma 4 rejected `thinking_budget`, while small capped contracts sometimes returned only thought/MAX_TOKENS. The generic 4o JSON fallback also reused an incident-specific bundle example and allowed unrelated generated fields to survive after only title rejection; one dynamic schema name contained a provider-invalid colon.
+7. **Occurrence and anchor roles were under-adjudicated.** Retrieval could find the right source/event, but the pipeline did not require one LLM decision to bind date and city to the same occurrence or distinguish doors/opening from event-wide start/range time.
 
 ## Contributing Factors
 
@@ -82,6 +84,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 - Safe first-pass cleanup removed 71 proven stale runtime/source-debug/carousel artifacts (`35,902,184` bytes); SQLite `quick_check` and `/healthz` remained healthy. The dominant persistent pressure was `/data/guide_media` without DB-aware retention.
 - The DB-aware production dry-run then selected 192 old unprotected guide files (`152,264,570` bytes), protected 248 referenced paths and predicted the configured budget would be met. Apply deleted exactly that manifest and healed 506 `guide_monitor_post` rows / 1,295 aligned stale asset references. The post-pass was idempotent (zero candidates/stale paths), all current/future persisted assets existed, `quick_check=ok`, `/healthz ready=true`, and `/data` free space rose to `374,222,848` bytes.
+- A light Guide run completed during cleanup and persisted a new ~64 MB recovery bundle beside the prior ~69 MB partial bundle. The existing guard's 256 MB / 256 MiB-free defaults were below the new warning floor. Both already-imported terminal bundles were removed, raising free space to `428,863,488` bytes; production policy is now two runs / 128 MiB / 350 MiB free, with the currently persisted bundle always excluded.
 - Runtime logging was redesigned with size rotation, a hard total budget, age pruning and a volume free-space floor. `/healthz` now exposes the same disk floor.
 - Guide media now has DB-aware bounded retention: current/future occurrences, recent source posts and current digest issues are protected; only old unprotected regular files are candidates and stale JSON links are healed transactionally.
 - The E2E production row remains unchanged until logging is available and its prior state is backed up.
@@ -89,7 +92,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 ## Corrective Actions
 
 - [x] complete the managed guide-media production dry-run/apply and record final before/after evidence;
-- [ ] deploy bounded runtime logging and verify ongoing writes/rotation guards;
+- [x] deploy bounded runtime logging and verify ongoing writes/rotation guards;
 - [ ] execute reversible E2E role grant, bounded live import and role restoration;
 - [ ] complete the new all-future source/public audit and repair confirmed defects;
 - [ ] deliver LLM-first/vector-first prevention for every confirmed fresh recurrence, not blanket regex mutation;
@@ -103,10 +106,10 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; remaining incident gates pending
-- post-deploy verification: pending
+- deployed SHA: `be635b8e` for bounded logs/disk retention; Smart Update prevention pending release
+- deploy path: `origin/main` / Fly release `1630` for the first phase
+- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch)
+- post-deploy verification: runtime mirror enabled and growing under the 64 MiB budget; Smart Update and E2E gates pending
 
 ## Prevention
 
