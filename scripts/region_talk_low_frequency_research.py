@@ -867,9 +867,17 @@ class TelethonCachedPeerAdapter:
         loop = getattr(self, "_loop", None)
         if client is not None and loop is not None and not loop.is_closed():
             try:
-                loop.run_until_complete(asyncio.wait_for(client.disconnect(), timeout=10))
+                loop.run_until_complete(asyncio.wait_for(client.disconnect(), timeout=30))
             except Exception:
                 pass
+            # Telethon starts update/keepalive tasks even with receive_updates
+            # disabled.  A timed-out disconnect must not leave them pending
+            # when this private loop is closed.
+            pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         if loop is not None and not loop.is_closed():
             loop.close()
 
