@@ -44,15 +44,20 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "source_queue_status": "pending_scan",
             },
         ]
-        duplicate_post = {
+        processed_post = {
             "platform_post_key": "tg:blogger:1",
             "post_url": "https://t.me/blogger/1",
             "source_url": "https://t.me/blogger",
+            "platform": "telegram",
+            "vector_gate_status": "vector_defer_wait_bge_m3",
+        }
+        fused_candidate = {
+            **processed_post,
             "vector_gate_status": "vector_accept_candidate",
         }
         metrics = mod._confirmed_external_blogger_funnel_metrics(
             sources,
-            [duplicate_post, dict(duplicate_post)],
+            [processed_post, dict(processed_post), fused_candidate],
             [{"post_url": "https://t.me/blogger/1"}, {"post_url": "https://t.me/blogger/1"}],
             [{"post_url": "https://t.me/blogger/1", "publication_candidate_status": "tombstoned_reject"}],
             [],

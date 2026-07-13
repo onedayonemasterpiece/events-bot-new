@@ -2879,7 +2879,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     fast_check_local_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "local_region_source"]
     fast_check_spam_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "spam_source_reject"]
     confirmed_external_blogger_metrics = _confirmed_external_blogger_funnel_metrics(
-        source_rows, processed_post_rows, images, publications, deliveries,
+        # Candidate memory owns the durable/latest fused E5+BGE verdict; its
+        # rows intentionally follow processed rows so they win identity dedup
+        # instead of a transient pre-BGE defer or later text compaction.
+        source_rows, [*processed_post_rows, *candidates], images, publications, deliveries,
     )
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_unique_keys)
