@@ -324,7 +324,7 @@ features:
       event_medallions_main_baseline: partial_11_organizers_no_festival_manifest
       event_medallions_release_branch: consolidated_25_organizers_11_festivals
       event_medallions_release_shortlist: p0_open
-      event_medallions_visual_acceptance: exhaustive_playwright_surface_capture_pending
+      event_medallions_visual_acceptance: static_site_exhaustive_playwright_surface_capture_pending_telegram_excluded
     entrypoints:
       - main.py
       - smart_event_update.py

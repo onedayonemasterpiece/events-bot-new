@@ -1,11 +1,13 @@
 # Medallion visual QA: exhaustive target-surface capture
 
-> **Status:** mandatory public-release QA gate; planned, not yet completed. The existing medallion lab screenshots and asset-load smoke are useful evidence, but they do not prove cleanliness on every real surface where medallions are rendered.
+> **Status:** mandatory public-release QA gate for the **static site only**; planned, not yet completed. The existing medallion lab screenshots and asset-load smoke are useful evidence, but they do not prove cleanliness on every real static-site surface where medallions are rendered.
 > **Owner:** release UI/visual acceptance. The canonical visual and semantic contract remains [Event token medallions](event-token-medallions.md).
 
 ## Release requirement
 
-At the release-candidate SHA, Playwright must discover and capture **every actual browser-rendered location where a medallion is visible**, not only the dedicated laboratory page or a hand-picked happy-path event.
+At the release-candidate SHA, Playwright must discover and capture **every actual static-site location where a medallion is visible**, not only the dedicated laboratory page or a hand-picked happy-path event.
+
+Telegram custom-emoji medallions are explicitly outside this QA requirement. Their rendering/runtime QA remains a separate feature concern and does not enter the static-site M1-QA inventory, screenshots or GO verdict.
 
 The evidence must prove that every rendered medallion:
 
@@ -30,7 +32,6 @@ The Playwright run builds its inventory from the frozen RC output and current re
 3. Capture every generated event-detail URL that actually contains one or more medallions. Do not sample only one page per organizer: combinations, wrapping and surrounding content can create page-specific clipping.
 4. Capture `/lab/medallions/` as the exhaustive isolated asset sheet, including organizer/venue, festival/program, source and Pushkin-card variants present in the RC manifests.
 5. Assert that listing, search, related-card and personal-feed surfaces contain no medallion row while they remain outside the approved P0 scope. If a release candidate starts rendering medallions there, those URLs automatically become positive capture targets and need product approval.
-6. Inventory actual Telegram custom-emoji medallion use separately. For each enabled production layout (ordinary text post and album-caption path when present), capture the real final message after the Premium editor through Telegram Web with Playwright. Because native Telegram can lay out custom emoji differently, retain a mobile-client spot-check in addition to, not instead of, the browser evidence.
 
 The run emits a machine-readable `surface-inventory.json`. The gate fails when:
 
@@ -63,15 +64,6 @@ The capture waits for:
 
 Animations and transitions are disabled for deterministic evidence. The full-page screenshot does not replace the token/section crop: both context and edge detail are required to identify clipped shadows and alpha contamination.
 
-### Telegram surfaces
-
-For every enabled Telegram layout with medallions:
-
-- record target channel/message URL, event id, chosen medallion slugs and final edit status;
-- capture desktop and narrow Telegram Web layouts after the custom emoji documents have loaded;
-- verify the complete mosaic, separators, spacing before `Подробнее`, no placeholder grid, no clipping/ellipse deformation and no overlap with album-caption limits;
-- retain one native mobile screenshot per distinct mosaic geometry (`4×4`, wider composite and two-medallion combination) because Telegram Web cannot prove native-client rasterization.
-
 ## Visual verdict and defect handling
 
 Each target receives one verdict:
@@ -99,8 +91,6 @@ artifacts/codex/medallion-visual-qa/<rc-sha>/
   static/desktop/<url-key>--medallions.png
   static/tablet/<layout-key>.png
   lab/<viewport>.png
-  telegram/web/<message-key>.png
-  telegram/native/<geometry-key>.png
   console-network.json
   summary.md
 ```
@@ -108,7 +98,7 @@ artifacts/codex/medallion-visual-qa/<rc-sha>/
 Every inventory/verdict row records at least:
 
 - RC commit SHA and preview/build id;
-- canonical URL or Telegram message URL;
+- canonical static-site URL;
 - page/template/surface kind and event id where applicable;
 - viewport, browser/version and screenshot path;
 - medallion slugs/kinds, asset URLs and rendered bounding boxes;
@@ -117,12 +107,11 @@ Every inventory/verdict row records at least:
 
 ## Release acceptance
 
-- [ ] The RC inventory accounts for 100% of renderer invocations, generated pages with medallions and enabled Telegram medallion layouts.
+- [ ] The RC inventory accounts for 100% of static-site renderer invocations and generated pages with medallions.
 - [ ] Every actual static target has required mobile/desktop Playwright context and section screenshots; each distinct layout also has tablet/boundary evidence.
-- [ ] Every RC manifest/config medallion has an isolated lab or Telegram geometry capture, or an explicit reviewed `not_rendered_in_rc` record.
+- [ ] Every RC static-site manifest medallion has an isolated lab capture or an explicit reviewed `not_rendered_in_rc` record.
 - [ ] Zero `fail_*`, `blocked_capture`, missing screenshots, broken assets, clipped medallions/shadows, dirty alpha/mattes, overlaps or horizontal overflow remain.
 - [ ] Negative assertions prove that unapproved listing/search/related/personal-feed surfaces do not display medallions.
-- [ ] Telegram Web evidence is complete and the required native-client geometry spot-checks pass.
 - [ ] Final owner review is recorded against the immutable RC SHA/build id; evidence from an older CSS/asset/manifest commit does not carry forward silently.
 
 ## Related documentation

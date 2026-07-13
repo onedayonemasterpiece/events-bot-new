@@ -80,7 +80,7 @@ Read-only production snapshot on **2026-07-12** contained `326` active current/f
 - P0 is complete only when every shortlist item is `implemented` or explicitly `deferred_by_owner` with reason; silence is not acceptance.
 - Each accepted asset has provenance, manifest aliases, SVG/WebP contract, preview assertion and mobile (~90px)/desktop (~112px) visual QA. Broken/ambiguous source or distorted artwork fails closed to no medallion.
 - Final release preview must prove no broken asset URLs, no duplicate organizer/festival token for the same identity, no false alias matches, no horizontal overflow and correct accessible labels.
-- Final release preview must also pass the separate [exhaustive target-surface capture](medallion-visual-qa.md): every actual medallion page at mobile/desktop, every distinct layout at its breakpoint state, isolated lab coverage and enabled Telegram layouts, with zero unresolved visual defects.
+- Final release preview must also pass the separate [exhaustive static-site target-surface capture](medallion-visual-qa.md): every actual medallion page at mobile/desktop, every distinct layout at its breakpoint state and isolated lab coverage, with zero unresolved visual defects. Telegram custom-emoji medallions are outside this gate.
 
 ## Visual contract
 
