@@ -514,6 +514,38 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(rows[0]["ko_posts_found"], 2)
         self.assertEqual(rows[0]["fetch_status"], "ok")
 
+    def test_latest_processed_metrics_separate_new_posts_from_refreshed_rows(self) -> None:
+        mod = load_module()
+        run_id = "region-talk-candidate-20260713T160229Z"
+        metrics, rows, unique_keys = mod._latest_processed_post_metrics([
+            {
+                "post_url": "https://t.me/new/1",
+                "run_id": run_id,
+                "first_seen_run_id": run_id,
+            },
+            {
+                "post_url": "https://t.me/known/2",
+                "last_seen_run_id": run_id,
+                "first_seen_run_id": "older-run",
+            },
+            {
+                "post_url": "https://t.me/known/2",
+                "current_run_id": run_id,
+                "first_seen_run_id": "older-run",
+            },
+            {
+                "post_url": "https://t.me/unrelated/3",
+                "run_id": "older-run",
+                "first_seen_run_id": "older-run",
+            },
+        ], run_id)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(unique_keys, {"url:https://t.me/new/1", "url:https://t.me/known/2"})
+        self.assertEqual(metrics["processed_posts_unique_latest_candidate_run_total"], 2)
+        self.assertEqual(metrics["processed_posts_new_latest_candidate_run_total"], 1)
+        self.assertEqual(metrics["processed_posts_reprocessed_latest_candidate_run_total"], 1)
+        self.assertEqual(metrics["processed_post_duplicate_identity_rows_latest_candidate_run_total"], 1)
+
     def test_source_merge_does_not_resurrect_terminal_local_queue_from_online_overlay(self) -> None:
         mod = load_module()
         rows = mod._merge_source_rows(

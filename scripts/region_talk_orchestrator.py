@@ -404,10 +404,20 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('processed_post_duplicate_identity_rows_total')}"
         ),
         (
-            "Последний основной ноутбук — уникальных постов обработано / строк / дублей: "
+            "Последний основной ноутбук — впервые добавлено новых постов / повторно обновлено известных / "
+            "всего затронуто уникальных / дублей идентичности: "
+            f"{value('processed_posts_new_latest_candidate_run_total')}/"
+            f"{value('processed_posts_reprocessed_latest_candidate_run_total')}/"
             f"{value('processed_posts_unique_latest_candidate_run_total')}/"
-            f"{value('processed_post_rows_latest_candidate_run_total')}/"
             f"{value('processed_post_duplicate_identity_rows_latest_candidate_run_total')}"
+        ),
+        (
+            "Исполнение последнего основного ноутбука — успешно прочитана история источников / "
+            "постов получено / постов пропущено через E5 / runtime, секунд: "
+            f"{value('candidate_heartbeat_sources_history_fetched_ok')}/"
+            f"{value('candidate_heartbeat_posts_fetched')}/"
+            f"{value('candidate_heartbeat_posts_scored')}/"
+            f"{value('candidate_heartbeat_runtime_elapsed_seconds')}"
         ),
         (
             "Последний основной ноутбук, KO-воронка — эвристически KO / проверены векторами / "
@@ -426,14 +436,17 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('latest_candidate_heuristic_to_publication_rate_percent')}%"
         ),
         (
-            "Последний запуск — глубоко просмотрено источников / с KO / доля; "
-            "быстро проверено источников / с KO / доля: "
-            f"{value('source_latest_scan_run_sources_total')}/"
-            f"{value('source_latest_scan_run_ko_sources_total')}/"
-            f"{value('source_latest_scan_run_ko_source_yield_percent')}%; "
+            "Последний запуск — быстро проверено источников / с KO / доля: "
             f"{value('fast_check_latest_run_sources_total')}/"
             f"{value('fast_check_latest_run_hit_sources_total')}/"
             f"{value('fast_check_latest_run_hit_rate_percent')}%"
+        ),
+        (
+            "Технические source-overlay обновления последнего run_id — строк с scan evidence / с KO / доля "
+            "(это НЕ число глубоко прочитанных источников): "
+            f"{value('source_latest_scan_run_sources_total')}/"
+            f"{value('source_latest_scan_run_ko_sources_total')}/"
+            f"{value('source_latest_scan_run_ko_source_yield_percent')}%"
         ),
         f"Причины результата эвристических KO-постов последнего запуска: {top_latest_outcomes}",
         (
@@ -1424,6 +1437,39 @@ def _post_merge_key(row: dict[str, Any]) -> str:
     if post_id:
         return "id:" + post_id
     return str(row.get("_ydb_pk") or "").strip()
+
+
+def _latest_processed_post_metrics(
+    rows: list[dict[str, Any]],
+    run_id: str,
+) -> tuple[dict[str, int], list[dict[str, Any]], set[str]]:
+    """Separate newly discovered posts from refreshes of durable rows.
+
+    ``run_id``/``last_seen_run_id`` means a row was touched by the notebook;
+    it does not mean that the post first entered YDB in that run. Reporting the
+    touched count as new work overstates product throughput whenever a known
+    source is rescanned. ``first_seen_run_id`` owns that distinction.
+    """
+    latest_rows = [
+        row for row in rows
+        if run_id and run_id in {
+            str(row.get("run_id") or ""),
+            str(row.get("last_seen_run_id") or ""),
+            str(row.get("current_run_id") or ""),
+        }
+    ]
+    latest_keys = {_post_merge_key(row) for row in latest_rows if _post_merge_key(row)}
+    new_keys = {
+        _post_merge_key(row) for row in latest_rows
+        if _post_merge_key(row) and str(row.get("first_seen_run_id") or "") == run_id
+    }
+    return ({
+        "processed_post_rows_latest_candidate_run_total": len(latest_rows),
+        "processed_posts_unique_latest_candidate_run_total": len(latest_keys),
+        "processed_posts_new_latest_candidate_run_total": len(new_keys),
+        "processed_posts_reprocessed_latest_candidate_run_total": len(latest_keys - new_keys),
+        "processed_post_duplicate_identity_rows_latest_candidate_run_total": max(0, len(latest_rows) - len(latest_keys)),
+    }, latest_rows, latest_keys)
 
 
 def _row_text_for_regex(row: dict[str, Any]) -> str:
@@ -2855,15 +2901,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     processed_post_rows = rows_by_kind["processed_post_item"]
     processed_post_unique_keys = {_post_merge_key(row) for row in processed_post_rows if _post_merge_key(row)}
-    processed_post_latest_run_rows = [
-        row for row in processed_post_rows
-        if latest_candidate_run_id and latest_candidate_run_id in {
-            str(row.get("run_id") or ""), str(row.get("last_seen_run_id") or ""), str(row.get("current_run_id") or "")
-        }
-    ]
-    processed_post_latest_run_unique_keys = {
-        _post_merge_key(row) for row in processed_post_latest_run_rows if _post_merge_key(row)
-    }
+    processed_post_latest_run_metrics, processed_post_latest_run_rows, processed_post_latest_run_unique_keys = (
+        _latest_processed_post_metrics(processed_post_rows, latest_candidate_run_id)
+    )
     processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
     source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
     source_with_posts_count = max(len(source_with_posts), len(processed_post_source_keys))
@@ -3067,9 +3107,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "processed_post_rows_total": len(processed_post_rows),
         "processed_post_duplicate_identity_rows_total": max(0, len(processed_post_rows) - processed_posts_unique_total),
         "processed_posts_latest_candidate_run_id": latest_candidate_run_id,
-        "processed_post_rows_latest_candidate_run_total": len(processed_post_latest_run_rows),
-        "processed_posts_unique_latest_candidate_run_total": len(processed_post_latest_run_unique_keys),
-        "processed_post_duplicate_identity_rows_latest_candidate_run_total": max(0, len(processed_post_latest_run_rows) - len(processed_post_latest_run_unique_keys)),
+        **processed_post_latest_run_metrics,
         "candidate_memory_total": len(candidates),
         "candidate_memory_terminal_local_audit_total": len(candidate_memory_terminal_local),
         "candidate_memory_terminal_spam_audit_total": len(candidate_memory_terminal_spam),

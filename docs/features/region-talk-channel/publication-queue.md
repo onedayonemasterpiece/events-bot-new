@@ -244,6 +244,13 @@ diagnostics, but cannot replace `rejected_local_region_source` / local-region
 scope with `processed_found_ko_candidate` / `unknown`.  This prevents already
 tombstoned media from reappearing as a phantom Gemini-finalizer backlog.
 
+Per-run post throughput distinguishes posts first admitted in that run
+(`first_seen_run_id`) from durable posts merely refreshed/re-evaluated by the
+same run. The CandidateReport heartbeat owns the actual deep-history source
+count and fetched/E5-scored workload. Source-overlay rows sharing a
+`last_scan_run_id` remain visible as a separate technical diagnostic and are
+not labelled as the number of deeply read sources.
+
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
 expected numeric peer and fail closed on a wrong target; the prepared chat is
