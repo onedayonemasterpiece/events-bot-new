@@ -6965,14 +6965,49 @@ async def sync_vk_source_post(
                 )
                 photo_upload_skipped_missing_user_token = True
                 break
-        if ids:
-            if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
-                logging.warning(
-                    "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
-                    event.id,
-                    len(ids),
-                    len(photo_urls_for_publish),
-                )
+            if ids:
+                if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
+                    # Preserve an existing photo set on partial re-upload, but
+                    # do not preserve *no media*.  Late rehydration commonly
+                    # reaches a text-only projection after one of several raw
+                    # source URLs has expired; attaching the successfully
+                    # uploaded subset is strictly better and lets the normal
+                    # media-completeness contract converge.
+                    existing_has_photos = True  # provider failure => fail safe
+                    try:
+                        existing_ids = _vk_owner_and_post_id(existing_vk_post_url)
+                        if existing_ids:
+                            existing_response = await vk_api(
+                                "wall.getById",
+                                posts=f"{existing_ids[0]}_{existing_ids[1]}",
+                            )
+                            existing_items = _vk_wall_get_by_id_items(existing_response)
+                            if existing_items:
+                                existing_has_photos = _vk_wall_item_has_photo(
+                                    existing_items[0]
+                                )
+                    except Exception:
+                        logging.warning(
+                            "VK partial media existing attachment probe failed event_id=%s url=%s",
+                            event.id,
+                            existing_vk_post_url,
+                            exc_info=True,
+                        )
+                    if existing_has_photos:
+                        logging.warning(
+                            "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
+                            event.id,
+                            len(ids),
+                            len(photo_urls_for_publish),
+                        )
+                    else:
+                        attachments = ids
+                        logging.warning(
+                            "VK photo upload partial for text-only existing post; attaching available media event_id=%s uploaded=%s expected=%s",
+                            event.id,
+                            len(ids),
+                            len(photo_urls_for_publish),
+                        )
             elif not existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
                 logging.error(
                     "sync_vk_source_post blocked partial source post media event_id=%s source_url=%s uploaded=%s expected=%s",

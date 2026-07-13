@@ -55,6 +55,10 @@ worker can publish again.
 Existence is not sufficient when canonical `photo_urls` are non-empty: a stored
 text-only live/postponed item is treated as an incomplete projection and is
 edited with media rather than skipped by the content-hash fast path.
+If only part of a late media set can still be uploaded, a text-only projection
+receives the successfully materialized subset; an already illustrated post
+keeps its existing attachments on the same partial failure. This prevents the
+old "preserve nothing" branch from completing a repair job without a photo.
 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
