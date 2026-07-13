@@ -1454,6 +1454,25 @@ async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
 
 
 @pytest.mark.asyncio
+async def test_managed_vk_post_with_missing_expected_photo_is_incomplete(monkeypatch):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+
+    async def fake_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        return {"response": {"items": [{"id": 2432, "attachments": []}]}}
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    event = _event(
+        source_vk_post_url="https://vk.com/wall-231920894_2432",
+        photo_urls=["https://static.kenigevents.ru/poster.webp"],
+    )
+
+    assert await main._managed_vk_post_state(event) == (True, False)
+    assert not await main._event_has_existing_managed_vk_post(event)
+
+
+@pytest.mark.asyncio
 async def test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

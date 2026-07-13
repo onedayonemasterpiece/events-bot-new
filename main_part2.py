@@ -4123,6 +4123,42 @@ async def _resolve_vk_postponed_wall_id_any_actor(
     return None
 
 
+async def _find_vk_postponed_wall_item_any_actor(
+    *,
+    owner_id: int,
+    post_id: int,
+    db: Database | None,
+    bot: Bot | None,
+) -> dict | None:
+    """Return the postponed wall item, not only its id.
+
+    ``wall.getById`` does not expose postponed posts and VK's ``all`` filter is
+    not a reliable superset.  Media-completeness checks therefore need the
+    authenticated ``postponed`` collection itself.
+    """
+
+    actors = _vk_wall_get_actors(owner_id)
+    try:
+        items = await _fetch_vk_postponed_items_for_owner(owner_id, actors, db, bot)
+    except Exception:
+        logging.warning(
+            "vk.postponed item probe failed owner_id=%s post_id=%s",
+            owner_id,
+            post_id,
+            exc_info=True,
+        )
+        return None
+    for item in items:
+        try:
+            item_id = int(item.get("id") or 0)
+            postponed_id = int(item.get("postponed_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if item_id > 0 and (item_id == int(post_id) or postponed_id == int(post_id)):
+            return item
+    return None
+
+
 async def _resolve_existing_vk_post_url(
     post_url: str,
     *,

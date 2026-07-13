@@ -139,6 +139,63 @@ def test_popular_review_first_slot_promo_forces_position_one() -> None:
 
 
 @pytest.mark.asyncio
+async def test_late_media_rehydration_is_persisted_and_rearms_public_projections(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Событие с поздней афишей",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-07-20",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            source_vk_post_url="https://vk.com/wall-1_2",
+            photo_urls=[],
+            photo_count=0,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    managed_url = "https://static.kenigevents.ru/p/dh16/aa/poster.webp"
+    scheduled = []
+
+    async def fake_rehydrate(_source_url):
+        return [managed_url]
+
+    async def fake_schedule(_db, *, event_id):
+        scheduled.append(event_id)
+
+    monkeypatch.setattr(
+        popular_review_module,
+        "_rehydrate_vk_photo_urls",
+        fake_rehydrate,
+    )
+    monkeypatch.setattr(
+        popular_review_module,
+        "_schedule_rehydrated_media_projection_repair",
+        fake_schedule,
+    )
+
+    urls = await popular_review_module._ensure_renderable_photo_urls(event, db=db)
+
+    assert urls == [managed_url]
+    assert scheduled == [event_id]
+    async with db.get_session() as session:
+        fresh = await session.get(Event, event_id)
+        assert fresh.photo_urls == [managed_url]
+        assert fresh.photo_count == 1
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_popular_review_partner_filter_applies_to_promo_candidates(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

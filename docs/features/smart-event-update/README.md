@@ -8,17 +8,26 @@ Smart Update по умолчанию строит публичный текст 
 
 ## Production staged contracts (INC-2026-07-13)
 
-Production sets `SMART_UPDATE_FORCE_STAGED_GEMINI=1` and
-`SMART_UPDATE_G4_SPLIT_CREATE=1`. Small semantic contracts (facts, occurrence
-scope, anchor-role and bundle-grounding review) use the configured Gemini facts
-model; writers use the configured Gemini writer model. This is not a
+Production sets `SMART_UPDATE_FORCE_STAGED_GEMINI=0` and
+`SMART_UPDATE_G4_SPLIT_CREATE=1`. Only the bounded facts/writer stages plus
+rare occurrence/location/anchor grounding reviews use the configured Gemini
+Lite facts/writer models; core merge, coverage, revise, short-description and digest
+contracts remain on the higher-RPD Gemma lane. `SMART_UPDATE_FORCE_STAGED_GEMINI=1`
+is diagnostic/emergency-only: a real two-event replay consumed 20 Lite requests
+(10 per event), which would exhaust the defensive 450-RPD project lane after
+roughly 45 similar events. Recent production added 19–42 rows per complete
+day (856 in 30 days), before counting merge-only updates, so the forced route
+had no safe daily headroom. The steady-state split normally spends one Lite writer call on a matched
+update and about two Lite calls on a create (facts + writer); rare grounding
+reviews can add one bounded call, while core merge/derived contracts remain on Gemma. This is not a
 deterministic semantic fallback: vectors/reference matching only retrieve
 candidates, while the LLM still decides meaning from exact source/OCR evidence.
 
 The hosted Gemma 4 API rejected `thinking_budget` and, under the old small token
 caps, could spend the response on thought-only output. Therefore Smart Update
-does not send an unsupported thinking config and does not use that endpoint for
-the bounded production stages. Create uses native-schema split stages; the
+does not send an unsupported thinking config; only the quality-critical bounded
+stages are moved off that endpoint, rather than force-routing every semantic
+call to a lower-RPD model. Create uses native-schema split stages; the
 legacy generated bundle cannot fall through to an unreviewed 4o response.
 
 Before merge/create, social candidates now receive targeted LLM-first checks:
@@ -35,10 +44,15 @@ Managed VK publication idempotency includes postponed posts: when
 `wall.getById` cannot see a stored managed URL, the publisher checks the
 authenticated `wall.get(filter=postponed)` collection before the legacy `all`
 fallback. A present postponed item is edited/reused, never recreated.
+Existence is not sufficient when canonical `photo_urls` are non-empty: a stored
+text-only live/postponed item is treated as an incomplete projection and is
+edited with media rather than skipped by the content-hash fast path.
 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
 - `SMART_UPDATE_FACT_FIRST=0` — rollback на прежний rewrite/merge‑first путь.
+- `SMART_UPDATE_FORCE_STAGED_GEMINI=0` — steady-state quota-safe routing. `1`
+  must not be left enabled in production; it is only a bounded diagnostic override.
 - `EVENT_PARSE_GEMMA_MODEL=gemma-4-31b-it` (default) — upstream VK/TG draft extraction uses Gemma 4 before Smart Update receives candidates. Legacy parser forcing remains explicit via `EVENT_PARSE_LLM=4o`; automatic parser fallback to 4o is disabled unless `EVENT_PARSE_ENABLE_4O_FALLBACK=1`.
 - `GEO_REGION_GEMMA_MODEL=gemma-4-31b-it` (default) — Smart Update's region-filter LLM fallback also stays on Gemma 4.
 - `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1` — off-by-default production-candidate create path для Gemma 4 migration: тяжёлый `create_bundle` остаётся ответственным за извлечение фактов, а сопутствующая работа делится на лёгкие Gemma 4 native-schema стадии `lollipop.bucket_facts`, `lollipop.prioritize.weight`, `lollipop.prioritize.lead`, `lollipop.editorial.layout` и финальный writer (`smart_update.g4_lollipop_light.final_writer.v3`). Writer выводит `- item` bullets только когда соответствующая секция writer_pack содержит non-empty `literal_items`; для остальных секций требует непрерывной прозы и сливает несколько фактов, отличающихся только именем (композитор/исполнитель/произведение/роль), в одно компактное предложение, чтобы не получалась одно-словная россыпь bullets. Чтобы убрать ложно-положительный `infoblock.leak:LG03` (когда короткое имя площадки естественно встречается в narrative как «в «Сигнале»»), `_g4_lollipop_light_normalize_bucket_payload` помечает `location_name` без признаков адреса (без улицы/цифр/двух запятых) как `narrative_policy=suppress` для writer-pack infoblock-валидатора; при адресоподобном `location_name` (`ул.`, цифры, две запятые) leak-guard сохраняется. `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4|4o|adaptive` выбирает writer lane; в adaptive dense packs (`facts_text_clean` больше `SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD`, default `14`) идут в один явный final `4o` writer call, остальные остаются на Gemma 4. Production canary должен ставить `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4`, если `FOUR_O_TOKEN` намеренно не выдан, иначе writer попытается dispatch 4o call, который без авторизации сразу падает (token не тратится, но trace покажет `writer.final_4o failed` и работа уйдёт в legacy fact-first fallback вместо новой v3-prose-prompt дорожки). Лёгкие native stages ограничены `SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC` (default `70`) и имеют короткий retry на transient provider failures (`SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES`, default `2`).
@@ -64,7 +78,7 @@ Vector identity recall is not a quality approval. For VK-originated candidates, 
 - prompt guidance requires a structured footer like `📅 31 июля, начало в 21:00` to override contextual prose dates, forbids schedule fragments such as `пятница 22:00` as titles, and tells the model to leave unsupported `location_name` empty instead of inferring a known venue;
 - unsupported venue names are cleared when neither source text, OCR, source title/default hint nor location hint contains the venue evidence; this prevents an identity/vector `allow_create` from publishing a hallucinated place;
 - VK contact mentions that arrive as `tg://user?id=...` are converted to public `https://vk.com/id...` links for VK-source events;
-- for multi-event VK posts, if OCR/relevance cannot confidently assign a photo to a specific child event, the child no longer receives the whole raw source gallery as fallback.
+- for multi-event VK posts, one bounded Gemma media-assignment contract receives all child drafts, source/OCR and retrieval scores and decides specific/shared poster ownership in one request per source post (not per child/photo); if it is unavailable, only an unambiguous high-confidence retrieval match survives and raw-gallery fallback remains disabled.
 
 These guards do not rewrite event meaning. They either pass source-grounded LLM output through, normalize transport-safe links, or fail closed/drop ambiguous media until the LLM/source provides grounded evidence.
 

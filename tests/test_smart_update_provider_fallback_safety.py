@@ -174,3 +174,17 @@ def test_force_staged_gemini_routes_semantic_contracts(monkeypatch) -> None:
     assert su._resolve_smart_update_model("occurrence_scope_review") == "facts-model"
     assert su._resolve_smart_update_model("create:fact_first_cov") == "facts-model"
     assert su._resolve_smart_update_model("split_description_writer") == "writer-model"
+
+
+def test_default_staged_routing_keeps_lite_calls_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(su, "SMART_UPDATE_FORCE_STAGED_GEMINI", False)
+    monkeypatch.setattr(su, "SMART_UPDATE_FACTS_MODEL", "facts-model")
+    monkeypatch.setattr(su, "SMART_UPDATE_WRITER_MODEL", "writer-model")
+    monkeypatch.setattr(su, "SMART_UPDATE_MODEL", "gemma-model")
+
+    assert su._resolve_smart_update_model("occurrence_scope_review") == "facts-model"
+    assert su._resolve_smart_update_model("location_grounding_review") == "facts-model"
+    assert su._resolve_smart_update_model("merge:42:fact_first_desc") == "writer-model"
+    assert su._resolve_smart_update_model("merge") == "gemma-model"
+    assert su._resolve_smart_update_model("merge:42:fact_first_revise") == "gemma-model"
+    assert su._resolve_smart_update_model("short_description") == "gemma-model"

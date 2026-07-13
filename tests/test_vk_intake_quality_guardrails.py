@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+import pytest
+
 import vk_intake
 
 
@@ -76,3 +78,45 @@ def test_multi_event_without_confident_media_assignment_does_not_use_raw_gallery
         )
         == []
     )
+
+
+@pytest.mark.asyncio
+async def test_multi_event_shared_poster_assignment_is_one_bounded_llm_call(monkeypatch):
+    calls = []
+
+    class FakeClient:
+        async def generate_content_async(self, **kwargs):
+            calls.append(kwargs)
+            return (
+                '{"assignments":[{"poster_index":0,"event_indices":[0,1],"confidence":0.96}]}',
+                object(),
+            )
+
+    def fake_require(name):
+        if name == "_get_event_parse_gemma_client":
+            return lambda: FakeClient()
+        if name == "_event_parse_extract_json":
+            import json
+
+            return json.loads
+        raise AssertionError(name)
+
+    monkeypatch.setattr(vk_intake, "require_main_attr", fake_require)
+    poster = vk_intake.PosterMedia(
+        data=b"poster",
+        name="roundup.jpg",
+        ocr_text="14 июля — вебинар; 16 июля — семинар",
+    )
+    assignments = await vk_intake._llm_assign_source_posters_to_drafts(
+        source_text="14 июля — вебинар. 16 июля — семинар.",
+        drafts=[
+            vk_intake.EventDraft(title="Вебинар", date="2026-07-14"),
+            vk_intake.EventDraft(title="Семинар", date="2026-07-16"),
+        ],
+        posters=[poster],
+        score_matrix=[[4.0, 4.0]],
+    )
+
+    assert assignments == {0: [0, 1]}
+    assert len(calls) == 1
+    assert calls[0]["model"] == "gemma-4-31b-it"

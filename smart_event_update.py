@@ -207,8 +207,8 @@ SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV = os.getenv(
 ).strip() or "GOOGLE_API_KEY4"
 
 # Per-stage primary model overrides. Default route fact extraction and the
-# main writer to gemini-3.1-flash-lite (500 RPD per key, stable on Google's
-# side at the time of cutover) while the rest of the Smart Update pipeline
+# main writer to gemini-3.1-flash-lite (the production registry reserves a
+# defensive 450 RPD project lane) while the rest of the Smart Update pipeline
 # (revise/rewrite/short_description/search_digest/coverage) keeps
 # SMART_UPDATE_MODEL. ``GOOGLE_AI_FALLBACK_MODELS`` is expected to include
 # ``gemma-4-31b-it`` so the GoogleAIClient model chain falls back to Gemma 4
@@ -251,6 +251,8 @@ def _resolve_smart_update_model(label: str | None) -> str:
         "title_recover_public",
         "anchor_role_review",
         "create_bundle_grounding",
+        "occurrence_scope_review",
+        "location_grounding_review",
     }:
         return SMART_UPDATE_FACTS_MODEL
     # Pure writer stages (split-create / fact-first paths). The fact-first
@@ -4624,6 +4626,8 @@ async def _llm_review_candidate_anchor_roles(
         "от полного периода работы и несколько отдельных occurrences от непрерывного range. "
         "Для многодневного периода ставь time=null, если единственное время относится "
         "только к открытию/вернисажу, а не к ежедневному расписанию всего периода. "
+        "Если title означает саму выставку, выбирай полный период; если title явно означает "
+        "открытие/вернисаж, выбирай только дату и время открытия. Не схлопывай выставку к дате закрытия. "
         "Если evidence однозначно поддерживает candidate — keep. Если однозначно даёт другие "
         "date/end_date/time — repair. Иначе uncertain. date/end_date только YYYY-MM-DD, time "
         "только HH:MM; null означает, что поле не подтверждено. evidence_quotes должны быть "
