@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -259,3 +259,29 @@ Direct review URLs:
 | Portrait + adaptive Bento | <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/examples/bento-portrait/> |
 
 Gemini `gemini-3.1-pro-preview` / Pro High completed the v4 design gate. Applied constraints include a `97px` side-stack top, negative-only bounded media translation, no scroll-jacking, two Bento columns below `1280px`, and no tall `1×2` spans in that narrow band. `a-opus` returned `Individual quota reached` and was not replaced by a lower-class model. Local prompts, raw reviews and Playwright evidence are stored under `artifacts/codex/desktop-scroll-compositions-v4-20260712/` and are not committed.
+
+## Desktop media polish (v5)
+
+V5 is a correction of the same desktop-only noindex lab, not a new production layout. The accepted mobile event surface and production `EventHero.astro` / `EventLayout.astro` remain unchanged.
+
+- **Editorial motion:** downward document scroll now decreases the image's internal Y offset from `+32px` toward `-32px`. The visual therefore travels upward more slowly than the foreground slab instead of drifting down against the scroll direction. The existing scale/bleed keeps the bounded transform inside its clipped viewport, and reduced motion still removes it.
+- **Editorial photo navigation:** the six previews are restored to one compact row (`44–68px` wide, `48px` high). A preview opens the existing fullscreen gallery at that exact image; the redundant `N фото` pill is absent from this composition.
+- **Split OCR:** media and information use an exact `50/50` stage at desktop widths. The physical poster track retains its overflow-bounded release but moves at the slower `0.28` coefficient.
+- **Portrait + Bento:** the media and reading columns also use `50/50`. The adaptive grid has square base cells, uses four columns from `1440px` and three below it, keeps OCR/unknown images top-aligned, centers ordinary photos, and promotes a real visual image with natural ratio `>=1.3` to a `2×1` cell. Every tile opens its own gallery position.
+- **Related cards:** `Смотрите дальше` keeps the graphite section, but the card body and utility row are cream/light. Share is light and like remains red directly on the common graphite surface; neither action receives a second dark card wrapper.
+
+The proportion decision combines the 12-column desktop convention from [Material responsive layout](https://m1.material.io/layout/responsive-ui.html), readable text-measure guidance from [MDN responsive design](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/CSS_layout/Responsive_Design), and inline inverse-surface guidance from [Carbon color](https://carbondesignsystem.com/elements/color/overview/). In this real-event lab, exact `50/50` gives the poster/photo enough physical width while the right column keeps prose constrained to a readable measure; narrower viewports change Bento density rather than collapsing the media column.
+
+A fresh Antigravity **Gemini 3.1 Pro (High)** implementation review ran successfully on `2026-07-13` (`exit=0`, empty stderr; no Flash/Lite substitution). It agreed with `50/50`, a roughly `65ch` prose measure, `+32px → -32px` bounded Editorial travel, compact one-row previews, square Bento cells, a `>=1.3` wide-image threshold and the inverse related-card surface. Local prompt, provenance, raw review and Playwright evidence are stored under `artifacts/codex/desktop-media-polish-v5-20260713/` and are not committed.
+
+Direct review URLs:
+
+| Composition | URL |
+|---|---|
+| Editorial photo · corrected parallax and compact fullscreen rail | <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/examples/editorial-photo/> |
+| OCR-primary event · landscape Editorial | <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/examples/editorial-ocr/> |
+| Split OCR · 50/50 and slower physical poster | <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/examples/split-ocr/> |
+| Physical vertical image strip | <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/examples/reading-photo/> |
+| Portrait + square/wide Bento | <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/examples/bento-portrait/> |
+
+Local Chromium acceptance at `1024×768`, `1440×650`, `1920×600` and `1920×1080` records zero horizontal overflow. It additionally proves decreasing Editorial internal Y, a single-row six-item rail, selected-index fullscreen opening for Editorial and Bento, exact `0.5` Split/Bento media ratios, square base cells plus a real `2×1` image, and inverse related-card computed styles. Public HTTP and browser evidence are required before this section is treated as published acceptance.

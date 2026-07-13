@@ -133,48 +133,48 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
           <figure class="desktop-prototype__media desktop-prototype__media--strip" data-media-frame data-slow-media-viewport>
             <div class="desktop-media-strip" data-slow-media-track data-slow-media-speed="0.55">
               {stripImages.map((image, index) => (
-                <button type="button" class="desktop-media-strip__item" data-strip-item data-strip-index={index} data-image-text-mode={image.image_text_mode} data-hero-gallery-open={galleryId} aria-label={`Открыть фото ${index + 1} события «${event.title}»`}>
+                <button type="button" class="desktop-media-strip__item" data-strip-item data-strip-index={index} data-image-text-mode={image.image_text_mode} data-hero-gallery-open={galleryId} data-hero-gallery-index={index} aria-label={`Открыть фото ${index + 1} события «${event.title}»`}>
                   <img src={image.src} alt={image.alt} width={image.width || 1600} height={image.height || 1000} loading={index ? 'lazy' : 'eager'} decoding="async" />
                 </button>
               ))}
             </div>
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
           </figure>
         ) : candidate === 'bento' ? (
           <figure class="desktop-prototype__media desktop-prototype__media--bento" data-media-frame data-slow-media-viewport>
             <div class="desktop-bento-track" data-slow-media-track data-slow-media-speed="0.48" data-bento-track>
               {bentoImages[0] && (
-                <button type="button" class="desktop-bento-main" data-hero-gallery-open={galleryId} aria-label={`Открыть главное фото события «${event.title}»`}>
+                <button type="button" class="desktop-bento-main" data-image-text-mode={bentoImages[0].image_text_mode} data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть главное фото события «${event.title}»`}>
                   <img src={bentoImages[0].src} alt={bentoImages[0].alt} width={bentoImages[0].width || 1200} height={bentoImages[0].height || 1600} fetchpriority="high" decoding="async" />
                 </button>
               )}
               <div class="desktop-bento-grid" data-bento-grid>
                 {bentoImages.slice(1).map((image, index) => (
-                  <button type="button" class="desktop-bento-tile" data-bento-tile data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} aria-label={`Открыть дополнительное фото ${index + 2}`}>
+                  <button type="button" class="desktop-bento-tile" data-bento-tile data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={index + 1} aria-label={`Открыть дополнительное фото ${index + 2}`}>
                     <img src={image.src} alt={image.alt} width={image.width || 1080} height={image.height || 1350} loading="lazy" decoding="async" />
                   </button>
                 ))}
               </div>
             </div>
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
           </figure>
         ) : candidate === 'split' && isOcr ? (
           <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport>
-            <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.35">
-              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} aria-label={`Открыть афишу события «${event.title}» на весь экран`}>
+            <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.28">
+              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть афишу события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             </div>
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
+            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
           </figure>
         ) : (
           <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''}>
             {preferredUrl && (
-              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
+              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
-            {photoCount > 0 && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
+            {photoCount > 0 && !(candidate === 'editorial' && editorialRail && railImages.length > 1) && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
           </figure>
         )}
 
@@ -183,7 +183,7 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
             {editorialRail && railImages.length > 1 && (
               <div class="desktop-prototype__media-rail" data-hero-rail aria-label="Выбрать изображение">
                 {railImages.map((image, index) => (
-                  <button type="button" class:list={[index === 0 && 'is-current']} data-clean-hero-thumb data-index={index} data-source-index={image.sourceIndex} data-src={image.src} data-alt={image.alt} data-mode={image.image_text_mode} data-width={image.width || 1600} data-height={image.height || 1000} data-position={image.position || '50% 50%'} aria-pressed={index === 0 ? 'true' : 'false'} aria-label={image.image_text_mode === 'ocr_text' ? 'Показать афишу целиком' : `Показать фото ${index + 1}`}>
+                  <button type="button" class:list={[index === 0 && 'is-current']} data-clean-hero-thumb data-index={index} data-source-index={image.sourceIndex} data-src={image.src} data-alt={image.alt} data-mode={image.image_text_mode} data-width={image.width || 1600} data-height={image.height || 1000} data-position={image.position || '50% 50%'} data-hero-gallery-open={galleryId} data-hero-gallery-index={index} aria-pressed={index === 0 ? 'true' : 'false'} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу в полноэкранной галерее, фото ${index + 1}` : `Открыть фото ${index + 1} в полноэкранной галерее`}>
                     <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
                     {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
                   </button>
@@ -364,9 +364,20 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
         updateOcrFrame();
       };
 
-      thumbButtons.forEach((button, index) => {
-        button.addEventListener('click', () => {
-          void selectHero(index, 'manual');
+      const indexedGalleryOpeners = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-hero-gallery-open][data-hero-gallery-index]'));
+      indexedGalleryOpeners.forEach((opener) => {
+        opener.addEventListener('click', () => {
+          const requested = Number(opener.dataset.heroGalleryIndex || 0);
+          if (requested <= 0) return;
+          queueMicrotask(() => {
+            const galleryId = opener.dataset.heroGalleryOpen;
+            const gallery = galleryId ? document.getElementById(galleryId) : null;
+            const slides = gallery?.querySelectorAll('[data-hero-gallery-slide]');
+            const next = gallery?.querySelector<HTMLButtonElement>('[data-hero-gallery-next]');
+            if (!gallery || gallery.hidden || !slides?.length || !next) return;
+            const selected = Math.min(requested, slides.length - 1);
+            for (let step = 0; step < selected; step += 1) next.click();
+          });
         });
       });
       rotationToggle?.addEventListener('click', () => {
@@ -394,10 +405,19 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
           const ratio = image.naturalWidth / image.naturalHeight;
           const mode = tile.dataset.imageTextMode || 'unknown';
           let span = 'square';
-          if (mode === 'visual_only' && ratio >= 1.45) span = 'wide';
-          else if (mode === 'visual_only' && ratio <= .72 && window.innerWidth >= 1280) span = 'tall';
+          if (mode === 'visual_only' && ratio >= 1.3) span = 'wide';
           tile.dataset.bentoSpan = span;
           tile.dataset.naturalRatio = ratio.toFixed(4);
+        });
+        cleanRoot.querySelectorAll<HTMLElement>('[data-bento-grid]').forEach((grid) => {
+          const style = getComputedStyle(grid);
+          const columns = style.gridTemplateColumns.split(/\s+/u).filter(Boolean).length;
+          const gap = Number.parseFloat(style.columnGap) || 0;
+          const inlinePadding = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
+          const cell = columns > 0 ? (grid.clientWidth - inlinePadding - gap * (columns - 1)) / columns : 0;
+          if (cell <= 0) return;
+          grid.style.setProperty('--bento-cell', `${cell.toFixed(2)}px`);
+          grid.dataset.bentoColumns = String(columns);
         });
         cleanRoot.querySelectorAll<HTMLElement>('[data-scroll-stage]').forEach((stage) => {
           const viewport = stage.querySelector<HTMLElement>('[data-slow-media-viewport]');
@@ -456,7 +476,7 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
             const rect = media.getBoundingClientRect();
             progress = clamp((viewport - rect.top) / Math.max(1, viewport + rect.height));
           }
-          media.style.setProperty('--desktop-parallax-y', `${(-amplitude + progress * amplitude * 2).toFixed(1)}px`);
+          media.style.setProperty('--desktop-parallax-y', `${(amplitude - progress * amplitude * 2).toFixed(1)}px`);
         });
         cleanRoot.querySelectorAll<HTMLElement>('[data-slow-media-viewport]').forEach((viewport) => {
           const stage = viewport.closest<HTMLElement>('[data-scroll-stage]');
@@ -794,18 +814,18 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
 
     /* Editorial: one continuous slab plus one bounded sticky right stack. */
     .desktop-clean-event--editorial .desktop-prototype__canvas { overflow:visible; }
-    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(300px,25vw,360px); display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(336px,28vw,480px); display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; }
     .desktop-clean-event--editorial .desktop-prototype__media-image { width:100%; height:100%; margin:0; transform:none; object-position:var(--image-position); }
     .desktop-clean-event--editorial[data-selected-media-policy="visual_only"] .desktop-prototype__media-image { height:calc(100% + 88px); margin-top:-44px; object-fit:cover; transform:translate3d(0,var(--desktop-parallax-y,0),0) scale(1.018); }
     .desktop-clean-event--editorial:not([data-selected-media-policy="visual_only"]) .desktop-prototype__media-image { object-fit:contain; background:#181411; }
     .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100% - 5vw)); min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
     .desktop-clean-event--editorial .desktop-prototype__content-flow .desktop-prototype__info { position:relative; inset:auto; width:auto; min-height:0; margin:0; padding:clamp(1.5rem,3vw,3rem); background:transparent; box-shadow:none; }
-    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; gap:.8rem; max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 2rem; overflow:auto; scrollbar-width:thin; }
-    .desktop-clean-event--editorial .desktop-prototype__media-rail { position:static; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; padding:.55rem; border-radius:18px; background:rgba(31,27,24,.9); }
-    .desktop-clean-event--editorial .desktop-prototype__media-rail button { position:relative; width:100%; height:64px; }
+    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; justify-items:end; gap:.8rem; max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 2rem; overflow:auto; scrollbar-width:thin; }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail { position:static; width:100%; display:flex; flex-wrap:nowrap; justify-content:flex-end; gap:.35rem; padding:.45rem; overflow:hidden; border-radius:16px; background:rgba(31,27,24,.9); }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail button { position:relative; flex:1 1 0; width:auto; min-width:44px; max-width:68px; height:48px; }
     .desktop-clean-event--editorial .desktop-prototype__media-rail button span { position:absolute; inset:auto .25rem .2rem; padding:.12rem .3rem; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:.62rem; font-weight:850; }
-    .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { position:static; inset:auto; width:auto; margin:0; border-radius:22px; }
+    .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { position:static; inset:auto; width:min(100%,330px); margin:0; border-radius:22px; }
 
     /* Shared two-column long-flow shell for Split OCR, physical strip and Bento. */
     .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__canvas,
@@ -814,6 +834,8 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
     .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__stage,
     .desktop-clean-event--reading .desktop-prototype__stage,
     .desktop-clean-event--bento .desktop-prototype__stage { display:grid; grid-template-columns:clamp(380px,45vw,620px) minmax(0,1fr); grid-template-rows:auto; align-items:start; height:auto; min-height:var(--scroll-stage-min-height,var(--stage-height)); overflow:visible; background:var(--clean-paper); }
+    .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__stage,
+    .desktop-clean-event--bento .desktop-prototype__stage { grid-template-columns:minmax(0,50%) minmax(0,50%); }
     .desktop-clean-event--reading .desktop-clean-reading-shell,
     .desktop-clean-event--bento .desktop-clean-reading-shell { display:contents; }
     .desktop-clean-event--reading .desktop-prototype,
@@ -851,20 +873,50 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
 
     .desktop-bento-track { display:grid; gap:clamp(14px,1.4vh,24px); padding-bottom:1px; background:#181411; }
     .desktop-bento-main { width:100%; min-height:calc(100svh - 73px); display:block; padding:0; overflow:hidden; border:0; background:#181411; cursor:zoom-in; }
-    .desktop-bento-main img { width:100%; height:auto; min-height:calc(100svh - 73px); display:block; object-fit:cover; object-position:center top; }
-    .desktop-bento-grid { --bento-row:clamp(150px,14vw,240px); display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-auto-rows:var(--bento-row); grid-auto-flow:row dense; gap:clamp(10px,1vw,16px); padding:0 clamp(10px,1vw,16px) clamp(10px,1vw,16px); }
+    .desktop-bento-main img { width:100%; height:auto; min-height:calc(100svh - 73px); display:block; object-fit:cover; object-position:center center; }
+    .desktop-bento-main[data-image-text-mode="ocr_text"] img,
+    .desktop-bento-main[data-image-text-mode="unknown"] img { object-position:center top; }
+    .desktop-bento-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-auto-rows:var(--bento-cell,180px); grid-auto-flow:row dense; gap:clamp(10px,1vw,16px); padding:0 clamp(10px,1vw,16px) clamp(10px,1vw,16px); }
     .desktop-bento-tile { width:100%; min-width:0; display:block; padding:0; overflow:hidden; border:0; border-radius:12px; background:#292521; cursor:zoom-in; }
     .desktop-bento-tile[data-bento-span="wide"] { grid-column:span 2; }
-    .desktop-bento-tile[data-bento-span="tall"] { grid-row:span 2; }
-    .desktop-bento-tile img { width:100%; height:100%; display:block; object-fit:cover; object-position:center 20%; }
+    .desktop-bento-tile img { width:100%; height:100%; display:block; object-fit:cover; object-position:center center; }
     .desktop-bento-tile[data-image-text-mode="ocr_text"] img,
-    .desktop-bento-tile[data-image-text-mode="unknown"] img { object-fit:contain; object-position:center top; }
+    .desktop-bento-tile[data-image-text-mode="unknown"] img { object-fit:cover; object-position:center top; }
+
+    /* Related cards invert on the graphite section; share/like remain on the common surface. */
+    .desktop-clean-related__grid :global(.event-card--split-actions) { background:transparent; color:#241c17; box-shadow:none; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__body),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__utility-row) { background:#fffaf2; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__title) { color:#241c17; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__meta),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__footer) { color:#6f6157; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__tag),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__other-times) { color:#91401d; background:rgba(181,77,34,.1); }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__status) { color:#285852; background:#edf3ee; border-color:rgba(40,88,82,.24); }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__utility-row .feedback-button--negative) { color:#6f6157; background:transparent; border-color:transparent; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__utility-row .feedback-button--calendar) { color:#91401d; background:rgba(181,77,34,.08); border-color:transparent; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button) { background:transparent; border-color:transparent; box-shadow:none; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--share) { color:#fffaf2; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like[aria-pressed="true"]) { color:#f06464; background:transparent; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--share:hover),
+    .desktop-clean-related__grid :global(.event-card--split-actions.is-share-prompt .feedback-button--share) { color:#fff; background:rgba(255,255,255,.1); border-color:transparent; box-shadow:none; transform:none; }
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like:hover),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like[aria-pressed="true"]:hover) { color:#ff7a72; background:rgba(201,52,52,.16); }
+    .desktop-clean-related__grid :global(.event-card--split-actions:focus-visible),
+    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button:focus-visible) { outline:3px solid #fffaf2; outline-offset:3px; }
   }
 
   @media (min-width:1024px) and (max-width:1279px) {
-    .desktop-bento-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .desktop-bento-tile[data-bento-span="tall"] { grid-row:span 1; }
-    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:300px; }
+    .desktop-bento-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:336px; }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline),
+    .desktop-clean-event--bento :global(.desktop-prototype__action--inline) { grid-template-columns:minmax(0,1fr) auto; }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline .desktop-prototype__primary-action),
+    .desktop-clean-event--bento :global(.desktop-prototype__action--inline .desktop-prototype__primary-action) { grid-column:1/-1; grid-row:2; }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline .desktop-prototype__action-row),
+    .desktop-clean-event--bento :global(.desktop-prototype__action--inline .desktop-prototype__action-row) { grid-column:2; grid-row:1; }
   }
 
   @media (min-width:1024px) and (max-height:720px) {
@@ -872,8 +924,7 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
     .desktop-clean-event--editorial .desktop-editorial-side { margin-top:350px; }
   }
 
-  @media (min-width:1600px) {
-    .desktop-clean-event--bento .desktop-prototype__stage { grid-template-columns:min(50vw,760px) minmax(0,1fr); }
+  @media (min-width:1440px) {
     .desktop-bento-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
   }
 

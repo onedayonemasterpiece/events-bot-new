@@ -170,6 +170,7 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
     'data-clean-hero',
     'data-media-frame',
     'data-hero-gallery-open',
+    'data-hero-gallery-index',
     'data-hero-gallery',
     'О событии',
     'Что говорят',
@@ -195,6 +196,8 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
     throw new Error(`Desktop full-page example ${scenario} leaks rejected CTA/icon copy`);
   }
   if (/data-desktop-parallax[^>]*>[\s\S]{0,250}<img[^>]+data-image-text-mode="ocr_text"/iu.test(html)) throw new Error(`OCR example ${scenario} must not receive parallax`);
+  if (variant === 'editorial' && visibleHtml.includes('desktop-prototype__photo-count')) throw new Error(`Editorial example ${scenario} must not duplicate its compact rail with a photo-count pill`);
+  if (variant === 'bento' && !visibleHtml.includes('data-hero-gallery-index="5"')) throw new Error('Bento example must map every visible tile to its own fullscreen gallery index');
 }
 
 const desktopCleanSource = readFileSync(join(siteDir, 'src/components/lab/DesktopEventCleanPage.astro'), 'utf8');
@@ -211,7 +214,13 @@ for (const marker of [
   'data-slow-media-track',
   'data-continuous-event-body',
   'desktop-bento-grid',
+  'data-hero-gallery-index',
   'editorialMediaExitProgress',
+  'amplitude - progress * amplitude * 2',
+  'ratio >= 1.3',
+  '--bento-cell',
+  'grid-template-columns:minmax(0,50%) minmax(0,50%)',
+  '.event-card--split-actions .event-card__feedback--under',
   '(-travel * progress)',
   'prefers-reduced-motion:reduce',
   'data-lab-row-normalize',
@@ -224,6 +233,13 @@ for (const marker of [
   'prefers-reduced-motion:reduce',
 ]) {
   if (!desktopCleanSource.includes(marker)) throw new Error(`Desktop clean source misses geometry/motion contract: ${marker}`);
+}
+if (desktopCleanSource.includes('-amplitude + progress * amplitude * 2')) throw new Error('Desktop Editorial parallax must move image pixels upward during downward page scroll');
+if (!/\.desktop-bento-tile img\s*\{[^}]*object-fit:cover;\s*object-position:center center;/u.test(desktopCleanSource)) {
+  throw new Error('Desktop Bento visual images must crop symmetrically from their center');
+}
+if (!/\.desktop-bento-tile\[data-image-text-mode="ocr_text"\] img,\s*\.desktop-bento-tile\[data-image-text-mode="unknown"\] img\s*\{[^}]*object-fit:cover;\s*object-position:center top;/u.test(desktopCleanSource)) {
+  throw new Error('Desktop Bento OCR/unknown images must preserve the top edge and crop from the bottom');
 }
 if (desktopCleanSource.includes('<section class="event-gallery"') || desktopCleanSource.includes('DesktopEventPagePrototype')) throw new Error('Desktop clean examples must not restore the rejected lower gallery/technical prototype shell');
 
