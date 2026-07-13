@@ -4730,6 +4730,31 @@ def _candidate_needs_llm_location_grounding_review(
     # transient provider failures still fail closed inside the review call.
     if SMART_UPDATE_LLM_DISABLED:
         return False, "llm_disabled"
+
+    # A structured event/festival label can be copied verbatim into the venue
+    # field while still not naming an attendee-facing place.  This is only a
+    # high-recall router: the LLM below owns the semantic verdict and may keep
+    # a genuine venue.  Keep the trigger narrow so it does not add a review to
+    # every social candidate merely because the title happens to mention its
+    # venue.
+    location_key = normalize_venue_key(candidate.location_name)
+    if location_key:
+        context_values = (
+            getattr(candidate, "festival", None),
+            getattr(candidate, "festival_full", None),
+            getattr(candidate, "festival_series", None),
+        )
+        for value in context_values:
+            context_key = normalize_venue_key(value)
+            if len(context_key) < 5:
+                continue
+            if (
+                location_key == context_key
+                or location_key.startswith(f"{context_key} ")
+                or location_key.endswith(f" {context_key}")
+            ):
+                return True, "location_overlaps_event_context"
+
     corpus = _candidate_location_grounding_corpus(candidate)
     if not corpus:
         return True, "missing_source_evidence"
@@ -4798,8 +4823,12 @@ async def _llm_review_candidate_location_grounding(
         "Reference/vector retrieval является только подсказкой и не доказывает площадку.\n"
         "Определи attendee-facing место проведения именно этого события. Не путай: "
         "площадку с артистом/организатором, парк с одноимённым дворцом спорта, "
-        "конкретный зал с широким кварталом, один остров/озеро с другим. "
+        "конкретный зал с широким кварталом, один остров/озеро с другим, а название "
+        "фестиваля, праздника или Дня города — с площадкой. Event context вроде "
+        "«День города в Янтарном» не является названием venue. "
         "Если источник явно называет более конкретное место, выбери его. "
+        "Если источник подтверждает только город/посёлок, но не attendee-facing площадку, "
+        "верни uncertain: не превращай событие или праздник в location_name. "
         "Ничего не выдумывай. Для repair верни короткую дословную evidence_quote. "
         "Если доказательств недостаточно — uncertain. Верни только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
