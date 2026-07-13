@@ -106,7 +106,7 @@ lanes:
 | R01 | Make Editorial parallax noticeably stronger | Correct-direction travel is materially larger than v5 while bounded, clipped and disabled under reduced motion |
 | R02 | Fullscreen gallery must fit OCR images | Known document/poster frames render whole and readable with `contain`; visual photos may still use immersive cover |
 | R03 | Editorial preview rail must answer how many photos remain | One compact cell communicates the remaining count without restoring a duplicate floating photo button |
-| R04 | Split CTA remains available during long reading | CTA becomes sticky after reaching the header and releases before `Смотрите дальше`; content does not hide underneath it |
+| R04 | Split CTA remains available during long reading | CTA becomes sticky after reaching the header and releases before `Смотрите дальше`; article content may pass behind the deliberately opaque panel, but cannot visibly bleed into the header gap |
 | R05 | Split OCR images must fit, not crop | OCR poster and any OCR gallery frame use contain with no text loss |
 | R06 | No-OCR related images become more square | Desktop related rows use square-ish crop for visual-only cards, reducing height; OCR/document cards keep readable containment |
 | R07 | Gemini visually audits every variant while scrolling | Gemini Pro receives public URLs plus Playwright scroll-state captures and returns separate design/product findings focused on CTA, media and event comprehension |

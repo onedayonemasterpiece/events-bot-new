@@ -241,6 +241,7 @@ for (const marker of [
   'box-shadow:0 -.75rem 0 var(--clean-paper)',
   'bottom:100%; height:.85rem; background:var(--clean-paper)',
   'linear-gradient(135deg,#e4ddd2,#d4c7b9)',
+  'background:transparent !important; object-fit:cover !important',
   'prefers-reduced-motion:reduce',
 ]) {
   if (!desktopCleanSource.includes(marker)) throw new Error(`Desktop clean source misses geometry/motion contract: ${marker}`);

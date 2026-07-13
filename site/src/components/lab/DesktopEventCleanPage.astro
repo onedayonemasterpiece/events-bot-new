@@ -803,7 +803,7 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; inset:0; width:100% !important; height:100% !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
-    .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { object-fit:cover !important; }
+    .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; object-fit:cover !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="document"] .event-card__media-shell) { background:#181411; }
     .desktop-clean-related__grid :global([data-lab-media-kind="document"] .event-card__media) { object-fit:contain !important; object-position:center top !important; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
