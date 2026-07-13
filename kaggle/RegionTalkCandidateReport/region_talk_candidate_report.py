@@ -9172,6 +9172,22 @@ def source_fast_check_query_bank() -> list[str]:
     return _dedupe_keep_order(priority_terms + list(terms))
 
 
+def confirmed_blogger_fast_check_query_ladder() -> list[str]:
+    """Measured high-yield ladder for a source known to have visited KO.
+
+    A 2026-07-13 cached-peer canary found six current-year KO posts that the
+    broad three-query control did not return.  Keep broad recall first, then
+    spend the rest of the confirmed-source ten-query budget on distinctive
+    low-frequency places.  Generic sources retain the stable global bank and
+    its existing cursor semantics.
+    """
+    return [
+        "Калининградская область", "Калининград", "Куршская коса",
+        "Нойхаузен", "Бальга", "Тапиау", "Талпаки", "Виштынец",
+        "Тильзит", "Роминта",
+    ]
+
+
 def _fast_check_previous_cursor(row: dict[str, Any], *, strategy: str) -> int:
     if strategy != "adaptive_cursor_v1":
         return 0
@@ -9200,6 +9216,7 @@ def source_fast_check_query_matches_text(query: str, text: str) -> bool:
     if not q or not body:
         return False
     phrase_patterns = {
+        "калининградская область": r"(?<![0-9a-zа-я])калининградск(?:ая|ой|ую)\s+област(?:ь|и|ью)(?![0-9a-zа-я])",
         "куршская коса": r"(?<![0-9a-zа-я])куршск(?:ая|ой|ую)\s+кос(?:а|е|ы|у|ой)(?![0-9a-zа-я])",
         "балтийская коса": r"(?<![0-9a-zа-я])балтийск(?:ая|ой|ую)\s+кос(?:а|е|ы|у|ой)(?![0-9a-zа-я])",
         "роминтенская пуща": r"(?<![0-9a-zа-я])роминтенск(?:ая|ой|ую)\s+пущ(?:а|е|и|у|ей)(?![0-9a-zа-я])",
@@ -9211,6 +9228,20 @@ def source_fast_check_query_matches_text(query: str, text: str) -> bool:
         return re.search(
             r"(?<![0-9a-zа-я])(?:пос[её]лок|город)\s+янтарный(?![0-9a-zа-я])"
             r"|(?<![0-9a-zа-я])(?:в|из|до|под|около)\s+янтарн(?:ом|ого|ому)(?![0-9a-zа-я])",
+            body,
+            flags=re.I,
+        ) is not None
+    simple_place_patterns = {
+        "калининград": r"калининград(?:а|е|ом|у)?",
+        "нойхаузен": r"нойхаузен(?:а|е|ом|у)?",
+        "бальга": r"бальг(?:а|е|и|у|ой)",
+        "тапиау": r"тапиау",
+        "талпаки": r"талпак(?:и|ах|ами|ов)",
+        "виштынец": r"виштын(?:ец|ца|це|цем|цу)",
+    }
+    if q in simple_place_patterns:
+        return re.search(
+            rf"(?<![0-9a-zа-я]){simple_place_patterns[q]}(?![0-9a-zа-я])",
             body,
             flags=re.I,
         ) is not None
@@ -9274,11 +9305,24 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
     candidates = sorted(candidates, key=lambda r: (
         not source_queue_row_has_cached_entity(r, previous_state),
         0 if source_queue_priority_bucket(r) == -2 else 1,
-        0 if prefer_continuations and str(r.get("fast_check_status") or "") in {"no_hit", "no_hit_partial"} else 1,
         str(r.get("fast_check_status") or "") == "no_hit" if not adaptive_enabled else False,
         source_queue_priority_bucket(r),
         int(r.get("queue_order") or 999999999),
     ))
+    if adaptive_enabled:
+        continuations = [
+            row for row in candidates
+            if str(row.get("fast_check_status") or "") in {"no_hit", "no_hit_partial"}
+        ]
+        fresh = [row for row in candidates if row not in continuations]
+        continuation_quota = max_items if prefer_continuations else max(
+            0,
+            min(max_items, getenv_int("REGION_TALK_FAST_CHECK_CONTINUATION_SOURCES_PER_RUN", 2)),
+        )
+        # Reserve only a bounded share for cursor continuation.  This prevents
+        # hundreds of partial rows from starving breadth, while guaranteeing
+        # that the long-tail bank actually advances over successive runs.
+        candidates = continuations[:continuation_quota] + fresh + continuations[continuation_quota:]
     out: list[Seed] = []
     seen: set[str] = set()
     for idx, row in enumerate(candidates, start=1):
@@ -9339,7 +9383,7 @@ def source_fast_check_query_bank_for_row(source_row: dict[str, Any] | None = Non
     if str(row.get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external":
         return bank
     matched = source_fast_check_evidence_priority_queries(row, bank=bank)
-    return list(dict.fromkeys(matched + bank))
+    return list(dict.fromkeys(matched + confirmed_blogger_fast_check_query_ladder() + bank))
 
 
 def source_fast_check_evidence_priority_queries(
@@ -9628,6 +9672,7 @@ async def run_source_fast_check_ko(
     same_run_posts: list[dict[str, Any]] = []
     queried = 0
     hits = 0
+    hit_posts = 0
     control_hits = 0
     incremental_hits = 0
     partial_no_hits = 0
@@ -9712,8 +9757,19 @@ async def run_source_fast_check_ko(
                 strategy=strategy,
                 source_row=previous_queue_row,
             )
-            hit_row: dict[str, Any] | None = None
-            hit_message: Any | None = None
+            confirmed_external = str(previous_queue_row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+            collect_multiple_hits = confirmed_external and getenv_bool(
+                "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_COLLECT_MULTIPLE_POSTS", True,
+            )
+            max_hits_per_query = max(1, getenv_int(
+                "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_POSTS_PER_QUERY", 2,
+            ))
+            max_hits_per_source = max(max_hits_per_query, getenv_int(
+                "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_MAX_POSTS_PER_SOURCE", 12,
+            ))
+            source_hit_pairs: list[tuple[dict[str, Any], Any]] = []
+            source_hit_urls: set[str] = set()
+            first_hit_position = 0
             for q in queries:
                 if not governor.has_total_request_budget("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url):
                     break
@@ -9771,6 +9827,7 @@ async def run_source_fast_check_ko(
                     ko_hits=hits, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
                     progress_label=f"fast-check {idx}/{len(seeds)} q={completed_cursor}/{source_query_terms_total}: {q}",
                 )
+                query_hits = 0
                 for msg in messages:
                     mid = int(getattr(msg, "id", 0) or 0)
                     if not mid:
@@ -9788,6 +9845,8 @@ async def run_source_fast_check_ko(
                         continue
                     handle = seed.handle.lstrip("@")
                     post_url = f"https://t.me/{handle}/{mid}"
+                    if post_url in source_hit_urls:
+                        continue
                     excerpt = re.sub(r"\s+", " ", text)[:500]
                     hit_row = {
                         **base_row,
@@ -9814,37 +9873,57 @@ async def run_source_fast_check_ko(
                         "edge_type": "source_local_keyword_fast_check",
                         "next_action": "prioritize_source_after_cursor_and_fetch_exact_post",
                     }
-                    hit_message = msg
-                    break
-                if hit_row:
+                    source_hit_urls.add(post_url)
+                    source_hit_pairs.append((hit_row, msg))
+                    query_hits += 1
+                    if not first_hit_position:
+                        first_hit_position = start_cursor + source_query_rpc_count
+                    if not collect_multiple_hits or query_hits >= max_hits_per_query or len(source_hit_pairs) >= max_hits_per_source:
+                        break
+                if source_hit_pairs and (not collect_multiple_hits or len(source_hit_pairs) >= max_hits_per_source):
                     break
             source_elapsed = round(time.monotonic() - source_query_started, 3)
             query_elapsed_total += source_elapsed
             base_row["fast_check_query_elapsed_seconds_run"] = source_elapsed
-            if hit_row:
-                hit_row.update(source_queue_keyword_evidence_fields(base_row))
+            if source_hit_pairs:
+                final_query_fields = {
+                    field: base_row.get(field)
+                    for field in (
+                        "fast_check_query_count", "fast_check_query_cursor", "fast_check_query_wave",
+                        "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
+                        "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run",
+                    )
+                }
+                source_hit_rows: list[dict[str, Any]] = []
+                for source_hit_row, _message in source_hit_pairs:
+                    source_hit_row.update(final_query_fields)
+                    source_hit_row["fast_check_hit_post_count_run"] = len(source_hit_pairs)
+                    source_hit_row.update(source_queue_keyword_evidence_fields(base_row))
+                    source_hit_rows.append(source_hit_row)
+                hit_row = source_hit_rows[0]
                 hits += 1
-                hit_position = start_cursor + source_query_rpc_count
+                hit_posts += len(source_hit_rows)
+                hit_position = first_hit_position or (start_cursor + source_query_rpc_count)
                 if hit_position <= 2:
                     control_hits += 1
                 else:
                     incremental_hits += 1
                 rows.append(hit_row)
-                post_hits.append(hit_row)
-                if hit_message is not None:
+                post_hits.extend(source_hit_rows)
+                for source_hit_row, hit_message in source_hit_pairs:
                     same_run_posts.append(
                         telegram_fast_check_message_post_row(
                             seed,
                             title,
                             hit_message,
-                            matched_query=str(hit_row.get("matched_query") or ""),
+                            matched_query=str(source_hit_row.get("matched_query") or ""),
                         )
                     )
                 write_region_talk_online_source_item(hit_row, run_id=run_id, stage="fast_check_ko", status="fast_check_ko_hit")
                 # The end-of-run unified queue handoff is the only writer of
                 # durable source priority. A second immediate queue write used
                 # to be reverted by that handoff's pre-run snapshot.
-                post_link_items_written += write_region_talk_post_link_queue_items([hit_row], run_id=run_id, stage="fast_check_ko_post_link_queue")
+                post_link_items_written += write_region_talk_post_link_queue_items(source_hit_rows, run_id=run_id, stage="fast_check_ko_post_link_queue")
             else:
                 new_cursor = min(source_query_terms_total, start_cursor + source_query_rpc_count)
                 if source_query_rpc_count <= 0:
@@ -9926,6 +10005,7 @@ async def run_source_fast_check_ko(
         "fast_check_ko_status": "ok" if rows else "empty",
         "fast_check_ko_sources_checked": len(rows),
         "fast_check_ko_hits": hits,
+        "fast_check_ko_hit_posts": hit_posts,
         "fast_check_ko_queries_processed": queried,
         "fast_check_ko_query_strategy": strategy,
         "fast_check_ko_query_terms_total": query_terms_total,
@@ -9943,14 +10023,14 @@ async def run_source_fast_check_ko(
     })
     status.event(
         "fast_check_ko_done", phase="fast_check_ko", status="running", run_id=run_id,
-        sources_checked=len(rows), ko_hits=hits, queries_processed=queried,
+        sources_checked=len(rows), ko_hits=hits, ko_hit_posts=hit_posts, queries_processed=queried,
         query_strategy=strategy, query_terms_total=query_terms_total,
         control_hits_q1_q2=control_hits, incremental_hits_q3_plus=incremental_hits,
         no_hit_partial=partial_no_hits, no_hit_exhausted=exhausted_no_hits,
         search_results_rejected=search_results_rejected,
         query_elapsed_seconds=round(query_elapsed_total, 3),
         local_rejected=local_rejected, spam_rejected=spam_rejected,
-        progress_label=f"fast-check KO done {hits}/{len(rows)}; q={queried}",
+        progress_label=f"fast-check KO done sources={hits}/{len(rows)} posts={hit_posts}; q={queried}",
     )
     return rows, post_hits, same_run_posts
 

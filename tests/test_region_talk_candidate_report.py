@@ -1657,6 +1657,109 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE"] = old_confirmed
 
+    def test_confirmed_blogger_generic_evidence_uses_measured_diverse_ladder(self) -> None:
+        mod = load_module()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "10",
+        }, clear=False):
+            queries = mod.source_fast_check_queries(
+                "evidence-run", 0, start_cursor=0, strategy="adaptive_cursor_v1",
+                source_row={
+                    "external_blogger_evidence_status": "confirmed_external",
+                    "external_blogger_locations_text": "Калининградская область",
+                },
+            )
+        self.assertEqual(queries, [
+            "Калининградская область", "Калининград", "Куршская коса",
+            "Нойхаузен", "Бальга", "Тапиау", "Талпаки", "Виштынец",
+            "Тильзит", "Роминта",
+        ])
+
+    def test_confirmed_blogger_fast_check_collects_bounded_distinct_posts_across_queries(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="seed_confirmed", platform="telegram", source_title="Travel Writer",
+            handle="confirmed", url="https://t.me/confirmed", source_kind="channel",
+            source_scope_guess="travel", priority=1, discovered_from="unit",
+            discovered_from_url="", why_seeded="confirmed evidence", expected_value="high",
+            known_risks="", initial_status="pending_scan", monitoring_enabled=True,
+            rights_policy="manual_review", notes="",
+        )
+        first = types.SimpleNamespace(
+            id=1, date=mod.datetime(2026, 1, 10, tzinfo=mod.timezone.utc),
+            message="Наш маршрут по Калининградской области",
+        )
+        second = types.SimpleNamespace(
+            id=2, date=mod.datetime(2026, 1, 11, tzinfo=mod.timezone.utc),
+            message="Поездка по Калининградской области продолжается",
+        )
+        third = types.SimpleNamespace(
+            id=3, date=mod.datetime(2026, 1, 12, tzinfo=mod.timezone.utc),
+            message="Вернулись из Калининграда с отзывом",
+        )
+
+        class Governor:
+            def __init__(self):
+                self.total_attempted = self.total_error = self.total_ok = 0
+                self.requests_by_method = {}
+
+            async def resolve_entity(self, _client, _seed):
+                return types.SimpleNamespace(title="Travel Writer"), {"telegram_resolve_status": "resolved_from_private_cache"}
+
+            def has_total_request_budget(self, *_args):
+                return True
+
+            async def humanlike_pause(self, *_args, **_kwargs):
+                return True
+
+            def log(self, *_args, **_kwargs):
+                return None
+
+        class Status:
+            def event(self, *_args, **_kwargs):
+                return None
+
+        previous = {"unified_source_queue": {"telegram:confirmed": {
+            "canonical_source_key": "telegram:confirmed", "platform": "telegram",
+            "source_url": "https://t.me/confirmed", "source_queue_status": "pending_scan",
+            "external_blogger_evidence_status": "confirmed_external",
+            "external_blogger_locations_text": "Калининградская область",
+        }}}
+        written: list[list[dict[str, object]]] = []
+        async_search = mock.AsyncMock(side_effect=[[first, second], [second, third]])
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_FAST_CHECK_KO_ENABLED": "1",
+            "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "1",
+            "REGION_TALK_FAST_CHECK_QUERY_STRATEGY": "adaptive_cursor_v1",
+            "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "2",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_COLLECT_MULTIPLE_POSTS": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_POSTS_PER_QUERY": "2",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_MAX_POSTS_PER_SOURCE": "4",
+        }, clear=False), \
+             mock.patch.object(mod, "source_fast_check_backlog_seeds", return_value=[seed]), \
+             mock.patch.object(mod, "runtime_budget_ok", return_value=True), \
+             mock.patch.object(mod, "history_min_post_datetime", return_value=mod.datetime(2025, 7, 13, tzinfo=mod.timezone.utc)), \
+             mock.patch.object(mod, "telethon_iter_messages_list", async_search), \
+             mock.patch.object(mod, "write_region_talk_online_source_item", return_value=True), \
+             mock.patch.object(mod, "write_region_talk_post_link_queue_items", side_effect=lambda rows, **_kwargs: written.append(list(rows)) or len(rows)):
+            source_rows, post_hits, same_run_posts = asyncio.run(
+                mod.run_source_fast_check_ko(object(), Governor(), previous, "unit-run", Status())
+            )
+
+        self.assertEqual(len(source_rows), 1)
+        self.assertEqual(len(post_hits), 3)
+        self.assertEqual(len(same_run_posts), 3)
+        self.assertEqual({row["keyword_hit_post_url"] for row in post_hits}, {
+            "https://t.me/confirmed/1", "https://t.me/confirmed/2", "https://t.me/confirmed/3",
+        })
+        self.assertEqual(source_rows[0]["fast_check_hit_post_count_run"], 3)
+        self.assertEqual(source_rows[0]["fast_check_query_rpc_count_run"], 2)
+        self.assertEqual(len(written), 1)
+        self.assertEqual(len(written[0]), 3)
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_hit_posts"], 3)
+
     def test_generic_adaptive_fast_check_keeps_small_wave(self) -> None:
         mod = load_module()
         with mock.patch.dict(os.environ, {
@@ -1757,6 +1860,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertTrue(mod.source_fast_check_query_matches_text("Куршская коса", "были на Куршской косе"))
         self.assertFalse(mod.source_fast_check_query_matches_text("Янтарный", "янтарный цвет заката"))
         self.assertTrue(mod.source_fast_check_query_matches_text("Янтарный", "поехали в посёлок Янтарный"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Калининград", "вернулись из Калининграда"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Бальга", "гуляли по Бальге"))
+        self.assertTrue(mod.source_fast_check_query_matches_text("Виштынец", "отдыхали на Виштынце"))
 
     def test_adaptive_fast_check_requeues_partial_but_not_exhausted_rows(self) -> None:
         mod = load_module()
@@ -1811,6 +1917,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 os.environ.pop("REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS", None)
             else:
                 os.environ["REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS"] = old_prefer
+
+    def test_adaptive_fast_check_reserves_bounded_continuation_share_without_starving_fresh_sources(self) -> None:
+        mod = load_module()
+        queue = {}
+        for index in range(3):
+            queue[f"telegram:partial{index}"] = {
+                "canonical_source_key": f"telegram:partial{index}", "platform": "telegram",
+                "source_url": f"https://t.me/partial{index}", "source_queue_status": "pending_scan",
+                "fast_check_status": "no_hit_partial", "fast_check_query_cursor": 4,
+                "queue_order": index + 1,
+            }
+        for index in range(3):
+            queue[f"telegram:fresh{index}"] = {
+                "canonical_source_key": f"telegram:fresh{index}", "platform": "telegram",
+                "source_url": f"https://t.me/fresh{index}", "source_queue_status": "pending_scan",
+                "queue_order": index + 10,
+            }
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_FAST_CHECK_QUERY_STRATEGY": "adaptive_cursor_v1",
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY": "0",
+            "REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS": "0",
+            "REGION_TALK_FAST_CHECK_CONTINUATION_SOURCES_PER_RUN": "2",
+        }, clear=False):
+            seeds = mod.source_fast_check_backlog_seeds({
+                "unified_source_queue_cursor_position": 0,
+                "unified_source_queue": queue,
+            }, 4)
+        self.assertEqual([seed.canonical_url for seed in seeds], [
+            "https://t.me/partial0", "https://t.me/partial1",
+            "https://t.me/fresh0", "https://t.me/fresh1",
+        ])
 
     def test_fast_check_no_hit_is_not_rechecked_or_prioritized_as_keyword(self) -> None:
         mod = load_module()

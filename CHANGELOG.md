@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Improved Region Talk source-local discovery from a bounded cached-peer A/B canary: confirmed external bloggers now use a measured broad-plus-low-frequency ten-query ladder, retain up to two distinct exact posts per query (twelve per source) instead of discarding all results after the first hit, and accept explicit Russian case forms without admitting Telegram stemming noise. Generic discovery remains breadth-first but reserves two slots for persisted adaptive-cursor continuation. The live canaries completed 70 source-local RPCs with zero resolves, errors, timeouts or FloodWait; rare terms added six current-year KO URLs not returned by the broad control.
+- Fixed Region Talk local-source leakage by reconciling source counters and locality from durable strict-KO candidates before image/publication handoff. Persistent KO creation (eight dated rows across at least 42 days) now routes the source and unsent candidates to the local audit lane unless authoritative confirmed-external evidence exists; the exact `vk:krasivo_s_evgo` 49-day regression is covered.
+
 - Changed Region Talk orchestration to use measured sub-750-second CandidateReport headroom for six-source breadth (up to five confirmed external bloggers) while the supported evidence backlog is material and BGE still fits one CPU batch; generic uncertain history remains capped at four.
 
 - Fixed a live Region Talk CandidateReport/ImageDiagnostic YDB race: CandidateReport now writes only newly created or status-changed image rows and never repeats an early handoff in its final handoff, so a concurrent `actual_scored` image result cannot be overwritten by the main notebook's stale start-of-run snapshot. Terminal CandidateReport heartbeats also receive bounded extra retries on transient YDB resource exhaustion, while ordinary heartbeat pressure remains unchanged.

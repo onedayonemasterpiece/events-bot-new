@@ -233,6 +233,37 @@ regional lexicon and adaptive bank. Human-like pacing, the one controlled
 uncached Telegram resolve lane and FloodWait cooldowns remain mandatory; source
 priority never bypasses Telegram safety.
 
+The measured confirmed-blogger ladder is now explicit rather than dependent on
+whatever happened to be at the start of the generic bank:
+`Калининградская область`, `Калининград`, `Куршская коса`, `Нойхаузен`,
+`Бальга`, `Тапиау`, `Талпаки`, `Виштынец`, `Тильзит`, `Роминта`. Evidence-specific
+locations still precede this ladder. For a confirmed external blogger, one
+successful query no longer discards the rest of the bounded wave: up to two
+distinct exact posts per query and twelve per source are handed immediately to
+the same-run text pipeline. Generic sources still stop after the first fresh
+exact hit; the extra exploitation budget exists only for independently
+confirmed external visitors.
+
+This policy is based on the read-only cached-peer experiment of 2026-07-13:
+
+- ordinary `no_hit_partial` control: 40 RPC over four sources, no errors or
+  FloodWait; 17 matches existed only before the rolling one-year window and the
+  five tested rare terms produced no current hit;
+- confirmed-external positive control: 30 RPC over three sources, no errors or
+  FloodWait; the three broad queries produced eight new manually verified KO
+  URLs, while seven low-frequency queries produced eight, including six not
+  returned by the broad control;
+- therefore low-frequency terms complement broad recall on a high-probability
+  source but are not evidence for spending the whole Telegram budget on random
+  generic channels.
+
+After the confirmed-blogger cohort is drained, adaptive selection reserves two
+source slots per run for persisted `no_hit|no_hit_partial` cursors and fills the
+remaining slots with fresh sources. This guarantees long-tail progress without
+letting a large continuation backlog starve breadth. Setting
+`REGION_TALK_FAST_CHECK_ADAPTIVE_PREFER_CONTINUATIONS=1` remains the explicit
+all-continuation diagnostic/rollback override.
+
 When a new source enters YDB from a catalog, similar-channel edge, keyword hit
 or hashtag hit, the next cheap step is not a deep history crawl. CandidateReport
 therefore has a bounded `fast-check-KO` pass over the existing
@@ -245,7 +276,8 @@ to promote KO hits in the same ledger without creating a second source queue.
 Per run, the orchestrator keeps this intentionally conservative:
 
 - `REGION_TALK_FAST_CHECK_KO_ENABLED=1`;
-- `REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN=5` in iterative debug runs;
+- `REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN=10` in the current orchestrated
+  product run (a smaller explicit canary value is still honored);
 - `REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE=2`;
 - `REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY=2`;
 - all resolves/searches go through `TelegramRequestGovernor` plus human-like
@@ -257,11 +289,13 @@ search enabled they may consume up to
 `REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE=10` source-local
 queries in one run, ordered by evidence-specific locations and then by the
 diverse regional place/POI bank. Up to 20 server-side matches per query are
-ranked by proximity to `visit_period_text` before choosing the exact link; this
+ranked by proximity to `visit_period_text` before selecting bounded exact links; this
 prevents a newer incidental mention (for example a Moscow miniature containing
-Kaliningrad) from hiding the independently evidenced 2025 trip. The pass still stops on the first fresh exact
-KO post, uses the same 5–9 second human-like pauses, never bypasses cached
-entity/FloodWait rules, and persists its cursor for continuation. Thus the
+Kaliningrad) from hiding the independently evidenced 2025 trip. The confirmed
+pass continues its bounded ten-query wave after the first hit, emits no more
+than two distinct exact posts per query and twelve per source, uses the same
+5–9 second human-like pauses, and never bypasses cached entity/FloodWait rules.
+Thus the
 extra budget is spent only after an author is independently confirmed as an
 external visitor, rather than slowing the generic source backlog.
 

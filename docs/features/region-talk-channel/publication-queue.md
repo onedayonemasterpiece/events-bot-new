@@ -196,6 +196,16 @@ later sparse `source_status_item` or `online_source_item`. Otherwise a valid
 Gemini-confirmed row can fail its source fingerprint check merely because a
 live progress overlay contains zero counters.
 
+CandidateReport also reconciles source locality from the durable candidate
+ledger before image/publication handoff. Eight strict KO rows spread over at
+least 42 days are treated as persistent regional-author evidence, not as a
+single visitor's trip burst. The source and its unsent candidate projections
+are routed to the local-region audit lane unless an authoritative
+`confirmed_external` evidence record explicitly overrides that inference.
+This closes the observed `vk:krasivo_s_evgo` failure mode (22 scanned/0 KO in a
+sparse status row while eight KO candidate rows spanned 49 days). Gemini's
+post-level approval can never override this source-level terminal decision.
+
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
 expected numeric peer and fail closed on a wrong target; the prepared chat is

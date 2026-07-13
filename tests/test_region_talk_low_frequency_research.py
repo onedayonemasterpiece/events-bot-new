@@ -265,6 +265,7 @@ class RegionTalkLowFrequencyResearchTests(unittest.TestCase):
     def test_visible_text_guard_accepts_place_cases_but_rejects_telegram_stemming_noise(self) -> None:
         self.assertFalse(self.mod.source_query_matches_visible_text("Советск", "Советский район Москвы"))
         self.assertTrue(self.mod.source_query_matches_visible_text("Советск", "Выходные в Советске"))
+        self.assertTrue(self.mod.source_query_matches_visible_text("Калининградская область", "маршрут по Калининградской области"))
         self.assertTrue(self.mod.source_query_matches_visible_text("Калининград", "Вернулись из Калининграда"))
         self.assertTrue(self.mod.source_query_matches_visible_text("Бальга", "Поехали к замку Бальга"))
         self.assertTrue(self.mod.source_query_matches_visible_text("Виштынец", "Отдыхали на Виштынце"))
