@@ -92,6 +92,9 @@ LOCAL_REGION_RATIO_MIN_POSTS = 30
 LOCAL_REGION_RATIO_MIN_KO_POSTS = 10
 LOCAL_REGION_RATIO_MIN_KO_RATIO = 0.35
 LOCAL_REGION_RATIO_MIN_CANDIDATE_RATIO = 0.55
+SOURCE_PROFILE_REPEATED_KO_MIN_POSTS = 8
+SOURCE_PROFILE_REPEATED_KO_MIN_RATIO = 0.60
+SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS = 42
 LOCAL_INSTITUTION_PROFILE_MIN_POSTS = 8
 LOCAL_INSTITUTION_PROFILE_MIN_HITS = 5
 SOURCE_LOCAL_TITLE_PATTERNS = [
@@ -147,6 +150,24 @@ def source_scope_terminal_fields_for_local_region(reason: str, *, hits: str = ""
         "next_action": "route_to_local_region_source_list_no_external_scan",
         "insertion_policy": "surface_local_rejected_before_cursor_insert",
     }
+
+
+def source_has_authoritative_confirmed_external_evidence(row: dict[str, Any] | None) -> bool:
+    """Return true only for explicit, non-local confirmed-external evidence."""
+    item = row if isinstance(row, dict) else {}
+    status = str(
+        item.get("external_blogger_evidence_status")
+        or item.get("confirmation_status")
+        or ""
+    ).strip().lower()
+    if status != "confirmed_external":
+        return False
+    relation = str(item.get("external_blogger_region_relation_status") or item.get("region_relation_status") or "").lower().replace("ё", "е")
+    return not any(marker in relation for marker in [
+        "lives in region", "living in region", "resident of region", "moved to region",
+        "local resident", "local blogger", "живет в регионе", "житель региона",
+        "местный", "переехал в калининград", "переехала в калининград",
+    ])
 
 
 def local_region_ratio_decision(row: dict[str, Any]) -> dict[str, Any]:
@@ -1461,7 +1482,9 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
             _source_cursor_for_seed(pair[0], previous_state),
             str(pair[1].get("source_queue_status") or pair[1].get("fetch_status") or ""),
         ),
+        str(pair[1].get("external_blogger_evidence_status") or "").strip().lower() != "confirmed_external",
         int(pair[1].get("queue_order") or 999999999),
+        canonical_source_key(pair[0].platform, pair[0].handle, pair[0].canonical_url),
     ))
     preferred_uncached_keys = {
         canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
@@ -1765,6 +1788,15 @@ def source_local_region_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
     surface = source_surface_terminal_fields(row)
     if source_terminal_rejected_status(surface.get("source_queue_status")):
         return surface
+    if source_has_authoritative_confirmed_external_evidence(row):
+        return {
+            **surface,
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_locality_class": "nonlocal_russia",
+            "source_locality_reconciliation_status": "authoritative_confirmed_external",
+            "source_locality_reconciliation_reason": "explicit confirmed_external evidence overrides content-only locality inference",
+        }
     if (
         str(row.get("source_scope") or "") == "local_region"
         or str(row.get("source_geo_class") or "") == "kaliningrad_local"
@@ -1941,6 +1973,14 @@ EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS = [
     "external_blogger_pipeline_status", "external_blogger_evidence_run_id",
     "external_blogger_evidence_attached_run_id",
 ]
+SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS = [
+    "source_locality_reconciliation_status", "source_locality_reconciliation_reason",
+    "source_locality_surface_class", "source_locality_class",
+    "source_repeated_ko_evidence_status", "source_repeated_ko_sampled_posts",
+    "source_repeated_ko_posts", "source_repeated_ko_dated_posts",
+    "source_repeated_ko_ratio", "source_repeated_ko_span_days",
+    "source_repeated_ko_oldest_date", "source_repeated_ko_newest_date",
+]
 
 
 SOURCE_STATE_FIELDS = [
@@ -1968,7 +2008,7 @@ SOURCE_STATE_FIELDS = [
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
     "next_action", "updated_at", "last_run_id",
-] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
 SOURCE_QUEUE_STATE_FIELDS = [
     "source_queue_id", "queue_seq", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
@@ -2005,7 +2045,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "publication_source_evidence_priority", "publication_source_evidence_post_url",
     "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
-] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
 SOURCE_CANDIDATE_STATE_FIELDS = [
     "source_candidate_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
     "canonical_source_key", "platform", "platform_guess", "handle", "recommended_username",
@@ -2024,7 +2064,7 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
-] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
     "from_source_id", "from_source_title", "from_post_id", "to_source_candidate_id",
@@ -5809,6 +5849,338 @@ def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: 
     }
 
 
+def repeated_ko_over_time_source_evidence(sampled: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build conservative source-local evidence from repeated dated KO posts.
+
+    A short trip series may contain many consecutive Kaliningrad posts, so the
+    count alone is not locality evidence.  Require both a strong sample share
+    and dated KO posts spanning at least six weeks.  The rule is source-local
+    and contains no handle-specific exception.
+    """
+    rows = [row for row in sampled if isinstance(row, dict)]
+    ko_rows = [
+        row for row in rows
+        if row.get("kaliningrad_oblast_only_scope") is True
+        or str(row.get("kaliningrad_oblast_only_scope") or "").strip().lower() in {"1", "true", "yes"}
+    ]
+    ko_dates = sorted(
+        dt for dt in (
+            normalize_post_datetime(
+                row.get("post_date") or row.get("published_at") or row.get("date")
+            )
+            for row in ko_rows
+        )
+        if dt is not None
+    )
+    sample_count = len(rows)
+    ko_count = len(ko_rows)
+    ko_ratio = ko_count / max(1, sample_count)
+    span_days = (ko_dates[-1] - ko_dates[0]).total_seconds() / 86400 if len(ko_dates) >= 2 else 0.0
+    confirmed = bool(
+        ko_count >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+        and len(ko_dates) >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+        and ko_ratio >= SOURCE_PROFILE_REPEATED_KO_MIN_RATIO
+        and span_days >= SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS
+    )
+    return {
+        "source_repeated_ko_evidence_status": "confirmed_local_over_time" if confirmed else "insufficient",
+        "source_repeated_ko_sampled_posts": sample_count,
+        "source_repeated_ko_posts": ko_count,
+        "source_repeated_ko_dated_posts": len(ko_dates),
+        "source_repeated_ko_ratio": round(ko_ratio, 3),
+        "source_repeated_ko_span_days": round(span_days, 1),
+        "source_repeated_ko_oldest_date": ko_dates[0].date().isoformat() if ko_dates else "",
+        "source_repeated_ko_newest_date": ko_dates[-1].date().isoformat() if ko_dates else "",
+    }
+
+
+def reconcile_source_profile_locality(srow: dict[str, Any], sampled: list[dict[str, Any]]) -> dict[str, Any]:
+    """Reconcile surface, authoritative and temporal source-locality evidence.
+
+    Strong local title/handle evidence remains terminal.  Explicit
+    ``confirmed_external`` evidence may override content-only locality because
+    an externally confirmed visitor can publish a long trip series.  All
+    unresolved or contradictory durable projections remain unknown so the
+    publication gate fails closed.
+    """
+    surface = source_discovery_surface_filter(srow)
+    surface_class = str(surface.get("source_quick_class") or "")
+    repeated = repeated_ko_over_time_source_evidence(sampled)
+    # A source-wide candidate ledger is more durable than one bounded current
+    # fetch.  It contains only KO-qualified rows, so its ratio is not a valid
+    # denominator, but its distinct dated-post count and span are valid
+    # evidence that the source publishes KO material persistently rather than
+    # in one compact trip burst.
+    durable_repeated_status = str(srow.get("source_repeated_ko_evidence_status") or "").strip().lower()
+    try:
+        durable_ko_posts = int(float(srow.get("source_repeated_ko_posts") or 0))
+    except Exception:
+        durable_ko_posts = 0
+    try:
+        durable_dated_posts = int(float(srow.get("source_repeated_ko_dated_posts") or 0))
+    except Exception:
+        durable_dated_posts = 0
+    try:
+        durable_span_days = float(srow.get("source_repeated_ko_span_days") or 0)
+    except Exception:
+        durable_span_days = 0.0
+    if (
+        durable_repeated_status in {"confirmed_local_over_time", "persistent_ko_creator_over_time"}
+        and durable_ko_posts >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+        and durable_dated_posts >= SOURCE_PROFILE_REPEATED_KO_MIN_POSTS
+        and durable_span_days >= SOURCE_PROFILE_REPEATED_KO_MIN_SPAN_DAYS
+    ):
+        repeated.update({
+            "source_repeated_ko_evidence_status": "persistent_ko_creator_over_time",
+            "source_repeated_ko_sampled_posts": int(float(srow.get("source_repeated_ko_sampled_posts") or 0)),
+            "source_repeated_ko_posts": durable_ko_posts,
+            "source_repeated_ko_dated_posts": durable_dated_posts,
+            "source_repeated_ko_ratio": float(srow.get("source_repeated_ko_ratio") or 0),
+            "source_repeated_ko_span_days": round(durable_span_days, 1),
+            "source_repeated_ko_oldest_date": str(srow.get("source_repeated_ko_oldest_date") or ""),
+            "source_repeated_ko_newest_date": str(srow.get("source_repeated_ko_newest_date") or ""),
+        })
+    scope = str(srow.get("source_scope") or "").strip().lower().replace("-", "_")
+    geo = str(srow.get("source_geo_class") or "").strip().lower().replace("-", "_")
+    quick = str(srow.get("source_quick_class") or "").strip().lower()
+    terminal_status = str(srow.get("source_queue_status") or srow.get("fetch_status") or "").strip().lower()
+    existing_local = bool(
+        scope in {"local", "local_region", "kaliningrad_local"}
+        or geo in {"local", "local_region", "kaliningrad_local"}
+        or quick == "local_region_source"
+        or terminal_status == LOCAL_REGION_SOURCE_STATUS
+    )
+    existing_external = bool(
+        scope in {"external", "nonlocal", "nonlocal_russia", "mixed_external", "nonlocal_mixed", "external_mixed"}
+        or geo in {"external", "nonlocal", "nonlocal_russia", "mixed_external", "nonlocal_mixed", "external_mixed"}
+    )
+    prior_status = str(srow.get("source_locality_reconciliation_status") or "").strip().lower()
+    ko_hits = int(repeated["source_repeated_ko_posts"])
+    sample_count = int(repeated["source_repeated_ko_sampled_posts"])
+    ko_ratio = float(repeated["source_repeated_ko_ratio"])
+
+    if surface_class == "local_region_source":
+        locality = "kaliningrad_local"
+        status = "local_surface_confirmed"
+        reason = str(surface.get("source_surface_filter_reason") or "local title/handle evidence")
+    elif (
+        source_has_authoritative_confirmed_external_evidence(srow)
+        and surface_class != "spam_source_reject"
+        and terminal_status != SPAM_SOURCE_STATUS
+    ):
+        locality = "nonlocal_russia"
+        status = "authoritative_confirmed_external"
+        reason = "explicit confirmed_external evidence overrides content-only locality inference"
+    elif repeated["source_repeated_ko_evidence_status"] in {"confirmed_local_over_time", "persistent_ko_creator_over_time"}:
+        locality = "kaliningrad_local"
+        status = "local_repeated_ko_over_time"
+        reason = (
+            f"repeated KO evidence: {ko_hits}/{sample_count} posts over "
+            f"{repeated['source_repeated_ko_span_days']} days"
+        )
+    elif prior_status in {"conflicting_locality_evidence", "unknown_insufficient_locality_evidence"}:
+        locality = "unknown"
+        status = prior_status
+        reason = str(srow.get("source_locality_reconciliation_reason") or "durable locality evidence unresolved")
+    elif existing_local and existing_external:
+        locality = "unknown"
+        status = "conflicting_locality_evidence"
+        reason = "durable source_scope/source_geo_class locality projections conflict"
+    elif existing_local:
+        locality = "kaliningrad_local"
+        status = "local_existing_durable_evidence"
+        reason = "existing durable local source verdict"
+    else:
+        try:
+            scanned_posts = int(float(srow.get("posts_scanned") or 0))
+        except Exception:
+            scanned_posts = 0
+        try:
+            scanned_ko_posts = int(float(srow.get("ko_posts_found") or 0))
+        except Exception:
+            scanned_ko_posts = 0
+        try:
+            scanned_candidate_posts = int(float(srow.get("candidate_posts_found") or 0))
+        except Exception:
+            scanned_candidate_posts = 0
+        mixed_scanned_external = bool(
+            scanned_posts >= 5
+            and 0 < max(scanned_ko_posts, scanned_candidate_posts) < scanned_posts
+        )
+        if sampled and 0 < ko_ratio < 1.0:
+            locality = "nonlocal_russia"
+            status = "external_mixed_sample"
+            reason = "sample contains both KO and non-KO posts without repeated KO-over-time locality evidence"
+        elif mixed_scanned_external:
+            locality = "nonlocal_russia"
+            status = "external_mixed_scanned_history"
+            reason = (
+                "bounded history contains KO and non-KO posts: "
+                f"posts_scanned={scanned_posts},ko_posts={scanned_ko_posts},"
+                f"candidate_posts={scanned_candidate_posts}"
+            )
+        elif sample_count >= 10 and ko_ratio >= 1.0:
+            locality = "kaliningrad_local"
+            status = "local_dense_all_ko_sample"
+            reason = "full bounded ten-post sample is all KO"
+        elif existing_external:
+            locality = "nonlocal_russia"
+            status = "external_existing_durable_evidence"
+            reason = "existing durable external source verdict"
+        else:
+            locality = "unknown"
+            status = "unknown_insufficient_locality_evidence"
+            reason = "insufficient non-conflicting source locality evidence"
+    return {
+        **repeated,
+        "source_locality_reconciliation_status": status,
+        "source_locality_reconciliation_reason": reason,
+        "source_locality_surface_class": surface_class,
+        "source_locality_class": locality,
+    }
+
+
+def reconcile_persistent_ko_source_evidence(
+    source_rows: list[dict[str, Any]],
+    candidate_rows: list[dict[str, Any]],
+    previous_state: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Reconcile source counters/locality from the durable KO candidate ledger.
+
+    ``source_status_item`` can be written by a bounded fetch before its scored
+    post rows are folded back into the canonical queue.  That produced the
+    observed impossible state ``22 scanned / 0 KO`` while eight dated KO
+    candidate rows already existed.  This helper uses only strict KO candidate
+    rows, deduplicates them by post URL/id, and propagates monotonic counters and
+    persistent-over-time evidence to all matching source projections.
+
+    A compact visit burst remains non-local/unknown.  Local terminal routing is
+    applied only for at least eight dated KO rows spanning six weeks and never
+    overrides explicit authoritative confirmed-external evidence.
+    """
+    candidates_by_alias: dict[str, dict[str, dict[str, Any]]] = {}
+
+    def aliases(row: dict[str, Any]) -> set[str]:
+        out: set[str] = set()
+        source_id = str(row.get("source_id") or "").strip()
+        if source_id:
+            out.add("id:" + source_id)
+        key = str(row.get("canonical_source_key") or "").strip().lower().rstrip("/")
+        if key:
+            out.add("key:" + key)
+        url = str(row.get("source_url") or row.get("canonical_url") or "").strip()
+        if url:
+            platform = normalize_source_platform(str(row.get("platform") or ""), url)
+            derived = canonical_source_key(
+                platform,
+                str(row.get("handle") or row.get("username_or_handle") or ""),
+                url,
+            )
+            if derived:
+                out.add("key:" + derived)
+        return out
+
+    for candidate in candidate_rows:
+        if not isinstance(candidate, dict):
+            continue
+        strict_ko = (
+            _rt_bool(candidate.get("kaliningrad_oblast_only_scope"))
+            and str(candidate.get("kaliningrad_mention_role") or "main_subject") in {"", "main_subject"}
+            and not str(candidate.get("vector_gate_status") or "").startswith("vector_reject")
+        )
+        if not strict_ko:
+            continue
+        post_key = str(
+            candidate.get("post_url")
+            or candidate.get("platform_post_key")
+            or candidate.get("post_id")
+            or candidate.get("candidate_memory_id")
+            or ""
+        ).strip()
+        if not post_key:
+            continue
+        for alias in aliases(candidate):
+            candidates_by_alias.setdefault(alias, {})[post_key] = candidate
+
+    stats = {
+        "sources_checked": 0,
+        "sources_with_candidate_ko_evidence": 0,
+        "source_counter_repairs": 0,
+        "persistent_local_sources": 0,
+        "authoritative_external_overrides": 0,
+    }
+
+    def reconciled(row: dict[str, Any], *, count_stats: bool = True) -> dict[str, Any]:
+        item = dict(row)
+        evidence_rows: dict[str, dict[str, Any]] = {}
+        for alias in aliases(item):
+            evidence_rows.update(candidates_by_alias.get(alias) or {})
+        if count_stats:
+            stats["sources_checked"] += 1
+        if not evidence_rows:
+            return item
+        if count_stats:
+            stats["sources_with_candidate_ko_evidence"] += 1
+        rows = list(evidence_rows.values())
+        old_ko = int(float(item.get("ko_posts_found") or 0))
+        old_candidate = int(float(item.get("candidate_posts_found") or 0))
+        ko_count = len(rows)
+        item["ko_posts_found"] = max(old_ko, ko_count)
+        item["candidate_posts_found"] = max(old_candidate, ko_count)
+        if count_stats and (int(item["ko_posts_found"]) != old_ko or int(item["candidate_posts_found"]) != old_candidate):
+            stats["source_counter_repairs"] += 1
+        repeated = repeated_ko_over_time_source_evidence(rows)
+        item.update(repeated)
+        if repeated.get("source_repeated_ko_evidence_status") != "confirmed_local_over_time":
+            return item
+        if source_has_authoritative_confirmed_external_evidence(item):
+            if count_stats:
+                stats["authoritative_external_overrides"] += 1
+            item.update(reconcile_source_profile_locality(item, []))
+            return item
+        item["source_repeated_ko_evidence_status"] = "persistent_ko_creator_over_time"
+        locality = reconcile_source_profile_locality(item, [])
+        item.update(locality)
+        if locality.get("source_locality_class") == "kaliningrad_local":
+            if count_stats:
+                stats["persistent_local_sources"] += 1
+            reason = str(locality.get("source_locality_reconciliation_reason") or "persistent KO creator over time")
+            item.update(source_scope_terminal_fields_for_local_region(reason, hits="persistent_ko_creator_over_time"))
+            item.update(locality)
+        return item
+
+    out = [reconciled(row) if isinstance(row, dict) else row for row in source_rows]
+    reconciled_sources_by_alias: dict[str, dict[str, Any]] = {}
+    for row in out:
+        if isinstance(row, dict):
+            for alias in aliases(row):
+                reconciled_sources_by_alias[alias] = row
+    for candidate in candidate_rows:
+        if not isinstance(candidate, dict):
+            continue
+        source = next((reconciled_sources_by_alias.get(alias) for alias in aliases(candidate) if reconciled_sources_by_alias.get(alias)), None)
+        if not source:
+            continue
+        for field in [
+            "posts_scanned", "ko_posts_found", "candidate_posts_found",
+            "source_scope", "source_geo_class", "source_quick_class", "source_queue_status",
+            "fetch_status", "monitoring_exclusion_reason", "next_action",
+            *SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS,
+        ]:
+            if source.get(field) not in (None, "", [], {}):
+                candidate[field] = source.get(field)
+    state = previous_state if isinstance(previous_state, dict) else {}
+    for state_key in ("unified_source_queue", "canonical_source_queue", "sources", "source_candidates"):
+        container = state.get(state_key)
+        if isinstance(container, dict):
+            for key, row in list(container.items()):
+                if isinstance(row, dict):
+                    container[key] = reconciled(row, count_stats=False)
+        elif isinstance(container, list):
+            state[state_key] = [reconciled(row, count_stats=False) if isinstance(row, dict) else row for row in container]
+    return out, stats
+
+
 def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]]) -> dict[str, Any]:
     title = str(srow.get("source_title") or srow.get("resolved_title") or "").lower()
     kind = str(srow.get("source_kind") or srow.get("source_type") or "").lower()
@@ -5819,19 +6191,8 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
     news_hits = sum(1 for r in sampled if float(r.get("newsiness_score") or 0) >= 0.45)
     personal_hits = sum(1 for r in sampled if str(r.get("has_firsthand_visit_evidence") or "").lower() == "true" or str(r.get("first_person_markers") or ""))
     ko_ratio = round(ko_hits / n, 3)
-    if any(w in joined for w in ["калининград", "kaliningrad", "кёнигсберг", "kenig", "koenig", "konig", "kgd", "kld", "klgd", "39"]):
-        geo = "kaliningrad_local"
-    # A travel channel can publish a short four-post Kaliningrad trip series.
-    # Any recent non-KO post plus a non-local title proves that the source is
-    # not dedicated exclusively to the region. Conversely, infer local from
-    # content ratio alone only after the full bounded ten-post sample is all KO;
-    # sparse all-KO samples stay unknown rather than being falsely rejected.
-    elif sampled and 0 < ko_ratio < 1.0:
-        geo = "nonlocal_russia"
-    elif len(sampled) >= 10 and ko_ratio >= 1.0:
-        geo = "kaliningrad_local"
-    else:
-        geo = "unknown"
+    locality = reconcile_source_profile_locality(srow, sampled)
+    geo = str(locality.get("source_locality_class") or "unknown")
     if any(w in joined for w in ["новост", "сми", "инфо", "афиша"]):
         topic = "local_news" if geo == "kaliningrad_local" else "federal_media"
     elif any(w in joined for w in ["тур", "экскурс", "бронь"]):
@@ -5848,6 +6209,7 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
     personal_score = round(min(1.0, personal_hits / n + (0.2 if topic == "personal_blog" else 0.0)), 3)
     nonlocal_value = round(min(1.0, (0.45 if geo == "nonlocal_russia" else 0.10 if geo == "unknown" else 0.0) + travel_score * 0.35 + (0.20 if 0 < ko_ratio < 0.5 else 0.0)), 3)
     return {
+        **locality,
         "source_scope": "local_region" if geo == "kaliningrad_local" else ("external" if geo == "nonlocal_russia" else "unknown"),
         "source_geo_class": geo,
         "source_topic_class": topic,
@@ -6723,8 +7085,34 @@ def build_unified_source_queue(
             # original discovery provenance that controls priority. Merge
             # graph evidence, while keeping the first durable added_from.
             existing.update({k: v for k, v in seed.items() if k != "added_from" and v not in ("", None)})
-            if not evidence_was_attached and str(seed.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external":
+            evidence_attached_now = (
+                not evidence_was_attached
+                and str(seed.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+            )
+            if evidence_attached_now:
                 existing["external_blogger_evidence_attached_run_id"] = run_id
+                locality = reconcile_source_profile_locality(existing, posts_by_source.get(str(existing.get("source_id") or ""), []))
+                existing.update(locality)
+                if locality.get("source_locality_reconciliation_status") == "authoritative_confirmed_external":
+                    old_status = str(existing.get("source_queue_status") or "")
+                    if old_status == LOCAL_REGION_SOURCE_STATUS:
+                        existing["previous_source_queue_status"] = old_status
+                        existing["source_queue_status"] = "pending_scan"
+                        existing["fetch_status"] = "pending_scan"
+                        existing["status_changed_this_run"] = "true"
+                        existing["last_status_changed_at"] = run_now
+                    existing.update({
+                        "source_scope": "external",
+                        "source_geo_class": "nonlocal_russia",
+                        "source_quick_class": "candidate_keep",
+                        "source_topic_class": (
+                            "travel_blogger"
+                            if str(existing.get("source_topic_class") or "") == "local_region_source_surface"
+                            else existing.get("source_topic_class") or "travel_blogger"
+                        ),
+                        "monitoring_exclusion_reason": "overridden_by_authoritative_confirmed_external_evidence",
+                        "next_action": "scan_confirmed_external_source",
+                    })
             if not existing.get("added_from"):
                 existing["added_from"] = seed.get("added_from") or added_from
             for field in ("discovery_types", "edge_types_all"):
@@ -7276,19 +7664,26 @@ def image_queue_source_disqualification_reason(row: dict[str, Any]) -> str:
     budget on local Kaliningrad publics, official/news/announcement surfaces or
     obvious commercial/travel-deal sources even if a post itself mentions KO.
     """
+    locality = reconcile_source_profile_locality(row, [])
+    authoritative_external = locality.get("source_locality_reconciliation_status") == "authoritative_confirmed_external"
     terminal = source_local_region_terminal_fields(row)
     terminal_status = str(terminal.get("source_queue_status") or row.get("source_queue_status") or row.get("fetch_status") or "")
-    if terminal_status == LOCAL_REGION_SOURCE_STATUS:
+    if terminal_status == LOCAL_REGION_SOURCE_STATUS and not authoritative_external:
         return "local_kaliningrad_source_for_separate_monitoring"
     if terminal_status == SPAM_SOURCE_STATUS:
         return "spam_or_commercial_hashtag_source"
-    if str(row.get("source_scope") or "") == "local_region" or str(row.get("source_geo_class") or "") == "kaliningrad_local":
+    if not authoritative_external and (
+        str(row.get("source_scope") or "") == "local_region"
+        or str(row.get("source_geo_class") or "") == "kaliningrad_local"
+    ):
         return "local_kaliningrad_source_for_separate_monitoring"
     topic = str(row.get("source_topic_class") or "")
-    if topic in IMAGE_QUEUE_BLOCKED_SOURCE_TOPICS:
+    if topic in IMAGE_QUEUE_BLOCKED_SOURCE_TOPICS and not (
+        authoritative_external and topic == "local_region_source_surface"
+    ):
         return "source_topic_not_publication_target:" + topic
     quick = str(row.get("source_quick_class") or "")
-    if quick in {"local_region_source", "spam_source_reject"}:
+    if quick == "spam_source_reject" or (quick == "local_region_source" and not authoritative_external):
         return "source_quick_class_not_publication_target:" + quick
     surface = " ".join([
         str(row.get("source_title") or ""),
@@ -7845,18 +8240,33 @@ PUBLICATION_SOURCE_UNKNOWN = "unknown"
 
 
 def _publication_source_verdict(source: dict[str, Any]) -> str:
+    locality = reconcile_source_profile_locality(source, [])
+    locality_status = str(locality.get("source_locality_reconciliation_status") or "")
+    locality_class = str(locality.get("source_locality_class") or "")
     terminal = source_local_region_terminal_fields(source)
     terminal_status = str(terminal.get("source_queue_status") or source.get("source_queue_status") or source.get("fetch_status") or "")
     scope = str(source.get("source_scope") or "").strip().lower().replace("-", "_")
     geo = str(source.get("source_geo_class") or "").strip().lower().replace("-", "_")
     quick = str(source.get("source_quick_class") or "").strip().lower()
-    if (
-        terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS}
+    if terminal_status == SPAM_SOURCE_STATUS or quick == "spam_source_reject":
+        return PUBLICATION_SOURCE_CONFIRMED_REJECTED
+    if locality_class == "kaliningrad_local" or (
+        locality_status != "authoritative_confirmed_external"
+        and (
+        terminal_status == LOCAL_REGION_SOURCE_STATUS
         or scope in {"local", "local_region", "kaliningrad_local"}
         or geo in {"local", "local_region", "kaliningrad_local"}
-        or quick in {"local_region_source", "spam_source_reject"}
+        or quick == "local_region_source"
+        )
     ):
         return PUBLICATION_SOURCE_CONFIRMED_REJECTED
+    if locality_status == "conflicting_locality_evidence" or (
+        locality_status == "unknown_insufficient_locality_evidence"
+        and bool(source.get("source_locality_reconciliation_status"))
+    ):
+        return PUBLICATION_SOURCE_UNKNOWN
+    if locality_class == "nonlocal_russia":
+        return PUBLICATION_SOURCE_CONFIRMED_EXTERNAL
     external_values = {
         "external", "nonlocal", "nonlocal_russia", "confirmed_nonlocal",
         "mixed_external", "nonlocal_mixed", "external_mixed",
@@ -7907,6 +8317,19 @@ def publication_eligibility(
         for key, value in dict(authoritative_source).items():
             if value not in (None, ""):
                 source[key] = value
+    locality = reconcile_source_profile_locality(source, [])
+    source.update(locality)
+    if locality.get("source_locality_reconciliation_status") == "authoritative_confirmed_external":
+        source.update({
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_quick_class": "candidate_keep",
+            "source_queue_status": "confirmed_external_evidence",
+        })
+        if str(source.get("fetch_status") or "") in {LOCAL_REGION_SOURCE_STATUS, "local_region"}:
+            source["fetch_status"] = "confirmed_external_evidence"
+        if str(source.get("source_topic_class") or "") == "local_region_source_surface":
+            source["source_topic_class"] = "travel_blogger"
     source_verdict = _publication_source_verdict(source)
     source_gate_reason = image_queue_source_disqualification_reason(source)
     merged = {**post, **{
@@ -7942,6 +8365,8 @@ def publication_eligibility(
         "source_ko_posts_found": source.get("ko_posts_found") or 0,
         "source_candidate_posts_found": source.get("candidate_posts_found") or 0,
         "source_gate_reason": source_gate_reason,
+        "source_locality_reconciliation_status": source.get("source_locality_reconciliation_status") or "",
+        "source_locality_reconciliation_reason": source.get("source_locality_reconciliation_reason") or "",
         "product_gate_reason": product_gate_reason,
         "base_gate_reason": base_reason,
         "vector_gate_status": merged.get("vector_gate_status") or "",
@@ -13671,7 +14096,15 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             next_action="build_image_queue",
             runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
         )
-    source_class_by_id = {str(s.get("source_id") or ""): {k: s.get(k) for k in ["source_geo_class", "source_topic_class", "ko_mention_ratio_recent", "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason"]} for s in source_rows}
+    source_profile_post_fields = [
+        "source_scope", "source_geo_class", "source_topic_class", "ko_mention_ratio_recent",
+        "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason",
+        *SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS,
+    ]
+    source_class_by_id = {
+        str(s.get("source_id") or ""): {k: s.get(k) for k in source_profile_post_fields}
+        for s in source_rows
+    }
     for r in new_posts:
         r.update({k: v for k, v in source_class_by_id.get(str(r.get("source_id") or ""), {}).items() if v != "" and v is not None})
 
@@ -13767,6 +14200,18 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     report_event("source_frontier_build_done", phase="queue_assembly", status="running", source_frontier_unique=len(source_frontier_unique), active_frontier_tg_vk=len(active_frontier_tg_vk), external_links_quarantine=len(external_links_quarantine), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     report_event("candidate_memory_build_started", phase="queue_assembly", status="running", previous_candidate_memory=len(previous_state.get("candidate_memory") or {}) if isinstance(previous_state.get("candidate_memory"), dict) else 0, new_posts=len(new_posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
+    source_rows, source_locality_ledger_stats = reconcile_persistent_ko_source_evidence(
+        source_rows,
+        candidate_memory_rows,
+        previous_state,
+    )
+    report_event(
+        "source_locality_candidate_ledger_reconciled",
+        phase="queue_assembly",
+        status="running",
+        **{f"source_locality_{key}": value for key, value in source_locality_ledger_stats.items()},
+        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+    )
     candidate_memory_source_cleanup_stats = apply_terminal_source_cleanup_to_candidate_memory(candidate_memory_rows)
     report_event(
         "candidate_memory_terminal_source_cleanup_done",

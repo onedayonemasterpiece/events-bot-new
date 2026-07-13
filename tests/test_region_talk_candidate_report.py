@@ -10,6 +10,7 @@ import types
 import unittest
 import urllib.parse
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -336,6 +337,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         urls = {seed.canonical_url for seed in seeds}
         self.assertIn("https://t.me/fresh", urls)
         self.assertNotIn("https://t.me/oldretry", urls)
+
+    def test_single_uncached_lane_prefers_fresh_confirmed_evidence_over_generic_queue_order(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 0,
+            "telegram_entity_cache": {},
+            "unified_source_queue": {
+                "telegram:generic": {
+                    "canonical_source_key": "telegram:generic",
+                    "platform": "telegram",
+                    "handle": "@generic",
+                    "source_url": "https://t.me/generic",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 1,
+                },
+                "telegram:evidenced": {
+                    "canonical_source_key": "telegram:evidenced",
+                    "platform": "telegram",
+                    "handle": "@evidenced",
+                    "source_url": "https://t.me/evidenced",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 200,
+                    "external_blogger_evidence_status": "confirmed_external",
+                },
+            },
+        }
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
+        }, clear=False):
+            seeds = mod.unified_queue_dynamic_seeds(previous, 1)
+
+        self.assertEqual([seed.canonical_url for seed in seeds], ["https://t.me/evidenced"])
+        self.assertEqual(
+            mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"],
+            ["telegram:username:evidenced"],
+        )
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_selected"], 1)
 
     def test_fast_check_message_is_reused_same_run_with_exact_fetch_identity(self) -> None:
         mod = load_module()
@@ -2890,6 +2929,192 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         )
         self.assertEqual(sparse["source_geo_class"], "unknown")
         self.assertEqual(dense["source_geo_class"], "kaliningrad_local")
+
+    def test_repeated_ko_posts_over_time_classify_generic_source_as_local(self) -> None:
+        mod = load_module()
+        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        sampled = [
+            {
+                "post_id": f"ko-{index}",
+                "post_date": (start + timedelta(days=index * 7)).isoformat(),
+                "kaliningrad_oblast_only_scope": True,
+            }
+            for index in range(8)
+        ]
+
+        profile = mod.classify_source_profile(
+            {
+                "platform": "vk",
+                "canonical_source_key": "vk:generic-photo-diary",
+                "canonical_url": "https://vk.com/generic_photo_diary",
+                "source_title": "Красивые места и прогулки",
+            },
+            sampled,
+        )
+
+        self.assertEqual(profile["source_geo_class"], "kaliningrad_local")
+        self.assertEqual(profile["source_locality_reconciliation_status"], "local_repeated_ko_over_time")
+        self.assertEqual(profile["source_repeated_ko_posts"], 8)
+        self.assertEqual(profile["source_repeated_ko_span_days"], 49.0)
+
+    def test_candidate_ledger_repairs_zero_ko_source_and_routes_persistent_creator_local(self) -> None:
+        mod = load_module()
+        start = datetime(2026, 5, 17, tzinfo=timezone.utc)
+        source = {
+            "source_id": "src_52be849f705069c0",
+            "canonical_source_key": "vk:krasivo_s_evgo",
+            "platform": "vk",
+            "source_url": "https://vk.com/krasivo_s_evgo",
+            "source_title": "Красиво с Евго",
+            "source_scope": "external",
+            "source_geo_class": "external",
+            "source_quick_class": "candidate_keep",
+            "posts_scanned": 22,
+            "ko_posts_found": 0,
+            "candidate_posts_found": 0,
+        }
+        offsets = [0, 10, 15, 16, 20, 31, 44, 49]
+        candidates = [
+            {
+                "candidate_memory_id": f"cmem-{index}",
+                "source_id": source["source_id"],
+                "source_url": source["source_url"],
+                "post_url": f"https://vk.com/wall-109066435_{996 + index}",
+                "post_date": (start + timedelta(days=offset)).isoformat(),
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "vector_gate_status": "vector_accept_candidate",
+                "current_stage": "semantic_candidate",
+            }
+            for index, offset in enumerate(offsets)
+        ]
+        previous = {"unified_source_queue": {"vk:krasivo_s_evgo": dict(source)}}
+
+        rows, stats = mod.reconcile_persistent_ko_source_evidence([source], candidates, previous)
+
+        self.assertEqual(stats["source_counter_repairs"], 1)
+        self.assertEqual(stats["persistent_local_sources"], 1)
+        self.assertEqual(rows[0]["ko_posts_found"], 8)
+        self.assertEqual(rows[0]["posts_scanned"], 22)
+        self.assertEqual(rows[0]["source_scope"], "local_region")
+        self.assertEqual(rows[0]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(rows[0]["source_repeated_ko_span_days"], 49.0)
+        self.assertEqual(
+            previous["unified_source_queue"]["vk:krasivo_s_evgo"]["source_queue_status"],
+            mod.LOCAL_REGION_SOURCE_STATUS,
+        )
+        self.assertTrue(all(row["source_scope"] == "local_region" for row in candidates))
+
+    def test_candidate_ledger_trip_cluster_does_not_create_local_terminal_source(self) -> None:
+        mod = load_module()
+        start = datetime(2026, 5, 17, tzinfo=timezone.utc)
+        source = {
+            "source_id": "src_trip",
+            "canonical_source_key": "vk:trip",
+            "platform": "vk",
+            "source_url": "https://vk.com/trip",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "posts_scanned": 22,
+        }
+        candidates = [
+            {
+                "source_id": "src_trip",
+                "source_url": source["source_url"],
+                "post_url": f"https://vk.com/wall-1_{index}",
+                "post_date": (start + timedelta(days=index)).isoformat(),
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "vector_gate_status": "vector_accept_candidate",
+            }
+            for index in range(8)
+        ]
+
+        rows, stats = mod.reconcile_persistent_ko_source_evidence([source], candidates, {})
+
+        self.assertEqual(stats["persistent_local_sources"], 0)
+        self.assertEqual(rows[0]["source_scope"], "external")
+        self.assertNotEqual(rows[0].get("source_queue_status"), mod.LOCAL_REGION_SOURCE_STATUS)
+
+    def test_clustered_ko_trip_series_with_other_regions_remains_external(self) -> None:
+        mod = load_module()
+        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        sampled = [
+            {
+                "post_id": f"ko-{index}",
+                "post_date": (start + timedelta(days=index)).isoformat(),
+                "kaliningrad_oblast_only_scope": True,
+                "has_firsthand_visit_evidence": "true",
+            }
+            for index in range(8)
+        ] + [
+            {
+                "post_id": f"other-{index}",
+                "post_date": (start + timedelta(days=30 + index)).isoformat(),
+                "kaliningrad_oblast_only_scope": False,
+                "has_firsthand_visit_evidence": "true",
+            }
+            for index in range(2)
+        ]
+
+        profile = mod.classify_source_profile(
+            {"source_title": "Дневник путешествий", "canonical_url": "https://vk.com/trip_diary"},
+            sampled,
+        )
+
+        self.assertEqual(profile["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(profile["source_locality_reconciliation_status"], "external_mixed_sample")
+        self.assertEqual(profile["source_repeated_ko_evidence_status"], "insufficient")
+
+    def test_confirmed_external_evidence_overrides_repeated_ko_content_locality(self) -> None:
+        mod = load_module()
+        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        sampled = [
+            {
+                "post_date": (start + timedelta(days=index * 7)).isoformat(),
+                "kaliningrad_oblast_only_scope": True,
+            }
+            for index in range(8)
+        ]
+        profile = mod.classify_source_profile(
+            {
+                "source_title": "Авторский фотодневник",
+                "canonical_url": "https://vk.com/photo_diary",
+                "external_blogger_evidence_status": "confirmed_external",
+                "external_blogger_region_relation_status": "external visitor",
+            },
+            sampled,
+        )
+
+        self.assertEqual(profile["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(profile["source_locality_reconciliation_status"], "authoritative_confirmed_external")
+
+    def test_local_title_remains_local_without_handle_special_case(self) -> None:
+        mod = load_module()
+        profile = mod.classify_source_profile(
+            {"source_title": "Фотограф Калининград", "canonical_url": "https://vk.com/photo_diary"},
+            [],
+        )
+        self.assertEqual(profile["source_geo_class"], "kaliningrad_local")
+        self.assertEqual(profile["source_locality_reconciliation_status"], "local_surface_confirmed")
+
+    def test_confirmed_external_personal_vk_profile_is_allowed(self) -> None:
+        mod = load_module()
+        profile = mod.classify_source_profile(
+            {
+                "platform": "vk",
+                "source_title": "Личный дневник поездок",
+                "canonical_source_key": "vk:id393939",
+                "canonical_url": "https://vk.com/id393939",
+                "source_type": "personal_profile",
+                "external_blogger_evidence_status": "confirmed_external",
+                "external_blogger_region_relation_status": "external visitor",
+            },
+            [],
+        )
+        self.assertEqual(profile["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(profile["source_scope"], "external")
+        self.assertEqual(mod._publication_source_verdict(profile), mod.PUBLICATION_SOURCE_CONFIRMED_EXTERNAL)
 
     def test_finalist_with_five_posts_but_unknown_scope_remains_due_for_profile(self) -> None:
         mod = load_module()
@@ -5831,6 +6056,61 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(scanned_all_ko["primary_reason"], "source_verdict_unknown")
         self.assertFalse(spam["eligible"])
         self.assertEqual(set(accepted), {"eligible", "decision", "primary_reason", "evidence", "gate_version", "media_review_mode"})
+
+    def test_publication_locality_reconciliation_is_fail_closed_and_keeps_semantic_gate(self) -> None:
+        mod = load_module()
+        row = {
+            "post_url": "https://vk.com/wall393939_10",
+            "source_title": "Личный дневник поездок",
+            "source_url": "https://vk.com/id393939",
+            "source_topic_class": "personal_blog",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "overall_media_score": 0.86,
+            "postcardness_score": 0.77,
+        }
+        authoritative = {
+            "source_title": "Личный дневник поездок",
+            "source_url": "https://vk.com/id393939",
+            "source_scope": "local_region",
+            "source_geo_class": "kaliningrad_local",
+            "source_queue_status": mod.LOCAL_REGION_SOURCE_STATUS,
+            "source_quick_class": "local_region_source",
+            "external_blogger_evidence_status": "confirmed_external",
+            "external_blogger_region_relation_status": "external visitor",
+        }
+        accepted = mod.publication_eligibility(row, authoritative_source=authoritative)
+        conflicting = mod.publication_eligibility(
+            row,
+            authoritative_source={
+                "source_scope": "external",
+                "source_geo_class": "unknown",
+                "source_locality_reconciliation_status": "conflicting_locality_evidence",
+                "source_locality_reconciliation_reason": "unit conflict",
+            },
+        )
+        semantic_reject = mod.publication_eligibility(
+            {**row, "vector_gate_status": "vector_reject_other_region"},
+            authoritative_source={
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "external_blogger_evidence_status": "confirmed_external",
+                "external_blogger_region_relation_status": "external visitor",
+            },
+        )
+
+        self.assertTrue(accepted["eligible"])
+        self.assertEqual(accepted["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_CONFIRMED_EXTERNAL)
+        self.assertFalse(conflicting["eligible"])
+        self.assertEqual(conflicting["decision"], "needs_source_review")
+        self.assertEqual(conflicting["primary_reason"], "source_verdict_unknown")
+        self.assertFalse(semantic_reject["eligible"])
+        self.assertEqual(semantic_reject["primary_reason"], "vector_reject_other_region")
 
     def test_publication_eligibility_routes_strict_text_video_to_operator_review(self) -> None:
         mod = load_module()
