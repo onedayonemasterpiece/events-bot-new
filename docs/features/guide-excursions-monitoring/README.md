@@ -91,6 +91,8 @@ python scripts/prune_guide_media_store.py --db /data/db.sqlite --root /data/guid
 python scripts/prune_guide_media_store.py --db /data/db.sqlite --root /data/guide_media --apply --reason incident_cleanup
 ```
 
+Production override удерживает store около `256 MiB` и требует после pass не менее `350 MiB` свободного места (`GUIDE_MEDIA_RETENTION_MAX_TOTAL_BYTES=268435456`, `GUIDE_MEDIA_RETENTION_MIN_FREE_BYTES=367001600`). Если protected/recent media не позволяют достигнуть этих targets, retention не расширяет deletion set, а сигнализирует `policy_satisfied=false`.
+
 ## Что уже мигрировано
 
 - отдельный guide-track в основной SQLite;

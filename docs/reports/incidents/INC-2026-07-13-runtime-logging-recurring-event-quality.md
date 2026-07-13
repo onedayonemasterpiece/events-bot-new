@@ -80,13 +80,14 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 ## Immediate Mitigation
 
-- Work is in progress under an isolated worktree from `origin/main`.
-- Runtime logging was redesigned locally with size rotation, a hard total budget, age pruning and a volume free-space floor; production remains unchanged until disk inventory, tests and clean deploy gates complete.
+- Safe first-pass cleanup removed 71 proven stale runtime/source-debug/carousel artifacts (`35,902,184` bytes); SQLite `quick_check` and `/healthz` remained healthy. The dominant persistent pressure was `/data/guide_media` without DB-aware retention.
+- Runtime logging was redesigned with size rotation, a hard total budget, age pruning and a volume free-space floor. `/healthz` now exposes the same disk floor.
+- Guide media now has DB-aware bounded retention: current/future occurrences, recent source posts and current digest issues are protected; only old unprotected regular files are candidates and stale JSON links are healed transactionally.
 - The E2E production row remains unchanged until logging is available and its prior state is backed up.
 
 ## Corrective Actions
 
-- [ ] clean proven stale production volume/root-overlay artifacts and record before/after evidence;
+- [ ] complete the managed guide-media production dry-run/apply and record final before/after evidence;
 - [ ] deploy bounded runtime logging and verify ongoing writes/rotation guards;
 - [ ] execute reversible E2E role grant, bounded live import and role restoration;
 - [ ] complete the new all-future source/public audit and repair confirmed defects;
@@ -97,13 +98,13 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 - [ ] add a persistent, non-public incident-prototype vector corpus so cancelled regression fixtures remain recall candidates for LLM adjudication;
 - [ ] expand daily quality acceptance beyond exhibition duplicates to recent imports plus rotating full-catalog source-grounded sampling, with `ops_run` and operator alerts;
-- [ ] add disk budget/low-free-space health or operator alerting before SQLite write failure.
+- [x] add disk budget/low-free-space health before SQLite write failure;
 
 ## Release And Closure Evidence
 
 - deployed SHA: pending
 - deploy path: pending
-- regression checks: `tests/test_runtime_logging.py` currently `5 passed`; remaining incident gates pending
+- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; remaining incident gates pending
 - post-deploy verification: pending
 
 ## Prevention
