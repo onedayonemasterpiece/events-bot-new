@@ -315,11 +315,15 @@ Important invariants:
   pending metric changed before the worker acquired it; later Candidate output
   is picked up by the next short orchestrator cycle instead.
 - Candidate breadth is runtime- and backlog-adaptive while the 20-minute
-  notebook guardrail remains unchanged. A completed run below 15 minutes and
-  BGE backlog below 75% of one 48-row batch permits eight history and eight
-  fast-check sources; 15-17.5 minutes or 75-100% BGE load uses six; above 17.5
-  minutes or above one-run BGE capacity uses five.
-  This spends measured headroom on scanning more publics, not on deeper history.
+  notebook guardrail remains unchanged. Generic uncertain history stays at
+  four sources per run. While at least 12 supported confirmed-external blogger
+  sources remain unscanned, the latest CandidateReport completed within 750
+  seconds and actionable BGE lag still fits one 48-row CPU batch, the next run
+  uses six history slots: up to five for the finite confirmed-blogger cohort and
+  one for publication-source attestation or the normal queue. This spends
+  measured headroom on scanning more high-probability sources, not on deeper
+  history, and automatically returns to four after the cohort drains or either
+  runtime/BGE guardrail is hit.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and a 7-query lexicon-driven Telegram global-search

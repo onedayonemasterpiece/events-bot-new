@@ -268,6 +268,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         ]:
             budget = mod.candidate_adaptive_budget(metrics)
             self.assertEqual(budget["history_sources"], 4)
+            self.assertEqual(budget["confirmed_blogger_slots"], 4)
             self.assertEqual(budget["fast_check_sources"], 10)
         failed_tail = mod.candidate_adaptive_budget({
             "candidate_heartbeat_runtime_elapsed_seconds": 0,
@@ -277,6 +278,16 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         })
         self.assertEqual(failed_tail["history_sources"], 4)
         self.assertEqual(failed_tail["incomplete_late_tail_observed"], 1)
+
+        evidence_headroom = mod.candidate_adaptive_budget({
+            "candidate_heartbeat_runtime_elapsed_seconds": 401,
+            "confirmed_external_blogger_pending_total": 26,
+            "bge_pending_sample_total": 17,
+            "bge_capacity_rows": 48,
+        })
+        self.assertEqual(evidence_headroom["history_sources"], 6)
+        self.assertEqual(evidence_headroom["confirmed_blogger_slots"], 5)
+        self.assertEqual(evidence_headroom["confirmed_blogger_headroom_used"], 1)
 
         old_sources = os.environ.get("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES")
         try:

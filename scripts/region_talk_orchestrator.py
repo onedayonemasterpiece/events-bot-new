@@ -2594,6 +2594,7 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     runtime_seconds = _safe_float(metrics.get("candidate_heartbeat_runtime_elapsed_seconds")) or 0.0
     bge_backlog = _safe_int(metrics.get("bge_pending_sample_total"))
     bge_capacity = max(1, _safe_int(metrics.get("bge_capacity_rows")) or _env_int("REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS", 48))
+    confirmed_blogger_pending = _safe_int(metrics.get("confirmed_external_blogger_pending_total"))
     heartbeat_event = str(metrics.get("candidate_heartbeat_event_name") or "").strip().lower()
     heartbeat_phase = str(metrics.get("candidate_heartbeat_phase") or "").strip().lower()
     heartbeat_status = str(metrics.get("candidate_heartbeat_status") or "").strip().lower()
@@ -2602,22 +2603,40 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
         or heartbeat_event in {"state_write_started", "report_write_started"}
         or heartbeat_phase in {"state_write", "report_write"}
     )
-    # Generic history is currently the lowest-yield Telegram lane. Keep it
-    # alive, but hold it at four sources while exact/fast-check/keyword work is
-    # abundant. Product breadth comes from ten fast checks and direct post
-    # links, not from reading 20 posts in eight uncertain channels.
+    # Generic history is currently the lowest-yield Telegram lane. Keep its
+    # default at four sources while exact/fast-check/keyword work is abundant.
+    # Confirmed external bloggers are different: two measured runs completed in
+    # 401-561 seconds, scanned three new evidence sources each and left more
+    # than half of the 54-source supported cohort unseen. When that backlog is
+    # still material and both CandidateReport and the one-run BGE capacity have
+    # headroom, spend the unused 20-minute budget on breadth (six sources), not
+    # on deeper history per source.
     history_sources = max(2, min(6, _env_int("REGION_TALK_ORCHESTRATOR_HISTORY_SOURCES", 4)))
+    confirmed_blogger_slots = min(4, history_sources)
+    confirmed_blogger_headroom = (
+        confirmed_blogger_pending >= 12
+        and 0 < runtime_seconds <= 750
+        and bge_backlog <= bge_capacity
+        and not incomplete_late_tail
+    )
+    if confirmed_blogger_headroom:
+        history_sources = max(history_sources, 6)
+        # Preserve one slot for a publication-source attestation or the normal
+        # queue while accelerating first scans from the finite evidence cohort.
+        confirmed_blogger_slots = min(5, history_sources)
     fast_check_sources = max(
         1,
         min(12, _env_int("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES", 10)),
     )
     return {
         "history_sources": history_sources,
+        "confirmed_blogger_slots": confirmed_blogger_slots,
         "fast_check_sources": fast_check_sources,
         "bge_capacity_rows": bge_capacity,
         "bge_backlog_capacity_percent": int(round((bge_backlog / bge_capacity) * 100)),
         "runtime_seconds_observed": int(round(runtime_seconds)),
         "incomplete_late_tail_observed": int(incomplete_late_tail),
+        "confirmed_blogger_headroom_used": int(confirmed_blogger_headroom),
     }
 
 
@@ -3130,7 +3149,8 @@ def build_decision_plan(
             os.getenv("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS") or "2000"
         ),
         "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": (
-            os.getenv("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN") or "4"
+            os.getenv("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN")
+            or str(candidate_budget["confirmed_blogger_slots"])
         ),
         "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED": (
             "1" if (os.getenv("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED") or "1").strip().lower()
