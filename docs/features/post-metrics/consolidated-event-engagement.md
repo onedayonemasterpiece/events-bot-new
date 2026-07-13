@@ -1,6 +1,6 @@
 # Consolidated event engagement: sources + KenigEvents site
 
-> Status: **required release design / not implemented end to end**. Source TG/VK snapshots and a partial source-like counter sync exist; first-party site persistence and one shared event-level read function for all popularity consumers do not.
+> Status: **required release design / not implemented end to end**. Source TG/VK snapshots and a partial source-like counter sync exist; first-party site persistence, one shared event-level read function and a shared popular-event projection for all consumers do not. The current static `/populyarnoe/` page is a source-only preview, not release evidence for this contract.
 
 ## Product requirement
 
@@ -15,6 +15,8 @@ Public UI may show one simple total where semantics are compatible, but internal
 
 The aggregate is enriched as new source snapshots and site actions arrive. Consumers must not reimplement mappings, sums, source baselines or fallback rules independently.
 
+The public static [`/populyarnoe/`](../static-site-pages/README.md) listing is a global popular-events product surface. Its main ordered list must be based on this aggregate and a shared versioned popular-event ranker that materially accounts for both source engagement and accepted KenigEvents site engagement. Reusing `EventListItem.astro` only reuses rendering and does **not** satisfy the shared popularity-component requirement.
+
 ## Current gap
 
 The repository already has several pieces, but not one release-safe contract:
@@ -23,10 +25,12 @@ The repository already has several pieces, but not one release-safe contract:
 - `handlers/popular_posts_cmd.py` contains its own loading/mapping/baseline/report logic;
 - `main_part2.py` has a separate daily event audience aggregation;
 - `reaction_counter_sync.py` can project source likes/views into the personalization counter table;
+- `site/scripts/export-production-preview-data.py` exports source likes/views/reposts but hardcodes `service_likes_count=0` and exports no accepted site views/shares;
+- `site/src/pages/populyarnoe/index.astro` calls the local TypeScript `getPopularEvents()`, while `site/src/lib/events.ts::eventPopularityScore()` recomputes its own source-dominated score (site likes are only a small separate term; site views/shares are absent);
 - static-site likes/shares remain partly local/preview and site view persistence is not a consolidated production signal;
 - `personalization_event_reaction_counter` is directionally the compact event-level projection, but it is not yet the single complete read model for `/popular_posts`, daily, static pages and video selection.
 
-Therefore “post metrics implemented” does not mean “source + site event engagement consolidated”.
+Therefore “post metrics implemented” and the existence of the `/populyarnoe/` route do not mean “source + site event engagement consolidated”. At present the route is best described as **source-engagement preview / partial**, not as a release-ready combined popularity section.
 
 ## Single read contract
 
@@ -48,6 +52,7 @@ The exact Python names may change in the implementation task, but there must be 
 
 Required consumers:
 
+- the public static `/populyarnoe/` ordered event projection;
 - `/popular_posts`;
 - `build_daily_posts` audience labels/ranking;
 - CherryFlash/`/v` popular-event candidate selection;
@@ -56,6 +61,42 @@ Required consumers:
 - operator/debug reports and later dashboards.
 
 The consumers may choose different weights/windows, but they receive the same raw components, provenance, freshness and normalized source features. They may not maintain separate SQL joins or definitions of an event’s likes/shares/views.
+
+## Shared popular-event projection
+
+The common component has two layers, both owned by the post-metrics/domain side rather than by an Astro page:
+
+1. `load_consolidated_event_engagement(...)` (or implementation-equivalent) produces the canonical source + site event aggregate.
+2. One versioned batch ranker/projection such as `rank_popular_events(...)` applies an explicit `policy_version`, window and eligibility contract, and materializes the ordered static-build input.
+
+Minimum conceptual build-time projection:
+
+```text
+PopularEventProjection
+  event_id
+  rank
+  popularity_score
+  popularity_score_version
+  computed_at
+  window
+  completeness
+  source_refreshed_at
+  site_refreshed_at
+  source_signal_summary
+  site_signal_summary
+```
+
+Contract for `/populyarnoe/`:
+
+- the static exporter receives the already ordered/versioned projection or the already computed per-event score; Astro does not calculate medians, join counters or maintain its own weight formula;
+- a TypeScript helper may filter by public lifecycle or read a precomputed rank, but it must be a thin consumer. The current independent `eventPopularityScore()` implementation must be removed or reduced to that role before release;
+- V1 inputs include distinct/latest accepted TG/VK source views, likes and reposts plus accepted KenigEvents valid views, current likes and shares. Favorite/calendar saves are not silently recast as likes; adding them later requires a new documented score version;
+- source and site signals are normalized/calibrated so platform scale does not make either group decorative. Golden counterfactuals must prove that a source-only strong event and a site-only strong event can each enter or materially move within the list, while a blended event is combined once;
+- a fresh zero is different from a missing component. The release page may claim combined popularity only when both source and site pipelines are fresh enough under the accepted SLO. On partial failure the build preserves the last-good full projection or exposes an explicitly approved degraded state; it never silently relabels a source-only result as combined popularity;
+- only canonical public current/future occurrences are eligible; canceled, merged-away, invalid and already ended occurrences are excluded or redirected before ranking;
+- the main `/populyarnoe/` order is global. `ListingPersonalFilter` may narrow visibility without recomputing the score, and `PersonalFeedSlot` remains a separately labelled personalized block that cannot insert into or reorder the popular list;
+- `/popular_posts` and other consumers may have different documented policies/windows, but if they request the same policy/window/eligibility their event score/order must reproduce the static projection. Any difference is attributable to a recorded policy or presentation limit, not a private SQL/formula;
+- the public copy changes to “популярно в источниках и на KenigEvents” only after the combined projection gate is green.
 
 ## Versioned result
 
@@ -163,11 +204,14 @@ Capacity release evidence includes relation/index size, bytes per event and acti
 ## Release acceptance
 
 - [ ] One canonical batch function/output schema exists and has contract tests.
-- [ ] `/popular_posts`, daily labels/ranking, CherryFlash popular selection and static counter export use it; duplicate private aggregators are removed or become thin consumers.
+- [ ] One versioned popular-event ranker/projection exists; `/populyarnoe/` consumes its precomputed order/score and contains no independent median/weight formula.
+- [ ] `/populyarnoe/`, `/popular_posts`, daily labels/ranking, CherryFlash popular selection and static counter export use the canonical aggregate; duplicate private aggregators are removed or become thin consumers.
 - [ ] Golden fixture with TG + VK + site view/like/share proves distinct-post dedup, latest-age selection, source/site totals, freshness and score version.
+- [ ] Counterfactual ranking fixture proves source-only, site-only and blended popularity can each affect the result materially; fresh zero, missing, stale and last-good inputs are not conflated.
 - [ ] Like/unlike, repeated share/copy, reload/bot/preview views, event merge and source repost cases do not inflate counts.
 - [ ] Source-only/site-only/stale/unavailable states degrade honestly and preserve last-good values.
 - [ ] The public manifest and cards show compatible totals while internal evidence retains component split.
+- [ ] A build check compares the `/populyarnoe/` event IDs/order with its SHA-bound projection manifest, and Playwright verifies the rendered order, lifecycle exclusions, combined-popularity copy and separately labelled personalized slot.
 - [ ] No per-event remote read loop and no per-page Supabase read dependency.
 - [ ] Storage test proves current-row cardinality, bounded evidence/TTL, relation+index budgets and near-cap shedding without breaking likes/unlikes or other durable controls.
 - [ ] Reconciliation compares aggregate output with raw TG/VK snapshots and accepted site summaries for a production snapshot; drift is zero or explained.

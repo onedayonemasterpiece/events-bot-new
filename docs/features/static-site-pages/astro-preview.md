@@ -16,7 +16,7 @@ Required URLs for the current preview:
 - Weekend listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vyhodnye/>
 - Search page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/>
 - Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vystavki/>
-- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/populyarnoe/>
+- Popular-by-source-engagement preview (not yet the required combined source + site projection): <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/populyarnoe/>; release contract: [Consolidated event engagement](../post-metrics/consolidated-event-engagement.md#shared-popular-event-projection).
 - Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partnerstvo/>
 - Information partners directory: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partners/>
 - Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/lab/medallions/>

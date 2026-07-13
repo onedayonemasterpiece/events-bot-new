@@ -22,7 +22,8 @@ This is currently one source-metrics implementation point, but not yet one event
 
 ## Release consolidation requirement
 
-- `/popular_posts`, daily popularity, CherryFlash/`/v`, static counter export and future rankers consume one canonical batch function for event engagement.
+- The public static `/populyarnoe/` list, `/popular_posts`, daily popularity, CherryFlash/`/v`, static counter export and future rankers consume one canonical batch function for event engagement.
+- `/populyarnoe/` additionally consumes one build-time, versioned popular-event projection/ranker; Astro must not maintain a second median/weight formula. Its global list uses both source and accepted site views/likes/shares, while any personalized slot remains visibly separate.
 - The result retains TG/VK/site components and freshness while exposing compatible totals for views, likes and shares; “views” are reach observations, not unique people.
 - A source post contributes once from its latest valid maturity snapshot, not once per `age_day` or duplicate mapping.
 - Site likes are current state; shares and valid views are idempotently compacted and bot/reload/preview guarded.

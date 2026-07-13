@@ -289,6 +289,7 @@ features:
     event_page_consultant_review_application_2026_06_27: docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md
     event_page_merged_skeleton: docs/features/static-site-pages/event-page-merged-skeleton.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
+    popular_event_projection: docs/features/post-metrics/consolidated-event-engagement.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
@@ -323,6 +324,8 @@ features:
       release_ui: candidate_signoff_pending
       responsive_navigation: adaptive_hybrid_selected_visual_signoff_pending
       sharing: preview_canvas_offline_generator_missing
+      popular_listing: partial_source_only_local_formula
+      popular_listing_shared_projection: missing_release_gate
       image_framing: renderer_preview_metadata_producer_missing
       event_medallions_main_baseline: partial_11_organizers_no_festival_manifest
       event_medallions_release_branch: consolidated_25_organizers_11_festivals
@@ -340,6 +343,7 @@ features:
       - site/src/pages/[preview]/index.astro
       - site/src/pages/segodnya/index.astro
       - site/src/pages/vyhodnye/index.astro
+      - site/src/pages/populyarnoe/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
       - site/src/pages/data/discovery/[eventId].json.ts
@@ -606,12 +610,17 @@ features:
       first_party_site_reaction_persistence: missing
       first_party_valid_view_aggregate: missing
       single_event_engagement_read_function: missing_release_gate
+      shared_popular_event_projection: missing_release_gate
+      static_popular_section: partial_source_only_local_formula
       popular_posts_consumer_migration: missing_release_gate
       ecological_current_aggregate: designed
     entrypoints:
       - source_parsing/post_metrics.py
       - reaction_counter_sync.py
       - scripts/sync_reaction_counters_to_supabase.py
+      - site/scripts/export-production-preview-data.py
+      - site/src/lib/events.ts
+      - site/src/pages/populyarnoe/index.astro
       - db.py
   smart_event_update:
     status: implemented
