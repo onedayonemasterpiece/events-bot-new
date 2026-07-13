@@ -1066,7 +1066,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-description__text :global(h6) { margin:1.6rem 0 .55rem; font-size:clamp(1.05rem,1.2vw,1.3rem); line-height:1.25; }
 
     /* Editorial owns a real horizontal visual; the cream slab remains one continuous reading surface. */
-    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(336px,28vw,480px); position:relative; display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(420px,32vw,560px); position:relative; display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; inset:auto; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; overflow:hidden; will-change:transform; }
     .desktop-clean-event--editorial[data-editorial-motion="pinned"] .desktop-prototype--editorial .desktop-prototype__media { position:sticky; top:73px; transform:none; }
     .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; height:calc(100vw / var(--image-ratio)); overflow:visible; transform:translate3d(0,0,0); }
@@ -1081,8 +1081,8 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side { margin-top:clamp(250px,34svh,420px); }
     .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { order:2; width:100%; }
     .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side :global(.desktop-prototype__action) { order:1; }
-    .desktop-editorial-companion { order:2; width:100%; min-height:clamp(246px,32svh,292px); display:grid; grid-template-columns:clamp(168px,12.5vw,196px) minmax(0,1fr) 1.35rem; align-items:center; gap:.8rem; padding:.7rem; border:1px solid rgba(255,255,255,.22); border-radius:18px; background:rgba(36,31,27,.94); color:#fffaf2; text-align:left; box-shadow:0 16px 32px rgba(31,23,18,.2); cursor:zoom-in; }
-    .desktop-editorial-companion__image { width:clamp(168px,12.5vw,196px); height:clamp(230px,31svh,284px); display:block; overflow:hidden; border-radius:11px; background:#171412; }
+    .desktop-editorial-companion { order:2; width:100%; min-height:clamp(352px,47svh,410px); display:grid; grid-template-columns:clamp(248px,18vw,292px) minmax(74px,1fr) 1.35rem; align-items:center; gap:.8rem; padding:.7rem; border:1px solid rgba(255,255,255,.22); border-radius:18px; background:rgba(36,31,27,.94); color:#fffaf2; text-align:left; box-shadow:0 16px 32px rgba(31,23,18,.2); cursor:zoom-in; }
+    .desktop-editorial-companion__image { width:clamp(248px,18vw,292px); height:clamp(330px,45svh,392px); display:block; overflow:hidden; border-radius:11px; background:#171412; }
     .desktop-editorial-companion__image img { width:100%; height:100%; display:block; object-fit:contain; object-position:center; }
     .desktop-editorial-companion__copy { display:grid; gap:.25rem; }
     .desktop-editorial-companion__copy small { color:#d8c9bc; font-size:.68rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
@@ -1121,6 +1121,9 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--split :global(.desktop-prototype__action--inline) { grid-template-columns:minmax(0,1fr) auto; }
     .desktop-clean-event--split :global(.desktop-prototype__action--inline .desktop-prototype__primary-action) { grid-column:1/-1; grid-row:2; }
     .desktop-clean-event--split :global(.desktop-prototype__action--inline .desktop-prototype__action-row) { grid-column:2; grid-row:1; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:420px; }
+    .desktop-editorial-companion { grid-template-columns:248px minmax(74px,1fr) 1.35rem; }
+    .desktop-editorial-companion__image { width:248px; }
   }
 
   @media (prefers-reduced-motion:reduce) {

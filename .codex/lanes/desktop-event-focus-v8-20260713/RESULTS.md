@@ -19,9 +19,9 @@
 - Implemented all v8 lab contracts in the shared noindex desktop component and scenarios.
 - Static build: `443` pages under `preview-20260713t-desktop-focus-v8`.
 - `npm run check:preview`: passed.
-- Final-dist Playwright at `1536×864` and `1440×900`: zero console errors; pinned image top-safe; continuous exact ratio; Split exact half width; low-resolution remainder `0`; duplicate-only rails absent; real rail `124.78px` high with aspect buckets; OCR companion poster `192×267.83`; gallery requested/active index `3/3`; per-row related-card heights normalized.
+- Final-dist Playwright at `1536×864` and `1440×900`: zero console errors; decoded pinned image top-safe; continuous exact ratio; Split exact half width; low-resolution remainder `0`; duplicate-only rails absent; real rail `124.78px` high with aspect buckets; OCR companion poster `276.47×388.8` / `259.19×392`; companion gallery requested/active/source `1/1/0`; rail gallery requested/active/source `3/3/2`; per-row related-card heights normalized.
 - Photo Editorial order is rail `1` then CTA `2`; OCR Editorial order is CTA `1`, companion `2`, rail `3`.
-- At `390×844`, the desktop lab root is absent and horizontal overflow is `0`.
+- At `390×844`, the desktop lab root computes to `display:none`, has a zero rectangle and horizontal overflow is `0`.
 - Public preview, public Playwright and final Gemini browser acceptance remain the deployment closure steps.
 
 ## L04 closure review — running
