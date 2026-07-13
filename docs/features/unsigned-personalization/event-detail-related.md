@@ -1,8 +1,10 @@
 # Event Detail Related Recommendations
 
-> **Status:** MVP-0 product/technical contract + hardened browser reference prototype
+> **Status:** product/UX contract + historical browser reference; strict pgvector/Gemma canary exists, but automatic production publication is still a release gate
 > **Surface:** `event_detail_related`
 > **Primary goal:** validate personalization as a small enhancement to a useful static event page before designing a personalized home feed.
+
+Current implementation authority for semantic candidate generation, LLM verification, Smart Update handoff and regular reconciliation is [Semantic vector retrieval](semantic-vector-retrieval.md#release-automation-contract). The `static_related_v1` sections below remain the deterministic fallback/reference contract; they must not be read as proof that the release `related_v1` vector+LLM pipeline is automatically publishing current manifests.
 
 ## Why MVP starts here
 

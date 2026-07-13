@@ -354,14 +354,20 @@ Acceptance criteria для первой реализации:
 
 ## Related-block rebuild freshness
 
-`static_related_v1` is a build artifact over the current active event catalog. If a new event appears, it can become a good recommendation for already published event pages. MVP decision: do not maintain per-event reverse dependency updates in the hot path. Rebuild and republish the full static event slice nightly, because the generated HTML/JSON is cheap and this avoids stale related blocks without complex invalidation.
+`static_related_v1` was the first build artifact over the active event catalogue. The release implementation is the strict `related_v1` pgvector + LLM-verified graph described in [Semantic vector retrieval](../unsigned-personalization/semantic-vector-retrieval.md#release-automation-contract). If a new event appears, it can become a good recommendation for already published event pages, so rebuilding only the new page is not sufficient.
 
-Operational rule:
+Release operational rule:
 
-- immediate/same-run build publishes the new/changed event page and its own `/data/discovery/<event_id>.json`;
-- existing pages may keep yesterday's `Смотрите дальше` until the scheduled nightly rebuild;
+- every effectful Smart Update create/update schedules one coalesced full-catalog static build for 15 minutes after the last effect;
+- the build publishes the new/changed event page and recomputes the active/future related graph for older anchors before atomic promotion;
+- an update during a running build guarantees exactly one follow-up build from a newer snapshot;
+- the independent vector lane runs after Smart Update and on periodic full-catalog reconciliation; the static build verifies matching `related_v1` hashes before retrieval;
+- a periodic drift reconciler and scheduled lifecycle rebuild recover lost triggers and expire started/ended candidates even when no Smart Update occurs;
+- changed candidate windows require current LLM-verifier evidence; unchanged fingerprint+policy cache hits are valid, while raw vectors are never silently labelled `Похожие`;
 - emergency/manual rebuild is allowed after major imports, large festivals, or quality fixes;
-- future optimization may add reverse-impact rebuilds by same city/category/date bucket, but only after manifest-hash evidence shows nightly full rebuild is too slow.
+- future optimization may add reverse-impact rebuilds by same city/category/date bucket, but only after manifest-hash evidence shows full-catalog rebuild/reconciliation is too slow.
+
+This automatic publication loop is **not production-complete yet**: the vector projection lane is configured, but the static Kaggle builder/strict related flags and atomic CDN promotion remain release gates.
 
 ## Date listing SEO/product contract
 

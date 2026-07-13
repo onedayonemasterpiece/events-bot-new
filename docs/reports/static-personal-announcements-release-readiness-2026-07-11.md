@@ -57,7 +57,7 @@
 | **G1** | Публичная надёжность и доступность | **Partial / Blocked** | Static-first fallback, CDN и rollback protocol описаны; root/preview/CDN отвечают `200` | Atomic promotion, last-good rollback, monitoring/SLO, clean `origin/main` RC, security/a11y/load/real-device evidence |
 | **G2** | Сокращены инциденты: дубли, локации, даты/время | **Partial / Blocked** | Bounded audits 305/305 и 308/308, repairs и regression incidents | Smart Update root-cause prevention; регулярный аудит новых/изменённых и всего active/future inventory; incident burn-down/trend/SLO; closure-grade replay для повторяющихся классов дефектов |
 | **F1** | Smart Update effect → rebuild через 15 минут | **Partial / Blocked** | Код coalesced `static_site_build` и Kaggle runner существует | Включить prod env; исправить running/deferred/stale semantics; atomic CDN promotion; prove two updates during one long build |
-| **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
+| **F2** | Автоматически актуальные похожие события через vector search + LLM verify | **Partial / vector lane configured, publication loop disabled** | `related_v1` pgvector/Gemma canaries and incremental/full vector sync exist; production config enables vector sync after Smart Update and every 180 min, but static Kaggle/strict-related flags are absent | Every effectful create/update → vector hash barrier → coalesced +15 min full-graph Kaggle build → LLM-verified changed windows → checked atomic promotion; periodic drift/lifecycle recovery, reverse-anchor E2E, 95%+ coverage and golden/hard-negative gate |
 | **F3** | Умный поиск + сохранение результата как публичного тега | **Partial** | Search UI/Edge source/canary и private feedback/tag-candidate intake существуют | Production `/poisk/`; explicit save; normalization/idempotency/result-novelty curation; current-catalog static tag generation; public anonymous tag E2E |
 | **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
 | **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; medallion baseline consolidated in draft PR #38; adaptive navigation direction documented; отдельная UX V3 branch активна | Design freeze + owner sign-off; shared global identity shell; shallow desktop-tag hybrid comparison; medallion P0 shortlist + final visual QA; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
@@ -95,6 +95,8 @@ Read-only срез на 2026-07-11:
 - core `/healthz` был ready, SQLite `quick_check=ok`, но свободное место `/data` составляло только около `256 MiB`; root overlay имел около `7.87 GiB`.
 
 Вывод: vector sidecar имеет актуальную operational основу, но статический публичный surface не синхронизирован с ней автоматически.
+
+Повторная read-only проверка Fly config и имён secrets 2026-07-13 подтвердила тот же разрыв: `ENABLE_EVENT_VECTOR_SYNC=1`, debounce `90s`, reconciliation `180m`; `ENABLE_STATIC_SITE_KAGGLE_BUILDER`, `STATIC_SITE_RELATED_MODE`, `STATIC_SITE_SYNC_PGVECTOR_VECTORS` и `STATIC_SITE_GEMMA_RELATED_VERIFY` отсутствуют и как config env, и как secrets. Это доказывает production-конфигурацию автоматического vector sidecar, но не текущий успешный cadence и не автоматическую публикацию блока похожих событий. Новый ledger probe в этот момент не состоялся, потому что Fly сообщил `no started VMs`; последним execution evidence остаётся успешный `ops_run=3591` от среза 2026-07-11.
 
 Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 
@@ -247,9 +249,16 @@ Smart Update является владельцем семантического 
 ### Stage 3 — Related/search readiness
 
 - [ ] Active/future vector coverage target `>=95%`, one model/dimension per build.
-- [ ] Whole active/future related graph recomputed after any changed/new event.
+- [ ] Каждый effectful Smart Update create/update автоматически ставит `event_vector_sync:prod` после short debounce и один `static_site_build:prod` на 15 минут после последнего эффекта; no-effect retry не тратит provider/build ресурсы.
+- [ ] Static build проходит vector freshness barrier: для snapshot совпадают eligible ids и `search_v3`/`related_v1` text hashes; incomplete/capped sync вызывает retry/fail candidate build, а не stale retrieval.
+- [ ] Whole active/future related graph recomputed after any changed/new event, including reverse impact on older anchors; rebuild only of the changed event is insufficient.
+- [ ] Changed anchor/candidate fingerprints проходят LLM verify/reorder; cache hit допустим только при совпадении обоих document hashes и policy signature. Raw pgvector candidates never appear under verified `Похожие` after provider failure.
+- [ ] Running-build race E2E: update A starts a build, update B during it creates exactly one deferred build from a newer immutable snapshot and final promoted manifest contains B.
+- [ ] Independent reconciliation at least every current vector interval (`180m`) compares catalogue/vector hashes with the promoted related manifest and automatically enqueues drift recovery; scheduled lifecycle build expires started/ended rows even without Smart Update.
+- [ ] Correlated automation evidence records Smart Update effect/event ids → vector `ops_run` → outbox/static job → Kaggle run/build → manifest hashes/coverage/LLM calls+cache+rejects+errors → promoted release id; alerts and catch-up cover every missing transition.
+- [ ] E2E create/update/no-effect/burst/vector-failure/LLM-failure/periodic-recovery/time-expiry asserts promoted discovery JSON and rendered order for changed plus reverse-affected older anchors.
 - [ ] Golden anchors + hard negatives pass editorial review; no popularity boost corrupts pure-related slots.
-- [ ] Product contract explicitly decides whether vector-only candidates may be shown under neutral `Смотрите дальше` or every `Похожие` candidate requires verifier evidence; UI label and manifest metadata match the decision.
+- [ ] UI/manifest enforce the accepted label contract: every `Похожие` candidate has current verifier evidence; vector-only material is allowed only in a separately identified neutral/degraded continuation if explicitly accepted, never silently under the verified label.
 - [ ] Fallback sparse manifest is last-good, explicit and not labelled semantic.
 - [ ] Production `/poisk/` published; Yandex OAuth/Edge env enabled.
 - [ ] Latest mobile browser E2E: login → callback → quota → search → result cards → fallback/logout.

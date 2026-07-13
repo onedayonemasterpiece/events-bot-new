@@ -409,6 +409,12 @@ features:
     capabilities:
       local_anonymous_profile: preview
       related_pgvector: canary_partial
+      event_vector_sync_after_smart_update: production_configured_90s
+      event_vector_periodic_reconciliation: production_configured_180m
+      related_static_build_after_smart_update: code_only_production_disabled
+      related_full_graph_recompute: canary_implemented_release_automation_missing
+      related_llm_verification: canary_implemented_production_disabled
+      related_manifest_periodic_reconciler: missing_release_gate
       authorized_search: canary_partial
       search_feedback_tag_candidate_intake: partial
       saved_search_public_tag: design_required_for_release
@@ -422,7 +428,12 @@ features:
       - static_site/personalization/personalization.js
       - static_site/personalization/demo.html
       - event_vector_sync.py
+      - main.py
+      - scheduling.py
       - scripts/sync_event_search_vectors_to_supabase.py
+      - scripts/run_static_site_builder_kaggle.py
+      - kaggle/StaticSiteBuilder/static_site_builder.py
+      - site/scripts/export-production-preview-data.py
       - site/src/components/AuthorizedEventSearch.astro
       - supabase/functions/event-search/index.ts
       - scripts/check_authorized_search_readiness.py
