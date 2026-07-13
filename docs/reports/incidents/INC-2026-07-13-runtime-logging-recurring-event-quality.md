@@ -38,6 +38,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 5. **Live acceptance lacked reversible role automation.** The E2E harness correctly failed on authorization, but the authorized temporary grant/restore procedure was not completed in the incident run.
 6. **The primary Smart Update model could exhaust output on hidden reasoning.** Hosted Gemma 4 rejected `thinking_budget`, while small capped contracts sometimes returned only thought/MAX_TOKENS. The generic 4o JSON fallback also reused an incident-specific bundle example and allowed unrelated generated fields to survive after only title rejection; one dynamic schema name contained a provider-invalid colon.
 7. **Occurrence and anchor roles were under-adjudicated.** Retrieval could find the right source/event, but the pipeline did not require one LLM decision to bind date and city to the same occurrence or distinguish doors/opening from event-wide start/range time.
+8. **The live replay exposed a VK idempotency regression.** `wall.getById` and `wall.get(filter=all)` did not expose an existing postponed managed post, although the same authenticated user saw it through `filter=postponed`. The helper incorrectly treated `all` as a superset and scheduled a second post.
 
 ## Contributing Factors
 
@@ -93,10 +94,11 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 - [x] complete the managed guide-media production dry-run/apply and record final before/after evidence;
 - [x] deploy bounded runtime logging and verify ongoing writes/rotation guards;
-- [ ] execute reversible E2E role grant, bounded live import and role restoration;
-- [ ] complete the new all-future source/public audit and repair confirmed defects;
-- [ ] deliver LLM-first/vector-first prevention for every confirmed fresh recurrence, not blanket regex mutation;
+- [x] execute reversible E2E role grant, bounded live import and role restoration;
+- [ ] complete the new all-future source/public audit and repair confirmed defects (audit complete; production repair set remains open);
+- [x] deliver LLM-first/vector-first prevention for every confirmed fresh recurrence, not blanket regex mutation;
 - [ ] distinguish legacy-debt repairs from rows created after each prevention SHA in monitoring metrics.
+- [x] delete the replay-created postponed duplicate `wall-231920894_7265`, restore event `6857` to `wall-231920894_7250`, and make postponed lookup use the correct authenticated collection;
 
 ## Follow-up Actions
 
@@ -106,10 +108,39 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 ## Release And Closure Evidence
 
-- deployed SHA: `be635b8e` for bounded logs/disk retention; Smart Update prevention pending release
-- deploy path: `origin/main` / Fly release `1630` for the first phase
-- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch)
-- post-deploy verification: runtime mirror enabled and growing under the 64 MiB budget; Smart Update and E2E gates pending
+- deployed SHA: `e278e072` (`origin/main`), including `8fd50472` Smart Update prevention and the earlier bounded logging/retention commits
+- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update) and `1633` (VK postponed idempotency/E2E acceptance)
+- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch). The broad VK test files also expose 13 pre-existing mock-signature failures for newer location-marker/reservation kwargs; those are test-debt, not accepted as a pass.
+- post-deploy verification: `/healthz ready=true`, disk `408 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
+
+## 2026-07-13 complete future audit
+
+Frozen denominator was **266/266** active canonical current/future events, with
+1,277 source rows, 781 poster/media rows, both current vector documents and
+direct Telegram/VK/comment inspection. Embeddings were **266/266 fresh for both
+`search_v3` and `related_v1`**; the defect was semantic adjudication/use, not
+vector coverage. The audit confirmed 33 semantic repair targets affecting 35
+canonical IDs plus four live-publication defects on four more IDs (**39 affected
+IDs**). Exact source truth, classifications, surfaces and safe repair actions are
+frozen in the ignored artifact
+`artifacts/codex/INC-2026-07-13-runtime-logging-quality/future-audit/SUMMARY.md`.
+
+Confirmed repair inventory (survivor/meaning is source-adjudicated in the
+artifact): duplicates/teasers `6222→6277`, `6696→6766`, `6472→5665`,
+`6774→2884`, `3459→2864`, `5937→5830`, and pseudo-event `6421`;
+occurrence/date/range/eventness IDs `6830`, `6661`, `6745`, `3934`, `4648`,
+`3999`, `4327`, `5765`, `6467`, `6582`, `6595`, `6624`, `6794`, `6112`,
+`6337`, `5344`, `3177`, `2601`, `2182`, `6028`; location IDs `4961`, `4671`,
+`6425`, `3132`; source/publication mixing `5754`, `5757`, `6592`, `6851`.
+Rows created after recent prevention cutovers include real recurrence examples
+`6745`, `6766`, `6774`, `6830` and `6851`; the rest must be reported as legacy
+debt or an earlier audit miss, not as one day's new regressions.
+
+The replay itself found one additional live-publication defect: postponed
+`wall-231920894_7250` was invisible through VK `filter=all`, so the old helper
+created `wall-231920894_7265`. The duplicate was deleted before its publish
+slot, event `6857` was restored to `7250`, and the production/API post-check is
+`7250 present, 7265 absent`.
 
 ## Prevention
 

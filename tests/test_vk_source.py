@@ -1229,6 +1229,33 @@ async def test_sync_vk_source_post_keeps_existing_same_id_postponed_post(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_postponed_lookup_uses_postponed_filter_before_all(monkeypatch):
+    calls: list[str] = []
+
+    async def fake_vk_api(method, params, *_args, **_kwargs):
+        assert method == "wall.get"
+        calls.append(params["filter"])
+        if params["filter"] == "postponed":
+            return {"response": {"items": [{"id": 7250, "date": 1783968000}]}}
+        return {"response": {"items": []}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    actor = main.VkActor(kind="user", token="u", label="user")
+
+    resolved = await main._resolve_vk_postponed_wall_id(
+        owner_id=-231920894,
+        post_id=7250,
+        actor=actor,
+        token="u",
+        db=None,
+        bot=None,
+    )
+
+    assert resolved == 7250
+    assert calls == ["postponed"]
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_recreates_deleted_managed_post(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_EVENTS_GROUP_ID = "1"

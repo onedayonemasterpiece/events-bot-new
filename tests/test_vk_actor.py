@@ -320,7 +320,7 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
             return {"response": {"post_id": 124}}
         if method == "wall.get":
             assert params["owner_id"] == "-2"
-            assert params["filter"] == "all"
+            assert params["filter"] == "postponed"
             return {"response": {"items": [{"id": 125, "postponed_id": 124, "date": expected}]}}
         raise AssertionError(method)
 

@@ -19,3 +19,6 @@ def test_vk_live_e2e_terminal_response_classification() -> None:
     assert module._terminal_response_kind("Not authorized") == "authorization_denied"
     assert module._terminal_response_kind("Результат: ошибка provider") == "operator_error"
     assert module._terminal_response_kind("Запускаю авторазбор") is None
+    assert module._terminal_processed_count("queue processed: 1/1") == 1
+    assert module._terminal_processed_count("queue processed: 0/0") == 0
+    assert module._terminal_processed_count("Запускаю") is None
