@@ -22,6 +22,7 @@ Production file mirror **включён постоянно** и пишет root 
 - rotated retention ceiling: `RUNTIME_LOG_RETENTION_HOURS=48`;
 - volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=256`;
 - level: `RUNTIME_LOG_LEVEL=INFO`.
+- `/healthz` disk telemetry: warning below `350 MiB`, critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
 
 При обычном потоке это даёт до двух суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Fly logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
 
