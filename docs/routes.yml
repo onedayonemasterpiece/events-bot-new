@@ -573,8 +573,18 @@ features:
       - scheduling.py
       - main_part2.py
   post_metrics:
-    status: implemented
+    status: source_metrics_implemented_consolidated_event_engagement_pending
     docs: docs/features/post-metrics/README.md
+    consolidated_event_engagement: docs/features/post-metrics/consolidated-event-engagement.md
+    reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    capabilities:
+      tg_vk_source_snapshots: implemented
+      source_counter_sync: partial
+      first_party_site_reaction_persistence: missing
+      first_party_valid_view_aggregate: missing
+      single_event_engagement_read_function: missing_release_gate
+      popular_posts_consumer_migration: missing_release_gate
+      ecological_current_aggregate: designed
     entrypoints:
       - source_parsing/post_metrics.py
       - reaction_counter_sync.py

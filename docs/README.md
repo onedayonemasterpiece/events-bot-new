@@ -18,6 +18,7 @@
 - Event image duplicate release audit (SHA-256 → visual review): `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Personalization Supabase 500 MB storage/compaction: `docs/operations/personalization-storage-budget.md`
+- Consolidated event views/likes/shares (sources + site): `docs/features/post-metrics/consolidated-event-engagement.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`

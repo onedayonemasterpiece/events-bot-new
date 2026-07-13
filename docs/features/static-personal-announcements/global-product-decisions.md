@@ -1,6 +1,6 @@
 # Global product decisions for the static personal announcements release
 
-> Status: release-level product decisions accepted in the planning thread on 2026-07-11 and extended on 2026-07-12; retention and numerical quality thresholds remain to be set.
+> Status: release-level product decisions accepted in the planning thread on 2026-07-11 and extended through 2026-07-13; retention and numerical quality thresholds remain to be set.
 
 ## Working decisions
 
@@ -28,6 +28,7 @@
 22. **Identity state is global across every static HTML page, and verified manual email is lightweight passwordless authorization.** One shared account shell provides Yandex login, code/link email login, logout, add/change email and device-local forget-email actions everywhere. Pending/cached email is not authentication; after verification it creates/restores the same Supabase identity class used by ordinary user-owned features, without collecting extra profile data.
 23. **Navigation is consistent in information architecture and adaptive in geometry.** Mobile keeps the stronger brand-tag disclosure pattern; desktop keeps primary destinations visible in a horizontal top bar and uses a restrained shallow version of the tag motif. Labels, order, active state, search/account semantics and accessible names remain the same. The shallow desktop hybrid is the recommended release candidate, subject to immutable-preview owner sign-off.
 24. **An event gallery contains no duplicate images at release.** Exact bytes, managed/source mirrors, re-encodes and visually redundant crops/minor overlays of the same underlying visual collapse to one gallery item; materially distinct posters, programme slides and semantically useful photos remain. The current baseline must be measured read-only from downloaded-byte SHA-256 through perceptual candidates to full visual review, then fixed by root-cause family.
+25. **Views, likes and shares are consolidated at event level across sources and KenigEvents.** One versioned batch function supplies `/popular_posts`, daily, video selection, static counters and approved rankers with the same TG/VK/site components, freshness and compatible totals. Physical ownership remains split by database; the shared aggregate is a compact read projection, not duplicated raw history.
 
 ## Consequences
 
@@ -37,6 +38,8 @@
 - A forwarded personal-page secret remains bearer access to that page and must not be rebound to the viewer's current global identity merely because the shared account shell is visible.
 - Cross-device continuity is measured by the same destinations/order/meaning and by task transfer, not by pixel-identical navigation. The release must not assume that one visitor uses only one device; desktop and mobile variants are both acceptance surfaces.
 - Hash equality is evidence, not the complete gallery decision: exact SHA duplicates are defects, while perceptual/crop/template candidates require visual/semantic adjudication so dedup does not drop useful distinct media. RC requires zero confirmed duplicates and zero unreviewed eligible clusters.
+- A consolidated counter never hides provenance or freshness: source and site components remain auditable, failed/stale input is not converted to zero, and total views are reach observations rather than a unique-person claim. Consumers cannot recalculate their own competing totals.
+- High-frequency site views are compacted before durable storage; Supabase keeps one current event aggregate and bounded current/action evidence, while optional de-identified history belongs in YDB with TTL. A page view must not create an unbounded permanent Postgres row or a per-card Supabase read.
 - The code and link cannot create two accounts or consume each other incorrectly; replay/attempt/TTL limits apply to the shared verification transaction.
 - `noindex` is discovery control, not access control. A forwarded personal-page URL intentionally grants read access to its holder.
 - Personal-page artifacts must exclude email, account id, raw/inferred profile internals, hidden scores and sensitive history.

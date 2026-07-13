@@ -49,6 +49,7 @@ The release target is Green with enough forecast headroom to remain below Orange
 6. **Bound indexes as well as tables.** Every index needs a real query/RLS/cleanup purpose; relation and index size are reviewed together because both consume the plan budget.
 7. **TTL is executable.** Retention jobs are idempotent, observable, tested against interrupted/repeated runs and followed by a size/bloat/reuse report. Do not use a disruptive full-table rewrite as routine cleanup.
 8. **Fail safely near capacity.** Drop/block disposable telemetry before durable user actions. Favorites, consent withdrawal, unsubscribe/suppression, reminder cancellation and send guards remain available.
+9. **Engagement is current-state first.** Source+site views/likes/shares keep one compact current event aggregate in Supabase; TG/VK age-bucket snapshots stay in Fly SQLite, raw site views are compacted before Postgres, and optional history is folded/projected instead of duplicating every observation.
 
 ## Proposed retention defaults for product approval
 
@@ -76,6 +77,7 @@ At least daily during canary and weekly in steady state, record without personal
 - rows/bytes per active user-day and per served list/session summary;
 - index-to-table ratio, dead-row/compaction lag and TTL rows/bytes removed;
 - event/vector/tag projection cardinality by active model/version;
+- engagement aggregate rows/bytes/index bytes, accepted site-view summary volume and counter updates per active event/day;
 - projected days to Yellow/Orange at current and peak growth;
 - number of writes dropped/blocked by storage band, separated from user-control actions;
 - YDB projection lag/failures and Object Storage artifact volume, without treating either as Supabase correctness evidence.

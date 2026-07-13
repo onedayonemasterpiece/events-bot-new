@@ -44,6 +44,8 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
 | Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
 | Strong-action current state/profile inputs | Supabase | Analytics event in YDB |
+| Current first-party event views/likes/shares aggregate | Supabase compact current row | CDN counter manifest; de-identified YDB daily history |
+| TG/VK source post metric snapshots and source-event mapping | Fly SQLite | Source component fields in compact Supabase event aggregate/CDN manifest |
 | Raw TG/VK comments, embeddings and matches | YDB comment-feedback sidecar | Sanitized static manifest in Object Storage |
 | Canonical event data | Fly SQLite | Bounded card/vector projection in Supabase |
 
@@ -72,6 +74,7 @@ Canonical operational budgets and release evidence: [Personalization Supabase st
 3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
 4. An asynchronous outbox projects de-identified analytics to YDB.
 5. YDB failure never blocks CTA/navigation or rolls back a user action.
+6. A batch engagement projector/read service combines distinct latest TG/VK source-post metrics with compact accepted site summaries. All popularity consumers use its one versioned event-level schema; it performs no cross-database transaction and no per-event remote read loop.
 
 ### Login and profile linking
 

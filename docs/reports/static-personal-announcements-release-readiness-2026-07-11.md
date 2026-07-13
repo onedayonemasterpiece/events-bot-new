@@ -75,6 +75,7 @@
 | **F17** | Admin issue report → ArtKodex repair/history | **Partial, branch-only** | Admin Edge/UI/history design and branch implementation exist | Merge; unique active/idempotency key; atomic poller claim; real ArtKodex owner; structured repair result; end-to-end repair/rebuild/history |
 | **M1** | Event-detail medallion release readiness | **Partial / consolidated draft PR** | Draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38): clean main-based slice with 25 organizer/venue + 11 festival/venue-brand entries; 420-page preview/check and 38/38 browser image load evidence | Produce/accept P0 shortlist; refresh production gap within 48h of RC; provenance/alias/no-false-match/a11y/no-overflow gates; owner mobile/desktop visual sign-off; merge to main |
 | **M2** | No duplicate images inside an event gallery | **Blocked / baseline reported degraded** | Exact/mirror/near-duplicate prevention exists in parts of Smart Update/publish paths, but the owner reports many current duplicates and no exhaustive current active/future visual ledger exists | Run the canonical read-only SHA-256 → dHash/visual audit over 100% of eligible multi-image events; zero confirmed duplicate events/excess refs/unreviewed clusters; root-cause repair + replay + public-surface recheck |
+| **M3** | Consolidated source + site event engagement | **Partial / fragmented** | TG/VK snapshots and source counter sync exist; `/popular_posts`, daily, static counters and site telemetry use incomplete/separate aggregation paths | One versioned batch function for source+site views/likes/shares; migrate all consumers; idempotency/freshness/reconciliation E2E; one compact current event row + bounded evidence/TTL and size forecast |
 
 **Итог:** для полного заявленного публичного релиза нет ни одного требования, которое можно честно отметить `Done` по строгому определению `main + tests + current production evidence`. Это не означает, что продукт начинается с нуля: сильные vertical slices уже есть, но release integration и эксплуатационные доказательства отстают от объёма реализации.
 
@@ -267,6 +268,8 @@ Smart Update является владельцем семантического 
 - [ ] No consent = no local profile mutation and no trusted remote telemetry.
 - [ ] Remote telemetry write path passes RLS/grant/body/rate/dedupe/bot/retention tests.
 - [ ] Valid impressions, detail views, dwell, card click, ticket/calendar/share/like/hide contain surface/rank/layout context.
+- [ ] One canonical `load_consolidated_event_engagement`-equivalent batch function combines distinct TG/VK source posts with accepted site valid views/current likes/shares, retains components/freshness and supplies `/popular_posts`, daily, CherryFlash/`/v`, static counter export and allowed rankers.
+- [ ] Consolidated engagement contract proves latest-valid source maturity bucket (no `age_day` double count), canonical post mapping, site action/view idempotency, event merge/recompute, source-only/site-only/stale/last-good behavior and versioned popularity scoring.
 - [ ] Verified email supports both one-time code and one-click link for the same identity/transaction, with TTL and replay/attempt limits.
 - [ ] На всех email-dependent surfaces есть одинаковый выбор: Yandex login/email или ручной ввод почты; Yandex без usable email переводит в manual verification, не ломая identity и не создавая второй профиль.
 - [ ] Manual-email path writes/reuses versioned `ke_contact_email_v1`: one entry per browser, pending/verified state survives reload and later saves, global `Забыть почту на этом устройстве` works, and local cache never substitutes for server verification/consent.
@@ -280,6 +283,7 @@ Smart Update является владельцем семантического 
 - [ ] Канонический [500 MB storage/compaction contract](../operations/personalization-storage-budget.md) реализован; current provider limit перепроверен перед canary.
 - [ ] Launch baseline находится в Green (`<60%` verified plan limit) и имеет forecast headroom through canary/hypercare; измеряются таблицы **и индексы**, bytes/user-day и projected days to Orange.
 - [ ] Raw weak telemetry по умолчанию выключена; browser/session compacts signals, Supabase хранит current state + bounded evidence, YDB получает только asynchronous de-identified TTL analytics, artifacts идут в Object Storage/CDN.
+- [ ] Social/site engagement uses one compact current aggregate row per event; raw site page views are never an unbounded Supabase stream, source snapshot history is not copied into Postgres, and relation+index bytes/updates per event are included in the launch/1k/10k model.
 - [ ] Retention/fold/compaction jobs идемпотентны, observable и проверены на restorable snapshot; stale vector/event/tag versions и debug/provider payloads не растут бесконечно.
 - [ ] Yellow/Orange/Red/Critical alerts и admission/kill switches доказаны: disposable telemetry/debug прекращаются раньше, чем становятся недоступны consent withdrawal, unsubscribe/suppression, favorite/reminder cancellation и send guards.
 - [ ] Synthetic volume model проверяет launch cohort, 1k и 10k active-user scenarios по утверждённому retention horizon; upgrade/architecture decision принимается до Red, не во время outage.
@@ -335,6 +339,7 @@ Smart Update является владельцем семантического 
 - [ ] Clean `origin/main`-reachable RC SHA; no release fixes only in side branches.
 - [ ] Full site build/check from clean checkout passes.
 - [ ] Full active/future image-uniqueness ledger is attached to the RC evidence pack and current static/Telegraph/TG/VK surfaces have no confirmed within-event duplicate images.
+- [ ] Engagement reconciliation on the RC snapshot proves the shared function equals distinct TG/VK latest snapshots plus accepted site summaries; all named consumers use it and storage/freshness/last-good evidence is attached.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
@@ -413,7 +418,7 @@ Smart Update является владельцем семантического 
 3. **P0 — Supabase ecological capacity:** fresh size/budget, compact schema, retention/compaction, growth forecast, alerts and near-cap fail-safe before remote telemetry/email activation.
 4. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
 5. **P0 — UI release freeze:** F5 plus clean preview contract, responsive-navigation comparison with the shallow desktop hybrid as default, PR #38 medallion baseline, completed/owner-deferred medallion P0 shortlist and real-device/a11y/visual evidence.
-6. **P1 — identity/telemetry/favorites/calendar:** F6/F7/F9/F10/F12, включая Yandex/manual-email choice и видимый reminder state после save.
+6. **P1 — identity/telemetry/favorites/calendar/engagement:** F6/F7/F9/F10/F12 plus M3, включая Yandex/manual-email choice, видимый reminder state after save and migration of `/popular_posts`/daily/video/static counters to one compact source+site engagement function.
 7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 8. **P1 — admin repair loop:** F17 after idempotency/poller contract.
 9. **P1 — media quality/share:** F15/F16.

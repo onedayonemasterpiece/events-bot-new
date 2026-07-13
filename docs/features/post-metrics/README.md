@@ -1,6 +1,6 @@
-# Post Metrics & Popularity (TG/VK)
+# Post Metrics & Popularity (TG/VK + KenigEvents)
 
-Фича консолидирует сбор статистики постов (`views/likes`, а также доступные `comments/reposts`) и подсветку “популярности” единым алгоритмом **для Telegram Monitoring и VK Auto Queue**.
+Фича консолидирует сбор статистики постов (`views/likes`, а также доступные `comments/reposts`) и подсветку “популярности” единым алгоритмом **для Telegram Monitoring и VK Auto Queue**. Release scope additionally requires first-party KenigEvents views/likes/shares to join the same event-level read contract; this final consolidation is not implemented yet.
 
 Это **не про “посты” как сущность**, а про то, как статистика постов становится сигналом для:
 
@@ -17,6 +17,17 @@
 - вычисление маркеров: `popularity_marks`.
 
 Обе пайплайны (TG/VK) используют **тот же код** и одинаковые ENV параметры.
+
+This is currently one source-metrics implementation point, but not yet one event-engagement read point: `/popular_posts`, daily audience labels, video selection and static counters still have separate aggregation paths. The required shared source+site function, versioned output and storage contract are defined in [Consolidated event engagement](consolidated-event-engagement.md).
+
+## Release consolidation requirement
+
+- `/popular_posts`, daily popularity, CherryFlash/`/v`, static counter export and future rankers consume one canonical batch function for event engagement.
+- The result retains TG/VK/site components and freshness while exposing compatible totals for views, likes and shares; “views” are reach observations, not unique people.
+- A source post contributes once from its latest valid maturity snapshot, not once per `age_day` or duplicate mapping.
+- Site likes are current state; shares and valid views are idempotently compacted and bot/reload/preview guarded.
+- Fly SQLite remains source-metric owner and personalization Supabase remains first-party-state owner. Consolidation is a compact projection/read model, not a cross-database transaction or a new raw-data lake.
+- Storage stays ecological: one current event aggregate, bounded source buckets, short strong-action evidence, compacted views, CDN manifest and optional de-identified YDB daily history with TTL.
 
 ## Данные (SQLite)
 
@@ -115,3 +126,5 @@ ENV (общие для TG/VK):
    - Сигналы: уровни `⭐/👍`, плюс возможные будущие агрегаты по нескольким источникам одного события.
 
 Важно: статистика “постов” сама по себе не цель. Цель: **маркировать и ранжировать события**, а пост‑метрики являются входным сигналом.
+
+Before public release, the source+site event aggregate and shared consumer function move out of “future” into the mandatory [release acceptance contract](consolidated-event-engagement.md#release-acceptance).
