@@ -85,6 +85,7 @@ POSITIVE_WORDS = ["красив", "атмосфер", "море", "дюны", "�
 SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09_local_scope_v2"
 LOCAL_REGION_SOURCE_STATUS = "rejected_local_region_source"
 SPAM_SOURCE_STATUS = "rejected_spam_source"
+UNRESOLVABLE_VK_SOURCE_STATUS = "rejected_unresolvable_vk_source"
 LOCAL_REGION_SOURCE_REASON = "source title/handle is Kaliningrad-local; keep for separate local-source monitoring, skip Region Talk external-publication scan"
 SPAM_SOURCE_REASON = "source title/hashtag/excerpt matches repeated hashtag-spam/commercial bait; skip Region Talk scan"
 LOCAL_REGION_RATIO_MIN_POSTS = 30
@@ -1128,6 +1129,22 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     rescan_due = [seed for seed, due in ordered if bool(due.get("due")) and bool(due.get("is_rescan"))]
     confirmed_external_priority: list[Seed] = []
     confirmed_external_selected: list[Seed] = []
+    confirmed_external_pairs: list[tuple[Seed, dict[str, Any]]] = []
+
+    def confirmed_pair_has_scan_evidence(pair: tuple[Seed, dict[str, Any]]) -> bool:
+        _seed, due = pair
+        row = due.get("queue_row") if isinstance(due, dict) else {}
+        cursor = due.get("cursor") if isinstance(due, dict) else {}
+        row = row if isinstance(row, dict) else {}
+        cursor = cursor if isinstance(cursor, dict) else {}
+        status = str(
+            row.get("source_queue_status")
+            or row.get("queue_status")
+            or row.get("fetch_status")
+            or cursor.get("fetch_status")
+            or ""
+        )
+        return _source_has_primary_scan_evidence(row, cursor, status)
     # First complete the unscanned/retry queue. Only when there are no primary
     # pending publics left do we spend budget on processed-source delta rescans.
     if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False):
@@ -1136,14 +1153,13 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             if bool(due.get("due"))
             and str((due.get("queue_row") or {}).get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
         ]
-        confirmed_external_priority = [
-            seed for seed, due in sorted(confirmed_external_pairs, key=lambda item: (
-                bool(item[1].get("is_rescan")),
+        confirmed_external_pairs = sorted(confirmed_external_pairs, key=lambda item: (
+                confirmed_pair_has_scan_evidence(item),
                 source_selection_cache_bucket(item[0], previous_state),
                 str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
                 item[0].canonical_url,
             ))
-        ]
+        confirmed_external_priority = [seed for seed, _due in confirmed_external_pairs]
         publication_completion_pairs = [
             (seed, due) for seed, due in annotated
             if bool(due.get("due")) and str(due.get("reason") or "") == "publication_source_evidence_completion"
@@ -1166,20 +1182,30 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             max(0, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN", 4)),
             len(confirmed_external_priority),
         )
-        evidence_telegram = [seed for seed in confirmed_external_priority if seed.platform == "telegram"]
-        evidence_vk = [seed for seed in confirmed_external_priority if seed.platform == "vk"]
-        evidence_other = [seed for seed in confirmed_external_priority if seed.platform not in {"telegram", "vk"}]
         balanced_evidence: list[Seed] = []
-        # VK does not need a Telegram resolve, while one Telegram source per
-        # run steadily warms the private entity cache. Interleave platforms so
-        # 32 VK rows cannot postpone all Telegram evidence for 16 runs.
-        while len(balanced_evidence) < confirmed_external_slots and (evidence_telegram or evidence_vk or evidence_other):
-            if evidence_telegram and len(balanced_evidence) < confirmed_external_slots:
-                balanced_evidence.append(evidence_telegram.pop(0))
-            if evidence_vk and len(balanced_evidence) < confirmed_external_slots:
-                balanced_evidence.append(evidence_vk.pop(0))
-            if evidence_other and len(balanced_evidence) < confirmed_external_slots:
-                balanced_evidence.append(evidence_other.pop(0))
+        # Finish never-scanned evidence before any delta rescan.  Platform
+        # interleaving is applied *inside* each tier: the old split-by-platform
+        # implementation could select a cached Telegram rescan while multiple
+        # never-scanned VK bloggers were waiting, only to preserve TG/VK/TG/VK
+        # symmetry.  One uncached Telegram lane still warms the cache, but
+        # remaining capacity now goes to other first scans instead of repeats.
+        for has_scan_evidence_tier in (False, True):
+            tier_pairs = [
+                (seed, due) for seed, due in confirmed_external_pairs
+                if confirmed_pair_has_scan_evidence((seed, due)) == has_scan_evidence_tier
+            ]
+            evidence_telegram = [seed for seed, _due in tier_pairs if seed.platform == "telegram"]
+            evidence_vk = [seed for seed, _due in tier_pairs if seed.platform == "vk"]
+            evidence_other = [seed for seed, _due in tier_pairs if seed.platform not in {"telegram", "vk"}]
+            while len(balanced_evidence) < confirmed_external_slots and (evidence_telegram or evidence_vk or evidence_other):
+                if evidence_telegram and len(balanced_evidence) < confirmed_external_slots:
+                    balanced_evidence.append(evidence_telegram.pop(0))
+                if evidence_vk and len(balanced_evidence) < confirmed_external_slots:
+                    balanced_evidence.append(evidence_vk.pop(0))
+                if evidence_other and len(balanced_evidence) < confirmed_external_slots:
+                    balanced_evidence.append(evidence_other.pop(0))
+            if len(balanced_evidence) >= confirmed_external_slots:
+                break
         confirmed_external_selected = balanced_evidence
         high_yield_rescan_pairs = [
             (seed, due) for seed, due in annotated
@@ -1223,6 +1249,21 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_travel_priority_enabled"] = bool(prioritize_product_sources)
     _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_eligible_total"] = len(confirmed_external_priority)
     _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"] = len(confirmed_external_selected)
+    confirmed_pair_by_url = {seed.canonical_url: (seed, due) for seed, due in confirmed_external_pairs}
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_primary_eligible_total"] = sum(
+        1 for pair in confirmed_external_pairs if not confirmed_pair_has_scan_evidence(pair)
+    )
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_rescan_eligible_total"] = sum(
+        1 for pair in confirmed_external_pairs if confirmed_pair_has_scan_evidence(pair)
+    )
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_primary_selected_total"] = sum(
+        1 for seed in confirmed_external_selected
+        if not confirmed_pair_has_scan_evidence(confirmed_pair_by_url.get(seed.canonical_url) or (seed, {}))
+    )
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_rescan_selected_total"] = sum(
+        1 for seed in confirmed_external_selected
+        if confirmed_pair_has_scan_evidence(confirmed_pair_by_url.get(seed.canonical_url) or (seed, {}))
+    )
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_top_product_priority"] = [
         {
             "source_title": seed.source_title,
@@ -1368,6 +1409,20 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         or source_queue_row_has_cached_entity(r, previous_state)
     ]
     uncached_lane_quota = max(0, getenv_int("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN", 1))
+    confirmed_external_rows = [
+        row for row in rows
+        if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+    ]
+    # The generic selection pool used to stop after 40 cached/VK rows.  With a
+    # 53-source confirmed cohort this meant the single safe uncached Telegram
+    # resolve lane never even reached selected_sources_for_run(), so every run
+    # rescanned the same cached channels.  Widen only the in-memory candidate
+    # pool enough to expose that one controlled lane; network quotas and
+    # human-like pacing are unchanged.
+    effective_max_items = max(
+        max(1, int(max_items or 1)),
+        len(confirmed_external_rows) + uncached_lane_quota,
+    )
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_candidate_rows"] = len(cached_rows)
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_entity_candidate_rows"] = max(0, len(rows) - len(cached_rows))
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_filter_applied"] = "false"
@@ -1396,10 +1451,12 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
             uncached_lane_keys.append("telegram:username:" + seed.handle.lstrip("@").lower())
         seen.add(key)
         selected.append(seed)
-        if len(selected) >= max_items:
+        if len(selected) >= effective_max_items:
             break
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"] = uncached_lane_keys
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_selected"] = len(uncached_lane_keys)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_selection_pool_requested"] = int(max_items or 0)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_selection_pool_effective"] = effective_max_items
     return selected
 
 
@@ -1867,6 +1924,7 @@ SOURCE_STATE_FIELDS = [
     "history_posts_with_dates", "history_avg_post_age_days",
     "history_newest_post_age_days", "history_oldest_post_age_days",
     "history_newest_post_date", "history_oldest_post_date",
+    "vk_wall_resolve_status", "vk_wall_resolved_type",
     "vk_wall_search_query_count", "vk_wall_search_queries_attempted",
     "vk_wall_search_matched_query", "vk_wall_search_hits",
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
@@ -1901,6 +1959,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "history_posts_with_dates", "history_avg_post_age_days",
     "history_newest_post_age_days", "history_oldest_post_age_days",
     "history_newest_post_date", "history_oldest_post_date",
+    "vk_wall_resolve_status", "vk_wall_resolved_type",
     "vk_wall_search_query_count", "vk_wall_search_queries_attempted",
     "vk_wall_search_matched_query", "vk_wall_search_hits",
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
@@ -2498,6 +2557,7 @@ def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "telegram_resolve_status", "posts_scanned", "last_seen_post_date", "history_fetch_runtime_seconds",
         "posts_fetched", "posts_scanned", "posts_for_scoring", "posts_to_score", "posts_scored",
         "posts_deferred", "sources_scanned", "candidates_created", "favorites_created",
+        "sources_history_fetched_ok", "source_count_scanned",
         "current_run_reviewable_candidates", "state_backend", "ydb_read_status", "ydb_write_status",
         "ydb_state_mode", "vk_wall_probe_status", "image_queue_total", "image_queue_pruned_non_region_previous",
         "build_report_required", "live_ydb_source_of_truth",
@@ -2669,6 +2729,8 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "history_oldest_post_age_days": row.get("history_oldest_post_age_days") or "",
         "history_newest_post_date": row.get("history_newest_post_date") or "",
         "history_oldest_post_date": row.get("history_oldest_post_date") or "",
+        "vk_wall_resolve_status": row.get("vk_wall_resolve_status") or "",
+        "vk_wall_resolved_type": row.get("vk_wall_resolved_type") or "",
     }
     # A terminal/source-status overlay may also be the durable queue update.
     # Preserve every existing queue-contract field (especially queue_seq and
@@ -9611,13 +9673,58 @@ def vk_wall_token_kind() -> str:
 
 def vk_domain_from_seed(seed: Seed) -> str:
     raw = (seed.url or seed.handle or "").strip()
-    m = re.search(r"vk\.com/(?:club|public)?([A-Za-z0-9_.-]+)", raw, re.I)
+    # Keep the full VK path token.  ``club123``/``public123`` are valid
+    # community short addresses, while stripping the prefix turns them into a
+    # *positive user id*.  wall.get then either returns the unrelated user's
+    # wall or an empty wall, silently losing the confirmed blogger source.
+    m = re.search(r"vk\.com/([A-Za-z0-9_.-]+)", raw, re.I)
     if m:
         domain = m.group(1)
         if domain.lower() in {"search", "video", "clips", "feed", "places", "market", "groups", "public"}:
             return canonical_handle(seed.handle).lstrip("@")
         return domain
     return canonical_handle(seed.handle).lstrip("@")
+
+
+def vk_api_read(method: str, params: dict[str, Any], token: str) -> dict[str, Any]:
+    """Call one bounded read-only VK API method and return its JSON payload."""
+    import urllib.parse, urllib.request
+
+    query = urllib.parse.urlencode({
+        **params,
+        "access_token": token,
+        "v": os.getenv("VK_API_VERSION") or "5.199",
+    })
+    with urllib.request.urlopen(
+        "https://api.vk.com/method/" + method + "?" + query,
+        timeout=getenv_int("REGION_TALK_VK_TIMEOUT_SECONDS", 20),
+    ) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def vk_resolved_wall_domain(domain: str, token: str) -> tuple[str, str, dict[str, Any]]:
+    """Resolve a failing VK screen name to a signed wall owner id.
+
+    VK's official 5.199 schema allows ``utils.resolveScreenName`` for service
+    tokens and describes wall owners as positive users / negative communities.
+    Resolution is deliberately a fallback after a failed wall.get, so normal
+    VK sources do not pay an extra request.  An empty successful response means
+    the evidence URL no longer identifies a VK object and can be terminally
+    removed from the active scan queue.
+    """
+    payload = vk_api_read("utils.resolveScreenName", {"screen_name": domain}, token)
+    if payload.get("error"):
+        return "", "resolve_error", payload
+    response = payload.get("response")
+    if isinstance(response, list):
+        response = response[0] if response else {}
+    response = response if isinstance(response, dict) else {}
+    object_id = int(response.get("object_id") or 0)
+    object_type = str(response.get("type") or "").strip().lower()
+    if object_id <= 0 or object_type not in {"user", "group", "page", "event"}:
+        return "", "not_found", payload
+    signed_owner_id = -object_id if object_type in {"group", "page", "event"} else object_id
+    return str(signed_owner_id), object_type, payload
 
 
 def fetch_vk_wall_for_seed(
@@ -9642,10 +9749,34 @@ def fetch_vk_wall_for_seed(
         src.update({"fetch_status": "skipped_vk_wall_domain_missing", "vk_wall_probe_status": "domain_missing", "source_probe_reason": "Cannot extract VK wall domain from seed/catalog/search URL"})
         return src, []
     try:
-        import urllib.parse, urllib.request
-        params = urllib.parse.urlencode({"domain": domain, "count": max(1, min(max_posts, getenv_int("REGION_TALK_VK_MAX_WALL_POSTS_PER_SOURCE", max_posts))), "filter": "owner", "extended": 1, "access_token": token, "v": os.getenv("VK_API_VERSION") or "5.199"})
-        with urllib.request.urlopen("https://api.vk.com/method/wall.get?" + params, timeout=getenv_int("REGION_TALK_VK_TIMEOUT_SECONDS", 20)) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+        import urllib.request
+        wall_params = {
+            "domain": domain,
+            "count": max(1, min(max_posts, getenv_int("REGION_TALK_VK_MAX_WALL_POSTS_PER_SOURCE", max_posts))),
+            "filter": "owner",
+            "extended": 1,
+        }
+        payload = vk_api_read("wall.get", wall_params, token)
+        vk_wall_resolve_status = "not_needed"
+        vk_wall_resolved_type = ""
+        if payload.get("error") and int((payload.get("error") or {}).get("error_code") or 0) == 100:
+            resolved_domain, vk_wall_resolved_type, resolve_payload = vk_resolved_wall_domain(domain, token)
+            vk_wall_resolve_status = vk_wall_resolved_type or "not_found"
+            if resolved_domain:
+                wall_params["domain"] = resolved_domain
+                payload = vk_api_read("wall.get", wall_params, token)
+            elif not resolve_payload.get("error"):
+                src.update({
+                    "fetch_status": UNRESOLVABLE_VK_SOURCE_STATUS,
+                    "source_queue_status": UNRESOLVABLE_VK_SOURCE_STATUS,
+                    "vk_wall_probe_status": "unresolvable",
+                    "fetch_error_code": 100,
+                    "fetch_error_message": "VK screen name no longer resolves to a user or community",
+                    "source_probe_reason": "Confirmed evidence URL is invalid, renamed, deleted or unavailable; remove it from the active scan queue without retry churn.",
+                    "next_action": "keep_in_evidence_audit_do_not_rescan_until_source_url_is_repaired",
+                    "vk_token_kind": vk_wall_token_kind(),
+                })
+                return src, []
         if payload.get("error"):
             err = payload["error"] or {}
             code = int(err.get("error_code") or 0)
@@ -9671,17 +9802,13 @@ def fetch_vk_wall_for_seed(
                         getenv_float("REGION_TALK_VK_SEARCH_DELAY_MIN_SECONDS", 0.6),
                         getenv_float("REGION_TALK_VK_SEARCH_DELAY_MAX_SECONDS", 1.2),
                     ))
-                    search_params = urllib.parse.urlencode({
+                    search_payload = vk_api_read("wall.search", {
                         "owner_id": owner_id,
                         "query": query,
                         "owners_only": 1,
                         "count": max(1, min(100, getenv_int("REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_RESULTS_PER_QUERY", 20))),
                         "extended": 1,
-                        "access_token": token,
-                        "v": os.getenv("VK_API_VERSION") or "5.199",
-                    })
-                    with urllib.request.urlopen("https://api.vk.com/method/wall.search?" + search_params, timeout=getenv_int("REGION_TALK_VK_TIMEOUT_SECONDS", 20)) as search_resp:
-                        search_payload = json.loads(search_resp.read().decode("utf-8"))
+                    }, token)
                     vk_search_queries_attempted.append(query)
                     if search_payload.get("error"):
                         continue
@@ -9748,7 +9875,7 @@ def fetch_vk_wall_for_seed(
             title = str(group.get("name") or seed.source_title or domain)
             post_row = {"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else "", **evidence_fields}
             append_post_online(posts, post_row, run_id=run_id, stage="vk_wall_fetch")
-        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_plus_evidence_search" if vk_search_queries_attempted else "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "VK wall.get plus bounded evidence-location wall.search" if vk_search_queries_attempted else "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind(), "vk_wall_search_query_count": len(vk_search_queries_attempted), "vk_wall_search_queries_attempted": "|".join(vk_search_queries_attempted), "vk_wall_search_matched_query": vk_search_matched_query, "vk_wall_search_hits": vk_search_hits})
+        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_plus_evidence_search" if vk_search_queries_attempted else "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "VK wall.get plus bounded evidence-location wall.search" if vk_search_queries_attempted else "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind(), "vk_wall_resolve_status": vk_wall_resolve_status, "vk_wall_resolved_type": vk_wall_resolved_type, "vk_wall_search_query_count": len(vk_search_queries_attempted), "vk_wall_search_queries_attempted": "|".join(vk_search_queries_attempted), "vk_wall_search_matched_query": vk_search_matched_query, "vk_wall_search_hits": vk_search_hits})
         return src, posts
     except Exception as exc:
         src.update({"fetch_status": "error_vk_wall_fetch", "vk_wall_probe_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]})
@@ -14084,6 +14211,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "entity_cache_rows_written":tg_obs.get("entity_cache_rows_written", 0),
         "entity_cache_write_failures":tg_obs.get("entity_cache_write_failures", 0),
         "source_queue_uncached_resolve_lane_selected":_REGION_TALK_TELEGRAM_RUNTIME.get("source_queue_uncached_resolve_lane_selected", 0),
+        "source_queue_selection_pool_requested":_REGION_TALK_TELEGRAM_RUNTIME.get("source_queue_selection_pool_requested", 0),
+        "source_queue_selection_pool_effective":_REGION_TALK_TELEGRAM_RUNTIME.get("source_queue_selection_pool_effective", 0),
         "source_queue_uncached_resolve_lane_attempts":tg_obs.get("uncached_resolve_lane_attempts", 0),
         "source_queue_uncached_resolve_lane_ok":tg_obs.get("uncached_resolve_lane_ok", 0),
         "resolved_sources_available_for_history_fetch":tg_obs.get("resolved_sources_available_for_history_fetch", ""),
@@ -14125,6 +14254,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "external_blogger_evidence_vk_sources":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_vk_sources", 0),
         "external_blogger_evidence_local_excluded":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_local_excluded", 0),
         "external_blogger_evidence_invalid_links":_REGION_TALK_TELEGRAM_RUNTIME.get("external_blogger_evidence_invalid_links", 0),
+        "confirmed_external_blogger_history_eligible_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_eligible_total", 0),
+        "confirmed_external_blogger_history_primary_eligible_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_primary_eligible_total", 0),
+        "confirmed_external_blogger_history_rescan_eligible_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_rescan_eligible_total", 0),
+        "confirmed_external_blogger_history_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_selected_total", 0),
+        "confirmed_external_blogger_history_primary_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_primary_selected_total", 0),
+        "confirmed_external_blogger_history_rescan_selected_total":_REGION_TALK_TELEGRAM_RUNTIME.get("confirmed_external_blogger_history_rescan_selected_total", 0),
         "frontier_duplicate_canonical_keys":len(source_frontier_unique) - len({r.get("canonical_source_key") or r.get("canonical_url") for r in source_frontier_unique}),
         "frontier_self_loops":0,
         "telegram_similar_seed_used":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_seed_count", 0),

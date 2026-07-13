@@ -8,6 +8,7 @@ import sys
 import tempfile
 import types
 import unittest
+import urllib.parse
 import zipfile
 from pathlib import Path
 from unittest import mock
@@ -240,6 +241,68 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len(selected), 4)
         self.assertEqual(selected[-1].canonical_url, publication.canonical_url)
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"], 3)
+
+    def test_confirmed_first_scans_fill_slots_before_cached_rescans(self) -> None:
+        mod = load_module()
+        tg_rescan = self._seed(mod, "@cachedrescan", seed_id="tg_rescan")
+        vk_new_one = mod.Seed("vk_new_1", "vk", "VK New 1", "@vknew1", "https://vk.com/vknew1", "unit", "external", 0, "unit", "", "", "", "pending_scan", "", True, "", "")
+        vk_new_two = mod.Seed("vk_new_2", "vk", "VK New 2", "@vknew2", "https://vk.com/vknew2", "unit", "external", 0, "unit", "", "", "", "pending_scan", "", True, "", "")
+        queue = {}
+        for idx, seed in enumerate([tg_rescan, vk_new_one, vk_new_two], start=1):
+            key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+            queue[key] = {
+                "canonical_source_key": key,
+                "platform": seed.platform,
+                "handle": seed.handle,
+                "source_url": seed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": idx,
+                "external_blogger_evidence_status": "confirmed_external",
+                **({"posts_scanned": 10, "last_history_fetch_at": "2026-01-01T00:00:00+00:00"} if seed is tg_rescan else {}),
+            }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "2",
+            "REGION_TALK_SOURCE_DELTA_RESCAN_INTERVAL_SECONDS": "1",
+        }, clear=False):
+            selected = mod.selected_sources_for_run([tg_rescan, vk_new_one, vk_new_two], 2, previous_state=previous)
+        self.assertEqual({seed.canonical_url for seed in selected}, {vk_new_one.canonical_url, vk_new_two.canonical_url})
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_primary_selected_total"], 2)
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_rescan_selected_total"], 0)
+
+    def test_unified_queue_pool_exposes_one_uncached_confirmed_telegram_lane(self) -> None:
+        mod = load_module()
+        queue = {}
+        for idx in range(40):
+            key = f"vk:confirmed{idx}"
+            queue[key] = {
+                "canonical_source_key": key,
+                "platform": "vk",
+                "handle": f"@confirmed{idx}",
+                "source_url": f"https://vk.com/confirmed{idx}",
+                "source_queue_status": "pending_scan",
+                "queue_order": idx + 1,
+                "external_blogger_evidence_status": "confirmed_external",
+            }
+        queue["telegram:uncachedconfirmed"] = {
+            "canonical_source_key": "telegram:uncachedconfirmed",
+            "platform": "telegram",
+            "handle": "@uncachedconfirmed",
+            "source_url": "https://t.me/uncachedconfirmed",
+            "source_queue_status": "pending_scan",
+            "queue_order": 100,
+            "external_blogger_evidence_status": "confirmed_external",
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue, "telegram_entity_cache": {}}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
+        }, clear=False):
+            seeds = mod.unified_queue_dynamic_seeds(previous, 40)
+        self.assertIn("https://t.me/uncachedconfirmed", {seed.canonical_url for seed in seeds})
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_selected"], 1)
+        self.assertGreater(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_selection_pool_effective"], 40)
 
     def test_fast_check_message_is_reused_same_run_with_exact_fetch_identity(self) -> None:
         mod = load_module()
@@ -3495,6 +3558,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(mod.vk_domain_from_seed(seed), "")
             wall = mod.Seed("s2", "vkvideo", "Wall", "@intravel39", "https://vk.com/intravel39", "", "", 1, "", "", "", "", "", "", True, "", "")
             self.assertEqual(mod.vk_domain_from_seed(wall), "intravel39")
+            club = mod.Seed("s3", "vk", "Club", "@club219148079", "https://vk.com/club219148079", "", "", 1, "", "", "", "", "", "", True, "", "")
+            self.assertEqual(mod.vk_domain_from_seed(club), "club219148079")
         finally:
             for k, v in old.items():
                 if v is None: os.environ.pop(k, None)
@@ -3554,6 +3619,78 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(source["source_scope"], "external")
         self.assertTrue(any(post["post_url"] == "https://vk.com/wall123_2" for post in posts))
         self.assertTrue(all(post.get("external_blogger_evidence_status") == "confirmed_external" for post in posts))
+
+    def test_vk_wall_marks_non_resolving_evidence_url_terminal_instead_of_retrying(self) -> None:
+        mod = load_module()
+        calls = []
+
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def read(self):
+                return json.dumps(self.payload).encode("utf-8")
+
+        def fake_urlopen(url, timeout=0):
+            del timeout
+            calls.append(str(url))
+            if "utils.resolveScreenName" in str(url):
+                return Response({"response": []})
+            return Response({"error": {"error_code": 100, "error_msg": "domain not domain"}})
+
+        seed = mod.Seed("vk-missing", "vk", "Missing VK", "@missingvk", "https://vk.com/missingvk", "unit", "external", 1, "unit", "", "", "", "", "", True, "", "")
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {
+            "VK_SERVICE_KEY": "service-token",
+            "REGION_TALK_VK_READ_SERVICE_FIRST": "1",
+        }, clear=False), mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            source, posts = mod.fetch_vk_wall_for_seed(seed, Path(td), 10, source_row={"external_blogger_evidence_status": "confirmed_external"})
+
+        self.assertEqual(posts, [])
+        self.assertEqual(source["fetch_status"], mod.UNRESOLVABLE_VK_SOURCE_STATUS)
+        self.assertEqual(source["source_queue_status"], mod.UNRESOLVABLE_VK_SOURCE_STATUS)
+        self.assertEqual(len(calls), 2)
+
+    def test_vk_wall_retries_resolved_signed_owner_after_domain_error(self) -> None:
+        mod = load_module()
+        wall_domains = []
+
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def read(self):
+                return json.dumps(self.payload).encode("utf-8")
+
+        def fake_urlopen(url, timeout=0):
+            del timeout
+            parsed = urllib.parse.urlsplit(str(url))
+            params = urllib.parse.parse_qs(parsed.query)
+            if "utils.resolveScreenName" in parsed.path:
+                return Response({"response": {"object_id": 321, "type": "group"}})
+            wall_domains.append(params.get("domain", [""])[0])
+            if len(wall_domains) == 1:
+                return Response({"error": {"error_code": 100, "error_msg": "domain not domain"}})
+            return Response({"response": {"count": 1, "items": [{"id": 7, "owner_id": -321, "from_id": -321, "date": 1783890000, "text": "Калининград — поездка"}], "groups": [{"id": 321, "name": "Travel"}]}})
+
+        seed = mod.Seed("vk-retry", "vk", "Travel", "@renamedvk", "https://vk.com/renamedvk", "unit", "external", 1, "unit", "", "", "", "", "", True, "", "")
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {
+            "VK_SERVICE_KEY": "service-token",
+            "REGION_TALK_VK_READ_SERVICE_FIRST": "1",
+            "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": "0",
+            "REGION_TALK_VK_CONFIRMED_BLOGGER_SEARCH_ENABLED": "0",
+        }, clear=False), mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            source, posts = mod.fetch_vk_wall_for_seed(seed, Path(td), 10, source_row={"external_blogger_evidence_status": "confirmed_external"})
+
+        self.assertEqual(wall_domains, ["renamedvk", "-321"])
+        self.assertEqual(source["fetch_status"], "ok")
+        self.assertEqual(source["vk_wall_resolve_status"], "group")
+        self.assertEqual(posts[0]["post_url"], "https://vk.com/wall-321_7")
 
     def test_source_frontier_dedupes_by_canonical_key_across_discovery_types(self) -> None:
         mod = load_module()

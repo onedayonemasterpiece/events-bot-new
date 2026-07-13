@@ -190,13 +190,29 @@ four slots is reserved for that near-publication source and the evidence cohort
 uses the other three. Keyword and similar discovery are separate stages and
 remain enabled, so this allocation accelerates the high-probability cohort
 without stopping discovery or bypassing the publication tail.
-Evidence slots are platform-balanced: Telegram and VK alternate while both are
-available. Telegram steadily warms/uses the single controlled entity-resolve
-lane while VK can be processed without Telegram. Confirmed VK rows use their evidence locations in
+Evidence slots are platform-balanced **inside the same first-scan/rescan
+tier**. Every never-scanned confirmed source therefore outranks every
+confirmed-source delta rescan. When only one uncached Telegram source is
+safely resolvable, the remaining slots are filled by never-scanned VK sources
+instead of repeating cached Telegram channels merely to preserve TG/VK/TG/VK
+symmetry. The in-memory selection pool is widened only enough to expose the
+single controlled uncached Telegram lane even when cached/VK evidence rows
+exceed the generic pool size; network resolve quotas, FloodWait policy and
+human-like pauses are unchanged. Confirmed VK rows use their evidence locations in
 a bounded `wall.search` pass (default up to eight evidence-specific queries,
 stop on the first fresh exact-text hit) in addition to the recent wall slice;
 this avoids treating ten recent non-trip posts as a meaningful check of a
 blogger known to have visited the region.
+
+VK personal profiles remain valid evidence sources. VK wall identifiers retain
+their full URL token: `club<ID>` and `public<ID>` must not be reduced to a
+positive numeric user id. A normal source uses one `wall.get`; only an API-100
+domain failure triggers `utils.resolveScreenName` and a single retry with the
+signed owner id (positive user, negative community). If the official resolver
+successfully returns no object, the stale/deleted/renamed evidence URL is kept
+for audit but marked `rejected_unresolvable_vk_source` so it cannot consume a
+confirmed-blogger slot on every run. Resolver/API failures themselves remain
+retryable rather than falsely rejecting a live profile.
 
 In `adaptive_cursor_v1`, known locations from the evidence row are moved to the
 front of that source's otherwise unchanged place bank. Thus a blogger known to
@@ -259,7 +275,9 @@ as the unscanned backlog. The same downstream stages are also reported by
 **unique source count** (`sources_with_processed_posts`, dual accept, media,
 publication, Gemini and delivery), because several successful posts from one
 blogger must not look like broad cohort coverage, while a pending source status
-must not hide a post that already passed the text gate.
+must not hide a post that already passed the text gate. Cross-platform aliases
+are platform-scoped: an identical Telegram username and VK screen name do not
+make one Telegram delivery count as two productive sources.
 
 When the canonical queue is reconstructed from YDB, an older
 `source_status_item`/legacy live projection may add only monotonic scan

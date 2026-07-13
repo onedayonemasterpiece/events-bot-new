@@ -629,6 +629,7 @@ def _telegram_handle_from_url(value: str) -> str:
 
 def _source_alias_keys(row: dict[str, Any]) -> set[str]:
     aliases: set[str] = set()
+    platform = str(row.get("platform") or row.get("platform_guess") or "").strip().lower()
     for field in [
         "canonical_source_key", "source_id", "source_url", "canonical_url",
         "url", "keyword_hit_source_url", "recommended_canonical_url",
@@ -645,7 +646,10 @@ def _source_alias_keys(row: dict[str, Any]) -> set[str]:
             aliases.add(f"https://t.me/{handle}")
     for field in ["handle", "username", "username_or_handle", "recommended_username"]:
         handle = str(row.get(field) or "").strip().lstrip("@").lower()
-        if handle:
+        # A VK screen name is not a Telegram username.  The previous generic
+        # alias expansion mapped vk.com/figarotravel to telegram:figarotravel,
+        # so one delivered Telegram post was reported as two unique sources.
+        if handle and platform not in {"vk", "vkvideo"}:
             aliases.add(f"telegram:{handle}")
             aliases.add(f"https://t.me/{handle}")
     post_url_handle = _telegram_handle_from_url(str(row.get("post_url") or ""))
@@ -761,6 +765,14 @@ def _confirmed_external_blogger_funnel_metrics(
         "confirmed_external_blogger_vk_search_hit_total": sum(1 for row in sources if _safe_int(row.get("vk_wall_search_hits")) > 0),
         "confirmed_external_blogger_rejected_local_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
         "confirmed_external_blogger_rejected_spam_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
+        "confirmed_external_blogger_rejected_unresolvable_vk_total": sum(
+            1 for row in sources
+            if str(row.get("source_queue_status") or row.get("fetch_status") or "") == "rejected_unresolvable_vk_source"
+        ),
+        "confirmed_external_blogger_fetch_error_total": sum(
+            1 for row in sources
+            if str(row.get("fetch_status") or row.get("last_scan_status") or "").startswith("error")
+        ),
         "confirmed_external_blogger_posts_processed_total": len(unique_posts),
         "confirmed_external_blogger_sources_with_processed_posts_total": len(processed_source_keys),
         "confirmed_external_blogger_vector_accepted_posts_total": len({

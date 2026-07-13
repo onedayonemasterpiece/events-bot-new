@@ -117,6 +117,41 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "telegram:travel",
         )
 
+    def test_confirmed_blogger_source_metrics_do_not_treat_vk_handle_as_telegram_alias(self) -> None:
+        mod = load_module()
+        sources = [
+            {
+                "canonical_source_key": "telegram:figarotravel",
+                "platform": "telegram",
+                "handle": "@figarotravel",
+                "source_url": "https://t.me/figarotravel",
+                "external_blogger_evidence_status": "confirmed_external",
+            },
+            {
+                "canonical_source_key": "vk:figarotravel",
+                "platform": "vk",
+                "handle": "@figarotravel",
+                "source_url": "https://vk.com/figarotravel",
+                "external_blogger_evidence_status": "confirmed_external",
+            },
+        ]
+        post = {
+            "platform_post_key": "tg:figarotravel:7346",
+            "post_url": "https://t.me/figarotravel/7346",
+            "source_url": "https://t.me/figarotravel",
+            "platform": "telegram",
+            "vector_gate_status": "vector_accept_candidate",
+        }
+        metrics = mod._confirmed_external_blogger_funnel_metrics(
+            sources,
+            [post],
+            [{"post_url": post["post_url"]}],
+            [{"post_url": post["post_url"], "publication_candidate_status": "sent_to_chat"}],
+            [{"post_url": post["post_url"], "delivery_status": "completed"}],
+        )
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_processed_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_sources_with_delivery_completed_posts_total"], 1)
+
     def test_latest_llm_budget_is_not_summed_across_daily_rows(self) -> None:
         mod = load_module()
         latest = mod._latest_llm_budget_row([
