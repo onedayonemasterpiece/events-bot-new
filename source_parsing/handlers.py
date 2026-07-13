@@ -1880,6 +1880,67 @@ async def _process_parsing_files(
             )
 
 
+def _positive_env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default)) or str(default)))
+    except (TypeError, ValueError):
+        return max(1, int(default))
+
+
+def prune_source_parsing_debug_logs(
+    log_dir: Path,
+    *,
+    retention_days: int,
+    max_total_mb: int,
+    exclude: Path | None = None,
+) -> dict[str, int]:
+    """Bound per-run parse logs without touching the source guard or unknown files."""
+
+    retention_seconds = max(1, int(retention_days)) * 86400
+    max_total_bytes = max(1, int(max_total_mb)) * 1024 * 1024
+    cutoff = time.time() - retention_seconds
+    excluded = exclude.resolve() if exclude is not None else None
+    candidates: list[tuple[float, int, Path]] = []
+    deleted_files = 0
+    deleted_bytes = 0
+    try:
+        entries = list(log_dir.glob("source_parsing_*.log"))
+    except Exception:
+        entries = []
+    for path in entries:
+        try:
+            resolved = path.resolve()
+            if excluded is not None and resolved == excluded:
+                continue
+            if not path.is_file() or resolved.parent != log_dir.resolve():
+                continue
+            stat = path.stat()
+            if stat.st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                deleted_files += 1
+                deleted_bytes += int(stat.st_size)
+                continue
+            candidates.append((float(stat.st_mtime), int(stat.st_size), path))
+        except Exception:
+            continue
+    total_bytes = sum(size for _mtime, size, _path in candidates)
+    for _mtime, size, path in sorted(candidates, key=lambda item: item[0]):
+        if total_bytes <= max_total_bytes:
+            break
+        try:
+            path.unlink(missing_ok=True)
+            total_bytes -= size
+            deleted_files += 1
+            deleted_bytes += size
+        except Exception:
+            continue
+    return {
+        "deleted_files": deleted_files,
+        "deleted_bytes": deleted_bytes,
+        "remaining_bytes": max(0, total_bytes),
+    }
+
+
 async def run_source_parsing(
     db: Database,
     bot: Bot | None = None,
@@ -1940,6 +2001,20 @@ async def run_source_parsing(
         log_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         logger.warning("source_parsing: failed to init debug dir %s: %s", log_dir, e)
+    retention_days = _positive_env_int("SOURCE_PARSING_DEBUG_RETENTION_DAYS", 7)
+    max_total_mb = _positive_env_int("SOURCE_PARSING_DEBUG_MAX_TOTAL_MB", 16)
+    prune_stats = prune_source_parsing_debug_logs(
+        log_dir,
+        retention_days=retention_days,
+        max_total_mb=max_total_mb,
+    )
+    if prune_stats["deleted_files"]:
+        logger.info(
+            "source_parsing.debug_prune deleted_files=%d deleted_bytes=%d remaining_bytes=%d",
+            prune_stats["deleted_files"],
+            prune_stats["deleted_bytes"],
+            prune_stats["remaining_bytes"],
+        )
     log_path = log_dir / f"source_parsing_{parse_run_id}.log"
     try:
         log_handler = logging.FileHandler(log_path, encoding="utf-8")
@@ -2110,6 +2185,12 @@ async def run_source_parsing(
         if log_handler:
             logging.getLogger().removeHandler(log_handler)
             log_handler.close()
+        prune_source_parsing_debug_logs(
+            log_dir,
+            retention_days=retention_days,
+            max_total_mb=max_total_mb,
+            exclude=log_path,
+        )
         source_details = {
             source: {
                 "processed": int(stats.total_received),

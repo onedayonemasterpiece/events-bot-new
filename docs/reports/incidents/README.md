@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-13-runtime-logging-recurring-event-quality.md`
+  - Scope: bounded permanent runtime logs, Fly volume hygiene, reversible production Telegram E2E authorization, complete future-event quality acceptance and vector/LLM evidence.
+  - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator.
 - `INC-2026-07-12-autoretro-one-day-exhibition-location-period.md`
   - Scope: source-grounded one-day outdoor exhibition date/venue semantics, Smart Update period/location merge safety, vector-first recall and all public projections.
   - Must not regress: a one-day street vehicle exhibition must not inherit a long-running exhibition period or unrelated indoor/default venue; vector similarity is recall only and cannot authorize semantic field transfer.

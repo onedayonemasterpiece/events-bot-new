@@ -56,6 +56,43 @@
 - `title_normalized` в extraction prompt считается stable route identity core: без имён гидов, source labels, дат, времени, маркетинговых суффиксов и availability-слов, чтобы один source post не создавал дубли одной и той же экскурсии под разными идентичностями.
 - regression evidence для guide digest completeness должен включать не только run-level `Новых выходов`, а occurrence-level проверку: какие raw outputs были digest-ready, какие были исключены как sold-out/no-date/non-target/duplicate, и какие still-future missed cards были компенсирующе опубликованы.
 
+## Retention persistent guide media
+
+`GUIDE_MEDIA_STORE_ROOT` находится на том же ограниченном volume, что и core SQLite, поэтому каждый server import выполняет bounded retention **до** materialization и ещё раз после commit. Ошибка retention не теряет уже скачанный Kaggle result (import остаётся fail-open), но попадает в runtime log `guide_media_retention ...` и в `import_summary.media_retention`.
+
+Safety contract:
+
+- никогда не удаляются файлы, на которые ссылаются occurrence с `date >= today` в `Europe/Kaliningrad`, source posts за recent grace window, все `preview`/`partial` digest issues и последний `published` issue каждого family;
+- общий prune рассматривает только обычные файлы внутри store, которые не входят в protected set и старше retention floor; symlink, special/non-file entry и lexical path за пределами store не удаляются и не follow-ятся;
+- unprotected candidates удаляются от старых к новым, но один pass ограничен числом и суммарным размером удалений. `max total` и `min free` — явные post-run targets: если их нельзя достигнуть без protected/recent файлов или из-за per-run cap, результат возвращает `policy_satisfied=false` / `bounded=true`, а не расширяет область удаления;
+- source assets из исторических постов после успешного unlink удаляются из `guide_monitor_post.media_assets_json` вместе только с position-aligned `media_refs_json`; тот же repair pass убирает paths, отсутствие которых доказано через filesystem. Dry-run DB не меняет. Ошибка DB transaction не маскируется, а следующий pass повторяет healing по уже отсутствующим paths;
+- generated `_digest_carousel/<issue_id>` является восстанавливаемым cache: `preview`/`partial` slides получают отдельный floor 24 часа, `published` — 7 суток. Source media из current issue при этом остаётся protected;
+- пустые каталоги удаляются только после apply-pass.
+
+Defaults (все thresholds меняются env без изменения кода):
+
+| Env | Default | Назначение |
+|---|---:|---|
+| `GUIDE_MEDIA_RETENTION_ENABLED` | `1` | автоматический pre/post import prune |
+| `GUIDE_MEDIA_RETENTION_DAYS` | `14` | минимальный возраст unprotected source/unknown regular file |
+| `GUIDE_MEDIA_RECENT_POST_GRACE_DAYS` | `14` | защита media недавно увиденных source posts независимо от occurrence link |
+| `GUIDE_MEDIA_RETENTION_MAX_TOTAL_BYTES` | `402653184` | target не более 384 MiB guide store после pass |
+| `GUIDE_MEDIA_RETENTION_MIN_FREE_BYTES` | `268435456` | target не менее 256 MiB свободного места на volume |
+| `GUIDE_MEDIA_RETENTION_MAX_DELETE_FILES` | `500` | верхняя граница unlink за pass |
+| `GUIDE_MEDIA_RETENTION_MAX_DELETE_BYTES` | `536870912` | верхняя граница reclaim за pass |
+| `GUIDE_MEDIA_CAROUSEL_PREVIEW_RETENTION_HOURS` | `24` | floor preview/partial carousel cache |
+| `GUIDE_MEDIA_CAROUSEL_PUBLISHED_RETENTION_HOURS` | `168` | floor published carousel cache |
+| `GUIDE_MEDIA_RETENTION_TZ` | `Europe/Kaliningrad` | граница current/future occurrence |
+
+Operator path сначала всегда dry-run; apply требует явного флага и печатает полный JSON inventory/repair report:
+
+```bash
+python scripts/prune_guide_media_store.py --db /data/db.sqlite --root /data/guide_media
+python scripts/prune_guide_media_store.py --db /data/db.sqlite --root /data/guide_media --apply --reason incident_cleanup
+```
+
+Production override удерживает store около `256 MiB` и требует после pass не менее `350 MiB` свободного места (`GUIDE_MEDIA_RETENTION_MAX_TOTAL_BYTES=268435456`, `GUIDE_MEDIA_RETENTION_MIN_FREE_BYTES=367001600`). Если protected/recent media не позволяют достигнуть этих targets, retention не расширяет deletion set, а сигнализирует `policy_satisfied=false`.
+
 ## Что уже мигрировано
 
 - отдельный guide-track в основной SQLite;

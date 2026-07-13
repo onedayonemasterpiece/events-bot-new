@@ -79,6 +79,8 @@
 
 Если значения не заданы, используется 04:30 по Europe/Kaliningrad. Дневной запуск пропускает Kaggle, если страницы источников не изменились с последнего успешного прогона.
 
+Per-run debug logs в `/data/parse_debug/source_parsing_*.log` ограничены независимо от runtime mirror: `SOURCE_PARSING_DEBUG_RETENTION_DAYS=7` и `SOURCE_PARSING_DEBUG_MAX_TOTAL_MB=16`. Очистка удаляет только этот basename, не затрагивает `source_parsing_guard.json` и неизвестные operator files.
+
 ## Документация по источникам
 
 - Театры (/parse): `docs/features/source-parsing/sources/theatres/README.md`

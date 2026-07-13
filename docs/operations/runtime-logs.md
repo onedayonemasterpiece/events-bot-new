@@ -1,62 +1,81 @@
 # Runtime Logs
 
-Каноническая политика краткоживущих runtime-логов на prod-машине.
+Каноническая политика краткоживущих runtime-логов production bot.
 
 ## Purpose
 
-- сохранить эксплуатационные логи на volume машины, чтобы можно было разбирать реальные scheduler/job инциденты постфактум;
-- не полагаться только на краткий буфер Fly logs;
-- не держать логи дольше суток, чтобы не раздувать `/data`.
+- сохранять scheduler/import/Smart Update evidence на Fly volume после того, как короткий буфер `fly logs` уже исчез;
+- обеспечивать ежедневный incident monitoring и пошаговую проверку live E2E;
+- не допускать повторения `INC-2026-04-16-prod-disk-pressure-runtime-logs`: логирование не может бесконтрольно занять volume с SQLite.
 
-## Current Production Policy
+## Production Policy
 
-- production currently keeps this mirror **disabled** (`ENABLE_RUNTIME_FILE_LOGGING=0`) after the April 16, 2026 disk-pressure incident on Fly volume `/data`;
-- the file-logging path remains available as an incident/debug tool, but should not stay permanently enabled on the current volume size without explicit space budgeting;
-- when temporarily enabled, it writes the existing application root logger to a file mirror;
-- default path: `RUNTIME_LOG_DIR=/data/runtime_logs`;
-- default active file name: `RUNTIME_LOG_BASENAME=events-bot.log`;
-- rotation: hourly;
-- retention: about 24 hours through `RUNTIME_LOG_RETENTION_HOURS=24`.
+Production file mirror **включён постоянно** и пишет root logger в `/data/runtime_logs/events-bot.log`.
+Отключение mirror не является штатной защитой диска: защита реализована ограничением размера и свободного места.
 
-Практически это значит:
+Текущий budget contract:
 
-- активный текущий час пишется в `events-bot.log`;
-- прошлые часы уходят в hourly rotated файлы рядом;
-- старые rotated файлы автоматически удаляются примерно после суток хранения.
+- `ENABLE_RUNTIME_FILE_LOGGING=1`;
+- active file: `/data/runtime_logs/events-bot.log`;
+- size rotation: `RUNTIME_LOG_MAX_FILE_MB=8`;
+- hard budget active + rotated: `RUNTIME_LOG_MAX_TOTAL_MB=64`;
+- rotated retention ceiling: `RUNTIME_LOG_RETENTION_HOURS=48`;
+- volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=256`;
+- level: `RUNTIME_LOG_LEVEL=INFO`.
+- `/healthz` disk telemetry: warning below `350 MiB`, critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
+
+При обычном потоке это даёт до двух суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Fly logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
 
 ## Scope
 
-В файл попадает уже существующий runtime stream root logger, поэтому туда идут:
+В файл попадает существующий root-logger stream:
 
-- scheduler/job события (`tg_monitoring`, `guide_monitoring`, `vk_auto_import`, `video_tomorrow` и т.д.);
-- traceback'и и runtime warnings;
-- обычные `INFO/WARNING/ERROR` сообщения приложения.
+- scheduler/job события (`vk_auto_import`, `tg_monitoring`, `guide_monitoring`, `event_vector_sync`, video jobs);
+- Smart Update decision/correlation lines;
+- traceback и runtime warnings;
+- E2E command/run evidence.
 
-Это не отдельная “спец-диагностика по одной фиче”, а единый эксплуатационный журнал.
+Секреты, LLM thoughts и полные private payloads специально в лог не добавляются.
 
 ## Environment
 
-- `ENABLE_RUNTIME_FILE_LOGGING` — включает file logging mirror.
-- `RUNTIME_LOG_DIR` — директория хранения логов.
-- `RUNTIME_LOG_BASENAME` — базовое имя текущего файла.
-- `RUNTIME_LOG_RETENTION_HOURS` — сколько часов хранить rotated logs.
-- `RUNTIME_LOG_LEVEL` — optional override для file handler; если не задан, используется текущий уровень root logger.
+- `ENABLE_RUNTIME_FILE_LOGGING` — включает mirror; production source of truth — `fly.toml`.
+- `RUNTIME_LOG_DIR`, `RUNTIME_LOG_BASENAME` — volume directory и active filename.
+- `RUNTIME_LOG_RETENTION_HOURS` — возрастной потолок rotated files.
+- `RUNTIME_LOG_MAX_FILE_MB` — размер одного active/rotated файла.
+- `RUNTIME_LOG_MAX_TOTAL_MB` — максимальный объём файлов этого basename.
+- `RUNTIME_LOG_MIN_FREE_MB` — floor свободного места, ниже которого mirror ставит file writes на паузу.
+- `RUNTIME_LOG_LEVEL` — уровень file handler независимо от console verbosity.
 
-## Agent Investigation Workflow
+Нельзя повышать budget/retention или снижать free-space floor без фактического `df`/`du` и regression-check инцидента `INC-2026-04-16`.
 
-Для production/scheduled/Kaggle-разборов агент обязан сначала проверить file mirror, а не начинать с предположения, что логов нет.
+## Investigation Workflow
 
-1. Проверить фактическую конфигурацию на машине: `ENABLE_RUNTIME_FILE_LOGGING`, `RUNTIME_LOG_DIR`, `RUNTIME_LOG_BASENAME`, `RUNTIME_LOG_RETENTION_HOURS`.
-2. Проверить наличие директории и файлов в `RUNTIME_LOG_DIR` (по умолчанию `/data/runtime_logs`), включая активный `events-bot.log` и hourly rotated файлы.
-3. Искать по нескольким ключам: `run_id`, `ops_run` id, job kind (`tg_monitoring`, `guide_monitoring`, `video_tomorrow`), Kaggle kernel ref, source username, machine-local time window and error class.
-4. Если file mirror выключен, директория отсутствует или retention уже удалил нужное окно, явно зафиксировать это в отчёте и только затем переходить к fallback-источникам.
-5. Fallback-источники для runtime evidence: `fly logs`, Kaggle output/log artifacts, `ops_run.details_json` / status rows в production DB, локальные артефакты в `artifacts/codex/`.
-6. Для долгих или спорных расследований сохранить минимальные релевантные выдержки логов/JSON в `artifacts/codex/<task-or-run-id>/`; не коммитить эти артефакты.
+Перед заявлением, что production-логи отсутствуют:
 
-Нельзя писать “логи потеряны” или “логов нет”, пока не проверены: file mirror на volume, rotated files, Fly logs, Kaggle output/logs, production `ops_run` и локальные `artifacts/codex/`.
+1. Проверить фактические env перечисленных выше переменных на активной машине.
+2. Проверить `df -h /data`, `du -x` и файлы `events-bot.log*` с sizes/mtimes.
+3. Искать по нескольким ключам: `run_id`, `ops_run_id`, `batch_id`, inbox/source/event id, job kind, UTC window, error class.
+4. Сверить log terminal line с `ops_run.details_json`/`metrics_json`, DB rows и Telegram UI/VK response.
+5. Сохранить только минимальные non-secret excerpts в `artifacts/codex/<incident>/`.
+6. Если mirror реально был paused/disabled или окно уже вытеснено budget/retention, явно зафиксировать это и перейти к `fly logs`, DB/`ops_run`, Kaggle outputs и публичным API.
 
-## Operational Notes
+## Disk Hygiene Runbook
 
-- на Fly production лог-файлы должны жить только на volume (`/data/...`), а не в ephemeral filesystem контейнера;
-- этот механизм предназначен для короткой incident-retention, а не для долгого архивирования;
-- если нужен длительный аудит, данные нужно отдельно выгружать/переносить, а не увеличивать retention на машине без оценки места на диске.
+До удаления:
+
+- `PRAGMA quick_check` для `/data/db.sqlite`;
+- точный `du` каждого top-level path;
+- mtime и назначение backup/tmp/result directories;
+- список active processes/open files для сомнительных путей.
+
+Можно удалять только доказанно terminal/regenerable artifacts: старые incident sqlite copies, stale temp/render directories и recovery bundles сверх их документированного retention. Нельзя удалять `/data/db.sqlite`, актуальные WAL/SHM вручную, Telegram/Telegraph token state или неизвестный directory только по имени.
+
+После очистки/деплоя обязательны:
+
+- `df -h /data` и root overlay;
+- `PRAGMA quick_check=ok` и write probe через обычный application path;
+- `/healthz ready=true`;
+- active runtime log exists, grows, and contains the startup budget line;
+- total `events-bot.log* <= RUNTIME_LOG_MAX_TOTAL_MB`;
+- no `Errno 28` / `database or disk is full` in fresh logs.

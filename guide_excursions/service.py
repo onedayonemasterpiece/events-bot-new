@@ -53,6 +53,7 @@ from .kaggle_service import (
     remote_telegram_auth_scope,
     run_guide_monitor_kaggle,
 )
+from .media_retention import prune_guide_media_store
 from .parser import (
     GuideParsedOccurrence,
     build_source_fingerprint,
@@ -3249,7 +3250,7 @@ async def _import_source_payload(
     return metrics, errors, source_report
 
 
-async def _import_results_file(
+async def _import_results_file_inner(
     db: Database,
     *,
     results_path: str,
@@ -3329,6 +3330,55 @@ async def _import_results_file(
         "sources": source_reports,
         "occurrence_changes": occurrence_changes,
     }
+    return metrics, errors, summary
+
+
+async def _run_guide_media_retention_guard(
+    db: Database,
+    *,
+    results_path: str,
+    reason: str,
+) -> dict[str, Any]:
+    try:
+        return (
+            await prune_guide_media_store(
+                db,
+                root=GUIDE_MEDIA_STORE_ROOT,
+                reason=reason,
+            )
+        ).as_dict()
+    except Exception as exc:
+        # Retention is operational hygiene, not a reason to discard an already
+        # downloaded scan result. Keep import fail-open but make the failure
+        # visible in both logs and the run summary.
+        logger.exception("guide_media_retention guard_failed reason=%s path=%s", reason, results_path)
+        return {"mode": "error", "error": f"{type(exc).__name__}: {exc}"}
+
+
+async def _import_results_file(
+    db: Database,
+    *,
+    results_path: str,
+) -> tuple[dict[str, int], list[str], dict[str, Any]]:
+    retention_runs: dict[str, dict[str, Any]] = {
+        "before_import": await _run_guide_media_retention_guard(
+            db,
+            results_path=results_path,
+            reason="before_results_import",
+        )
+    }
+    try:
+        metrics, errors, summary = await _import_results_file_inner(
+            db,
+            results_path=results_path,
+        )
+    finally:
+        retention_runs["after_import"] = await _run_guide_media_retention_guard(
+            db,
+            results_path=results_path,
+            reason="after_results_import",
+        )
+    summary["media_retention"] = retention_runs
     return metrics, errors, summary
 
 
