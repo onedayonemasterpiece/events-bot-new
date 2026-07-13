@@ -190,6 +190,11 @@ The audit repair queue was also applied:
 - [x] Project an exact city-only fallback to static/vector data as city with no
   synthetic `venue_name`, so `search_v3`/`related_v1` and future static pages do
   not encode `Янтарный · Янтарный`.
+- [x] Tighten the single-call Gemini Lite public-writer prompt so attendee
+  promises, program details and exhibit qualities require explicit future-event
+  support; a thin teaser must produce conservative copy rather than importing
+  recap details or inventing activities. No verifier call or deterministic
+  narrative fallback was added.
 
 ## Follow-up Actions
 

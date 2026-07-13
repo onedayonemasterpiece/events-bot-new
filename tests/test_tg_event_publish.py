@@ -492,6 +492,9 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
             assert kwargs["model"] == "gemini-3.1-flash-lite"
             assert "Вопрос не обязателен" in prompt
             assert "какую пользу это даёт" in prompt
+            assert "Любое обещание посетителю" in prompt
+            assert "Не переноси детали прошедшего события" in prompt
+            assert "без домысливания программы и активностей" in prompt
             assert self.fallback_models == []
             assert self.max_retries == 1
             return (

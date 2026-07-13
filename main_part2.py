@@ -5222,7 +5222,7 @@ TG_EVENT_REWRITE_MODEL = "gemini-3.1-flash-lite"
 TG_EVENT_4O_FALLBACK_MODEL = "gpt-4o"
 TG_EVENT_4O_FALLBACK_DAILY_LIMIT = 100
 TG_EVENT_4O_FALLBACK_BUDGET_KEY = "tg_event_public_writer_4o"
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v7-source-grounded-attendee-actions"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
 _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
@@ -6095,7 +6095,12 @@ async def build_tg_event_hook_text(
         "а не как про концерт, фестиваль или развлекательную программу.\n"
         "Собственные имена и названия копируй буквально из названия или текста события; "
         "если не уверен в форме слова, лучше опусти имя, чем меняй написание.\n"
-        "Не выдумывай факты; используй только текст ниже.\n\n"
+        "Не выдумывай факты; используй только текст ниже. Любое обещание посетителю "
+        "(«вы увидите», «сможете», «пообщаетесь»), деталь программы, состав участников, "
+        "качество или редкость экспонатов должны быть прямо подтверждены текстом именно "
+        "будущего события. Не переноси детали прошедшего события в будущий анонс. "
+        "Если подтверждены только формат и общая тема, дай консервативные 1-2 предложения "
+        "о них без домысливания программы и активностей.\n\n"
         f"Название: {getattr(event, 'title', '')}\n"
         f"Текст события:\n{source[:5000]}"
     )
