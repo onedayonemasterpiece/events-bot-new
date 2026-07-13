@@ -81,13 +81,14 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 ## Immediate Mitigation
 
 - Safe first-pass cleanup removed 71 proven stale runtime/source-debug/carousel artifacts (`35,902,184` bytes); SQLite `quick_check` and `/healthz` remained healthy. The dominant persistent pressure was `/data/guide_media` without DB-aware retention.
+- The DB-aware production dry-run then selected 192 old unprotected guide files (`152,264,570` bytes), protected 248 referenced paths and predicted the configured budget would be met. Apply deleted exactly that manifest and healed 506 `guide_monitor_post` rows / 1,295 aligned stale asset references. The post-pass was idempotent (zero candidates/stale paths), all current/future persisted assets existed, `quick_check=ok`, `/healthz ready=true`, and `/data` free space rose to `374,222,848` bytes.
 - Runtime logging was redesigned with size rotation, a hard total budget, age pruning and a volume free-space floor. `/healthz` now exposes the same disk floor.
 - Guide media now has DB-aware bounded retention: current/future occurrences, recent source posts and current digest issues are protected; only old unprotected regular files are candidates and stale JSON links are healed transactionally.
 - The E2E production row remains unchanged until logging is available and its prior state is backed up.
 
 ## Corrective Actions
 
-- [ ] complete the managed guide-media production dry-run/apply and record final before/after evidence;
+- [x] complete the managed guide-media production dry-run/apply and record final before/after evidence;
 - [ ] deploy bounded runtime logging and verify ongoing writes/rotation guards;
 - [ ] execute reversible E2E role grant, bounded live import and role restoration;
 - [ ] complete the new all-future source/public audit and repair confirmed defects;
