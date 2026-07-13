@@ -96,7 +96,7 @@ lanes:
     expected_output: Done/Partial/Missing closure matrix
     verification_scope: inspection_only
     effort: high
-    status: in_progress
+    status: completed
 ```
 
 ## Requirement matrix

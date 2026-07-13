@@ -1,7 +1,7 @@
 # Desktop event media polish v6 — integration results
 
 ## Status
-ready-for-closure-review
+complete
 
 ## Branch
 `feature/event-page-desktop-media-polish-v6-20260713`
@@ -37,3 +37,7 @@ ready-for-closure-review
 - Changed behavior is confined to `site/src/components/lab/DesktopEventCleanPage.astro` and `/lab/event-desktop/**`.
 - `EventHero.astro`, `EventLayout.astro` and production mobile components/styles are unchanged.
 - V5 remains publicly available as rollback/reference evidence.
+
+## Final closure audit
+
+The read-only checklist reviewer accepted pushed implementation commit `8a488027` with **7 Done / 0 Partial / 0 Missing**. It confirmed the final v4 build/check/public evidence, clean production-mobile isolation, the masked sticky CTA contract, the delayed-image placeholder gate, and a clean upstream-tracking branch. Merging this stacked feature branch into `origin/main` remains a separate integration exercise.
