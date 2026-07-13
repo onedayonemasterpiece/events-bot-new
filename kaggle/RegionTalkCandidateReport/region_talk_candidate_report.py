@@ -7666,6 +7666,7 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     postcardness = _rt_float(row.get("postcardness_score"))
     aesthetic = _rt_float(row.get("aesthetic_score"))
     technical = _rt_float(row.get("technical_quality_score"))
+    score_epsilon = _rt_float(os.getenv("REGION_TALK_PUBLICATION_SCORE_QUANTIZATION_EPSILON"), 0.001)
     primary_media_ok = overall >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE"), 0.66)
     # A weighted overall score near the hard boundary must not discard an
     # otherwise exceptional postcard before Gemini sees it. This calibrated
@@ -7674,7 +7675,7 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     high_postcard_override = (
         overall >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_OVERALL_MEDIA_SCORE"), 0.63)
         and postcardness >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_POSTCARDNESS_SCORE"), 0.85)
-        and aesthetic >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_AESTHETIC_SCORE"), 0.52)
+        and aesthetic + score_epsilon >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_AESTHETIC_SCORE"), 0.52)
         and technical >= _rt_float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_TECHNICAL_SCORE"), 0.68)
     )
     if not (primary_media_ok or high_postcard_override):
@@ -7686,7 +7687,7 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = (
     os.getenv("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION")
-    or "region_talk_publication_eligibility_v3"
+    or "region_talk_publication_eligibility_v4"
 )
 PUBLICATION_SOURCE_CONFIRMED_EXTERNAL = "confirmed_nonlocal_or_mixed_external"
 PUBLICATION_SOURCE_CONFIRMED_REJECTED = "confirmed_local_or_spam"

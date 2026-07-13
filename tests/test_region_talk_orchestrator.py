@@ -24,6 +24,48 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_confirmed_blogger_funnel_metrics_deduplicate_posts_and_separate_ledger(self) -> None:
+        mod = load_module()
+        sources = [
+            {
+                "canonical_source_key": "telegram:blogger",
+                "platform": "telegram",
+                "source_url": "https://t.me/blogger",
+                "external_blogger_evidence_status": "confirmed_external",
+                "source_queue_status": "processed_found_ko_candidate",
+                "posts_scanned": 4,
+                "ko_posts_found": 1,
+            },
+            {
+                "canonical_source_key": "vk:writer",
+                "platform": "vk",
+                "source_url": "https://vk.com/writer",
+                "external_blogger_evidence_status": "confirmed_external",
+                "source_queue_status": "pending_scan",
+            },
+        ]
+        duplicate_post = {
+            "platform_post_key": "tg:blogger:1",
+            "post_url": "https://t.me/blogger/1",
+            "source_url": "https://t.me/blogger",
+            "vector_gate_status": "vector_accept_candidate",
+        }
+        metrics = mod._confirmed_external_blogger_funnel_metrics(
+            sources,
+            [duplicate_post, dict(duplicate_post)],
+            [{"post_url": "https://t.me/blogger/1"}, {"post_url": "https://t.me/blogger/1"}],
+            [{"post_url": "https://t.me/blogger/1", "publication_candidate_status": "tombstoned_reject"}],
+            [],
+        )
+        self.assertEqual(metrics["confirmed_external_blogger_sources_total"], 2)
+        self.assertEqual(metrics["confirmed_external_blogger_scanned_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_unscanned_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_posts_processed_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_vector_accepted_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_image_queue_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_publication_posts_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_publication_confirmed_posts_total"], 0)
+
     def test_heuristic_ko_funnel_uses_exclusive_product_outcomes(self) -> None:
         mod = load_module()
         run_id = "region-talk-orchestrator-candidate-report-unit"

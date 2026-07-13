@@ -247,7 +247,9 @@ because one KO post contains an integration.
 The operator scorecard reports this cohort as a disjoint product funnel:
 `total / scanned / unscanned / sources with KO`, followed by its processed
 posts, dual-vector accepts, media handoffs, publication-ledger rows and chat
-deliveries. The mutable technical count of rows whose queue status happens to
+deliveries. Publication-ledger rows (including terminal tombstones) and Gemini
+confirmed rows are separate counters, so reaching the ledger cannot be read as
+acceptance. The mutable technical count of rows whose queue status happens to
 be `pending_scan` is retained separately as
 `confirmed_external_blogger_queue_pending_status_total`; it is not presented
 as the unscanned backlog.

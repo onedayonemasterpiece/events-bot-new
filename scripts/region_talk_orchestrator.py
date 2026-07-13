@@ -52,7 +52,7 @@ ACTION_KERNEL_SLUGS = {
 
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
-CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v3"
+CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
 POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
 
@@ -322,11 +322,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         (
             "Посты подтверждённых внешних блогеров — обработано / текстовый dual-вектор пропустил / "
-            "передано на медиа / дошло до публикационного реестра / отправлено в чат: "
+            "передано на медиа / дошло до публикационного реестра / подтверждено Gemini / отправлено в чат: "
             f"{value('confirmed_external_blogger_posts_processed_total')}/"
             f"{value('confirmed_external_blogger_vector_accepted_posts_total')}/"
             f"{value('confirmed_external_blogger_image_queue_posts_total')}/"
             f"{value('confirmed_external_blogger_publication_posts_total')}/"
+            f"{value('confirmed_external_blogger_publication_confirmed_posts_total')}/"
             f"{value('confirmed_external_blogger_delivery_completed_posts_total')}"
         ),
         (
@@ -642,6 +643,78 @@ def _source_alias_keys(row: dict[str, Any]) -> set[str]:
         aliases.add(f"telegram:{post_url_handle}")
         aliases.add(f"https://t.me/{post_url_handle}")
     return {a.lower().rstrip("/") for a in aliases if a}
+
+
+def _confirmed_external_blogger_funnel_metrics(
+    source_rows: list[dict[str, Any]],
+    processed_post_rows: list[dict[str, Any]],
+    images: list[dict[str, Any]],
+    publications: list[dict[str, Any]],
+    deliveries: list[dict[str, Any]],
+) -> dict[str, int]:
+    sources = [
+        row for row in source_rows
+        if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+    ]
+    scanned = [row for row in sources if _source_has_scan_evidence(row)]
+    aliases: set[str] = set()
+    for row in sources:
+        aliases.update(_source_alias_keys(row))
+    posts = [row for row in processed_post_rows if _source_alias_keys(row) & aliases]
+
+    def identity(row: dict[str, Any]) -> str:
+        return str(row.get("platform_post_key") or row.get("post_url") or row.get("post_id") or "").strip().rstrip("/")
+
+    unique_posts = {identity(row): row for row in posts if identity(row)}
+    post_urls = {
+        str(row.get("post_url") or "").strip().rstrip("/")
+        for row in unique_posts.values() if str(row.get("post_url") or "").strip()
+    }
+    image_urls = {
+        str(row.get("post_url") or "").strip().rstrip("/")
+        for row in images if str(row.get("post_url") or "").strip().rstrip("/") in post_urls
+    }
+    publication_rows = [
+        row for row in publications
+        if str(row.get("post_url") or "").strip().rstrip("/") in post_urls
+    ]
+    publication_urls = {
+        str(row.get("post_url") or "").strip().rstrip("/") for row in publication_rows
+    }
+    publication_confirmed_urls = {
+        str(row.get("post_url") or "").strip().rstrip("/")
+        for row in publication_rows if is_confirmed_publication(row)
+    }
+    delivery_urls = {
+        str(row.get("post_url") or "").strip().rstrip("/")
+        for row in deliveries
+        if str(row.get("post_url") or "").strip().rstrip("/") in post_urls
+        and str(row.get("delivery_status") or row.get("status") or "").strip().lower() in {"completed", "sent", "delivered"}
+    }
+    return {
+        "confirmed_external_blogger_sources_total": len(sources),
+        "confirmed_external_blogger_telegram_total": sum(1 for row in sources if str(row.get("platform") or "") == "telegram"),
+        "confirmed_external_blogger_vk_total": sum(1 for row in sources if str(row.get("platform") or "") == "vk"),
+        "confirmed_external_blogger_pending_total": len(sources) - len(scanned),
+        "confirmed_external_blogger_unscanned_total": len(sources) - len(scanned),
+        "confirmed_external_blogger_queue_pending_status_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "pending_scan"),
+        "confirmed_external_blogger_scanned_total": len(scanned),
+        "confirmed_external_blogger_with_ko_total": sum(1 for row in sources if _source_has_ko_candidate(row)),
+        "confirmed_external_blogger_fast_check_hit_total": sum(1 for row in sources if str(row.get("fast_check_status") or "") == "ko_hit"),
+        "confirmed_external_blogger_vk_search_checked_total": sum(1 for row in sources if _safe_int(row.get("vk_wall_search_query_count")) > 0),
+        "confirmed_external_blogger_vk_search_hit_total": sum(1 for row in sources if _safe_int(row.get("vk_wall_search_hits")) > 0),
+        "confirmed_external_blogger_rejected_local_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
+        "confirmed_external_blogger_rejected_spam_total": sum(1 for row in sources if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
+        "confirmed_external_blogger_posts_processed_total": len(unique_posts),
+        "confirmed_external_blogger_vector_accepted_posts_total": len({
+            identity(row) for row in unique_posts.values()
+            if str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
+        }),
+        "confirmed_external_blogger_image_queue_posts_total": len(image_urls),
+        "confirmed_external_blogger_publication_posts_total": len(publication_urls),
+        "confirmed_external_blogger_publication_confirmed_posts_total": len(publication_confirmed_urls),
+        "confirmed_external_blogger_delivery_completed_posts_total": len(delivery_urls),
+    }
 
 
 def _row_has_ko_candidate_evidence(row: dict[str, Any]) -> bool:
@@ -2743,40 +2816,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     fast_check_no_hit_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "no_hit"]
     fast_check_local_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "local_region_source"]
     fast_check_spam_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "spam_source_reject"]
-    confirmed_external_blogger_rows = [
-        row for row in source_rows
-        if str(row.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
-    ]
-    confirmed_external_blogger_scanned_rows = [row for row in confirmed_external_blogger_rows if _source_has_scan_evidence(row)]
-    confirmed_external_blogger_ko_rows = [row for row in confirmed_external_blogger_rows if _source_has_ko_candidate(row)]
-    confirmed_external_blogger_fast_hit_rows = [
-        row for row in confirmed_external_blogger_rows if str(row.get("fast_check_status") or "") == "ko_hit"
-    ]
-    confirmed_external_blogger_aliases: set[str] = set()
-    for row in confirmed_external_blogger_rows:
-        confirmed_external_blogger_aliases.update(_source_alias_keys(row))
-    confirmed_external_blogger_post_rows = [
-        row for row in processed_post_rows
-        if _source_alias_keys(row) & confirmed_external_blogger_aliases
-    ]
-    confirmed_external_blogger_post_urls = {
-        str(row.get("post_url") or "").strip().rstrip("/")
-        for row in confirmed_external_blogger_post_rows
-        if str(row.get("post_url") or "").strip()
-    }
-    confirmed_external_blogger_image_rows = [
-        row for row in images
-        if str(row.get("post_url") or "").strip().rstrip("/") in confirmed_external_blogger_post_urls
-    ]
-    confirmed_external_blogger_publication_rows = [
-        row for row in publications
-        if str(row.get("post_url") or "").strip().rstrip("/") in confirmed_external_blogger_post_urls
-    ]
-    confirmed_external_blogger_delivery_rows = [
-        row for row in deliveries
-        if str(row.get("post_url") or "").strip().rstrip("/") in confirmed_external_blogger_post_urls
-        and str(row.get("delivery_status") or row.get("status") or "").strip().lower() in {"completed", "sent", "delivered"}
-    ]
+    confirmed_external_blogger_metrics = _confirmed_external_blogger_funnel_metrics(
+        source_rows, processed_post_rows, images, publications, deliveries,
+    )
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_unique_keys)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
@@ -2853,46 +2895,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "fast_check_ko_local_rejected_sources_total": len(fast_check_local_rows),
         "fast_check_ko_spam_rejected_sources_total": len(fast_check_spam_rows),
         "fast_check_ko_hit_post_links_total": sum(1 for r in fast_check_hit_rows if str(r.get("fast_check_hit_post_url") or r.get("keyword_hit_post_url") or "").strip()),
-        "confirmed_external_blogger_sources_total": len(confirmed_external_blogger_rows),
-        "confirmed_external_blogger_telegram_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("platform") or "") == "telegram"),
-        "confirmed_external_blogger_vk_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("platform") or "") == "vk"),
-        # Product pending is disjoint from scanned. Keep the mutable raw queue
-        # status under an explicitly technical name so it cannot be mistaken
-        # for the number of bloggers that have never been inspected.
-        "confirmed_external_blogger_pending_total": len(confirmed_external_blogger_rows) - len(confirmed_external_blogger_scanned_rows),
-        "confirmed_external_blogger_unscanned_total": len(confirmed_external_blogger_rows) - len(confirmed_external_blogger_scanned_rows),
-        "confirmed_external_blogger_queue_pending_status_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "pending_scan"),
-        "confirmed_external_blogger_scanned_total": len(confirmed_external_blogger_scanned_rows),
-        "confirmed_external_blogger_with_ko_total": len(confirmed_external_blogger_ko_rows),
-        "confirmed_external_blogger_fast_check_hit_total": len(confirmed_external_blogger_fast_hit_rows),
-        "confirmed_external_blogger_vk_search_checked_total": sum(1 for row in confirmed_external_blogger_rows if _safe_int(row.get("vk_wall_search_query_count")) > 0),
-        "confirmed_external_blogger_vk_search_hit_total": sum(1 for row in confirmed_external_blogger_rows if _safe_int(row.get("vk_wall_search_hits")) > 0),
-        "confirmed_external_blogger_rejected_local_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_local_region_source"),
-        "confirmed_external_blogger_rejected_spam_total": sum(1 for row in confirmed_external_blogger_rows if str(row.get("source_queue_status") or "") == "rejected_spam_source"),
-        "confirmed_external_blogger_posts_processed_total": len({
-            str(row.get("platform_post_key") or row.get("post_url") or row.get("post_id") or "")
-            for row in confirmed_external_blogger_post_rows
-            if str(row.get("platform_post_key") or row.get("post_url") or row.get("post_id") or "").strip()
-        }),
-        "confirmed_external_blogger_vector_accepted_posts_total": sum(
-            1 for row in confirmed_external_blogger_post_rows
-            if str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
-        ),
-        "confirmed_external_blogger_image_queue_posts_total": len({
-            str(row.get("post_url") or "").strip().rstrip("/")
-            for row in confirmed_external_blogger_image_rows
-            if str(row.get("post_url") or "").strip()
-        }),
-        "confirmed_external_blogger_publication_posts_total": len({
-            str(row.get("post_url") or "").strip().rstrip("/")
-            for row in confirmed_external_blogger_publication_rows
-            if str(row.get("post_url") or "").strip()
-        }),
-        "confirmed_external_blogger_delivery_completed_posts_total": len({
-            str(row.get("post_url") or "").strip().rstrip("/")
-            for row in confirmed_external_blogger_delivery_rows
-            if str(row.get("post_url") or "").strip()
-        }),
+        **confirmed_external_blogger_metrics,
         "rejected_sources_total": len(rejected_sources),
         "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
         "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,

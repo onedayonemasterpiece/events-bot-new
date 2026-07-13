@@ -4626,7 +4626,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS"], "45")
             self.assertEqual(env["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
-            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v3")
+            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v4")
         finally:
             for key, value in old.items():
                 if value is None:
@@ -5528,8 +5528,12 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "technical_quality_score": 0.719,
         }
         accepted = mod.publication_eligibility(base)
+        quantized_boundary = mod.publication_eligibility({**base, "aesthetic_score": 0.519})
+        outside_quantization = mod.publication_eligibility({**base, "aesthetic_score": 0.518})
         low_aesthetic = mod.publication_eligibility({**base, "aesthetic_score": 0.469})
         self.assertTrue(accepted["eligible"])
+        self.assertTrue(quantized_boundary["eligible"])
+        self.assertFalse(outside_quantization["eligible"])
         self.assertFalse(low_aesthetic["eligible"])
         self.assertEqual(low_aesthetic["primary_reason"], "overall_media_score_below_threshold")
 

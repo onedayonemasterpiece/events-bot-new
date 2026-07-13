@@ -148,4 +148,7 @@ narrow near-threshold lane prevents a weighted-score edge case from discarding
 an exceptional postcard before Gemini: `overall >= 0.63`, `postcardness >=
 0.85`, `aesthetic >= 0.52` and `technical >= 0.68` must all hold. This does not
 auto-accept the post; it only permits the final Gemini review. The calibrated
-contract is `region_talk_publication_eligibility_v3`.
+contract is `region_talk_publication_eligibility_v4`. The narrow high-postcard
+lane applies a `0.001` tolerance only to its three-decimal aesthetic boundary,
+so a score reported as `0.519` is not discarded against `0.520`; `0.518` still
+fails. The overall, postcardness and technical floors are unchanged.

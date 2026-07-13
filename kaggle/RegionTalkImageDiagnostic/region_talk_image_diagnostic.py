@@ -20,7 +20,7 @@ IMAGE_TERMINAL_SKIP_STATUSES = {
     "broken_media",
 }
 PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
-PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v3"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
