@@ -77,6 +77,7 @@
 | **M1-QA** | Exhaustive static-site medallion visual cleanliness | **Missing / release gate specified** | Lab load/screenshot evidence exists, but there is no SHA-bound Playwright inventory and screenshot verdict for every actual static-site target page/layout | Discover every static-site renderer/surface; capture every actual page at 390/1440 plus breakpoint combinations; zero clipping, dirty/cut shadows, alpha mattes, overlap, overflow, broken/unreadable medallions or uncaptured targets. Telegram medallions are out of scope. |
 | **M2** | No duplicate images inside an event gallery | **Blocked / baseline reported degraded** | Exact/mirror/near-duplicate prevention exists in parts of Smart Update/publish paths, but the owner reports many current duplicates and no exhaustive current active/future visual ledger exists | Run the canonical read-only SHA-256 → dHash/visual audit over 100% of eligible multi-image events; zero confirmed duplicate events/excess refs/unreviewed clusters; root-cause repair + replay + public-surface recheck |
 | **M3** | Consolidated source + site event engagement | **Partial / fragmented** | TG/VK snapshots and source counter sync exist; `/popular_posts`, daily, static counters and site telemetry use incomplete/separate aggregation paths | One versioned batch function for source+site views/likes/shares; migrate all consumers; idempotency/freshness/reconciliation E2E; one compact current event row + bounded evidence/TTL and size forecast |
+| **M4** | Final SEO/GEO and AI-search transparency | **Designed / sequencing gate** | Static HTML, canonical, sitemap and JSON-LD foundations exist in preview, but there is no final feature-complete frozen-UI audit or reconciled multi-agent release evidence | Start only after public-feature integration plus UI/UX owner freeze; independent Codex + approved `agy` Gemini Pro + `a-opus` audits; remediate crawl/index/schema/content/performance/GEO gaps; rerun all gates on final RC |
 
 **Итог:** для полного заявленного публичного релиза нет ни одного требования, которое можно честно отметить `Done` по строгому определению `main + tests + current production evidence`. Это не означает, что продукт начинается с нуля: сильные vertical slices уже есть, но release integration и эксплуатационные доказательства отстают от объёма реализации.
 
@@ -337,6 +338,21 @@ Smart Update является владельцем семантического 
 - [ ] RC/hypercare gate: `events_with_confirmed_intra_event_duplicates=0`, `confirmed_excess_duplicate_refs=0`, `unreviewed_candidate_clusters=0`; new/changed multi-image events remain clean through the 14-day quality window. Repair confirmed ingest/Smart Update/persistence/render root causes and replay incidents, not only DB URLs.
 - [ ] Stable share assets and real Telegram/VK/MAX tests.
 
+### Stage 6A — Final SEO/GEO optimization after UI/UX freeze
+
+This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptance plus integration of all release-scope features that can change public HTML. No final SEO/GEO audit or optimization task starts against a moving navigation, page-family set, content hierarchy, layout or interaction design.
+
+- [ ] Record the immutable `origin/main`-reachable feature-complete UI/UX acceptance SHA, full preview build id and owner sign-off before opening SEO/GEO work; no unresolved release task may still change public page families/navigation/content.
+- [ ] Build the neutral full-site evidence pack from the frozen output: URL/page-shape inventory, rendered HTML crawl, status/canonical/robots/sitemap/redirect map, JSON-LD, link graph, no-JS/mobile screenshots, media/performance/CDN evidence and negative private/preview/personal surfaces.
+- [ ] Complete three independent blind audits against the same evidence: Codex; Gemini Pro High through `agy` resolving only to `gemini-3.1-pro-preview` or `gemini-3-pro-preview`; Opus high through `a-opus`. Save exact prompts, raw outputs, model/provider status and timestamps.
+- [ ] Do not substitute Flash/Lite/Gemma or an unspecified fallback for Gemini Pro, and do not mark an empty/failed `a-opus` run complete. Because all three lanes are owner-required, a missing lane blocks M4.
+- [ ] SEO audit covers 100% intended indexable/negative surfaces: crawlability, status/redirect/canonical identity, robots/sitemaps/`lastmod`, metadata/snippets, internal links/orphans/thin duplicates, lifecycle pages, rendered JSON-LD/visible-fact parity, images/CDN/mobile/no-JS/current Core Web Vitals and Google/Yandex/Bing behavior.
+- [ ] GEO audit proves transparent static answerability for what/where/when/who/price/status, source/freshness/entity clarity, crawler search-versus-training policy, optional evidence-based `llms.txt` decision, passage citability without AI-only filler, and a representative regional event query pack.
+- [ ] Codex reconciles every finding from all three reports into one evidence ledger; unique Critical/High findings are reproduced or disproved, disagreements use current primary documentation/live output, and implementation is routed to separate scoped tasks.
+- [ ] Zero unresolved Critical/High findings, factual visible/structured-data conflicts, unintended indexable surfaces, sitemap/canonical leaks or missing page families remain; Medium/Low findings have explicit disposition.
+- [ ] Any remediation that changes visible copy, order, navigation, interaction or layout reopens the affected UI/UX visual acceptance; after it passes, the final full SEO/GEO audit reruns on the new SHA.
+- [ ] Codex full deterministic rerun plus independent Gemini Pro and `a-opus` final diff/regression reviews accept the exact RC SHA to be promoted. See the canonical [SEO/GEO release contract](../features/static-site-pages/seo-geo-release-optimization.md).
+
 ### Stage 7 — Release candidate, canary и public launch
 
 - [ ] Clean `origin/main`-reachable RC SHA; no release fixes only in side branches.
@@ -346,9 +362,10 @@ Smart Update является владельцем семантического 
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
+- [ ] M4 SEO/GEO gate is complete on this exact RC SHA: all three audit lanes, reconciled ledger, remediation and final acceptance evidence are attached.
 - [ ] Limited canary continues through the approved **14-day event-quality stability window** with availability/quality dashboards; GO requires zero critical defects and zero recurrences of closed root causes across the full window.
 - [ ] Rollback drill and incident on-call/contact tree executed.
-- [ ] Remove root `noindex` only after all launch blockers are signed off.
+- [ ] Remove root `noindex` only after all launch blockers, including the post-UI-freeze M4 SEO/GEO gate, are signed off.
 - [ ] Post-launch 72-hour hypercare, then 14-day review before declaring stable.
 
 ### Stage 8 — После публичной презентации
@@ -379,6 +396,7 @@ Smart Update является владельцем семантического 
 | Mature-persona time to interest | every eligible golden scenario reaches the first relevant event within `<=20` validly inspected cards; production percentile target follows measured canary baseline |
 | Personalization E2E integrity | one correlated run proves localStorage collection, exactly-once accepted DB evidence, expected profile change and application to the next served list |
 | Supabase ecological capacity | verified limit ≈`500 MB`; launch `<60%`, disposable-write shedding from Orange, current control state remains writable through simulated near-cap test |
+| SEO/GEO release transparency | `100%` intended public URL classes pass status/canonical/robots/sitemap/structured-visible fact parity; `0` leaked private/preview/bearer URLs and `0` unresolved Critical/High findings across the required three-agent final audit |
 
 ## 9. Release evidence pack
 
@@ -388,6 +406,7 @@ Smart Update является владельцем семантического 
 - [ ] files changed and canonical docs updated;
 - [ ] unit/contract/replay/E2E commands with terminal result;
 - [ ] preview/canary URL and immutable build/release id;
+- [ ] for M4: neutral crawl/render pack, all three raw consultant reports/provider evidence, reconciled finding ledger, fix SHAs and final reruns bound to the promoted RC;
 - [ ] production config diff without secrets;
 - [ ] DB migration/RLS/grant evidence when applicable;
 - [ ] release manifest and catalog parity report;
@@ -420,15 +439,16 @@ Smart Update является владельцем семантического 
 2. **P0 — Smart Update quality stabilization:** G2, регулярные аудиты, incident burn-down, root-cause fixes, closure-grade replay, dashboard/SLO.
 3. **P0 — Supabase ecological capacity:** fresh size/budget, compact schema, retention/compaction, growth forecast, alerts and near-cap fail-safe before remote telemetry/email activation.
 4. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
-5. **P0 — UI release freeze:** F5 plus clean preview contract, responsive-navigation comparison with the shallow desktop hybrid as default, PR #38 medallion baseline, completed/owner-deferred medallion P0 shortlist and exhaustive SHA-bound Playwright medallion surface inventory/screenshots with zero visual defects, followed by real-device/a11y/owner evidence.
+5. **P0 — UI release freeze:** F5 plus clean preview contract, responsive-navigation comparison with the shallow desktop hybrid as default, PR #38 medallion baseline, completed/owner-deferred medallion P0 shortlist and exhaustive SHA-bound Playwright medallion surface inventory/screenshots with zero visual defects, followed by real-device/a11y/owner evidence. UI/UX is refrozen if later feature integration changes it.
 6. **P1 — identity/telemetry/favorites/calendar/engagement:** F6/F7/F9/F10/F12 plus M3, включая Yandex/manual-email choice, видимый reminder state after save and migration of `/popular_posts`/daily/video/static counters to one compact source+site engagement function.
 7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 8. **P1 — admin repair loop:** F17 after idempotency/poller contract.
 9. **P1 — media quality/share:** F15/F16.
 10. **P2 — transport:** land the validated preliminary slice through PR #37 only after release-UI placement is accepted; separately prototype/accept-or-defer the optional «Как добраться» gallery slide; F11 becomes production-safe only after the nightly source pipeline/atomic last-good gate is closed.
 11. **P2 — discussion signals:** F14 after rebase and safety evaluation.
+12. **P0 final gate — SEO/GEO:** only after steps 1–11 are integrated and the resulting UI/UX is immutably owner-accepted, M4 runs Codex + approved `agy` Gemini Pro + `a-opus` independent audits over crawl/index/schema/internal-link/performance and AI transparency/citability, then re-reviews the exact final RC after remediation.
 
-Все одиннадцать streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.
+Все двенадцать streams остаются blockers. Staged canaries допустимы для управления риском, но `P2` и другие capabilities нельзя исключить из первого публичного release scope.
 
 ## 12. Closure checklist этого аудита
 
@@ -438,5 +458,6 @@ Smart Update является владельцем семантического 
 | G2 | Активные incident families, Smart Update ownership и регулярный audit/incident/root-cause/replay workflow перечислены | **Done (planning only)** |
 | F1–F17 | Каждое исходное требование имеет отдельный статус, evidence class и gate | **Done (planning only)** |
 | Документация | Main docs и side-branch feature homes разведены; gaps перечислены | **Done (planning only)** |
+| M4 SEO/GEO | Post-UI/UX sequence, three independent audit lanes, detailed scope, synthesis and acceptance gates documented | **Done (planning only)** |
 | Реализация | В этой задаче намеренно не менялась | **Not in scope** |
 | Public release | Не разрешён данным аудитом | **Blocked / NO-GO** |

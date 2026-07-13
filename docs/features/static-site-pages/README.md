@@ -172,6 +172,7 @@ Runtime policy: `ocr_text`/`unknown` stay `contain`/natural-ratio no-crop; `visu
 - Admin issue reporting: `docs/features/event-issue-reporting/README.md`.
 - Astro SSG preview runbook and public URLs: `docs/features/static-site-pages/astro-preview.md`.
 - CDN asset delivery: `docs/features/static-site-pages/cdn-asset-delivery.md`.
+- Final post-UI-freeze SEO/GEO optimization and three-agent audit: `docs/features/static-site-pages/seo-geo-release-optimization.md`.
 - Listing personal feed: `docs/features/static-site-pages/listing-personal-feed.md`.
 - Исторический backlog/research: `docs/backlog/features/static-event-pages/README.md`.
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.

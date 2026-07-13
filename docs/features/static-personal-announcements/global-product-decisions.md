@@ -29,6 +29,7 @@
 23. **Navigation is consistent in information architecture and adaptive in geometry.** Mobile keeps the stronger brand-tag disclosure pattern; desktop keeps primary destinations visible in a horizontal top bar and uses a restrained shallow version of the tag motif. Labels, order, active state, search/account semantics and accessible names remain the same. The shallow desktop hybrid is the recommended release candidate, subject to immutable-preview owner sign-off.
 24. **An event gallery contains no duplicate images at release.** Exact bytes, managed/source mirrors, re-encodes and visually redundant crops/minor overlays of the same underlying visual collapse to one gallery item; materially distinct posters, programme slides and semantically useful photos remain. The current baseline must be measured read-only from downloaded-byte SHA-256 through perceptual candidates to full visual review, then fixed by root-cause family.
 25. **Views, likes and shares are consolidated at event level across sources and KenigEvents.** One versioned batch function supplies `/popular_posts`, daily, video selection, static counters and approved rankers with the same TG/VK/site components, freshness and compatible totals. Physical ownership remains split by database; the shared aggregate is a compact read projection, not duplicated raw history.
+26. **Final SEO/GEO work is the last pre-RC quality stage, begins only after UI/UX freeze plus integration of all public-HTML-changing features, and requires three independent audits.** Codex, Gemini Pro through `agy` and Opus through `a-opus` review the same immutable RC evidence blindly before synthesis; lower-class model substitutions do not close a missing consultant lane. Visible/structural remediation or a late feature change reopens UI/UX acceptance and then the SEO/GEO audit reruns.
 
 ## Consequences
 
@@ -50,7 +51,7 @@
 - A passing localStorage test or a passing DB insert alone is insufficient personalization evidence; the same correlated run must show that the expected profile changed the next served list.
 - The provider limit is a capacity ceiling, not a utilization target; release starts in the Green band with measured growth/compaction headroom and a tested near-cap kill switch.
 - Search-tag automation fails closed rather than weakening checks to avoid a manual queue; `pending` is private and never appears in navigation/sitemap.
-- All eleven release workstreams in the readiness checklist remain blockers.
+- All twelve release workstreams in the readiness checklist remain blockers.
 - The public recommendation-email launch can reach fewer than 200 users during canary or when provider seed/service contacts reduce usable plan capacity, but it can never exceed 200 active consented users without a later explicit product and infrastructure decision.
 
 ## Product decisions still required

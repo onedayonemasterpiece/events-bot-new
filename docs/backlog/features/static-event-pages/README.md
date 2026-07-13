@@ -153,6 +153,8 @@ Deliverable:
 
 ### 5. Исследование SEO, GEO и internal linking
 
+> Historical research questions are retained below. The current release-stage sequence, three-agent audit and acceptance gate are canonical in [Final SEO/GEO release optimization](../../../features/static-site-pages/seo-geo-release-optimization.md) and begin only after UI/UX freeze.
+
 - [ ] Проверить, какие GEO-факты уже есть в данных, а какие придётся достраивать: город, район, координаты, площадка, timezone.
 - [ ] Определить минимальный набор index/listing pages для внутренней перелинковки: город, дата, категория, площадка.
 - [ ] Оценить, какие поля обязательны для search snippets и rich results, а какие можно добавлять позже.

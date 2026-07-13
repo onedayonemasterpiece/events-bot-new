@@ -293,6 +293,7 @@ features:
     responsive_navigation: docs/features/static-site-pages/responsive-navigation.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
     image_framing: docs/features/static-site-pages/image-framing.md
+    seo_geo_release_optimization: docs/features/static-site-pages/seo-geo-release-optimization.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md
     related_event_issue_reporting: docs/features/event-issue-reporting/README.md
@@ -325,6 +326,7 @@ features:
       event_medallions_release_branch: consolidated_25_organizers_11_festivals
       event_medallions_release_shortlist: p0_open
       event_medallions_visual_acceptance: static_site_exhaustive_playwright_surface_capture_pending_telegram_excluded
+      seo_geo_release_gate: post_ui_ux_freeze_three_agent_audit_pending
     entrypoints:
       - main.py
       - smart_event_update.py
