@@ -17,6 +17,13 @@ exhibition. The same Autoretro source and same City Jazz/default-30-day defect
 had already been a regression fixture in `INC-2026-07-02`; the deployed guard
 matched phrases rather than occurrence roles and missed the next wording.
 
+On 2026-07-13 the operator reported a remaining semantic location defect in the
+forwarded announcement `https://t.me/kenigevents/4405`: the first repair had
+replaced the hallucinated venue with the source phrase `День города в
+Янтарном`, but that phrase names the occasion, not an attendee-facing place.
+The original source confirms only the settlement, so the honest canonical
+location is city-level `Янтарный` with no invented venue/address.
+
 A vector-first audit then covered the complete bounded current/future inventory
 (`326/326` rows, `326/326` persisted `related_v1` vectors) and confirmed further
 wrong periods, locations, duplicates, non-events and multi-event description
@@ -33,6 +40,9 @@ linked source.
 
 - Reported directly by the operator from the public `@kldevents` post.
 - Existing broad future-event audits did not surface the defect; that miss is part of the incident.
+- The recurrence was reported directly from `@kenigevents/4405`; authenticated
+  Telegram/VK inspection then confirmed the same prose location in
+  `@kldevents/2301` and managed VK post `wall-231920894_7233`.
 - Frozen audit export SHA-256: `256ec6c8e18f6c4f7b51eeec7a786dc2b3c7752069ca8657973f6cc841257ae6`.
 
 ## Timeline
@@ -44,6 +54,10 @@ linked source.
   event into both `search_v3` and `related_v1`.
 - 2026-07-12 22:10 UTC — full audit froze and checked `326/326` active
   current/future rows.
+- 2026-07-13 UTC — operator reported prose in location at
+  `@kenigevents/4405`; the canonical event was mapped back to `6853`, the
+  replacement source album `@kldevents/2301–2304`, managed VK `7233` and the
+  existing Telegraph page.
 
 ## Root Cause
 
@@ -69,15 +83,28 @@ linked source.
 6. **Queue-hint parser contamination.** `ГАЗ-24-10` became a false 24 October
    `event_ts_hint`. It did not determine the final event date, but it is a
    separate retrieval/date-signal defect.
+7. **The first mitigation preserved an occasion as a venue.** The repair
+   correctly removed City Jazz and the invented month, but wrote the verbatim
+   source phrase `День города в Янтарном` into `location_name`. Source grounding
+   alone was insufficient because the phrase was grounded as event context,
+   not as an attendee-facing place.
+8. **The semantic grounding router was too narrow.**
+   `_candidate_needs_llm_location_grounding_review` required an explicit venue
+   role or missing source evidence. The future teaser had neither a `📍`/address
+   cue nor an exact venue; because the occasion phrase occurred verbatim, it
+   bypassed the LLM verdict and propagated through every public projection.
 
 ## Contributing Factors
 
 - The active-event vector sidecar prunes cancelled/repaired historical examples,
   so `6853` retrieved generic long exhibitions rather than the prior bad
   Autoretro rows. Vectors cannot replace source-grounded LLM adjudication.
-- Production runtime file logging was disabled (`ENABLE_RUNTIME_FILE_LOGGING=0`)
-  and the file mirror stopped at 8 July; `ops_run`, DB rows and public surfaces
-  were required as fallback evidence.
+- Production runtime file logging was disabled during the first investigation,
+  so its oldest evidence came from `ops_run`, DB rows and public surfaces. By
+  the 2026-07-13 recurrence it was enabled with bounded rotation at
+  `/data/runtime_logs`; the active files confirmed event-vector and Telegraph
+  work for `6853`. The exact manual/forwarded `@kenigevents/4405` action is not
+  represented in `promo_exposure`, which remains an observability gap.
 - Managed VK postponed IDs had promoted/deleted into new live IDs while DB URLs
   remained stale, complicating direct public repair.
 
@@ -151,6 +178,12 @@ The audit repair queue was also applied:
 - [x] Freeze direct Telegram/VK/Telegraph/vector/media surface evidence.
 - [x] Audit `326/326` future/current rows vector-first and source-adjudicate all
   findings.
+- [x] Route `location_name` overlap with structured festival/occasion context
+  to the existing bounded LLM grounding review; the router does not rewrite
+  semantics, and city-only/occasion-only evidence fails closed.
+- [x] Add exact Autoretro recurrence and genuine unrelated-venue negative
+  controls; no new per-event LLM stage or deterministic venue inference was
+  introduced.
 
 ## Follow-up Actions
 
@@ -221,3 +254,9 @@ Prevention is LLM-first: deterministic structure only routes semantic review and
 validates verbatim/date grounding. It is vector-first at audit/recall boundaries:
 the exact catalog and nearest pairs are retrieved before source-grounded review,
 but vector scores never approve a field, merge or publication.
+
+For the 2026-07-13 recurrence, structured festival overlap is only a high-recall
+router into the already-existing `location_grounding_review`. The LLM decides
+whether the value is a venue; uncertainty blocks create/merge/publication. This
+adds at most one bounded grounding call only to the rare overlap candidates and
+does not consume a new call for every processed event.
