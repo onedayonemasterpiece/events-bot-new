@@ -3007,7 +3007,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertNotIn("debug_blob", prompt)
             self.assertEqual(data["prompt_version"], mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION)
             self.assertTrue(any("emotion/review" in rule for rule in data["rules"]))
-            self.assertTrue(any("VK/MAX footer" in rule and "!= ad" in rule for rule in data["rules"]))
+            self.assertTrue(any("social footer" in rule and "!= ad" in rule for rule in data["rules"]))
             self.assertTrue(any("media credit" in rule and "!= visit proof" in rule for rule in data["rules"]))
         finally:
             if old is None:
@@ -5545,7 +5545,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "text": "Личный рассказ о Правдинске. Экскурсии. Полезные сервисы.",
         }, {"stage": "final_publication_verifier"})
         self.assertIn("short recurring footer", prompt)
-        self.assertIn("is not by itself advertising", prompt)
+        self.assertIn("alone is not ad", prompt)
         self.assertEqual(mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION, "region_talk_final_verifier_v5")
 
     def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
