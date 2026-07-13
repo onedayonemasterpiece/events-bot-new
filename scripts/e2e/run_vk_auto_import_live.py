@@ -11,6 +11,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -74,6 +75,11 @@ def _terminal_response_kind(text: str | None) -> str | None:
     if "результат: ошибка" in normalized:
         return "operator_error"
     return None
+
+
+def _terminal_processed_count(text: str | None) -> int | None:
+    match = re.search(r"(?im)^queue processed:\s*(\d+)\s*/\s*(\d+)\s*$", str(text or ""))
+    return int(match.group(1)) if match else None
 
 
 async def _main(args: argparse.Namespace) -> int:
@@ -141,6 +147,27 @@ async def _main(args: argparse.Namespace) -> int:
                 return 2
             if terminal_kind != "success":
                 return 3
+            terminal_texts = [item["text"] for item in run_payload["messages"] if not item["out"]]
+            processed = next(
+                (
+                    value
+                    for value in (_terminal_processed_count(text) for text in reversed(terminal_texts))
+                    if value is not None
+                ),
+                None,
+            )
+            run_payload["queue_processed"] = processed
+            args.output.write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            if not args.allow_empty and (processed is None or processed < 1):
+                run_payload["acceptance_error"] = "no VK inbox row was processed"
+                args.output.write_text(
+                    json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                return 4
         evidence["finished_at"] = datetime.now(timezone.utc).isoformat()
         args.output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return 0
@@ -155,6 +182,11 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, choices=range(1, 4), default=1)
     parser.add_argument("--timeout-seconds", type=float, default=2100.0)
     parser.add_argument("--poll-seconds", type=float, default=5.0)
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="accept a zero-row run as an authorization-only smoke (not Smart Update E2E)",
+    )
     parser.add_argument(
         "--output",
         type=Path,

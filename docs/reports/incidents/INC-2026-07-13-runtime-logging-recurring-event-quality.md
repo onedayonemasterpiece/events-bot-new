@@ -38,6 +38,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 5. **Live acceptance lacked reversible role automation.** The E2E harness correctly failed on authorization, but the authorized temporary grant/restore procedure was not completed in the incident run.
 6. **The primary Smart Update model could exhaust output on hidden reasoning.** Hosted Gemma 4 rejected `thinking_budget`, while small capped contracts sometimes returned only thought/MAX_TOKENS. The generic 4o JSON fallback also reused an incident-specific bundle example and allowed unrelated generated fields to survive after only title rejection; one dynamic schema name contained a provider-invalid colon.
 7. **Occurrence and anchor roles were under-adjudicated.** Retrieval could find the right source/event, but the pipeline did not require one LLM decision to bind date and city to the same occurrence or distinguish doors/opening from event-wide start/range time.
+8. **The live replay exposed a VK idempotency regression.** `wall.getById` and `wall.get(filter=all)` did not expose an existing postponed managed post, although the same authenticated user saw it through `filter=postponed`. The helper incorrectly treated `all` as a superset and scheduled a second post.
 
 ## Contributing Factors
 
@@ -97,6 +98,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 - [ ] complete the new all-future source/public audit and repair confirmed defects;
 - [ ] deliver LLM-first/vector-first prevention for every confirmed fresh recurrence, not blanket regex mutation;
 - [ ] distinguish legacy-debt repairs from rows created after each prevention SHA in monitoring metrics.
+- [x] delete the replay-created postponed duplicate `wall-231920894_7265`, restore event `6857` to `wall-231920894_7250`, and make postponed lookup use the correct authenticated collection;
 
 ## Follow-up Actions
 

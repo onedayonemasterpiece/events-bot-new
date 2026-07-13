@@ -31,6 +31,11 @@ Before merge/create, social candidates now receive targeted LLM-first checks:
 - dynamic OpenAI schema names are provider-safe, but this fallback remains
   disabled for create bundles.
 
+Managed VK publication idempotency includes postponed posts: when
+`wall.getById` cannot see a stored managed URL, the publisher checks the
+authenticated `wall.get(filter=postponed)` collection before the legacy `all`
+fallback. A present postponed item is edited/reused, never recreated.
+
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
 - `SMART_UPDATE_FACT_FIRST=0` — rollback на прежний rewrite/merge‑first путь.

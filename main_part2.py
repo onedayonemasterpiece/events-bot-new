@@ -4052,33 +4052,40 @@ async def _resolve_vk_postponed_wall_id(
     db: Database | None,
     bot: Bot | None,
 ) -> int | None:
-    try:
-        response = await _vk_api(
-            "wall.get",
-            {"owner_id": str(owner_id), "filter": "all", "count": 100},
-            db,
-            bot,
-            token=token,
-            token_kind=actor.kind,
-            skip_captcha=(actor.kind == "group"),
-        )
-    except Exception as exc:
-        logging.warning(
-            "post_to_vk resolve postponed id failed owner_id=%s post_id=%s actor=%s error=%s",
-            owner_id,
-            post_id,
-            actor.label,
-            exc,
-        )
-        return None
-    for item in _vk_postponed_items(response):
+    # VK's `all` view is not a reliable superset for an authenticated user:
+    # production returned an empty list for a real postponed item that was
+    # visible with `filter=postponed`. Probe the semantic collection first;
+    # keep `all` only as a compatibility fallback for actors that expose the
+    # post-id -> wall-id mapping there immediately after wall.post.
+    for wall_filter in ("postponed", "all"):
         try:
-            item_id = int(item.get("id") or 0)
-            postponed_id = int(item.get("postponed_id") or 0)
-        except Exception:
+            response = await _vk_api(
+                "wall.get",
+                {"owner_id": str(owner_id), "filter": wall_filter, "count": 100},
+                db,
+                bot,
+                token=token,
+                token_kind=actor.kind,
+                skip_captcha=(actor.kind == "group"),
+            )
+        except Exception as exc:
+            logging.warning(
+                "post_to_vk resolve postponed id failed owner_id=%s post_id=%s actor=%s filter=%s error=%s",
+                owner_id,
+                post_id,
+                actor.label,
+                wall_filter,
+                exc,
+            )
             continue
-        if item_id > 0 and (postponed_id == int(post_id) or item_id == int(post_id)):
-            return item_id
+        for item in _vk_postponed_items(response):
+            try:
+                item_id = int(item.get("id") or 0)
+                postponed_id = int(item.get("postponed_id") or 0)
+            except Exception:
+                continue
+            if item_id > 0 and (postponed_id == int(post_id) or item_id == int(post_id)):
+                return item_id
     return None
 
 
