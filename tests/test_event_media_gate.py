@@ -498,3 +498,16 @@ async def test_backfill_stages_legacy_multi_image_event_without_deleting_evidenc
         "static_site_build": 1,
     }
     assert backup_count == 2
+
+    # Once the automatic reviewer has accepted the pending row, a recurring
+    # backfill pass must not quarantine that decision again.
+    con = sqlite3.connect(db_path)
+    con.execute(
+        "update eventposter set review_status='approved', review_reason='automated_pair_distinct', reviewed_at=CURRENT_TIMESTAMP where event_id=? and review_status='pending_review'",
+        (event_id,),
+    )
+    con.commit()
+    con.row_factory = sqlite3.Row
+    rerun = module.stage(con, current_date="2026-07-13", apply=False)
+    con.close()
+    assert rerun["staged_events"] == 0

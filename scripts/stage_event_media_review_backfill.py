@@ -110,7 +110,15 @@ def stage(con: sqlite3.Connection, *, current_date: str, apply: bool) -> dict[st
             for row in active
         )
         has_pending = any(str(row["review_status"] or "") == "pending_review" for row in active)
-        needs_stage = bool(missing_urls or has_pending or (len(active) > 1 and not already_audited))
+        # Rows created before this feature have no review_reason.  A non-empty
+        # reason proves that the dated audit or automatic reviewer already
+        # adjudicated the row and must never be undone by a later backfill run.
+        has_unreviewed_legacy_multi = len(active) > 1 and any(
+            str(row["review_status"] or "") == "approved"
+            and not str(row["review_reason"] or "").strip()
+            for row in active
+        )
+        needs_stage = bool(missing_urls or has_pending or has_unreviewed_legacy_multi)
         if needs_stage:
             planned.append(
                 {
@@ -118,6 +126,7 @@ def stage(con: sqlite3.Connection, *, current_date: str, apply: bool) -> dict[st
                     "missing_urls": missing_urls,
                     "active_ids": [int(row["id"]) for row in active],
                     "already_audited": already_audited,
+                    "has_unreviewed_legacy_multi": has_unreviewed_legacy_multi,
                     "before_projection": _json_list(event["photo_urls"]),
                     "before_photo_count": int(event["photo_count"] or 0),
                     "has_telegraph_publication": bool(str(event["telegraph_url"] or "").strip() or str(event["telegraph_path"] or "").strip()),
@@ -174,18 +183,32 @@ def stage(con: sqlite3.Connection, *, current_date: str, apply: bool) -> dict[st
         ).fetchall()
         if not rows:
             continue
-        audited_ids = {
+        adjudicated_approved_ids = {
             int(row["id"])
             for row in rows
-            if str(row["review_reason"] or "").startswith(AUDIT_REASON_PREFIX)
+            if str(row["review_status"] or "") == "approved"
+            and str(row["review_reason"] or "").strip()
         }
-        approved_ids = [int(row["id"]) for row in rows if str(row["review_status"] or "") == "approved"]
-        seed_id = approved_ids[0] if approved_ids else int(rows[0]["id"])
+        blank_approved_ids = [
+            int(row["id"])
+            for row in rows
+            if str(row["review_status"] or "") == "approved"
+            and not str(row["review_reason"] or "").strip()
+        ]
+        seed_id = None if adjudicated_approved_ids else (blank_approved_ids[0] if blank_approved_ids else None)
         for row in rows:
             row_id = int(row["id"])
-            if row_id == seed_id or row_id in audited_ids:
+            current_status = str(row["review_status"] or "")
+            current_reason = str(row["review_reason"] or "").strip()
+            if current_status == "pending_review":
+                status = current_status
+                reason = current_reason or "backfill_awaiting_automated_pair_review"
+            elif current_reason:
+                status = current_status
+                reason = current_reason
+            elif row_id == seed_id:
                 status = "approved"
-                reason = str(row["review_reason"] or "") or "automatic_review_seed"
+                reason = "automatic_review_seed"
             else:
                 status = "pending_review"
                 reason = "backfill_awaiting_automated_pair_review"
@@ -207,7 +230,11 @@ def stage(con: sqlite3.Connection, *, current_date: str, apply: bool) -> dict[st
             "UPDATE event SET photo_urls=?, photo_count=?, preview_3d_url=NULL WHERE id=?",
             (json.dumps(projection, ensure_ascii=False), len(projection), event_id),
         )
-        _enqueue(con, event_id, "event_media_review", now + timedelta(seconds=ordinal * 2))
+        if con.execute(
+            "SELECT 1 FROM eventposter WHERE event_id=? AND review_status='pending_review' LIMIT 1",
+            (event_id,),
+        ).fetchone():
+            _enqueue(con, event_id, "event_media_review", now + timedelta(seconds=ordinal * 2))
         projection_changed = item["before_projection"] != projection or item["before_photo_count"] != len(projection)
         if projection_changed:
             result["public_projection_changed_events"] += 1

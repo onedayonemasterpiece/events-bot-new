@@ -111,7 +111,9 @@ surfaces that already exist (Telegraph path, Telegram post, or hash-proven
 managed VK post), so cleanup can never become first-time publication; the
 global static build is rearmed once. The staging command
 handles rows created/changed after the snapshot; it keeps one seed, quarantines
-additional media and uses only the same automatic outbox worker.
+additional media and uses only the same automatic outbox worker. Repeated
+staging preserves every non-empty automatic/audit decision reason, so a
+successful VLM decision cannot be returned to quarantine by the backfill.
 
 Never delete Storage during this rollout. Before production apply: fresh DB
 snapshot + SHA-256, `PRAGMA quick_check`, dry-run/stale review. After apply:
