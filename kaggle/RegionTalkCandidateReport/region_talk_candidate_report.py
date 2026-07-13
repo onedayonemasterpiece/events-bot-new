@@ -154,7 +154,14 @@ def source_scope_terminal_fields_for_local_region(reason: str, *, hits: str = ""
 
 
 def source_has_authoritative_confirmed_external_evidence(row: dict[str, Any] | None) -> bool:
-    """Return true only for explicit, non-local confirmed-external evidence."""
+    """Return true only for explicit, non-local confirmed-external evidence.
+
+    ``confirmation_status=confirmed_external`` proves that the author/source
+    was found through the external-blogger research lane. It does not, by
+    itself, prove residence outside Kaliningrad when ``region_relation_status``
+    is still unknown. Such an unknown relation must not override strong
+    persistent-local evidence from the durable post ledger.
+    """
     item = row if isinstance(row, dict) else {}
     status = str(
         item.get("external_blogger_evidence_status")
@@ -164,10 +171,17 @@ def source_has_authoritative_confirmed_external_evidence(row: dict[str, Any] | N
     if status != "confirmed_external":
         return False
     relation = str(item.get("external_blogger_region_relation_status") or item.get("region_relation_status") or "").lower().replace("ё", "е")
-    return not any(marker in relation for marker in [
+    if any(marker in relation for marker in [
         "lives in region", "living in region", "resident of region", "moved to region",
         "local resident", "local blogger", "живет в регионе", "житель региона",
         "местный", "переехал в калининград", "переехала в калининград",
+        "локальный",
+    ]):
+        return False
+    return any(marker in relation for marker in [
+        "external visitor", "nonlocal", "non-local", "outside region",
+        "приезж", "не местн", "внешн",
+        "иностранный автор", "россия-базированный иностранный автор",
     ])
 
 

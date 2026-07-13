@@ -3206,6 +3206,48 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         )
         self.assertTrue(all(row["source_scope"] == "local_region" for row in candidates))
 
+    def test_unknown_external_evidence_does_not_override_persistent_local_ledger(self) -> None:
+        mod = load_module()
+        start = datetime(2026, 5, 17, tzinfo=timezone.utc)
+        candidates = [
+            {
+                "source_url": "https://vk.com/krasivo_s_evgo",
+                "post_url": f"https://vk.com/wall-109066435_{index}",
+                "post_date": (start + timedelta(days=offset)).isoformat(),
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "vector_gate_status": "vector_accept_candidate",
+            }
+            for index, offset in enumerate([0, 10, 16, 20, 31, 44, 49])
+        ]
+        source = {
+            "canonical_source_key": "vk:krasivo_s_evgo",
+            "platform": "vk",
+            "source_url": "https://vk.com/krasivo_s_evgo",
+            "source_scope": "external",
+            "source_geo_class": "external",
+            "external_blogger_evidence_status": "confirmed_external",
+            "external_blogger_region_relation_status": "не установлено",
+        }
+
+        rows, stats = mod.reconcile_persistent_ko_source_evidence(
+            [source], candidates, {}, run_id="unknown-relation-run"
+        )
+
+        self.assertEqual(stats["authoritative_external_overrides"], 0)
+        self.assertEqual(stats["persistent_local_sources"], 1)
+        self.assertEqual(rows[0]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+
+        explicit_external = {
+            **source,
+            "external_blogger_region_relation_status": "приезжий — подтверждено",
+        }
+        external_rows, external_stats = mod.reconcile_persistent_ko_source_evidence(
+            [explicit_external], candidates, {}, run_id="explicit-external-run"
+        )
+        self.assertEqual(external_stats["authoritative_external_overrides"], 1)
+        self.assertNotEqual(external_rows[0].get("source_queue_status"), mod.LOCAL_REGION_SOURCE_STATUS)
+
     def test_candidate_ledger_trip_cluster_does_not_create_local_terminal_source(self) -> None:
         mod = load_module()
         start = datetime(2026, 5, 17, tzinfo=timezone.utc)

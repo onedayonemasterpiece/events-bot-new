@@ -228,6 +228,14 @@ The broader recent-history source classifier keeps the more conservative
 eight-post threshold; the seven-post boundary is limited to already
 dual-accepted durable KO evidence.
 
+An external-blogger evidence row overrides persistent-local evidence only when
+`region_relation_status` explicitly says that the author is a non-local
+visitor. `confirmed_external` with an unresolved relation still keeps the
+source in the priority research cohort, but it is not authoritative enough to
+erase seven durable KO posts across six weeks. This distinction is required
+for rows such as `vk:krasivo_s_evgo`, which entered the research table before
+the author's locality was established.
+
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
 expected numeric peer and fail closed on a wrong target; the prepared chat is
