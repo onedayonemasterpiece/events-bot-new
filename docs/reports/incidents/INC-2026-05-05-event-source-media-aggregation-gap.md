@@ -94,3 +94,12 @@ Added best-effort Telegraph rebuild repair: for multi-source events with only on
 ## Prevention
 
 The source graph should be enough to repair event media after older import bugs; Telegraph rebuild now performs that best-effort repair instead of rendering only the current event row image list.
+
+### 2026-07-13 superseding placement
+
+The source graph remains the recovery source, but Telegraph no longer writes.
+Smart Update enqueues `event_media_review`; that worker aggregates only missing
+specific multi-source media, skips roundup sources shared by multiple events,
+and sends every recovered image through the same quarantine/review projection.
+The renderer is read-only. Regression coverage explicitly asserts both
+multi-source aggregation and single/shared-source non-refetch behavior.

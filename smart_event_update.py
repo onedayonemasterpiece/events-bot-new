@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from calendar import monthrange
+import hashlib
 import math
 import json
 import logging
@@ -15,8 +16,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
-from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
-import urllib.request
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import and_, delete, or_, select
 
@@ -27,7 +27,6 @@ from location_reference import (
     normalize_venue_key,
 )
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
-from media_dedup import compute_dhash_hex, hamming_distance_hex
 from models import (
     Event,
     EventIdentityDecisionLog,
@@ -459,15 +458,6 @@ SMART_UPDATE_GEMMA_TEXT_WALL_CLOCK_SEC = _env_int(
 # Default matches the operator expectation: > 6 months ahead requires more scrutiny.
 SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS = _env_int(
     "SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS", 6, lo=0, hi=24
-)
-
-# Max Hamming distance (over the 256-bit dh16 perceptual hash) at which two
-# posters are treated as the same image and collapsed before publishing. The
-# live VK feed has shown same-frame re-encodes/crops at distance 28
-# (INC-2026-06-16), so keep a still-conservative 256-bit default just above
-# that. 0 disables near-dup dedup.
-SMART_UPDATE_POSTER_NEAR_DUP_HAMMING = _env_int(
-    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 32, lo=0, hi=64
 )
 
 # Optional: allow light emoji usage in *full* public descriptions (Telegraph/body).
@@ -17913,7 +17903,7 @@ async def _smart_event_update_impl(
 
 
 def _poster_relevance_quality(p: PosterCandidate) -> int:
-    """Cheap quality score to pick the survivor of a near-duplicate cluster."""
+    """Cheap quality score to pick the survivor of an exact identity collision."""
     q = 0
     title = getattr(p, "ocr_title", None)
     if title:
@@ -17924,74 +17914,6 @@ def _poster_relevance_quality(p: PosterCandidate) -> int:
     if getattr(p, "supabase_url", None):
         q += 1
     return q
-
-
-def _dedup_near_duplicate_posters(
-    posters: Sequence[PosterCandidate],
-) -> list[PosterCandidate]:
-    """Collapse visually near-identical posters by perceptual-hash Hamming distance.
-
-    Exact-byte (sha256) and exact-URL dedup elsewhere only catch identical files;
-    two re-encodes / crops / resolutions of the same poster have different bytes
-    (and often slightly different dh16 hashes), so both used to survive and publish
-    as a duplicate image (INC-2026-05-17). Here we keep, per near-dup cluster, the
-    highest-quality poster. Posters without a phash are always kept (we cannot prove
-    they are duplicates).
-    """
-    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
-    if threshold <= 0 or len(posters) < 2:
-        return list(posters)
-    kept: list[PosterCandidate] = []
-    kept_phashes: list[str] = []
-    for p in posters:
-        ph = (getattr(p, "phash", None) or "").strip().lower()
-        if ph:
-            dup_idx = None
-            for i, kph in enumerate(kept_phashes):
-                if kph and hamming_distance_hex(ph, kph) <= threshold:
-                    dup_idx = i
-                    break
-            if dup_idx is not None:
-                if _poster_relevance_quality(p) > _poster_relevance_quality(kept[dup_idx]):
-                    kept[dup_idx] = p
-                    kept_phashes[dup_idx] = ph
-                logger.info(
-                    "smart_update: dropped near-duplicate poster (hamming<=%d)",
-                    threshold,
-                )
-                continue
-        kept.append(p)
-        kept_phashes.append(ph)
-    return kept
-
-
-async def _backfill_missing_poster_candidate_phashes(
-    posters: Sequence[PosterCandidate],
-) -> None:
-    for poster in posters or []:
-        if (getattr(poster, "phash", None) or "").strip():
-            continue
-        url = (getattr(poster, "supabase_url", None) or getattr(poster, "catbox_url", None) or "").strip()
-        if not url:
-            continue
-        phash = await _photo_url_dhash(url)
-        if phash:
-            poster.phash = phash
-
-
-def _event_poster_display_url(row: EventPoster) -> str | None:
-    return (getattr(row, "supabase_url", None) or getattr(row, "catbox_url", None) or "").strip() or None
-
-
-def _event_poster_quality(row: EventPoster) -> int:
-    score = 0
-    if getattr(row, "ocr_title", None):
-        score += len(str(row.ocr_title))
-    if getattr(row, "ocr_text", None):
-        score += len(str(row.ocr_text))
-    if getattr(row, "supabase_url", None):
-        score += 2
-    return score
 
 
 def _normalize_poster_identity_url(url: str | None) -> str | None:
@@ -18022,7 +17944,8 @@ def _poster_identity_keys(
 ) -> tuple[tuple[str, str], ...]:
     """Return deterministic identity keys for poster merge dedup.
 
-    Strong keys are exact poster hash, Supabase object path, and exact phash.
+    Strong keys are exact content hash and Supabase object path. Perceptual
+    hashes never establish identity without automated visual adjudication.
     URL is intentionally last and weak: it is used only as a conservative
     fallback for legacy rows that lack stronger metadata.
     """
@@ -18038,9 +17961,6 @@ def _poster_identity_keys(
     supabase_path = str(getattr(poster, "supabase_path", "") or "").strip()
     if supabase_path:
         keys.append(("supabase_path", supabase_path))
-    phash = str(getattr(poster, "phash", "") or "").strip().lower()
-    if phash:
-        keys.append(("phash", phash))
     if include_weak_url:
         seen_urls: set[str] = set()
         for raw_url in (getattr(poster, "supabase_url", None), getattr(poster, "catbox_url", None)):
@@ -18111,191 +18031,6 @@ def _dedup_poster_candidates_by_identity(
     return kept
 
 
-async def _backfill_missing_eventposter_phashes(rows: Sequence[EventPoster]) -> None:
-    for row in rows or []:
-        if (getattr(row, "phash", None) or "").strip():
-            continue
-        url = _event_poster_display_url(row)
-        if not url:
-            continue
-        phash = await _photo_url_dhash(url)
-        if phash:
-            row.phash = phash
-
-
-async def _prune_near_duplicate_eventposters(session, rows: Sequence[EventPoster]) -> tuple[int, set[str]]:
-    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
-    if threshold <= 0 or len(rows or []) < 2:
-        return 0, set()
-    kept: list[EventPoster] = []
-    kept_phashes: list[str] = []
-    pruned_urls: set[str] = set()
-    pruned = 0
-    for row in rows:
-        ph = (getattr(row, "phash", None) or "").strip().lower()
-        if not ph:
-            kept.append(row)
-            kept_phashes.append("")
-            continue
-        dup_idx = None
-        for idx, existing in enumerate(kept_phashes):
-            if existing and hamming_distance_hex(ph, existing) <= threshold:
-                dup_idx = idx
-                break
-        if dup_idx is None:
-            kept.append(row)
-            kept_phashes.append(ph)
-            continue
-
-        survivor = kept[dup_idx]
-        if _event_poster_quality(row) > _event_poster_quality(survivor):
-            drop = survivor
-            kept[dup_idx] = row
-            kept_phashes[dup_idx] = ph
-        else:
-            drop = row
-        for url in (getattr(drop, "catbox_url", None), getattr(drop, "supabase_url", None)):
-            if url:
-                pruned_urls.add(str(url))
-        await session.delete(drop)
-        pruned += 1
-        logger.info(
-            "smart_update: pruned persisted near-duplicate eventposter id=%s hamming<=%d",
-            getattr(drop, "id", None),
-            threshold,
-        )
-    return pruned, pruned_urls
-
-
-def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
-    match = re.search(
-        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
-        str(url or "").strip(),
-        flags=re.IGNORECASE,
-    )
-    return match.group(1).lower() if match else None
-
-
-def _download_photo_for_hash(url: str, *, max_bytes: int) -> bytes | None:
-    request_url = _quote_photo_url_for_request(url)
-    req = urllib.request.Request(
-        request_url,
-        headers={"User-Agent": "events-bot-media-dedup/1.0"},
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        length = resp.headers.get("Content-Length")
-        if length:
-            try:
-                if int(length) > max_bytes:
-                    return None
-            except ValueError:
-                pass
-        data = resp.read(max_bytes + 1)
-        if len(data) > max_bytes:
-            return None
-        return data
-
-
-def _quote_photo_url_for_request(url: str) -> str:
-    try:
-        parts = urlsplit(url)
-        return urlunsplit(
-            (
-                parts.scheme,
-                parts.netloc,
-                quote(parts.path, safe="/%:@"),
-                quote(parts.query, safe="=&?/:+,%"),
-                parts.fragment,
-            )
-        )
-    except Exception:
-        return url
-
-
-async def _photo_url_dhash(url: str | None) -> str | None:
-    raw = str(url or "").strip()
-    if not raw:
-        return None
-    parsed = _extract_dhash_from_managed_photo_url(raw)
-    if parsed:
-        return parsed
-    if not raw.startswith(("http://", "https://")):
-        return None
-    try:
-        max_bytes = int(os.getenv("SMART_UPDATE_PHOTO_HASH_MAX_BYTES", "8000000") or "8000000")
-    except ValueError:
-        max_bytes = 8_000_000
-    try:
-        payload = await asyncio.to_thread(_download_photo_for_hash, raw, max_bytes=max_bytes)
-        if not payload:
-            return None
-        return await asyncio.to_thread(compute_dhash_hex, payload)
-    except Exception as exc:
-        logger.info("smart_update.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
-        return None
-
-
-async def _dedupe_photo_urls_by_phash(
-    photo_urls: Sequence[str],
-    *,
-    preferred_urls: set[str] | None = None,
-) -> list[str]:
-    """Collapse visually duplicate persisted image URLs.
-
-    `_dedup_near_duplicate_posters` handles the current candidate batch, but
-    events can already carry legacy `photo_urls` from a site/CDN import. When a
-    later Smart Update adds the same poster through managed storage, both URLs
-    used to survive in `Event.photo_urls` and then publish as duplicate VK
-    attachments. This normalizes the persisted image set itself.
-    """
-    urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
-    if len(urls) < 2:
-        return urls
-    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
-    if threshold <= 0:
-        out: list[str] = []
-        seen: set[str] = set()
-        for url in urls:
-            if url not in seen:
-                seen.add(url)
-                out.append(url)
-        return out
-    preferred = {str(u or "").strip() for u in (preferred_urls or set()) if str(u or "").strip()}
-    kept: list[str] = []
-    kept_hashes: list[str | None] = []
-    seen: set[str] = set()
-    for url in urls:
-        if url in seen:
-            continue
-        seen.add(url)
-        phash = await _photo_url_dhash(url)
-        duplicate_idx: int | None = None
-        if phash:
-            for idx, existing in enumerate(kept_hashes):
-                if existing and hamming_distance_hex(phash, existing) <= threshold:
-                    duplicate_idx = idx
-                    break
-        if duplicate_idx is None:
-            kept.append(url)
-            kept_hashes.append(phash)
-            continue
-        current_preferred = url in preferred
-        existing_preferred = kept[duplicate_idx] in preferred
-        if current_preferred and not existing_preferred:
-            logger.info(
-                "smart_update.photo_dedup replacing legacy near-duplicate with preferred url hamming<=%d",
-                threshold,
-            )
-            kept[duplicate_idx] = url
-            kept_hashes[duplicate_idx] = phash
-        else:
-            logger.info(
-                "smart_update.photo_dedup dropped near-duplicate photo_url hamming<=%d",
-                threshold,
-            )
-    return kept
-
-
 async def _apply_posters(
     session,
     event_id: int | None,
@@ -18303,298 +18038,168 @@ async def _apply_posters(
     poster_scope_hashes: Sequence[str] | None = None,
     event_title: str | None = None,
 ) -> tuple[int, list[str], bool, int, bool]:
+    """Persist candidates through the single fail-closed event-media gate.
+
+    Exact content/object identity may merge synchronously.  Perceptual hashes are
+    evidence only: every new second-or-later logical image remains quarantined
+    until the automated pair reviewer resolves it.
+    """
+
+    del event_title
     if not event_id:
         return 0, [], False, 0, False
-    await _backfill_missing_poster_candidate_phashes(posters)
-    posters = _dedup_near_duplicate_posters(posters)
+
+    from event_media import (
+        APPROVED,
+        DUPLICATE,
+        PENDING_REVIEW,
+        REJECTED,
+        ensure_event_media_reviews,
+        resolve_poster_display_url,
+        sync_event_gallery_projection,
+    )
+
     posters = _dedup_poster_candidates_by_identity(posters)
-    existing_rows = (
-        await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
-    ).scalars().all()
-    existing_map = {row.poster_hash: row for row in existing_rows}
+    existing_rows = list(
+        (
+            await session.execute(
+                select(EventPoster).where(EventPoster.event_id == int(event_id))
+            )
+        ).scalars().all()
+    )
+    existing_map = {str(row.poster_hash or "").strip(): row for row in existing_rows}
     existing_identity_index = _build_eventposter_identity_index(existing_rows)
-    added = 0
+    event = await session.get(Event, int(event_id))
+    before_urls = list(getattr(event, "photo_urls", None) or []) if event else []
+    before_count = int(getattr(event, "photo_count", 0) or 0) if event else 0
+    had_preview = bool(getattr(event, "preview_3d_url", None)) if event else False
     now = datetime.now(timezone.utc)
-    extra_urls: list[str] = []
+    added = 0
+    soft_rejected = 0
     added_urls: list[str] = []
-    preview_invalidated = False
-    pruned = 0
-    photo_urls_changed = False
+    next_order = max((int(getattr(row, "display_order", 0) or 0) for row in existing_rows), default=-1) + 1
 
-    def _pick_display_url(p: PosterCandidate) -> str | None:
-        return p.supabase_url or p.catbox_url
-
-    def _remember_url(url: str | None) -> None:
-        if url and url not in added_urls:
-            added_urls.append(url)
-
-    selected_hashes = {p.sha256 for p in posters if p.sha256}
-    scope_hashes = {
-        h.strip()
-        for h in (poster_scope_hashes or [])
-        if isinstance(h, str) and h.strip()
+    selected_hashes = {
+        str(p.sha256 or "").strip()
+        for p in posters
+        if str(p.sha256 or "").strip()
     }
-    pruned_urls: set[str] = set()
-    replaced_urls: set[str] = set()
-    to_delete_by_hash: dict[str, EventPoster] = {}
-
-    # 1) Exact prune: if the source provided the poster hash scope AND we have a non-empty
-    # selected set for this event, drop any previously attached posters from that scope that
-    # are not selected now.
-    #
-    # Important: if selection is empty, it usually means matching failed (OCR/title/time),
-    # and pruning would incorrectly delete posters (regression seen in TG monitoring re-imports).
+    scope_hashes = {
+        str(value or "").strip()
+        for value in (poster_scope_hashes or [])
+        if str(value or "").strip()
+    }
+    # A source-local scope may withdraw an old candidate, but never physically
+    # delete evidence.  Re-importing that exact candidate reopens review below.
     if scope_hashes and selected_hashes:
-        for h in scope_hashes:
-            if h in selected_hashes:
-                continue
-            row = existing_map.get(h)
-            if row:
-                to_delete_by_hash[row.poster_hash] = row
-
-    if to_delete_by_hash:
-        for row in to_delete_by_hash.values():
-            if row.catbox_url:
-                pruned_urls.add(row.catbox_url)
-            if getattr(row, "supabase_url", None):
-                pruned_urls.add(str(getattr(row, "supabase_url")))
-            await session.delete(row)
-        pruned = len(to_delete_by_hash)
+        for digest in scope_hashes - selected_hashes:
+            row = existing_map.get(digest)
+            if row and row.review_status not in {DUPLICATE, REJECTED}:
+                row.review_status = REJECTED
+                row.review_reason = "source_scope_withdrawn"
+                row.reviewed_at = now
+                session.add(row)
+                soft_rejected += 1
 
     for poster in posters:
-        digest = poster.sha256
+        poster_supabase_url = getattr(poster, "supabase_url", None)
+        poster_catbox_url = getattr(poster, "catbox_url", None)
+        poster_supabase_path = getattr(poster, "supabase_path", None)
+        poster_phash = getattr(poster, "phash", None)
+        poster_ocr_text = getattr(poster, "ocr_text", None)
+        poster_ocr_title = getattr(poster, "ocr_title", None)
+        display_url = str(poster_supabase_url or poster_catbox_url or "").strip()
+        digest = str(getattr(poster, "sha256", None) or "").strip().lower()
+        # Only a real SHA-256 may enter the byte-fingerprint column and its
+        # uniqueness guard.  Legacy callers sometimes supplied opaque ids here;
+        # those remain usable as poster identity but are not byte evidence.
+        digest_is_content = bool(re.fullmatch(r"[0-9a-f]{64}", digest))
+        if not digest and display_url:
+            digest = hashlib.sha256(f"url:{_normalize_poster_identity_url(display_url)}".encode()).hexdigest()
         if not digest:
-            url = _pick_display_url(poster)
-            if url:
-                extra_urls.append(url)
+            continue
+
+        row = existing_map.get(digest)
+        duplicate_reason = "poster_hash" if row else None
+        if row is None:
             row, duplicate_reason = _find_duplicate_eventposter_by_identity(
                 poster,
                 existing_identity_index,
             )
-            if not row:
-                continue
-        else:
-            row = existing_map.get(digest)
-            duplicate_reason = "poster_hash" if row else None
-            if not row:
-                row, duplicate_reason = _find_duplicate_eventposter_by_identity(
-                    poster,
-                    existing_identity_index,
-                )
-        if row:
+        if row is not None:
+            if poster_catbox_url and row.catbox_url != poster_catbox_url:
+                row.catbox_url = poster_catbox_url
+            if poster_supabase_url and row.supabase_url != poster_supabase_url:
+                row.supabase_url = poster_supabase_url
+            if poster_supabase_path:
+                row.supabase_path = poster_supabase_path
+            if poster_phash:
+                row.phash = poster_phash
+            if digest_is_content and not row.raw_sha256:
+                row.raw_sha256 = digest
+            if poster_ocr_text is not None:
+                row.ocr_text = poster_ocr_text
+            if poster_ocr_title is not None:
+                row.ocr_title = poster_ocr_title
+            if getattr(poster, "prompt_tokens", 0):
+                row.prompt_tokens = int(poster.prompt_tokens or 0)
+            if getattr(poster, "completion_tokens", 0):
+                row.completion_tokens = int(poster.completion_tokens or 0)
+            if getattr(poster, "total_tokens", 0):
+                row.total_tokens = int(poster.total_tokens or 0)
+            if row.review_status == REJECTED:
+                row.review_status = PENDING_REVIEW
+                row.review_reason = "source_scope_reintroduced"
+                row.reviewed_at = None
+            row.updated_at = now
+            session.add(row)
             if duplicate_reason and duplicate_reason != "poster_hash":
                 logger.info(
-                    "smart_update: merged duplicate poster by %s event_id=%s",
+                    "smart_update: merged exact poster identity reason=%s event_id=%s",
                     duplicate_reason,
                     event_id,
                 )
-            changed = False
-            if poster.catbox_url:
-                if row.catbox_url != poster.catbox_url:
-                    if row.catbox_url:
-                        replaced_urls.add(str(row.catbox_url))
-                    row.catbox_url = poster.catbox_url
-                    changed = True
-            if poster.supabase_url:
-                if getattr(row, "supabase_url", None) != poster.supabase_url:
-                    if getattr(row, "supabase_url", None):
-                        replaced_urls.add(str(getattr(row, "supabase_url")))
-                    row.supabase_url = poster.supabase_url
-                    changed = True
-            if poster.supabase_path:
-                if getattr(row, "supabase_path", None) != poster.supabase_path:
-                    row.supabase_path = poster.supabase_path
-                    changed = True
-            if poster.phash:
-                row.phash = poster.phash
-            if poster.ocr_text is not None:
-                row.ocr_text = poster.ocr_text
-            if poster.ocr_title is not None:
-                row.ocr_title = poster.ocr_title
-            # OCR token accounting is best-effort: keep the latest non-zero values.
-            if getattr(poster, "prompt_tokens", 0):
-                row.prompt_tokens = int(getattr(poster, "prompt_tokens", 0) or 0)
-            if getattr(poster, "completion_tokens", 0):
-                row.completion_tokens = int(getattr(poster, "completion_tokens", 0) or 0)
-            if getattr(poster, "total_tokens", 0):
-                row.total_tokens = int(getattr(poster, "total_tokens", 0) or 0)
-            row.updated_at = now
-            if changed:
-                _remember_url(_pick_display_url(poster))
         else:
-            session.add(
-                EventPoster(
-                    event_id=event_id,
-                    catbox_url=poster.catbox_url,
-                    supabase_url=poster.supabase_url,
-                    supabase_path=poster.supabase_path,
-                    poster_hash=digest,
-                    phash=poster.phash,
-                    ocr_text=poster.ocr_text,
-                    ocr_title=poster.ocr_title,
-                    prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
-                    completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
-                    total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
-                    updated_at=now,
-                )
+            row = EventPoster(
+                event_id=int(event_id),
+                catbox_url=poster_catbox_url,
+                supabase_url=poster_supabase_url,
+                supabase_path=poster_supabase_path,
+                poster_hash=digest,
+                raw_sha256=digest if digest_is_content else None,
+                phash=poster_phash,
+                review_status=PENDING_REVIEW,
+                review_reason="awaiting_automated_pair_review",
+                display_order=next_order,
+                ocr_text=poster_ocr_text,
+                ocr_title=poster_ocr_title,
+                prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
+                completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
+                total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
+                updated_at=now,
             )
+            next_order += 1
+            session.add(row)
+            await session.flush()
+            existing_rows.append(row)
+            existing_map[digest] = row
+            for key in _poster_identity_keys(row):
+                existing_identity_index.setdefault(key, row)
             added += 1
-            _remember_url(_pick_display_url(poster))
+        url = resolve_poster_display_url(row)
+        if url and url not in added_urls:
+            added_urls.append(url)
 
     await session.flush()
-    persisted_rows = (
-        await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
-    ).scalars().all()
-    await _backfill_missing_eventposter_phashes(persisted_rows)
-    persisted_pruned, persisted_pruned_urls = await _prune_near_duplicate_eventposters(
-        session,
-        persisted_rows,
-    )
-    if persisted_pruned:
-        pruned += persisted_pruned
-        pruned_urls |= persisted_pruned_urls
-        await session.flush()
-        persisted_rows = (
-            await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
-        ).scalars().all()
-
-    # Update event.photo_urls if possible
-    result = await session.execute(select(Event).where(Event.id == event_id))
-    event = result.scalar_one_or_none()
-    if event:
-        before_urls = list(event.photo_urls or [])
-        before_count = int(getattr(event, "photo_count", 0) or len(before_urls))
-        current = list(event.photo_urls or [])
-        removed_urls = pruned_urls | replaced_urls
-        if removed_urls:
-            current = [u for u in current if u not in removed_urls]
-        persisted_known_urls: set[str] = set()
-        persisted_display_urls: list[str] = []
-        for row in persisted_rows:
-            display_url = _event_poster_display_url(row)
-            for raw_url in (getattr(row, "catbox_url", None), getattr(row, "supabase_url", None)):
-                clean_url = str(raw_url or "").strip()
-                if clean_url:
-                    persisted_known_urls.add(clean_url)
-            if display_url and display_url not in persisted_display_urls:
-                persisted_display_urls.append(display_url)
-        if persisted_display_urls:
-            current = [u for u in current if u not in persisted_known_urls]
-            current = persisted_display_urls + [
-                u for u in current if u not in persisted_display_urls
-            ]
-        for poster in posters:
-            url = _pick_display_url(poster)
-            if url and url not in current:
-                current.append(url)
-        for url in extra_urls:
-            if url not in current:
-                current.append(url)
-        preferred_display_urls = {
-            _pick_display_url(poster)
-            for poster in posters
-            if _pick_display_url(poster)
-        }
-        # Prefer posters that are *relevant* to this event (by OCR vs event title/date/time),
-        # then fall back to OCR "quality" as a tie-breaker.
-        preferred_urls: list[str] = []
-        scored: list[tuple[float, int, int, str]] = []  # (relevance, quality, idx, url)
-        title_for_score = (event.title or event_title or "").strip()
-        date_for_score = (event.date or "").strip()
-        time_for_score = (event.time or "").strip()
-
-        def _norm(text: str | None) -> str:
-            value = (text or "").strip().casefold().replace("ё", "е")
-            value = unicodedata.normalize("NFKC", value)
-            value = value.replace("\xa0", " ")
-            value = re.sub(r"\s+", " ", value).strip()
-            return value
-
-        def _tokens(text: str | None) -> set[str]:
-            raw = _norm(text)
-            if not raw:
-                return set()
-            found = re.findall(r"[a-zа-я0-9]{3,}", raw, flags=re.IGNORECASE)
-            return {t for t in found if t and not t.isdigit()}
-
-        def _score_relevance(*, ocr_title: str | None, ocr_text: str | None) -> float:
-            ocr_combined = " ".join(
-                x for x in [(ocr_title or "").strip(), (ocr_text or "").strip()] if x
-            ).strip()
-            if not ocr_combined:
-                return 0.0
-            ocr_norm = _norm(ocr_combined)
-
-            title_tokens = _tokens(title_for_score)
-            ocr_tokens = _tokens(ocr_combined)
-            overlap = len(title_tokens & ocr_tokens) if (title_tokens and ocr_tokens) else 0
-            score = float(min(10, overlap * 2))
-
-            title_norm = _norm(title_for_score)
-            if title_norm and len(title_norm) >= 10 and title_norm in ocr_norm:
-                score += 4.0
-
-            d_raw = date_for_score
-            if d_raw:
-                try:
-                    d_obj = date.fromisoformat(d_raw.split("..", 1)[0].strip())
-                except Exception:
-                    d_obj = None
-                if d_obj is not None:
-                    day = d_obj.day
-                    month = d_obj.month
-                    if re.search(rf"\b0?{day}[./-]0?{month}\b", ocr_norm):
-                        score += 3.0
-
-            t_raw = time_for_score
-            if t_raw and t_raw != "00:00":
-                hhmm = re.sub(r"\s+", "", t_raw)
-                if re.match(r"^\d{1,2}:\d{2}$", hhmm):
-                    hh, mm = hhmm.split(":", 1)
-                    hh = hh.zfill(2)
-                    if f"{hh}:{mm}" in ocr_norm or f"{hh}.{mm}" in ocr_norm:
-                        score += 1.5
-
-            return score
-
-        for idx, poster in enumerate(posters):
-            url = _pick_display_url(poster)
-            if not url:
-                continue
-            quality = 0
-            if poster.ocr_title:
-                quality += len(poster.ocr_title)
-            if poster.ocr_text:
-                quality += len(poster.ocr_text)
-            if quality <= 0:
-                continue
-            relevance = _score_relevance(ocr_title=poster.ocr_title, ocr_text=poster.ocr_text)
-            scored.append((relevance, quality, idx, url))
-
-        if scored:
-            has_relevance = any(rel > 0.0 for rel, _q, _i, _u in scored)
-            if has_relevance:
-                scored_sorted = sorted(scored, key=lambda t: (-t[0], -t[1], t[2]))
-            else:
-                scored_sorted = sorted(scored, key=lambda t: (-t[1], t[2]))
-            for _rel, _quality, _idx, url in scored_sorted:
-                if url not in preferred_urls:
-                    preferred_urls.append(url)
-            current = preferred_urls + [url for url in current if url not in preferred_urls]
-        current = await _dedupe_photo_urls_by_phash(
-            current,
-            preferred_urls={str(u) for u in preferred_display_urls if u},
-        )
-        photo_urls_changed = (current != before_urls) or (len(current) != before_count)
-        event.photo_urls = current
-        event.photo_count = len(current)
-        # If the image set changed, any existing 3D preview becomes stale: force regeneration.
-        if photo_urls_changed and getattr(event, "preview_3d_url", None):
-            event.preview_3d_url = None
-            preview_invalidated = True
-        session.add(event)
-
-    return added, added_urls, preview_invalidated, pruned, photo_urls_changed
+    await ensure_event_media_reviews(session, int(event_id))
+    photo_urls_changed = await sync_event_gallery_projection(session, int(event_id))
+    event = await session.get(Event, int(event_id))
+    if event is not None:
+        after_urls = list(event.photo_urls or [])
+        after_count = int(event.photo_count or 0)
+        photo_urls_changed = photo_urls_changed or before_urls != after_urls or before_count != after_count
+    preview_invalidated = bool(had_preview and event is not None and not event.preview_3d_url)
+    return added, added_urls, preview_invalidated, soft_rejected, photo_urls_changed
 
 
 async def _ensure_event_source(
@@ -18644,6 +18249,18 @@ async def _ensure_event_source(
             trust_level=candidate.trust_level,
         )
     )
+    # Source-only merges are reconciled asynchronously by the same event-media
+    # gate; Telegraph/renderers are no longer allowed to attach media themselves.
+    try:
+        from event_media import enqueue_event_media_review_job
+
+        await enqueue_event_media_review_job(session, int(event_id))
+    except Exception:
+        logger.warning(
+            "smart_update: failed to enqueue source media reconcile event_id=%s",
+            event_id,
+            exc_info=True,
+        )
     return True, False
 
 

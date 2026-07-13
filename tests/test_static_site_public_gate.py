@@ -114,3 +114,61 @@ def test_public_projection_gate_is_safe_for_old_schema_rows() -> None:
     rows = exporter.fetch_rows(con, limit=5, current_date="2026-07-01", include_ids=[10])
 
     assert [row["id"] for row in rows] == [10]
+
+
+def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        """
+        create table eventposter(
+            id integer primary key,
+            event_id integer not null,
+            supabase_url text,
+            catbox_url text,
+            ocr_text text,
+            review_status text,
+            display_order integer default 0
+        )
+        """
+    )
+    con.executemany(
+        "insert into eventposter values(?, ?, ?, ?, ?, ?, ?)",
+        [
+            (1, 7, "https://managed.example/a.webp", "https://source.example/a.jpg", "A", "approved", 0),
+            (2, 7, "https://managed.example/b.webp", None, "B", "pending_review", 1),
+            (3, 7, None, "https://source.example/c.jpg", "C", "duplicate", 2),
+            (4, 7, None, "https://source.example/d.jpg", "D", "approved", 3),
+        ],
+    )
+
+    _primary, _mode, assets = exporter.collect_images(
+        con,
+        7,
+        '["https://legacy.example/leak.jpg"]',
+        "Событие",
+    )
+
+    assert [asset["src"] for asset in assets] == [
+        "https://managed.example/a.webp",
+        "https://source.example/d.jpg",
+    ]
+
+
+def test_collect_images_does_not_fallback_when_only_quarantined_rows_exist() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        "create table eventposter(id integer primary key, event_id integer, supabase_url text, catbox_url text, ocr_text text, review_status text, display_order integer)"
+    )
+    con.execute(
+        "insert into eventposter values(1, 8, 'https://static.example/pending.webp', null, null, 'pending_review', 0)"
+    )
+    _primary, _mode, assets = exporter.collect_images(
+        con, 8, '["https://legacy.example/leak.jpg"]', "Событие"
+    )
+    assert assets == []

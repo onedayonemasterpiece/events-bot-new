@@ -5214,7 +5214,6 @@ TG_EVENT_MAX_URL = "https://max.ru/channel_kenigevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
-TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 # This is a final public-copy writer, not an internal processing stage.  Keep it
 # on Gemini Lite by policy; the call site disables cross-model fallbacks and
 # bounds each publication attempt to one request so a retry backlog cannot
@@ -6277,47 +6276,20 @@ def _chunked_tg_media(urls: Sequence[str], size: int = TG_EVENT_ALBUM_SIZE) -> l
     return [clean[i : i + size] for i in range(0, len(clean), size)]
 
 
-def _tg_media_dhash_from_url(url: str) -> str | None:
-    match = re.search(r"/p/dh16/[0-9a-f]{2}/([0-9a-f]{64})\.webp(?:[?#].*)?$", url, re.I)
-    return match.group(1).lower() if match else None
-
-
-def _tg_media_dhash_distance(left: str, right: str) -> int | None:
-    try:
-        return (int(left, 16) ^ int(right, 16)).bit_count()
-    except Exception:
-        return None
-
-
 def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
     clean: list[str] = []
     seen: set[str] = set()
-    seen_dhashes: list[str] = []
     for raw in urls or []:
         url = str(raw or "").strip()
         if not url or url in seen:
             continue
-        dhash = _tg_media_dhash_from_url(url)
-        if dhash:
-            duplicate = False
-            for seen_dhash in seen_dhashes:
-                distance = _tg_media_dhash_distance(dhash, seen_dhash)
-                if (
-                    distance is not None
-                    and distance <= TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE
-                ):
-                    duplicate = True
-                    break
-            if duplicate:
-                continue
-            seen_dhashes.append(dhash)
         seen.add(url)
         clean.append(url)
     return clean
 
 
 async def _dedupe_event_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
-    """Drop visually duplicate event photos across managed mirrors and source URLs."""
+    """Final exact-URL guard; visual identity is owned by event_media review."""
     return await _dedupe_vk_photo_urls_for_publish(photo_urls)
 
 
@@ -6783,117 +6755,20 @@ def build_vk_source_message(
     return "\n".join(lines)
 
 
-def _vk_photo_near_dup_hamming_threshold() -> int:
-    raw = (
-        os.getenv("VK_PHOTO_NEAR_DUP_HAMMING")
-        or os.getenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING")
-        or "32"
-    )
-    try:
-        return max(0, int(str(raw).strip()))
-    except (TypeError, ValueError):
-        return 32
-
-
-def _quote_photo_url_for_request(url: str) -> str:
-    try:
-        parts = urlsplit(url)
-        return urlunsplit(
-            (
-                parts.scheme,
-                parts.netloc,
-                quote(parts.path, safe="/%:@"),
-                quote(parts.query, safe="=&?/:+,%"),
-                parts.fragment,
-            )
-        )
-    except Exception:
-        return url
-
-
-def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
-    match = re.search(
-        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
-        str(url or "").strip(),
-        flags=re.IGNORECASE,
-    )
-    return match.group(1).lower() if match else None
-
-
-async def _compute_vk_photo_url_dhash(url: str | None) -> str | None:
-    raw = str(url or "").strip()
-    if not raw:
-        return None
-    parsed = _extract_dhash_from_managed_photo_url(raw)
-    if parsed:
-        return parsed
-    try:
-        from media_dedup import compute_dhash_hex
-    except Exception:
-        return None
-    try:
-        session = get_http_session()
-        request_url = _quote_photo_url_for_request(raw)
-        async with span("http"):
-            async with HTTP_SEMAPHORE:
-                async with session.get(request_url) as resp:
-                    resp.raise_for_status()
-                    if resp.content_length and resp.content_length > MAX_DOWNLOAD_SIZE:
-                        return None
-                    buf = bytearray()
-                    async for chunk in resp.content.iter_chunked(64 * 1024):
-                        buf.extend(chunk)
-                        if len(buf) > MAX_DOWNLOAD_SIZE:
-                            return None
-        return await asyncio.to_thread(compute_dhash_hex, bytes(buf))
-    except Exception as exc:
-        logging.info("vk.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
-        return None
-
-
 async def _dedupe_vk_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
-    """Drop visually duplicate image URLs before uploading a VK media group."""
+    """Keep only exact URL uniqueness at the renderer boundary.
+
+    A perceptual distance is evidence, not permission for a publisher to hide
+    media that the canonical automated review approved.
+    """
     urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
-    if len(urls) < 2:
-        return urls
-    threshold = _vk_photo_near_dup_hamming_threshold()
-    if threshold <= 0:
-        out: list[str] = []
-        seen: set[str] = set()
-        for url in urls:
-            if url not in seen:
-                seen.add(url)
-                out.append(url)
-        return out
-
-    try:
-        from media_dedup import hamming_distance_hex
-    except Exception:
-        hamming_distance_hex = None
-
     kept: list[str] = []
-    kept_hashes: list[str | None] = []
     seen_urls: set[str] = set()
     for url in urls:
         if url in seen_urls:
             continue
         seen_urls.add(url)
-        phash = await _compute_vk_photo_url_dhash(url)
-        duplicate = False
-        if phash and hamming_distance_hex is not None:
-            for existing in kept_hashes:
-                if existing and hamming_distance_hex(phash, existing) <= threshold:
-                    logging.info(
-                        "vk.photo_dedup dropped near-duplicate hamming<=%d url=%s",
-                        threshold,
-                        url[:160],
-                    )
-                    duplicate = True
-                    break
-        if duplicate:
-            continue
         kept.append(url)
-        kept_hashes.append(phash)
     return kept
 
 
@@ -7088,49 +6963,49 @@ async def sync_vk_source_post(
                 )
                 photo_upload_skipped_missing_user_token = True
                 break
-            if ids:
-                if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
-                    # Preserve an existing photo set on partial re-upload, but
-                    # do not preserve *no media*.  Late rehydration commonly
-                    # reaches a text-only projection after one of several raw
-                    # source URLs has expired; attaching the successfully
-                    # uploaded subset is strictly better and lets the normal
-                    # media-completeness contract converge.
-                    existing_has_photos = True  # provider failure => fail safe
-                    try:
-                        existing_ids = _vk_owner_and_post_id(existing_vk_post_url)
-                        if existing_ids:
-                            existing_response = await vk_api(
-                                "wall.getById",
-                                posts=f"{existing_ids[0]}_{existing_ids[1]}",
+        if ids:
+            if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
+                # Preserve an existing photo set on partial re-upload, but
+                # do not preserve *no media*.  Late rehydration commonly
+                # reaches a text-only projection after one of several raw
+                # source URLs has expired; attaching the successfully
+                # uploaded subset is strictly better and lets the normal
+                # media-completeness contract converge.
+                existing_has_photos = True  # provider failure => fail safe
+                try:
+                    existing_ids = _vk_owner_and_post_id(existing_vk_post_url)
+                    if existing_ids:
+                        existing_response = await vk_api(
+                            "wall.getById",
+                            posts=f"{existing_ids[0]}_{existing_ids[1]}",
+                        )
+                        existing_items = _vk_wall_get_by_id_items(existing_response)
+                        if existing_items:
+                            existing_has_photos = _vk_wall_item_has_photo(
+                                existing_items[0]
                             )
-                            existing_items = _vk_wall_get_by_id_items(existing_response)
-                            if existing_items:
-                                existing_has_photos = _vk_wall_item_has_photo(
-                                    existing_items[0]
-                                )
-                    except Exception:
-                        logging.warning(
-                            "VK partial media existing attachment probe failed event_id=%s url=%s",
-                            event.id,
-                            existing_vk_post_url,
-                            exc_info=True,
-                        )
-                    if existing_has_photos:
-                        logging.warning(
-                            "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
-                            event.id,
-                            len(ids),
-                            len(photo_urls_for_publish),
-                        )
-                    else:
-                        attachments = ids
-                        logging.warning(
-                            "VK photo upload partial for text-only existing post; attaching available media event_id=%s uploaded=%s expected=%s",
-                            event.id,
-                            len(ids),
-                            len(photo_urls_for_publish),
-                        )
+                except Exception:
+                    logging.warning(
+                        "VK partial media existing attachment probe failed event_id=%s url=%s",
+                        event.id,
+                        existing_vk_post_url,
+                        exc_info=True,
+                    )
+                if existing_has_photos:
+                    logging.warning(
+                        "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
+                        event.id,
+                        len(ids),
+                        len(photo_urls_for_publish),
+                    )
+                else:
+                    attachments = ids
+                    logging.warning(
+                        "VK photo upload partial for text-only existing post; attaching available media event_id=%s uploaded=%s expected=%s",
+                        event.id,
+                        len(ids),
+                        len(photo_urls_for_publish),
+                    )
             elif not existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
                 logging.error(
                     "sync_vk_source_post blocked partial source post media event_id=%s source_url=%s uploaded=%s expected=%s",

@@ -370,17 +370,25 @@ async def _ensure_promo_vk_photo_urls(db: Database, ev: Event) -> list[str]:
     if not recovered_urls:
         return []
 
-    ev.photo_urls = recovered_urls
-    ev.photo_count = len(recovered_urls)
     event_id = getattr(ev, "id", None)
     if event_id:
+        from event_media import get_event_gallery_urls, ingest_event_media_urls
+
         async with db.get_session() as session:
-            stored = await session.get(Event, int(event_id))
-            if stored is not None:
-                stored.photo_urls = recovered_urls
-                stored.photo_count = len(recovered_urls)
-                session.add(stored)
-                await session.commit()
+            await ingest_event_media_urls(
+                session,
+                int(event_id),
+                recovered_urls,
+                source="promo_telegraph_recovery",
+            )
+            await session.commit()
+            recovered_urls = await get_event_gallery_urls(
+                session,
+                int(event_id),
+                legacy_fallback=False,
+            )
+        ev.photo_urls = list(recovered_urls)
+        ev.photo_count = len(recovered_urls)
     logger.info(
         "promo.vk media recovered source=telegraph event_id=%s telegraph_url=%s photo_urls_count=%s",
         event_id,

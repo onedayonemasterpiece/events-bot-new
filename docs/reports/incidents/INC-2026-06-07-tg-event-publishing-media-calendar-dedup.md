@@ -192,3 +192,12 @@ The first production Telegram event announcement in `@kldevents` was published a
 - Regression tests now also cover single-source source-media rehydrate, media URL participation in Telegram event idempotency, borderline near-dHash duplicate collapse, and stale text-post replacement when media appears later.
 - Regression tests now also cover the fanout order contract: Telegram event publishing depends on managed VK sync, and dependency errors/backoff block downstream publication instead of letting Telegram run ahead.
 - Regression tests now also cover the 2036 cleanup-anchor regression and the late-next-day backlog regression: far-future cancelled/backlog rows and stale evening anchors after local window close do not push fresh Telegram event posts outside the normal morning rhythm.
+
+## 2026-07-13 superseding media contract
+
+Telegram no longer owns near-dHash adjudication and source rehydration no longer
+runs inside Telegraph. `tg_event_publish` receives only the Smart Update
+`approved` projection and retains exact-URL uniqueness as a final guard. This
+prevents publisher-specific false positives and keeps calendar/idempotency logic
+independent from visual duplicate decisions. See
+`docs/features/event-media/README.md`.

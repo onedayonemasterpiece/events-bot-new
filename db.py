@@ -474,6 +474,13 @@ class Database:
             )
             dbg("eventposter")
 
+            eventposter_columns_before = await (
+                await conn.execute("PRAGMA table_info('eventposter')")
+            ).fetchall()
+            eventposter_had_review_status = any(
+                str(col[1]) == "review_status" for col in eventposter_columns_before
+            )
+
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS eventposter(
@@ -484,6 +491,17 @@ class Database:
                     supabase_path TEXT,
                     poster_hash TEXT NOT NULL,
                     phash TEXT,
+                    raw_sha256 TEXT,
+                    pixel_sha256 TEXT,
+                    perceptual_hash TEXT,
+                    width INTEGER,
+                    height INTEGER,
+                    mime_type TEXT,
+                    review_status TEXT NOT NULL DEFAULT 'pending_review',
+                    duplicate_of_id INTEGER,
+                    review_reason TEXT,
+                    reviewed_at TIMESTAMP,
+                    display_order INTEGER NOT NULL DEFAULT 0,
                     ocr_text TEXT,
                     ocr_title TEXT,
                     prompt_tokens INTEGER NOT NULL DEFAULT 0,
@@ -491,6 +509,7 @@ class Database:
                     total_tokens INTEGER NOT NULL DEFAULT 0,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(duplicate_of_id) REFERENCES eventposter(id) ON DELETE SET NULL,
                     UNIQUE(event_id, poster_hash)
                 )
                 """
@@ -499,11 +518,101 @@ class Database:
             await _add_column(conn, "eventposter", "phash TEXT")
             await _add_column(conn, "eventposter", "supabase_url TEXT")
             await _add_column(conn, "eventposter", "supabase_path TEXT")
+            await _add_column(conn, "eventposter", "raw_sha256 TEXT")
+            await _add_column(conn, "eventposter", "pixel_sha256 TEXT")
+            await _add_column(conn, "eventposter", "perceptual_hash TEXT")
+            await _add_column(conn, "eventposter", "width INTEGER")
+            await _add_column(conn, "eventposter", "height INTEGER")
+            await _add_column(conn, "eventposter", "mime_type TEXT")
+            await _add_column(
+                conn,
+                "eventposter",
+                "review_status TEXT NOT NULL DEFAULT 'pending_review'",
+            )
+            await _add_column(conn, "eventposter", "duplicate_of_id INTEGER")
+            await _add_column(conn, "eventposter", "review_reason TEXT")
+            await _add_column(conn, "eventposter", "reviewed_at TIMESTAMP")
+            await _add_column(
+                conn,
+                "eventposter",
+                "display_order INTEGER NOT NULL DEFAULT 0",
+            )
+            if not eventposter_had_review_status:
+                await conn.execute(
+                    "UPDATE eventposter SET review_status='approved', reviewed_at=COALESCE(reviewed_at, updated_at)"
+                )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_event ON eventposter(event_id)"
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_phash ON eventposter(phash)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_review_status ON eventposter(event_id, review_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_raw_sha256 ON eventposter(event_id, raw_sha256)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_pixel_sha256 ON eventposter(event_id, pixel_sha256)"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_eventposter_event_raw_sha256 ON eventposter(event_id, raw_sha256) WHERE raw_sha256 IS NOT NULL AND TRIM(raw_sha256) != ''"
+            )
+
+            dbg("event_media_review")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_media_pair_review(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    left_poster_id INTEGER NOT NULL,
+                    right_poster_id INTEGER NOT NULL,
+                    context_hash TEXT NOT NULL,
+                    pair_input_hash TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    decision TEXT,
+                    duplicate_kind TEXT,
+                    confidence REAL,
+                    semantic_conflict INTEGER NOT NULL DEFAULT 0,
+                    canonical_poster_id INTEGER,
+                    reason_code TEXT,
+                    primary_model TEXT,
+                    escalation_model TEXT,
+                    response_json JSON,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    provider_calls INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    next_run_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    resolved_at TIMESTAMP,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(left_poster_id) REFERENCES eventposter(id) ON DELETE CASCADE,
+                    FOREIGN KEY(right_poster_id) REFERENCES eventposter(id) ON DELETE CASCADE,
+                    FOREIGN KEY(canonical_poster_id) REFERENCES eventposter(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_media_pair_review_event_status ON event_media_pair_review(event_id, status, next_run_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_media_pair_review_left ON event_media_pair_review(left_poster_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_media_pair_review_right ON event_media_pair_review(right_poster_id)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_media_review_usage(
+                    day TEXT NOT NULL,
+                    stage TEXT NOT NULL,
+                    calls INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(day, stage)
+                )
+                """
             )
 
             dbg("event_media_asset")

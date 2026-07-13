@@ -761,6 +761,9 @@ class EventPoster(SQLModel, table=True):
     __table_args__ = (
         Index("ix_eventposter_event", "event_id"),
         Index("ix_eventposter_phash", "phash"),
+        Index("ix_eventposter_review_status", "event_id", "review_status"),
+        Index("ix_eventposter_raw_sha256", "event_id", "raw_sha256"),
+        Index("ix_eventposter_pixel_sha256", "event_id", "pixel_sha256"),
         UniqueConstraint("event_id", "poster_hash", name="ux_eventposter_event_hash"),
     )
 
@@ -772,12 +775,79 @@ class EventPoster(SQLModel, table=True):
     supabase_url: Optional[str] = None
     supabase_path: Optional[str] = None
     poster_hash: str
+    # ``phash`` is the historical repository-compatible dHash16 value.  Keep it
+    # for storage-path compatibility; new code stores the DCT hash separately.
     phash: Optional[str] = None
+    raw_sha256: Optional[str] = None
+    pixel_sha256: Optional[str] = None
+    perceptual_hash: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    mime_type: Optional[str] = None
+    review_status: str = "pending_review"
+    duplicate_of_id: Optional[int] = Field(default=None, foreign_key="eventposter.id")
+    review_reason: Optional[str] = None
+    reviewed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    display_order: int = 0
     ocr_text: Optional[str] = None
     ocr_title: Optional[str] = None
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventMediaPairReview(SQLModel, table=True):
+    __tablename__ = "event_media_pair_review"
+    __table_args__ = (
+        Index("ix_event_media_pair_review_event_status", "event_id", "status", "next_run_at"),
+        Index("ix_event_media_pair_review_left", "left_poster_id"),
+        Index("ix_event_media_pair_review_right", "right_poster_id"),
+        UniqueConstraint("pair_input_hash", name="ux_event_media_pair_review_input"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id")
+    left_poster_id: int = Field(foreign_key="eventposter.id")
+    right_poster_id: int = Field(foreign_key="eventposter.id")
+    context_hash: str
+    pair_input_hash: str
+    status: str = "pending"
+    decision: Optional[str] = None
+    duplicate_kind: Optional[str] = None
+    confidence: Optional[float] = None
+    semantic_conflict: bool = False
+    canonical_poster_id: Optional[int] = Field(default=None, foreign_key="eventposter.id")
+    reason_code: Optional[str] = None
+    primary_model: Optional[str] = None
+    escalation_model: Optional[str] = None
+    response_json: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    attempts: int = 0
+    provider_calls: int = 0
+    last_error: Optional[str] = None
+    next_run_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    resolved_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventMediaReviewUsage(SQLModel, table=True):
+    __tablename__ = "event_media_review_usage"
+    day: str = Field(primary_key=True)
+    stage: str = Field(primary_key=True)
+    calls: int = 0
     updated_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
@@ -1261,6 +1331,7 @@ class OpsRun(SQLModel, table=True):
 
 
 class JobTask(str, Enum):
+    event_media_review = "event_media_review"
     telegraph_build = "telegraph_build"
     vk_sync = "vk_sync"
     tg_event_publish = "tg_event_publish"

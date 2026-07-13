@@ -1,5 +1,10 @@
 # Source parsing (извлечение событий из источников)
 
+Event images recovered by full-update/source parsing are passed to
+`event_media.ingest_event_media_urls()` and therefore the Smart Update automatic
+gate; this surface must not assign `Event.photo_urls` directly. See
+[Event media](../event-media/README.md).
+
 Фича отвечает за извлечение и обновление событий из внешних источников: театры, отдельные сайты (например pyramida.info), спецпроекты Дом искусств, а также другие источники, которые будут добавляться.
 
 ## Точки входа

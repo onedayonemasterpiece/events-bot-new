@@ -715,7 +715,7 @@ async def test_sync_vk_source_post_blocks_new_post_on_partial_media_upload(monke
 
 
 @pytest.mark.asyncio
-async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
+async def test_sync_vk_source_post_does_not_override_canonical_media_gate(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True
     main.VK_TOKEN_AFISHA = "ga"
@@ -730,17 +730,6 @@ async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
         photo_urls=["http://img1", "http://img2", "http://img3"],
     )
 
-    hashes = {
-        "http://img1": "0" * 64,
-        # INC-2026-06-16: visually duplicate VK illustrations were 28 bits
-        # apart over the 256-bit dh16 hash and must still collapse.
-        "http://img2": ("f" * 7) + ("0" * 57),
-        "http://img3": "f" * 64,
-    }
-
-    async def fake_hash(url):
-        return hashes[url]
-
     uploaded: list[str] = []
 
     async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
@@ -753,21 +742,14 @@ async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
         posted["vals"] = attachments
         return "https://vk.com/wall-1_2"
 
-    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_hash)
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
     monkeypatch.setattr(main, "post_to_vk", fake_post)
 
     url = await main.sync_vk_source_post(event, "Text", None, None)
 
     assert url == "https://vk.com/wall-1_2"
-    assert uploaded == ["http://img1", "http://img3"]
-    assert posted["vals"] == ["ph1", "ph2"]
-
-
-def test_vk_photo_near_dup_default_threshold(monkeypatch):
-    monkeypatch.delenv("VK_PHOTO_NEAR_DUP_HAMMING", raising=False)
-    monkeypatch.delenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", raising=False)
-    assert main._vk_photo_near_dup_hamming_threshold() == 32
+    assert uploaded == ["http://img1", "http://img2", "http://img3"]
+    assert posted["vals"] == ["ph1", "ph2", "ph3"]
 
 
 @pytest.mark.asyncio

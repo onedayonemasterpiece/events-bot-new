@@ -23,6 +23,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from db import Database
+from event_media import (
+    PENDING_REVIEW,
+    ensure_event_media_reviews,
+    sync_event_gallery_projection,
+)
 from media_dedup import prepare_image_for_supabase
 from models import Event, EventPoster, EventSource
 from net import http_call
@@ -708,7 +713,10 @@ async def _process_event(
                     supabase_url=fetched.hosted_url,
                     supabase_path=fetched.hosted_path,
                     poster_hash=fetched.raw_sha256,
+                    raw_sha256=fetched.raw_sha256,
                     phash=fetched.dhash_hex,
+                    review_status=PENDING_REVIEW,
+                    review_reason="storage_backfill_awaiting_automated_review",
                     updated_at=now,
                 )
             )
@@ -725,10 +733,16 @@ async def _process_event(
                     )
                 )
 
-        if result.photo_urls_changed:
-            event_db.photo_urls = updated_photo_urls
-            event_db.photo_count = len(updated_photo_urls)
-            session.add(event_db)
+        # Storage migration may add a logical image, but it cannot bypass the
+        # Smart Update media gate or publish its own projection.
+        await session.flush()
+        await ensure_event_media_reviews(session, int(event.id))
+        await sync_event_gallery_projection(session, int(event.id))
+        await session.flush()
+        event_db = await session.get(Event, int(event.id))
+        approved_photo_urls = list(event_db.photo_urls or []) if event_db else []
+        result.photo_urls_changed = approved_photo_urls != list(event.photo_urls or [])
+        updated_photo_urls = approved_photo_urls
 
         await session.commit()
 

@@ -13790,84 +13790,33 @@ async def upsert_event_posters(
     event_id: int,
     poster_items: Sequence[PosterMedia] | None,
 ) -> None:
+    """Compatibility adapter; Smart Update remains the only poster writer."""
+
     if not poster_items:
         return
+    from smart_event_update import PosterCandidate, _apply_posters
 
-    existing = (
-        await session.execute(
-            select(EventPoster).where(EventPoster.event_id == event_id)
-        )
-    ).scalars()
-    existing_map = {row.poster_hash: row for row in existing}
-    seen: set[str] = set()
-    now = datetime.now(timezone.utc)
-
+    candidates: list[PosterCandidate] = []
     for item in poster_items:
-        digest = item.digest
-        if not digest and item.data:
-            digest = hashlib.sha256(item.data).hexdigest()
-        if not digest or digest in seen:
-            continue
-        seen.add(digest)
-        row = existing_map.get(digest)
+        digest = item.digest or (hashlib.sha256(item.data).hexdigest() if item.data else None)
         supabase_url = (getattr(item, "supabase_url", None) or "").strip() or None
-        if not supabase_url:
-            maybe = (getattr(item, "catbox_url", None) or "").strip()
-            if maybe and is_supabase_storage_url(maybe):
-                supabase_url = maybe
-        supabase_path = None
-        if supabase_url:
-            try:
-                from supabase_storage import parse_storage_object_url
-
-                parsed = parse_storage_object_url(supabase_url)
-                if parsed:
-                    _b, p = parsed
-                    supabase_path = p
-            except Exception:
-                supabase_path = None
-        prompt_tokens = item.prompt_tokens
-        completion_tokens = item.completion_tokens
-        total_tokens = item.total_tokens
-        if row:
-            if item.catbox_url:
-                row.catbox_url = item.catbox_url
-            if supabase_url:
-                row.supabase_url = supabase_url
-            if supabase_path:
-                row.supabase_path = supabase_path
-            if item.ocr_text is not None:
-                row.ocr_text = item.ocr_text
-            if item.ocr_title is not None:
-                row.ocr_title = item.ocr_title
-            if prompt_tokens is not None:
-                row.prompt_tokens = int(prompt_tokens)
-            if completion_tokens is not None:
-                row.completion_tokens = int(completion_tokens)
-            if total_tokens is not None:
-                row.total_tokens = int(total_tokens)
-            row.updated_at = now
-        else:
-            session.add(
-                EventPoster(
-                    event_id=event_id,
-                    catbox_url=item.catbox_url,
-                    supabase_url=supabase_url,
-                    supabase_path=supabase_path,
-                    poster_hash=digest,
-                    ocr_text=item.ocr_text,
-                    ocr_title=item.ocr_title,
-                    prompt_tokens=int(prompt_tokens or 0),
-                    completion_tokens=int(completion_tokens or 0),
-                    total_tokens=int(total_tokens or 0),
-                    updated_at=now,
-                )
+        catbox_url = (getattr(item, "catbox_url", None) or "").strip() or None
+        if not supabase_url and catbox_url and is_supabase_storage_url(catbox_url):
+            supabase_url, catbox_url = catbox_url, None
+        candidates.append(
+            PosterCandidate(
+                catbox_url=catbox_url,
+                supabase_url=supabase_url,
+                sha256=digest,
+                phash=getattr(item, "phash", None),
+                ocr_text=item.ocr_text,
+                ocr_title=item.ocr_title,
+                prompt_tokens=int(item.prompt_tokens or 0),
+                completion_tokens=int(item.completion_tokens or 0),
+                total_tokens=int(item.total_tokens or 0),
             )
-
-    stale_entries = [row for key, row in existing_map.items() if key not in seen]
-    for entry in stale_entries:
-        await session.delete(entry)
-
+        )
+    await _apply_posters(session, int(event_id), candidates)
     await session.commit()
 
 
@@ -17121,6 +17070,7 @@ BACKOFF_SCHEDULE = [30, 120, 600, 3600]
 
 
 TASK_LABELS = {
+    "event_media_review": "Проверка изображений",
     "telegraph_build": "Telegraph (событие)",
     "vk_sync": "VK (событие)",
     "tg_event_publish": "Telegram (событие)",
@@ -17143,6 +17093,7 @@ TASK_LABELS = {
 # user-facing publish tasks to 1 hour so heavy operations
 # (vk_auto_import / nightly_page_sync) cannot starve them.
 JOB_TTL: dict[JobTask, int] = {
+    JobTask.event_media_review: 86400,
     JobTask.telegraph_build: 3600,
     JobTask.tg_event_publish: 3600,
     JobTask.tg_premium_emoji_edit: 3600,
@@ -17156,6 +17107,7 @@ JOB_TTL: dict[JobTask, int] = {
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
+    JobTask.event_media_review: 180,
     JobTask.telegraph_build: 900,
     JobTask.tg_event_publish: 180,
     JobTask.tg_premium_emoji_edit: 180,
@@ -17171,6 +17123,7 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
 DEFAULT_JOB_TTL = 3600
 DEFAULT_JOB_MAX_RUNTIME = 900
 EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
+    JobTask.event_media_review,
     JobTask.telegraph_build,
     JobTask.vk_sync,
     JobTask.tg_event_publish,
@@ -17482,6 +17435,7 @@ async def _run_due_jobs_once_locked(
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
     priority = {
+        JobTask.event_media_review: -2,
         JobTask.vk_sync: -1,
         JobTask.telegraph_build: 0,
         JobTask.tg_event_publish: 0,
@@ -18228,7 +18182,11 @@ async def ensure_event_telegraph_link(e: Event, fest: Festival | None, db: Datab
 
 
 def _event_source_media_rehydrate_enabled() -> bool:
-    raw = (os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH") or "1").strip().lower()
+    raw = (
+        os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ENABLED")
+        or os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH")
+        or "1"
+    ).strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
 
@@ -18246,7 +18204,7 @@ async def _fetch_event_source_poster_candidates(
 
     Event sources are the durable evidence graph. Older imports, idempotent replays,
     or source-only merges may have kept the source URL/text while missing its media.
-    Telegraph rebuilds can safely repair that storage gap without changing event text.
+    The event-media outbox worker can repair that storage gap without changing event text.
     """
 
     url = (source_url or "").strip()
@@ -18310,7 +18268,7 @@ async def _fetch_event_source_poster_candidates(
             out.append(
                 PosterCandidate(
                     catbox_url=photo_url,
-                    sha256=_source_media_hash("vk-source-photo", photo_url),
+                    sha256=None,
                 )
             )
         return out
@@ -18323,6 +18281,13 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
     *,
     event_id: int,
 ) -> int:
+    """Reconcile missing multi-source media through Smart Update's media gate.
+
+    The historical name is kept for compatibility, but this function is invoked
+    by the event-media outbox job, never by the Telegraph renderer.
+    """
+
+    del ev
     if not _event_source_media_rehydrate_enabled():
         return 0
     try:
@@ -18336,137 +18301,83 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
         per_source_limit = 3
     per_source_limit = max(1, min(per_source_limit, 8))
 
-    try:
-        from models import EventPoster, EventSource
-    except Exception:
-        return 0
-
     source_rows = (
         await session.execute(
             select(EventSource.source_type, EventSource.source_url)
-            .where(EventSource.event_id == event_id)
+            .where(EventSource.event_id == int(event_id))
             .order_by(EventSource.imported_at.asc(), EventSource.id.asc())
             .limit(max_sources)
         )
     ).all()
-    if not source_rows:
+    # Regression contract INC-2026-05-05: source aggregation is a repair for a
+    # multi-source gap, not a reason to refetch every ordinary single-source row.
+    if len(source_rows) < 2:
         return 0
 
-    source_urls = [
-        str(row[1] or "").strip()
-        for row in source_rows
-        if str(row[1] or "").strip()
-    ]
-    shared_source_urls: set[str] = set()
-    if source_urls:
-        source_counts = (
-            await session.execute(
-                select(
-                    EventSource.source_url,
-                    func.count(func.distinct(EventSource.event_id)),
-                )
-                .where(EventSource.source_url.in_(source_urls))
-                .group_by(EventSource.source_url)
-            )
-        ).all()
-        shared_source_urls = {
-            str(source_url or "").strip()
-            for source_url, event_count in source_counts
-            if str(source_url or "").strip() and int(event_count or 0) > 1
-        }
-
-    poster_rows = (
+    source_urls = [str(row[1] or "").strip() for row in source_rows if str(row[1] or "").strip()]
+    source_counts = (
         await session.execute(
-            select(EventPoster.poster_hash, EventPoster.catbox_url, EventPoster.supabase_url)
-            .where(EventPoster.event_id == event_id)
+            select(EventSource.source_url, func.count(func.distinct(EventSource.event_id)))
+            .where(EventSource.source_url.in_(source_urls))
+            .group_by(EventSource.source_url)
         )
     ).all()
-    existing_hashes = {
-        str(row[0] or "").strip()
-        for row in list(poster_rows or [])
-        if str(row[0] or "").strip()
+    shared_source_urls = {
+        str(source_url or "").strip()
+        for source_url, event_count in source_counts
+        if str(source_url or "").strip() and int(event_count or 0) > 1
     }
-    existing_urls = {
-        str(u or "").strip()
-        for row in list(poster_rows or [])
-        for u in (row[1], row[2])
-        if str(u or "").strip()
-    }
-    event_urls = {
-        str(u or "").strip()
-        for u in list(getattr(ev, "photo_urls", None) or [])
-        if str(u or "").strip()
-    }
-    existing_urls.update(event_urls)
 
-    # Avoid network calls on already-rich pages. When stored images are fewer than
-    # attached sources, the page may still miss source-specific illustrations.
-    if len(existing_urls) >= len(source_rows):
+    existing_count = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(EventPoster).where(
+                    EventPoster.event_id == int(event_id),
+                    EventPoster.review_status.in_(("approved", "pending_review")),
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    if existing_count >= len(source_rows):
         return 0
 
-    added = 0
-    photo_urls = list(getattr(ev, "photo_urls", None) or [])
-    now = datetime.now(timezone.utc)
+    candidates: list[Any] = []
     for source_type, source_url in source_rows:
         source_url_clean = str(source_url or "").strip()
         if source_url_clean in shared_source_urls:
             logging.info(
-                "telegraph.source_media: skip shared multi-event source rehydrate event_id=%s source=%s",
+                "event_media.source_rehydrate: skip shared source event_id=%s source=%s",
                 event_id,
                 source_url_clean,
             )
             continue
-        candidates = await _fetch_event_source_poster_candidates(
-            str(source_type or ""),
-            source_url_clean,
-            limit=per_source_limit,
-        )
-        for poster in candidates:
-            display_url = str(
-                getattr(poster, "supabase_url", None)
-                or getattr(poster, "catbox_url", None)
-                or ""
-            ).strip()
-            if not display_url:
-                continue
-            digest = str(getattr(poster, "sha256", None) or "").strip()
-            if not digest:
-                digest = _source_media_hash("source-photo-url", display_url)
-            if digest in existing_hashes or display_url in existing_urls:
-                continue
-            session.add(
-                EventPoster(
-                    event_id=event_id,
-                    catbox_url=getattr(poster, "catbox_url", None),
-                    supabase_url=getattr(poster, "supabase_url", None),
-                    supabase_path=getattr(poster, "supabase_path", None),
-                    poster_hash=digest,
-                    phash=getattr(poster, "phash", None),
-                    ocr_text=getattr(poster, "ocr_text", None),
-                    ocr_title=getattr(poster, "ocr_title", None),
-                    prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
-                    completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
-                    total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
-                    updated_at=now,
-                )
+        candidates.extend(
+            await _fetch_event_source_poster_candidates(
+                str(source_type or ""),
+                source_url_clean,
+                limit=per_source_limit,
             )
-            existing_hashes.add(digest)
-            existing_urls.add(display_url)
-            if display_url not in photo_urls:
-                photo_urls.append(display_url)
-            added += 1
-    if added:
-        ev.photo_urls = photo_urls
-        ev.photo_count = len(photo_urls)
-        session.add(ev)
-        await session.flush()
-        logging.info(
-            "telegraph.source_media: rehydrated event_id=%s added_posters=%s sources=%s",
-            event_id,
-            added,
-            len(source_rows),
         )
-    return added
+    if not candidates:
+        return 0
+
+    from smart_event_update import _apply_posters
+
+    added, _urls, _preview, _rejected, _changed = await _apply_posters(
+        session,
+        int(event_id),
+        candidates,
+    )
+    await session.flush()
+    logging.info(
+        "event_media.source_rehydrate: reconciled event_id=%s candidates=%s added=%s sources=%s",
+        event_id,
+        len(candidates),
+        added,
+        len(source_rows),
+    )
+    return int(added)
 
 
 async def update_telegraph_event_page(
@@ -18658,188 +18569,16 @@ async def update_telegraph_event_page(
                     summary.other_dates_more = int(more)
         except Exception:
             logging.warning("telegraph: failed to build other_dates for event %s", event_id, exc_info=True)
-        try:
-            await _rehydrate_missing_event_source_posters_for_telegraph(
-                session,
-                ev,
-                event_id=event_id,
-            )
-        except Exception:
-            logging.warning(
-                "telegraph: failed to rehydrate source posters for event %s",
-                event_id,
-                exc_info=True,
-            )
-        photos = list(ev.photo_urls or [])
-        # For rendering (Telegraph + Telegram cached previews), prefer Supabase when available.
-        # Catbox may be flaky (connection drops) and breaks Telegraph/Telegram previews when used
-        # as the only origin.
-        try:
-            poster_rows = (
-                await session.execute(
-                    select(
-                        EventPoster.catbox_url,
-                        EventPoster.supabase_url,
-                        EventPoster.ocr_title,
-                        EventPoster.ocr_text,
-                        EventPoster.updated_at,
-                        EventPoster.poster_hash,
-                        EventPoster.phash,
-                    ).where(EventPoster.event_id == event_id)
-                )
-            ).all()
-        except Exception:
-            poster_rows = []
-        prefer_supabase_raw = (os.getenv("TELEGRAPH_PREFER_SUPABASE") or "").strip().lower()
-        if prefer_supabase_raw in {"0", "false", "no", "off"}:
-            prefer_supabase = False
-        elif prefer_supabase_raw in {"1", "true", "yes", "on"}:
-            prefer_supabase = True
-        else:
-            # Default: prefer Supabase for stability.
-            prefer_supabase = True
-        poster_render_urls, exclude_urls = _select_eventposter_render_urls(
-            list(poster_rows or []), prefer_supabase=prefer_supabase
+        # Telegraph is a pure consumer of the approved canonical gallery.
+        # Source rehydration and duplicate adjudication run in event_media_review.
+        from event_media import get_event_gallery_urls
+
+        photos = await get_event_gallery_urls(
+            session,
+            int(event_id),
+            legacy_fallback=True,
         )
-        all_poster_urls: set[str] = set()
-        for catbox_url, supabase_url, _ocr_title, _ocr_text, _updated_at, _hash, _phash in list(poster_rows or []):
-            for u in (catbox_url, supabase_url):
-                u2 = (u or "").strip()
-                if u2:
-                    all_poster_urls.add(u2)
-        # If multiple posters are present (common for a single VK post that describes
-        # several events), prioritize the poster that best matches the event's title/date/time.
-        # This reduces cases where a wrong poster becomes the Telegraph cover.
-        if len(poster_render_urls) > 1 and poster_rows:
-            try:
-                url_to_ocr: dict[str, tuple[str | None, str | None]] = {}
-                for (
-                    catbox_url,
-                    supabase_url,
-                    ocr_title,
-                    ocr_text,
-                    _updated_at,
-                    _hash,
-                    _phash,
-                ) in list(poster_rows or []):
-                    for u in (catbox_url, supabase_url):
-                        u2 = (u or "").strip()
-                        if not u2:
-                            continue
-                        url_to_ocr[u2] = (ocr_title, ocr_text)
-
-                scored_urls: list[tuple[float, int, str]] = []
-                for idx, url in enumerate(poster_render_urls):
-                    ocr_title, ocr_text = url_to_ocr.get(str(url).strip(), (None, None))
-                    score = _score_eventposter_against_event(
-                        event_title=getattr(ev, "title", None),
-                        event_date=getattr(ev, "date", None),
-                        event_time=getattr(ev, "time", None),
-                        ocr_title=ocr_title,
-                        ocr_text=ocr_text,
-                    )
-                    scored_urls.append((float(score), idx, str(url).strip()))
-
-                scored_urls.sort(key=lambda t: (-t[0], t[1]))
-                best_score = scored_urls[0][0] if scored_urls else 0.0
-                # If we have at least one confident match, drop very low-scoring posters.
-                if best_score >= 4.0:
-                    filtered = [u for s, _i, u in scored_urls if s >= 2.0 and s >= (best_score - 2.0)]
-                    if filtered:
-                        poster_render_urls = filtered
-                    else:
-                        poster_render_urls = [scored_urls[0][2]]
-                else:
-                    # With weak signals, keep ordering but still avoid obviously unrelated posters
-                    # when one candidate is a clear winner (e.g., date/time match vs mismatch).
-                    second_score = scored_urls[1][0] if len(scored_urls) >= 2 else None
-                    if best_score >= 3.0 and (second_score is None or (best_score - second_score) >= 2.0 or second_score < 1.0):
-                        poster_render_urls = [scored_urls[0][2]]
-                    else:
-                        poster_render_urls = [u for _s, _i, u in scored_urls]
-            except Exception:
-                logging.warning("telegraph: failed to score poster relevance", exc_info=True)
-        if all_poster_urls:
-            keep_posters = {str(u).strip() for u in (poster_render_urls or []) if str(u or "").strip()}
-            if keep_posters:
-                photos = [
-                    u
-                    for u in photos
-                    if (u or "").strip()
-                    and ((str(u).strip() not in all_poster_urls) or (str(u).strip() in keep_posters))
-                ]
-        if exclude_urls:
-            photos = [u for u in photos if (u or "").strip() and str(u).strip() not in exclude_urls]
-        merged_photo_urls = False
-        validate_images_raw = (os.getenv("TELEGRAPH_VALIDATE_IMAGE_URLS") or "1").strip().lower()
-        validate_images = validate_images_raw in {"1", "true", "yes", "on"}
-        if validate_images:
-            posters_before_probe = list(poster_render_urls or [])
-            photos_before_probe = list(photos or [])
-            fallback_map: dict[str, str] = {}
-            for catbox_url, supabase_url, _ocr_title, _ocr_text, _updated_at, _hash, _phash in list(poster_rows or []):
-                c = (catbox_url or "").strip()
-                s = (supabase_url or "").strip()
-                if c and s:
-                    fallback_map[c] = s
-                    fallback_map[s] = c
-            poster_render_urls_probed, dropped_posters = await _replace_or_drop_broken_images(
-                list(poster_render_urls or []),
-                fallback_map=fallback_map,
-                label=f"eid={event_id}:posters",
-            )
-            if not poster_render_urls_probed and posters_before_probe:
-                # Avoid rendering a blank cover because of transient probe failures.
-                poster_render_urls_probed = posters_before_probe
-                dropped_posters = []
-            poster_render_urls = poster_render_urls_probed
-            photos_probed, dropped_photos = await _replace_or_drop_broken_images(
-                list(photos or []),
-                fallback_map={},
-                label=f"eid={event_id}:photos",
-            )
-            if not photos_probed and photos_before_probe:
-                photos_probed = photos_before_probe
-                dropped_photos = []
-            photos = photos_probed
-            if dropped_posters or dropped_photos:
-                merged_photo_urls = True
-            # Drop avatar-like tiny images when a real poster-sized illustration exists.
-            poster_render_urls_filtered, dropped_tiny_posters = _drop_tiny_illustrations_when_large_present(
-                list(poster_render_urls or []),
-                label=f"eid={event_id}:posters:tiny",
-            )
-            photos_filtered, dropped_tiny_photos = _drop_tiny_illustrations_when_large_present(
-                list(photos or []),
-                label=f"eid={event_id}:photos:tiny",
-            )
-            if dropped_tiny_posters or dropped_tiny_photos:
-                poster_render_urls = poster_render_urls_filtered
-                photos = photos_filtered
-                merged_photo_urls = True
-        # Keep Event.photo_urls resilient: ensure selected poster URLs are present (without duplicates)
-        for url in poster_render_urls:
-            if url and url not in photos:
-                photos.append(url)
-                merged_photo_urls = True
-        try:
-            dedupe_event_photos = globals().get("_dedupe_event_photo_urls_for_publish")
-            if callable(dedupe_event_photos):
-                photos_before_dedupe = list(photos or [])
-                posters_before_dedupe = list(poster_render_urls or [])
-                photos = await dedupe_event_photos(photos_before_dedupe)
-                poster_render_urls = await dedupe_event_photos(posters_before_dedupe)
-                if photos != photos_before_dedupe or poster_render_urls != posters_before_dedupe:
-                    merged_photo_urls = True
-        except Exception:
-            logging.warning(
-                "telegraph: failed to dedupe render photos for event %s",
-                event_id,
-                exc_info=True,
-            )
-        if merged_photo_urls or exclude_urls:
-            ev.photo_urls = list(photos)
-            ev.photo_count = len(ev.photo_urls)
+        poster_render_urls = list(photos)
         cover_url_raw = str(ev.preview_3d_url).strip() if ev.preview_3d_url else None
         cover_url = cover_url_raw
         force_cover_url = cover_url_raw
@@ -21813,7 +21552,38 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     return True
 
 
+async def job_event_media_review(
+    event_id: int,
+    db: Database,
+    bot: Bot | None,
+) -> bool:
+    """Rehydrate source media and adjudicate one cached pair automatically."""
+
+    rehydrated = 0
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+        if event is None:
+            return False
+        rehydrated = await _rehydrate_missing_event_source_posters_for_telegraph(
+            session,
+            event,
+            event_id=int(event_id),
+        )
+        await session.commit()
+
+    from event_media import review_next_event_media_pair
+
+    projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
+    if rehydrated and not projection_changed:
+        async with db.get_session() as session:
+            fresh = await session.get(Event, int(event_id))
+        if fresh is not None:
+            await schedule_event_update_tasks(db, fresh)
+    return bool(rehydrated or projection_changed)
+
+
 JOB_HANDLERS = {
+    "event_media_review": job_event_media_review,
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
     "tg_event_publish": job_publish_tg_event_post,

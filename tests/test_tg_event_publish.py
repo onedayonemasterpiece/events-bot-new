@@ -679,7 +679,7 @@ async def test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption
     monkeypatch.setattr(
         main,
         "_schedule_tg_premium_emoji_editor",
-        lambda targets, *, context: scheduled.append((targets, context)),
+        lambda targets, *, context, **_kwargs: scheduled.append((targets, context)),
     )
     event = _event(
         title="Длинный промо-пост",
@@ -977,7 +977,7 @@ async def test_same_source_feeding_series_replaces_vk_text_instead_of_appending(
     await db.close()
 
 
-def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
+def test_unique_tg_media_urls_only_applies_exact_url_guard():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"
         "0c9a2cd38cb24672c27010e8004d884b84434062a0d264522cc29896985624c0.webp"
@@ -993,11 +993,12 @@ def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
 
     assert main._unique_tg_media_urls([base, near_duplicate, distinct, base]) == [
         base,
+        near_duplicate,
         distinct,
     ]
 
 
-def test_unique_tg_media_urls_dedupes_borderline_supabase_dhash_duplicates():
+def test_unique_tg_media_urls_does_not_make_borderline_perceptual_decision():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/8c/"
         "8c22d06b5b245a25046594720972196274e373193230d963c70b520848490504.webp"
@@ -1007,11 +1008,11 @@ def test_unique_tg_media_urls_dedupes_borderline_supabase_dhash_duplicates():
         "8922d26b59245825046514720972196274e373193230d963c70b180048490504.webp"
     )
 
-    assert main._unique_tg_media_urls([base, near_duplicate]) == [base]
+    assert main._unique_tg_media_urls([base, near_duplicate]) == [base, near_duplicate]
 
 
 @pytest.mark.asyncio
-async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
+async def test_tg_event_publish_does_not_override_canonical_media_gate(monkeypatch):
     managed = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/80/"
         "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800.webp"
@@ -1019,16 +1020,10 @@ async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
     vk_cdn = "https://sun9-78.userapi.com/s/v1/ig2/source-copy.jpg?cs=1080x0"
     event = _event(photo_urls=[managed, vk_cdn])
 
-    async def fake_compute_dhash(url):
-        if url == vk_cdn:
-            return "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800"
-        return main._extract_dhash_from_managed_photo_url(url)
-
     async def fake_hook_text(event_arg, source_text, **_kwargs):
         assert event_arg is event
         return "Короткий анонс события."
 
-    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_compute_dhash)
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
     materialize_calls = _patch_media_materializer(monkeypatch)
     bot = DummyTgBot()
@@ -1042,11 +1037,11 @@ async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
 
     assert url == "https://t.me/c/1234567890/101"
     assert post_id == 101
-    assert mode == "photo_caption"
+    assert mode == "album_caption"
     assert source_hash
-    assert materialize_calls == [(managed, 0)]
-    assert len(bot.photos) == 1
-    assert not bot.media_groups
+    assert materialize_calls == [(managed, 0), (vk_cdn, 1)]
+    assert not bot.photos
+    assert len(bot.media_groups) == 1
 
 
 @pytest.mark.asyncio

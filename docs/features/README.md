@@ -12,6 +12,7 @@
 - `docs/features/tourist-label/README.md` — туристическая метка (ручная разметка + экспорт)
 - `docs/features/llm-gateway/README.md` — управление лимитами Google AI (Gemma/Gemini) и ретраи
 - `docs/features/smart-event-update/README.md` — единый Smart Update (match/merge, лог фактов, Telegraph)
+- `docs/features/event-media/README.md` — единый автоматический Smart Update gate для event images и approved public projection
 - `docs/features/linked-events/README.md` — связанные события (серии “то же событие в другие даты” + UI «Другие даты»)
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily

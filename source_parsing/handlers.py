@@ -835,8 +835,14 @@ async def update_event_full(
                 theatre_event.source_type,
             )
             if photos and not event.photo_urls:
-                event.photo_urls = photos
-                event.photo_count = len(photos)
+                from event_media import ingest_event_media_urls
+
+                await ingest_event_media_urls(
+                    session,
+                    int(event_id),
+                    photos,
+                    source="source_parsing_full_update",
+                )
             
             await session.commit()
             

@@ -53,3 +53,13 @@ VK monitoring operator seeds (`club194393485`, `ivsguide`, `natakkaz`) also live
 ## Важно про Supabase‑миграции
 
 SQL‑миграции Supabase лежат отдельно в `migrations/` (например `001_google_ai.sql`, `002_google_ai_rpc_rollout.sql`) и не имеют отношения к SQLite схеме событий.
+
+## Event-media schema upgrade
+
+`Database.init()` adds the event-media status/fingerprint columns, partial
+per-event raw-SHA uniqueness, `event_media_pair_review` and
+`event_media_review_usage`. On a legacy DB, existing `EventPoster` rows become
+`approved` only when `review_status` is first introduced. This is a one-time
+compatibility migration: later restarts must not reset
+`pending_review`/`duplicate`/`rejected`/`unavailable` decisions. Regression:
+`tests/test_event_media_gate.py::test_review_status_migration_is_one_time_and_restart_safe`.

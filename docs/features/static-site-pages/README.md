@@ -127,6 +127,12 @@ Event facts should read as properties, not prose duplicates. Current UI policy:
 
 ## Media/gallery and Smart Update image metadata requirements
 
+Static exporter — read-only consumer [event-media approved projection](../event-media/README.md):
+он выбирает ровно один display URL на один `EventPoster`, не объединяет managed
+и source alternate locations и не добавляет `Event.photo_urls`, если approved
+poster rows уже существуют. `pending_review`, `duplicate`, `rejected` и
+`unavailable` никогда не входят в gallery.
+
 For events with multiple images, MVP must **not** auto-rotate the first-paint hero by default. The event page chooses one deterministic best hero image for first paint. A tap/click on the hero opens an explicit immersive fullscreen gallery; only inside this opened viewer `visual_only` photos may run a controlled auto-forward pan/advance sequence. Current v43 state machine: forward pan is `38% → 64%` object-position over `17.9s` (right-to-left visual motion), auto-advances by an `8.88s` timer so there is no long dead wait with `gallery-pan-forward` as a fallback, preloads and `decode()`s the next adjacent image slides before the timer fires so the transition does not start over a black empty slide, manual backward swipe/click sets `autoAdvance=false` and runs only the local reverse pan, and `prefers-reduced-motion` remains a hard guard. The final gallery slide can be an explicit CTA card (`Купить билет`, `В календарь`, `Смотреть похожее`), visibly labeled as a CTA, not disguised as another image. Pull-to-expand/top overscroll hero behavior is P1/P2 lab-only because it can conflict with browser pull-to-refresh and mobile address-bar gestures.
 
 Smart Update / image preparation must enrich image assets in batch/offline, not in the static page runtime. When OCR/media analysis runs, it must return enough metadata for safe crop decisions:

@@ -18,6 +18,7 @@ sections:
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
+    event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md
     telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
@@ -528,6 +529,15 @@ features:
       - smart_event_update.py
       - models.py
       - db.py
+  event_media:
+    status: implemented
+    docs: docs/features/event-media/README.md
+    audit_runbook: docs/operations/event-image-duplicate-audit.md
+    entrypoints:
+      - event_media.py
+      - smart_event_update.py
+      - scripts/apply_event_media_audit_cleanup.py
+      - scripts/stage_event_media_review_backfill.py
   linked_events:
     status: implemented
     docs: docs/features/linked-events/README.md

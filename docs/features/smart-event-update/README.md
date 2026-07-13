@@ -2,6 +2,15 @@
 
 Автоматический мердж события из разных источников без ручной модерации, с сохранением списка источников и защитой якорных полей.
 
+## Изображения: единый automatic gate
+
+Все новые event images входят через `_apply_posters()` этого pipeline. Второе и
+последующие logical media fail-closed остаются `pending_review`; exact raw/pixel
+SHA решается детерминированно, остальные пары — bounded one-pair VLM job с
+feature budgets и автоматическим retry. Только `approved` проецируется в
+`Event.photo_urls` и читается Telegraph/TG/VK/static. Каноника, все ingestion
+paths и rollout: [Event media](../event-media/README.md).
+
 ## Fact-first (внедрено)
 
 Smart Update по умолчанию строит публичный текст (`description`, `short_description`, `search_digest`) по схеме **sources → facts → text** (вариант C+D из dry‑run), то есть **строго из извлечённых фактов**, а не из “сырых” текстов источников.
