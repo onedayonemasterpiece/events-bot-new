@@ -170,7 +170,7 @@ def _insert_job(
     *,
     event_id: int,
     task: str,
-    next_run_at: str,
+    next_run_at: datetime,
     coalesce_key: str,
 ) -> None:
     exists = con.execute(
@@ -189,7 +189,10 @@ def _insert_job(
             event_id, task, status, attempts, updated_at, next_run_at, coalesce_key
         ) VALUES (?, ?, 'pending', 0, CURRENT_TIMESTAMP, ?, ?)
         """,
-        (event_id, task, next_run_at, coalesce_key),
+        # SQLAlchemy's SQLite DateTime binder uses a space separator.  A raw
+        # ISO `T` string sorts after every same-day bound datetime and would
+        # leave the row invisible to `next_run_at <= now` until tomorrow.
+        (event_id, task, next_run_at.astimezone(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f"), coalesce_key),
     )
 
 
@@ -505,7 +508,7 @@ def apply_plan(con: sqlite3.Connection, plan: dict[str, Any], *, apply: bool) ->
                 con,
                 event_id=event_id,
                 task="event_media_review",
-                next_run_at=(now + timedelta(seconds=len(stats["changed_event_ids"]) * 2)).isoformat(),
+                next_run_at=now + timedelta(seconds=len(stats["changed_event_ids"]) * 2),
                 coalesce_key=f"event_media_review:{event_id}",
             )
         # Cleanup repairs existing public projections; it must never turn a DB
@@ -517,7 +520,7 @@ def apply_plan(con: sqlite3.Connection, plan: dict[str, Any], *, apply: bool) ->
                 con,
                 event_id=event_id,
                 task="telegraph_build",
-                next_run_at=(now + timedelta(seconds=ordinal * 4)).isoformat(),
+                next_run_at=now + timedelta(seconds=ordinal * 4),
                 coalesce_key=f"telegraph_build:{event_id}",
             )
             stats["public_rebuild_jobs"]["telegraph_build"] += 1
@@ -527,7 +530,7 @@ def apply_plan(con: sqlite3.Connection, plan: dict[str, Any], *, apply: bool) ->
                 con,
                 event_id=event_id,
                 task="vk_sync",
-                next_run_at=(now + timedelta(seconds=ordinal * 15)).isoformat(),
+                next_run_at=now + timedelta(seconds=ordinal * 15),
                 coalesce_key=f"vk_sync:{event_id}",
             )
             stats["public_rebuild_jobs"]["vk_sync"] += 1
@@ -537,7 +540,7 @@ def apply_plan(con: sqlite3.Connection, plan: dict[str, Any], *, apply: bool) ->
                 con,
                 event_id=event_id,
                 task="tg_event_publish",
-                next_run_at=(now + timedelta(seconds=ordinal * 90)).isoformat(),
+                next_run_at=now + timedelta(seconds=ordinal * 90),
                 coalesce_key=f"tg_event_publish:{event_id}",
             )
             stats["public_rebuild_jobs"]["tg_event_publish"] += 1
@@ -548,7 +551,7 @@ def apply_plan(con: sqlite3.Connection, plan: dict[str, Any], *, apply: bool) ->
             con,
             event_id=owner,
             task="static_site_build",
-            next_run_at=(now + timedelta(minutes=20)).isoformat(),
+            next_run_at=now + timedelta(minutes=20),
             coalesce_key="static_site_build:prod",
         )
         stats["public_rebuild_jobs"]["static_site_build"] = 1

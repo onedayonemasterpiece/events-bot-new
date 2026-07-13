@@ -474,7 +474,7 @@ async def test_backfill_stages_legacy_multi_image_event_without_deleting_evidenc
         "select photo_urls, photo_count from event where id=?", (event_id,)
     ).fetchone()
     jobs = con.execute(
-        "select task from joboutbox where event_id=? and status='pending'", (event_id,)
+        "select task, next_run_at from joboutbox where event_id=? and status='pending'", (event_id,)
     ).fetchall()
     backup_count = con.execute(
         f"select count(*) from {module.BACKUP_PREFIX}_eventposter where event_id=?",
@@ -487,6 +487,7 @@ async def test_backfill_stages_legacy_multi_image_event_without_deleting_evidenc
     assert json.loads(projection[0]) == ["https://static.example/a.webp"]
     assert projection[1] == 1
     job_tasks = {row[0] for row in jobs}
+    assert all("T" not in str(row[1]) for row in jobs)
     assert "event_media_review" in job_tasks
     assert "static_site_build" in job_tasks
     assert not {"telegraph_build", "vk_sync", "tg_event_publish"} & job_tasks

@@ -114,6 +114,9 @@ handles rows created/changed after the snapshot; it keeps one seed, quarantines
 additional media and uses only the same automatic outbox worker. Repeated
 staging preserves every non-empty automatic/audit decision reason, so a
 successful VLM decision cannot be returned to quarantine by the backfill.
+Cleanup/backfill outbox timestamps use the same SQLite `DateTime` representation
+as SQLAlchemy (space separator, UTC), otherwise same-day rows with a raw ISO
+`T` would not satisfy the worker's `next_run_at <= now` query.
 
 Never delete Storage during this rollout. Before production apply: fresh DB
 snapshot + SHA-256, `PRAGMA quick_check`, dry-run/stale review. After apply:

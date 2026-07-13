@@ -58,7 +58,14 @@ def _enqueue(
         INSERT INTO joboutbox(event_id, task, status, attempts, updated_at, next_run_at, coalesce_key)
         VALUES (?, ?, 'pending', 0, CURRENT_TIMESTAMP, ?, ?)
         """,
-        (event_id, task, next_run_at.isoformat(), f"{task}:{event_id}"),
+        (
+            event_id,
+            task,
+            next_run_at.astimezone(timezone.utc)
+            .replace(tzinfo=None)
+            .strftime("%Y-%m-%d %H:%M:%S.%f"),
+            f"{task}:{event_id}",
+        ),
     )
 
 
