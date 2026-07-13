@@ -42,6 +42,7 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 9. **The staged-model mitigation was over-broad.** `SMART_UPDATE_FORCE_STAGED_GEMINI=1` moved every Smart Update contract onto Gemini Lite. The accepted two-event E2E replay made 20 Lite calls (10/event), while the production quota registry intentionally budgets 450 RPD for that model versus 1,500 RPD for Gemma. This was not a sub-hundred-call fallback and could exhaust the shared project lane after about 45 similar events.
 10. **Media completeness was not part of publication idempotency.** Multi-event VK intake dropped ambiguous/shared roundup posters; a later popular-review path rehydrated `event.photo_urls` but neither materialized raw VK CDN links durably nor rearmed Telegram/VK publication. Separately, VK hash/existence fast paths accepted text-only managed posts even when canonical media existed.
 11. **Opening and exhibition range were forced into one occurrence.** The anchor-role repair correctly noticed that `16:00` was an opening-only time, but the single-candidate contract had no explicit split rule. Event `6661` was consequently collapsed to the closing date instead of retaining the active 4–31 July exhibition (and, at initial future import time, a separate 4 July 16:00 opening occurrence).
+12. **VK could change a postponed id at the live transition.** Editing a post close to its publish slot could return/persist the old postponed id while VK exposed the public item under a new wall id. Exact-id and postponed lookups then both missed it, so an otherwise idempotent retry could create another post. Three repaired projections (`6661`, `6843`, `6846`) exposed this transition shape; their live ids were reconciled to `7269`, `7267`, `7268`.
 
 ## Contributing Factors
 
@@ -103,8 +104,9 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 - [ ] distinguish legacy-debt repairs from rows created after each prevention SHA in monitoring metrics.
 - [x] delete the replay-created postponed duplicate `wall-231920894_7265`, restore event `6857` to `wall-231920894_7250`, and make postponed lookup use the correct authenticated collection;
 - [x] immediately stop the unbounded Lite route in production and retain Gemini Lite only for bounded facts/writer/grounding stages;
-- [ ] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API;
-- [ ] repair event `6661` to the active exhibition range on canonical/public surfaces (do not create a new historical opening row after the opening has passed);
+- [ ] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API (VK complete; Telegram throttled catch-up is still running);
+- [x] repair event `6661` to the active exhibition range on canonical/public surfaces (do not create a new historical opening row after the opening has passed);
+- [x] reconcile changed postponed-to-live VK ids and add unique exact title+date live-id recovery before republish;
 
 ## Follow-up Actions
 
@@ -114,11 +116,11 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 ## Release And Closure Evidence
 
-- deployed SHA: `e278e072` (`origin/main`), including `8fd50472` Smart Update prevention and the earlier bounded logging/retention commits
-- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update) and `1633` (VK postponed idempotency/E2E acceptance)
+- deployed SHA before final live-id guard: `4f378510` (`origin/main`), including `533db6fa` quota/media prevention, `8fd50472` Smart Update prevention and the earlier bounded logging/retention commits
+- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update), `1633` (VK postponed idempotency/E2E acceptance), `1635` (quota/media prevention) and `1636` (durable VK media materialization)
 - regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch). The broad VK test files also expose 13 pre-existing mock-signature failures for newer location-marker/reservation kwargs; those are test-debt, not accepted as a pass.
 - post-deploy verification: `/healthz ready=true`, disk `408 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
-- quota containment: Fly release after the operator escalation has effective `SMART_UPDATE_FORCE_STAGED_GEMINI=0`, `SMART_UPDATE_G4_SPLIT_CREATE=1`, `/healthz ready=true`. Day-of-request accounting showed 74 Smart Update provider calls before containment (37 Gemma, 37 Lite); the exact live two-event replay accounted for 20 Lite calls. Recent completed production days created 19–42 rows (856/30 days), before merge-only updates; therefore 10/event had no safe headroom. The steady-state route normally budgets one Lite writer stage per matched update or about two Lite stages per create (facts + writer); core merge/revise/coverage/short-description/digest stays on Gemma, and rare grounding adds only a bounded call.
+- quota containment: Fly release after the operator escalation has effective `SMART_UPDATE_FORCE_STAGED_GEMINI=0`, `SMART_UPDATE_G4_SPLIT_CREATE=1`, `/healthz ready=true`. Day-of-request accounting showed 74 Smart Update provider calls before containment (37 Gemma, 37 Lite); the old exact live two-event replay accounted for 20 Lite calls. Recent completed production days created 19–42 rows (856/30 days), before merge-only updates; therefore 10/event had no safe headroom. The post-fix replay of the same source (`ops_run=3684`) used **5 Lite + 14 Gemma calls for two event updates**: Lite was limited to 2/3 bounded occurrence/fact-writer contracts per event while core match/merge/coverage/derived work remained on Gemma, a 75% reduction in Lite load. Vector sync `ops_run=3685/3686` then completed both document kinds with two changed embeddings per run and no call-cap omissions.
 
 ## 2026-07-13 media surface audit
 
@@ -136,8 +138,11 @@ The prevention contract is now: multi-event poster ownership is one bounded
 Gemma adjudication per source post with retrieval scores as hints; late VK
 rehydration materializes managed URLs and rearms ordinary public projections;
 VK existence/hash idempotency requires an actual photo attachment whenever
-canonical `photo_urls` are non-empty. Production data/public repair remains a
-closure gate above.
+canonical `photo_urls` are non-empty. All eight target VK projections now have
+photo attachments; the source rows were reconciled to live ids where VK changed
+them during postponed publication. Telegram replacements remain intentionally
+serialized by the normal ten-minute public-send gate and are a closure gate
+above rather than being bypassed in an incident script.
 
 ## 2026-07-13 complete future audit
 

@@ -1439,6 +1439,7 @@ async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
 
     event = _event(
         id=None,
+        date=(main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat(),
         source_vk_post_url="https://vk.com/wall-231920894_2432",
     )
     async with db.get_session() as session:
@@ -1450,7 +1451,8 @@ async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
 
     assert any(task == main.JobTask.vk_sync for task, _, _ in tasks)
     tg_publish = [item for item in tasks if item[0] == main.JobTask.tg_event_publish][0]
-    assert f"vk_sync:{event.id}" in tg_publish[1]
+    # Telegram publishing is deliberately independent from VK retries/captcha.
+    assert f"vk_sync:{event.id}" not in tg_publish[1]
 
 
 @pytest.mark.asyncio
@@ -1470,6 +1472,63 @@ async def test_managed_vk_post_with_missing_expected_photo_is_incomplete(monkeyp
 
     assert await main._managed_vk_post_state(event) == (True, False)
     assert not await main._event_has_existing_managed_vk_post(event)
+
+
+@pytest.mark.asyncio
+async def test_recover_managed_vk_live_url_persists_unique_title_date_match(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+
+    event = _event(
+        id=None,
+        source_vk_post_url="https://vk.com/wall-231920894_7266",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    async def fake_state(ev):
+        return False, False
+
+    async def fake_find(ev, *, owner_id, db, bot):
+        assert owner_id == -231920894
+        return {"id": 7269, "text": "Камерный концерт\n\n\U0001f4c5 20 июня 19:00"}
+
+    monkeypatch.setattr(main, "_managed_vk_post_state", fake_state)
+    monkeypatch.setattr(main, "_find_unique_live_managed_vk_item_for_event", fake_find)
+
+    assert await main._recover_managed_vk_live_url(db, event, bot=None)
+    assert event.source_vk_post_url == "https://vk.com/wall-231920894_7269"
+    async with db.get_session() as session:
+        saved = await session.get(main.Event, event_id)
+    assert saved.source_vk_post_url == "https://vk.com/wall-231920894_7269"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_live_managed_vk_item_recovery_fails_closed_when_ambiguous(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_vk_wall_get_actors",
+        lambda owner_id: [SimpleNamespace(kind="user", token="user-token", label="user")],
+    )
+    expected = "Камерный концерт\n\n\U0001f4c5 20 июня 19:00\n\U0001f4cd Дом искусств"
+
+    async def fake_vk_api(method, params, *args, **kwargs):
+        assert method == "wall.get"
+        return {"response": {"items": [{"id": 7268, "text": expected}, {"id": 7269, "text": expected}]}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    item = await main._find_unique_live_managed_vk_item_for_event(
+        _event(), owner_id=-231920894, db=None, bot=None
+    )
+    assert item is None
 
 
 @pytest.mark.asyncio

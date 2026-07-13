@@ -44,6 +44,13 @@ Managed VK publication idempotency includes postponed posts: when
 `wall.getById` cannot see a stored managed URL, the publisher checks the
 authenticated `wall.get(filter=postponed)` collection before the legacy `all`
 fallback. A present postponed item is edited/reused, never recreated.
+VK may also assign a different public wall id during the postponed-to-live
+transition. Before any hash/idempotency decision, the worker then scans only a
+bounded recent managed-wall window and accepts a replacement id only for one
+unique item whose generated title and date header both match exactly. Zero or
+multiple matches fail closed; semantic/vector similarity is deliberately not
+used for this transport-identity repair. The recovered live URL is persisted
+before the worker can publish again.
 Existence is not sufficient when canonical `photo_urls` are non-empty: a stored
 text-only live/postponed item is treated as an incomplete projection and is
 edited with media rather than skipped by the content-hash fast path.
@@ -268,8 +275,9 @@ These guards do not rewrite event meaning. They either pass source-grounded LLM 
 - `/parse` (site parsers): источник сайта добавляется/мерджится через Smart Update, когда у события ещё нет этого `parser:<site>` источника.
 - Outgoing post jobs: `schedule_event_update_tasks()` ставит Telegraph rebuild, VK event post и Telegram event post ([Telegram Event Publishing](../tg-publishing/README.md)) для активных будущих/текущих событий.
   Для managed VK event posts `vk_sync` считается идемпотентным и по отложенным постам тоже: если `wall.getById`
-  не видит stored URL, но `wall.get` находит запись по тому же postponed/live id, Smart Update не создаёт второй
-  VK-пост для того же `event_id`.
+  не видит stored URL, но `wall.get` находит запись по тому же postponed/live id или единственный live-пост с
+  точным generated title + date header, Smart Update сохраняет актуальный live id и не создаёт второй VK-пост
+  для того же `event_id`. Неоднозначный поиск всегда fail-closed.
 
 ## Фестивали и фестивальная очередь
 

@@ -14451,6 +14451,58 @@ async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
     return bool(exists and media_complete)
 
 
+async def _recover_managed_vk_live_url(
+    db: Database,
+    ev: Event,
+    *,
+    bot: Bot | None,
+) -> bool:
+    """Persist a changed live id after a postponed managed VK post publishes."""
+
+    if not _event_has_managed_vk_post(ev):
+        return False
+    exists, _ = await _managed_vk_post_state(ev)
+    if exists:
+        return False
+    current_url = str(getattr(ev, "source_vk_post_url", "") or "").strip()
+    ids = _vk_owner_and_post_id(current_url)
+    if not ids:
+        return False
+    item = await _find_unique_live_managed_vk_item_for_event(
+        ev,
+        owner_id=int(ids[0]),
+        db=db,
+        bot=bot,
+    )
+    if not item:
+        return False
+    live_id = int(item.get("id") or 0)
+    if live_id <= 0:
+        return False
+    live_url = f"https://vk.com/wall{int(ids[0])}_{live_id}"
+    if live_url == current_url:
+        return False
+
+    event_id = int(getattr(ev, "id", 0) or 0)
+    if event_id <= 0:
+        return False
+    async with db.get_session() as session:
+        stored = await session.get(Event, event_id)
+        if stored is None or not _event_has_managed_vk_post(stored):
+            return False
+        stored.source_vk_post_url = live_url
+        session.add(stored)
+        await session.commit()
+    ev.source_vk_post_url = live_url
+    logging.warning(
+        "vk.live-id recovery persisted event_id=%s old_url=%s live_url=%s",
+        event_id,
+        current_url,
+        live_url,
+    )
+    return True
+
+
 def _event_vk_publish_end_date(ev: Event) -> date | None:
     end_raw = (getattr(ev, "end_date", None) or "").strip()
     if end_raw:
@@ -21049,6 +21101,10 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         )
         return False
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
+    # A postponed VK item may receive a different id at the exact moment it is
+    # published.  Recover the unique live projection before hash/idempotency
+    # checks so a stale stored id cannot create a duplicate wall post.
+    await _recover_managed_vk_live_url(db, ev, bot=bot)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response

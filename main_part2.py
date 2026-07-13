@@ -4159,6 +4159,109 @@ async def _find_vk_postponed_wall_item_any_actor(
     return None
 
 
+async def _find_unique_live_managed_vk_item_for_event(
+    event: Event,
+    *,
+    owner_id: int,
+    db: Database | None,
+    bot: Bot | None,
+) -> dict | None:
+    """Recover a live wall item whose postponed id changed on publication.
+
+    VK can replace a postponed id while moving a post to the public wall.  The
+    old id then disappears from both ``wall.getById`` and ``filter=postponed``.
+    Recovery is intentionally fail-closed: a candidate must have the exact
+    generated title and date header, and there must be exactly one match in the
+    recent managed wall window.  This is an identity repair, not semantic event
+    matching; ambiguous rows are left for the normal sync/review path.
+    """
+
+    expected_title = str(getattr(event, "title", "") or "").strip()
+    header_lines = build_vk_source_header(event, None)
+    expected_date = next(
+        (str(line).strip() for line in header_lines if str(line).startswith("\U0001f4c5 ")),
+        "",
+    )
+    if not expected_title or not expected_date:
+        return None
+
+    actors = _vk_wall_get_actors(owner_id)
+    for actor in actors:
+        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+        items: list[dict] = []
+        actor_failed = False
+        for offset in (0, 100, 200):
+            try:
+                response = await _vk_api(
+                    "wall.get",
+                    {
+                        "owner_id": str(owner_id),
+                        "filter": "owner",
+                        "count": 100,
+                        "offset": offset,
+                    },
+                    db,
+                    bot,
+                    token=token,
+                    token_kind=actor.kind,
+                    skip_captcha=(actor.kind == "group"),
+                )
+            except VKAPIError as exc:
+                logging.warning(
+                    "vk.live-id recovery wall.get failed event_id=%s owner_id=%s actor=%s code=%s msg=%s",
+                    getattr(event, "id", None),
+                    owner_id,
+                    actor.label,
+                    exc.code,
+                    exc.message,
+                )
+                actor_failed = True
+                break
+            except Exception as exc:
+                logging.warning(
+                    "vk.live-id recovery wall.get transport failure event_id=%s owner_id=%s actor=%s error=%r",
+                    getattr(event, "id", None),
+                    owner_id,
+                    actor.label,
+                    exc,
+                )
+                actor_failed = True
+                break
+            page = _vk_postponed_items(response)
+            items.extend(page)
+            if len(page) < 100:
+                break
+        if actor_failed:
+            continue
+
+        matches: list[dict] = []
+        for item in items:
+            lines = [line.strip() for line in str(item.get("text") or "").splitlines()]
+            nonempty = [line for line in lines if line]
+            if nonempty and nonempty[0] == expected_title and expected_date in nonempty:
+                try:
+                    if int(item.get("id") or 0) > 0:
+                        matches.append(item)
+                except (TypeError, ValueError):
+                    continue
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            logging.warning(
+                "vk.live-id recovery ambiguous event_id=%s owner_id=%s matches=%s title=%r date=%r",
+                getattr(event, "id", None),
+                owner_id,
+                [item.get("id") for item in matches],
+                expected_title,
+                expected_date,
+            )
+            return None
+        # A successful authenticated wall read is authoritative for this
+        # bounded window; trying a lower-priority actor adds no useful signal.
+        return None
+    return None
+
+
 async def _resolve_existing_vk_post_url(
     post_url: str,
     *,
