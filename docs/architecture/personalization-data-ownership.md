@@ -27,6 +27,8 @@ This decision follows the implementation already present in `origin/main`: Supab
 |---|---|---|
 | Yandex identity and sessions | Supabase Auth | Opaque/HMAC subject id in YDB analytics |
 | Verified email-only identity | Supabase Auth email OTP/magic-link | Keyed email HMAC in YDB analytics |
+| Post-release verified VK identity/link consent | Private Supabase schema | Dedicated keyed VK subject HMAC only in an approved service bridge; no raw VK ID in YDB |
+| Post-release eligible VK friend edges | Private Supabase schema | Aggregate friend-signal metrics only; never the full public friend list |
 | Anonymous device/identity link | Private Supabase schema after server materialization | HMAC subject id in YDB |
 | Current anonymous/auth profile | Private Supabase schema | Sanitized immutable Kaggle export; de-identified YDB analytics |
 | Browser `localStorage` profile | Local cache/offline projection, never SOR | None |
@@ -111,6 +113,7 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - YDB analytics used for send eligibility.
 - Browser direct writes to YDB or raw/private Supabase profile tables.
 - Plain email, bearer tokens or raw profile vectors in YDB analytics.
+- Raw VK IDs, VK message bodies, complete public friend lists or friendship edges in YDB analytics, core Fly SQLite or static artifacts.
 - Plain/unsalted SHA for email or bearer-token lookup.
 - `anon_id` alone treated as proof of profile ownership.
 - Full canonical event copies in Supabase/YDB.
@@ -129,6 +132,7 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Bearer tokens have at least 128 bits of entropy and are stored only as keyed hashes; page, click, unsubscribe and feedback tokens are separate.
 - YDB is service-credential-only, with TTL and minimized HMAC subject identifiers.
 - Account/profile deletion emits a purge request for eligible YDB raw/history state; irreversibly anonymized aggregates follow a documented retention policy.
+- VK message-link challenges use a keyed code hash, short TTL and atomic one-time consume; the full VK friend list is intersected transiently and is not persisted.
 - Recommendation admission and every send claim fail closed above the 200-user launch ceiling.
 - Provider credentials and mailbox passwords stay in the approved secret manager and never enter Git, artifacts or application logs.
 

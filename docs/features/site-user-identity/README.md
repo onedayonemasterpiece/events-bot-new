@@ -13,6 +13,8 @@ Owns the global identity contract shared by search, personalization, favorites/c
 - anonymous-to-auth profile linking;
 - unlink, reset, account/profile deletion and audit.
 
+Post-release VK identity linking through a one-time direct-message challenge and privacy-preserving friend intersection is specified separately in [VK identity linking through a verification message](vk-message-link.md). It is not part of the F1–F17 first-release gate.
+
 Search-specific UI remains in [authorized event search](../unsigned-personalization/authorized-event-search.md). Ranking/profile schemas remain in [unsigned personalization](../unsigned-personalization/README.md).
 
 ## Product rules
@@ -58,3 +60,5 @@ See [personalization data ownership](../../architecture/personalization-data-own
 ## Open product decisions
 
 See the umbrella [global product decisions](../static-personal-announcements/global-product-decisions.md), especially verified-email UX and profile-link consent.
+
+The VK message-link extension additionally requires approved retention, a dedicated VK inbox, a purpose-specific VK-link consent, a personal-data processing policy and a user agreement. The live identity/friend graph is pseudonymous personal data, not anonymous data.

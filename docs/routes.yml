@@ -407,6 +407,7 @@ features:
   site_user_identity:
     status: partial_design
     docs: docs/features/site-user-identity/README.md
+    vk_message_link_postrelease: docs/features/site-user-identity/vk-message-link.md
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_search: docs/features/unsigned-personalization/authorized-event-search.md
     related_favorites: docs/features/event-favorites-calendar/README.md
@@ -414,6 +415,7 @@ features:
       yandex_login_logout: partial
       verified_email_identity: design
       profile_linking: design
+      vk_message_link_and_friend_signals: postrelease_design
 
   event_favorites_calendar:
     status: design_with_ics_preview
