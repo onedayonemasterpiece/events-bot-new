@@ -50,6 +50,8 @@ Festival media — отдельная модель `Festival` и не входи
 
 Равный raw/pixel SHA — exact duplicate без LLM. Равенство/близость dHash, pHash,
 OCR или SSIM само по себе никогда не удаляет и не скрывает approved media.
+Повтор одного и того же resolved display URL схлопывается ещё раньше, до
+download/hash/VLM; связанные deferred pair rows закрываются детерминированно.
 
 ### Автоматический VLM review
 

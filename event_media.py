@@ -271,6 +271,62 @@ async def enqueue_event_media_review_job(
     return True
 
 
+async def _collapse_exact_display_url_duplicates(
+    session: Any,
+    event_id: int,
+    rows: Sequence[EventPoster],
+) -> list[EventPoster]:
+    """Resolve repeated logical URLs before downloads, hashes, or VLM calls."""
+
+    groups: dict[str, list[EventPoster]] = {}
+    for row in rows:
+        url = resolve_poster_display_url(row)
+        if url:
+            groups.setdefault(url, []).append(row)
+    losers: list[EventPoster] = []
+    survivor_ids: set[int] = set()
+    now = datetime.now(timezone.utc)
+    for grouped in groups.values():
+        survivor = _choose_survivor(*grouped[:2]) if len(grouped) == 2 else max(
+            grouped, key=_poster_quality_key
+        )
+        survivor_ids.add(int(survivor.id or 0))
+        for row in grouped:
+            if row.id == survivor.id:
+                continue
+            row.review_status = DUPLICATE
+            row.duplicate_of_id = int(survivor.id or 0)
+            row.review_reason = "exact_display_url_duplicate"
+            row.reviewed_at = now
+            session.add(row)
+            losers.append(row)
+    loser_ids = [int(row.id or 0) for row in losers if row.id]
+    if loser_ids:
+        related = (
+            await session.execute(
+                select(EventMediaPairReview).where(
+                    EventMediaPairReview.event_id == int(event_id),
+                    EventMediaPairReview.status.in_(("pending", "deferred")),
+                    or_(
+                        EventMediaPairReview.left_poster_id.in_(loser_ids),
+                        EventMediaPairReview.right_poster_id.in_(loser_ids),
+                    ),
+                )
+            )
+        ).scalars().all()
+        for review in related:
+            review.status = "cancelled"
+            review.decision = "duplicate"
+            review.duplicate_kind = "exact"
+            review.confidence = 1.0
+            review.reason_code = "exact_display_url_duplicate"
+            review.last_error = None
+            review.resolved_at = now
+            review.updated_at = now
+            session.add(review)
+    return [row for row in rows if int(row.id or 0) in survivor_ids]
+
+
 async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
     """Create cached unordered pair decisions for every unresolved gallery row."""
 
@@ -288,6 +344,9 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
         )
     ).scalars().all()
     rows = [row for row in rows if resolve_poster_display_url(row)]
+    rows = await _collapse_exact_display_url_duplicates(
+        session, int(event_id), rows
+    )
     pending_rows = [row for row in rows if row.review_status == PENDING_REVIEW]
     if pending_rows and not any(row.review_status == APPROVED for row in rows):
         seed = pending_rows[0]

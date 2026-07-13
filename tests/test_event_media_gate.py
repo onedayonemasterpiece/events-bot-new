@@ -523,6 +523,70 @@ async def test_stale_running_pair_review_is_returned_to_automatic_retry(tmp_path
     assert recovered_run_at == now
 
 
+@pytest.mark.asyncio
+async def test_exact_display_url_is_resolved_before_recovered_pair_download(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = event_media.datetime.now(event_media.timezone.utc)
+    shared_url = "https://static.example/shared.webp"
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        left = EventPoster(
+            event_id=int(event.id),
+            poster_hash="left-same-url",
+            supabase_url=shared_url,
+            review_status=APPROVED,
+            display_order=0,
+        )
+        right = EventPoster(
+            event_id=int(event.id),
+            poster_hash="right-same-url",
+            supabase_url=shared_url,
+            review_status=PENDING_REVIEW,
+            display_order=1,
+        )
+        session.add(left)
+        session.add(right)
+        await session.commit()
+        await session.refresh(left)
+        await session.refresh(right)
+        review = EventMediaPairReview(
+            event_id=int(event.id),
+            left_poster_id=int(left.id),
+            right_poster_id=int(right.id),
+            context_hash="ctx-same-url",
+            pair_input_hash="pair-same-url",
+            status="deferred",
+            attempts=1,
+            updated_at=now,
+            next_run_at=now,
+        )
+        session.add(review)
+        await session.commit()
+
+        created = await event_media.ensure_event_media_reviews(session, int(event.id))
+        await event_media.sync_event_gallery_projection(session, int(event.id))
+        await session.commit()
+        await session.refresh(left)
+        await session.refresh(right)
+        await session.refresh(review)
+        await session.refresh(event)
+
+    assert created == 0
+    assert left.review_status == APPROVED
+    assert right.review_status == DUPLICATE
+    assert right.duplicate_of_id == left.id
+    assert right.review_reason == "exact_display_url_duplicate"
+    assert review.status == "cancelled"
+    assert review.decision == "duplicate"
+    assert review.reason_code == "exact_display_url_duplicate"
+    assert event.photo_urls == [shared_url]
+    assert event.photo_count == 1
+
+
 def test_production_media_writers_are_restricted_to_the_gate() -> None:
     root = Path(__file__).resolve().parents[1]
     allowed = {
