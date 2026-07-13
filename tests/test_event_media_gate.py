@@ -464,6 +464,65 @@ async def test_review_status_migration_is_one_time_and_restart_safe(tmp_path) ->
     con.close()
 
 
+@pytest.mark.asyncio
+async def test_stale_running_pair_review_is_returned_to_automatic_retry(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = event_media.datetime.now(event_media.timezone.utc)
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        left = EventPoster(
+            event_id=int(event.id),
+            poster_hash="left-stale",
+            supabase_url="https://static.example/left.webp",
+            review_status=APPROVED,
+        )
+        right = EventPoster(
+            event_id=int(event.id),
+            poster_hash="right-stale",
+            supabase_url="https://static.example/right.webp",
+            review_status=PENDING_REVIEW,
+        )
+        session.add(left)
+        session.add(right)
+        await session.commit()
+        await session.refresh(left)
+        await session.refresh(right)
+        review = EventMediaPairReview(
+            event_id=int(event.id),
+            left_poster_id=int(left.id),
+            right_poster_id=int(right.id),
+            context_hash="ctx-stale",
+            pair_input_hash="pair-stale",
+            status="running",
+            attempts=1,
+            updated_at=now - event_media.timedelta(minutes=20),
+            next_run_at=now - event_media.timedelta(minutes=20),
+        )
+        session.add(review)
+        await session.commit()
+
+        recovered = await event_media._recover_stale_running_reviews(
+            session, int(event.id), now=now
+        )
+        await session.commit()
+        await session.refresh(review)
+
+    assert recovered == 1
+    assert review.status == "deferred"
+    assert review.decision == "uncertain"
+    assert review.reason_code == "automatic_running_recovered"
+    assert review.last_error == "interrupted_running_review"
+    assert review.attempts == 1
+    recovered_run_at = review.next_run_at
+    if recovered_run_at.tzinfo is None:
+        recovered_run_at = recovered_run_at.replace(tzinfo=event_media.timezone.utc)
+    assert recovered_run_at == now
+
+
 def test_production_media_writers_are_restricted_to_the_gate() -> None:
     root = Path(__file__).resolve().parents[1]
     allowed = {

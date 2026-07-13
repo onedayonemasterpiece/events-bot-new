@@ -69,6 +69,9 @@ Defaults:
   следующий UTC day;
 - cache/idempotency: `event_media_pair_review.pair_input_hash` включает event,
   fingerprints, event context и policy/prompt versions.
+- `running` pair, прерванный deploy/restart, автоматически возвращается в
+  `deferred` через десять минут; evidence попытки сохраняется, а дальнейшая
+  обработка следует обычным budget/retry правилам без ручного вмешательства.
 
 Результаты: duplicate → `duplicate`; distinct → `approved`; semantic conflict/
 unrelated candidate → `rejected`; failure/uncertain → fail-closed quarantine.

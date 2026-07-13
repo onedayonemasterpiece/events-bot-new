@@ -648,6 +648,37 @@ def _next_utc_day() -> datetime:
     return datetime.combine(now.date() + timedelta(days=1), time(hour=0, minute=5), tzinfo=timezone.utc)
 
 
+async def _recover_stale_running_reviews(
+    session: Any,
+    event_id: int,
+    *,
+    now: datetime,
+) -> int:
+    """Return interrupted pair calls to the automatic queue after a restart."""
+
+    stale_after = timedelta(
+        seconds=_env_int("EVENT_MEDIA_REVIEW_RUNNING_STALE_SECONDS", 600, lo=60, hi=3600)
+    )
+    rows = (
+        await session.execute(
+            select(EventMediaPairReview).where(
+                EventMediaPairReview.event_id == int(event_id),
+                EventMediaPairReview.status == "running",
+                EventMediaPairReview.updated_at <= now - stale_after,
+            )
+        )
+    ).scalars().all()
+    for review in rows:
+        review.status = "deferred"
+        review.decision = "uncertain"
+        review.reason_code = "automatic_running_recovered"
+        review.last_error = "interrupted_running_review"
+        review.next_run_at = now
+        review.updated_at = now
+        session.add(review)
+    return len(rows)
+
+
 async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) -> bool:
     """Process at most one pair; unresolved media never enters the public gallery."""
 
@@ -657,8 +688,17 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         event = await session.get(Event, int(event_id))
         if event is None:
             return False
-        await ensure_event_media_reviews(session, int(event_id))
         now = datetime.now(timezone.utc)
+        recovered = await _recover_stale_running_reviews(
+            session, int(event_id), now=now
+        )
+        if recovered:
+            logger.warning(
+                "event_media: recovered stale running reviews event_id=%s count=%s",
+                event_id,
+                recovered,
+            )
+        await ensure_event_media_reviews(session, int(event_id))
         review = (
             await session.execute(
                 select(EventMediaPairReview)
