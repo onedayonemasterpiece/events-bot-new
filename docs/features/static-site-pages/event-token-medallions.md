@@ -3,7 +3,7 @@
 > **Status:** release-candidate medallion slice consolidated from the freshest source-faithful branch state into `integration/static-site-medallions-release-20260712` from `origin/main@c6396331`; draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38), not yet in `origin/main`. Content baseline `fa367ea3` contains 25 organizer/venue entries and 11 festival/venue-brand entries. SVG is primary only for official or safely source-faithful vector marks; raster-only sources are WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb`, `act-opus`, `kantata-festival` and other documented raster exceptions remain WebP-first until trustworthy SVG sources exist.
 > **Workflow skill:** project-specific medallion archaeology/sourcing/rendering workflow is codified in `.codex/skills/static-event-medallions/SKILL.md`.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
-> **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
+> **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Medallion visual QA](medallion-visual-qa.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
 ## Goal
 
@@ -51,6 +51,8 @@ Validation of the clean consolidation on 2026-07-12:
 - medallion lab rendered `38/38` lazy-loaded images after full-page scroll, with zero broken assets, zero console errors/warnings and no horizontal overflow at `390px`;
 - desktop `1440px` and mobile `390px` viewport screenshots confirmed the intended circle grid, readable marks and source/festival sections. Final owner visual sign-off still applies after P0 shortlist assets are added.
 
+These screenshots are baseline evidence, not exhaustive release acceptance. Public release additionally requires the separate [inventory-driven Playwright visual QA gate](medallion-visual-qa.md): capture every actual generated page/surface that renders medallions, not only the lab; verify zero clipping, dirty/abruptly cut shadows, alpha mattes, overlap, overflow or unreadable marks; and retain an immutable SHA-bound verdict ledger.
+
 ### Release shortlist: medallions still to produce
 
 Read-only production snapshot on **2026-07-12** contained `326` active current/future canonical events across `124` normalized-as-stored location strings. Direct location-alias matching against the consolidated organizer manifest covered `181/326` events before festival/program matching. Counts below are prioritization evidence, not permission to guess a logo; every item still requires official/source-faithful provenance and mobile/desktop visual QA.
@@ -78,6 +80,7 @@ Read-only production snapshot on **2026-07-12** contained `326` active current/f
 - P0 is complete only when every shortlist item is `implemented` or explicitly `deferred_by_owner` with reason; silence is not acceptance.
 - Each accepted asset has provenance, manifest aliases, SVG/WebP contract, preview assertion and mobile (~90px)/desktop (~112px) visual QA. Broken/ambiguous source or distorted artwork fails closed to no medallion.
 - Final release preview must prove no broken asset URLs, no duplicate organizer/festival token for the same identity, no false alias matches, no horizontal overflow and correct accessible labels.
+- Final release preview must also pass the separate [exhaustive target-surface capture](medallion-visual-qa.md): every actual medallion page at mobile/desktop, every distinct layout at its breakpoint state, isolated lab coverage and enabled Telegram layouts, with zero unresolved visual defects.
 
 ## Visual contract
 

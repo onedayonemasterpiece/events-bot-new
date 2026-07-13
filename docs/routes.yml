@@ -300,6 +300,7 @@ features:
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
+    event_token_medallions_visual_qa: docs/features/static-site-pages/medallion-visual-qa.md
     event_token_medallions_integration_branch: integration/static-site-medallions-release-20260712
     event_token_medallions_source_branch: feature/static-site-venue-medallions-20260703
     event_token_medallions_content_baseline: fa367ea3
@@ -323,7 +324,7 @@ features:
       event_medallions_main_baseline: partial_11_organizers_no_festival_manifest
       event_medallions_release_branch: consolidated_25_organizers_11_festivals
       event_medallions_release_shortlist: p0_open
-      event_medallions_visual_acceptance: pending
+      event_medallions_visual_acceptance: exhaustive_playwright_surface_capture_pending
     entrypoints:
       - main.py
       - smart_event_update.py

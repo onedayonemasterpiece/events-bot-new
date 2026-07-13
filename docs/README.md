@@ -16,6 +16,7 @@
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event image duplicate release audit (SHA-256 → visual review): `docs/operations/event-image-duplicate-audit.md`
+- Medallion visual QA (all actual Playwright target surfaces): `docs/features/static-site-pages/medallion-visual-qa.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Personalization Supabase 500 MB storage/compaction: `docs/operations/personalization-storage-budget.md`
 - Consolidated event views/likes/shares (sources + site): `docs/features/post-metrics/consolidated-event-engagement.md`
