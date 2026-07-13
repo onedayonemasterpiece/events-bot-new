@@ -18,6 +18,7 @@ sections:
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
+    event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md
     personalization_storage_budget: docs/operations/personalization-storage-budget.md
     telegram_link_inspection: docs/operations/telegram-link-inspection.md
@@ -128,6 +129,7 @@ sections:
     incident_80_stories_source_coverage_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-source-coverage.md
     incident_80_stories_video_promo_gap_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-video-promo-gap.md
     incident_event_source_media_aggregation_gap_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-source-media-aggregation-gap.md
+    incident_event_media_duplicates_2026_06_09: docs/reports/incidents/INC-2026-06-09-event-media-duplicates.md
     incident_smart_update_gemma3_fallback_hallucination_2026_05_05: docs/reports/incidents/INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md
     incident_event_quality_regression_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-quality-regression.md
     incident_kitoboya_garage_date_2026_05_05: docs/reports/incidents/INC-2026-05-05-kitoboya-garage-date.md

@@ -36,6 +36,7 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 | ID | Capability | Canonical home | Stage |
 |---|---|---|---|
 | M1 | Event-detail organizer/venue/festival medallions | [Event token medallions](../static-site-pages/event-token-medallions.md) | clean consolidated draft PR #38: 25 organizer/venue + 11 festival/venue-brand entries; P0 shortlist and owner visual sign-off pending |
+| M2 | No duplicate images inside an event gallery | [Event image duplicate audit](../../operations/event-image-duplicate-audit.md) | current production baseline reported degraded; exhaustive hash-to-visual audit and root-cause burn-down pending |
 
 ## Cross-feature authorities
 
@@ -54,6 +55,7 @@ Current decisions and questions that affect several feature families live in [gl
 
 - Navigation keeps one cross-device information architecture but adapts its geometry: compact mobile brand-tag disclosure, persistent desktop horizontal navigation with the shallow hybrid tag as the recommended release candidate. The exact immutable preview still needs owner sign-off.
 - The gallery slide «Как добраться» is an optional F11 presentation candidate: it may summarize validated transport data after real event media, but cannot replace the accessible full schedule block or weaken the nightly refresh/fail-closed gates.
+- Release galleries require zero confirmed intra-event image duplicates across the full active/future public inventory. The current baseline must be established by the [read-only SHA-to-visual audit](../../operations/event-image-duplicate-audit.md), then each confirmed failure family is closed at its ingest/Smart Update/persistence/render root cause rather than by a one-off URL cleanup.
 - Medallion readiness is part of F5/UI presentation acceptance: use only clean draft PR #38, finish or explicitly owner-defer the production-backed P0 shortlist, refresh the gap audit within 48 hours of RC and sign off mobile/desktop provenance/alias/asset QA.
 - Identity is a global static-site release capability: every generated HTML page must render the shared account controller with Yandex login, passwordless verified-email login, logout and device-local forget-email semantics; `/poisk/` may consume but may not own this state.
 - Public presentation requires CDN-backed delivery of the full canonical static site and an asset audit proving that runtime images are lightweight WebP or safe SVG. The detailed gate lives in the [release checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-2--production-static-buildpublish-platform) and [CDN delivery contract](../static-site-pages/cdn-asset-delivery.md#public-release-delivery-contract).

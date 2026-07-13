@@ -56,3 +56,9 @@ For ordinary managed VK source posts, `sync_vk_source_post` only blocked text-on
   - Smart Update replacing a persisted source mirror URL with the managed URL from the same `EventPoster` row.
   - Promo VK publication deduping the same mirror pair and failing before `wall.post` if upload returns no attachments.
   - Ordinary VK source publishing for `Благотворительный концерт`-style VK-origin events failing before `wall.post` when media exists but upload returns no attachments.
+
+## 2026-07-13 release-baseline recurrence signal
+
+The project owner reports that current event galleries still contain many duplicate images. This is a recurrence signal, not yet a quantified finding: the historical fixes covered specific Smart Update/publisher paths, but there is no exhaustive current production ledger joining legacy `Event.photo_urls`, `EventPoster`, downloaded bytes and final rendered galleries.
+
+Before public release, run the canonical [event image duplicate audit](../../operations/event-image-duplicate-audit.md) over the full eligible active/future inventory. The audit is read-only and must proceed from exact URL/path/poster hash through downloaded-byte SHA-256 and repository-compatible dHash candidates to recorded visual review of every multi-image event. Confirmed clusters must be assigned to a root-cause family and repaired/replayed in separate tasks; a one-off DB cleanup does not close this recurrence.

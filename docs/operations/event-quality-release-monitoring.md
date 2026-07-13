@@ -15,6 +15,7 @@ It is not a second semantic gate and must not replace LLM-first Smart Update dec
 - **Regular full inventory:** audit the complete active/future catalog at an agreed cadence before release.
 - **Release cutoff:** freeze the exact active/future inventory and complete a full source-grounded audit.
 - **Canary:** continue the same cadence and measure new/reopened incidents during the stability window.
+- **Image baseline:** before RC, run the one-time exhaustive [event image duplicate audit](event-image-duplicate-audit.md) with recorded visual review for every eligible multi-image event; during the stability window automatically scan every new/changed gallery and adjudicate ambiguous clusters before GO.
 
 ## Workflow
 
@@ -37,6 +38,7 @@ At minimum track by import batch and day:
 - wrong/prose/default location incidents;
 - wrong date/time incidents;
 - invalid/non-event rows reaching a public projection;
+- events and excess refs with exact/mirror/re-encoded/visually confirmed intra-event image duplicates, plus unreviewed/unreviewable gallery clusters;
 - newly opened, reopened, mitigated and closed quality incidents;
 - root causes closed with passing replay;
 - time from detection to mitigation and prevention closure.

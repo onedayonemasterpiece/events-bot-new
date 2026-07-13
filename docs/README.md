@@ -15,6 +15,7 @@
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
+- Event image duplicate release audit (SHA-256 → visual review): `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Personalization Supabase 500 MB storage/compaction: `docs/operations/personalization-storage-budget.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`

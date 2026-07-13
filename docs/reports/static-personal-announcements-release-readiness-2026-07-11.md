@@ -74,6 +74,7 @@
 | **F16** | Correct image focus/crop | **Partial** | Renderer accepts focal/face metadata and keeps OCR-safe contain fallback | Producer currently emits empty focal/face metadata; implement enrichment, confidence/manual override, golden visual corpus |
 | **F17** | Admin issue report → ArtKodex repair/history | **Partial, branch-only** | Admin Edge/UI/history design and branch implementation exist | Merge; unique active/idempotency key; atomic poller claim; real ArtKodex owner; structured repair result; end-to-end repair/rebuild/history |
 | **M1** | Event-detail medallion release readiness | **Partial / consolidated draft PR** | Draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38): clean main-based slice with 25 organizer/venue + 11 festival/venue-brand entries; 420-page preview/check and 38/38 browser image load evidence | Produce/accept P0 shortlist; refresh production gap within 48h of RC; provenance/alias/no-false-match/a11y/no-overflow gates; owner mobile/desktop visual sign-off; merge to main |
+| **M2** | No duplicate images inside an event gallery | **Blocked / baseline reported degraded** | Exact/mirror/near-duplicate prevention exists in parts of Smart Update/publish paths, but the owner reports many current duplicates and no exhaustive current active/future visual ledger exists | Run the canonical read-only SHA-256 → dHash/visual audit over 100% of eligible multi-image events; zero confirmed duplicate events/excess refs/unreviewed clusters; root-cause repair + replay + public-surface recheck |
 
 **Итог:** для полного заявленного публичного релиза нет ни одного требования, которое можно честно отметить `Done` по строгому определению `main + tests + current production evidence`. Это не означает, что продукт начинается с нуля: сильные vertical slices уже есть, но release integration и эксплуатационные доказательства отстают от объёма реализации.
 
@@ -325,12 +326,15 @@ Smart Update является владельцем семантического 
 - [ ] Comment feedback: incremental YDB state, PII redaction, phrase-bank/vector-first gates, cached group verifier, static manifest, Astro fallback and manual canary.
 - [ ] Admin report: allowlisted auth, event snapshot, idempotency key/unique active constraint, atomic poller claim, crash/retry safety, structured repair result/history/re-report.
 - [ ] Offline focal/face/saliency enrichment with confidence/fallback/manual override and golden crop corpus.
+- [ ] Run the exhaustive [event image duplicate audit](../operations/event-image-duplicate-audit.md) on a hashed production snapshot: union `Event.photo_urls` + `EventPoster`, exact byte SHA-256, repo-compatible dHash/near-candidate recall, contact sheets and recorded visual review for 100% of eligible multi-image events.
+- [ ] RC/hypercare gate: `events_with_confirmed_intra_event_duplicates=0`, `confirmed_excess_duplicate_refs=0`, `unreviewed_candidate_clusters=0`; new/changed multi-image events remain clean through the 14-day quality window. Repair confirmed ingest/Smart Update/persistence/render root causes and replay incidents, not only DB URLs.
 - [ ] Stable share assets and real Telegram/VK/MAX tests.
 
 ### Stage 7 — Release candidate, canary и public launch
 
 - [ ] Clean `origin/main`-reachable RC SHA; no release fixes only in side branches.
 - [ ] Full site build/check from clean checkout passes.
+- [ ] Full active/future image-uniqueness ledger is attached to the RC evidence pack and current static/Telegraph/TG/VK surfaces have no confirmed within-event duplicate images.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.

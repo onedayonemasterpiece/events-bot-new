@@ -166,6 +166,7 @@ Runtime policy: `ocr_text`/`unknown` stay `contain`/natural-ratio no-crop; `visu
 - Responsive navigation decision/research: `docs/features/static-site-pages/responsive-navigation.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
+- Event gallery duplicate release audit: `docs/operations/event-image-duplicate-audit.md`.
 - Event transport: `docs/features/event-transport/README.md`; optional gallery card: `docs/features/event-transport/gallery-how-to-get-there-card.md`.
 - Event comment feedback: `docs/features/event-comment-feedback/README.md`.
 - Admin issue reporting: `docs/features/event-issue-reporting/README.md`.

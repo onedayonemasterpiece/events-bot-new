@@ -43,6 +43,10 @@ The detailed identity and action semantics live in [Site user identity](../site-
 
 The UI-freeze task may prototype one generated non-photo gallery slide **«Как добраться»** after genuine event media. It is derived from the same validated F11 snapshot/selector as the normal transport block, fails closed for stale/unsupported data and never becomes hero/OG/JSON-LD event media. The full accessible schedule block remains canonical; the slide itself is optional and may be owner-deferred without removing F11. See [the gallery-card contract](../event-transport/gallery-how-to-get-there-card.md).
 
+## Gallery image uniqueness
+
+No public event gallery may show exact, mirror/re-encoded or visually redundant crop/minor-overlay copies of the same underlying image. RC acceptance requires zero confirmed duplicates and zero unreviewed clusters in the full eligible active/future inventory, using the canonical [event image duplicate audit](../../operations/event-image-duplicate-audit.md). Distinct posters/slides/photos must not be collapsed merely because they share a template; generated product cards are typed separately from source media.
+
 ## Event medallion acceptance
 
 The frozen event-detail UI consumes the single medallion slice from draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38); it must not copy assets/manifests from the mixed historical branches. Release acceptance requires the canonical [medallion P0 shortlist and RC gap gate](event-token-medallions.md#release-consolidation-and-remaining-shortlist), source-faithful artwork/provenance, bounded aliases, no duplicate identity tokens, loaded SVG/WebP+PNG assets, accessible labels and no overflow at mobile/desktop baselines. Listing/search-card medallion rows remain out of P0 unless separately approved.
