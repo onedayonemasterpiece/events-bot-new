@@ -18083,6 +18083,7 @@ async def _apply_posters(
         DUPLICATE,
         PENDING_REVIEW,
         REJECTED,
+        UNAVAILABLE,
         ensure_event_media_reviews,
         event_media_require_cdn,
         materialize_event_media_candidate_to_cdn,
@@ -18184,9 +18185,9 @@ async def _apply_posters(
                 row.completion_tokens = int(poster.completion_tokens or 0)
             if getattr(poster, "total_tokens", 0):
                 row.total_tokens = int(poster.total_tokens or 0)
-            if row.review_status == REJECTED:
+            if row.review_status in {REJECTED, UNAVAILABLE}:
                 row.review_status = PENDING_REVIEW
-                row.review_reason = "source_scope_reintroduced"
+                row.review_reason = "source_candidate_reintroduced"
                 row.reviewed_at = None
             if event_media_require_cdn() and not cdn_ready.get(id(poster), False):
                 row.review_status = PENDING_REVIEW

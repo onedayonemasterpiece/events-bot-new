@@ -128,6 +128,57 @@ async def test_strict_cdn_gate_does_not_project_unmaterialized_source_url(
 
 
 @pytest.mark.asyncio
+async def test_recovered_unavailable_poster_is_reopened_and_projected(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    source_url = "https://source.example/recovered.jpg"
+    cdn_url = "https://static.kenigevents.ru/p/dh16/aa/recovered.webp"
+
+    async def recover(candidate) -> bool:
+        candidate.supabase_url = cdn_url
+        candidate.supabase_path = "p/dh16/aa/recovered.webp"
+        return True
+
+    monkeypatch.setattr(
+        event_media, "materialize_event_media_candidate_to_cdn", recover
+    )
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        session.add(
+            EventPoster(
+                event_id=int(event.id),
+                catbox_url=source_url,
+                poster_hash=hashlib.sha256(f"url:{source_url}".encode()).hexdigest(),
+                review_status="unavailable",
+                review_reason="download_unavailable",
+            )
+        )
+        await session.commit()
+        await _apply_posters(
+            session,
+            event.id,
+            [PosterCandidate(catbox_url=source_url)],
+        )
+        await session.commit()
+        await session.refresh(event)
+        row = (
+            await session.execute(
+                select(EventPoster).where(EventPoster.event_id == event.id)
+            )
+        ).scalar_one()
+
+    assert row.review_status == APPROVED
+    assert row.supabase_url == cdn_url
+    assert event.photo_urls == [cdn_url]
+
+
+@pytest.mark.asyncio
 async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
