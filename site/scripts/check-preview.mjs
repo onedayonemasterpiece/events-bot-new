@@ -35,13 +35,11 @@ const required = [
   'lab/event-decision-block/index.html',
   'lab/event-desktop/index.html',
   'lab/event-desktop/examples/editorial-photo/index.html',
-  'lab/event-desktop/examples/editorial-ocr/index.html',
-  'lab/event-desktop/examples/split-photo/index.html',
+  'lab/event-desktop/examples/editorial-photo-continuous/index.html',
+  'lab/event-desktop/examples/editorial-ocr-companion/index.html',
   'lab/event-desktop/examples/split-ocr/index.html',
-  'lab/event-desktop/examples/gallery-photo/index.html',
-  'lab/event-desktop/examples/gallery-ocr/index.html',
-  'lab/event-desktop/examples/reading-photo/index.html',
-  'lab/event-desktop/examples/bento-portrait/index.html',
+  'lab/event-desktop/examples/split-portrait/index.html',
+  'lab/event-desktop/examples/split-low-resolution/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -114,47 +112,31 @@ const eventDesktopLabHtml = readFileSync(join(root, 'lab/event-desktop/index.htm
 for (const marker of [
   'data-desktop-event-lab',
   'data-desktop-media-families',
-  'data-desktop-variant="editorial-non-ocr"',
-  'data-desktop-variant="editorial-ocr"',
-  'data-desktop-variant="split-non-ocr"',
-  'data-desktop-variant="split-ocr"',
-  'data-desktop-variant="gallery-non-ocr"',
-  'data-desktop-variant="gallery-ocr"',
-  'data-desktop-variant="typographic-non-ocr"',
-  'data-desktop-variant="typographic-ocr"',
-  'Editorial Slab',
-  'Split Canvas',
-  'Immersive Bottom Horizon',
-  'Gallery Exhibition',
-  'Billboard + Action Rail',
-  'Typographic Lead',
-  'Добавить в календарь',
-  'Билеты',
-  'safe-cover',
-  '20%',
+  'data-desktop-focus-v7',
+  'Два итоговых семейства',
+  'Editorial motion',
+  'Закреплённый',
+  'Непрерывный',
   'editorial-photo',
-  'editorial-ocr',
-  'split-photo',
+  'editorial-photo-continuous',
+  'editorial-ocr-companion',
   'split-ocr',
-  'gallery-photo',
-  'gallery-ocr',
-  '326',
-  '195',
-  '26',
+  'split-portrait',
+  'split-low-resolution',
+  'OCR + сильная horizontal',
+  'Горизонталь низкого разрешения',
 ]) {
   if (!eventDesktopLabHtml.includes(marker)) throw new Error(`Desktop event lab misses marker: ${marker}`);
 }
 if (eventDesktopLabHtml.includes('Узнать цену') || eventDesktopLabHtml.includes('Открыть условия') || eventDesktopLabHtml.includes('calendar-link__plus')) throw new Error('Desktop event lab leaks rejected CTA/icon copy');
 
 const desktopExampleContracts = [
-  ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'desktop-prototype__media-rail', 'data-continuous-event-body']],
-  ['editorial-ocr', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ', 'data-selected-media-policy="visual_only"', 'data-source-index="0"']],
-  ['split-photo', 6472, 'split', 'non-ocr', ['Концерт «Закрытие сезона»']],
-  ['split-ocr', 5783, 'split', 'ocr', ['Великие учителя', 'Зарегистрироваться', 'data-slow-media-track', 'data-continuous-event-body']],
-  ['gallery-photo', 5259, 'gallery', 'non-ocr', ['Экскурсия по Светлогорску', 'Как добраться']],
-  ['gallery-ocr', 6510, 'gallery', 'ocr', ['Хиты любимых артистов', 'Как добраться']],
-  ['reading-photo', 5658, 'reading', 'non-ocr', ['Спектакль «Гараж»', 'desktop-media-strip', 'data-strip-item', 'desktop-clean-reading-shell']],
-  ['bento-portrait', 5761, 'bento', 'non-ocr', ['Выставка фэнтези-картин', 'desktop-bento-grid', 'data-bento-tile']],
+  ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'data-editorial-motion="pinned"', '--image-position:50% 80%', 'desktop-prototype__media-rail', 'data-continuous-event-body']],
+  ['editorial-photo-continuous', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'data-editorial-motion="continuous"', '--image-position:50% 80%', 'desktop-prototype__media-rail']],
+  ['editorial-ocr-companion', 5783, 'editorial', 'ocr', ['Великие учителя', 'data-selected-media-policy="visual_only"', 'data-editorial-ocr-companion', 'Оригинальная афиша', 'data-source-index="0"']],
+  ['split-ocr', 5077, 'split', 'ocr', ['Калининград и область как кинодекорация', 'data-slow-media-track', 'data-split-media-rail', 'data-continuous-event-body']],
+  ['split-portrait', 6550, 'split', 'non-ocr', ['Концерт 21-го военного оркестра', 'data-split-media-rail', 'data-slow-media-speed="0.36"']],
+  ['split-low-resolution', 5761, 'split', 'non-ocr', ['Выставка фэнтези-картин', 'data-split-media-rail', 'data-remaining-count']],
 ];
 for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktopExampleContracts) {
   const html = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
@@ -197,37 +179,29 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
   }
   if (/data-desktop-parallax[^>]*>[\s\S]{0,250}<img[^>]+data-image-text-mode="ocr_text"/iu.test(html)) throw new Error(`OCR example ${scenario} must not receive parallax`);
   if (variant === 'editorial' && visibleHtml.includes('desktop-prototype__photo-count')) throw new Error(`Editorial example ${scenario} must not duplicate its compact rail with a photo-count pill`);
-  if (variant === 'bento' && !visibleHtml.includes('data-hero-gallery-index="5"')) throw new Error('Bento example must map every visible tile to its own fullscreen gallery index');
 }
 
 const desktopCleanSource = readFileSync(join(siteDir, 'src/components/lab/DesktopEventCleanPage.astro'), 'utf8');
 for (const marker of [
-  '--stage-height:clamp(560px,calc(100svh - 88px),800px)',
-  'inset:0 0 25%',
-  'width:min(64%,820px)',
-  'width:min(28%,330px)',
-  'grid-template-columns:55% 45%',
-  'grid-template-columns:min(52%,calc(var(--stage-height) * var(--image-ratio)))',
-  'grid-template-columns:min(48%,calc((var(--stage-height) - 3rem) * var(--image-ratio)))',
-  'potentialCrop <= .2',
-  'data-auto-rotate',
+  "type EditorialMotion = 'pinned' | 'continuous'",
+  'data-editorial-motion',
+  "motion === 'continuous'",
+  'stageTravel * .35',
+  "sticky-then-1.00",
+  'height:max(calc(100% + 112px),calc(100vw / var(--image-ratio)))',
+  'object-position:var(--image-position) !important',
+  'data-editorial-ocr-companion',
+  '.desktop-editorial-companion__image img',
+  'object-fit:contain; object-position:center',
+  'data-split-media-rail',
   'data-slow-media-track',
   'data-continuous-event-body',
-  'desktop-bento-grid',
   'data-hero-gallery-index',
-  'editorialMediaExitProgress',
-  'amplitude - progress * amplitude * 2',
-  'ratio >= 1.3',
-  '--bento-cell',
   'grid-template-columns:minmax(0,50%) minmax(0,50%)',
   '.event-card--split-actions .event-card__feedback--under',
   '(-travel * progress)',
   'prefers-reduced-motion:reduce',
   'data-lab-row-normalize',
-  'right:calc(3% + min(28vw,330px) + 1rem)',
-  '--ocr-media-width:clamp(380px,45vw,620px)',
-  'min-height:max(var(--stage-height),calc(var(--ocr-media-width) / var(--image-ratio)))',
-  'grid-template-columns:minmax(440px,48%) minmax(0,1fr)',
   'Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios))',
   'data-lab-media-kind',
   'document-minimax-contained',
@@ -235,24 +209,19 @@ for (const marker of [
   'data-hero-rail-more',
   'data-remaining-count',
   'forcedOcrSourceIndexes',
-  'amplitude = 64',
-  'height:calc(100% + 160px)',
   'position:sticky; top:calc(73px + .75rem)',
+  'padding-bottom:64px',
   'box-shadow:0 -.75rem 0 var(--clean-paper)',
   'bottom:100%; height:.85rem; background:var(--clean-paper)',
   'linear-gradient(135deg,#e4ddd2,#d4c7b9)',
   'background:transparent !important; object-fit:cover !important',
-  'prefers-reduced-motion:reduce',
+  'desktop-clean-description__heading',
+  'desktop-clean-description__lead',
+  "matchMedia('(min-width: 1024px)')",
 ]) {
   if (!desktopCleanSource.includes(marker)) throw new Error(`Desktop clean source misses geometry/motion contract: ${marker}`);
 }
-if (desktopCleanSource.includes('-amplitude + progress * amplitude * 2')) throw new Error('Desktop Editorial parallax must move image pixels upward during downward page scroll');
-if (!/\.desktop-bento-tile img\s*\{[^}]*object-fit:cover;\s*object-position:center center;/u.test(desktopCleanSource)) {
-  throw new Error('Desktop Bento visual images must crop symmetrically from their center');
-}
-if (!/\.desktop-bento-tile\[data-image-text-mode="ocr_text"\] img,\s*\.desktop-bento-tile\[data-image-text-mode="unknown"\] img\s*\{[^}]*object-fit:cover;\s*object-position:center top;/u.test(desktopCleanSource)) {
-  throw new Error('Desktop Bento OCR/unknown images must preserve the top edge and crop from the bottom');
-}
+if (desktopCleanSource.includes('editorialMediaExitProgress')) throw new Error('Desktop Editorial must not restore the accelerated JS exit transform');
 if (desktopCleanSource.includes('<section class="event-gallery"') || desktopCleanSource.includes('DesktopEventPagePrototype')) throw new Error('Desktop clean examples must not restore the rejected lower gallery/technical prototype shell');
 
 const genericFaviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');

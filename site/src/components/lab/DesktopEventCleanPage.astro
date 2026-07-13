@@ -12,8 +12,9 @@ import {
 } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 
-type Candidate = 'editorial' | 'split' | 'gallery' | 'reading' | 'bento';
+type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
+type EditorialMotion = 'pinned' | 'continuous';
 
 interface Props {
   event: PreviewEvent;
@@ -24,7 +25,10 @@ interface Props {
   heroImageIndex?: number;
   heroWidth?: number;
   heroHeight?: number;
+  heroObjectPosition?: string;
   editorialRail?: boolean;
+  editorialMotion?: EditorialMotion;
+  ocrCompanionImageIndex?: number;
   autoRotate?: boolean;
   ocrSafeCover?: boolean;
   ocrSourceIndexes?: number[];
@@ -49,13 +53,15 @@ const {
   heroImageIndex = 0,
   heroWidth,
   heroHeight,
+  heroObjectPosition,
   editorialRail = candidate === 'editorial' && mediaPolicy === 'non-ocr',
+  editorialMotion = 'pinned',
+  ocrCompanionImageIndex,
   autoRotate = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   ocrSafeCover = false,
   ocrSourceIndexes = [],
 } = Astro.props;
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
-const isOcr = mediaPolicy === 'ocr';
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
@@ -63,8 +69,10 @@ const preferredUrl = eventImageUrl(preferredAsset?.src || event.image_url) || pr
 const preferredWidth = heroWidth || preferredAsset?.width || 1600;
 const preferredHeight = heroHeight || preferredAsset?.height || 1000;
 const ratio = preferredWidth / preferredHeight;
-const preferredPosition = preferredAsset?.recommended_object_position || event.image_object_position || '50% 50%';
-const selectedMediaMode = preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
+const preferredPosition = heroObjectPosition || preferredAsset?.recommended_object_position || event.image_object_position || '50% 50%';
+const selectedMediaMode = forcedOcrSourceIndexes.has(heroImageIndex)
+  ? 'ocr_text'
+  : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
 const selectedHeroIsOcr = selectedMediaMode !== 'visual_only';
 
 const galleryImages = (() => {
@@ -98,15 +106,18 @@ const galleryImages = (() => {
 const galleryId = `clean-hero-gallery-${event.id}`;
 const galleryTitleId = `${galleryId}-title`;
 const photoCount = galleryImages.length;
-const readingImages = (galleryImages.filter((image) => image.image_text_mode === 'visual_only').length >= 2
-  ? galleryImages.filter((image) => image.image_text_mode === 'visual_only')
-  : galleryImages).slice(0, 5);
 const railCellLimit = 6;
-const railImages = galleryImages.slice(0, galleryImages.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
-const railRemainingCount = galleryImages.length - railImages.length;
-const stripImages = readingImages.slice(0, 4);
-const bentoImages = galleryImages.slice(0, 9);
-const usesLongFlow = candidate === 'editorial' || candidate === 'reading' || candidate === 'bento' || (candidate === 'split' && isOcr);
+const indexedGalleryImages = galleryImages.map((image, galleryIndex) => ({ image, galleryIndex }));
+const ocrCompanion = ocrCompanionImageIndex === undefined
+  ? undefined
+  : indexedGalleryImages.find(({ image }) => image.sourceIndex === ocrCompanionImageIndex);
+const editorialRailCandidates = indexedGalleryImages.filter(({ galleryIndex }) => galleryIndex !== ocrCompanion?.galleryIndex);
+const editorialRailImages = editorialRailCandidates.slice(0, editorialRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
+const editorialRailRemainingCount = editorialRailCandidates.length - editorialRailImages.length;
+const splitRailCandidates = indexedGalleryImages.filter(({ galleryIndex }) => galleryIndex !== 0);
+const splitRailImages = splitRailCandidates.slice(0, splitRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
+const splitRailRemainingCount = splitRailCandidates.length - splitRailImages.length;
+const usesLongFlow = true;
 
 const dateLabel = displayDate(event);
 const weekdayLabel = displayWeekdayLong(event);
@@ -114,7 +125,12 @@ const dateTimeLabel = displayDateTime(event);
 const addressLabel = event.address || event.city || 'Адрес уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
 // The page owns the section heading; source descriptions occasionally repeat it.
-const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\s*О событии\s*<\/h\1>/giu, '');
+// Remaining source headings are lowered one semantic level so they cannot compete with the event H1.
+const descriptionHtml = (event.description_html || '')
+  .replace(/<h([2-6])[^>]*>\s*О событии[^<]*<\/h\1>/giu, '')
+  .replace(/<(\/?)h([2-5])([^>]*)>/giu, (_match, closing, level, attrs) => closing
+    ? `</h${Number(level) + 1}>`
+    : `<h${Number(level) + 1}${attrs}>`);
 ---
 
 <main
@@ -123,9 +139,10 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
   data-desktop-family={candidate}
   data-media-policy={mediaPolicy}
   data-selected-media-policy={selectedMediaMode}
+  data-editorial-motion={candidate === 'editorial' ? editorialMotion : undefined}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
   data-event-id={event.id}
-  style={`--image-ratio:${ratio};--image-position:${preferredPosition};--media-count:${Math.max(1, stripImages.length)};`}
+  style={`--image-ratio:${ratio};--image-position:${preferredPosition};--media-count:${Math.max(1, photoCount)};`}
 >
   <div class="desktop-clean-reading-shell">
   <article class:list={['desktop-prototype', 'desktop-prototype--clean', `desktop-prototype--${candidate}`, `desktop-prototype--${mediaPolicy}`]} data-clean-hero>
@@ -136,81 +153,83 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
         data-scroll-kind={candidate}
         aria-labelledby={`clean-event-title-${event.id}`}
       >
-        {candidate === 'reading' ? (
-          <figure class="desktop-prototype__media desktop-prototype__media--strip" data-media-frame data-slow-media-viewport>
-            <div class="desktop-media-strip" data-slow-media-track data-slow-media-speed="0.55">
-              {stripImages.map((image, index) => (
-                <button type="button" class="desktop-media-strip__item" data-strip-item data-strip-index={index} data-image-text-mode={image.image_text_mode} data-hero-gallery-open={galleryId} data-hero-gallery-index={index} aria-label={`Открыть фото ${index + 1} события «${event.title}»`}>
-                  <img src={image.src} alt={image.alt} width={image.width || 1600} height={image.height || 1000} loading={index ? 'lazy' : 'eager'} decoding="async" />
-                </button>
-              ))}
-            </div>
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
-          </figure>
-        ) : candidate === 'bento' ? (
-          <figure class="desktop-prototype__media desktop-prototype__media--bento" data-media-frame data-slow-media-viewport>
-            <div class="desktop-bento-track" data-slow-media-track data-slow-media-speed="0.48" data-bento-track>
-              {bentoImages[0] && (
-                <button type="button" class="desktop-bento-main" data-image-text-mode={bentoImages[0].image_text_mode} data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть главное фото события «${event.title}»`}>
-                  <img src={bentoImages[0].src} alt={bentoImages[0].alt} width={bentoImages[0].width || 1200} height={bentoImages[0].height || 1600} fetchpriority="high" decoding="async" />
-                </button>
-              )}
-              <div class="desktop-bento-grid" data-bento-grid>
-                {bentoImages.slice(1).map((image, index) => (
-                  <button type="button" class="desktop-bento-tile" data-bento-tile data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={index + 1} aria-label={`Открыть дополнительное фото ${index + 2}`}>
-                    <img src={image.src} alt={image.alt} width={image.width || 1080} height={image.height || 1350} loading="lazy" decoding="async" />
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
-          </figure>
-        ) : candidate === 'split' && isOcr ? (
+        {candidate === 'split' ? (
           <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport>
-            <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.28">
+            <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.36">
               <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть афишу события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
+              {splitRailImages.length > 0 && (
+                <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail aria-label="Другие изображения события">
+                  {splitRailImages.map(({ image, galleryIndex }) => (
+                    <button type="button" data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу, изображение ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1}`}>
+                      <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
+                      {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
+                    </button>
+                  ))}
+                  {splitRailRemainingCount > 0 && (
+                    <button type="button" class="desktop-prototype__media-rail-more" data-remaining-count={splitRailRemainingCount} data-hero-gallery-open={galleryId} data-hero-gallery-index={splitRailImages.at(-1)!.galleryIndex + 1} aria-label={`Открыть ещё ${splitRailRemainingCount} фото`}>
+                      <strong>+{splitRailRemainingCount}</strong><span>фото</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount} фото</span></button>
           </figure>
         ) : (
-          <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''}>
+          <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''} data-editorial-media>
             {preferredUrl && (
               <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
-            {photoCount > 0 && !(candidate === 'editorial' && editorialRail && railImages.length > 1) && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
+            {photoCount > 0 && !(editorialRail && editorialRailImages.length > 1) && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
           </figure>
         )}
 
         {candidate === 'editorial' && (
           <aside class="desktop-editorial-side" data-editorial-side>
-            {editorialRail && railImages.length > 1 && (
+            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
+            {ocrCompanion && (
+              <button
+                type="button"
+                class="desktop-editorial-companion"
+                data-editorial-ocr-companion
+                data-source-index={ocrCompanion.image.sourceIndex}
+                data-hero-gallery-open={galleryId}
+                data-hero-gallery-index={ocrCompanion.galleryIndex}
+                aria-label="Открыть афишу события на весь экран"
+              >
+                <span class="desktop-editorial-companion__image">
+                  <img src={ocrCompanion.image.src} alt="" width={ocrCompanion.image.width || 800} height={ocrCompanion.image.height || 1200} loading="lazy" decoding="async" />
+                </span>
+                <span class="desktop-editorial-companion__copy"><small>Оригинальная афиша</small><strong>Открыть полностью</strong></span>
+                <Icon name="image" />
+              </button>
+            )}
+            {editorialRail && editorialRailImages.length > 1 && (
               <div class="desktop-prototype__media-rail" data-hero-rail aria-label="Выбрать изображение">
-                {railImages.map((image, index) => (
-                  <button type="button" class:list={[index === 0 && 'is-current']} data-clean-hero-thumb data-index={index} data-source-index={image.sourceIndex} data-src={image.src} data-alt={image.alt} data-mode={image.image_text_mode} data-width={image.width || 1600} data-height={image.height || 1000} data-position={image.position || '50% 50%'} data-hero-gallery-open={galleryId} data-hero-gallery-index={index} aria-pressed={index === 0 ? 'true' : 'false'} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу в полноэкранной галерее, фото ${index + 1}` : `Открыть фото ${index + 1} в полноэкранной галерее`}>
+                {editorialRailImages.map(({ image, galleryIndex }, index) => (
+                  <button type="button" class:list={[index === 0 && 'is-current']} data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу в полноэкранной галерее, фото ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1} в полноэкранной галерее`}>
                     <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
                     {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
                   </button>
                 ))}
-                {railRemainingCount > 0 && (
+                {editorialRailRemainingCount > 0 && (
                   <button
                     type="button"
                     class="desktop-prototype__media-rail-more"
                     data-hero-rail-more
-                    data-remaining-count={railRemainingCount}
+                    data-remaining-count={editorialRailRemainingCount}
                     data-hero-gallery-open={galleryId}
-                    data-hero-gallery-index={railImages.length}
-                    aria-label={`Открыть ещё ${railRemainingCount} фото`}
+                    data-hero-gallery-index={editorialRailImages.at(-1)!.galleryIndex + 1}
+                    aria-label={`Открыть ещё ${editorialRailRemainingCount} фото`}
                   >
-                    <strong>+{railRemainingCount}</strong><span>фото</span>
+                    <strong>+{editorialRailRemainingCount}</strong><span>фото</span>
                   </button>
                 )}
               </div>
             )}
-            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
           </aside>
         )}
 
@@ -231,8 +250,8 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
           {usesLongFlow && (
             <div class="desktop-prototype__flow-body" data-continuous-event-body>
               <article class="desktop-clean-description">
-                <p class="eyebrow">О событии</p>
-                <h2 id={`about-${event.id}`}>{event.summary || event.title}</h2>
+                <h2 class="desktop-clean-description__heading" id={`about-${event.id}`}>О событии</h2>
+                <p class="desktop-clean-description__lead">{event.summary || event.title}</p>
                 <div class="desktop-clean-description__text prose" set:html={descriptionHtml} />
               </article>
               <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
@@ -258,8 +277,8 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
 
   {!usesLongFlow && <section class="desktop-clean-story page-shell" aria-labelledby={`about-${event.id}`}>
     <article class="desktop-clean-description">
-      <p class="eyebrow">О событии</p>
-      <h2 id={`about-${event.id}`}>{event.summary || event.title}</h2>
+      <h2 class="desktop-clean-description__heading" id={`about-${event.id}`}>О событии</h2>
+      <p class="desktop-clean-description__lead">{event.summary || event.title}</p>
       <div class="desktop-clean-description__text prose" set:html={descriptionHtml} />
     </article>
     <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
@@ -334,7 +353,8 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
 
   <script>
     const cleanRoot = document.querySelector<HTMLElement>('[data-desktop-clean-event]');
-    if (cleanRoot) {
+    const desktopViewport = window.matchMedia('(min-width: 1024px)');
+    if (cleanRoot && desktopViewport.matches) {
       document.body.classList.add('desktop-clean-event-page');
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
@@ -470,33 +490,36 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
           if (reducedMotion.matches) {
             media.style.setProperty('--desktop-parallax-y', '0px');
             media.style.removeProperty('transform');
+            media.dataset.editorialMediaShift = '0.00';
             return;
           }
           const viewport = window.innerHeight || 800;
           const stage = media.closest<HTMLElement>('.desktop-prototype__stage');
-          let progress = 0;
-          let amplitude = 48;
           if (stage && cleanRoot.dataset.desktopFamily === 'editorial') {
             const rect = stage.getBoundingClientRect();
-            const travel = Math.max(1, rect.height - viewport + 73);
-            progress = clamp((73 - rect.top) / travel);
-            amplitude = 64;
-            const description = stage.querySelector<HTMLElement>('.desktop-clean-description');
-            if (description) {
-              const stageTravel = Math.max(0, 73 - rect.top);
-              const descriptionEnd = description.getBoundingClientRect().bottom - rect.top;
-              const exitStart = Math.max(0, descriptionEnd - viewport);
-              const exitEnd = Math.max(exitStart + 1, descriptionEnd - 73);
-              const exitProgress = clamp((stageTravel - exitStart) / (exitEnd - exitStart));
-              const exitDistance = media.offsetHeight + 73;
-              media.style.transform = `translate3d(0,${(-exitDistance * exitProgress).toFixed(2)}px,0)`;
-              stage.dataset.editorialMediaExitProgress = exitProgress.toFixed(4);
+            const stageTravel = Math.max(0, 73 - rect.top);
+            const motion = cleanRoot.dataset.editorialMotion || 'pinned';
+            const scrollRange = Math.max(1, stage.offsetHeight - viewport + 73);
+            if (motion === 'continuous') {
+              const maxShift = Math.max(0, stage.offsetHeight - media.offsetHeight);
+              const shift = Math.min(maxShift, stageTravel * .35);
+              media.style.transform = `translate3d(0,${shift.toFixed(2)}px,0)`;
+              media.style.setProperty('--desktop-parallax-y', '0px');
+              media.dataset.editorialMediaShift = shift.toFixed(2);
+              stage.dataset.editorialMediaNetRatio = '.65';
+            } else {
+              media.style.removeProperty('transform');
+              const image = media.querySelector<HTMLImageElement>('[data-clean-hero-image]');
+              const availableBleed = Math.max(0, (image?.offsetHeight || media.offsetHeight) - media.clientHeight);
+              const internalTravel = Math.min(140, availableBleed);
+              const progress = clamp(stageTravel / scrollRange);
+              const offset = -internalTravel * progress;
+              media.style.setProperty('--desktop-parallax-y', `${offset.toFixed(1)}px`);
+              media.dataset.editorialMediaShift = '0.00';
+              stage.dataset.editorialInternalTravel = internalTravel.toFixed(2);
+              stage.dataset.editorialMediaNetRatio = 'sticky-then-1.00';
             }
-          } else {
-            const rect = media.getBoundingClientRect();
-            progress = clamp((viewport - rect.top) / Math.max(1, viewport + rect.height));
           }
-          media.style.setProperty('--desktop-parallax-y', `${(amplitude - progress * amplitude * 2).toFixed(1)}px`);
         });
         cleanRoot.querySelectorAll<HTMLElement>('[data-slow-media-viewport]').forEach((viewport) => {
           const stage = viewport.closest<HTMLElement>('[data-scroll-stage]');
@@ -980,8 +1003,68 @@ const descriptionHtml = (event.description_html || '').replace(/<h([2-6])[^>]*>\
     .desktop-bento-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
   }
 
+  /* Desktop focus v7: only the selected Editorial and Split/Fallback families. */
+  @media (min-width:1024px) {
+    .desktop-clean-description__heading { margin:0; color:#a44721; font-size:clamp(.78rem,.8vw,.9rem) !important; line-height:1.2 !important; letter-spacing:.11em !important; text-transform:uppercase; }
+    .desktop-clean-description__lead { max-width:34ch; margin:.85rem 0 0; font-size:clamp(1.35rem,2vw,2.15rem); font-weight:780; line-height:1.12; letter-spacing:-.03em; }
+    .desktop-clean-description__text { margin-top:1.45rem; }
+    .desktop-clean-description__text :global(h3) { margin:2rem 0 .65rem; font-size:clamp(1.2rem,1.55vw,1.65rem); line-height:1.2; letter-spacing:-.02em; }
+    .desktop-clean-description__text :global(h4),
+    .desktop-clean-description__text :global(h5),
+    .desktop-clean-description__text :global(h6) { margin:1.6rem 0 .55rem; font-size:clamp(1.05rem,1.2vw,1.3rem); line-height:1.25; }
+
+    /* Editorial owns a real horizontal visual; the cream slab remains one continuous reading surface. */
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(336px,28vw,480px); position:relative; display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; inset:auto; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; overflow:hidden; will-change:transform; }
+    .desktop-clean-event--editorial[data-editorial-motion="pinned"] .desktop-prototype--editorial .desktop-prototype__media { position:sticky; top:73px; transform:none; }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; transform:translate3d(0,0,0); }
+    .desktop-clean-event--editorial .desktop-prototype__media-opener { position:absolute; inset:0; }
+    .desktop-clean-event--editorial .desktop-prototype__media-image,
+    .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__media-image,
+    .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { position:absolute; inset:auto 0 0; width:100%; height:max(calc(100% + 112px),calc(100vw / var(--image-ratio))) !important; min-height:0; margin:0 !important; object-fit:cover !important; object-position:var(--image-position) !important; background:#d9cbb8; transform:translate3d(0,var(--desktop-parallax-y,0),0) !important; transition:none; will-change:transform; }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype__media-image { transform:none !important; }
+    .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100vw - var(--editorial-side) - 6vw)); min-width:0; min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
+    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; justify-items:stretch; gap:.8rem; width:calc(100% - 1rem); max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 3rem 0; overflow:auto; scrollbar-width:thin; }
+    .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { order:1; width:100%; }
+    .desktop-editorial-companion { order:2; width:100%; min-height:136px; display:grid; grid-template-columns:92px minmax(0,1fr) 1.35rem; align-items:center; gap:.8rem; padding:.65rem; border:1px solid rgba(255,255,255,.22); border-radius:18px; background:rgba(36,31,27,.94); color:#fffaf2; text-align:left; box-shadow:0 16px 32px rgba(31,23,18,.2); cursor:zoom-in; }
+    .desktop-editorial-companion__image { width:92px; height:118px; display:block; overflow:hidden; border-radius:11px; background:#171412; }
+    .desktop-editorial-companion__image img { width:100%; height:100%; display:block; object-fit:contain; object-position:center; }
+    .desktop-editorial-companion__copy { display:grid; gap:.25rem; }
+    .desktop-editorial-companion__copy small { color:#d8c9bc; font-size:.68rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+    .desktop-editorial-companion__copy strong { font-size:.92rem; line-height:1.15; }
+    .desktop-editorial-companion :global(.icon) { width:1.35rem; height:1.35rem; color:#dd8a61; }
+    .desktop-clean-event--editorial .desktop-prototype__media-rail { order:3; }
+
+    /* Split/Fallback: exact half-canvas media, natural poster track and one bounded sticky CTA. */
+    .desktop-clean-event--split .desktop-prototype__canvas { overflow:visible; }
+    .desktop-clean-event--split .desktop-prototype--split .desktop-prototype__stage { display:grid; grid-template-columns:minmax(0,50%) minmax(0,50%); grid-template-rows:auto; align-items:start; width:100%; height:auto; min-height:var(--scroll-stage-min-height,var(--stage-height)); overflow:visible; background:var(--clean-paper); }
+    .desktop-clean-event--split .desktop-prototype__media { grid-column:1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:2; width:100%; min-width:0; height:calc(100svh - 73px); align-self:start; overflow:hidden; background:#1d1916; }
+    .desktop-clean-event--split .desktop-prototype__content-flow { grid-column:2; grid-row:1; display:block; width:auto; min-width:0; margin:0; padding-bottom:64px; background:var(--clean-paper); box-shadow:-12px 0 36px rgba(47,33,23,.08); }
+    .desktop-clean-event--split .desktop-prototype__info { grid-column:auto; grid-row:auto; padding:clamp(1.5rem,3.2vw,4rem) clamp(1.5rem,3.6vw,4.5rem) 1.5rem; }
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline) { position:sticky; top:calc(73px + .75rem); z-index:12; display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline::before) { content:""; position:absolute; left:0; right:0; bottom:100%; height:.85rem; background:var(--clean-paper); pointer-events:none; }
+    .desktop-clean-event--split :global(.desktop-prototype__action-row) { grid-column:auto; }
+    .desktop-clean-event--split .desktop-poster-track { position:relative; width:100%; height:auto; min-height:0; display:grid; align-content:start; transform:translate3d(0,0,0); will-change:transform; }
+    .desktop-clean-event--split .desktop-prototype__media--poster-scroll .desktop-prototype__media-opener { position:relative; inset:auto; width:100%; height:auto; min-height:0; }
+    .desktop-clean-event--split .desktop-prototype__media--poster-scroll .desktop-prototype__media-image { position:relative; inset:auto; width:100%; height:auto !important; min-height:0; display:block; margin:0; object-fit:contain !important; object-position:center top !important; transform:none !important; background:#1d1916; }
+    .desktop-prototype__media-rail--poster { position:relative; inset:auto; width:100%; display:flex; flex-wrap:nowrap; gap:.5rem; padding:.65rem; overflow:hidden; border-radius:0; background:#292521; }
+    .desktop-prototype__media-rail--poster button { position:relative; flex:1 1 0; width:auto; min-width:54px; max-width:none; height:66px; }
+    .desktop-prototype__media-rail--poster button[data-image-text-mode="ocr_text"] img,
+    .desktop-prototype__media-rail--poster button[data-image-text-mode="unknown"] img { object-fit:contain; background:#181411; }
+    .desktop-prototype__media-rail--poster button span { position:absolute; inset:auto .25rem .2rem; padding:.12rem .3rem; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:.62rem; font-weight:850; }
+    .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more { display:grid; place-content:center; gap:.05rem; border:1px solid rgba(255,255,255,.2); background:#fffaf2; color:#241c17; line-height:1; }
+    .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more span { position:static; padding:0; background:transparent; color:#6f6157; font-size:.58rem; }
+  }
+
+  @media (min-width:1024px) and (max-width:1279px) {
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline) { grid-template-columns:minmax(0,1fr) auto; }
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline .desktop-prototype__primary-action) { grid-column:1/-1; grid-row:2; }
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline .desktop-prototype__action-row) { grid-column:2; grid-row:1; }
+  }
+
   @media (prefers-reduced-motion:reduce) {
     .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { transform:none !important; }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype__media { transform:none !important; }
     .desktop-prototype__media-image { transition:none !important; }
     [data-slow-media-viewport] { position:relative !important; top:auto !important; height:auto !important; overflow:visible !important; }
     [data-slow-media-track] { transform:none !important; }

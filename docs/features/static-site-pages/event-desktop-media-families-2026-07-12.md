@@ -301,3 +301,47 @@ Review surface: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v
 Local and public Chromium acceptance cover all eight scenarios, selected-index fullscreen opening, the `+2` rail cell, OCR `contain`, Editorial `+64px → -58.8px` travel, Split CTA stick/release geometry, related-row media ratios, four desktop viewport sizes and the hidden `390×844` lab root. The public overview and all direct scenario URLs return HTTP `200`.
 
 Gemini 3.1 Pro (High) then reviewed the real public browser captures for every top and `Смотрите дальше` state, plus the Editorial/Split gallery and sticky states. Its corrected verdict has no blocker: **Editorial Photo** is the preferred photo composition, **Split OCR** the preferred poster composition, and **Gallery Photo** the conservative fallback. It explicitly retained the stronger Editorial parallax, count-aware rail, sticky CTA contracts and OCR-safe containment. Its only material finding was a black frame while a third-party VK lazy image was still loading (`complete=true`, `1920×2560` after network settling); v6 now supplies a neutral visual placeholder for that latency state.
+
+## Desktop focus v7: two final families
+
+V7 removes Gallery/Reading/Bento from the active review surface and keeps only two desktop families. This remains a noindex laboratory at `min-width:1024px`; production `EventHero.astro`, `EventLayout.astro`, the mobile event composition and every rule below `1024px` are unchanged.
+
+### Editorial
+
+Editorial is allowed only when a real, semantically suitable horizontal visual is at least `1200px` wide with ratio `>=1.33`. The size gate is necessary but not sufficient: the asset still needs a meaning/quality decision.
+
+- **Pinned comparison:** the media viewport is native `position:sticky`. The image moves upward inside its clipped frame through at most `140px` of measured real bleed. There is no JS exit transform: the containing stage releases the sticky element at normal `1.0x` document speed.
+- **Continuous comparison:** the media viewport is never sticky. A uniform positive compensation of `0.35 * stageScroll` gives a measured net screen speed near `0.65x`; the media naturally crosses the top edge without an unpin/release transition.
+- The `1280×853` «Гараж» source uses `object-position:50% 80%`. Necessary cover loss is allocated to the upper scene so the actors' legs and floor remain in the initial meaningful frame.
+- If an event also has an OCR poster, CTA stays first in the sticky side stack, followed by a compact non-parallax OCR document and then the count-aware photo rail. The companion uses `contain` and opens the existing fullscreen gallery at its exact source index.
+
+The current fixture metadata for `4671/image_assets[3]` says `1080×1350`, but the browser-decoded storage object is actually `2560×1709`; this asset therefore must not be classified from stale dimensions alone. The focused v7 OCR+horizontal example uses event `5783/image_assets[3]`, likewise verified from the source file as `2560×1707`, and retains `image_assets[0]` as the OCR companion. The OCR-without-landscape Split example uses event `5077/image_assets[0]`, a real `955×1280` poster whose physical height exceeds the media viewport at the 50/50 desktop split and whose valid registration CTA can be assessed in context.
+
+### Split/Fallback
+
+Split owns OCR without a strong horizontal image, portrait-only sets and low-resolution landscapes such as `800×602`.
+
+- Media and information are exact `50/50` columns at desktop widths.
+- The left viewport is sticky below the `73px` header. Its physical media track renders the selected image at `width:100%; height:auto`; the measured overflow, not `object-fit:contain` in a fixed frame, determines upward travel. A coefficient of `0.36` extends the stage enough to reveal the complete lower edge.
+- The compact rail is part of that physical track directly below the selected image. It keeps stable fullscreen gallery indexes, shows five concrete cells when necessary and reserves the sixth for `+N`.
+- `О событии` is the real section H2; the canonical summary is a subordinate lead paragraph, and source HTML headings are demoted one level.
+- The action cluster remains sticky inside the information column. A `64px` trailing paper safe zone forces it to release before, and never touch, the graphite `Смотрите дальше` section.
+
+### Routing examples
+
+| Reality | Review route |
+|---|---|
+| Strong horizontal, pinned native release | `/lab/event-desktop/examples/editorial-photo/` |
+| Same event, continuous `0.65x` media | `/lab/event-desktop/examples/editorial-photo-continuous/` |
+| Strong horizontal + OCR companion | `/lab/event-desktop/examples/editorial-ocr-companion/` |
+| OCR without a valid horizontal hero | `/lab/event-desktop/examples/split-ocr/` |
+| Portrait-only visual set | `/lab/event-desktop/examples/split-portrait/` |
+| Low-resolution horizontal fallback | `/lab/event-desktop/examples/split-low-resolution/` |
+
+### Consultant and acceptance gate
+
+Antigravity resolved the unoverridden consultant request to **Gemini 3.1 Pro (High)**. The design-contract run exited `0` with empty stderr and rejected the v6 accelerated exit, portrait-dimension fabrication, fixed-frame poster shrink and blind center cropping. It selected the CTA → OCR companion → rail order and the same Editorial/Split routing matrix. Local evidence is stored under `artifacts/codex/desktop-event-focus-v7-20260713/gemini/` and is not committed.
+
+Acceptance requires desktop geometry at `1024×768`, `1440×650`, `1440×900`, `1920×600` and `1920×1080`; selected-index fullscreen opening; pinned normal-speed release; continuous monotonically upward `~0.65x` movement; exact Split half width; full poster-track travel; a CTA-to-related gap of at least `64px`; zero horizontal overflow; reduced-motion reset; and a `390×844` isolation smoke proving the laboratory root stays hidden.
+
+The final local and public Playwright runs passed `57/57` checks. A targeted public boundary sample measured `64.28125px` between the sticky CTA and `Смотрите дальше`. In the related grid the light image/body/utility surface remains one card, while share and like intentionally sit without a second footer container on the common graphite section background (white share, red like), matching the approved inversion contract. Gemini 3.1 Pro (High) re-read these two pieces of evidence after its first-pass ambiguity, revised both items to `PASS` and returned the final recommendation **SHIP**.
