@@ -72,6 +72,64 @@ def test_fingerprints_distinguish_raw_container_but_match_pixels() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeSession:
+        async def commit(self) -> None:
+            return None
+
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def generate_content_async(self, **kwargs):
+            captured.update(kwargs)
+            return (
+                json.dumps(
+                    {
+                        "decision": "distinct",
+                        "duplicate_kind": "none",
+                        "confidence": 0.99,
+                        "semantic_conflict": False,
+                        "canonical_side": "either",
+                        "reason_code": "different_photos",
+                    }
+                ),
+                None,
+            )
+
+    async def fake_claim(*_args, **_kwargs) -> bool:
+        return True
+
+    import google_ai
+    import main
+
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_claim)
+    monkeypatch.setattr(event_media, "compute_global_ssim", lambda *_args: 0.5)
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: None)
+    result, calls = await event_media._call_reviewer(
+        event=_event(),
+        left=EventPoster(event_id=1, poster_hash="left", review_status=APPROVED),
+        right=EventPoster(event_id=1, poster_hash="right", review_status=PENDING_REVIEW),
+        left_media=DownloadedPoster(b"left", "image/png", "https://example/left.png"),
+        right_media=DownloadedPoster(b"right", "image/png", "https://example/right.png"),
+        model="gemini-3.1-flash-lite-preview",
+        stage="primary",
+        session=FakeSession(),
+    )
+
+    assert calls == 1
+    assert result and result["decision"] == "distinct"
+    config = captured["generation_config"]
+    assert isinstance(config, dict)
+    assert config["response_json_schema"] == event_media._REVIEW_SCHEMA
+    assert "response_schema" not in config
+
+
+@pytest.mark.asyncio
 async def test_smart_update_quarantines_second_image_and_projects_only_approved(tmp_path) -> None:
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

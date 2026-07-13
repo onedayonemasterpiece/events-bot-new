@@ -577,7 +577,11 @@ async def _call_reviewer(
         generation_config={
             "temperature": 0,
             "response_mime_type": "application/json",
-            "response_schema": _REVIEW_SCHEMA,
+            # This is standard JSON Schema.  The current google-genai SDK
+            # contract routes it through response_json_schema; response_schema
+            # is the narrower OpenAPI Schema protobuf and rejects fields such
+            # as additionalProperties before the model is called.
+            "response_json_schema": _REVIEW_SCHEMA,
         },
         max_output_tokens=_env_int("EVENT_MEDIA_REVIEW_MAX_OUTPUT_TOKENS", 256, lo=128, hi=512),
     )

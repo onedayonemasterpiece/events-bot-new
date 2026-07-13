@@ -117,6 +117,9 @@ successful VLM decision cannot be returned to quarantine by the backfill.
 Cleanup/backfill outbox timestamps use the same SQLite `DateTime` representation
 as SQLAlchemy (space separator, UTC), otherwise same-day rows with a raw ISO
 `T` would not satisfy the worker's `next_run_at <= now` query.
+The Gemini call sends the strict standard schema through google-genai
+`response_json_schema`; `response_schema` is not used because that narrower
+protobuf transport rejects JSON Schema `additionalProperties` before inference.
 
 Never delete Storage during this rollout. Before production apply: fresh DB
 snapshot + SHA-256, `PRAGMA quick_check`, dry-run/stale review. After apply:
