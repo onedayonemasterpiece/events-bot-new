@@ -413,6 +413,7 @@ class Database:
                     tg_event_source_hash TEXT,
                     ics_hash TEXT,
                     ics_file_id TEXT,
+                    ics_post_hash TEXT,
                     ics_updated_at TIMESTAMP,
                     ics_post_url TEXT,
                     ics_post_id INTEGER,
@@ -436,6 +437,7 @@ class Database:
             await _add_column(conn, "event", "tg_source_author TEXT")
             await _add_column(conn, "event", "ics_hash TEXT")
             await _add_column(conn, "event", "ics_file_id TEXT")
+            await _add_column(conn, "event", "ics_post_hash TEXT")
             await _add_column(conn, "event", "ics_updated_at TIMESTAMP")
             await _add_column(conn, "event", "ics_post_url TEXT")
             await _add_column(conn, "event", "ics_post_id INTEGER")

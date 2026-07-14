@@ -8278,6 +8278,117 @@ def _calendar_schedule_is_supported(ev: Event) -> bool:
     return bool(parse_time_range(ev.time) and parse_iso_date(ev.date))
 
 
+def _event_has_ics_storage_projection(ev: Event) -> bool:
+    return bool(
+        str(getattr(ev, "ics_url", None) or "").strip()
+        or str(getattr(ev, "ics_hash", None) or "").strip()
+        or str(getattr(ev, "vk_ics_short_url", None) or "").strip()
+        or str(getattr(ev, "vk_ics_short_key", None) or "").strip()
+    )
+
+
+def _event_has_tg_ics_projection(ev: Event) -> bool:
+    return bool(
+        str(getattr(ev, "ics_post_url", None) or "").strip()
+        or getattr(ev, "ics_post_id", None)
+        or str(getattr(ev, "ics_file_id", None) or "").strip()
+    )
+
+
+async def _invalidate_ics_storage_projection(db: Database, event_id: int) -> bool:
+    """Clear an unsupported ICS projection and durably queue its object deletion."""
+
+    queued = False
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+        if not ev or not _event_has_ics_storage_projection(ev):
+            return False
+        old_url = str(ev.ics_url or "").strip()
+        if old_url:
+            try:
+                from supabase_storage import parse_storage_object_url
+
+                parsed = parse_storage_object_url(old_url)
+                if parsed:
+                    bucket, path = parsed
+                    await session.execute(
+                        text(
+                            "INSERT OR IGNORE INTO supabase_delete_queue(bucket, path) "
+                            "VALUES(:bucket, :path)"
+                        ),
+                        {"bucket": str(bucket), "path": str(path).lstrip("/")},
+                    )
+                    queued = True
+            except Exception:
+                logging.warning(
+                    "ics invalidation: failed to queue storage delete event_id=%s url=%s",
+                    event_id,
+                    old_url,
+                    exc_info=True,
+                )
+                raise
+        ev.ics_url = None
+        ev.ics_hash = None
+        ev.ics_updated_at = None
+        ev.vk_ics_short_url = None
+        ev.vk_ics_short_key = None
+        await session.commit()
+    logging.info(
+        "ics invalidation: storage projection cleared event_id=%s delete_queued=%s",
+        event_id,
+        int(queued),
+    )
+    return True
+
+
+async def _invalidate_tg_ics_projection(
+    db: Database,
+    bot: Bot,
+    event_id: int,
+) -> bool:
+    """Delete an unsupported calendar-channel document before clearing its ledger."""
+
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+    if not ev or not _event_has_tg_ics_projection(ev):
+        return False
+
+    post_id = int(getattr(ev, "ics_post_id", 0) or 0)
+    if post_id:
+        channel = await get_asset_channel(db)
+        if not channel:
+            raise RuntimeError("calendar asset channel unavailable for stale ICS cleanup")
+        try:
+            await bot.delete_message(chat_id=channel.channel_id, message_id=post_id)
+        except TelegramBadRequest as exc:
+            message = str(getattr(exc, "message", None) or exc).lower()
+            if "message to delete not found" not in message and "message not found" not in message:
+                raise
+
+    async with db.get_session() as session:
+        stored = await session.get(Event, event_id)
+        if stored:
+            stored.ics_file_id = None
+            stored.ics_post_hash = None
+            stored.ics_post_url = None
+            stored.ics_post_id = None
+            await session.commit()
+    logging.info(
+        "ics invalidation: telegram projection cleared event_id=%s post_id=%s",
+        event_id,
+        post_id or None,
+    )
+    try:
+        await update_source_post_keyboard(event_id, db, bot)
+    except Exception:
+        logging.warning(
+            "ics invalidation: source keyboard refresh failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+    return True
+
+
 def _mark_ics_skipped_invalid_schedule(progress, key: str, event: Event, exc: Exception) -> None:
     detail = f"{str(exc) or exc.__class__.__name__}: date={event.date!r} time={event.time!r}"
     if progress:
@@ -8461,6 +8572,11 @@ async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> b
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
             if _ics_build_error_is_permanent(e):
+                if _event_has_ics_storage_projection(ev):
+                    changed = await _invalidate_ics_storage_projection(db, event_id)
+                    if progress:
+                        progress.mark("ics_supabase", "removed_invalid_schedule", str(e))
+                    return changed
                 _mark_ics_skipped_invalid_schedule(progress, "ics_supabase", ev, e)
                 return False
             if progress:
@@ -8542,6 +8658,11 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
             if _ics_build_error_is_permanent(e):
+                if _event_has_tg_ics_projection(ev):
+                    changed = await _invalidate_tg_ics_projection(db, bot, event_id)
+                    if progress:
+                        progress.mark("ics_telegram", "removed_invalid_schedule", str(e))
+                    return changed
                 _mark_ics_skipped_invalid_schedule(progress, "ics_telegram", ev, e)
                 return False
             if progress:
@@ -8549,7 +8670,7 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
             raise
 
         ics_hash = hashlib.sha256(hash_source).hexdigest()
-        if ev.ics_hash == ics_hash and ev.ics_file_id and ev.ics_post_url:
+        if ev.ics_post_hash == ics_hash and ev.ics_file_id and ev.ics_post_url:
             if progress:
                 progress.mark("ics_telegram", "skipped_nochange", "no change")
             try:
@@ -8569,25 +8690,71 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
         file = types.BufferedInputFile(ics_bytes, filename=filename)
         caption, parse_mode = format_event_caption(ev)
         try:
-            async with span("tg-send"):
-                msg = await bot.send_document(
-                    channel.channel_id,
-                    file,
+            if ev.ics_post_id:
+                media = types.InputMediaDocument(
+                    media=file,
                     caption=caption,
                     parse_mode=parse_mode,
                 )
+                async with span("tg-send"):
+                    msg = await bot.edit_message_media(
+                        chat_id=channel.channel_id,
+                        message_id=int(ev.ics_post_id),
+                        media=media,
+                    )
+            else:
+                async with span("tg-send"):
+                    msg = await bot.send_document(
+                        channel.channel_id,
+                        file,
+                        caption=caption,
+                        parse_mode=parse_mode,
+                    )
         except TelegramBadRequest as e:
             # In local/dev/E2E we might have a prod DB snapshot where the bot has no access
             # to the configured channel. Don't retry these forever.
             if "chat not found" in (getattr(e, "message", "") or "").lower():
                 logline("ICS", event_id, "telegram skipped", reason="chat_not_found")
                 return False
-            async with span("tg-send"):
-                msg = await bot.send_document(
-                    channel.channel_id,
-                    file,
-                    caption=caption,
-                )
+            message = str(getattr(e, "message", None) or e).lower()
+            if ev.ics_post_id:
+                if "message is not modified" in message:
+                    async with db.get_session() as session:
+                        stored = await session.get(Event, event_id)
+                        if stored:
+                            stored.ics_post_hash = ics_hash
+                            await session.commit()
+                    if progress:
+                        progress.mark("ics_telegram", "skipped_nochange", "no change")
+                    try:
+                        await update_source_post_keyboard(event_id, db, bot)
+                    except Exception:
+                        logging.warning(
+                            "update_source_post_keyboard failed for %s",
+                            event_id,
+                            exc_info=True,
+                        )
+                    return False
+                if (
+                    "message to edit not found" in message
+                    or "message not found" in message
+                ):
+                    async with span("tg-send"):
+                        msg = await bot.send_document(
+                            channel.channel_id,
+                            file,
+                            caption=caption,
+                            parse_mode=parse_mode,
+                        )
+                else:
+                    raise
+            else:
+                async with span("tg-send"):
+                    msg = await bot.send_document(
+                        channel.channel_id,
+                        file,
+                        caption=caption,
+                    )
         except Exception as e:
             # Treat delivery issues as non-fatal to keep pipelines (monitoring/smart update)
             # running in dev environments.
@@ -8609,6 +8776,7 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
             obj = await session.get(Event, event_id)
             if obj:
                 obj.ics_file_id = tg_file_id
+                obj.ics_post_hash = ics_hash
                 obj.ics_post_url = tg_post_url
                 obj.ics_post_id = tg_post_id
                 await session.commit()
@@ -12316,6 +12484,7 @@ async def process_request(callback: types.CallbackQuery, db: Database, bot: Bot)
                 ev.ics_url = None
                 ev.ics_file_id = None
                 ev.ics_hash = None
+                ev.ics_post_hash = None
                 ev.ics_updated_at = None
                 ev.vk_ics_short_url = None
                 ev.vk_ics_short_key = None
@@ -15357,18 +15526,29 @@ async def schedule_event_update_tasks(
     tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
     vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
     has_calendar_schedule = _calendar_schedule_is_supported(ev)
-    if (not disable_ics_jobs) and has_calendar_schedule and "ics_publish" in JOB_HANDLERS:
+    stale_ics_storage = (not has_calendar_schedule) and _event_has_ics_storage_projection(ev)
+    stale_tg_ics = (not has_calendar_schedule) and _event_has_tg_ics_projection(ev)
+    if (
+        (not disable_ics_jobs)
+        and (has_calendar_schedule or stale_ics_storage)
+        and "ics_publish" in JOB_HANDLERS
+    ):
         ics_dep = f"{JobTask.ics_publish.value}:{eid}"
         results[JobTask.ics_publish] = ics_dep
         await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
+    telegraph_deps = [key for key in (media_dep_key, ics_dep if stale_ics_storage else None) if key]
     results[JobTask.telegraph_build] = await enqueue_job(
         db,
         eid,
         JobTask.telegraph_build,
-        depends_on=[media_dep_key] if media_dep_key else None,
+        depends_on=telegraph_deps or None,
         replace_depends_on=True,
     )
-    if (not disable_ics_jobs) and has_calendar_schedule and "tg_ics_post" in JOB_HANDLERS:
+    if (
+        (not disable_ics_jobs)
+        and (has_calendar_schedule or stale_tg_ics)
+        and "tg_ics_post" in JOB_HANDLERS
+    ):
         tg_ics_deps = [telegraph_dep_key]
         if ics_dep:
             tg_ics_deps.append(ics_dep)
@@ -15386,11 +15566,17 @@ async def schedule_event_update_tasks(
         # VK media/API failures must not block Telegram event announcements.
         if refresh_existing_vk or not await _event_has_existing_managed_vk_post(ev):
             results[JobTask.vk_sync] = vk_dep_key
+            vk_enqueue_kwargs: dict[str, Any] = {
+                "requeue_done": refresh_existing_vk,
+            }
+            if stale_ics_storage and ics_dep:
+                vk_enqueue_kwargs["depends_on"] = [ics_dep]
+                vk_enqueue_kwargs["replace_depends_on"] = True
             await enqueue_job(
                 db,
                 eid,
                 JobTask.vk_sync,
-                requeue_done=refresh_existing_vk,
+                **vk_enqueue_kwargs,
             )
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
         tg_event_deps = [telegraph_dep_key]

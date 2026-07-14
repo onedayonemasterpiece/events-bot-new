@@ -437,6 +437,7 @@ class Event(SQLModel, table=True):
     tg_event_source_hash: Optional[str] = None
     ics_hash: Optional[str] = None
     ics_file_id: Optional[str] = None
+    ics_post_hash: Optional[str] = None
     ics_updated_at: Optional[datetime] = None
     ics_post_url: Optional[str] = None
     ics_post_id: Optional[int] = None

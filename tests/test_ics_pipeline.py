@@ -12,6 +12,8 @@ class DummyBot(Bot):
     def __init__(self, token: str):
         super().__init__(token)
         self.docs = []
+        self.edits = []
+        self.deleted = []
 
     async def send_document(self, chat_id, document, caption=None, **kwargs):
         self.docs.append((chat_id, caption, kwargs.get("parse_mode")))
@@ -21,6 +23,19 @@ class DummyBot(Bot):
             document=SimpleNamespace(file_id="file" + str(len(self.docs))),
             message_id=len(self.docs),
             chat=chat,
+        )
+
+    async def delete_message(self, chat_id, message_id, **kwargs):
+        self.deleted.append((chat_id, message_id))
+        return True
+
+    async def edit_message_media(self, chat_id, message_id, media, **kwargs):
+        self.edits.append((chat_id, message_id, media))
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            document=SimpleNamespace(file_id="edited" + str(len(self.edits))),
+            message_id=message_id,
+            chat=SimpleNamespace(id=chat_id),
         )
 
 
@@ -245,6 +260,7 @@ async def test_ics_updates_on_change(tmp_path, monkeypatch):
         ev = await session.get(Event, 1)
         assert ev.ics_hash != h1
         assert ev.ics_file_id != f1
+        assert ev.ics_post_hash == ev.ics_hash
 
 
 @pytest.mark.asyncio
@@ -357,6 +373,79 @@ async def test_ics_jobs_skip_invalid_schedule_without_retry(tmp_path, monkeypatc
     assert pr2.marks[0][0] == "ics_telegram"
     assert pr2.marks[0][1] == "skipped_invalid_schedule"
     assert "bad time" in pr2.marks[0][2]
+
+
+@pytest.mark.asyncio
+async def test_ics_jobs_remove_stale_projections_when_time_becomes_unknown(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    bot = DummyBot("123:abc")
+    async with db.get_session() as session:
+        session.add(Channel(channel_id=-100, title="Asset", is_admin=True, is_asset=True))
+        session.add(
+            Event(
+                id=1,
+                title="A",
+                description="d",
+                source_text="s",
+                date="2026-08-08",
+                time="",
+                location_name="Hall",
+                city="Town",
+                ics_url=(
+                    "https://example.supabase.co/storage/v1/object/public/"
+                    "events-ics/event-1-2026-08-08.ics"
+                ),
+                ics_hash="old-hash",
+                ics_file_id="old-file",
+                ics_post_hash="old-hash",
+                ics_post_url="https://t.me/kenigeventscalendar/77",
+                ics_post_id=77,
+                vk_ics_short_url="https://vk.cc/old",
+                vk_ics_short_key="old",
+            )
+        )
+        await session.commit()
+
+    async def fake_update_keyboard(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(main, "update_source_post_keyboard", fake_update_keyboard)
+    supabase_progress = Progress()
+    assert await main.ics_publish(1, db, bot, supabase_progress) is True
+    assert supabase_progress.marks == [
+        ("ics_supabase", "removed_invalid_schedule", "bad time")
+    ]
+
+    telegram_progress = Progress()
+    assert await main.tg_ics_post(1, db, bot, telegram_progress) is True
+    assert telegram_progress.marks == [
+        ("ics_telegram", "removed_invalid_schedule", "bad time")
+    ]
+    assert bot.deleted == [(-100, 77)]
+
+    async with db.get_session() as session:
+        ev = await session.get(Event, 1)
+        assert ev.ics_url is None
+        assert ev.ics_hash is None
+        assert ev.ics_file_id is None
+        assert ev.ics_post_hash is None
+        assert ev.ics_post_url is None
+        assert ev.ics_post_id is None
+        assert ev.vk_ics_short_url is None
+        assert ev.vk_ics_short_key is None
+        queued = (
+            await session.execute(
+                main.text(
+                    "SELECT bucket, path FROM supabase_delete_queue "
+                    "WHERE path='event-1-2026-08-08.ics'"
+                )
+            )
+        ).first()
+    assert queued == ("events-ics", "event-1-2026-08-08.ics")
+    await db.close()
 
 
 @pytest.mark.asyncio

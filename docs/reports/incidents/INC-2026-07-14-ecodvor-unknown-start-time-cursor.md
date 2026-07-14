@@ -54,6 +54,9 @@ Telegram Monitoring run:
   canonical time and completed as `ops_run=3780`; Telegraph and Telegram were repaired.
 - 2026-07-14 16:04Z — public verification found managed VK still contained `14:00`: the
   canonical merge scheduler treated a previously completed managed VK projection as terminal.
+- 2026-07-14 16:12Z — managed VK post `7474` was idempotently edited and verified without
+  `14:00`; follow-up surface inspection found the old ICS object/calendar post still encoded
+  `DTSTART:20260808T140000` because invalid schedules skipped rather than invalidated old assets.
 
 ## Root Cause
 
@@ -72,6 +75,14 @@ Telegram Monitoring run:
 6. Smart Update scheduled `vk_sync` only when no complete managed VK post existed, and
    `enqueue_job()` skipped a completed VK job for that post. That duplicate-prevention contract
    incorrectly made an editable public projection terminal after later canonical field changes.
+7. `ics_publish`/`tg_ics_post` correctly refused to build a *new* calendar from an empty/invalid
+   time, but the scheduler did not enqueue them when an older calendar already existed. Their
+   invalid-schedule branch also returned `skipped` without clearing the storage URL/shortlink or
+   deleting the already-published calendar-channel document.
+8. Storage ICS and Telegram calendar documents shared `event.ics_hash`. Because `ics_publish`
+   updated that hash first, the following `tg_ics_post` could mistake its older attached document
+   for the newly uploaded content and skip it. Telegram projection identity had no independent
+   content hash and the update path sent a new message rather than editing the known post.
 
 ## Contributing Factors
 
@@ -146,7 +157,12 @@ Telegram Monitoring run:
 - [x] Advance source cursor for legitimate zero-event messages without polluting metrics/scanned rows.
 - [x] Re-arm an existing completed managed VK projection only for an actual Smart Update merge;
   retain the no-change/postponed-post duplicate guard.
-- [ ] Deploy the VK refresh correction, repair event `6878` on VK and verify all public surfaces.
+- [x] Make stale ICS storage/calendar-channel projections explicit cleanup dependencies when a
+  canonical update removes the only valid time; queue object deletion and delete the old document.
+- [x] Split Telegram calendar content identity into `ics_post_hash` and edit the known document
+  in place on schedule changes; fail closed rather than duplicate on an ambiguous edit error.
+- [ ] Deploy the calendar cleanup correction, remove the stale event `6878` ICS/calendar post and
+  verify all public surfaces.
 
 ## Follow-up Actions
 
