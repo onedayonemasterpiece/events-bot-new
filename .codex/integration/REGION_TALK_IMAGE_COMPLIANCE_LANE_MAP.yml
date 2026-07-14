@@ -1,0 +1,134 @@
+mode: read_only_parallel_then_serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/agent/region-talk/R04-live-canary
+base_sha: f7abc1c29d2522831e768d8af5d94b94033be210
+base_branch: agent/region-talk/R04-live-canary
+integration_branch: integration/region-talk-image-compliance-review-20260714
+global_constraints:
+  - Keep production publication disabled; this branch is an auditable consultation and compliance-gate change set.
+  - Treat operator-confirmed false negatives as labels, not as proof that every near-threshold post is good.
+  - Verify legal status only against current official Russian registries and keep operator exclusion separate from an official-registry match.
+  - Do not spend image, vector, or LLM budget on an exact source explicitly excluded by the compliance gate.
+  - Do not change image thresholds before external review and a labelled shadow evaluation.
+verification_owner: integrator
+stop_conditions:
+  - An exact Telegram identity cannot be resolved safely.
+  - Official registry evidence is unavailable or ambiguous; record unknown rather than infer legal status.
+  - A proposed scoring change lacks labelled positive and negative controls.
+requirements:
+  - id: R01
+    requirement: Record the four operator-confirmed image false negatives as golden positive evidence.
+    area: evaluation data
+    likely_files:
+      - tests/fixtures/region_talk_image_scoring_review_cases.json
+      - docs/features/region-talk-channel/image-scoring-false-negative-review.md
+    dependencies: []
+    conflict_risk: low
+    primary_lane: integrator
+    parallelizable: false
+    done_when: All four exact links and operator verdicts are retained without copying source images.
+  - id: R02
+    requirement: Check Meduza and Nebozhena against current official foreign-agent and extremist registries and exclude requested sources before expensive work.
+    area: source compliance
+    likely_files:
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - tests/test_region_talk_candidate_report.py
+      - docs/features/region-talk-channel/source-discovery.md
+    dependencies: []
+    conflict_risk: high
+    primary_lane: legal-registry-audit
+    parallelizable: true
+    done_when: Exact source identities have dated official-registry evidence or an explicit unknown result, and the early terminal gate is tested.
+  - id: R03
+    requirement: Audit the current image and album scoring path for false rejection mechanisms.
+    area: image scoring
+    likely_files:
+      - kaggle/RegionTalkImageDiagnostic/region_talk_image_diagnostic.py
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - docs/features/region-talk-channel/image-postcardness.md
+    dependencies: []
+    conflict_risk: medium
+    primary_lane: image-scoring-audit
+    parallelizable: true
+    done_when: Current formula, gates, sample grain, reject counts, and testable hypotheses are documented with evidence.
+  - id: R04
+    requirement: Prepare a complete external-consultant brief aimed at materially reducing false rejection.
+    area: consultant handoff
+    likely_files:
+      - docs/features/region-talk-channel/image-scoring-false-negative-review.md
+    dependencies:
+      - R01
+      - R02
+      - R03
+    conflict_risk: medium
+    primary_lane: integrator
+    parallelizable: false
+    done_when: The brief contains evidence, constraints, questions, requested deliverables, and an acceptance protocol.
+  - id: R05
+    requirement: Commit and push a review branch and provide direct links.
+    area: git handoff
+    likely_files:
+      - .codex/integration/INTEGRATION_REPORT.md
+      - CHANGELOG.md
+    dependencies:
+      - R01
+      - R02
+      - R03
+      - R04
+    conflict_risk: low
+    primary_lane: integrator
+    parallelizable: false
+    done_when: The branch is clean, pushed to origin, and its commit and main brief are linkable.
+lanes:
+  - id: legal-registry-audit
+    role: reviewer
+    effort: extra-high
+    requirement_ids: [R02]
+    target: Current official-registry identity audit for telegram:meduzalive and telegram:imnotbozhena.
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Dated official URLs, exact/unknown match status, identity caveats, and safe implementation guidance.
+    verification_scope: inspection_only
+    status: spawned
+  - id: image-scoring-audit
+    role: reviewer
+    effort: extra-high
+    requirement_ids: [R03]
+    target: Evidence-backed audit of image/album scoring and publication rejection.
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Root-cause findings, code anchors, and a ranked test plan without threshold edits.
+    verification_scope: inspection_only
+    status: spawned
+  - id: integrator
+    role: worker
+    effort: high
+    requirement_ids: [R01, R04, R05]
+    target: Golden fixture, compliance integration, consultant brief, docs, tests, commit, and push.
+    depends_on: [legal-registry-audit, image-scoring-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/region-talk-image-compliance-review-20260714
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-image-compliance-review
+    writable_files:
+      - .codex/integration/**
+      - .codex/lanes/**
+      - CHANGELOG.md
+      - docs/features/region-talk-channel/**
+      - docs/routes.yml
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - tests/fixtures/region_talk_image_scoring_review_cases.json
+      - tests/test_region_talk_candidate_report.py
+    forbidden_files:
+      - .env
+      - artifacts/**
+    expected_output: A clean pushed integration branch with a self-contained external-consultant handoff.
+    verification_scope: targeted
+    status: in_progress

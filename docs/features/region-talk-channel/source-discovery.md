@@ -21,6 +21,34 @@ Other discovery inputs:
 
 Personal profiles are not a primary MVP source. They may appear as `candidate` only if public, author-like, clearly non-private and manually accepted later.
 
+## Source compliance no-spend gate
+
+Compliance/editorial source identity is checked before source/post history,
+embeddings, image download/scoring and LLM calls. A hard legal decision
+requires an exact canonical resource URL, official registration identifier or
+stable platform source ID. A fuzzy title/person-name match may only create
+`REVIEW_NO_SPEND`; it must never assign a legal label.
+
+The first dated exact rules (`region_talk_source_compliance_v1_2026_07_14`)
+are:
+
+- `telegram:meduzalive` → `rejected_compliance_source` /
+  `deny_no_spend`: current Minjust foreign-agent registry contains the exact
+  `https://t.me/meduzalive` resource for `SIA Medusa Project`; the same entity
+  is also officially undesirable. No extremist status is inferred.
+- `telegram:imnotbozhena` → the same terminal no-spend status, but strictly
+  with `manual_editorial_source_block`: the checked current foreign-agent and
+  extremist registries contain no exact source match, and the anonymous author
+  is not inferred from the parody title.
+
+Every decision retains filter version, match basis, registry snapshot/check
+date and official evidence URL. This exact local gate prevents immediate
+resource spend, but it is not a substitute for the planned registry-sync job.
+That job must persist source/effective date/hash, active/inactive transitions
+and TTL, and fail closed to `REVIEW_NO_SPEND` when a registry is stale,
+unavailable or identity is ambiguous. See the [image-scoring false-negative
+review](image-scoring-false-negative-review.md#юридическая-сверка-и-no-spend-gate).
+
 ## Seed list + graph expansion
 
 Pipeline:

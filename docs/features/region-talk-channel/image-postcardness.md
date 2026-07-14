@@ -1,6 +1,13 @@
 # Image postcardness scoring
 
-Status: design. Goal: make MVP visibly useful by showing selected photos + model image report + why they are “открыточные”.
+Status: **implemented single-anchor scorer under calibration review**. Goal: make MVP visibly useful by showing selected photos + model image report + why they are “открыточные”.
+
+> The 2026-07-14 live audit found at least four operator-confirmed false
+> rejects among 18 exact image-only rejects. The runtime currently scores one
+> anchor frame, not the complete Telegram/VK album, and its arithmetic
+> multi-model score is not calibrated. Do not lower the threshold as an
+> isolated fix. Canonical evidence and the external-consultant brief:
+> [image-scoring false-negative review](image-scoring-false-negative-review.md).
 
 ## Principle
 
@@ -171,7 +178,8 @@ hashes, eligibility evidence and media state but not another durable copy of
 the full post text. Exact text remains only in active candidate/vector/Gemini
 work and is removed after the final verdict.
 
-The publication media gate uses `overall_media_score >= 0.66` by default. A
+The current (not yet golden-set-calibrated) publication media gate uses
+`overall_media_score >= 0.66` by default. A
 narrow near-threshold lane prevents a weighted-score edge case from discarding
 an exceptional postcard before Gemini: `overall >= 0.63`, `postcardness >=
 0.85`, `aesthetic >= 0.52` and `technical >= 0.68` must all hold. This does not
@@ -180,6 +188,12 @@ contract is `region_talk_publication_eligibility_v4`. The narrow high-postcard
 lane applies a `0.001` tolerance only to its three-decimal aesthetic boundary,
 so a score reported as `0.519` is not discarded against `0.520`; `0.518` still
 fails. The overall, postcardness and technical floors are unchanged.
+
+These thresholds describe the deployed v4 behavior; the word `calibrated`
+does not mean that a labelled source-disjoint holdout has validated them.
+Until the review protocol is complete, album/high-disagreement low scores
+should be considered candidates for a non-terminal review lane, not evidence
+that a lower global number is safe.
 
 Final Gemini verifier prompt v5 treats a short recurring author footer with
 links to excursions, useful services or the author's other profiles as neutral
