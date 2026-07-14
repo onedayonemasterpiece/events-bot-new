@@ -1,6 +1,6 @@
 # INC-2026-07-14 Ecoyard unknown activity time and stalled source cursor
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Telegram Monitoring producer / server import / Smart Update / managed event publishing
 Opened: 2026-07-14
@@ -57,6 +57,12 @@ Telegram Monitoring run:
 - 2026-07-14 16:12Z — managed VK post `7474` was idempotently edited and verified without
   `14:00`; follow-up surface inspection found the old ICS object/calendar post still encoded
   `DTSTART:20260808T140000` because invalid schedules skipped rather than invalidated old assets.
+- 2026-07-14 16:25Z — the calendar-cleanup deployment invalidated the stale storage/calendar projections:
+  the Supabase object was durably queued for deletion, the Telegram calendar document was deleted,
+  and Telegraph/Telegram were rebuilt without a calendar CTA.
+- 2026-07-14 16:39Z — final machine version `1673` (`3a9b5ff5`) re-armed the managed VK projection
+  with the explicit empty-calendar hash sentinel; authenticated `wall.getById` verification proved
+  the known post was edited in place and no longer contains either `14:00` or the stale calendar link.
 
 ## Root Cause
 
@@ -168,7 +174,7 @@ Telegram Monitoring run:
   in place on schedule changes; fail closed rather than duplicate on an ambiguous edit error.
 - [x] Include the canonical ICS URL in managed VK content identity so adding/removing calendar
   projection state always edits the known wall post.
-- [ ] Deploy the calendar cleanup correction, remove the stale event `6878` ICS/calendar post and
+- [x] Deploy the calendar cleanup correction, remove the stale event `6878` ICS/calendar post and
   verify all public surfaces.
 
 ## Follow-up Actions
@@ -178,10 +184,35 @@ Telegram Monitoring run:
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending final suite/replay
-- post-deploy verification: pending
+- `origin/main` delivery chain: `15f8662a` (source/alias), `5888777d` (producer, Smart Update and
+  zero-event cursor), `e912bb22` (reviewed existing-row time removal), `0951517d` (managed VK
+  re-arm), `b68e7d11` (durable ICS invalidation and independent Telegram calendar hash),
+  `ff7a4bd4` and final correction `3a9b5ff5` (VK calendar projection identity).
+- Final deploy: clean-worktree `flyctl deploy --remote-only` from `origin/main`-reachable
+  `3a9b5ff5`; image `deployment-01KXGQTTQ69P0BVR3BDYRQKABP`, Fly machine version `1673`, one
+  passing machine check. `/healthz` returned `ready=true`, `db=ok`, no issues; disk remained a
+  non-critical warning at 302 MiB free versus the 256 MiB critical floor.
+- Regression suites: 120 relevant source/link/producer/cursor/candidate/Smart Update assertions;
+  3 managed-VK refresh tests; 20 calendar pipeline/DB/builder/job tests. The cursor test file's
+  assertions pass but its process can time out during interpreter shutdown because its existing
+  aiosqlite worker is not closed; an unrelated full-suite calendar concurrency test is order-flaky.
+- Compensating production replay: `ops_run=3780`, success, five messages, one forced candidate,
+  one merge, zero errors; source `60425` advanced through message `935`. Vector catch-up
+  `ops_run=3781` succeeded for 279 events with two embedding upserts and no call-cap remainder.
+- Canonical production verification: event `6878` has `date=2026-08-08`, empty `time`, Railway
+  Gates, one photo and all ICS/calendar/shortlink fields null; parent event `6767` still has
+  `14:00-17:00`; source `@ecodvor39` is enabled/high-trust with cursor `935`; delete queue is empty;
+  `PRAGMA quick_check` is `ok`.
+- Public verification: `https://t.me/kldevents/2422`,
+  `https://telegra.ph/Dzhankbuk-bloknot-iz-sluchajnyh-sokrovishch-07-14` and authenticated
+  `https://vk.com/wall-231920894_7474` show the date/location and no unsupported `14:00`; VK has
+  one photo and no calendar CTA/old `vk.cc` link. `https://t.me/kenigeventscalendar/7474` returns
+  `message_not_found`, and the former Supabase ICS object returns object-not-found.
+- Runtime file logging is enabled at `/data/runtime_logs` with rotation. The final log contains
+  `edit_vk_post start/done` for event `6878`, proving the final run did not hash-skip the edit.
+- LLM budget: the new semantic path adds at most one Lite anchor-role review only for candidates
+  with explicit TBD-start wording. It adds neither a new producer call nor per-event retry loops;
+  public prose remains on the existing Lite writer with the already-budgeted strict 4o fallback.
 
 ## Prevention
 
