@@ -38,6 +38,15 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_missing_telegram_username_is_terminal_but_generic_value_error_is_not(self) -> None:
+        mod = load_module()
+        self.assertTrue(mod.telegram_resolve_error_is_terminal_unresolvable(
+            ValueError('No user has "obytschnajazhizn" as username')
+        ))
+        self.assertFalse(mod.telegram_resolve_error_is_terminal_unresolvable(
+            ValueError("temporary local decode failure")
+        ))
+
     def _seed(self, mod, handle: str, *, priority: int = 0, seed_id: str | None = None):
         return mod.Seed(
             source_seed_id=seed_id or handle.strip("@"),

@@ -349,6 +349,13 @@ text scoring but must leave an otherwise unvisited public in `pending_scan`.
 The queue persists `history_fetch_mode` so a later merge cannot mistake an
 `exact_post_link_fetch` row for completion of the source's first pass.
 
+An uncached Telegram resolve has one additional idempotency terminal: the
+provider's deterministic `UsernameInvalid`/`UsernameNotOccupied` (including
+Telethon's exact `No user has … as username` `ValueError`) becomes
+`rejected_unresolvable_telegram_source`. Transient RPC errors and FloodWait do
+not use that terminal. This prevents a dead public username from consuming the
+single human-like uncached resolve lane on every orchestrator cycle.
+
 The orchestrated product run now defaults to
 `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=adaptive_cursor_v1`; an explicit
 `legacy_v1` environment override remains the immediate rollback to the

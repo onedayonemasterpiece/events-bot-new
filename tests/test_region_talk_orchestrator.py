@@ -103,6 +103,22 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["confirmed_external_blogger_sources_with_publication_confirmed_posts_total"], 0)
         self.assertEqual(metrics["confirmed_external_blogger_sources_with_delivery_completed_posts_total"], 0)
 
+    def test_confirmed_blogger_metrics_count_terminal_missing_telegram_username(self) -> None:
+        mod = load_module()
+        metrics = mod._confirmed_external_blogger_funnel_metrics(
+            [{
+                "canonical_source_key": "telegram:missing",
+                "platform": "telegram",
+                "source_url": "https://t.me/missing",
+                "external_blogger_evidence_status": "confirmed_external",
+                "source_queue_status": "rejected_unresolvable_telegram_source",
+            }],
+            [], [], [], [],
+        )
+        self.assertEqual(metrics["confirmed_external_blogger_terminal_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_rejected_unresolvable_telegram_total"], 1)
+        self.assertEqual(metrics["confirmed_external_blogger_unscanned_total"], 0)
+
     def test_heuristic_ko_funnel_uses_exclusive_product_outcomes(self) -> None:
         mod = load_module()
         run_id = "region-talk-orchestrator-candidate-report-unit"

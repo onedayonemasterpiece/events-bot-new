@@ -86,6 +86,7 @@ SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09_local_scope_v2"
 LOCAL_REGION_SOURCE_STATUS = "rejected_local_region_source"
 SPAM_SOURCE_STATUS = "rejected_spam_source"
 UNRESOLVABLE_VK_SOURCE_STATUS = "rejected_unresolvable_vk_source"
+UNRESOLVABLE_TELEGRAM_SOURCE_STATUS = "rejected_unresolvable_telegram_source"
 LOCAL_REGION_SOURCE_REASON = "source title/handle is Kaliningrad-local; keep for separate local-source monitoring, skip Region Talk external-publication scan"
 SPAM_SOURCE_REASON = "source title/hashtag/excerpt matches repeated hashtag-spam/commercial bait; skip Region Talk scan"
 LOCAL_REGION_RATIO_MIN_POSTS = 30
@@ -4805,6 +4806,17 @@ def git_provenance() -> dict[str, str]:
     return out
 
 
+def telegram_resolve_error_is_terminal_unresolvable(exc: Exception) -> bool:
+    """Recognize deterministic public-username failures, not transient RPCs."""
+    error_name = type(exc).__name__
+    if error_name in {"UsernameInvalidError", "UsernameNotOccupiedError"}:
+        return True
+    message = str(exc or "").strip().lower()
+    return error_name == "ValueError" and bool(
+        re.search(r"\bno user has .+ as username\b", message)
+    )
+
+
 class TelegramRequestGovernor:
     def __init__(self, run_id: str, output_dir: Path, state: dict[str, Any]) -> None:
         self.run_id = run_id
@@ -5100,6 +5112,20 @@ class TelegramRequestGovernor:
                 self.resolve_network_floodwait += 1
                 cooldown_until = self.mark_floodwait("ResolveUsernameRequest", source_id, canonical_url, seconds)
                 return None, {"fetch_status": "error_floodwait_resolve", "telegram_resolve_status": "error_floodwait", "fetch_error_code": "FloodWaitError", "fetch_error_message": str(exc)[:180], "next_allowed_resolve_at": cooldown_until}
+            if telegram_resolve_error_is_terminal_unresolvable(exc):
+                self.log(
+                    "ResolveUsernameRequest", "entity_resolve_expensive", source_id,
+                    canonical_url, UNRESOLVABLE_TELEGRAM_SOURCE_STATUS, ok=False,
+                    error_code=type(exc).__name__, error_message=str(exc)[:180],
+                )
+                return None, {
+                    "fetch_status": UNRESOLVABLE_TELEGRAM_SOURCE_STATUS,
+                    "source_queue_status": UNRESOLVABLE_TELEGRAM_SOURCE_STATUS,
+                    "telegram_resolve_status": "terminal_unresolvable_username",
+                    "fetch_error_code": type(exc).__name__,
+                    "fetch_error_message": str(exc)[:180],
+                    "next_action": "do_not_retry_missing_telegram_username",
+                }
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "error", ok=False, error_code=type(exc).__name__, error_message=str(exc)[:180])
             return None, {"fetch_status": "error_telegram_rpc", "telegram_resolve_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}
 

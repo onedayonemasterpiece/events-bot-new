@@ -322,7 +322,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
             "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
-            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё активно ждут просмотра / ошибочно локальный / спам / недоступный VK: "
+            "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё активно ждут просмотра / ошибочно локальный / спам / недоступный TG / недоступный VK: "
             f"{value('confirmed_external_blogger_sources_total')}/"
             f"{value('confirmed_external_blogger_scanned_total')}/"
             f"{value('confirmed_external_blogger_with_ko_total')}/"
@@ -332,6 +332,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('confirmed_external_blogger_pending_total')}/"
             f"{value('confirmed_external_blogger_rejected_local_total')}/"
             f"{value('confirmed_external_blogger_rejected_spam_total')}/"
+            f"{value('confirmed_external_blogger_rejected_unresolvable_telegram_total')}/"
             f"{value('confirmed_external_blogger_rejected_unresolvable_vk_total')}"
         ),
         (
@@ -822,6 +823,10 @@ def _confirmed_external_blogger_funnel_metrics(
         "confirmed_external_blogger_rejected_unresolvable_vk_total": sum(
             1 for row in sources
             if str(row.get("source_queue_status") or row.get("fetch_status") or "") == "rejected_unresolvable_vk_source"
+        ),
+        "confirmed_external_blogger_rejected_unresolvable_telegram_total": sum(
+            1 for row in sources
+            if str(row.get("source_queue_status") or row.get("fetch_status") or "") == "rejected_unresolvable_telegram_source"
         ),
         "confirmed_external_blogger_fetch_error_total": sum(
             1 for row in sources
