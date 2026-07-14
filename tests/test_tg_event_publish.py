@@ -498,6 +498,8 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
             assert "без домысливания программы и активностей" in prompt
             assert "evidence_quote" in prompt
             assert kwargs["generation_config"]["response_mime_type"] == "application/json"
+            assert "response_json_schema" in kwargs["generation_config"]
+            assert "response_schema" not in kwargs["generation_config"]
             assert self.fallback_models == []
             assert self.max_retries == 1
             return (

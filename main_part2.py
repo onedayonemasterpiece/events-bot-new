@@ -6210,6 +6210,9 @@ async def build_tg_event_hook_text(
         "`evidence_quote` — точная непрерывная цитата из блока «Организаторские источники», "
         "которая прямо подтверждает всё предложение `text`. Нельзя использовать редакционный черновик как evidence.\n"
         "Если конкретное предложение нельзя подтвердить одной точной цитатой, не пиши его.\n"
+        "Пиши близким к цитате пересказом: не объединяй факты из разных фрагментов в одно предложение. "
+        "Не добавляй обращения и приглашения (`друзья`, `вас ждёт`, `приглашаем`), если именно это обращение "
+        "не входит в подтверждающую цитату вместе со всеми остальными деталями предложения.\n"
         f"Формат: 1-3 предложения, до {max_chars} символов.\n"
         f"{promo_instruction}"
         "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
@@ -6254,7 +6257,10 @@ async def build_tg_event_hook_text(
             generation_config={
                 "temperature": 0.3,
                 "response_mime_type": "application/json",
-                "response_schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+                # JSON Schema (including additionalProperties) belongs in the
+                # google-genai JSON-schema field. The protobuf response_schema
+                # path rejects it with INVALID_ARGUMENT/additional_properties.
+                "response_json_schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
             },
             max_output_tokens=360 if promo_highlight else 260,
         )
