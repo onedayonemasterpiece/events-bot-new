@@ -11268,9 +11268,13 @@ def candidate_link_rows_for_fetch(
         if url and (status in terminal_link_statuses or status.startswith("terminal_") or (next_attempt and next_attempt > current)):
             blocked_urls.add(url)
 
-    def rank(row: dict[str, Any]) -> tuple[int, float, int, str]:
+    def rank(row: dict[str, Any]) -> tuple[int, int, int, float, int, str]:
         kind = str(row.get("_kind") or "")
         status = str(row.get("post_link_status") or row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
+        try:
+            durable_priority = int(row.get("post_link_priority") if row.get("post_link_priority") not in (None, "") else 100)
+        except (TypeError, ValueError):
+            durable_priority = 100
         cache_rank = 0 if _candidate_link_handle(row) in cached_handles else 1
         if kind == "post_link_queue_item":
             if status in {"", "pending_fetch"}:
@@ -11287,7 +11291,7 @@ def candidate_link_rows_for_fetch(
             attempt_count = int(row.get("attempt_count") or row.get("fetch_attempt_count") or 0)
         except (TypeError, ValueError):
             attempt_count = 0
-        return pri, freshness_rank, attempt_count, str(row.get("updated_at") or "")
+        return durable_priority, pri, cache_rank, freshness_rank, attempt_count, str(row.get("updated_at") or "")
 
     ordered = sorted(raw_rows, key=rank)
     # Durable exact text can be fused again without another Telegram request.
@@ -11302,6 +11306,23 @@ def candidate_link_rows_for_fetch(
     ][:local_rescore_cap]
     local_rescore_ids = {id(row) for row in local_rescoring}
     ordered = [row for row in ordered if id(row) not in local_rescore_ids]
+
+    # Image scoring can finish after state maintenance has compacted the old
+    # working text. Those rows are already near the end of the product funnel,
+    # so reserve bounded exact-fetch capacity for restoring their body before
+    # fresh discovery links. This changes only ordering: the same global
+    # network-call limit, entity cache and human-like governor still apply.
+    text_restore_cap = min(
+        max(0, getenv_int("REGION_TALK_TEXT_RESTORE_EXACT_PER_RUN", 5)),
+        max(0, limit),
+    )
+    text_restoring = [
+        row for row in ordered
+        if str(row.get("priority_reason") or "") == "publication_text_restore_after_active_payload_prune"
+        and str(row.get("post_link_status") or "") in {"", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache"}
+    ][:text_restore_cap]
+    text_restore_ids = {id(row) for row in text_restoring}
+    ordered = text_restoring + [row for row in ordered if id(row) not in text_restore_ids]
 
     # Rows whose old working text has already been compacted still need one
     # bounded human-like refetch slot. Continuous fresh keyword inflow must not

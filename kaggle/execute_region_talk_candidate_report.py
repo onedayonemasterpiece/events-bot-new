@@ -349,12 +349,16 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_RUN_ID": run_id,
         "REGION_TALK_DRY_RUN": "1",
         "REGION_TALK_DISABLE_PUBLISH": "1",
-        "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "json"),
+        # This launcher is the live CandidateReport entry point.  Defaulting to
+        # a local JSON sandbox can produce a green Kaggle run that reads and
+        # writes none of the shared funnel, so JSON must now be an explicit
+        # opt-in for offline experiments.
+        "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "ydb"),
         "REGION_TALK_VECTOR_PROBE_ONLY": os.environ.get("REGION_TALK_VECTOR_PROBE_ONLY", "0"),
         "REGION_TALK_VECTOR_PROBE_TEXT_LIMIT": os.environ.get("REGION_TALK_VECTOR_PROBE_TEXT_LIMIT", "6"),
         "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get(
             "REGION_TALK_REQUIRE_YDB_STATE",
-            "1" if os.environ.get("REGION_TALK_STATE_BACKEND", "").strip().lower() == "ydb" else "0",
+            "1" if os.environ.get("REGION_TALK_STATE_BACKEND", "ydb").strip().lower() == "ydb" else "0",
         ),
         "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL": os.environ.get("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0"),
         "REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS", "20"),
@@ -428,6 +432,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_POST_INPUT_MODE": os.environ.get("REGION_TALK_POST_INPUT_MODE", os.environ.get("REGION_TALK_FETCH_MODE", "")),
         "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": os.environ.get("REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST", "1"),
         "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": os.environ.get("REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT", "12"),
+        "REGION_TALK_TEXT_RESTORE_EXACT_PER_RUN": os.environ.get("REGION_TALK_TEXT_RESTORE_EXACT_PER_RUN", "5"),
         "REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT": os.environ.get("REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT", "5000"),
         "REGION_TALK_YDB_CANDIDATE_LINK_LIMIT": os.environ.get("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", "180"),
         "REGION_TALK_MAX_IMAGES_PER_POST": os.environ.get("REGION_TALK_MAX_IMAGES_PER_POST", "8"),
@@ -856,7 +861,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "0")
     os.environ.setdefault("REGION_TALK_VK_READ_SERVICE_FIRST", "1")
     os.environ.setdefault("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1")
-    os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
+    os.environ.setdefault("REGION_TALK_STATE_BACKEND", "ydb")
     if (os.environ.get("REGION_TALK_STATE_BACKEND") or "").strip().lower() == "ydb":
         os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "1")
     else:

@@ -6184,6 +6184,59 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "https://t.me/cached/10",
         ])
 
+    def test_candidate_link_order_reserves_bounded_text_restore_lane(self) -> None:
+        mod = load_module()
+        raw = [
+            {
+                "_kind": "post_link_queue_item",
+                "post_link_status": "pending_fetch",
+                "post_link_priority": 0,
+                "priority_reason": "global_keyword_search_exact_post",
+                "post_url": "https://t.me/fresh/1",
+            },
+            *[
+                {
+                    "_kind": "post_link_queue_item",
+                    "post_link_status": "retry_fetch",
+                    "post_link_priority": 0,
+                    "priority_reason": "publication_text_restore_after_active_payload_prune",
+                    "post_url": f"https://t.me/restore/{idx}",
+                }
+                for idx in range(1, 4)
+            ],
+        ]
+        with mock.patch.dict(os.environ, {"REGION_TALK_TEXT_RESTORE_EXACT_PER_RUN": "2"}):
+            selected = mod.candidate_link_rows_for_fetch(raw, 3, cached_entity_handles={"fresh", "restore"})
+        self.assertEqual([row["post_url"] for row in selected], [
+            "https://t.me/restore/1",
+            "https://t.me/restore/2",
+            "https://t.me/fresh/1",
+        ])
+
+    def test_candidate_launcher_defaults_to_live_ydb_backend(self) -> None:
+        mod = load_runner_module()
+        old_backend = os.environ.pop("REGION_TALK_STATE_BACKEND", None)
+        captured: dict[str, dict] = {}
+
+        def fake_create(_client, _username, slug, _title, writer):
+            with tempfile.TemporaryDirectory() as td:
+                folder = Path(td)
+                writer(folder)
+                cfg = folder / "region_talk_run_config.json"
+                if cfg.exists():
+                    captured["config"] = json.loads(cfg.read_text(encoding="utf-8"))
+            return "zigomaro/" + slug
+
+        try:
+            mod.create_or_replace_dataset = fake_create
+            mod.wait_dataset_ready = lambda *args, **kwargs: None
+            mod.build_input_datasets(object(), run_id="unit-ydb-default", username="zigomaro")
+            self.assertEqual(captured["config"]["env"]["REGION_TALK_STATE_BACKEND"], "ydb")
+            self.assertEqual(captured["config"]["env"]["REGION_TALK_REQUIRE_YDB_STATE"], "1")
+        finally:
+            if old_backend is not None:
+                os.environ["REGION_TALK_STATE_BACKEND"] = old_backend
+
     def test_bge_arrival_reopens_only_nonterminal_fetched_exact_post(self) -> None:
         mod = load_module()
         links = [

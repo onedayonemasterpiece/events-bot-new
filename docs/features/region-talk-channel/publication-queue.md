@@ -142,6 +142,14 @@ the normal human-like request governor; the finalizer does not use public-web
 HTML as a hidden fallback. Existing FloodWait/cooldown evidence on an active
 exact-link retry is preserved.
 
+The exact-link selector reserves up to five existing network slots per run for
+these near-final `text_restore_pending` rows before ordinary fresh keyword
+links. This is an ordering rule, not a larger Telegram budget: total exact
+calls, cached-entity preference, pacing and cooldown behavior are unchanged.
+The Kaggle CandidateReport launcher defaults to the shared YDB backend; an
+offline JSON run now requires an explicit `REGION_TALK_STATE_BACKEND=json`, so
+a successful sandbox report cannot be mistaken for product-funnel progress.
+
 Legacy `no_text_for_gemini` rows are migrated into this retry contour. Working
 text remains lossless only while the candidate is active and is deleted after
 the actual Gemini/operator terminal verdict. This keeps YDB compact without
