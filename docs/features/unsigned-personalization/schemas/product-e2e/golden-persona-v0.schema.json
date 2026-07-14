@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kenigevents.ru/schemas/product-e2e/golden-persona-v0.schema.json",
-  "title": "Golden persona contract v0 (Phase A draft)",
-  "$comment": "Design-only. Probabilities, maturity thresholds, and final acceptance gates await eligible external consultant synthesis. This oracle must never be written as the application's finished profile.",
+  "title": "Golden persona contract v0.2 (real-catalog draft)",
+  "$comment": "Design-only controlled non-PII actor. Interests and behavior are test-oracle data, but every catalog/holdout event must resolve to a frozen real production record. Final probabilities, maturity thresholds, and release gates await eligible consultant synthesis.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,7 +10,11 @@
     "persona_id",
     "persona_version",
     "label_revision",
-    "synthetic_fixture",
+    "controlled_test_actor",
+    "contains_real_personal_data",
+    "age_cohort",
+    "life_context",
+    "catalog_data_policy",
     "latent_interests",
     "constraints",
     "unknown_exploration_zone",
@@ -25,39 +29,149 @@
     "anti_bubble_expectations"
   ],
   "properties": {
-    "schema_version": { "const": "golden-persona/v0.1-draft" },
-    "persona_id": { "$ref": "#/$defs/stableId" },
-    "persona_version": { "type": "integer", "minimum": 1 },
-    "label_revision": { "$ref": "#/$defs/nonEmpty" },
-    "synthetic_fixture": { "const": true },
-    "description": { "type": "string", "maxLength": 1000 },
+    "schema_version": {
+      "const": "golden-persona/v0.2-draft"
+    },
+    "persona_id": {
+      "$ref": "#/$defs/stableId"
+    },
+    "persona_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "label_revision": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "controlled_test_actor": {
+      "const": true
+    },
+    "contains_real_personal_data": {
+      "const": false
+    },
+    "age_cohort": {
+      "enum": [
+        "adult_18_24",
+        "adult_25_34",
+        "adult_30_44",
+        "adult_35_49",
+        "adult_50_64",
+        "adult_65_plus",
+        "adult_age_neutral"
+      ]
+    },
+    "life_context": {
+      "$ref": "#/$defs/stableId"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "catalog_data_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "source_snapshot_ref"
+      ],
+      "properties": {
+        "mode": {
+          "const": "real_event_records_only"
+        },
+        "source_snapshot_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        }
+      }
+    },
     "latent_interests": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["positive", "negative"],
+      "required": [
+        "positive",
+        "negative"
+      ],
       "properties": {
-        "positive": { "type": "array", "items": { "$ref": "#/$defs/interest" }, "uniqueItems": true },
-        "negative": { "type": "array", "items": { "$ref": "#/$defs/interest" }, "uniqueItems": true }
+        "positive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interest"
+          },
+          "uniqueItems": true
+        },
+        "negative": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interest"
+          },
+          "uniqueItems": true
+        }
       }
     },
     "constraints": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cities", "date_windows", "price", "accessibility"],
+      "required": [
+        "cities",
+        "date_windows",
+        "price",
+        "accessibility",
+        "unknown_fact_policy"
+      ],
       "properties": {
-        "cities": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
-        "date_windows": { "type": "array", "items": { "$ref": "#/$defs/dateWindow" } },
+        "cities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "date_windows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dateWindow"
+          }
+        },
         "price": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["currency", "max", "free_preference"],
+          "required": [
+            "currency",
+            "max",
+            "free_preference"
+          ],
           "properties": {
-            "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
-            "max": { "type": ["number", "null"], "minimum": 0 },
-            "free_preference": { "type": ["boolean", "null"] }
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "max": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "free_preference": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
           }
         },
-        "accessibility": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
+        "accessibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "unknown_fact_policy": {
+          "enum": [
+            "exclude_from_eligible_supply",
+            "separate_unknown_outcome",
+            "allow_only_if_constraint_soft"
+          ]
+        }
       }
     },
     "unknown_exploration_zone": {
@@ -65,112 +179,266 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["facet_id", "relationship"],
+        "required": [
+          "facet_id",
+          "relationship"
+        ],
         "properties": {
-          "facet_id": { "$ref": "#/$defs/stableId" },
-          "relationship": { "enum": ["adjacent_unknown", "novel_unknown", "uncertain"] }
+          "facet_id": {
+            "$ref": "#/$defs/stableId"
+          },
+          "relationship": {
+            "enum": [
+              "adjacent_unknown",
+              "novel_unknown",
+              "uncertain"
+            ]
+          }
         }
       }
     },
     "maturity_rule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["policy_ref", "required_evidence_classes", "status_at_start"],
+      "required": [
+        "policy_ref",
+        "required_evidence_classes",
+        "status_at_start"
+      ],
       "properties": {
-        "policy_ref": { "$ref": "#/$defs/nonEmpty" },
+        "policy_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        },
         "required_evidence_classes": {
           "type": "array",
-          "items": { "enum": ["valid_impression", "strong_positive", "explicit_negative", "return_session", "time_span"] },
+          "items": {
+            "enum": [
+              "valid_impression",
+              "strong_positive",
+              "explicit_negative",
+              "return_session",
+              "time_span"
+            ]
+          },
           "minItems": 1,
           "uniqueItems": true
         },
-        "status_at_start": { "enum": ["cold", "reactivated"] }
+        "status_at_start": {
+          "enum": [
+            "cold",
+            "reactivated"
+          ]
+        }
       }
     },
-    "session_schedule_ref": { "$ref": "#/$defs/nonEmpty" },
-    "behavior_policy_ref": { "$ref": "#/$defs/nonEmpty" },
-    "ground_truth_ref": { "$ref": "#/$defs/nonEmpty" },
+    "session_schedule_ref": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "behavior_policy_ref": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "ground_truth_ref": {
+      "$ref": "#/$defs/nonEmpty"
+    },
     "holdout_events": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["fixture_event_id", "activation_day", "label", "label_source"],
+        "required": [
+          "real_event_id",
+          "source_snapshot_ref",
+          "captured_content_hash",
+          "evaluation_release_day",
+          "label",
+          "label_source"
+        ],
         "properties": {
-          "fixture_event_id": { "$ref": "#/$defs/stableId" },
-          "activation_day": { "type": "integer", "minimum": 1 },
-          "label": { "$ref": "#/$defs/relevanceLabel" },
-          "label_source": { "$ref": "#/$defs/nonEmpty" }
+          "real_event_id": {
+            "$ref": "#/$defs/stableId"
+          },
+          "source_snapshot_ref": {
+            "$ref": "#/$defs/nonEmpty"
+          },
+          "captured_content_hash": {
+            "$ref": "#/$defs/hash"
+          },
+          "evaluation_release_day": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "label": {
+            "$ref": "#/$defs/relevanceLabel"
+          },
+          "label_source": {
+            "$ref": "#/$defs/nonEmpty"
+          }
         }
       }
     },
     "expected_profile_facets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["required", "allowed_adjacent", "forbidden"],
+      "required": [
+        "required",
+        "allowed_adjacent",
+        "forbidden"
+      ],
       "properties": {
-        "required": { "$ref": "#/$defs/facetList" },
-        "allowed_adjacent": { "$ref": "#/$defs/facetList" },
-        "forbidden": { "$ref": "#/$defs/facetList" }
+        "required": {
+          "$ref": "#/$defs/facetList"
+        },
+        "allowed_adjacent": {
+          "$ref": "#/$defs/facetList"
+        },
+        "forbidden": {
+          "$ref": "#/$defs/facetList"
+        }
       }
     },
     "expected_exclusions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["event_ids", "facets"],
+      "required": [
+        "real_event_ids",
+        "facets"
+      ],
       "properties": {
-        "event_ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
-        "facets": { "$ref": "#/$defs/facetList" }
+        "real_event_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "facets": {
+          "$ref": "#/$defs/facetList"
+        }
       }
     },
     "no_relevant_supply": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["scheduled_days", "expected_state"],
+      "required": [
+        "scheduled_days",
+        "expected_state"
+      ],
       "properties": {
-        "scheduled_days": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
-        "expected_state": { "const": "separate_supply_failure" }
+        "scheduled_days": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "uniqueItems": true
+        },
+        "expected_state": {
+          "const": "separate_supply_failure"
+        }
       }
     },
     "anti_bubble_expectations": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "useful_adjacent_event_ids",
-        "forbidden_return_event_ids",
+        "useful_adjacent_real_event_ids",
+        "forbidden_return_real_event_ids",
         "max_concentration_policy_ref",
         "stale_interest_decay_policy_ref"
       ],
       "properties": {
-        "useful_adjacent_event_ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
-        "forbidden_return_event_ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
-        "max_concentration_policy_ref": { "$ref": "#/$defs/nonEmpty" },
-        "stale_interest_decay_policy_ref": { "$ref": "#/$defs/nonEmpty" }
+        "useful_adjacent_real_event_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "forbidden_return_real_event_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "max_concentration_policy_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "stale_interest_decay_policy_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        }
       }
     }
   },
   "$defs": {
-    "stableId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{1,127}$" },
-    "nonEmpty": { "type": "string", "minLength": 1, "maxLength": 300 },
-    "facetList": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
-    "relevanceLabel": { "enum": ["relevant", "adjacent", "irrelevant", "prohibited"] },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{1,127}$"
+    },
+    "nonEmpty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "facetList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stableId"
+      },
+      "uniqueItems": true
+    },
+    "relevanceLabel": {
+      "enum": [
+        "relevant",
+        "adjacent",
+        "irrelevant",
+        "prohibited"
+      ]
+    },
     "interest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["facet_id", "strength_band", "evidence_basis"],
+      "required": [
+        "facet_id",
+        "strength_band",
+        "evidence_basis"
+      ],
       "properties": {
-        "facet_id": { "$ref": "#/$defs/stableId" },
-        "strength_band": { "enum": ["weak", "medium", "strong"] },
-        "evidence_basis": { "const": "independent_label" }
+        "facet_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "strength_band": {
+          "enum": [
+            "weak",
+            "medium",
+            "strong"
+          ]
+        },
+        "evidence_basis": {
+          "const": "independent_label"
+        }
       }
     },
     "dateWindow": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["start", "end"],
+      "required": [
+        "start",
+        "end"
+      ],
       "properties": {
-        "start": { "type": "string", "format": "date-time" },
-        "end": { "type": "string", "format": "date-time" }
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     }
   }

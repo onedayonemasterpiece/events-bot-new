@@ -27,6 +27,10 @@ UI reference board для static event pages: `docs/features/static-site-pages/i
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
 Product E2E-driven longitudinal personalization research task: `docs/features/unsigned-personalization/product-e2e-research-brief.md`.
 Pre-consultation Phase A audit, traceability, persona/catalog schemas, simulator and KPI design: `docs/features/unsigned-personalization/product-e2e-design.md`.
+Concrete golden-persona panel across adult age/life cohorts and strict real-event-only snapshot/time-travel protocol: `docs/features/unsigned-personalization/golden-personas-real-data-v0.md`.
+Long-horizon Supabase/YDB growth, retention, cleanup and ownership acceptance: `docs/features/unsigned-personalization/database-sustainability-e2e.md`.
+External consultant reading order, direct GitHub links, review questions and deliverable: `docs/features/unsigned-personalization/external-consultant-review-pack.md`.
+User-supplied supplementary research intake (provider/model provenance pending; not an eligible review): `docs/features/unsigned-personalization/reviews/product-e2e/supplementary-research-intake-2026-07-14-ru.md`.
 Cross-feature data ownership ADR: `docs/architecture/personalization-data-ownership.md`.
 Site identity/profile linking: `docs/features/site-user-identity/README.md`.
 Durable favorites/calendar: `docs/features/event-favorites-calendar/README.md`.

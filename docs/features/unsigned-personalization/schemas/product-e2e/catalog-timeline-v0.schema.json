@@ -1,84 +1,245 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kenigevents.ru/schemas/product-e2e/catalog-timeline-v0.schema.json",
-  "title": "Catalog timeline contract v0 (Phase A draft)",
-  "$comment": "Design-only immutable 14+ day replay contract. It defines no production migration and must use wholly synthetic event fixtures.",
+  "title": "Catalog timeline contract v0.2 (real-data draft)",
+  "$comment": "Design-only immutable 14+ day replay contract over frozen real production event records. It forbids invented events, dates, facts, cancellations and lifecycle transitions.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "timeline_id",
     "timeline_version",
-    "synthetic_fixture",
+    "timeline_mode",
+    "real_data_snapshot",
+    "source_authority",
+    "source_snapshot_ref",
+    "snapshot_taken_at",
+    "source_db_fingerprint",
+    "as_of_policy",
     "seed",
     "timezone",
-    "start_virtual_date",
+    "start_as_of_date",
     "days"
   ],
   "properties": {
-    "schema_version": { "const": "catalog-timeline/v0.1-draft" },
-    "timeline_id": { "$ref": "#/$defs/stableId" },
-    "timeline_version": { "type": "integer", "minimum": 1 },
-    "synthetic_fixture": { "const": true },
-    "seed": { "type": "integer", "minimum": 0 },
-    "timezone": { "const": "Europe/Kaliningrad" },
-    "start_virtual_date": { "type": "string", "format": "date" },
+    "schema_version": {
+      "const": "catalog-timeline/v0.2-draft"
+    },
+    "timeline_id": {
+      "$ref": "#/$defs/stableId"
+    },
+    "timeline_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timeline_mode": {
+      "enum": [
+        "captured_daily_snapshots",
+        "forward_schedule_projection"
+      ]
+    },
+    "real_data_snapshot": {
+      "const": true
+    },
+    "source_authority": {
+      "const": "fly_sqlite_production_snapshot"
+    },
+    "source_snapshot_ref": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "snapshot_taken_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_db_fingerprint": {
+      "$ref": "#/$defs/hash"
+    },
+    "as_of_policy": {
+      "const": "advance_over_observed_records_only"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timezone": {
+      "const": "Europe/Kaliningrad"
+    },
+    "start_as_of_date": {
+      "type": "string",
+      "format": "date"
+    },
     "days": {
       "type": "array",
       "minItems": 14,
-      "items": { "$ref": "#/$defs/catalogDay" }
+      "items": {
+        "$ref": "#/$defs/catalogDay"
+      }
     }
   },
   "$defs": {
-    "stableId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{1,127}$" },
-    "hash": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
-    "idList": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{1,127}$"
+    },
+    "nonEmpty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "requiredHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "idList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stableId"
+      },
+      "uniqueItems": true
+    },
     "hashMap": {
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/stableId" },
-      "additionalProperties": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      "propertyNames": {
+        "$ref": "#/$defs/stableId"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/requiredHash"
+      }
     },
     "eventUpdate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixture_event_id", "changed_fields", "previous_content_hash", "content_hash"],
+      "required": [
+        "real_event_id",
+        "changed_fields",
+        "previous_content_hash",
+        "content_hash",
+        "evidence_ref"
+      ],
       "properties": {
-        "fixture_event_id": { "$ref": "#/$defs/stableId" },
-        "changed_fields": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "minItems": 1, "uniqueItems": true },
-        "previous_content_hash": { "$ref": "#/$defs/hash" },
-        "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+        "real_event_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "changed_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stableId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "previous_content_hash": {
+          "$ref": "#/$defs/hash"
+        },
+        "content_hash": {
+          "$ref": "#/$defs/requiredHash"
+        },
+        "evidence_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        }
       }
     },
-    "holdoutActivation": {
+    "holdoutRelease": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixture_event_id", "persona_ids", "label_revision"],
+      "required": [
+        "real_event_id",
+        "persona_ids",
+        "label_revision",
+        "source_snapshot_ref"
+      ],
       "properties": {
-        "fixture_event_id": { "$ref": "#/$defs/stableId" },
-        "persona_ids": { "$ref": "#/$defs/idList" },
-        "label_revision": { "type": "string", "minLength": 1, "maxLength": 300 }
+        "real_event_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "persona_ids": {
+          "$ref": "#/$defs/idList"
+        },
+        "label_revision": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "source_snapshot_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        }
       }
     },
     "supply": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["eligible_active_count", "relevant_count", "adjacent_count", "no_relevant_supply"],
+      "required": [
+        "eligible_active_count",
+        "relevant_count",
+        "adjacent_count",
+        "unknown_constraint_count",
+        "no_relevant_supply"
+      ],
       "properties": {
-        "eligible_active_count": { "type": "integer", "minimum": 0 },
-        "relevant_count": { "type": "integer", "minimum": 0 },
-        "adjacent_count": { "type": "integer", "minimum": 0 },
-        "no_relevant_supply": { "type": "boolean" }
+        "eligible_active_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relevant_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "adjacent_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown_constraint_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "no_relevant_supply": {
+          "type": "boolean"
+        }
       }
     },
     "transition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixture_event_id", "from", "to", "reason"],
+      "required": [
+        "real_event_id",
+        "from",
+        "to",
+        "reason",
+        "evidence_ref"
+      ],
       "properties": {
-        "fixture_event_id": { "$ref": "#/$defs/stableId" },
-        "from": { "enum": ["scheduled", "active", "cancelled", "ended"] },
-        "to": { "enum": ["scheduled", "active", "cancelled", "ended"] },
-        "reason": { "type": "string", "minLength": 1, "maxLength": 300 }
+        "real_event_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "from": {
+          "enum": [
+            "scheduled",
+            "active",
+            "cancelled",
+            "ended"
+          ]
+        },
+        "to": {
+          "enum": [
+            "scheduled",
+            "active",
+            "cancelled",
+            "ended"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "evidence_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        }
       }
     },
     "catalogDay": {
@@ -86,7 +247,8 @@
       "additionalProperties": false,
       "required": [
         "day_index",
-        "virtual_date",
+        "as_of_date",
+        "evidence_snapshot_ref",
         "build_id",
         "catalog_id",
         "catalog_hash",
@@ -96,7 +258,7 @@
         "updated_events",
         "cancelled_event_ids",
         "ended_event_ids",
-        "holdout_activations",
+        "sealed_holdout_releases",
         "expected_candidate_supply",
         "lifecycle_transitions",
         "source_hashes",
@@ -104,27 +266,77 @@
         "replay_fingerprint"
       ],
       "properties": {
-        "day_index": { "type": "integer", "minimum": 1 },
-        "virtual_date": { "type": "string", "format": "date" },
-        "build_id": { "$ref": "#/$defs/stableId" },
-        "catalog_id": { "$ref": "#/$defs/stableId" },
-        "catalog_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "previous_catalog_hash": { "$ref": "#/$defs/hash" },
-        "active_event_ids": { "$ref": "#/$defs/idList" },
-        "new_event_ids": { "$ref": "#/$defs/idList" },
-        "updated_events": { "type": "array", "items": { "$ref": "#/$defs/eventUpdate" } },
-        "cancelled_event_ids": { "$ref": "#/$defs/idList" },
-        "ended_event_ids": { "$ref": "#/$defs/idList" },
-        "holdout_activations": { "type": "array", "items": { "$ref": "#/$defs/holdoutActivation" } },
+        "day_index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "as_of_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "evidence_snapshot_ref": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "build_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "catalog_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "catalog_hash": {
+          "$ref": "#/$defs/requiredHash"
+        },
+        "previous_catalog_hash": {
+          "$ref": "#/$defs/hash"
+        },
+        "active_event_ids": {
+          "$ref": "#/$defs/idList"
+        },
+        "new_event_ids": {
+          "$ref": "#/$defs/idList"
+        },
+        "updated_events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/eventUpdate"
+          }
+        },
+        "cancelled_event_ids": {
+          "$ref": "#/$defs/idList"
+        },
+        "ended_event_ids": {
+          "$ref": "#/$defs/idList"
+        },
+        "sealed_holdout_releases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/holdoutRelease"
+          }
+        },
         "expected_candidate_supply": {
           "type": "object",
-          "propertyNames": { "$ref": "#/$defs/stableId" },
-          "additionalProperties": { "$ref": "#/$defs/supply" }
+          "propertyNames": {
+            "$ref": "#/$defs/stableId"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/supply"
+          }
         },
-        "lifecycle_transitions": { "type": "array", "items": { "$ref": "#/$defs/transition" } },
-        "source_hashes": { "$ref": "#/$defs/hashMap" },
-        "content_hashes": { "$ref": "#/$defs/hashMap" },
-        "replay_fingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+        "lifecycle_transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transition"
+          }
+        },
+        "source_hashes": {
+          "$ref": "#/$defs/hashMap"
+        },
+        "content_hashes": {
+          "$ref": "#/$defs/hashMap"
+        },
+        "replay_fingerprint": {
+          "$ref": "#/$defs/requiredHash"
+        }
       }
     }
   }

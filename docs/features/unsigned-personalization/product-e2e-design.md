@@ -4,6 +4,8 @@
 >
 > **Phase boundary:** this document completes only the pre-consultation Phase A from [the research brief](product-e2e-research-brief.md). Final KPI thresholds, maturity rules, persona behavior distributions, production schema, ranking changes, and a release canary remain blocked on two eligible external reviews and their accept/adapt/reject synthesis.
 >
+> **Accepted project decisions after intake:** golden personas are concrete controlled non-PII actors; all event/catalog/lifecycle evidence is real-data-only; and every longitudinal run must pass the [database sustainability gate](database-sustainability-e2e.md). These decisions do not accept the consultation’s numeric thresholds or start Phase B.
+>
 > **Executable assets:** the only current browser contract is [`tests/playwright/static_personalization_contract.spec.ts`](../../../tests/playwright/static_personalization_contract.spec.ts). Scenario names below are a **draft catalogue**, not executable Gherkin and not entries in `docs/operations/e2e-scenarios.md`.
 
 ## 1. Decision frame
@@ -51,7 +53,7 @@ The PR #26 `e2e-acceptance.md` draft is useful input but is not in `main` and is
 | Valid impression, dwell, quick-skip, read/detail/back | No personalization implementation found | Intended browser telemetry | No executable assertion | **Missing** | Visibility threshold, dwell clock, dedupe, navigation correlation, and valid-inspection definition | `cards_to_first_relevant` cannot be measured honestly until this collection seam exists. |
 | Local related rerank and exclusions | `EventLayout.astro:2307-2439`; reference client `:180-335` | Same-origin related manifest + browser profile | Nine Playwright reference tests, all passing in this audit | **Implemented** for the reference fixture; **Partial** on built Astro | Reference and inline Astro implementations can drift; no shared module/actual-site contract | Keep as a deterministic contract layer; do not call it longitudinal E2E. |
 | Local served-list evidence | `EventLayout.astro:2710-2758,3145-3154`; reference client `:372-438` | Browser memory/debug log | Reference Playwright verifies id/hash/context and resize dedupe | **Partial** | Astro summary is stored in memory for context but not remotely accepted; no persisted candidate-pool/build/profile revision | Ranking outcomes cannot be joined to authoritative exposure or DB state. |
-| Remote telemetry ingest, validation, dedupe, quarantine | Draft SQL in `database.md`; no matching applied migration/RPC | Intended separate personalization Supabase project | No SQL/integration contract found | **Design-only / Missing** | Typed ingest, grants, quotas, consent validation, dedupe, synthetic marker, cleanup | Browser-to-DB and exactly-once claims are release blockers. |
+| Remote telemetry ingest, validation, dedupe, quarantine | Draft SQL in `database.md`; no matching applied migration/RPC | Intended separate personalization Supabase project | No SQL/integration contract found | **Design-only / Missing** | Typed ingest, grants, quotas, consent validation, dedupe, trusted test-actor marker, cleanup | Browser-to-DB and exactly-once claims are release blockers. |
 | Durable profile rollup and multi-horizon snapshot | Draft in `database.md`/`neural-flow.md` | Intended Supabase profile authority | No migration, function, worker, or integration test found | **Design-only / Missing** | Rollup trigger, versioned algorithm, lag evidence, short/mid/long decay | Maturity and profile correctness cannot currently be asserted. |
 | Listing personal-feed UI | `PersonalFeedSlot.astro`; listing pages; `EventLayout.astro:2480-2669` | Browser profile/cache plus intended Supabase RPC | `check-preview.mjs:354-360` checks strings/slots | **Partial / Contradictory-stale** | Client calls `get_listing_personal_feed_v1`, but no matching migration/function exists in the repository | UI preparation must not be represented as an operational personalized feed. |
 | Candidate generation and profile application | Local related manifest and client rerank; pgvector related/search RPCs | Fly event facts; Supabase vector sidecar; browser profile | Vector migrations and static canaries; no profile-aware candidate integration test | **Partial** | No implemented server candidate API applying a durable profile and recording candidate/served lists | A later feed cannot yet prove profile-to-next-feed application. |
@@ -102,12 +104,12 @@ These findings are recorded rather than silently normalized into implementation 
 - durable served/candidate-list evidence carrying run, catalog, build, profile, and algorithm versions;
 - two-week deterministic catalog replay and action-driven profile formation;
 - independent relevance/adjacency/novelty labels and metric calculator;
-- isolated Supabase setup/teardown and synthetic-data exclusion;
+- isolated Supabase setup/teardown and trusted test-traffic exclusion;
 - a built-Astro Playwright journey and controlled canary policy.
 
 ## 4. Stable scenario and traceability model
 
-IDs are immutable once an executable scenario ships. A semantic rewrite creates a new ID/version; wording changes do not. The same ID must appear in the future scenario catalogue, Playwright title/annotation, fixture manifest, DB assertion output, metric row, and artifact manifest.
+IDs are immutable once an executable scenario ships. A semantic rewrite creates a new ID/version; wording changes do not. The same ID must appear in the future scenario catalogue, Playwright title/annotation, evidence manifest, DB assertion output, metric row, and artifact manifest.
 
 ### Draft scenario catalogue — not executable
 
@@ -135,12 +137,12 @@ IDs are immutable once an executable scenario ships. A semantic rewrite creates 
 |---|---|---|---|---|---|---|---|---|---|
 | Consent/privacy | `PERS-COLLECT-001` | Decline, browse, then consent and act | No profile before consent; compatible version after consent | Zero trusted emission before consent | Zero accepted pre-consent rows | No remote mutation pre-consent | Static list marked unpersonalized | no-consent violation count | Redacted storage diff + HAR summary |
 | Valid collection/dedupe | `PERS-COLLECT-001` | Scroll past, dwell, open/back, retry one action | Bounded local action/session state | Stable client event/run/session IDs; one retry | One accepted row; explicit drop/dedupe reason | Only eligible signals affect rollup | Action joins exact list/rank | collection success | Trace + request ledger + DB assertion JSON |
-| UI-driven maturation | `PERS-LONG-001` | Execute scheduled sessions across catalog days | No injected final profile | Correlated action batches | Evidence belongs only to synthetic identity/run | Maturity reason references observed evidence | Each session has candidate/served evidence | eligible mature session | Daily checkpoint manifest |
+| UI-driven maturation | `PERS-LONG-001` | Execute scheduled sessions across catalog days | No injected final profile | Correlated action batches | Evidence belongs only to the controlled test identity/run | Maturity reason references observed evidence | Each session has candidate/served evidence | eligible mature session | Daily checkpoint manifest |
 | Rollup | `PERS-ROLLUP-001` | Finish session, trigger isolated rollup, start next session | Compatible cached/local view | Rollup request/job correlation | One current versioned snapshot | Expected facets/exclusions, no forbidden facet | Next list references snapshot revision | rollup lag | Before/after profile JSON, redacted |
 | Profile application | `PERS-APPLY-001` | Reload/new session and open feed | Restored compatible state | Request carries only allowed compact context | Served record references profile revision | Applied revision equals current eligible revision | Candidate pool and visible order captured | application rate, MRR/precision | Screenshot + served/candidate JSON |
 | Relevant discovery | `PERS-QUALITY-001` | Activate labelled holdout, inspect cards naturally | Inspections/actions append, no direct profile write | All inspections correlate | Ground-truth supply present and active | Persona mature before feed request | Distinct valid inspections and first relevant rank | cards/time to first relevant, @20/@30 | Metric JSON + trace/video |
 | No supply | `PERS-SUPPLY-001` | Run session on a day with zero labelled relevant eligible candidates | Normal profile preserved | Candidate request succeeds | Supply assertion proves zero | No maturity downgrade caused by supply | Honest non-relevant list/fallback | `no_relevant_supply`, excluded from ranking denominator | Catalog/supply proof |
-| Catalog lifecycle | `PERS-LIFECYCLE-001` | Cross activation/update/cancellation/end checkpoints | No stale event state cached as current | Request catalog/build hashes advance exactly once | Snapshot/hash/lifecycle rows match fixture | Profile remains intact across catalog change | New holdout enters; cancelled/ended IDs leave candidate and served lists | supply/lifecycle violations | Timeline validation + before/after served lists |
+| Catalog lifecycle | `PERS-LIFECYCLE-001` | Cross activation/update/cancellation/end checkpoints | No stale event state cached as current | Request catalog/build hashes advance exactly once | Snapshot/hash/lifecycle rows match real evidence timeline | Profile remains intact across catalog change | New holdout enters; cancelled/ended IDs leave candidate and served lists | supply/lifecycle violations | Timeline validation + before/after served lists |
 | Useful novelty | `PERS-NOVEL-001` | Encounter adjacent holdout and take policy-consistent useful action | Novel exposure state recorded | Exploration reason is explicit | Independent adjacency label available | Profile is allowed to learn after outcome, not before | Core relevant slots remain present | exploration share/success, useful novelty | Independent label + order comparison |
 | Negatives/hidden | `PERS-NEG-001` | Hide/reject, reload, catalog update | Hidden and negative axes remain separate | Action is idempotent | No duplicate/contradictory active row | Expected exclusion persists | Hidden ID absent from later lists | hidden/negative violations | Cross-session diff |
 | Drift/decay | `PERS-DRIFT-001` | Shift behavior in later virtual days | Local action history remains bounded | New evidence timestamps are virtual-date correct | Snapshot revisions remain ordered | New facet grows; stale facet decays per versioned rule | Later feed changes for a stated reason | drift response, stale-interest exposure | Profile-revision timeline |
@@ -149,130 +151,63 @@ IDs are immutable once an executable scenario ships. A semantic rewrite creates 
 
 ## 5. Golden-persona and ground-truth contract
 
-The schema is a Phase A contract (`golden-persona/v0.1-draft`), not a final panel or probability table. Fixture data must be wholly synthetic. A persona’s latent truth is test oracle data, not browser profile state.
+The concrete controlled-actor panel and strict real-event-data policy now live in the canonical [golden-personas v0 document](golden-personas-real-data-v0.md). The schema is `golden-persona/v0.2-draft`: persona behavior is controlled oracle data, but the actor contains no real PII and every holdout/exclusion/adjacent ID resolves to a frozen real production event record.
 
 Machine-readable draft: [`schemas/product-e2e/golden-persona-v0.schema.json`](schemas/product-e2e/golden-persona-v0.schema.json).
 
-The following compact instance validates against the draft schema; it contains bands and policy references, not final weights or probabilities.
+A minimal instance shape is:
 
 ```yaml
-schema_version: golden-persona/v0.1-draft
-persona_id: classical_composer_01
+schema_version: golden-persona/v0.2-draft
+persona_id: p05_classical_depth_50_64
 persona_version: 1
-label_revision: independent-labels/2026-xx-xx.1
-synthetic_fixture: true
-description: synthetic fixture only
-
-latent_interests:
-  positive:
-    - facet_id: classical_music
-      strength_band: strong        # band, not final numeric ranker weight
-      evidence_basis: independent_label
-  negative:
-    - facet_id: nightlife
-      strength_band: strong
-      evidence_basis: independent_label
-constraints:
-  cities: [kaliningrad]
-  date_windows: []
-  price: { currency: RUB, max: null, free_preference: null }
-  accessibility: []
-unknown_exploration_zone:
-  - facet_id: ballet
-    relationship: adjacent_unknown
-
-maturity_rule:
-  policy_ref: maturity-policy/pending-consultation
-  required_evidence_classes: [valid_impression, strong_positive, explicit_negative]
-  status_at_start: cold
-session_schedule_ref: sessions/classical_composer_01/v1
-behavior_policy_ref: behavior-policy/classical_composer_01/v1-pending-calibration
-
-ground_truth_ref: ground-truth/catalog-timeline-01/labels-v1
+label_revision: independent-labels/real-snapshot-2026-07-14.1
+controlled_test_actor: true
+contains_real_personal_data: false
+age_cohort: adult_50_64
+life_context: classical_depth
+catalog_data_policy:
+  mode: real_event_records_only
+  source_snapshot_ref: fly-prod/2026-07-14T15:47:25Z/<sha256>
+# latent interests, constraints, schedule and maturity remain oracle data
 holdout_events:
-  - fixture_event_id: evt_holdout_tchaikovsky_01
-    activation_day: 7
+  - real_event_id: "<existing canonical event id>"
+    source_snapshot_ref: fly-prod/2026-07-14T15:47:25Z/<sha256>
+    captured_content_hash: sha256:<64 hex chars>
+    evaluation_release_day: 7
     label: relevant
-    label_source: independent_panel
-expected_profile_facets:
-  required: [classical_music]
-  allowed_adjacent: [ballet]
-  forbidden: [nightlife]
-expected_exclusions:
-  event_ids: []
-  facets: [nightlife]
-no_relevant_supply:
-  scheduled_days: [5]
-  expected_state: separate_supply_failure
-anti_bubble_expectations:
-  useful_adjacent_event_ids: [evt_holdout_ballet_01]
-  forbidden_return_event_ids: []
-  max_concentration_policy_ref: pending-consultation
-  stale_interest_decay_policy_ref: pending-consultation
+    label_source: independent-panel/<revision>
 ```
 
-Ground truth is a separate, versioned table keyed by `(persona_id, persona_version, fixture_event_id, catalog_revision)`. It carries `relevant | adjacent | irrelevant | prohibited`, confidence/disagreement, reason codes, independent reviewer provenance, and validity dates. It must not be derived from the ranker score under test. Candidate pools should include labelled holdouts, random eligible items, and hard negatives so evaluation does not only judge already-recommended items.
+Age/life context is a coverage and constraint axis, never an inferred-interest feature. The desired application profile still must emerge from UI actions. Ground truth is keyed by `(persona_id, persona_version, real_event_id, source_snapshot_ref, label_revision)` and remains independent of the ranker score under test. Unknown price/accessibility/audience facts remain unknown; they cannot silently satisfy a hard constraint.
 
-Maturity is evaluated from accepted action evidence. The harness may query a maturity decision, but it must not write `mature=true` or inject the desired profile snapshot.
+## 6. Real-data two-week catalog timeline contract
 
-## 6. Two-week catalog timeline contract
-
-The minimum timeline is 14 daily snapshots advanced by virtual time. A snapshot is immutable and content-addressed; a later correction creates a new timeline revision.
+The minimum replay remains 14 `as_of` days, but the earlier wholly-synthetic catalog-fixture proposal is superseded. The schema is now `catalog-timeline/v0.2-draft` and accepts only content-addressed snapshots derived read-only from canonical Fly SQLite event records.
 
 Machine-readable draft: [`schemas/product-e2e/catalog-timeline-v0.schema.json`](schemas/product-e2e/catalog-timeline-v0.schema.json).
 
-The following is a **single-day excerpt**, not a complete validating timeline instance: a complete fixture must contain at least 14 consecutive entries and pass the semantic invariants below. Hashes are illustrative values with schema-valid format; the loader recomputes them.
+Two modes are distinct:
 
-```yaml
-schema_version: catalog-timeline/v0.1-draft
-timeline_id: kaliningrad-14d-panel-01
-timeline_version: 1
-synthetic_fixture: true
-seed: 184467
-timezone: Europe/Kaliningrad
-start_virtual_date: 2026-09-01
-days:
-  - day_index: 1
-    virtual_date: 2026-09-01
-    build_id: fixture-build-001
-    catalog_id: fixture-catalog-001
-    catalog_hash: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-    previous_catalog_hash: null
-    active_event_ids: [evt_001, evt_002]
-    new_event_ids: [evt_001, evt_002]
-    updated_events: []
-    cancelled_event_ids: []
-    ended_event_ids: []
-    holdout_activations: []
-    expected_candidate_supply:
-      classical_composer_01:
-        eligible_active_count: 2
-        relevant_count: 0
-        adjacent_count: 1
-        no_relevant_supply: true
-    lifecycle_transitions: []
-    source_hashes:
-      evt_001: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-      evt_002: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-    content_hashes:
-      evt_001: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      evt_002: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-    replay_fingerprint: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
-```
+- `captured_daily_snapshots`: replays actual daily snapshots and may assert evidenced new/update/cancel/end transitions;
+- `forward_schedule_projection`: advances `as_of` over one frozen snapshot to see which captured real scheduled/multi-day events remain eligible. It cannot invent future arrivals, corrections or cancellations.
 
-Every day records active/new/updated/cancelled/ended sets, source and normalized-content hashes, holdout activation, persona-specific expected supply, and lifecycle transitions such as `scheduled -> active -> cancelled|ended`. Candidate eligibility is recomputed at the day watermark; an ended/cancelled event cannot remain “supply.” Replay fails closed when a build/catalog/hash differs from the fixture manifest.
+Every day carries its evidence snapshot reference, real event IDs, source/content hashes, build/catalog hashes, independently labelled supply and a replay fingerprint. A sealed holdout release changes only evaluator visibility; it never changes the canonical event lifecycle.
 
-The loader performs semantic validation that JSON Schema alone cannot express:
+The semantic validator rejects the timeline unless:
 
-1. `day_index` is unique and strictly consecutive from `1`; `virtual_date` is unique and advances exactly one local calendar day.
-2. Day 1 has `previous_catalog_hash: null`; every later value exactly equals the previous day’s `catalog_hash`.
-3. `active`, `cancelled`, and `ended` membership is lifecycle-consistent: cancelled/ended events are not active or counted as eligible supply; transitions explain every removal.
-4. Every `updated_events` previous/current hash matches the adjacent day and current `content_hashes` maps; all active/new/updated IDs have the required source/content hashes.
-5. Holdout event, persona, activation day, and label-revision references exist and activation happens exactly on the declared day.
-6. For every persona/day, `no_relevant_supply` is exactly `(relevant_count == 0)`, and relevant/adjacent counts cannot exceed eligible active count.
-7. The replay fingerprint is recomputed from the canonicalized snapshot and seed; a mismatch aborts replay.
+1. `day_index` and `as_of_date` advance consecutively in `Europe/Kaliningrad`.
+2. Hash chaining and snapshot/build references are valid and content-addressed.
+3. Every event ID resolves to the referenced real snapshot; event facts/dates are byte- or normalization-traceable to captured evidence.
+4. Cancel/update/new transitions are asserted only in `captured_daily_snapshots` and cite real evidence; a forward projection may only age/filter captured records.
+5. Cancelled/ended events are absent from eligible supply at the applicable `as_of`.
+6. Holdout releases reference existing real records and do not falsify `added_at`, publication or occurrence dates.
+7. For every persona/day, `no_relevant_supply == (relevant_count == 0)`; unknown hard-constraint facts are reported separately.
+8. Ground-truth counts cannot exceed real eligible supply, and the fingerprint is recomputed from canonicalized evidence plus seed.
 
-Calendar days advance through the harness clock. Only short interaction delays run as UI time. There are no week-long sleeps and no dependency on wall-clock passage.
+A read-only production probe at `as_of=2026-07-14` found a broad schema-native envelope of 172 distinct canonical active/future events across days 0–13 and 218 across days 0–29. That proves useful real replay supply exists, but not relevance for every persona. Price evidence was unknown for 129/218 rows and accessibility was not available as a trustworthy canonical field, so price/accessibility-constrained actors must emit an explicit unknown-data/supply outcome rather than fabricated eligibility. Exact aggregate queries and redacted results are kept in ignored `artifacts/codex/personalization-e2e-real-data-audit/`.
+
+Calendar days advance through the harness clock; short interaction delays remain UI time. No week-long sleeps are used, and after the latest captured snapshot the run is labelled projection rather than historical truth.
 
 ## 7. Behavior simulator interfaces
 
@@ -317,7 +252,7 @@ interface ActionPolicy {
 
 interface HumanSession {
   run(persona: PersonaState, day: CatalogDay, policy: ActionPolicy): Promise<SessionTrace>;
-  searchIfScheduled(queryFixtureId: string): Promise<void>;
+  searchIfScheduled(queryScenarioId: string): Promise<void>;
   interrupt(reason: string): Promise<void>;
   resume(checkpoint: SessionCheckpoint): Promise<SessionTrace>;
 }
@@ -386,9 +321,9 @@ Every mature-persona evaluation must pair the primary relevance result with thes
 | Offline ranker evaluation | Full candidate outputs, time-aware labels, MRR/precision/recall, diversity/concentration, counterfactual comparison | Collection/UI fidelity | Missing for golden timeline |
 | Longitudinal simulator | Session schedule, persona policy, catalog progression, action trace, fatigue/noise/interruption | DOM/browser contract | Design-only |
 | Playwright browser E2E | Real mobile UI actions, localStorage, network, navigation, visible order/fallback, trace/video/screenshot | Bulk metric computation | Current routed MVP contract only |
-| Isolated Supabase integration | Ingest validation/dedupe/RLS, rollup, profile revision, served-list persistence, cleanup | Production data | Missing for telemetry/profile |
+| Isolated Supabase integration | Ingest validation/dedupe/RLS, rollup, profile revision, served-list persistence, cleanup | Canonical event ownership or real-user mutation | Missing for telemetry/profile |
 | Shadow/replay | Compare algorithm variants on immutable accepted evidence without user-visible mutation | Causal proof by itself | Future, after privacy/data contracts |
-| Release canary | Real CDN/config/auth/network path with dedicated synthetic identities and kill switch | Arbitrary production mutation or final offline quality proof | Out of Phase A |
+| Release canary | Real CDN/config/auth/network path with dedicated controlled test identities and kill switch | Arbitrary production mutation or final offline quality proof | Out of Phase A |
 
 Playwright runs only a compact representative persona/day set through the real UI. Larger seeds/persona panels and ranking mathematics run offline, then a small number of browser journeys validate that the product emits the evidence used by those calculations.
 
@@ -419,7 +354,7 @@ Playwright runs only a compact representative persona/day set through the real U
 Preferred order:
 
 1. ephemeral/local Supabase stack or dedicated non-production project;
-2. otherwise a dedicated test namespace/identity range with hard environment allowlist, `synthetic=true`, mandatory `e2e_run_id`, retention TTL, and service-side cleanup;
+2. otherwise a dedicated test namespace/identity range with hard environment allowlist, server-authenticated `test_actor=true`, mandatory `e2e_run_id`, retention TTL, and service-side cleanup;
 3. release canary later uses only dedicated test identities and rows excluded from rollup/training of ordinary profiles.
 
 The browser receives only the intended public/publishable credential. Service-role assertions and cleanup run in a separate fixture process. A production URL/project ref is a fail-closed preflight error for simulator/integration runs. No real user data appears in fixtures.
@@ -447,7 +382,9 @@ Write ignored artifacts to `artifacts/codex/personalization-e2e/<e2e_run_id>/`:
 - metric outputs and comparison decision;
 - cleanup proof and remaining-row count.
 
-Redaction runs before artifact write, not only before upload. Browser storage state and HAR files are denied by default because they can contain auth material. Synthetic IDs must still be treated as identifiers in artifacts.
+Redaction runs before artifact write, not only before upload. Browser storage state and HAR files are denied by default because they can contain auth material. Controlled test IDs must still be treated as identifiers in artifacts.
+
+Database snapshots, attribution, cleanup/TTL evidence and 30/90/365-day projections follow the separate [database sustainability gate](database-sustainability-e2e.md). A functional persona pass without that gate is not an E2E acceptance pass.
 
 ## 12. Missing seams as implementation backlog for Phase B
 
@@ -461,7 +398,7 @@ Priority follows dependency order, not desired UI polish:
 6. Persist candidate and served-list evidence with full correlation envelope.
 7. Implement schema validators, timeline loader, independent ground-truth loader, and offline metric calculator.
 8. Implement the seeded simulator and only then targeted actual-Astro Playwright journeys.
-9. Add shadow/replay comparison and, after governance approval, a synthetic-only canary.
+9. Add DB growth/retention accounting, then shadow/replay comparison and, after governance approval, a controlled-test-only canary.
 
 None of these is implemented by this Phase A document.
 
@@ -479,7 +416,7 @@ None of these is implemented by this Phase A document.
 - decay windows and profile rollback/versioning;
 - counterfactual/shadow method and simulator-to-reality calibration;
 - valid impression/dwell thresholds and accelerated-time fidelity;
-- canary scope, synthetic traffic classification, and production exclusion controls.
+- canary scope, controlled test-traffic classification, and production exclusion controls.
 
 ### Questions for both eligible consultants
 
@@ -487,7 +424,7 @@ None of these is implemented by this Phase A document.
 2. What evidence-based maturity rule is stable across narrow, mixed, drifting, sparse-supply, and reactivated personas?
 3. How should relevant/adjacent/usefully novel labels be created independently, sampled, versioned, and adjudicated?
 4. Which minimal persona panel and catalog perturbations expose candidate-generation, ranking, profile, and anti-bubble failures without overfitting fixtures?
-5. How should action policies be calibrated, and what sensitivity analysis is required before synthetic behavior can influence a release decision?
+5. How should action policies be calibrated, and what sensitivity analysis is required before controlled persona behavior can influence a release decision?
 6. Which time-aware split, replay/counterfactual method, uncertainty interval, and acceptance test should compare variants?
 7. Which anti-bubble measures and supply-aware gates are decision-useful for time-sensitive local events?
 8. Which clock/impression semantics preserve browser realism while allowing a 14-day replay in minutes?
@@ -507,7 +444,7 @@ docs/features/unsigned-personalization/reviews/product-e2e/
 
 Raw provider/CLI captures remain ignored under `artifacts/codex/personalization-product-e2e-consultants/<provider>/<date>/`. The committed review files above contain only sanitized, durable evidence and decisions. Each records provider, exact eligible model/class, date, prompt/brief version, reviewed commit, source links, limitations, and recommendations. An unavailable or lower-class model response is marked `supplementary probe material`, never a completed consultant review.
 
-The user-supplied “Executive Conclusion” memo accompanying this task is useful supplementary intake (hybrid layers, virtual time, independent labels, no-supply isolation, survival-style reporting), but it lacks repository-recorded provider/model/provenance and does not satisfy the two-review gate by itself.
+The moved [user-supplied research intake](reviews/product-e2e/supplementary-research-intake-2026-07-14-ru.md) is useful supplementary material (hybrid layers, virtual time, independent labels, no-supply isolation, survival-style reporting), but it lacks verified provider/model provenance and satisfies neither eligible-review slot. The [review pack](external-consultant-review-pack.md) is the canonical handoff for the next consultant.
 
 Synthesis uses this table:
 
@@ -515,7 +452,7 @@ Synthesis uses this table:
 |---|---|---|---|---|---|---|
 | `E2E-D01` | recommendation + rationale | recommendation + rationale | agree/disagree/risk | code/data anchor | accept/adapt/reject/defer | exact follow-up |
 
-Mutual critique should focus on the 20/30 SLO formulation, maturity, ground-truth independence, simulator calibration, counterfactual bias, anti-bubble gates, valid-impression clock semantics, and synthetic-data contamination. Phase B starts only after every blocking decision has a recorded resolution.
+Mutual critique should focus on the 20/30 SLO formulation, maturity, ground-truth independence, simulator calibration, counterfactual bias, anti-bubble gates, valid-impression clock semantics, and controlled-test contamination plus real-catalog provenance. Phase B starts only after every blocking decision has a recorded resolution.
 
 ## 14. Phase A acceptance record
 
@@ -523,13 +460,14 @@ Mutual critique should focus on the 20/30 SLO formulation, maturity, ground-trut
 |---|---|---|
 | Current-state audit | **Done** | Section 3, with code/data/test owners and honest statuses |
 | Traceability model and stable IDs | **Done (design-only)** | Section 4; no fake executable feature added |
-| Golden-persona schema | **Done (draft)** | Section 5; no final probabilities/maturity threshold |
-| Catalog timeline schema | **Done (draft)** | Section 6; deterministic 14-day minimum |
+| Golden-persona panel/schema | **Done (concrete v0, design-only)** | Section 5 + golden-personas document; 12 actors, no final probabilities/maturity threshold |
+| Real catalog timeline schema | **Done (draft)** | Section 6; deterministic 14-day minimum over evidenced real records |
 | Behavior simulator interface | **Done (draft)** | Section 7 |
 | KPI draft | **Done (provisional)** | Section 8; only 20/30 carried as provisional/under investigation |
 | Test layers | **Done** | Section 10 |
 | Environment/evidence/isolation | **Done (design)** | Section 11 |
-| Consultant intake | **Done; reviews missing by design** | Section 13 |
+| Supabase/YDB sustainability | **Done (design-only; implementation missing)** | Database sustainability gate |
+| Supplementary intake + consultant handoff | **Done; two eligible reviews still missing** | Section 13 and external review pack |
 | Final implementation/live proof | **Missing / out of Phase A** | Explicit Phase B gate |
 
 ## References

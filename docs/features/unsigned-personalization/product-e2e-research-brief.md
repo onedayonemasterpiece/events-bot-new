@@ -6,7 +6,7 @@
 >
 > Pending release-plan input: [PR #26 E2E acceptance draft](https://github.com/onedayonemasterpiece/events-bot-new/blob/agent/static-release/checklist-cdn-social/docs/features/unsigned-personalization/e2e-acceptance.md)
 >
-> Phase A output: [preliminary product E2E design](product-e2e-design.md). The seed remains the task contract; the design records the factual audit and provisional schemas without starting Phase B.
+> Phase A output: [preliminary product E2E design](product-e2e-design.md), [concrete golden-persona panel with strict real-event protocol](golden-personas-real-data-v0.md), [database sustainability gate](database-sustainability-e2e.md) and [external consultant handoff](external-consultant-review-pack.md). These remain design outputs and do not start Phase B.
 
 ## Product objective
 
@@ -36,12 +36,15 @@ Canonical context:
 - [Smart Update boundary](smart-update-contract.md)
 - [Bots and automation](bots-and-automation.md)
 - [Database design](database.md)
+- [Golden personas + real-data protocol](golden-personas-real-data-v0.md)
+- [Database sustainability gate](database-sustainability-e2e.md)
+- [External consultant review pack](external-consultant-review-pack.md)
 - [Current Gherkin](../../../tests/e2e/features/static_site_personalization.feature)
 - [Current Playwright contract](../../../tests/playwright/static_personalization_contract.spec.ts)
 
 ## Target system (`to-be`)
 
-A reproducible Playwright-based longitudinal harness simulates a panel of golden personas across versioned daily catalogue snapshots and accelerated virtual time. Personas acquire their profile through visible UI actions rather than direct injection of the desired final profile. The same correlated run proves:
+A reproducible Playwright-based longitudinal harness drives controlled non-PII golden personas across content-addressed real production catalog snapshots and accelerated virtual time. Personas acquire their profile through visible UI actions rather than direct injection of the desired final profile. The same correlated run proves:
 
 1. browser/localStorage collection;
 2. accepted and deduplicated server evidence;
@@ -66,7 +69,7 @@ Mobile is the primary full-fidelity journey. Desktop gets a smaller parity suite
 ## Required scenario dimensions
 
 - Multiple seeded golden personas, including composer/classical-music affinity such as «Чайковский», theatre, family, exhibitions, excursions, mixed interests, strong exclusions and drifting interests.
-- At least two weeks of versioned day/catalog progression with newly arriving holdout events, lifecycle expiry and periods of low/no relevant supply.
+- At least two weeks of `as_of` progression over frozen real event records. New/update/cancel transitions are used only when evidenced by captured daily snapshots; one-snapshot forward projection may only age/filter known records. Real holdouts, lifecycle expiry and low/no supply are reported without invented events or facts.
 - Short sessions with seeded but human-shaped action timing; real-time waiting for weeks is forbidden.
 - Meaningful action rarity: shares and search must remain uncommon; noisy/accidental behavior and occasional contradictory actions are represented.
 - Cross-surface paths: listings/feed, event detail, related events, favorites/calendar, ticket CTA and occasional authorized search.
@@ -91,7 +94,7 @@ Mobile is the primary full-fidelity journey. Desktop gets a smaller parity suite
 - draft persona, catalogue-day, behavior-policy, ground-truth and evidence schemas;
 - define scenario IDs and a traceability matrix;
 - design deterministic seeded virtual clock/session playback and Playwright page-object/human-behavior interfaces;
-- specify isolated test data, Supabase assertions/cleanup, artifacts and metric calculation;
+- specify isolated controlled test traffic, Supabase/YDB assertions and cleanup/TTL, per-store 30/90/365-day growth projections, artifacts and metric calculation;
 - record open decisions and implementation seams without choosing hidden defaults.
 
 ### Phase B — only after external reviews are supplied and reconciled
@@ -104,7 +107,7 @@ Mobile is the primary full-fidelity journey. Desktop gets a smaller parity suite
 
 ## Guardrails
 
-- Do not mutate production data or train ordinary profiles with synthetic activity.
+- Do not mutate production data or train ordinary profiles with controlled test activity. All event/catalog facts must come from frozen real production records; do not invent events, dates, prices, cancellations or lifecycle states.
 - Do not inject the final desired profile as a substitute for interaction-driven formation.
 - Do not call paid LLM/image/provider APIs merely to scaffold tests.
 - Do not use week-long wall-clock sleeps; use deterministic virtual time plus short seeded UI delays.
@@ -118,6 +121,6 @@ Mobile is the primary full-fidelity journey. Desktop gets a smaller parity suite
 - longitudinal behavior/session simulator specification;
 - Gherkin scenario catalogue and Playwright architecture;
 - KPI dictionary with denominators, targets, segments and anti-gaming caveats;
-- test-layer/environment/data-cleanup plan;
+- test-layer/environment/data-cleanup plan plus Supabase/YDB sustainability evidence;
 - prioritized product/architecture gaps discovered by the E2E design;
 - implementation and evidence plan for the subsequent E2E-driven tuning work.

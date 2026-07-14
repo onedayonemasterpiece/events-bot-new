@@ -364,6 +364,10 @@ features:
     production_integration: docs/features/unsigned-personalization/production-integration.md
     product_e2e_research_brief: docs/features/unsigned-personalization/product-e2e-research-brief.md
     product_e2e_design: docs/features/unsigned-personalization/product-e2e-design.md
+    product_e2e_golden_personas_real_data: docs/features/unsigned-personalization/golden-personas-real-data-v0.md
+    product_e2e_database_sustainability: docs/features/unsigned-personalization/database-sustainability-e2e.md
+    product_e2e_external_consultant_pack: docs/features/unsigned-personalization/external-consultant-review-pack.md
+    product_e2e_supplementary_intake_2026_07_14: docs/features/unsigned-personalization/reviews/product-e2e/supplementary-research-intake-2026-07-14-ru.md
     product_e2e_golden_persona_schema: docs/features/unsigned-personalization/schemas/product-e2e/golden-persona-v0.schema.json
     product_e2e_catalog_timeline_schema: docs/features/unsigned-personalization/schemas/product-e2e/catalog-timeline-v0.schema.json
     data_ownership: docs/architecture/personalization-data-ownership.md
@@ -391,7 +395,7 @@ features:
     capabilities:
       local_anonymous_profile: preview
       related_pgvector: canary_partial
-      longitudinal_product_e2e: phase_a_design_complete_external_reviews_pending
+      longitudinal_product_e2e: phase_a_real_data_personas_sustainability_external_reviews_pending
       authorized_search: canary_partial
       remote_telemetry_ingest: design
       durable_profile: design
