@@ -48,6 +48,7 @@ VK monitoring operator seeds (`club194393485`, `ivsguide`, `natakkaz`) also live
 
 - `INSERT OR IGNORE` в `event_source` из `event.source_post_url` (тип выводится как `telegram`/`vk`/`legacy` по URL),
 - отдельный `INSERT OR IGNORE` из `event.source_vk_post_url` с `source_type='vk'`,
+- URL собственных managed VK-публикаций исключаются из обоих backfill-проходов, а ранее ошибочно созданные строки удаляются вместе с зависимыми фактами: публичная проекция не может становиться evidence,
 - можно отключить на больших БД (или для отладки) переменной окружения: `DB_INIT_SKIP_EVENT_SOURCE_BACKFILL=1`.
 
 ## Важно про Supabase‑миграции

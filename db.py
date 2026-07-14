@@ -15,6 +15,26 @@ _KNOWN_DATABASES: set["Database"] = set()
 _VALID_JOURNAL_MODES = {"WAL", "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF"}
 
 
+def _managed_vk_publication_globs() -> tuple[str, ...]:
+    """Return exact-owner SQLite GLOBs for our managed VK projections."""
+
+    group_ids = {
+        str(os.getenv(name) or "").strip().lstrip("-")
+        for name in ("VK_EVENTS_GROUP_ID", "VK_AFISHA_GROUP_ID")
+    }
+    group_ids.discard("")
+    # Production default used by the publisher when the env alias is absent.
+    group_ids.add("231920894")
+    return tuple(f"*vk.com/wall-{group_id}_[0-9]*" for group_id in sorted(group_ids))
+
+
+def _exclude_managed_vk_sql(column: str, globs: tuple[str, ...]) -> tuple[str, tuple[str, ...]]:
+    if not globs:
+        return "", ()
+    predicates = " OR ".join(f"LOWER({column}) GLOB ?" for _ in globs)
+    return f" AND NOT ({predicates})", globs
+
+
 async def _add_column(conn, table: str, col_def: str) -> None:
     try:
         await conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
@@ -797,8 +817,15 @@ class Database:
             if not skip_event_source_backfill:
                 dbg("seed event_source backfill")
                 try:
+                    managed_vk_globs = _managed_vk_publication_globs()
+                    source_post_filter, source_post_args = _exclude_managed_vk_sql(
+                        "e.source_post_url", managed_vk_globs
+                    )
+                    source_vk_filter, source_vk_args = _exclude_managed_vk_sql(
+                        "e.source_vk_post_url", managed_vk_globs
+                    )
                     await conn.execute(
-                        """
+                        f"""
                         INSERT OR IGNORE INTO event_source(
                             event_id,
                             source_type,
@@ -818,10 +845,12 @@ class Database:
                             e.source_message_id
                         FROM event e
                         WHERE e.source_post_url IS NOT NULL AND TRIM(e.source_post_url) != ''
-                        """
+                        {source_post_filter}
+                        """,
+                        source_post_args,
                     )
                     await conn.execute(
-                        """
+                        f"""
                         INSERT OR IGNORE INTO event_source(
                             event_id,
                             source_type,
@@ -837,8 +866,18 @@ class Database:
                             e.source_message_id
                         FROM event e
                         WHERE e.source_vk_post_url IS NOT NULL AND TRIM(e.source_vk_post_url) != ''
-                        """
+                        {source_vk_filter}
+                        """,
+                        source_vk_args,
                     )
+                    if managed_vk_globs:
+                        predicates = " OR ".join(
+                            "LOWER(source_url) GLOB ?" for _ in managed_vk_globs
+                        )
+                        await conn.execute(
+                            f"DELETE FROM event_source WHERE {predicates}",
+                            managed_vk_globs,
+                        )
                 except Exception:
                     logging.warning(
                         "db.init: event_source backfill failed (non-fatal)",
