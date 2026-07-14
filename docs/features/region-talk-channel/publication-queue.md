@@ -146,6 +146,18 @@ The exact-link selector reserves up to five existing network slots per run for
 these near-final `text_restore_pending` rows before ordinary fresh keyword
 links. This is an ordering rule, not a larger Telegram budget: total exact
 calls, cached-entity preference, pacing and cooldown behavior are unchanged.
+After a successful restore, CandidateReport must rebuild the current policy,
+fusion and candidate-memory projection even when the text hash and both E5/BGE
+vectors are already current. That pass is `reuse_e5_bge_text_restore`: it
+reuses both durable vectors and does not load or run either encoder. Candidate
+memory identity is canonical post URL, not a fetch-route-specific `post_id`, so
+source-history and exact-link fetches cannot create a second product row for
+the same public post.
+
+Source-onboarding evidence also treats the current restored candidate as the
+authoritative authored-post excerpt for its URL. An older compacted memory row
+with the same URL is removed from that evidence pack rather than hiding the
+restored body and producing a misleading identity-only profile.
 The Kaggle CandidateReport launcher defaults to the shared YDB backend; an
 offline JSON run now requires an explicit `REGION_TALK_STATE_BACKEND=json`, so
 a successful sandbox report cannot be mistaken for product-funnel progress.

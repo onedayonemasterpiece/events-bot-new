@@ -6709,6 +6709,21 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
         previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
     )
     memory: dict[str, dict[str, Any]] = {str(k): dict(v) for k, v in previous_memory.items() if isinstance(v, dict)}
+    # Exact-link and source-history fetches historically derived different
+    # post_id values for the same public URL. Candidate memory is a product
+    # entity, so reuse the oldest durable memory id for that URL instead of
+    # creating another row every time the fetch route changes.
+    memory_id_by_url: dict[str, str] = {}
+    for existing_mid, existing in sorted(
+        memory.items(),
+        key=lambda item: (
+            str(item[1].get("first_seen_at") or item[1].get("first_seen_run_id") or "~"),
+            str(item[0]),
+        ),
+    ):
+        existing_url = canonical_post_url_for_storage(existing.get("post_url"))
+        if existing_url:
+            memory_id_by_url.setdefault(existing_url, existing_mid)
     # Bootstrap legacy candidate memory from pre-z4 post state.
     for pid, prev in previous_posts.items():
         if not isinstance(prev, dict):
@@ -6733,7 +6748,10 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
         if not is_candidate_memory_row(row):
             continue
         pid = str(row.get("post_id") or stable_hash(row.get("post_url")))
-        mid = "cmem_" + stable_hash(pid)
+        canonical_memory_url = canonical_post_url_for_storage(row.get("post_url"))
+        mid = memory_id_by_url.get(canonical_memory_url) or "cmem_" + stable_hash(pid)
+        if canonical_memory_url:
+            memory_id_by_url.setdefault(canonical_memory_url, mid)
         prev = memory.get(mid) or {}
         status = candidate_lifecycle_status(row)
         prev_score = prev.get("candidate_score_current", "")
@@ -13553,6 +13571,10 @@ def plan_posts_for_vector_scoring(
         fingerprint = post_processing_fingerprint(text_hash=text_hash, require_bge_m3=require_bge_m3)
         previous_fingerprint = str((previous or {}).get("post_processing_fingerprint") or "")
         previous_stage = str((previous or {}).get("current_stage") or "")
+        text_restore_requested = (
+            str(row.get("priority_reason") or "")
+            == "publication_text_restore_after_active_payload_prune"
+        )
 
         if not text_hash:
             kind = "skip_no_text"
@@ -13562,6 +13584,13 @@ def plan_posts_for_vector_scoring(
             # E5 is already durable and the external BGE notebook consumes that
             # ledger directly. Re-encoding E5 cannot advance the product.
             kind = "reuse_e5_wait_bge" if previous is None else "wait_bge_existing_e5"
+        elif text_restore_requested:
+            # The exact post was fetched specifically because asynchronous
+            # media scoring reached final verification after working text had
+            # been compacted. Re-run the cheap policy/fusion pass from current
+            # durable E5+BGE rows so candidate memory receives the lossless
+            # body again; do not recompute either encoder.
+            kind = "reuse_e5_bge_text_restore"
         elif previous_stage == "dual_model_vector_enrichment_pending":
             kind = "reuse_e5_bge_fusion"
         elif previous_fingerprint == fingerprint:
@@ -13593,7 +13622,7 @@ def plan_posts_for_vector_scoring(
             "_rt_previous_post": previous or {},
             "_rt_work_priority": _post_work_priority(row, previous),
         })
-        if kind in {"needs_e5", "reuse_e5_wait_bge", "reuse_e5_bge_fusion", "reuse_e5_bge_policy_refresh"}:
+        if kind in {"needs_e5", "reuse_e5_wait_bge", "reuse_e5_bge_fusion", "reuse_e5_bge_policy_refresh", "reuse_e5_bge_text_restore"}:
             actionable.append(row)
 
     actionable.sort(key=lambda r: r.get("_rt_work_priority") or (9, 9, 9, ""))
@@ -13604,6 +13633,7 @@ def plan_posts_for_vector_scoring(
         "posts_reuse_e5_wait_bge": reasons.get("reuse_e5_wait_bge", 0),
         "posts_reuse_e5_bge_fusion": reasons.get("reuse_e5_bge_fusion", 0),
         "posts_reuse_e5_bge_policy_refresh": reasons.get("reuse_e5_bge_policy_refresh", 0),
+        "posts_reuse_e5_bge_text_restore": reasons.get("reuse_e5_bge_text_restore", 0),
         "posts_wait_bge_existing_e5": reasons.get("wait_bge_existing_e5", 0),
         "posts_skipped_unchanged": reasons.get("skip_unchanged_current", 0),
         "posts_skipped_legacy_current_dual": reasons.get("skip_legacy_current_dual", 0),

@@ -612,8 +612,19 @@ def build_source_onboarding_evidence(
         reverse=True,
     )
     candidate_url = normalize_post_url(str(candidate.get("post_url") or ""))
-    if candidate_url and not any(normalize_post_url(str(row.get("post_url") or "")) == candidate_url for row in ordered_memory):
-        ordered_memory.insert(0, candidate)
+    if candidate_url:
+        # A compacted historical memory row may already own this URL but have
+        # no body. Always prefer the current finalizer candidate for that URL;
+        # it may contain text just restored by CandidateReport. This keeps the
+        # evidence pack auditable without inventing biography or using web
+        # fallback, and avoids treating a valid authored post as identity-only.
+        ordered_memory = [
+            candidate,
+            *[
+                row for row in ordered_memory
+                if normalize_post_url(str(row.get("post_url") or "")) != candidate_url
+            ],
+        ]
     for row in ordered_memory:
         if len(evidence) >= 8:
             break

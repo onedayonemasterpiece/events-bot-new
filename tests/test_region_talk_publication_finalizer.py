@@ -382,6 +382,33 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertTrue(all(len(item["excerpt"]) <= 500 for item in items))
         self.assertEqual(sum(1 for item in items if item["url"] == "https://t.me/travelcase/10"), 1)
 
+    def test_source_onboarding_evidence_prefers_current_restored_text_for_same_url(self) -> None:
+        mod = self.mod
+        row = candidate_row(text="Восстановленный личный рассказ о зимней поездке в Калининград.")
+        compacted_memory = [{
+            "canonical_source_key": "telegram:travelcase",
+            "post_url": row["post_url"],
+            "post_date": "2026-06-10T10:00:00+00:00",
+            "full_text": "",
+            "text": "",
+            "text_excerpt": "",
+            "short_summary": "",
+        }]
+
+        evidence = mod.build_source_onboarding_evidence(
+            row["_authoritative_source"],
+            compacted_memory,
+            row,
+        )
+        items = json.loads(evidence["evidence_pack_json"])
+        authored = [item for item in items if item["kind"] == "authored_post_excerpt"]
+
+        self.assertEqual(evidence["evidence_status"], "sufficient")
+        self.assertEqual(evidence["authored_post_evidence_total"], 1)
+        self.assertEqual(len(authored), 1)
+        self.assertEqual(authored[0]["url"], row["post_url"])
+        self.assertIn("Восстановленный личный рассказ", authored[0]["excerpt"])
+
     def test_source_onboarding_profile_and_writer_fail_closed_on_unsupported_references(self) -> None:
         mod = self.mod
         evidence = mod.build_source_onboarding_evidence(

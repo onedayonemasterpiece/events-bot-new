@@ -6213,6 +6213,77 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "https://t.me/fresh/1",
         ])
 
+    def test_text_restore_reuses_current_dual_vectors_but_rebuilds_memory(self) -> None:
+        mod = load_module()
+        post = {
+            "post_id": "post_exact_route",
+            "post_url": "https://t.me/travel/10",
+            "platform_post_key": "tg:travel:10",
+            "text": "Личный рассказ о поездке в Калининград и на Куршскую косу.",
+            "priority_reason": "publication_text_restore_after_active_payload_prune",
+        }
+        text_hash = mod.text_vector_text_hash(mod.text_embedding_input_for_post(post))
+        e5 = {
+            "post_url": post["post_url"], "text_hash": text_hash,
+            "model_id": mod.E5_TEXT_MODEL_ID, "model_short": "e5",
+            "encoder_contract": mod.E5_ENCODER_CONTRACT,
+            "semantic_bank_version": mod.semantic_bank_version_and_hash(mod.semantic_bank_v1())[0],
+            "semantic_bank_hash": mod.semantic_bank_version_and_hash(mod.semantic_bank_v1())[1][:16],
+            "semantic_scores_by_class": {"ko_visit_impression": 0.8},
+        }
+        bge = {
+            "post_url": post["post_url"], "text_hash": text_hash,
+            "model_id": mod.BGE_M3_TEXT_MODEL_ID, "model_short": "bge_m3",
+            "encoder_contract": mod.BGE_M3_ENCODER_CONTRACT,
+            "semantic_bank_version": e5["semantic_bank_version"],
+            "semantic_bank_hash": e5["semantic_bank_hash"],
+            "semantic_scores_by_class": {"ko_visit_impression": 0.8},
+        }
+        actionable, metrics = mod.plan_posts_for_vector_scoring(
+            [post],
+            previous_posts={"tg:travel:10": {"current_stage": "needs_image_review"}},
+            e5_index=mod.build_text_vector_enrichment_index({"text_vector_enrichment": {"e": e5}}, model="e5"),
+            bge_m3_index=mod.build_text_vector_enrichment_index({"text_vector_enrichment": {"b": bge}}, model="bge_m3"),
+            require_bge_m3=True,
+        )
+        self.assertEqual(len(actionable), 1)
+        self.assertEqual(actionable[0]["_rt_work_kind"], "reuse_e5_bge_text_restore")
+        self.assertEqual(metrics["posts_needs_e5"], 0)
+        self.assertEqual(metrics["posts_reuse_e5_bge_text_restore"], 1)
+
+    def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
+        mod = load_module()
+        previous = {
+            "candidate_memory": {
+                "cmem_original": {
+                    "candidate_memory_id": "cmem_original",
+                    "post_id": "history_post_id",
+                    "post_url": "https://t.me/travel/10",
+                    "first_seen_run_id": "run-1",
+                }
+            }
+        }
+        current = [{
+            "post_id": "exact_fetch_post_id",
+            "post_url": "https://t.me/travel/10",
+            "platform_post_key": "tg:travel:10",
+            "source_id": "src1",
+            "source_title": "Travel",
+            "post_date": "2026-07-01T00:00:00+00:00",
+            "text": "Личный рассказ о Калининграде.",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "needs_image_review",
+            "candidate_score": 0.7,
+            "overall_media_score": 0.7,
+        }]
+        memory, _increment, _expired = mod.build_candidate_memory(previous, current, [], "run-2", "2026-07-14T00:00:00+00:00")
+        matches = [row for row in memory if row.get("post_url") == "https://t.me/travel/10"]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["candidate_memory_id"], "cmem_original")
+        self.assertEqual(matches[0]["post_id"], "exact_fetch_post_id")
+        self.assertIn("Личный рассказ", matches[0]["full_text"])
+
     def test_candidate_launcher_defaults_to_live_ydb_backend(self) -> None:
         mod = load_runner_module()
         old_backend = os.environ.pop("REGION_TALK_STATE_BACKEND", None)
