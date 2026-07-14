@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk delayed E5→BGE promotion losing hard ad/promo evidence: candidate memory now preserves the safety fields, rechecks the complete active E5 text instead of a short summary, and blocks explicit registration/booking/promo posts before ImageDiagnostic.
 - Fixed Region Talk ImageDiagnostic CLIP startup hangs by attaching a pinned complete Kaggle Model input and loading it locally/offline; production image runs no longer depend on a 600 MB Hugging Face download, and heartbeats expose the resolved model origin/path.
 - Fixed Region Talk ImageDiagnostic heartbeat payloads so model-load and per-image inference checkpoints retain the exact model, post URL, component scores and timings in YDB instead of exposing only a generic event name.
 - Fixed Region Talk orchestrator memory growth when reading the complete dual-vector ledger: control-plane metrics now use a server-side scalar YDB projection and never materialize dense E5/BGE embedding arrays, while the stored vectors and E5+BGE fusion contract remain unchanged.

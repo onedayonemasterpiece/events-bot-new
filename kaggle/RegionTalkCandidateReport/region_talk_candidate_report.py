@@ -6572,6 +6572,20 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "matched_place_accepted_as_region_evidence": row.get("matched_place_accepted_as_region_evidence", prev.get("matched_place_accepted_as_region_evidence", "")),
             "kaliningrad_mention_role": row.get("kaliningrad_mention_role", prev.get("kaliningrad_mention_role", "")),
             "region_scope_reason": row.get("region_scope_reason", prev.get("region_scope_reason", "")),
+            # Preserve the strict pre-image safety evidence across the delayed
+            # E5 -> BGE handoff. Dropping these fields makes the later memory
+            # promotion re-evaluate only a short summary and can admit an
+            # explicit registration/booking post to ImageDiagnostic.
+            "is_ad_or_promo": row.get("is_ad_or_promo", prev.get("is_ad_or_promo", "")),
+            "is_ad_or_promo_hard": row.get("is_ad_or_promo_hard", prev.get("is_ad_or_promo_hard", "")),
+            "is_ad_or_promo_possible": row.get("is_ad_or_promo_possible", prev.get("is_ad_or_promo_possible", "")),
+            "ad_promo_hits": row.get("ad_promo_hits", prev.get("ad_promo_hits", "")),
+            "ad_promo_possible_hits": row.get("ad_promo_possible_hits", prev.get("ad_promo_possible_hits", "")),
+            "ad_promo_reason": row.get("ad_promo_reason", prev.get("ad_promo_reason", "")),
+            "is_multi_region_roundup": row.get("is_multi_region_roundup", prev.get("is_multi_region_roundup", "")),
+            "is_multi_topic_digest": row.get("is_multi_topic_digest", prev.get("is_multi_topic_digest", "")),
+            "is_digest_or_roundup": row.get("is_digest_or_roundup", prev.get("is_digest_or_roundup", "")),
+            "external_geo_mentions": row.get("external_geo_mentions", prev.get("external_geo_mentions", "")),
             "content_type": row.get("content_type", prev.get("content_type", "")),
             "llm_content_type": row.get("llm_content_type", prev.get("llm_content_type", "")),
             "vector_content_type": row.get("vector_content_type", prev.get("vector_content_type", "")),
@@ -6596,6 +6610,12 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "llm_gate_status": row.get("llm_gate_status", ""), "llm_decision": row.get("llm_decision", ""), "llm_reason": row.get("llm_reason", ""), "llm_model": row.get("llm_model", ""),
             "final_verifier_status": row.get("final_verifier_status", ""), "final_verifier_decision": row.get("final_verifier_decision", ""), "final_verifier_reason": row.get("final_verifier_reason", ""), "final_verifier_model": row.get("final_verifier_model", ""),
             "vector_gate_status": row.get("vector_gate_status", ""), "vector_positive_score": row.get("vector_positive_score", ""),
+            "vector_negative_class": row.get("vector_negative_class", prev.get("vector_negative_class", "")),
+            "vector_negative_score": row.get("vector_negative_score", prev.get("vector_negative_score", "")),
+            "vector_ad_promo_score": row.get("vector_ad_promo_score", prev.get("vector_ad_promo_score", "")),
+            "vector_news_event_score": row.get("vector_news_event_score", prev.get("vector_news_event_score", "")),
+            "vector_roundup_score": row.get("vector_roundup_score", prev.get("vector_roundup_score", "")),
+            "vector_other_region_score": row.get("vector_other_region_score", prev.get("vector_other_region_score", "")),
             "text_vector_fusion_status": row.get("text_vector_fusion_status", prev.get("text_vector_fusion_status", "")),
             "external_bge_m3_status": row.get("external_bge_m3_status", prev.get("external_bge_m3_status", "")),
             "bge_m3_enrichment_id": row.get("bge_m3_enrichment_id", prev.get("bge_m3_enrichment_id", "")),
@@ -6760,7 +6780,15 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
             row["next_action"] = "run_region_talk_bge_m3_enrichment"
             continue
         fused = fuse_e5_with_external_bge_m3(e5_row, bge_row, text_hash=str(e5_row.get("text_hash") or text_sha), match_mode=bge_mode)
-        sample_text = str(row.get("short_summary") or row.get("why_keep_in_memory") or row.get("post_url") or "")
+        sample_text = str(
+            e5_row.get("full_text")
+            or e5_row.get("text_excerpt")
+            or row.get("full_text")
+            or row.get("short_summary")
+            or row.get("why_keep_in_memory")
+            or row.get("post_url")
+            or ""
+        )
         if sample_text and sample_text.startswith("http"):
             sample_text = str(row.get("matched_place_names") or "Калининградская область")
         scope2 = kaliningrad_oblast_only_scope_gate(sample_text, lexicon) if sample_text else {
@@ -6772,15 +6800,25 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
             scope2["kaliningrad_oblast_only_scope"] = True
             scope2["matched_place_names"] = row.get("matched_place_names", scope2.get("matched_place_names", ""))
             scope2["region_scope_reason"] = row.get("region_scope_reason", scope2.get("region_scope_reason", "stored candidate-memory KO scope"))
+        promotion_ad_gate = ad_promo_gate(sample_text)
         gate = text_vector_gate(
             sample_text or str(row.get("short_summary") or ""),
             score_text(sample_text),
             scope2,
-            {"is_ad_or_promo": str(row.get("is_ad_or_promo") or "").lower() in {"true", "1", "yes"}},
+            promotion_ad_gate,
             score_substance(sample_text),
             embedding_scores=fused,
             allow_embedding_fallback=False,
         )
+        row.update(promotion_ad_gate)
+        if promotion_ad_gate.get("is_ad_or_promo"):
+            gate.update({
+                "vector_gate_status": "vector_reject_ad_promo",
+                "vector_content_type": "ad_or_promo",
+                "vector_rejection_reason": str(promotion_ad_gate.get("ad_promo_reason") or "explicit hard ad/promo evidence"),
+                "needs_llm_final_verify": "false",
+                "llm_status": "not_called_vector_reject",
+            })
         row.update({k: v for k, v in gate.items() if v not in ("", None)})
         row["bge_m3_enrichment_id"] = fused.get("bge_m3_enrichment_id", row.get("bge_m3_enrichment_id", ""))
         row["bge_m3_match_mode"] = fused.get("bge_m3_match_mode", row.get("bge_m3_match_mode", ""))

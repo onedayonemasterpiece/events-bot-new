@@ -1143,6 +1143,74 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         })
         self.assertEqual(reason, "semantic_scope_contradiction_multi_region_or_digest")
 
+    def test_candidate_memory_preserves_hard_ad_evidence_for_delayed_bge_fusion(self) -> None:
+        mod = load_module()
+        rows, _not_refetched, _deltas = mod.build_candidate_memory(
+            {},
+            [{
+                "post_id": "promo-post",
+                "post_url": "https://vk.com/wall-1_2",
+                "source_id": "source-1",
+                "source_title": "External sports series",
+                "current_stage": "dual_model_vector_enrichment_pending",
+                "vector_gate_status": "vector_defer_wait_bge_m3",
+                "vector_content_type": "visit_impression_candidate",
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "is_ad_or_promo": True,
+                "is_ad_or_promo_hard": "true",
+                "ad_promo_hits": "booking_tickets",
+                "vector_ad_promo_score": 0.8,
+                "text": "Регистрация на сайте",
+            }],
+            [],
+            "unit-run",
+            "2026-07-14T00:00:00+00:00",
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]["is_ad_or_promo"])
+        self.assertEqual(rows[0]["ad_promo_hits"], "booking_tickets")
+        self.assertEqual(rows[0]["vector_ad_promo_score"], 0.8)
+
+    def test_delayed_bge_promotion_rechecks_complete_e5_text_and_rejects_hard_promo(self) -> None:
+        mod = load_module()
+        text_hash = "promo-hash"
+        pending = {
+            "post_id": "promo-post",
+            "post_url": "https://vk.com/wall-1_2",
+            "source_title": "External sports series",
+            "pending_bge_m3_text_hash": text_hash,
+            "current_stage": "dual_model_vector_enrichment_pending",
+            "vector_gate_status": "vector_defer_wait_bge_m3",
+            "kaliningrad_oblast_only_scope": "true",
+            "kaliningrad_mention_role": "main_subject",
+            "short_summary": "Красивое место в Калининграде",
+        }
+        e5 = {
+            "text_hash": text_hash,
+            "full_text": "Плавательные сборы в Калининграде. Регистрация на сайте.",
+        }
+        bge = {"text_hash": text_hash}
+        fused = {
+            "vector_negative_class": "other_region_travel",
+            "vector_positive_semantic_score": 0.8,
+            "vector_negative_score": 0.5,
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+        }
+        with mock.patch.object(mod, "fuse_e5_with_external_bge_m3", return_value=fused):
+            stats = mod.apply_external_bge_m3_fusion_to_candidate_memory(
+                [pending],
+                e5_index={f"hash:{text_hash}": [e5]},
+                bge_index={f"hash:{text_hash}": [bge]},
+                lexicon=[],
+            )
+        self.assertEqual(stats["rejected"], 1)
+        self.assertEqual(stats["promoted"], 0)
+        self.assertEqual(pending["vector_gate_status"], "vector_reject_ad_promo")
+        self.assertTrue(pending["is_ad_or_promo"])
+        self.assertIn("booking_tickets", pending["ad_promo_hits"])
+        self.assertEqual(pending["current_stage"], "dropped_text_gate")
+
     def test_terminal_source_cleanup_makes_old_candidate_memory_audit_only(self) -> None:
         mod = load_module()
         rows = [

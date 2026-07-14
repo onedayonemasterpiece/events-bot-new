@@ -590,6 +590,14 @@ For bounded live-YDB handoff runs, fetched posts are pre-ordered before the vect
 
 Hard Kaliningrad-only region scope now runs before candidate memory and `04a_final_shortlist`: multi-region/non-Kaliningrad posts are rejected as `reject_not_kaliningrad_oblast_only` and cannot leak into product shortlist unless manually overridden with explicit region evidence. Image scoring remains only for selected non-ad Kaliningrad rows; broad LLM stays disabled (`wide_funnel_llm_calls=0`) and the optional LLM verifier is limited to top-N final rows through the Supabase limiter.
 
+The delayed E5→BGE path has the same pre-image safety contract as the direct
+path. Candidate memory retains hard ad/promo and multi-region evidence while it
+waits for BGE. When BGE arrives, the promotion pass reuses the complete active
+E5 text rather than the 180-character summary; explicit hard registration,
+booking, price or promo evidence becomes `vector_reject_ad_promo` and never
+enters ImageDiagnostic. This does not replace or weaken dual-vector scoring—it
+prevents compact queue state from erasing an already known safety verdict.
+
 ## MVP-1.z7 growth discovery / honest increment update
 
 The runner now has explicit process modes:
