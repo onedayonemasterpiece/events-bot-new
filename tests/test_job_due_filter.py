@@ -598,6 +598,94 @@ async def test_tg_event_publish_new_posts_outrank_existing_post_edits(tmp_path, 
 
 
 @pytest.mark.asyncio
+async def test_confirmed_public_repair_outranks_normal_tg_lanes_without_bypassing_spacing(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    now = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    async with db.get_session() as session:
+        repair = Event(
+            title="Confirmed duplicate repair",
+            description="d",
+            date="2026-07-10",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+            added_at=now - timedelta(days=2),
+            tg_event_post_id=100,
+            tg_event_post_url="https://t.me/c/1/100",
+        )
+        fresh = Event(
+            title="Fresh announcement",
+            description="d",
+            date="2026-07-11",
+            time="13:00",
+            location_name="loc",
+            source_text="src",
+            added_at=now,
+        )
+        session.add(repair)
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(repair)
+        await session.refresh(fresh)
+        session.add(
+            JobOutbox(
+                event_id=repair.id,
+                task=JobTask.tg_event_publish,
+                payload={"public_repair_priority": True},
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            JobOutbox(
+                event_id=fresh.id,
+                task=JobTask.tg_event_publish,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+        repair_id = int(repair.id)
+        fresh_id = int(fresh.id)
+
+    calls: list[int] = []
+
+    async def fake_tg_publish(eid, db_obj, bot_obj):
+        calls.append(eid)
+        return True
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {"tg_event_publish": fake_tg_publish})
+
+    processed = await main._run_due_jobs_once(db, None)
+
+    assert processed == 1
+    assert calls == [repair_id]
+    async with db.get_session() as session:
+        repair_job = (
+            await session.execute(
+                select(JobOutbox).where(JobOutbox.event_id == repair_id)
+            )
+        ).scalar_one()
+        fresh_job = (
+            await session.execute(
+                select(JobOutbox).where(JobOutbox.event_id == fresh_id)
+            )
+        ).scalar_one()
+    assert repair_job.status == JobStatus.done
+    assert fresh_job.status == JobStatus.pending
+    assert main._ensure_utc(fresh_job.next_run_at) >= (
+        main._ensure_utc(repair_job.updated_at) + timedelta(minutes=10)
+    )
+
+
+@pytest.mark.asyncio
 async def test_fresh_tg_event_publish_is_not_starved_by_old_backlog(
     tmp_path, monkeypatch
 ):

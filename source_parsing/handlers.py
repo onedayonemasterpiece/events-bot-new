@@ -36,6 +36,7 @@ from poster_media import PosterMedia, is_supabase_storage_url, process_media
 from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
 from models import Event, EventSource
+from telegram_sources import canonicalize_tg_url
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ async def _fetch_og_image_for_dramteatr(page_url: str) -> str | None:
         return None
 
     m = re.search(
-        r'(?is)<meta\\s+[^>]*(?:property|name)=(\"|\\\')(?:(?:og:image)|(?:twitter:image))\\1[^>]*content=(\"|\\\')([^\"\\\']+)\\2',
+        r'''(?is)<meta\s+[^>]*(?:property|name)=("|')(?:(?:og:image)|(?:twitter:image))\1[^>]*content=("|')([^"']+)\2''',
         html,
     )
     if m:
@@ -100,7 +101,7 @@ async def _fetch_og_image_for_dramteatr(page_url: str) -> str | None:
 
     # Fallback: dramteatr pages often embed galleries without OG tags.
     # Prefer event gallery images under `/storage/uploads/!spektakli/...`.
-    img_srcs = re.findall(r'(?is)<img\\s+[^>]*src=(\"|\\\')([^\"\\\']+)\\1', html)
+    img_srcs = re.findall(r'''(?is)<img\s+[^>]*src=("|')([^"']+)\1''', html)
     candidates: list[str] = []
     for _q, src in img_srcs:
         s = (src or "").strip()
@@ -114,7 +115,7 @@ async def _fetch_og_image_for_dramteatr(page_url: str) -> str | None:
             continue
         if "/images/bimage/" in low:
             continue
-        if not re.search(r"(?i)\\.(?:jpg|jpeg|png|webp)(?:\\?.*)?$", low):
+        if not re.search(r"(?i)\.(?:jpg|jpeg|png|webp)(?:\?.*)?$", low):
             continue
         if s not in candidates:
             candidates.append(s)
@@ -207,6 +208,9 @@ def _normalize_source_url_for_match(url: str | None) -> str | None:
     value = str(url).strip()
     if not value:
         return None
+    canonical_tg = canonicalize_tg_url(value)
+    if canonical_tg:
+        value = canonical_tg
     if value.startswith("http://") or value.startswith("https://"):
         value = value.rstrip("/")
     return value
@@ -835,8 +839,14 @@ async def update_event_full(
                 theatre_event.source_type,
             )
             if photos and not event.photo_urls:
-                event.photo_urls = photos
-                event.photo_count = len(photos)
+                from event_media import ingest_event_media_urls
+
+                await ingest_event_media_urls(
+                    session,
+                    int(event_id),
+                    photos,
+                    source="source_parsing_full_update",
+                )
             
             await session.commit()
             
@@ -2533,6 +2543,42 @@ async def process_source_events(
 
                 # Always update linked events
                 await update_linked_events(db, existing_id, location_name, event.title)
+                # Ticket-status idempotency must not bypass media repair. Route
+                # the parser's current source images through the same Smart
+                # Update event-media gate used for new events.
+                existing_media_urls = limit_photos_for_source(
+                    event.photos,
+                    event.source_type,
+                )
+                if (
+                    not existing_media_urls
+                    and event.url
+                    and event.source_type == "dramteatr"
+                ):
+                    cover = await _fetch_og_image_for_dramteatr(event.url)
+                    if cover:
+                        existing_media_urls = [cover]
+                if existing_media_urls:
+                    try:
+                        from event_media import ingest_event_media_urls
+
+                        async with db.get_session() as media_session:
+                            _added, media_changed = await ingest_event_media_urls(
+                                media_session,
+                                int(existing_id),
+                                existing_media_urls,
+                                source=f"source_parser:{event.source_type}:existing",
+                            )
+                            await media_session.commit()
+                        if media_changed:
+                            await schedule_existing_event_update(db, existing_id)
+                    except Exception:
+                        logger.warning(
+                            "source_parsing: existing media reconcile failed source=%s event_id=%s",
+                            event.source_type,
+                            existing_id,
+                            exc_info=True,
+                        )
             else:
                 mode_prefix = "existing_source_missing" if existing_id else "new"
                 if existing_id and diag_enabled:
@@ -2568,7 +2614,6 @@ async def process_source_events(
                             "source_parsing: diag ocr skipped source=%s",
                             event.source_type,
                         )
-                    target_photos = []
                 
                 if target_photos:
                     try:
@@ -2588,9 +2633,10 @@ async def process_source_events(
                         )
                         
                         if raw_images:
-                            # Catbox can be flaky for consumers (Telegram preview, local runtime TLS issues).
-                            # For dramteatr, keep original URLs but still run OCR and store hashes.
-                            need_catbox = event.source_type != "dramteatr"
+                            # ``need_catbox`` now means materialize through the
+                            # managed uploader (Yandex CDN first), not "Catbox only".
+                            # Every source therefore follows one Smart Update media path.
+                            need_catbox = True
                             # OCR is optional for source-parsed galleries; we must not drop posters
                             # just because OCR timed out or a provider was unavailable.
                             need_ocr = bool(need_catbox) and (event.source_type not in SOURCE_PARSING_DISABLE_OCR_SOURCES)

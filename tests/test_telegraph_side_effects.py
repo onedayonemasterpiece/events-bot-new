@@ -87,6 +87,13 @@ async def test_update_event_page_edits_without_create(tmp_path, monkeypatch):
         return {}
     monkeypatch.setattr(m, "telegraph_create_page", fake_create)
     monkeypatch.setattr(m, "telegraph_edit_page", fake_edit)
+    async def forbidden_rehydrate(*_args, **_kwargs):
+        raise AssertionError("Telegraph renderer must remain a read-only media consumer")
+    monkeypatch.setattr(
+        m,
+        "_rehydrate_missing_event_source_posters_for_telegraph",
+        forbidden_rehydrate,
+    )
     await m.update_telegraph_event_page(eid, db, None)
     assert create_calls == []
     assert edit_calls == ["abc"]
@@ -197,7 +204,7 @@ async def test_navigation_builds_do_not_touch_events(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_telegraph_rehydrates_missing_media_from_event_sources(tmp_path, monkeypatch):
+async def test_media_job_rehydrates_multiple_sources_but_quarantines_new_images(tmp_path, monkeypatch):
     m = importlib.reload(orig_main)
     db = m.Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -275,19 +282,24 @@ async def test_telegraph_rehydrates_missing_media_from_event_sources(tmp_path, m
     assert added == 3
     async with db.get_session() as session:
         ev = await session.get(m.Event, eid)
-        assert ev.photo_count == 4
+        assert ev.photo_count == 1
         assert ev.photo_urls == [
             "https://cdn.example/existing.jpg",
-            "https://cdn.example/vk.jpg",
-            "https://cdn.example/tg3191.jpg",
-            "https://cdn.example/tg3193.jpg",
         ]
         rows = (
             await session.execute(
-                m.select(m.EventPoster.poster_hash).where(m.EventPoster.event_id == eid)
+                m.select(m.EventPoster.poster_hash, m.EventPoster.review_status)
+                .where(m.EventPoster.event_id == eid)
+                .order_by(m.EventPoster.id.asc())
             )
         ).all()
         assert {r[0] for r in rows} == {"existing", "vk", "tg3191", "tg3193"}
+        assert [r[1] for r in rows] == [
+            "approved",
+            "pending_review",
+            "pending_review",
+            "pending_review",
+        ]
 
 
 @pytest.mark.asyncio

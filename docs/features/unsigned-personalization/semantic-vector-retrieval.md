@@ -43,6 +43,7 @@ Migrations:
 Main tables:
 
 - `event_search_documents` — compact factual `search_digest` for query search, cleaner `related_digest` for event-to-event similarity, facets, dates, status, canonical path/slug and trusted `card_snapshot`; no raw OCR or source HTML.
+- Admission facets fail closed: an event with `unknown`/status-only admission is not tagged as `ticketed`; `ticketed` is emitted only for an explicit ticket, registration or phone-booking contract, while `free` still requires an explicit free flag.
 - `event_embeddings` — `gemini-embedding-2`, `embedding_dim=768`, `vector(768)`, `embedding_doc_kind` (`search_v3` or `related_v1`), partial HNSW cosine indexes, `(event_id, embedding_model, embedding_dim, embedding_doc_kind)` primary key.
 - `search_quota_plans`, `user_search_quota_ledger`, `event_search_requests` — authorized search quotas and privacy-preserving audit.
 
@@ -91,6 +92,7 @@ The current implementation deliberately uses **one embedding model and one table
 
 - `search_v3` — broad query-search document. It includes weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday language, free/registration/paid/sold-out status, charity/family/tourist/Pushkin-card hints and query-friendly synonyms. This is the document kind used by `/poisk/`.
 - `related_v1` — cleaner event-to-event document. It emphasizes title, event type, category, format, themes, concise meaning, venue/context and audience. Calendar/admission noise is intentionally reduced so “бесплатно вечером” does not beat true thematic similarity in related cards. This is the document kind used by static related generation.
+- When canonical `location_name` is only the same settlement fallback as `city`, the preview/vector projection exports no synthetic `venue_name`; both `search_v3` and `related_v1` keep the city once. Exact presentation deduplication does not infer a venue and does not replace the LLM grounding verdict.
 
 Why this is not “two vector databases”: both kinds use `gemini-embedding-2/vector(768)` and live in `event_embeddings`; the key difference is `embedding_doc_kind`. RPCs filter by `embedding_model`, `embedding_dim` and `embedding_doc_kind`, so search and related retrieval cannot accidentally mix representations.
 

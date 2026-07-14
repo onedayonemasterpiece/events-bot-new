@@ -17,6 +17,13 @@ exhibition. The same Autoretro source and same City Jazz/default-30-day defect
 had already been a regression fixture in `INC-2026-07-02`; the deployed guard
 matched phrases rather than occurrence roles and missed the next wording.
 
+On 2026-07-13 the operator reported a remaining semantic location defect in the
+forwarded announcement `https://t.me/kenigevents/4405`: the first repair had
+replaced the hallucinated venue with the source phrase `День города в
+Янтарном`, but that phrase names the occasion, not an attendee-facing place.
+The original source confirms only the settlement, so the honest canonical
+location is city-level `Янтарный` with no invented venue/address.
+
 A vector-first audit then covered the complete bounded current/future inventory
 (`326/326` rows, `326/326` persisted `related_v1` vectors) and confirmed further
 wrong periods, locations, duplicates, non-events and multi-event description
@@ -33,6 +40,9 @@ linked source.
 
 - Reported directly by the operator from the public `@kldevents` post.
 - Existing broad future-event audits did not surface the defect; that miss is part of the incident.
+- The recurrence was reported directly from `@kenigevents/4405`; authenticated
+  Telegram/VK inspection then confirmed the same prose location in
+  `@kldevents/2301` and managed VK post `wall-231920894_7233`.
 - Frozen audit export SHA-256: `256ec6c8e18f6c4f7b51eeec7a786dc2b3c7752069ca8657973f6cc841257ae6`.
 
 ## Timeline
@@ -44,6 +54,10 @@ linked source.
   event into both `search_v3` and `related_v1`.
 - 2026-07-12 22:10 UTC — full audit froze and checked `326/326` active
   current/future rows.
+- 2026-07-13 UTC — operator reported prose in location at
+  `@kenigevents/4405`; the canonical event was mapped back to `6853`, the
+  replacement source album `@kldevents/2301–2304`, managed VK `7233` and the
+  existing Telegraph page.
 
 ## Root Cause
 
@@ -69,15 +83,28 @@ linked source.
 6. **Queue-hint parser contamination.** `ГАЗ-24-10` became a false 24 October
    `event_ts_hint`. It did not determine the final event date, but it is a
    separate retrieval/date-signal defect.
+7. **The first mitigation preserved an occasion as a venue.** The repair
+   correctly removed City Jazz and the invented month, but wrote the verbatim
+   source phrase `День города в Янтарном` into `location_name`. Source grounding
+   alone was insufficient because the phrase was grounded as event context,
+   not as an attendee-facing place.
+8. **The semantic grounding router was too narrow.**
+   `_candidate_needs_llm_location_grounding_review` required an explicit venue
+   role or missing source evidence. The future teaser had neither a `📍`/address
+   cue nor an exact venue; because the occasion phrase occurred verbatim, it
+   bypassed the LLM verdict and propagated through every public projection.
 
 ## Contributing Factors
 
 - The active-event vector sidecar prunes cancelled/repaired historical examples,
   so `6853` retrieved generic long exhibitions rather than the prior bad
   Autoretro rows. Vectors cannot replace source-grounded LLM adjudication.
-- Production runtime file logging was disabled (`ENABLE_RUNTIME_FILE_LOGGING=0`)
-  and the file mirror stopped at 8 July; `ops_run`, DB rows and public surfaces
-  were required as fallback evidence.
+- Production runtime file logging was disabled during the first investigation,
+  so its oldest evidence came from `ops_run`, DB rows and public surfaces. By
+  the 2026-07-13 recurrence it was enabled with bounded rotation at
+  `/data/runtime_logs`; the active files confirmed event-vector and Telegraph
+  work for `6853`. The exact manual/forwarded `@kenigevents/4405` action is not
+  represented in `promo_exposure`, which remains an observability gap.
 - Managed VK postponed IDs had promoted/deleted into new live IDs while DB URLs
   remained stale, complicating direct public repair.
 
@@ -117,13 +144,15 @@ Source truth is frozen: one day `2026-07-18`, time unknown, city `Янтарны
 outdoor City Day auto exhibition; exact square/address is not source-grounded.
 The primary repair must use no end date and no invented indoor venue/address.
 
-Production event `6853` is now repaired to one day (`2026-07-18`), location
-`День города в Янтарном`, city `Янтарный`, no address/end date and an
-event-local description. The wrong Telegram album `2297–2300` was deleted and
-replaced by `https://t.me/kldevents/2301`; managed VK `7233` and the existing
-Telegraph page were edited in place. The replacement still uses prior
-Autoretro show photos as illustrations, but its caption no longer presents the
-past cars/performance as the future program.
+Production event `6853` is now repaired to one day (`2026-07-18`), honest
+city-level location `Янтарный`, no address/end date/time and an event-local
+description. The obsolete Telegram albums, including the operator-reported
+`@kenigevents/4405–4408`, were deleted. The current four-photo projections are
+`https://t.me/kldevents/2361` and forwarded
+`https://t.me/kenigevents/4418`; managed VK `7233` and the existing Telegraph
+page were edited in place. The public text states that exact place and time are
+not present in the source and does not promote recap details as the future
+program.
 
 The audit repair queue was also applied:
 
@@ -151,6 +180,26 @@ The audit repair queue was also applied:
 - [x] Freeze direct Telegram/VK/Telegraph/vector/media surface evidence.
 - [x] Audit `326/326` future/current rows vector-first and source-adjudicate all
   findings.
+- [x] Route `location_name` overlap with structured festival/occasion context
+  to the existing bounded LLM grounding review; the router does not rewrite
+  semantics, and city-only/occasion-only evidence fails closed.
+- [x] Add exact Autoretro recurrence and genuine unrelated-venue negative
+  controls; no new per-event LLM stage or deterministic venue inference was
+  introduced.
+- [x] Reuse the canonical location composer in Telegram and managed VK public
+  headers so a city-level fallback renders once (`Янтарный`), without the
+  redundant `Янтарный, #Янтарный` projection.
+- [x] Project an exact city-only fallback to static/vector data as city with no
+  synthetic `venue_name`, so `search_v3`/`related_v1` and future static pages do
+  not encode `Янтарный · Янтарный`.
+- [x] Tighten the single-call Gemini Lite public-writer prompt so attendee
+  promises, program details and exhibit qualities require explicit future-event
+  support; a thin teaser must produce conservative copy rather than importing
+  recap details or inventing activities. No verifier call or deterministic
+  narrative fallback was added.
+- [x] Make managed VK re-sync exact-text idempotent: distinct historical body
+  versions remain separated, but identical adjacent copies collapse and a
+  location-only repair cannot append the same description again.
 
 ## Follow-up Actions
 
@@ -164,6 +213,41 @@ The audit repair queue was also applied:
   remain recall-only and must feed LLM adjudication.
 
 ## Release And Closure Evidence
+
+### 2026-07-13 prose-location recurrence
+
+- prevention and repair SHAs through `97b6c087` are reachable from
+  `origin/main`; the final clean-worktree Fly release is machine version `1659`,
+  image `deployment-01KXE76XX5B4A286464SSHA7XV`.
+- `/healthz` returned `ok=true`, `ready=true`, DB/scheduler/tasks all `ok`;
+  runtime file logging is enabled at `/data/runtime_logs` with 48-hour,
+  64-MiB bounded retention. The data volume had `315 MiB` free, above the
+  `256 MiB` critical threshold, and reported only the configured disk warning.
+- recurrence backup tables:
+  `codex_backup_event_20260713_autoretro_prose_location`,
+  `codex_backup_event_source_20260713_autoretro_prose_location`,
+  `codex_backup_joboutbox_20260713_autoretro_prose_location`;
+  final `PRAGMA quick_check=ok`.
+- final canonical event `6853`: `2026-07-18`, no end date/time/address,
+  `location_name=city=Янтарный`. All relevant outbox projections are `done`.
+- public verification:
+  - obsolete `@kenigevents/4405` and the matching old source album are absent;
+    current four-photo albums are `https://t.me/kldevents/2361` and
+    `https://t.me/kenigevents/4418`, both rendering only `📍 Янтарный`;
+  - `https://vk.com/wall-231920894_7233` renders `📍 Янтарный`, one canonical
+    body, no managed-body separator/duplicate and four photo attachments;
+  - `https://telegra.ph/Den-goroda-v-YAntarnom-07-12` renders `📍 Янтарный`
+    without an invented venue or range.
+- vector catch-up `ops_run=3713` completed with two provider calls/two embedding
+  writes and no cap remainder. Event `6853` has fresh 768-dimensional
+  `gemini-embedding-2` `search_v3` and `related_v1` documents; `venue_name` is
+  absent and city is `Янтарный`.
+- regression checks: exact occasion-as-venue candidate entered the existing
+  grounding boundary; an unrelated real venue remained a negative control;
+  focused Smart Update/location/TG/VK/static/vector tests passed. The final VK
+  exact-text idempotency tests passed `3/3`; after aligning older mocks and hash
+  fixtures with the current managed-post contract, the complete VK module
+  passed `48/48`.
 
 - deployed SHA: `59312251` (prevention `e95a596f` + atomic exhibition date
   renderer); both commits are ancestors of `origin/main`. Local E2E diagnostic
@@ -206,10 +290,8 @@ The audit repair queue was also applied:
   immediately (`terminal_kind=authorization_denied`) instead of timing out.
   Authorization must be restored by the operator/security owner before a real
   1-row live import can close this check; no privilege was granted implicitly.
-- Production file-mirror logging remains intentionally disabled after the prior
-  Fly disk-pressure incident (`ENABLE_RUNTIME_FILE_LOGGING=0`). Current evidence
-  therefore comes from `ops_run`, DB, Telegram UI, VK API and provider logs.
-  A bounded-volume/retention design is required before re-enabling it.
+- The former production-file-log blocker is resolved: bounded logging is active
+  at `/data/runtime_logs` and was verified after the recurrence release.
 - Static-site Kaggle production handoff is disabled and no `static_site_build`
   outbox exists. The old advertised static path was 404 (not stale wrong data);
   the corrected vector card now points at the new canonical path, but publishing
@@ -221,3 +303,9 @@ Prevention is LLM-first: deterministic structure only routes semantic review and
 validates verbatim/date grounding. It is vector-first at audit/recall boundaries:
 the exact catalog and nearest pairs are retrieved before source-grounded review,
 but vector scores never approve a field, merge or publication.
+
+For the 2026-07-13 recurrence, structured festival overlap is only a high-recall
+router into the already-existing `location_grounding_review`. The LLM decides
+whether the value is a venue; uncertainty blocks create/merge/publication. This
+adds at most one bounded grounding call only to the rare overlap candidates and
+does not consume a new call for every processed event.

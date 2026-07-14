@@ -15,6 +15,26 @@ _KNOWN_DATABASES: set["Database"] = set()
 _VALID_JOURNAL_MODES = {"WAL", "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF"}
 
 
+def _managed_vk_publication_globs() -> tuple[str, ...]:
+    """Return exact-owner SQLite GLOBs for our managed VK projections."""
+
+    group_ids = {
+        str(os.getenv(name) or "").strip().lstrip("-")
+        for name in ("VK_EVENTS_GROUP_ID", "VK_AFISHA_GROUP_ID")
+    }
+    group_ids.discard("")
+    # Production default used by the publisher when the env alias is absent.
+    group_ids.add("231920894")
+    return tuple(f"*vk.com/wall-{group_id}_[0-9]*" for group_id in sorted(group_ids))
+
+
+def _exclude_managed_vk_sql(column: str, globs: tuple[str, ...]) -> tuple[str, tuple[str, ...]]:
+    if not globs:
+        return "", ()
+    predicates = " OR ".join(f"LOWER({column}) GLOB ?" for _ in globs)
+    return f" AND NOT ({predicates})", globs
+
+
 async def _add_column(conn, table: str, col_def: str) -> None:
     try:
         await conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
@@ -393,6 +413,7 @@ class Database:
                     tg_event_source_hash TEXT,
                     ics_hash TEXT,
                     ics_file_id TEXT,
+                    ics_post_hash TEXT,
                     ics_updated_at TIMESTAMP,
                     ics_post_url TEXT,
                     ics_post_id INTEGER,
@@ -416,6 +437,7 @@ class Database:
             await _add_column(conn, "event", "tg_source_author TEXT")
             await _add_column(conn, "event", "ics_hash TEXT")
             await _add_column(conn, "event", "ics_file_id TEXT")
+            await _add_column(conn, "event", "ics_post_hash TEXT")
             await _add_column(conn, "event", "ics_updated_at TIMESTAMP")
             await _add_column(conn, "event", "ics_post_url TEXT")
             await _add_column(conn, "event", "ics_post_id INTEGER")
@@ -474,6 +496,13 @@ class Database:
             )
             dbg("eventposter")
 
+            eventposter_columns_before = await (
+                await conn.execute("PRAGMA table_info('eventposter')")
+            ).fetchall()
+            eventposter_had_review_status = any(
+                str(col[1]) == "review_status" for col in eventposter_columns_before
+            )
+
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS eventposter(
@@ -484,6 +513,17 @@ class Database:
                     supabase_path TEXT,
                     poster_hash TEXT NOT NULL,
                     phash TEXT,
+                    raw_sha256 TEXT,
+                    pixel_sha256 TEXT,
+                    perceptual_hash TEXT,
+                    width INTEGER,
+                    height INTEGER,
+                    mime_type TEXT,
+                    review_status TEXT NOT NULL DEFAULT 'pending_review',
+                    duplicate_of_id INTEGER,
+                    review_reason TEXT,
+                    reviewed_at TIMESTAMP,
+                    display_order INTEGER NOT NULL DEFAULT 0,
                     ocr_text TEXT,
                     ocr_title TEXT,
                     prompt_tokens INTEGER NOT NULL DEFAULT 0,
@@ -491,6 +531,7 @@ class Database:
                     total_tokens INTEGER NOT NULL DEFAULT 0,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(duplicate_of_id) REFERENCES eventposter(id) ON DELETE SET NULL,
                     UNIQUE(event_id, poster_hash)
                 )
                 """
@@ -499,11 +540,101 @@ class Database:
             await _add_column(conn, "eventposter", "phash TEXT")
             await _add_column(conn, "eventposter", "supabase_url TEXT")
             await _add_column(conn, "eventposter", "supabase_path TEXT")
+            await _add_column(conn, "eventposter", "raw_sha256 TEXT")
+            await _add_column(conn, "eventposter", "pixel_sha256 TEXT")
+            await _add_column(conn, "eventposter", "perceptual_hash TEXT")
+            await _add_column(conn, "eventposter", "width INTEGER")
+            await _add_column(conn, "eventposter", "height INTEGER")
+            await _add_column(conn, "eventposter", "mime_type TEXT")
+            await _add_column(
+                conn,
+                "eventposter",
+                "review_status TEXT NOT NULL DEFAULT 'pending_review'",
+            )
+            await _add_column(conn, "eventposter", "duplicate_of_id INTEGER")
+            await _add_column(conn, "eventposter", "review_reason TEXT")
+            await _add_column(conn, "eventposter", "reviewed_at TIMESTAMP")
+            await _add_column(
+                conn,
+                "eventposter",
+                "display_order INTEGER NOT NULL DEFAULT 0",
+            )
+            if not eventposter_had_review_status:
+                await conn.execute(
+                    "UPDATE eventposter SET review_status='approved', reviewed_at=COALESCE(reviewed_at, updated_at)"
+                )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_event ON eventposter(event_id)"
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_phash ON eventposter(phash)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_review_status ON eventposter(event_id, review_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_raw_sha256 ON eventposter(event_id, raw_sha256)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_pixel_sha256 ON eventposter(event_id, pixel_sha256)"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_eventposter_event_raw_sha256 ON eventposter(event_id, raw_sha256) WHERE raw_sha256 IS NOT NULL AND TRIM(raw_sha256) != ''"
+            )
+
+            dbg("event_media_review")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_media_pair_review(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    left_poster_id INTEGER NOT NULL,
+                    right_poster_id INTEGER NOT NULL,
+                    context_hash TEXT NOT NULL,
+                    pair_input_hash TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    decision TEXT,
+                    duplicate_kind TEXT,
+                    confidence REAL,
+                    semantic_conflict INTEGER NOT NULL DEFAULT 0,
+                    canonical_poster_id INTEGER,
+                    reason_code TEXT,
+                    primary_model TEXT,
+                    escalation_model TEXT,
+                    response_json JSON,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    provider_calls INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    next_run_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    resolved_at TIMESTAMP,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(left_poster_id) REFERENCES eventposter(id) ON DELETE CASCADE,
+                    FOREIGN KEY(right_poster_id) REFERENCES eventposter(id) ON DELETE CASCADE,
+                    FOREIGN KEY(canonical_poster_id) REFERENCES eventposter(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_media_pair_review_event_status ON event_media_pair_review(event_id, status, next_run_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_media_pair_review_left ON event_media_pair_review(left_poster_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_media_pair_review_right ON event_media_pair_review(right_poster_id)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_media_review_usage(
+                    day TEXT NOT NULL,
+                    stage TEXT NOT NULL,
+                    calls INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(day, stage)
+                )
+                """
             )
 
             dbg("event_media_asset")
@@ -688,8 +819,15 @@ class Database:
             if not skip_event_source_backfill:
                 dbg("seed event_source backfill")
                 try:
+                    managed_vk_globs = _managed_vk_publication_globs()
+                    source_post_filter, source_post_args = _exclude_managed_vk_sql(
+                        "e.source_post_url", managed_vk_globs
+                    )
+                    source_vk_filter, source_vk_args = _exclude_managed_vk_sql(
+                        "e.source_vk_post_url", managed_vk_globs
+                    )
                     await conn.execute(
-                        """
+                        f"""
                         INSERT OR IGNORE INTO event_source(
                             event_id,
                             source_type,
@@ -700,7 +838,8 @@ class Database:
                         SELECT
                             e.id,
                             CASE
-                                WHEN e.source_post_url LIKE '%t.me/%' THEN 'telegram'
+                                WHEN e.source_post_url LIKE '%t.me/%'
+                                  OR e.source_post_url LIKE '%telegram.me/%' THEN 'telegram'
                                 WHEN e.source_post_url LIKE '%vk.com/%' THEN 'vk'
                                 ELSE 'legacy'
                             END,
@@ -709,10 +848,12 @@ class Database:
                             e.source_message_id
                         FROM event e
                         WHERE e.source_post_url IS NOT NULL AND TRIM(e.source_post_url) != ''
-                        """
+                        {source_post_filter}
+                        """,
+                        source_post_args,
                     )
                     await conn.execute(
-                        """
+                        f"""
                         INSERT OR IGNORE INTO event_source(
                             event_id,
                             source_type,
@@ -728,8 +869,18 @@ class Database:
                             e.source_message_id
                         FROM event e
                         WHERE e.source_vk_post_url IS NOT NULL AND TRIM(e.source_vk_post_url) != ''
-                        """
+                        {source_vk_filter}
+                        """,
+                        source_vk_args,
                     )
+                    if managed_vk_globs:
+                        predicates = " OR ".join(
+                            "LOWER(source_url) GLOB ?" for _ in managed_vk_globs
+                        )
+                        await conn.execute(
+                            f"DELETE FROM event_source WHERE {predicates}",
+                            managed_vk_globs,
+                        )
                 except Exception:
                     logging.warning(
                         "db.init: event_source backfill failed (non-fatal)",
@@ -2385,6 +2536,22 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_kaggle_resource_lease_status ON kaggle_resource_lease(status, expires_at)"
+            )
+
+            dbg("llm_daily_request_budget")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS llm_daily_request_budget(
+                    budget_key TEXT NOT NULL,
+                    day TEXT NOT NULL,
+                    used INTEGER NOT NULL DEFAULT 0,
+                    limit_value INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(budget_key, day),
+                    CHECK(used >= 0),
+                    CHECK(limit_value >= 0)
+                )
+                """
             )
 
             await conn.commit()

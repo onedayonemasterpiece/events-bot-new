@@ -527,6 +527,9 @@ async def test_promo_vk_publication_blocks_text_only_telegram_event(tmp_path, mo
     ev.source_post_url = "https://t.me/kraftmarket39/199"
     ev.photo_urls = []
     ev.photo_count = 0
+    async with db.get_session() as session:
+        session.add(ev)
+        await session.commit()
 
     caplog.set_level(logging.INFO, logger="promo")
     with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
@@ -579,6 +582,9 @@ async def test_promo_vk_publication_recovers_telegraph_media_before_posting(tmp_
     ev.telegraph_url = "https://telegra.ph/Port-07-07"
     ev.photo_urls = []
     ev.photo_count = 0
+    async with db.get_session() as session:
+        session.add(ev)
+        await session.commit()
 
     url = await _build_promo_vk_source_post(
         db,
@@ -1363,7 +1369,7 @@ async def test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget(
 
 
 @pytest.mark.asyncio
-async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_path, monkeypatch) -> None:
+async def test_promo_vk_publication_uses_projection_as_is_and_blocks_empty_upload(tmp_path, monkeypatch) -> None:
     import main
     from promo import _build_promo_vk_source_post
 
@@ -1378,11 +1384,6 @@ async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_
     monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
     monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
 
-    async def fake_compute_dhash(url):
-        if url == vk_cdn:
-            return "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800"
-        return main._extract_dhash_from_managed_photo_url(url)
-
     upload_calls: list[str] = []
 
     async def fake_upload(group_id, photo_url, db_arg=None, bot_arg=None):
@@ -1392,7 +1393,6 @@ async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_
     async def fake_post_to_vk(*args, **kwargs):
         raise AssertionError("promo VK publication must fail closed when media upload is empty")
 
-    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_compute_dhash)
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
     monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
 
@@ -1412,7 +1412,7 @@ async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_
             target_group_id=231920894,
         )
 
-    assert upload_calls == [managed]
+    assert upload_calls == [managed, vk_cdn]
     await db.close()
 
 

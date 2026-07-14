@@ -57,6 +57,8 @@ def _classify_url(url: str | None) -> str:
     raw = str(url or "").strip().lower()
     if not raw:
         return "none"
+    if "static.kenigevents.ru/" in raw:
+        return "cdn"
     if "storage.yandexcloud.net/" in raw:
         return "yandex"
     if "files.catbox.moe/" in raw or "catbox.moe/" in raw:
@@ -98,6 +100,11 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=7, help="Inspect only events added in the last N days (0 = all)")
     parser.add_argument("--source", choices=["all", "tg", "vk"], default="all", help="Restrict by source kind")
     parser.add_argument("--samples", type=int, default=5, help="How many sample event_ids to show per bucket")
+    parser.add_argument(
+        "--require-cdn",
+        action="store_true",
+        help="Exit non-zero when a non-empty gallery contains a non-CDN URL",
+    )
     args = parser.parse_args()
 
     con = _open_db(str(args.db))
@@ -123,6 +130,7 @@ def main() -> int:
     samples: dict[tuple[str, str], list[str]] = defaultdict(list)
 
     total = 0
+    violations = 0
     for row in rows:
         added_at = _parse_dt(row["added_at"])
         if cutoff and (not added_at or added_at < cutoff):
@@ -132,6 +140,8 @@ def main() -> int:
             continue
         photo_urls = _load_json_list(row["photo_urls"])
         bucket = _classify_url_list(photo_urls)
+        if photo_urls and any(_classify_url(url) != "cdn" for url in photo_urls):
+            violations += 1
         by_source[source_kind][bucket] += 1
         total += 1
         key = (source_kind, bucket)
@@ -148,6 +158,9 @@ def main() -> int:
             sample_values = samples.get((source_kind, bucket)) or []
             if sample_values:
                 print(f"  samples[{bucket}] {' | '.join(sample_values)}")
+    print(f"strict_cdn_violations={violations}")
+    if args.require_cdn and violations:
+        return 2
     return 0
 
 

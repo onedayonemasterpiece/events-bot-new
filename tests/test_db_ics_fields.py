@@ -19,6 +19,14 @@ class DummyBot(Bot):
             chat=chat,
         )
 
+    async def edit_message_media(self, chat_id, message_id, media, **kwargs):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            document=SimpleNamespace(file_id="edited-file"),
+            message_id=message_id,
+            chat=SimpleNamespace(id=chat_id),
+        )
+
 
 class FakeClient:
     def __init__(self):
@@ -77,4 +85,7 @@ async def test_ics_fields_persist_and_update(tmp_path, monkeypatch):
         assert ev.ics_hash != h1
         assert ev.ics_url
         assert ev.ics_file_id != f1
+        assert ev.ics_post_hash == ev.ics_hash
         assert ev.ics_updated_at > t1
+    await bot.session.close()
+    await db.close()

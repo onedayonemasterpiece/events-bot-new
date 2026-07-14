@@ -599,6 +599,81 @@ def test_g4_rich_facts_flatten_preserves_named_speaker_fact():
     ), flat
 
 
+def test_g4_rich_facts_schema_requires_exact_evidence_quote() -> None:
+    schema = su._g4_rich_facts_schema()
+    item = schema["properties"]["public_core_facts"]["items"]
+
+    assert item["type"] == "object"
+    assert item["required"] == ["fact", "evidence_quote"]
+
+
+def test_merge_facts_require_exact_evidence_quote() -> None:
+    item = su.MERGE_SCHEMA["properties"]["added_facts"]["items"]
+
+    assert item["type"] == "object"
+    assert item["required"] == ["fact", "evidence_quote"]
+
+
+def test_merge_fact_contract_rejects_topic_adjacent_hallucination() -> None:
+    source = "На Экодворе собирают чистые соусники для повторного использования."
+    facts = su._flatten_source_grounded_fact_items(
+        [
+            {
+                "fact": "Можно сдать до 4 шин на переработку.",
+                "evidence_quote": "собирают чистые соусники для повторного использования",
+            }
+        ],
+        source_text=source,
+        log_context="test",
+    )
+
+    assert facts == []
+
+
+def test_g4_rich_facts_rejects_synthetic_ecodvor_purpose() -> None:
+    source = (
+        "8 августа Летний Экодвор вернётся в Железнодорожные ворота. "
+        "Мы уже намечаем программу с новыми лекциями, мастер-классами и другими активностями."
+    )
+    payload = {
+        "public_core_facts": [
+            {
+                "fact": "Цель: продвижение экологических инициатив, обмен опытом и активный досуг.",
+                "evidence_quote": "Летний Экодвор вернётся в Железнодорожные ворота",
+            }
+        ],
+        "program_or_examples": [],
+        "context_methodology_facts": [],
+        "people_org_facts": [],
+        "logistics_facts": [],
+        "uncertain_or_drop": [],
+    }
+
+    assert su._flatten_g4_rich_facts_payload(payload, source_corpus=source) == []
+
+
+def test_managed_vk_publication_is_not_legacy_evidence(monkeypatch) -> None:
+    monkeypatch.setenv("VK_EVENTS_GROUP_ID", "231920894")
+
+    assert su._is_managed_vk_publication_url("https://vk.com/wall-231920894_7008") is True
+    assert su._is_managed_vk_publication_url("https://vk.com/wall-132625599_17342") is False
+
+
+def test_fact_first_sparse_source_prompt_does_not_force_headings() -> None:
+    prompt = su._fact_first_description_prompt(
+        title="Летний Экодвор",
+        event_type="встреча",
+        facts_text_clean=[
+            "Летний Экодвор вернётся в Железнодорожные ворота.",
+            "Организаторы намечают новые лекции и мастер-классы.",
+        ],
+        epigraph_fact=None,
+    )
+
+    assert "SPARSE SOURCE MODE" in prompt
+    assert "1–2 коротких абзаца без `###`" in prompt
+
+
 @pytest.mark.asyncio
 async def test_g4_split_create_rich_facts_keeps_prompt_schema_fallback(monkeypatch):
     client = _FakeGemmaClient(

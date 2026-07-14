@@ -450,12 +450,18 @@ def build_channel_message_link(target_chat: str | int | None, message_id: int | 
         return f"https://t.me/{url_quote(raw[1:])}/{mid}"
     if raw.startswith("-100") and raw[4:].isdigit():
         return f"https://t.me/c/{raw[4:]}/{mid}"
-    if raw.startswith("https://t.me/") or raw.startswith("http://t.me/"):
+    if raw.startswith(
+        ("https://t.me/", "http://t.me/", "https://telegram.me/", "http://telegram.me/")
+    ):
         base, _, _fragment = raw.partition("?")
-        if re.fullmatch(r"https?://t\.me/[A-Za-z0-9_]+", base):
-            return f"{base}/{mid}"
-        if re.fullmatch(r"https?://t\.me/c/\d+", base):
-            return f"{base}/{mid}"
+        match = re.fullmatch(
+            r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)", base, flags=re.I
+        )
+        if match:
+            return f"https://t.me/{match.group(1)}/{mid}"
+        match = re.fullmatch(r"https?://(?:t\.me|telegram\.me)/c/(\d+)", base, flags=re.I)
+        if match:
+            return f"https://t.me/c/{match.group(1)}/{mid}"
         return None
     if re.fullmatch(r"[A-Za-z0-9_]+", raw):
         return f"https://t.me/{url_quote(raw)}/{mid}"

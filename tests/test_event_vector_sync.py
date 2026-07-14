@@ -126,6 +126,31 @@ def test_delete_stale_events_removes_embeddings_before_documents(monkeypatch):
     assert calls[1] == ("DELETE", "event_search_documents?event_id=in.(2)")
 
 
+def test_unknown_admission_is_not_tagged_as_ticketed():
+    event = {
+        "id": 6767,
+        "title": "Летний Экодвор",
+        "event_type": "фестиваль",
+        "city": "Калининград",
+        "ticket": {"kind": "status", "label": "Условия уточняются", "is_free": False},
+    }
+
+    tags = sync.event_tags(event, "festival")
+
+    assert "ticketed" not in tags
+    assert "free" not in tags
+
+
+def test_explicit_registration_is_tagged_as_ticketed():
+    event = {
+        "id": 42,
+        "title": "Событие по регистрации",
+        "ticket": {"kind": "registration", "href": "https://example.org/register"},
+    }
+
+    assert "ticketed" in sync.event_tags(event, "event")
+
+
 @pytest.mark.asyncio
 async def test_smart_update_fanout_enqueues_coalesced_vector_projection(monkeypatch, tmp_path):
     import main

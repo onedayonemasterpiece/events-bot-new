@@ -12,6 +12,7 @@
 - `docs/features/tourist-label/README.md` — туристическая метка (ручная разметка + экспорт)
 - `docs/features/llm-gateway/README.md` — управление лимитами Google AI (Gemma/Gemini) и ретраи
 - `docs/features/smart-event-update/README.md` — единый Smart Update (match/merge, лог фактов, Telegraph)
+- `docs/features/event-media/README.md` — единый автоматический Smart Update gate для event images и approved public projection
 - `docs/features/linked-events/README.md` — связанные события (серии “то же событие в другие даты” + UI «Другие даты»)
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily
@@ -43,7 +44,7 @@
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
-- `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking
+- `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`
 - `docs/features/event-favorites-calendar/README.md` — durable favorite/calendar state and lifecycle semantics
 - `docs/features/personal-email-announcements/README.md` — opt-in recommendation email with exactly three events plus a personal page
 - `docs/features/event-email-notifications/README.md` — transactional followed-event confirmation/reminder/cancellation/reschedule email

@@ -432,9 +432,14 @@ async def _persist_rehydrated_photo_urls(
                 fresh = await session.get(Event, int(event_id))
                 if fresh is None:
                     return False
-                fresh.photo_urls = list(photo_urls)
-                fresh.photo_count = len(photo_urls)
-                session.add(fresh)
+                from event_media import ingest_event_media_urls
+
+                await ingest_event_media_urls(
+                    session,
+                    int(event_id),
+                    photo_urls,
+                    source="video_announce_rehydrate",
+                )
                 await session.commit()
             return True
         except OperationalError as exc:
@@ -518,8 +523,7 @@ async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
         else:
             refreshed = []
         if refreshed:
-            ev.photo_urls = list(refreshed)
-            ev.photo_count = len(refreshed)
+            approved_urls = list(refreshed)
             if db is not None:
                 persisted = await _persist_rehydrated_photo_urls(
                     db,
@@ -535,17 +539,29 @@ async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
                         len(refreshed),
                     )
                     return []
+                from event_media import get_event_gallery_urls
+
+                async with db.get_session() as session:
+                    approved_urls = await get_event_gallery_urls(
+                        session,
+                        int(getattr(ev, "id", 0) or 0),
+                        legacy_fallback=False,
+                    )
+                if not approved_urls:
+                    return []
                 await _schedule_rehydrated_media_projection_repair(
                     db,
                     event_id=getattr(ev, "id", None),
                 )
+            ev.photo_urls = list(approved_urls)
+            ev.photo_count = len(approved_urls)
             logger.info(
                 "video_announce.popular_review: rehydrated poster urls event_id=%s source=%s count=%s",
                 getattr(ev, "id", None),
                 source_url,
                 len(refreshed),
             )
-            return refreshed
+            return approved_urls
     return []
 
 

@@ -14,7 +14,7 @@ from models import Event, EventPoster, EventSource
 from smart_event_update import (
     PosterCandidate,
     _apply_posters,
-    _dedup_near_duplicate_posters,
+    _dedup_poster_candidates_by_identity,
     _is_candidate_title_weak_for_llm_override,
     _is_generic_title_event_type_venue,
     _llm_recover_event_title,
@@ -93,49 +93,39 @@ def _poster(phash=None, ocr_title=None, supabase_url=None, catbox_url=None, sha2
     )
 
 
-def test_near_duplicate_posters_collapsed_keeping_best():
+def test_near_duplicate_posters_are_not_collapsed_before_vision_review():
     ph = "ab" * 32
     ph_near = ph[:-1] + "a"  # 1-bit difference from ph -> within threshold
     p1 = _poster(phash=ph, ocr_title="", supabase_url="u1", sha256="s1")
     p2 = _poster(phash=ph_near, ocr_title="Concert poster text", supabase_url="u2", sha256="s2")
-    out = _dedup_near_duplicate_posters([p1, p2])
-    assert len(out) == 1
-    # Higher-quality survivor (the one carrying OCR title) is kept.
-    assert out[0].ocr_title == "Concert poster text"
+    out = _dedup_poster_candidates_by_identity([p1, p2])
+    assert len(out) == 2
 
 
 def test_distinct_posters_preserved():
     p1 = _poster(phash="00" * 32, sha256="s1")
     p2 = _poster(phash="ff" * 32, sha256="s2")
-    out = _dedup_near_duplicate_posters([p1, p2])
+    out = _dedup_poster_candidates_by_identity([p1, p2])
     assert len(out) == 2
 
 
 def test_posters_without_phash_are_kept():
     p1 = _poster(phash=None, sha256="s1", catbox_url="c1")
     p2 = _poster(phash=None, sha256="s2", catbox_url="c2")
-    out = _dedup_near_duplicate_posters([p1, p2])
+    out = _dedup_poster_candidates_by_identity([p1, p2])
     assert len(out) == 2
 
 
 @pytest.mark.asyncio
-async def test_telegraph_rehydrate_fetches_single_source_when_event_has_no_media(
+async def test_media_rehydrate_does_not_refetch_ordinary_single_source_event(
     tmp_path,
     monkeypatch,
 ):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
-    async def fake_fetch(source_type, source_url, *, limit):
-        assert source_type == "telegram"
-        assert source_url == "https://t.me/source/1"
-        return [
-            PosterCandidate(
-                supabase_url="https://storage.example/p.webp",
-                sha256="sha-one",
-                phash="ab" * 32,
-            )
-        ]
+    async def fake_fetch(*_args, **_kwargs):
+        raise AssertionError("single-source events must not be re-fetched")
 
     monkeypatch.setattr(main, "_fetch_event_source_poster_candidates", fake_fetch)
 
@@ -175,14 +165,14 @@ async def test_telegraph_rehydrate_fetches_single_source_when_event_has_no_media
             )
         ).scalars().all()
 
-    assert added == 1
-    assert event.photo_urls == ["https://storage.example/p.webp"]
-    assert event.photo_count == 1
-    assert len(rows) == 1
+    assert added == 0
+    assert event.photo_urls == []
+    assert event.photo_count == 0
+    assert rows == []
 
 
 @pytest.mark.asyncio
-async def test_apply_posters_dedupes_legacy_photo_urls_by_phash(tmp_path, monkeypatch):
+async def test_apply_posters_replaces_legacy_projection_with_canonical_row(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -192,13 +182,6 @@ async def test_apply_posters_dedupes_legacy_photo_urls_by_phash(tmp_path, monkey
         + ("ab" * 32)
         + ".webp"
     )
-
-    async def fake_photo_hash(url):
-        if url == legacy_url:
-            return "ab" * 32
-        return su._extract_dhash_from_managed_photo_url(url)
-
-    monkeypatch.setattr(su, "_photo_url_dhash", fake_photo_hash)
 
     async with db.get_session() as session:
         event = Event(
@@ -240,9 +223,8 @@ async def test_apply_posters_dedupes_legacy_photo_urls_by_phash(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_apply_posters_backfills_eventposter_phash_and_prunes_duplicate_rows(
+async def test_apply_posters_never_deletes_rows_from_perceptual_hash_alone(
     tmp_path,
-    monkeypatch,
 ):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -253,13 +235,6 @@ async def test_apply_posters_backfills_eventposter_phash_and_prunes_duplicate_ro
         + ".webp"
     )
     raw_url = "https://vk.example/raw.jpg"
-
-    async def fake_photo_hash(url):
-        if url == raw_url:
-            return "ab" * 32
-        return su._extract_dhash_from_managed_photo_url(url)
-
-    monkeypatch.setattr(su, "_photo_url_dhash", fake_photo_hash)
 
     async with db.get_session() as session:
         event = Event(
@@ -307,12 +282,15 @@ async def test_apply_posters_backfills_eventposter_phash_and_prunes_duplicate_ro
             )
         ).scalars().all()
 
-    assert pruned == 1
+    assert pruned == 0
     assert changed is True
     assert event.photo_urls == [managed_url]
     assert event.photo_count == 1
-    assert len(rows) == 1
+    assert len(rows) == 2
     assert rows[0].supabase_url == managed_url
+    assert rows[0].review_status == "approved"
+    assert rows[1].catbox_url == raw_url
+    assert rows[1].review_status == "pending_review"
 
 
 @pytest.mark.asyncio

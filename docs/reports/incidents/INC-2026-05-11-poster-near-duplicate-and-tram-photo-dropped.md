@@ -98,3 +98,13 @@ The tram photo (`C75B5B35-…-big.jpg`, ocr_title `в ДЕПО`) is in `eventpos
 
 - This incident record sits in the index as the canonical regression contract for VK-near-duplicate posters and semantic poster relevance.
 - Any future change to the Telegraph render path must replay the 4727 fixture to prove no regression.
+
+## 2026-07-13 automated-gate hardening
+
+Perceptual hashes are now candidate evidence only: neither Smart Update nor
+Telegraph/TG/VK renderer physically prunes by Hamming distance. Exact raw/pixel
+SHA is deterministic; crop/re-encode and semantic relevance use automatic
+pairwise vision review. This preserves distinct tram/event photos while keeping
+unresolved candidates non-public. Telegraph is a read-only media consumer, so
+the 4727-style renderer mutation path no longer exists. Canonical contract:
+`docs/features/event-media/README.md`.

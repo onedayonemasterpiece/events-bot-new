@@ -37,6 +37,14 @@ def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:
     assert "instagram\\.com" in source
     assert "linktr\\.ee" in source
     assert "_is_disallowed_source_website_url" in source
+    assert "telegram\\.me" in source
+
+
+def test_tg_monitor_script_canonicalizes_telegram_me_linked_posts() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "(?:t\\.me|telegram\\.me)/[^/\\s]+/\\d+" in source
+    assert "'https://t.me/'" in source
 
 
 def test_strip_custom_emoji_preserves_meaningful_unicode_fallback() -> None:
@@ -117,6 +125,8 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
 
     assert "Never return whitespace-only strings." in source
     assert "Use evidence from both message text and OCR." in source
+    assert "If a named activity explicitly says its start time is being clarified" in source
+    assert "Do not copy the enclosing festival, fair, venue, or full-program hours into it." in source
     assert "Prefer filling location_name and location_address" in source
     assert 'Never output literal field-name placeholders like "location_address", "address", "location_name"' in source
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
@@ -1086,6 +1096,15 @@ def test_tg_monitor_runner_bootstraps_google_ai_bundle_for_kaggle_notebook() -> 
     assert "importlib.util.find_spec('google_ai')" in source
     assert "Path('/kaggle/input')" in source
     assert "tg_monitor.google_ai bootstrap" in source
+
+
+def test_tg_monitor_does_not_promote_sole_donation_link_to_ticket() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "Поддержать" in source
+    assert "Donation/fundraiser/project-support" in source
+    assert "A sole external URL" in source
+    assert "if len(cands) == 1" not in source[source.index("def _pick_link"):source.index("def _more_specific_ticket_link")]
 
 
 def test_tg_monitor_title_prompt_prefers_caption_event_name_over_poster_slogan() -> None:

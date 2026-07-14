@@ -446,6 +446,8 @@ features:
   site_user_identity:
     status: search_only_yandex_global_identity_shell_missing
     docs: docs/features/site-user-identity/README.md
+    vk_message_link_postrelease: docs/features/site-user-identity/vk-message-link.md
+    vk_personal_data_store: ydb_ru_central1_isolated
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_search: docs/features/unsigned-personalization/authorized-event-search.md
     related_favorites: docs/features/event-favorites-calendar/README.md
@@ -466,6 +468,7 @@ features:
       manual_email_code_or_link: design
       manual_email_localstorage_reuse: design
       profile_linking: design
+      vk_message_link_and_friend_signals: postrelease_design
 
   event_favorites_calendar:
     status: design_with_ics_preview
@@ -640,6 +643,15 @@ features:
       - smart_event_update.py
       - models.py
       - db.py
+  event_media:
+    status: implemented
+    docs: docs/features/event-media/README.md
+    audit_runbook: docs/operations/event-image-duplicate-audit.md
+    entrypoints:
+      - event_media.py
+      - smart_event_update.py
+      - scripts/apply_event_media_audit_cleanup.py
+      - scripts/stage_event_media_review_backfill.py
   linked_events:
     status: implemented
     docs: docs/features/linked-events/README.md

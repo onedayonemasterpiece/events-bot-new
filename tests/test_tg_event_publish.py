@@ -1,9 +1,10 @@
 from types import SimpleNamespace
+import json
 
 import pytest
 
 import main
-from models import PromoActivity, PromoCampaign, PromoTarget
+from models import EventSource, PromoActivity, PromoCampaign, PromoTarget
 from promo import PROMO_SURFACE_TG_BUTTON_HIGHLIGHT, PROMO_TG_BUTTON_HIGHLIGHT_PROFILE
 
 
@@ -118,6 +119,19 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
         '<a href="https://vk.ru/im/channels/-239844596">Вконтакте</a>'
     ) in text
     assert "Подписаться" not in text
+
+
+def test_build_tg_event_announcement_does_not_repeat_city_as_venue() -> None:
+    event = _event(
+        location_name="Янтарный",
+        location_address=None,
+        city="Янтарный",
+    )
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert "📍 Янтарный" in text
+    assert "📍 Янтарный, #Янтарный" not in text
 
 
 def test_tg_event_hashtag_line_drops_long_title_like_festival_slug():
@@ -456,31 +470,6 @@ def test_tg_event_utility_hashtags_ignore_conflicting_description():
     assert "#концерт" not in text
 
 
-def test_tg_event_utility_fallback_is_practical_not_generic_question():
-    text = (
-        "Собранное сырье будет направлено на перерабатывающее предприятие. "
-        "От одного физического лица принимается не более 4 шин."
-    )
-    event = _event(title="Прием шин", source_text=text)
-
-    hook = main._fallback_tg_event_hook_text(event, text)
-
-    assert "до 4 чистых шин" in hook
-    assert not hook.startswith("Что здесь стоит увидеть?")
-
-
-def test_tg_event_fallback_skips_repetitive_openers():
-    event = _event(
-        short_description="Хотите камерный вечер в музее?",
-        search_digest="Редкая камерная программа в спокойном формате.",
-        source_text="Готовы услышать редкую программу?",
-    )
-
-    hook = main._fallback_tg_event_hook_text(event, event.source_text)
-
-    assert hook == "Редкая камерная программа в спокойном формате."
-
-
 @pytest.mark.asyncio
 async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     import google_ai
@@ -491,18 +480,44 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
         "лица принимается не более 4 шин."
     )
     event = _event(title="Прием шин", source_text=source)
+    clients = []
 
     class FakeGoogleAIClient:
         def __init__(self, *args, **kwargs):
-            pass
+            self.fallback_models = ["gemini-3.1-flash-lite"]
+            self.max_retries = 3
+            clients.append(self)
 
         async def generate_content_async(self, **kwargs):
             prompt = kwargs["prompt"]
+            assert kwargs["model"] == "gemini-3.1-flash-lite"
             assert "Вопрос не обязателен" in prompt
             assert "какую пользу это даёт" in prompt
+            assert "Любое обещание посетителю" in prompt
+            assert "Не переноси детали прошедшего события" in prompt
+            assert "без домысливания программы и активностей" in prompt
+            assert "evidence_quote" in prompt
+            assert kwargs["generation_config"]["response_mime_type"] == "application/json"
+            assert "response_json_schema" in kwargs["generation_config"]
+            assert "response_schema" not in kwargs["generation_config"]
+            assert self.fallback_models == []
+            assert self.max_retries == 1
             return (
-                "Можно сдать до 4 чистых шин на переработку: из них сделают "
-                "резиновую крошку и другие полезные материалы.",
+                json.dumps(
+                    {
+                        "sentences": [
+                            {
+                                "text": "Принимается не более 4 шин от одного человека; собранное сырьё направят на переработку.",
+                                "evidence_quote": (
+                                    "Собранное сырье будет направлено на перерабатывающее предприятие, "
+                                    "где из шин изготовят новые полезные продукты. От одного физического "
+                                    "лица принимается не более 4 шин."
+                                ),
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
                 {},
             )
 
@@ -510,8 +525,111 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
 
     hook = await main.build_tg_event_hook_text(event, source)
 
-    assert hook.startswith("Можно сдать")
+    assert len(clients) == 1
+    assert hook.startswith("Принимается не более 4 шин")
     assert "Что здесь стоит увидеть?" not in hook
+
+
+@pytest.mark.asyncio
+async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(monkeypatch):
+    import google_ai
+
+    source = "Музыканты исполнят редкую камерную программу."
+    event = _event(id=81, title="Камерный концерт", source_text=source)
+
+    class FailingLiteClient:
+        def __init__(self, *args, **kwargs):
+            self.fallback_models = ["gemma-4-31b-it"]
+            self.max_retries = 3
+
+        async def generate_content_async(self, **kwargs):
+            assert kwargs["model"] == "gemini-3.1-flash-lite"
+            assert self.fallback_models == []
+            assert self.max_retries == 1
+            raise RuntimeError("lite unavailable")
+
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FailingLiteClient)
+
+    async def fake_reserve(db, *, event_id):
+        assert db == "db"
+        assert event_id == 81
+        return 7
+
+    calls = []
+
+    async def fake_ask_4o(prompt, **kwargs):
+        calls.append((prompt, kwargs))
+        return json.dumps(
+            {
+                "sentences": [
+                    {
+                        "text": "Музыканты исполнят редкую камерную программу.",
+                        "evidence_quote": "Музыканты исполнят редкую камерную программу.",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(main, "_reserve_tg_event_4o_fallback", fake_reserve)
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    hook = await main.build_tg_event_hook_text(event, source, db="db")
+
+    assert hook.startswith("Музыканты исполнят")
+    assert len(calls) == 1
+    assert calls[0][1]["model"] == "gpt-4o"
+    assert calls[0][1]["allow_model_fallback"] is False
+    assert calls[0][1]["meta"]["consumer"] == "tg_event_publish_fallback"
+    assert calls[0][1]["meta"]["daily_request_no"] == 7
+
+
+@pytest.mark.asyncio
+async def test_tg_event_hook_has_no_deterministic_fallback_when_budget_exhausted(monkeypatch):
+    import google_ai
+
+    event = _event(id=82, title="Камерный концерт", source_text="Текст события")
+
+    class InvalidLiteClient:
+        def __init__(self, *args, **kwargs):
+            self.fallback_models = []
+            self.max_retries = 1
+
+        async def generate_content_async(self, **kwargs):
+            return "Хотите камерный вечер?", {}
+
+    monkeypatch.setattr(google_ai, "GoogleAIClient", InvalidLiteClient)
+    monkeypatch.setattr(
+        main,
+        "_reserve_tg_event_4o_fallback",
+        lambda *args, **kwargs: main.asyncio.sleep(0, result=None),
+    )
+
+    async def unexpected_4o(*args, **kwargs):
+        raise AssertionError("4o must not run without a reservation")
+
+    monkeypatch.setattr(main, "ask_4o", unexpected_4o)
+
+    with pytest.raises(main.TelegramEventPublicWriterUnavailable):
+        await main.build_tg_event_hook_text(event, event.source_text, db="db")
+
+
+@pytest.mark.asyncio
+async def test_tg_event_4o_fallback_budget_is_persisted_and_hard_capped(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "TG_EVENT_4O_FALLBACK_DAILY_LIMIT", 2)
+
+    assert await main._reserve_tg_event_4o_fallback(db, event_id=1) == 1
+    assert await main._reserve_tg_event_4o_fallback(db, event_id=2) == 2
+    assert await main._reserve_tg_event_4o_fallback(db, event_id=3) is None
+    rows = await db.exec_driver_sql(
+        "SELECT used, limit_value FROM llm_daily_request_budget "
+        "WHERE budget_key = ?",
+        (main.TG_EVENT_4O_FALLBACK_BUDGET_KEY,),
+    )
+    assert rows == [(2, 2)]
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -529,10 +647,19 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
             assert "до 500 символов" in prompt
             assert "Это промо-событие" in prompt
             assert "2-3 самые сильные конкретные причины" in prompt
-            assert kwargs["max_output_tokens"] == 260
+            assert kwargs["max_output_tokens"] == 360
             return (
-                "Редкая камерная программа для тех, кто хочет услышать живой ансамбль "
-                "в спокойном формате. В описании есть детали состава и настроения вечера.",
+                json.dumps(
+                    {
+                        "sentences": [
+                            {
+                                "text": "Музыканты играют редкую камерную программу.",
+                                "evidence_quote": "Музыканты играют редкую программу.",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
                 {},
             )
 
@@ -544,7 +671,38 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
         promo_highlight=True,
     )
 
-    assert hook.startswith("Редкая камерная программа")
+    assert hook.startswith("Музыканты играют")
+
+
+def test_tg_event_hook_payload_rejects_unrelated_tire_claim() -> None:
+    source = (
+        "На Летнем Экодворе будет специалистка Центра защиты леса. "
+        "Также собирают чистые материалы для повторного использования."
+    )
+    raw = json.dumps(
+        {
+            "sentences": [
+                {
+                    "text": "Можно сдать до 4 шин на переработку.",
+                    "evidence_quote": "чистые материалы для повторного использования",
+                }
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+    assert main._parse_tg_event_hook_payload(raw, evidence_corpus=source) is None
+
+
+def test_managed_vk_projection_is_not_event_source_evidence(monkeypatch) -> None:
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+
+    assert main._event_source_url_is_managed_output(
+        "https://vk.com/wall-231920894_7008"
+    ) is True
+    assert main._event_source_url_is_managed_output(
+        "https://vk.com/wall-132625599_17342"
+    ) is False
 
 
 def test_build_tg_promo_event_publication_formats_markdown_body():
@@ -605,7 +763,7 @@ async def test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption
     monkeypatch.setattr(
         main,
         "_schedule_tg_premium_emoji_editor",
-        lambda targets, *, context: scheduled.append((targets, context)),
+        lambda targets, *, context, **_kwargs: scheduled.append((targets, context)),
     )
     event = _event(
         title="Длинный промо-пост",
@@ -903,7 +1061,7 @@ async def test_same_source_feeding_series_replaces_vk_text_instead_of_appending(
     await db.close()
 
 
-def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
+def test_unique_tg_media_urls_only_applies_exact_url_guard():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"
         "0c9a2cd38cb24672c27010e8004d884b84434062a0d264522cc29896985624c0.webp"
@@ -919,11 +1077,12 @@ def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
 
     assert main._unique_tg_media_urls([base, near_duplicate, distinct, base]) == [
         base,
+        near_duplicate,
         distinct,
     ]
 
 
-def test_unique_tg_media_urls_dedupes_borderline_supabase_dhash_duplicates():
+def test_unique_tg_media_urls_does_not_make_borderline_perceptual_decision():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/8c/"
         "8c22d06b5b245a25046594720972196274e373193230d963c70b520848490504.webp"
@@ -933,11 +1092,11 @@ def test_unique_tg_media_urls_dedupes_borderline_supabase_dhash_duplicates():
         "8922d26b59245825046514720972196274e373193230d963c70b180048490504.webp"
     )
 
-    assert main._unique_tg_media_urls([base, near_duplicate]) == [base]
+    assert main._unique_tg_media_urls([base, near_duplicate]) == [base, near_duplicate]
 
 
 @pytest.mark.asyncio
-async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
+async def test_tg_event_publish_does_not_override_canonical_media_gate(monkeypatch):
     managed = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/80/"
         "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800.webp"
@@ -945,16 +1104,10 @@ async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
     vk_cdn = "https://sun9-78.userapi.com/s/v1/ig2/source-copy.jpg?cs=1080x0"
     event = _event(photo_urls=[managed, vk_cdn])
 
-    async def fake_compute_dhash(url):
-        if url == vk_cdn:
-            return "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800"
-        return main._extract_dhash_from_managed_photo_url(url)
-
     async def fake_hook_text(event_arg, source_text, **_kwargs):
         assert event_arg is event
         return "Короткий анонс события."
 
-    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_compute_dhash)
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
     materialize_calls = _patch_media_materializer(monkeypatch)
     bot = DummyTgBot()
@@ -968,11 +1121,11 @@ async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
 
     assert url == "https://t.me/c/1234567890/101"
     assert post_id == 101
-    assert mode == "photo_caption"
+    assert mode == "album_caption"
     assert source_hash
-    assert materialize_calls == [(managed, 0)]
-    assert len(bot.photos) == 1
-    assert not bot.media_groups
+    assert materialize_calls == [(managed, 0), (vk_cdn, 1)]
+    assert not bot.photos
+    assert len(bot.media_groups) == 1
 
 
 @pytest.mark.asyncio
@@ -1124,6 +1277,59 @@ async def test_tg_event_publish_fails_closed_when_materialized_media_unavailable
     assert not bot.messages
     assert not bot.photos
     assert not bot.media_groups
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_never_downgrades_to_text_in_strict_cdn_mode(
+    monkeypatch,
+):
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    event = _event(
+        photo_urls=[],
+        tg_event_post_id=77,
+        tg_event_post_mode="photo_caption",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+    )
+    bot = DummyTgBot()
+
+    with pytest.raises(RuntimeError, match="missing_approved_cdn_media"):
+        await main.publish_tg_event_announcement(event, "Описание", None, bot)
+
+    assert not bot.messages
+    assert not bot.photos
+    assert not bot.deleted
+
+
+@pytest.mark.asyncio
+async def test_strict_cdn_schedule_puts_media_repair_before_public_fanout(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls = []
+
+    async def fake_enqueue_job(_db, eid, task, **kwargs):
+        calls.append((task, kwargs.get("depends_on")))
+        return f"{task.value}:{eid}"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    event = _event(id=None, date="2027-08-20", photo_urls=[])
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert (main.JobTask.event_media_review, None) in calls
+    assert (
+        main.JobTask.telegraph_build,
+        [f"event_media_review:{event.id}"],
+    ) in calls
+    tg_calls = [item for item in calls if item[0] == main.JobTask.tg_event_publish]
+    assert tg_calls and f"telegraph_build:{event.id}" in tg_calls[0][1]
 
 
 @pytest.mark.asyncio
@@ -1439,6 +1645,7 @@ async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
 
     event = _event(
         id=None,
+        date=(main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat(),
         source_vk_post_url="https://vk.com/wall-231920894_2432",
     )
     async with db.get_session() as session:
@@ -1450,7 +1657,8 @@ async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
 
     assert any(task == main.JobTask.vk_sync for task, _, _ in tasks)
     tg_publish = [item for item in tasks if item[0] == main.JobTask.tg_event_publish][0]
-    assert f"vk_sync:{event.id}" in tg_publish[1]
+    # Telegram publishing is deliberately independent from VK retries/captcha.
+    assert f"vk_sync:{event.id}" not in tg_publish[1]
 
 
 @pytest.mark.asyncio
@@ -1470,6 +1678,79 @@ async def test_managed_vk_post_with_missing_expected_photo_is_incomplete(monkeyp
 
     assert await main._managed_vk_post_state(event) == (True, False)
     assert not await main._event_has_existing_managed_vk_post(event)
+
+
+@pytest.mark.asyncio
+async def test_recover_managed_vk_live_url_persists_unique_title_date_match(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+
+    event = _event(
+        id=None,
+        source_vk_post_url="https://vk.com/wall-231920894_7266",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+        session.add(
+            EventSource(
+                event_id=event_id,
+                source_type="vk",
+                source_url="https://vk.com/wall-231920894_7266",
+            )
+        )
+        await session.commit()
+
+    async def fake_state(ev):
+        return False, False
+
+    async def fake_find(ev, *, owner_id, db, bot):
+        assert owner_id == -231920894
+        return {"id": 7269, "text": "Камерный концерт\n\n\U0001f4c5 20 июня 19:00"}
+
+    monkeypatch.setattr(main, "_managed_vk_post_state", fake_state)
+    monkeypatch.setattr(main, "_find_unique_live_managed_vk_item_for_event", fake_find)
+
+    assert await main._recover_managed_vk_live_url(db, event, bot=None)
+    assert event.source_vk_post_url == "https://vk.com/wall-231920894_7269"
+    async with db.get_session() as session:
+        saved = await session.get(main.Event, event_id)
+        source_urls = list(
+            (
+                await session.execute(
+                    main.select(EventSource.source_url).where(EventSource.event_id == event_id)
+                )
+            ).scalars()
+        )
+    assert saved.source_vk_post_url == "https://vk.com/wall-231920894_7269"
+    assert source_urls == ["https://vk.com/wall-231920894_7269"]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_live_managed_vk_item_recovery_fails_closed_when_ambiguous(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_vk_wall_get_actors",
+        lambda owner_id: [SimpleNamespace(kind="user", token="user-token", label="user")],
+    )
+    expected = "Камерный концерт\n\n\U0001f4c5 20 июня 19:00\n\U0001f4cd Дом искусств"
+
+    async def fake_vk_api(method, params, *args, **kwargs):
+        assert method == "wall.get"
+        return {"response": {"items": [{"id": 7268, "text": expected}, {"id": 7269, "text": expected}]}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    item = await main._find_unique_live_managed_vk_item_for_event(
+        _event(), owner_id=-231920894, db=None, bot=None
+    )
+    assert item is None
 
 
 @pytest.mark.asyncio

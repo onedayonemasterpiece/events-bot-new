@@ -92,6 +92,10 @@
   - если в fallback сломалась загрузка poster media в Catbox/Supabase, импорт не обнуляет иллюстрации: используется прямой CDN URL целевого Telegram media (`cdn*.telesco.pe`) как последний аварийный fallback.
   - `linked_source_urls` теперь обогащают медиа события: сервер пытается подтянуть афиши из linked Telegram постов (сначала из того же `telegram_results.json`, затем через `t.me/s/...` fallback) и добавляет их в candidate до Smart Update.
 - `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам. Эти вспомогательные linked-pass вызовы подавляют `vk_sync`, потому что публикационную задачу должен ставить только основной источник события.
+- Публичные Telegram URL принимаются с host `t.me` и `telegram.me` на source-add, linked-post,
+  Smart Update/source identity, media recovery, festival queue и operator lookup границах.
+  Любой принятый alias перед сохранением канонизируется в `https://t.me/...`; producer и public
+  output также пишут только `t.me`, поэтому смена host не создаёт дубль источника/события.
 - Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
@@ -125,6 +129,7 @@
   - compact theatre lines вида `17.05 | GROZA` трактуются как date marker + title, не как `time=17:05`;
   - service/digest headings вроде `неделя в театре`, `афиша`, `репертуар`, `анонс` не считаются attendee-facing title, если рядом есть реальное название события;
   - если producer всё равно вернул `events=[]` для structurally clear single-event post с датой, временем и ticket/venue evidence, запускается узкий LLM single-event rescue. Сервер дополнительно сохраняет диагностический `telegram_scanned_message.error=producer_zero_events:clear_event_signals`, чтобы DB-аудит видел “producer false negative”, а не “пост не сканировался”; такая строка допускает переобработку, когда новый producer output уже содержит events.
+- После `INC-2026-07-14-ecodvor-unknown-start-time-cursor` parent/programme window не становится временем вложенной активности: если у мастер-класса/лекции прямо сказано, что время начала уточняется, producer и Smart Update возвращают неизвестное время, даже когда тот же пост даёт часы всего фестиваля. Подтверждённый LLM anchor-review также может очистить уже сохранённое неверное время при source-anchor merge. Это один дополнительный anchor-role LLM review только для exact TBD-кандидата, а не новый вызов на каждое событие; узкий server/merge guard лишь fail-closed применяет подтверждённое решение и не извлекает смысл.
 - После `INC-2026-05-02-pre-daily-event-quality` prompt contract дополнительно закрепляет **event-local venue grounding**: в multi-event/digest/repost постах площадка, адрес и город берутся из ближайшего блока конкретного события, а source/default location используется только когда event-local блок не называет свою площадку. Литералы имён полей (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) считаются синтаксическими placeholders и должны стать пустыми строками, не публичными значениями.
 - После `INC-2026-06-24-future-event-date-default-venue-regressions` contract дополнительно закрепляет real-source date/default-location guard: русские числовые даты в мониторинге всегда трактуются как `DD.MM` (`10.05` = 10 мая, не 10 сентября), даты словами/хэштегом (`26 июля`, `#13_июня`, `#21_июня`) являются authoritative event date и не переносятся в месяц публикации, а `гейт 2.6`, этажи, адреса, координаты, цены, телефоны и номера домов не могут становиться датой/временем. Для single-event output producer может узко исправить LLM-date drift только если в тексте/OCR есть ровно одна явная дата; это safety-net, не классификатор eventness. Если пост явно даёт offsite `Место:`/`📍`/адрес, эта event-local площадка/адрес выигрывает у `source.default_location` даже когда extractor изначально оставил venue пустым.
 - `Gemma 4` venue-review stage: если extracted `location_name` имеет широкий плохой shape (слишком длинная фраза, schedule row, короткий section label вроде `Кинозал:`, короткое предложение с точкой, non-location emoji/list bullet вроде `📩 ...`, topic fragment вроде `о концертах`) или источник имеет `default_location`, Kaggle делает отдельный LLM-pass только по `location_name/location_address/city` на original message + OCR + source context + `default_location`. После `INC-2026-05-09-event-location-alias-free-dup-regressions` stage также запускается, когда извлечённая площадка не grounded в тексте/OCR/source context, а рядом есть venue/address cues, или когда адрес есть в источнике, но не попал в structured fields. Детерминированная часть решает только “нужна проверка”; смысловую площадку выбирает LLM через быстрый Gemma 4 native-schema response. Это canonical fix path для произвольных фрагментов вроде случайно попавшей фразы из соседнего предложения и для похожих venue-alias drift случаев вроде `Дворец спорта «Янтарный»` vs `Дворец спорта «Юность»`.
@@ -173,6 +178,8 @@ Live validation (`2026-04-22`):
 
 Чтобы отчёт был объясним, бот выводит разбиение `Пропущено` по основным причинам (прошедшие/невалидные/без изменений и т.д.).
 Дополнительно бот отправляет оператору список **пропущенных/частично обработанных постов** (с ссылкой на пост, кратким фрагментом текста и breakdown причин), чтобы можно было вручную проверить “почему не импортировалось”.
+
+Успешно просмотренный producer-ом tail продвигает `telegram_source.last_scanned_message_id` даже для легитимных `events=[]`: такие сообщения не отправляются в Smart Update и не создают metrics/scanned rows, но не должны повторно сжигать media/LLM quota на следующем ежедневном запуске. Event-like `events=[]` по-прежнему получают durable `producer_zero_events` diagnostic.
 
 Также мониторинг может сканировать сообщения «на несколько дней назад» (для обновления просмотров/лайков).
 Такие сообщения **не прогоняются через Smart Update повторно** (идемпотентность по `message_id`), а учитываются как `Посты только для метрик` в отчёте.
@@ -235,7 +242,7 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - В `DEV_MODE!=1` DEV-режим не показывается в UI и отклоняется на уровне callback/task, даже если callback вызван вручную.
 - Планировщик (`scheduling.py`) — ежедневный запуск по ENV.
 
-Канонический список источников (prod/test) и их настройки: `docs/features/telegram-monitoring/sources.yml` (см. также `docs/features/telegram-monitoring/sources.md`).
+Канонический список источников (prod/test) и их настройки: `docs/features/telegram-monitoring/sources.yml` (см. также `docs/features/telegram-monitoring/sources.md`). В список входит официальный `@ecodvor39` с `high` trust и без `default_location`, чтобы площадка оставалась source-grounded.
 
 ## Основные модули
 
@@ -565,3 +572,13 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
 ## Отложенное обновление страниц
 
 Telegram Monitoring может обновлять/создавать много событий за один запуск, поэтому обновления month/weekend страниц делаются **отложенно и накопительно** (debounce 15 минут после последнего изменения). Каноническое описание механизма — в `docs/features/smart-event-update/README.md` («Отложенное обновление страниц (debounce)»).
+
+### Source-grounded admission links (2026-07-14)
+
+Telegram Monitor may emit `ticket_link` only when the source labels the URL as registration,
+ticket purchase, booking, or an equivalent attendee-admission action. A sole external URL is
+not evidence of admission. Links labelled donation/support/help/fundraising (including a bank
+recipient/payment page) must remain ordinary source links unless the same source explicitly
+labels that exact URL as attendee payment. The server import repeats this fail-closed check so
+a producer mistake cannot turn organizer donations into “registration”. The generated Kaggle
+notebook must remain synchronized with `telegram_monitor.py` after this contract changes.

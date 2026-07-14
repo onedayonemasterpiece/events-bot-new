@@ -372,6 +372,23 @@ def test_build_vk_source_header_keeps_confirmed_time():
     assert any(line == "📅 28 июня 19:00" for line in lines)
 
 
+def test_build_vk_source_header_does_not_repeat_city_as_venue():
+    event = main.Event(
+        title="Выставка ретроавтомобилей",
+        description="desc",
+        source_text="src",
+        date="2026-07-18",
+        time="",
+        location_name="Янтарный",
+        city="Янтарный",
+    )
+
+    lines = main.build_vk_source_header(event)
+
+    assert "📍 Янтарный" in lines
+    assert "📍 Янтарный, #Янтарный" not in lines
+
+
 @pytest.mark.asyncio
 async def test_sync_vk_source_post_updates_short_link(monkeypatch):
     event = main.Event(

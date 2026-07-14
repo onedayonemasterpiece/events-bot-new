@@ -11,6 +11,12 @@
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 `/populyarnoe/` сейчас является только source-engagement preview: exporter отдаёт TG/VK counters, `service_likes_count` остаётся нулём, а Astro ранжирует локальной формулой. Публичный релиз требует, чтобы страница без собственного скоринга потребляла SHA-bound ordered projection общего [source + site engagement contract](../post-metrics/consolidated-event-engagement.md#shared-popular-event-projection); наличие общего `EventListItem` решает только отображение, но не консолидацию популярности.
 Для медиа export обязан передавать `image_text_mode` из существующего OCR/media-контура. В hero `ocr_text`/`unknown` идут в `poster-stage` (full poster on solid slab), `visual_only` — в `photo-cover`; в discovery cards `ocr_text`/`unknown` рендерятся в натуральном соотношении без crop/backdrop, `visual_only` допускает cover-кроп в вертикальной 4:5 карточке; date-listing thumbnails (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) являются компактным навигационным preview и используют crop в левой колонке, при этом detail page остаётся источником полного постера. Astro build сам OCR не запускает.
+Event gallery media имеет отдельный fail-closed CDN contract: exporter читает
+только approved `EventPoster.supabase_url` на `static.kenigevents.ru`, допускает
+только host-canonicalization raw URL текущего `kenigevents.ru` bucket и никогда
+не откатывается к `catbox_url`, source CDN, Supabase или legacy bucket. Silent
+rows исключаются тем же static predicate; продолжающиеся события остаются
+eligible по `end_date`.
 
 
 
@@ -127,6 +133,12 @@ Event facts should read as properties, not prose duplicates. Current UI policy:
 - Real production scan on 2026-06-28 found 385 future active rows with free/admission clues: `free_word=59`, `registration=34`, `booking/запись=25`, `comments=4`, `limited=18`, `donation=2`. This confirms that “free” is not a single state: it can mean open entry, registration, booking, comment signup, limited seats, donation, or mixed paid/free ranges.
 
 ## Media/gallery and Smart Update image metadata requirements
+
+Static exporter — read-only consumer [event-media approved projection](../event-media/README.md):
+он выбирает ровно один display URL на один `EventPoster`, не объединяет managed
+и source alternate locations и не добавляет `Event.photo_urls`, если approved
+poster rows уже существуют. `pending_review`, `duplicate`, `rejected` и
+`unavailable` никогда не входят в gallery.
 
 For events with multiple images, MVP must **not** auto-rotate the first-paint hero by default. The event page chooses one deterministic best hero image for first paint. A tap/click on the hero opens an explicit immersive fullscreen gallery; only inside this opened viewer `visual_only` photos may run a controlled auto-forward pan/advance sequence. Current v43 state machine: forward pan is `38% → 64%` object-position over `17.9s` (right-to-left visual motion), auto-advances by an `8.88s` timer so there is no long dead wait with `gallery-pan-forward` as a fallback, preloads and `decode()`s the next adjacent image slides before the timer fires so the transition does not start over a black empty slide, manual backward swipe/click sets `autoAdvance=false` and runs only the local reverse pan, and `prefers-reduced-motion` remains a hard guard. The final gallery slide can be an explicit CTA card (`Купить билет`, `В календарь`, `Смотреть похожее`), visibly labeled as a CTA, not disguised as another image. Pull-to-expand/top overscroll hero behavior is P1/P2 lab-only because it can conflict with browser pull-to-refresh and mobile address-bar gestures.
 

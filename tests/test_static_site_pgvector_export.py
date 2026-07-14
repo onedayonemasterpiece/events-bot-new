@@ -70,3 +70,11 @@ def test_build_gemma_related_audit_prompt_is_compact_and_xml_escaped() -> None:
     assert "confidence" in prompt
     assert "reason_codes" not in prompt
     assert len(prompt) < 1800
+
+
+def test_city_level_fallback_is_not_exported_as_a_venue() -> None:
+    exporter = _load_exporter_module()
+
+    assert exporter.drop_city_only_venue("Янтарный", "Янтарный") is None
+    assert exporter.drop_city_only_venue("  янтарный  ", "Янтарный") is None
+    assert exporter.drop_city_only_venue("Площадь Мастеров", "Янтарный") == "Площадь Мастеров"

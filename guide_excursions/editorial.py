@@ -99,7 +99,11 @@ def _normalize_booking_label(label: str | None, url: str | None) -> str | None:
     text = collapse_ws(label)
     href = collapse_ws(url)
     if href:
-        tg_match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]{4,64})", href, re.I)
+        tg_match = re.search(
+            r"(?:https?://)?(?:t\.me|telegram\.me)/([A-Za-z0-9_]{4,64})",
+            href,
+            re.I,
+        )
         if tg_match:
             return f"@{tg_match.group(1)}"
         if href.startswith("tel:"):
@@ -293,7 +297,11 @@ def build_booking_candidates(row: Mapping[str, Any]) -> list[dict[str, str]]:
         href = collapse_ws(str(link))
         if not href:
             continue
-        match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]{4,64})", href, re.I)
+        match = re.search(
+            r"(?:https?://)?(?:t\.me|telegram\.me)/([A-Za-z0-9_]{4,64})",
+            href,
+            re.I,
+        )
         if match:
             uname = match.group(1)
             add(f"@{uname}", f"https://t.me/{uname}", "source_about")
@@ -304,7 +312,7 @@ def build_booking_candidates(row: Mapping[str, Any]) -> list[dict[str, str]]:
     for uname in USERNAME_RE.findall(about_text):
         add(f"@{uname}", f"https://t.me/{uname}", "source_about")
     for href in URL_RE.findall(about_text):
-        if "t.me/" in href.lower():
+        if "t.me/" in href.lower() or "telegram.me/" in href.lower():
             continue
         add("Сайт / запись", href, "source_about")
     kind_rank = {"explicit": 0, "source_about": 1}
@@ -315,7 +323,7 @@ def build_booking_candidates(row: Mapping[str, Any]) -> list[dict[str, str]]:
         kind = collapse_ws(item.get("kind"))
         tel = 0 if href.startswith("tel:") and _is_mobile_phone(text) else 1
         any_tel = 0 if href.startswith("tel:") else 1
-        tg = 0 if "t.me/" in href.lower() else 1
+        tg = 0 if ("t.me/" in href.lower() or "telegram.me/" in href.lower()) else 1
         return (
             kind_rank.get(kind, 9),
             tel,
@@ -370,8 +378,12 @@ def _fallback_booking_line(row: Mapping[str, Any]) -> str | None:
         return booking_text
     booking_url = collapse_ws(str(row.get("booking_url") or ""))
     if booking_url:
-        if "t.me/" in booking_url.lower():
-            match = re.search(r"t\.me/([A-Za-z0-9_]{4,64})", booking_url, flags=re.I)
+        if "t.me/" in booking_url.lower() or "telegram.me/" in booking_url.lower():
+            match = re.search(
+                r"(?:t\.me|telegram\.me)/([A-Za-z0-9_]{4,64})",
+                booking_url,
+                flags=re.I,
+            )
             if match:
                 return f"@{match.group(1)}"
         if booking_url.startswith("tel:"):

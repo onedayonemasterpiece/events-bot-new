@@ -236,3 +236,12 @@ python kaggle/execute_gemma_key2_probe.py --env-file ".env copy"
 
 ## TODO / Risks
 - Дочистить оставшиеся direct-SDK inspect/probe scripts после Smart Update G4 rollout, чтобы удалить legacy `google.generativeai` fallback из runtime dependencies.
+
+## Event-media scoped vision consumer
+
+`event_media_review` uses the shared `GoogleAIClient`, but deliberately has a
+stricter envelope: one image pair per call, KEY4 only, no reserve overflow or
+local limiter fallback, 100 primary + 25 escalation calls per UTC day and at
+most three automatic attempts. Primary budget exhaustion does not consume the
+escalation allowance. Pair/result cache and daily counters live in Fly SQLite;
+unresolved media stays non-public. Full contract: [Event media](../event-media/README.md).

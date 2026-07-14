@@ -57,8 +57,13 @@ For ordinary managed VK source posts, `sync_vk_source_post` only blocked text-on
   - Promo VK publication deduping the same mirror pair and failing before `wall.post` if upload returns no attachments.
   - Ordinary VK source publishing for `Благотворительный концерт`-style VK-origin events failing before `wall.post` when media exists but upload returns no attachments.
 
-## 2026-07-13 release-baseline recurrence signal
+## 2026-07-13 automated-gate hardening
 
-The project owner reports that current event galleries still contain many duplicate images. This is a recurrence signal, not yet a quantified finding: the historical fixes covered specific Smart Update/publisher paths, but there is no exhaustive current production ledger joining legacy `Event.photo_urls`, `EventPoster`, downloaded bytes and final rendered galleries.
-
-Before public release, run the canonical [event image duplicate audit](../../operations/event-image-duplicate-audit.md) over the full eligible active/future inventory. The audit is read-only and must proceed from exact URL/path/poster hash through downloaded-byte SHA-256 and repository-compatible dHash candidates to recorded visual review of every multi-image event. Confirmed clusters must be assigned to a root-cause family and repaired/replayed in separate tasks; a one-off DB cleanup does not close this recurrence.
+The full production-snapshot audit proved this was not closed by publisher
+guards: `79/266` eligible events still had confirmed duplicate gallery refs.
+The new regression contract is the single Smart Update event-media gate:
+second+ images remain non-public until exact byte/pixel or bounded VLM review,
+and all renderers consume only approved rows. The dated cleanup is soft/status
+only with DB backups; Storage deletion is forbidden. Canonical implementation:
+`docs/features/event-media/README.md`. Release/deploy evidence is recorded only
+after the production cleanup and public-surface verification complete.

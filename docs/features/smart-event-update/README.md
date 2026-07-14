@@ -2,6 +2,18 @@
 
 Автоматический мердж события из разных источников без ручной модерации, с сохранением списка источников и защитой якорных полей.
 
+## Изображения: единый automatic gate
+
+Все новые event images входят через `_apply_posters()` этого pipeline. Второе и
+последующие logical media fail-closed остаются `pending_review`; exact raw/pixel
+SHA решается детерминированно, остальные пары — bounded one-pair VLM job с
+feature budgets и автоматическим retry. Только `approved` проецируется в
+`Event.photo_urls` и читается Telegraph/TG/VK/static. Каноника, все ingestion
+paths и rollout: [Event media](../event-media/README.md).
+В production тот же gate до approval обязан materialize каждый source poster в
+`static.kenigevents.ru`; existing-event ticket-status fast path не является
+исключением и также передаёт текущие parser photos в `_apply_posters()`.
+
 ## Fact-first (внедрено)
 
 Smart Update по умолчанию строит публичный текст (`description`, `short_description`, `search_digest`) по схеме **sources → facts → text** (вариант C+D из dry‑run), то есть **строго из извлечённых фактов**, а не из “сырых” текстов источников.
@@ -44,9 +56,29 @@ Managed VK publication idempotency includes postponed posts: when
 `wall.getById` cannot see a stored managed URL, the publisher checks the
 authenticated `wall.get(filter=postponed)` collection before the legacy `all`
 fallback. A present postponed item is edited/reused, never recreated.
+VK may also assign a different public wall id during the postponed-to-live
+transition. Before any hash/idempotency decision, the worker then scans only a
+bounded recent managed-wall window and accepts a replacement id only for one
+unique item whose generated title and date header both match exactly. Zero or
+multiple matches fail closed; semantic/vector similarity is deliberately not
+used for this transport-identity repair. The recovered live URL is persisted
+on both the canonical event and its managed `event_source` row before the
+worker can publish again.
 Existence is not sufficient when canonical `photo_urls` are non-empty: a stored
 text-only live/postponed item is treated as an incomplete projection and is
 edited with media rather than skipped by the content-hash fast path.
+If only part of a late media set can still be uploaded, a text-only projection
+receives the successfully materialized subset; an already illustrated post
+keeps its existing attachments on the same partial failure. This prevents the
+old "preserve nothing" branch from completing a repair job without a photo.
+An actual Smart Update merge also re-arms the existing managed VK projection:
+the idempotent worker edits the resolved live/postponed post even when the prior
+`vk_sync` job is already `done`. A no-change replay keeps the older duplicate
+prevention contract and does not requeue a complete managed post. This keeps
+canonical date/time/location/text repairs consistent across VK without turning
+routine source rescans into repeated public edits. The managed VK content hash
+also includes the canonical ICS URL: adding or removing a calendar projection
+must re-render the calendar line even when the event body itself is unchanged.
 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
@@ -268,8 +300,9 @@ These guards do not rewrite event meaning. They either pass source-grounded LLM 
 - `/parse` (site parsers): источник сайта добавляется/мерджится через Smart Update, когда у события ещё нет этого `parser:<site>` источника.
 - Outgoing post jobs: `schedule_event_update_tasks()` ставит Telegraph rebuild, VK event post и Telegram event post ([Telegram Event Publishing](../tg-publishing/README.md)) для активных будущих/текущих событий.
   Для managed VK event posts `vk_sync` считается идемпотентным и по отложенным постам тоже: если `wall.getById`
-  не видит stored URL, но `wall.get` находит запись по тому же postponed/live id, Smart Update не создаёт второй
-  VK-пост для того же `event_id`.
+  не видит stored URL, но `wall.get` находит запись по тому же postponed/live id или единственный live-пост с
+  точным generated title + date header, Smart Update сохраняет актуальный live id и не создаёт второй VK-пост
+  для того же `event_id`. Неоднозначный поиск всегда fail-closed.
 
 ## Фестивали и фестивальная очередь
 
@@ -368,7 +401,7 @@ Smart Update содержит детекцию фестивалей как ча�
 - Curated aliases in `docs/reference/location-aliases.md` force canonical `location_name/location_address/city` from `docs/reference/locations.md` when the alias matches exactly. This is intentionally a reference-normalization guardrail, not a semantic matcher: broad/ambiguous room labels such as bare `Кинозал` still need source context or the Gemma 4 venue-review stage.
 - Для нормализации по `docs/reference/locations.md` действует guardrail: неизвестная площадка не должна схлопываться в известную запись по общему токену вроде `школа`; если в источнике есть явный конфликтующий адрес, сохраняем raw `location_name/location_address/city`, а не создаём гибрид из справочника и текста поста.
 - Географические слова `остров` и `озеро` также не являются identity-токенами площадки: `Верхнее озеро, остров Шайба` не может fuzzy-схлопнуться в `Остров Канта` только по слову `остров`.
-- После reference-нормализации подозрительные social-source локации проходят отдельный LLM-first `location_grounding_review`. Детерминированный слой только маршрутизирует случаи, где итоговая площадка/адрес отсутствуют в source+OCR или reference-recall нашёл более конкретную площадку; решение `keep|repair|uncertain` принимает LLM. `repair` принимается только с дословной source/OCR evidence quote и source-grounded новым значением, а provider/grounding uncertainty fail-closes до create/merge/publication. Это предотвращает подмены вида парк `Юность` → одноимённый дворец спорта, `остров Шайба` → `Остров Канта` и `Бастион Холл` → широкий квартал `Понарт`.
+- После reference-нормализации подозрительные social-source локации проходят отдельный LLM-first `location_grounding_review`. Детерминированный слой только маршрутизирует случаи, где итоговая площадка/адрес отсутствуют в source+OCR, reference-recall нашёл более конкретную площадку **или `location_name` совпал со структурированным названием фестиваля/праздника**; решение `keep|repair|uncertain` принимает LLM. Поэтому source-grounded фраза вроде `День города в Янтарном` не принимается за venue только из-за дословного присутствия в источнике: если источник подтверждает лишь город/посёлок, review fail-closes и не синтезирует площадку. `repair` принимается только с дословной source/OCR evidence quote и source-grounded новым значением, а provider/grounding uncertainty fail-closes до create/merge/publication. Это предотвращает подмены вида парк `Юность` → одноимённый дворец спорта, `остров Шайба` → `Остров Канта`, `Бастион Холл` → широкий квартал `Понарт` и occasion label → venue. Новый occasion-overlap trigger узкий и добавляет не более одного существующего grounding-вызова только кандидатам с совпадением structured festival context; это не per-event стадия и не deterministic semantic rewrite.
 - Цель: стабильный dedup/merge и единообразный summary-блок Telegraph.
 - Детерминированные ранние фильтры “не-событий” (без LLM), чтобы не создавать псевдо-ивенты:
   - `skipped_non_event:non_event_notice` (инфо‑объявления/госуслуги и т.п.)
@@ -641,3 +674,18 @@ with `scripts/inspect/audit_public_exhibition_duplicates.py`.  It scans the
 canonical SQLite event inventory read-only and emits JSON/Prometheus acceptance
 metrics, including
 `events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"}`.
+
+### Sparse-source and fact evidence contract (2026-07-14)
+
+Public facts extracted from a candidate, including facts returned by the merge stage, must be
+LLM-selected objects `{fact, evidence_quote}`. `evidence_quote` is an exact contiguous fragment
+of that candidate's text/OCR and must directly support the complete fact. A narrow verifier may
+reject an invalid contract, but it does not rewrite or infer meaning. In particular, the model
+must not infer an event's goal, format, benefits, regularity, or “continuation of a series” from
+the project name or topic.
+
+Thin teasers are allowed to yield only one to three facts. The fact-first writer then produces
+one or two short paragraphs without forced headings or filler; sparsity is an honest state, not
+a prompt to invent detail. Later concrete organizer sources can enrich the same event through
+the normal LLM merge. Managed VK publication URLs are output projections and are excluded from
+legacy `event_source` backfill, preventing published AI copy from becoming circular evidence.

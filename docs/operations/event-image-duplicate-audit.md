@@ -1,6 +1,6 @@
 # Event image duplicate audit and release gate
 
-> Status: **P0 public-release gate / current baseline unknown and reported degraded on 2026-07-13**. This is the canonical runbook and copy-paste prompt for auditing duplicate images in active/future event galleries. It is an investigation contract, not a cleanup script.
+> Status: **P0 public-release gate / 2026-07-13 baseline complete**. This is the canonical runbook for repeatable read-only audits. The implementation and soft-cleanup contract live in [Event media](../features/event-media/README.md); this document remains an investigation contract, not a cleanup script.
 
 ## Release invariant
 
@@ -180,4 +180,9 @@ The audit produces facts and root-cause clusters. Repair must then be split into
 5. source-boundary replay plus incident regression checks;
 6. repeat the full inventory audit and prove the release invariant.
 
-Manual visual review is required for the **current baseline** because the actual false-negative shape is unknown. The steady-state target is automatic detection/containment plus monitored ambiguous cases, not a permanent routine manual publication process.
+The 2026-07-13 baseline used complete contact-sheet review because the actual
+false-negative shape was unknown (`158/158` eligible multi-image events have a
+visual-review row). This is not a recurring operator process. Steady state is
+the automatic Smart Update gate: exact byte/pixel decisions plus bounded
+one-pair VLM adjudication; uncertain/exhausted cases stay non-public and retry
+automatically, with no manual publication queue.

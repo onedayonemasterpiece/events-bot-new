@@ -38,7 +38,7 @@ from models import (
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
 from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
-from telegram_sources import normalize_tg_username
+from telegram_sources import canonicalize_tg_url, normalize_tg_username, parse_tg_post_url
 from source_parsing.post_metrics import (
     PopularityBaseline,
     PopularityMarks,
@@ -547,6 +547,9 @@ def _clean_url(value: str | None) -> str | None:
         return None
     if re.match(r"(?i)^tg://user\?id=\d+$", raw):
         return raw
+    canonical_tg = canonicalize_tg_url(raw)
+    if canonical_tg:
+        raw = canonical_tg
     if not re.match(r"https?://", raw):
         return None
     if re.match(r"^https?://t\.me/addlist/", raw):
@@ -557,7 +560,7 @@ def _clean_url(value: str | None) -> str | None:
 _TRAILING_URL_PUNCT_RE = re.compile(r"[)\],.!?:;]+$", re.U)
 _BARE_URL_RE = re.compile(
     r"(?i)\b("
-    r"(?:t\.me|vk\.cc|clck\.ru|timepad\.ru|kassir\.ru|qtickets\.ru|ticketland\.ru|ticketscloud\.com|intickets\.ru)"
+    r"(?:t\.me|telegram\.me|vk\.cc|clck\.ru|timepad\.ru|kassir\.ru|qtickets\.ru|ticketland\.ru|ticketscloud\.com|intickets\.ru)"
     r"/[^\s<>()]+"
     r")"
 )
@@ -579,7 +582,7 @@ def _coerce_url(value: str | None) -> str | None:
         return raw
     if raw.lower().startswith(("http://", "https://")):
         return _clean_url(raw)
-    if raw.lower().startswith(("t.me/", "vk.cc/", "clck.ru/")):
+    if raw.lower().startswith(("t.me/", "telegram.me/", "vk.cc/", "clck.ru/")):
         return _clean_url(f"https://{raw}")
     m = _BARE_URL_RE.search(raw)
     if m:
@@ -663,6 +666,45 @@ def _link_is_ticketish(label: str | None, url: str | None) -> bool:
     )
 
 
+def _link_is_explicitly_non_admission(label: str | None, url: str | None) -> bool:
+    text = str(label or "").strip().casefold()
+    value = str(url or "").strip().casefold()
+    if any(
+        marker in text
+        for marker in (
+            "донат",
+            "пожертв",
+            "поддержать",
+            "поддержка проекта",
+            "сбор средств",
+            "donate",
+            "donation",
+            "support the project",
+        )
+    ):
+        return True
+    return any(domain in value for domain in ("boosty.to", "patreon.com"))
+
+
+def _ticket_link_is_explicitly_non_admission(
+    ticket_link: str | None,
+    message_links: list[Any],
+) -> bool:
+    current = _coerce_url(ticket_link)
+    if not current:
+        return False
+    key = current.casefold().rstrip("/")
+    for item in message_links or []:
+        if not isinstance(item, dict):
+            continue
+        url = _coerce_url(item.get("url") or item.get("link") or item.get("href"))
+        if not url or url.casefold().rstrip("/") != key:
+            continue
+        if _link_is_explicitly_non_admission(item.get("text"), url):
+            return True
+    return False
+
+
 def _is_more_specific_same_host_url(current: str | None, candidate: str | None) -> bool:
     cur = _coerce_url(current)
     cand = _coerce_url(candidate)
@@ -713,7 +755,11 @@ def _infer_ticket_link_from_message_links(
         else:
             url = _coerce_url(str(item or ""))
             label = None
-        if url and _link_is_public_ticket_candidate(url):
+        if (
+            url
+            and _link_is_public_ticket_candidate(url)
+            and not _link_is_explicitly_non_admission(label, url)
+        ):
             normalized.append({"url": url, "text": label})
     external = [item for item in normalized if "t.me/" not in str(item.get("url") or "").lower()]
     if current:
@@ -723,14 +769,10 @@ def _infer_ticket_link_from_message_links(
             if _is_more_specific_same_host_url(current, candidate):
                 return candidate
         return None
-    if len(external) == 1:
-        return external[0].get("url")
     ticketish = [item for item in external if _link_is_ticketish(item.get("text"), item.get("url"))]
     if len(ticketish) == 1:
         return ticketish[0].get("url")
     external_urls = [str(item.get("url") or "") for item in external if item.get("url")]
-    if len(external_urls) == 1:
-        return external_urls[0]
     # If there are multiple links, only pick when there is a single strong ticket-domain match.
     strong = [u for u in external_urls if _link_is_ticketish(None, u)]
     if len(strong) == 1:
@@ -768,17 +810,8 @@ def _extract_urls_from_text(text: str | None) -> list[str]:
 
 
 def _parse_tg_source_url(value: str | None) -> tuple[str | None, int | None]:
-    raw = _clean_url(value)
-    if not raw:
-        return None, None
-    m = re.search(r"t\.me/s/([^/]+)/([0-9]+)", raw, flags=re.IGNORECASE)
-    if not m:
-        m = re.search(r"t\.me/([^/]+)/([0-9]+)", raw, flags=re.IGNORECASE)
-    if not m:
-        return None, None
-    username = str(m.group(1) or "").strip() or None
-    message_id = _to_int(m.group(2))
-    return username, message_id
+    parsed = parse_tg_post_url(value)
+    return parsed if parsed else (None, None)
 
 
 def _normalize_video_status(value: Any) -> str | None:
@@ -1140,6 +1173,13 @@ def _source_text_explicitly_mentions_location(
 _SCHED_LINE_RE = re.compile(r"(^|\s)(\d{1,2})[./](\d{1,2})\s*\|", re.IGNORECASE)
 _SCHED_LINE_START_RE = re.compile(r"^\s*\d{1,2}[./]\d{1,2}\s*\|", re.IGNORECASE)
 _TIME_TOKEN_RE = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
+_EXPLICIT_UNKNOWN_START_TIME_RE = re.compile(
+    r"(?iu)\b(?:"
+    r"время\s+(?:начала|старта)|"
+    r"(?:точное\s+)?(?:начало|старт)"
+    r")\s+(?:пока\s+)?(?:уточняется|не\s+определен[оа]?|не\s+известн[оа]?|"
+    r"будет\s+(?:уточнен[оа]?|объявлен[оа]?|известн[оа]?))\b"
+)
 
 _RECURRING_WORDS_RE = re.compile(
     r"\b(ежедневн|кажд(ый|ая|ое|ую)\s+д(ень|ня)|по\s+будням|кажд(ый|ую)\s+"
@@ -1232,6 +1272,18 @@ def _time_is_supported_by_texts(time_value: str | None, *texts: str | None) -> b
     if not supported:
         return False
     return any(token in supported for token in wanted)
+
+
+def _source_explicitly_leaves_start_time_unknown(*texts: str | None) -> bool:
+    """Narrow fail-closed check for an explicitly TBD event start.
+
+    The producer/Smart Update LLM still owns time-role semantics. This guard only
+    prevents a concrete time elsewhere in the same post (for example the parent
+    festival window) from overwriting an exact source statement that the named
+    activity's start is not known yet.
+    """
+
+    return any(_EXPLICIT_UNKNOWN_START_TIME_RE.search(str(text or "")) for text in texts)
 
 
 def _time_value_matches_event_date_marker(time_value: str | None, event_date: str | None) -> bool:
@@ -2756,7 +2808,7 @@ def _event_local_location_candidate_ok(location_name: str | None, location_addre
     raw = str(location_name or "").strip()
     if not raw:
         return False
-    if "@" in raw or re.search(r"(?i)\bt\.me/", raw):
+    if "@" in raw or re.search(r"(?i)\b(?:t\.me|telegram\.me)/", raw):
         return False
     if (
         _looks_like_location_prose_fragment(raw)
@@ -3013,7 +3065,9 @@ _TICKET_CONTACT_LINE_RE = re.compile(
     r"(?iu)\b(билет\w*|вход\w*|регистрац\w*|запис(?:ь|аться)|брон(?:ь|ировать)|оплат\w*)\b"
 )
 _TG_HANDLE_IN_TEXT_RE = re.compile(r"(?i)@([a-z0-9_]{4,32})")
-_TG_LINK_IN_TEXT_RE = re.compile(r"(?i)(?:https?://)?t\.me/([a-z0-9_]{4,32})\b")
+_TG_LINK_IN_TEXT_RE = re.compile(
+    r"(?i)(?:https?://)?(?:t\.me|telegram\.me)/([a-z0-9_]{4,32})\b"
+)
 _PHONE_IN_TEXT_RE = re.compile(
     r"(?u)(?<!\d)(?:\+\s*7|8)\s*\(?\d{3}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)"
 )
@@ -3373,7 +3427,9 @@ def _normalize_source_suggestions(value: Any) -> dict[str, Any] | None:
         return None
     series = str(value.get("festival_series") or "").strip() or None
     website = _clean_url(str(value.get("website_url") or "").strip())
-    if website and re.match(r"^https?://(?:t\.me|telegra\.ph)/", website, flags=re.IGNORECASE):
+    if website and re.match(
+        r"^https?://(?:t\.me|telegram\.me|telegra\.ph)/", website, flags=re.IGNORECASE
+    ):
         website = None
     confidence = None
     try:
@@ -4358,8 +4414,19 @@ def _build_candidate(
             location_name = None
             location_address = None
 
+    message_link_items = _extract_message_link_items(message)
+    if ticket_link and _ticket_link_is_explicitly_non_admission(ticket_link, message_link_items):
+        logger.warning(
+            "telegram: dropped donation/support link from ticket_link source=%s message_id=%s title=%r ticket_link=%s",
+            username,
+            message_id,
+            title,
+            ticket_link,
+        )
+        ticket_link = None
+
     refined_ticket_link = _infer_ticket_link_from_message_links(
-        _extract_message_link_items(message),
+        message_link_items,
         current=ticket_link,
     )
     if refined_ticket_link and refined_ticket_link != ticket_link:
@@ -4375,7 +4442,7 @@ def _build_candidate(
     # Extract a booking contact from the message when ticket_link is missing.
     if not ticket_link:
         inferred_from_links = _infer_ticket_link_from_message_links(
-            _extract_message_link_items(message)
+            message_link_items
         )
         if inferred_from_links:
             ticket_link = inferred_from_links
@@ -4434,15 +4501,39 @@ def _build_candidate(
             )
 
     try:
+        message_event_count = len(message.get("events") or [])
+    except Exception:
+        message_event_count = 1
+    # Full-message TBD wording is safe only for a single extracted activity.
+    # In a multi-activity digest it may belong to a sibling, so the server
+    # leaves that semantic decision to the per-event producer/Smart Update LLM.
+    explicit_unknown_start_time = _source_explicitly_leaves_start_time_unknown(
+        raw_excerpt,
+        event_source_text_raw if message_event_count <= 1 else None,
+        event_source_text if message_event_count <= 1 else None,
+        message_text_s if message_event_count <= 1 else None,
+    )
+    if explicit_unknown_start_time and str(time_raw or "").strip():
+        logger.warning(
+            "telegram: cleared extracted time conflicting with explicit unknown start "
+            "source=%s message_id=%s title=%r time=%r",
+            username,
+            message_id,
+            title,
+            time_raw,
+        )
+        time_raw = ""
+
+    try:
         current_time = str(time_raw or "").strip()
-        if not current_time:
+        if not current_time and not explicit_unknown_start_time:
             inferred_start = _infer_time_from_event_text(event_source_text, event_date=str(date_raw).strip() if date_raw else None)
             if inferred_start:
                 time_raw = inferred_start
     except Exception:
         pass
 
-    if not str(time_raw or "").strip():
+    if not str(time_raw or "").strip() and not explicit_unknown_start_time:
         time_probe_text = str(event_source_text or "")
         raw_probe = event_source_text_raw.strip()
         if raw_probe and raw_probe not in time_probe_text:
@@ -4463,7 +4554,7 @@ def _build_candidate(
 
     # If time is still missing, try poster OCR (common in schedule posts where the body text
     # mentions only "в воскресенье" but the poster contains explicit date/time).
-    if not str(time_raw or "").strip():
+    if not str(time_raw or "").strip() and not explicit_unknown_start_time:
         try:
             probe_payload = assigned_posters_payload or posters_payload or []
             chunks: list[str] = []
@@ -4659,6 +4750,7 @@ def _build_candidate(
             "tg_city_overridden_by_default": bool(city_overridden_by_default),
             "tg_ticket_link_from_post_author": bool(ticket_link_from_post_author),
             "tg_time_is_default": bool(time_is_default),
+            "tg_time_explicitly_unknown": bool(explicit_unknown_start_time),
         }
     )
 
@@ -4877,7 +4969,10 @@ async def _reconcile_primary_import_vk_sync_jobs(db: Database) -> int:
                     & (JobOutbox.task == JobTask.vk_sync)
                     & (JobOutbox.status.in_([JobStatus.pending, JobStatus.running])),
                 )
-                .where(Event.source_post_url.like("%t.me/%"))
+                .where(
+                    Event.source_post_url.like("%t.me/%")
+                    | Event.source_post_url.like("%telegram.me/%")
+                )
                 .where(Event.date >= today)
                 .where(Event.lifecycle_status == "active")
                 .where(Event.silent.is_(False))
@@ -5283,7 +5378,6 @@ async def process_telegram_results(
                     events_imported=0,
                     error="producer_zero_events:clear_event_signals",
                 )
-                await _update_source_scan_meta(db, int(source.id), int(message_id))
                 report.skipped_posts.append(
                     {
                         "source_username": username,
@@ -5293,6 +5387,10 @@ async def process_telegram_results(
                         "text_excerpt": _build_excerpt(str(message.get("text") or ""), max_len=240),
                     }
                 )
+            # The producer successfully scanned this message even when it is a
+            # legitimate non-event. Advancing only for event-like zero results
+            # makes the source tail sticky and repeats LLM/media work every day.
+            await _update_source_scan_meta(db, int(source.id), int(message_id))
             continue
 
         processed_no += 1

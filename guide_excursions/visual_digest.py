@@ -29,6 +29,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
 from markup import format_tel_link_for_display
+from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
@@ -1134,11 +1135,7 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
 
 
 def _is_tg_post_url(url: str | None) -> bool:
-    raw = _plain(url)
-    if not raw.startswith("https://t.me/"):
-        return False
-    parts = raw.rstrip("/").split("/")
-    return len(parts) >= 5 and parts[-1].isdigit()
+    return parse_tg_post_url(_plain(url)) is not None
 
 
 def _source_post_url(payload_url: Any, fallback_url: Any) -> str | None:
@@ -1582,6 +1579,9 @@ def _ensure_https(url: str) -> str:
     raw = _plain(url)
     if not raw:
         return ""
+    canonical_tg = canonicalize_tg_url(raw)
+    if canonical_tg:
+        return canonical_tg
     if raw.lower().startswith(("http://", "https://", "tel:")):
         return raw
     if re.match(r"^(?:t\.me|telegram\.me|vk\.(?:com|ru)|www\.)/", raw, flags=re.I):
@@ -1640,7 +1640,9 @@ def _primary_link(row: Mapping[str, Any]) -> tuple[str | None, bool]:
     source = _plain(row.get("source_post_url") or row.get("channel_url"))
     if source:
         return source, False
-    if booking_text and re.search(r"https?://|t\.me|vk\.com|vk\.ru", booking_text, re.I):
+    if booking_text and re.search(
+        r"https?://|t\.me|telegram\.me|vk\.com|vk\.ru", booking_text, re.I
+    ):
         return booking_text, False
     return None, False
 
@@ -1723,8 +1725,11 @@ def _telegram_target_public_url(target_chat: str | int | None) -> str | None:
         return f"https://t.me/{raw[1:]}"
     if re.fullmatch(r"[A-Za-z0-9_]{5,}", raw):
         return f"https://t.me/{raw}"
-    if re.fullmatch(r"https?://t\.me/[A-Za-z0-9_]+", raw, flags=re.I):
-        return raw
+    match = re.fullmatch(
+        r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)", raw, flags=re.I
+    )
+    if match:
+        return f"https://t.me/{match.group(1)}"
     return None
 
 

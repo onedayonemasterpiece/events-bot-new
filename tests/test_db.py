@@ -105,3 +105,94 @@ async def test_event_topics_roundtrip(tmp_path):
         assert stored.topics == ["ART"]
         assert stored.topics_manual is True
 
+
+@pytest.mark.asyncio
+async def test_event_source_backfill_excludes_and_purges_managed_vk_projection(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("VK_AFISHA_GROUP_ID", "231920894")
+    db_path = tmp_path / "test.sqlite"
+    db = Database(str(db_path))
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO event(
+                title, description, date, time, location_name, source_text,
+                source_post_url, source_vk_post_url
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Managed projection",
+                "Projection text",
+                "2026-08-08",
+                "14:00",
+                "Test venue",
+                "Projection text",
+                "https://vk.com/wall-231920894_7008",
+                "https://vk.com/wall-231920894_7008",
+            ),
+        )
+        managed_event_id = (await (await conn.execute("SELECT last_insert_rowid()")).fetchone())[0]
+        await conn.execute(
+            """
+            INSERT INTO event_source(event_id, source_type, source_url)
+            VALUES(?, 'vk', ?)
+            """,
+            (managed_event_id, "https://vk.com/wall-231920894_7008"),
+        )
+        managed_source_id = (await (await conn.execute("SELECT last_insert_rowid()")).fetchone())[0]
+        await conn.execute(
+            """
+            INSERT INTO event_source_fact(event_id, source_id, fact, status)
+            VALUES(?, ?, 'Published AI projection', 'added')
+            """,
+            (managed_event_id, managed_source_id),
+        )
+        await conn.execute(
+            """
+            INSERT INTO event(
+                title, description, date, time, location_name, source_text,
+                source_vk_post_url
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "External source",
+                "Organizer text",
+                "2026-08-09",
+                "15:00",
+                "Test venue",
+                "Organizer text",
+                "https://vk.com/wall-24180215_123",
+            ),
+        )
+        external_event_id = (await (await conn.execute("SELECT last_insert_rowid()")).fetchone())[0]
+        await conn.commit()
+
+    await db.engine.dispose()
+    restarted = Database(str(db_path))
+    await restarted.init()
+    async with restarted.raw_conn() as conn:
+        managed_sources = await (
+            await conn.execute(
+                "SELECT id FROM event_source WHERE event_id=?", (managed_event_id,)
+            )
+        ).fetchall()
+        managed_facts = await (
+            await conn.execute(
+                "SELECT id FROM event_source_fact WHERE event_id=?", (managed_event_id,)
+            )
+        ).fetchall()
+        external_sources = await (
+            await conn.execute(
+                "SELECT source_url FROM event_source WHERE event_id=?", (external_event_id,)
+            )
+        ).fetchall()
+
+    await restarted.engine.dispose()
+    assert managed_sources == []
+    assert managed_facts == []
+    assert [row[0] for row in external_sources] == ["https://vk.com/wall-24180215_123"]

@@ -472,7 +472,7 @@ def _accept_booking_line_candidate(value: str | None, row: Mapping[str, Any]) ->
     if booking_url.startswith("tel:"):
         digits = re.sub(r"[^\d]", "", text)
         return 6 <= len(digits) <= 15 and len(text) <= 40
-    if booking_url.lower().startswith("https://t.me/"):
+    if booking_url.lower().startswith(("https://t.me/", "https://telegram.me/")):
         return bool(re.fullmatch(r"@[A-Za-z0-9_]{4,64}", text))
     return 1 <= _word_count(text) <= 8 and len(text) <= 80
 

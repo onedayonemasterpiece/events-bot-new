@@ -77,6 +77,11 @@ A production DB scan found **16 active future events** with the same dump in `ev
 
 - code: `google_ai/client.py`, `markup.py`, `smart_event_update.py`, `main.py` (`job_sync_vk_source_post`), `poster_media.py`, `vk_intake.py`, `media_dedup.py`.
 - env/config: `SMART_UPDATE_POSTER_NEAR_DUP_HAMMING`.
+
+> Superseded for media on 2026-07-13: Hamming thresholds are now evidence
+> only. `_apply_posters` and VK renderers no longer collapse by dHash; the
+> automatic `event_media_review` gate owns visual decisions. See
+> `docs/features/event-media/README.md`.
 - release: Fly app `events-bot-new-wngqia` via `flyctl deploy`.
 - external: VK `klgdevents` group, Telegraph.
 

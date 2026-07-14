@@ -429,8 +429,13 @@ def mem_info(label: str = "", update: bool = True) -> tuple[int, int]:
 
 
 def normalize_telegraph_url(url: str | None) -> str | None:
-    if url and url.startswith("https://t.me/"):
-        return url.replace("https://t.me/", "https://telegra.ph/")
+    if url and re.match(r"^https://(?:t\.me|telegram\.me)/", url, flags=re.IGNORECASE):
+        return re.sub(
+            r"^https://(?:t\.me|telegram\.me)/",
+            "https://telegra.ph/",
+            url,
+            flags=re.IGNORECASE,
+        )
     return url
 
 
@@ -7959,12 +7964,20 @@ async def update_source_post_keyboard(event_id: int, db: Database, bot: Bot) -> 
     if ev.source_post_url and ev.source_chat_id and ev.source_chat_id > 0:
         chat_match = None
         msg_id = None
-        m = re.match(r"https://t.me/c/([0-9]+)/([0-9]+)", ev.source_post_url)
+        m = re.match(
+            r"https://(?:t\.me|telegram\.me)/c/([0-9]+)/([0-9]+)",
+            ev.source_post_url,
+            flags=re.IGNORECASE,
+        )
         if m:
             cid, msg_id = m.groups()
             chat_match = int("-100" + cid)
         else:
-            m = re.match(r"https://t.me/([A-Za-z0-9_]+)/([0-9]+)", ev.source_post_url)
+            m = re.match(
+                r"https://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)/([0-9]+)",
+                ev.source_post_url,
+                flags=re.IGNORECASE,
+            )
             if m:
                 username, msg_id = m.group(1), int(m.group(2))
                 try:
@@ -8265,6 +8278,117 @@ def _calendar_schedule_is_supported(ev: Event) -> bool:
     return bool(parse_time_range(ev.time) and parse_iso_date(ev.date))
 
 
+def _event_has_ics_storage_projection(ev: Event) -> bool:
+    return bool(
+        str(getattr(ev, "ics_url", None) or "").strip()
+        or str(getattr(ev, "ics_hash", None) or "").strip()
+        or str(getattr(ev, "vk_ics_short_url", None) or "").strip()
+        or str(getattr(ev, "vk_ics_short_key", None) or "").strip()
+    )
+
+
+def _event_has_tg_ics_projection(ev: Event) -> bool:
+    return bool(
+        str(getattr(ev, "ics_post_url", None) or "").strip()
+        or getattr(ev, "ics_post_id", None)
+        or str(getattr(ev, "ics_file_id", None) or "").strip()
+    )
+
+
+async def _invalidate_ics_storage_projection(db: Database, event_id: int) -> bool:
+    """Clear an unsupported ICS projection and durably queue its object deletion."""
+
+    queued = False
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+        if not ev or not _event_has_ics_storage_projection(ev):
+            return False
+        old_url = str(ev.ics_url or "").strip()
+        if old_url:
+            try:
+                from supabase_storage import parse_storage_object_url
+
+                parsed = parse_storage_object_url(old_url)
+                if parsed:
+                    bucket, path = parsed
+                    await session.execute(
+                        text(
+                            "INSERT OR IGNORE INTO supabase_delete_queue(bucket, path) "
+                            "VALUES(:bucket, :path)"
+                        ),
+                        {"bucket": str(bucket), "path": str(path).lstrip("/")},
+                    )
+                    queued = True
+            except Exception:
+                logging.warning(
+                    "ics invalidation: failed to queue storage delete event_id=%s url=%s",
+                    event_id,
+                    old_url,
+                    exc_info=True,
+                )
+                raise
+        ev.ics_url = None
+        ev.ics_hash = None
+        ev.ics_updated_at = None
+        ev.vk_ics_short_url = None
+        ev.vk_ics_short_key = None
+        await session.commit()
+    logging.info(
+        "ics invalidation: storage projection cleared event_id=%s delete_queued=%s",
+        event_id,
+        int(queued),
+    )
+    return True
+
+
+async def _invalidate_tg_ics_projection(
+    db: Database,
+    bot: Bot,
+    event_id: int,
+) -> bool:
+    """Delete an unsupported calendar-channel document before clearing its ledger."""
+
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+    if not ev or not _event_has_tg_ics_projection(ev):
+        return False
+
+    post_id = int(getattr(ev, "ics_post_id", 0) or 0)
+    if post_id:
+        channel = await get_asset_channel(db)
+        if not channel:
+            raise RuntimeError("calendar asset channel unavailable for stale ICS cleanup")
+        try:
+            await bot.delete_message(chat_id=channel.channel_id, message_id=post_id)
+        except TelegramBadRequest as exc:
+            message = str(getattr(exc, "message", None) or exc).lower()
+            if "message to delete not found" not in message and "message not found" not in message:
+                raise
+
+    async with db.get_session() as session:
+        stored = await session.get(Event, event_id)
+        if stored:
+            stored.ics_file_id = None
+            stored.ics_post_hash = None
+            stored.ics_post_url = None
+            stored.ics_post_id = None
+            await session.commit()
+    logging.info(
+        "ics invalidation: telegram projection cleared event_id=%s post_id=%s",
+        event_id,
+        post_id or None,
+    )
+    try:
+        await update_source_post_keyboard(event_id, db, bot)
+    except Exception:
+        logging.warning(
+            "ics invalidation: source keyboard refresh failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+    return True
+
+
 def _mark_ics_skipped_invalid_schedule(progress, key: str, event: Event, exc: Exception) -> None:
     detail = f"{str(exc) or exc.__class__.__name__}: date={event.date!r} time={event.time!r}"
     if progress:
@@ -8448,6 +8572,11 @@ async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> b
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
             if _ics_build_error_is_permanent(e):
+                if _event_has_ics_storage_projection(ev):
+                    changed = await _invalidate_ics_storage_projection(db, event_id)
+                    if progress:
+                        progress.mark("ics_supabase", "removed_invalid_schedule", str(e))
+                    return changed
                 _mark_ics_skipped_invalid_schedule(progress, "ics_supabase", ev, e)
                 return False
             if progress:
@@ -8529,6 +8658,11 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
             if _ics_build_error_is_permanent(e):
+                if _event_has_tg_ics_projection(ev):
+                    changed = await _invalidate_tg_ics_projection(db, bot, event_id)
+                    if progress:
+                        progress.mark("ics_telegram", "removed_invalid_schedule", str(e))
+                    return changed
                 _mark_ics_skipped_invalid_schedule(progress, "ics_telegram", ev, e)
                 return False
             if progress:
@@ -8536,7 +8670,7 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
             raise
 
         ics_hash = hashlib.sha256(hash_source).hexdigest()
-        if ev.ics_hash == ics_hash and ev.ics_file_id and ev.ics_post_url:
+        if ev.ics_post_hash == ics_hash and ev.ics_file_id and ev.ics_post_url:
             if progress:
                 progress.mark("ics_telegram", "skipped_nochange", "no change")
             try:
@@ -8556,25 +8690,71 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
         file = types.BufferedInputFile(ics_bytes, filename=filename)
         caption, parse_mode = format_event_caption(ev)
         try:
-            async with span("tg-send"):
-                msg = await bot.send_document(
-                    channel.channel_id,
-                    file,
+            if ev.ics_post_id:
+                media = types.InputMediaDocument(
+                    media=file,
                     caption=caption,
                     parse_mode=parse_mode,
                 )
+                async with span("tg-send"):
+                    msg = await bot.edit_message_media(
+                        chat_id=channel.channel_id,
+                        message_id=int(ev.ics_post_id),
+                        media=media,
+                    )
+            else:
+                async with span("tg-send"):
+                    msg = await bot.send_document(
+                        channel.channel_id,
+                        file,
+                        caption=caption,
+                        parse_mode=parse_mode,
+                    )
         except TelegramBadRequest as e:
             # In local/dev/E2E we might have a prod DB snapshot where the bot has no access
             # to the configured channel. Don't retry these forever.
             if "chat not found" in (getattr(e, "message", "") or "").lower():
                 logline("ICS", event_id, "telegram skipped", reason="chat_not_found")
                 return False
-            async with span("tg-send"):
-                msg = await bot.send_document(
-                    channel.channel_id,
-                    file,
-                    caption=caption,
-                )
+            message = str(getattr(e, "message", None) or e).lower()
+            if ev.ics_post_id:
+                if "message is not modified" in message:
+                    async with db.get_session() as session:
+                        stored = await session.get(Event, event_id)
+                        if stored:
+                            stored.ics_post_hash = ics_hash
+                            await session.commit()
+                    if progress:
+                        progress.mark("ics_telegram", "skipped_nochange", "no change")
+                    try:
+                        await update_source_post_keyboard(event_id, db, bot)
+                    except Exception:
+                        logging.warning(
+                            "update_source_post_keyboard failed for %s",
+                            event_id,
+                            exc_info=True,
+                        )
+                    return False
+                if (
+                    "message to edit not found" in message
+                    or "message not found" in message
+                ):
+                    async with span("tg-send"):
+                        msg = await bot.send_document(
+                            channel.channel_id,
+                            file,
+                            caption=caption,
+                            parse_mode=parse_mode,
+                        )
+                else:
+                    raise
+            else:
+                async with span("tg-send"):
+                    msg = await bot.send_document(
+                        channel.channel_id,
+                        file,
+                        caption=caption,
+                    )
         except Exception as e:
             # Treat delivery issues as non-fatal to keep pipelines (monitoring/smart update)
             # running in dev environments.
@@ -8596,6 +8776,7 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
             obj = await session.get(Event, event_id)
             if obj:
                 obj.ics_file_id = tg_file_id
+                obj.ics_post_hash = ics_hash
                 obj.ics_post_url = tg_post_url
                 obj.ics_post_id = tg_post_id
                 await session.commit()
@@ -10159,6 +10340,7 @@ async def ask_4o(
     model: str | None = None,
     meta: Mapping[str, Any] | None = None,
     temperature: float = 0.0,
+    allow_model_fallback: bool = True,
 ) -> str:
     token = os.getenv("FOUR_O_TOKEN")
     if not token:
@@ -10182,6 +10364,11 @@ async def ask_4o(
         operation="ask",
         meta=meta,
     )
+    if not allow_model_fallback and selected_model != requested_model:
+        raise RuntimeError(
+            "Strict 4o request blocked by the daily token budget; "
+            f"requested={requested_model} selected={selected_model}"
+        )
     payload: dict[str, Any] = {
         "model": selected_model,
         "messages": messages,
@@ -12297,6 +12484,7 @@ async def process_request(callback: types.CallbackQuery, db: Database, bot: Bot)
                 ev.ics_url = None
                 ev.ics_file_id = None
                 ev.ics_hash = None
+                ev.ics_post_hash = None
                 ev.ics_updated_at = None
                 ev.vk_ics_short_url = None
                 ev.vk_ics_short_key = None
@@ -13784,84 +13972,33 @@ async def upsert_event_posters(
     event_id: int,
     poster_items: Sequence[PosterMedia] | None,
 ) -> None:
+    """Compatibility adapter; Smart Update remains the only poster writer."""
+
     if not poster_items:
         return
+    from smart_event_update import PosterCandidate, _apply_posters
 
-    existing = (
-        await session.execute(
-            select(EventPoster).where(EventPoster.event_id == event_id)
-        )
-    ).scalars()
-    existing_map = {row.poster_hash: row for row in existing}
-    seen: set[str] = set()
-    now = datetime.now(timezone.utc)
-
+    candidates: list[PosterCandidate] = []
     for item in poster_items:
-        digest = item.digest
-        if not digest and item.data:
-            digest = hashlib.sha256(item.data).hexdigest()
-        if not digest or digest in seen:
-            continue
-        seen.add(digest)
-        row = existing_map.get(digest)
+        digest = item.digest or (hashlib.sha256(item.data).hexdigest() if item.data else None)
         supabase_url = (getattr(item, "supabase_url", None) or "").strip() or None
-        if not supabase_url:
-            maybe = (getattr(item, "catbox_url", None) or "").strip()
-            if maybe and is_supabase_storage_url(maybe):
-                supabase_url = maybe
-        supabase_path = None
-        if supabase_url:
-            try:
-                from supabase_storage import parse_storage_object_url
-
-                parsed = parse_storage_object_url(supabase_url)
-                if parsed:
-                    _b, p = parsed
-                    supabase_path = p
-            except Exception:
-                supabase_path = None
-        prompt_tokens = item.prompt_tokens
-        completion_tokens = item.completion_tokens
-        total_tokens = item.total_tokens
-        if row:
-            if item.catbox_url:
-                row.catbox_url = item.catbox_url
-            if supabase_url:
-                row.supabase_url = supabase_url
-            if supabase_path:
-                row.supabase_path = supabase_path
-            if item.ocr_text is not None:
-                row.ocr_text = item.ocr_text
-            if item.ocr_title is not None:
-                row.ocr_title = item.ocr_title
-            if prompt_tokens is not None:
-                row.prompt_tokens = int(prompt_tokens)
-            if completion_tokens is not None:
-                row.completion_tokens = int(completion_tokens)
-            if total_tokens is not None:
-                row.total_tokens = int(total_tokens)
-            row.updated_at = now
-        else:
-            session.add(
-                EventPoster(
-                    event_id=event_id,
-                    catbox_url=item.catbox_url,
-                    supabase_url=supabase_url,
-                    supabase_path=supabase_path,
-                    poster_hash=digest,
-                    ocr_text=item.ocr_text,
-                    ocr_title=item.ocr_title,
-                    prompt_tokens=int(prompt_tokens or 0),
-                    completion_tokens=int(completion_tokens or 0),
-                    total_tokens=int(total_tokens or 0),
-                    updated_at=now,
-                )
+        catbox_url = (getattr(item, "catbox_url", None) or "").strip() or None
+        if not supabase_url and catbox_url and is_supabase_storage_url(catbox_url):
+            supabase_url, catbox_url = catbox_url, None
+        candidates.append(
+            PosterCandidate(
+                catbox_url=catbox_url,
+                supabase_url=supabase_url,
+                sha256=digest,
+                phash=getattr(item, "phash", None),
+                ocr_text=item.ocr_text,
+                ocr_title=item.ocr_title,
+                prompt_tokens=int(item.prompt_tokens or 0),
+                completion_tokens=int(item.completion_tokens or 0),
+                total_tokens=int(item.total_tokens or 0),
             )
-
-    stale_entries = [row for key, row in existing_map.items() if key not in seen]
-    for entry in stale_entries:
-        await session.delete(entry)
-
+        )
+    await _apply_posters(session, int(event_id), candidates)
     await session.commit()
 
 
@@ -14059,6 +14196,7 @@ async def enqueue_job(
     depends_on: list[str] | None = None,
     replace_depends_on: bool = False,
     next_run_at: datetime | None = None,
+    requeue_done: bool = False,
 ) -> str:
     async with db.get_session() as session:
         now = datetime.now(timezone.utc)
@@ -14119,7 +14257,11 @@ async def enqueue_job(
         job = _normalize_job(res.scalar_one_or_none())
         dep_str = ",".join(depends_on) if depends_on else None
         if job:
-            if job.status == JobStatus.done and task == JobTask.vk_sync:
+            if (
+                job.status == JobStatus.done
+                and task == JobTask.vk_sync
+                and not requeue_done
+            ):
                 if ev is None or await _event_has_existing_managed_vk_post(ev):
                     logline("ENQ", event_id, "skipped", job_key=job_key)
                     return "skipped"
@@ -14451,6 +14593,82 @@ async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
     return bool(exists and media_complete)
 
 
+async def _recover_managed_vk_live_url(
+    db: Database,
+    ev: Event,
+    *,
+    bot: Bot | None,
+) -> bool:
+    """Persist a changed live id after a postponed managed VK post publishes."""
+
+    if not _event_has_managed_vk_post(ev):
+        return False
+    exists, _ = await _managed_vk_post_state(ev)
+    if exists:
+        return False
+    current_url = str(getattr(ev, "source_vk_post_url", "") or "").strip()
+    ids = _vk_owner_and_post_id(current_url)
+    if not ids:
+        return False
+    item = await _find_unique_live_managed_vk_item_for_event(
+        ev,
+        owner_id=int(ids[0]),
+        db=db,
+        bot=bot,
+    )
+    if not item:
+        return False
+    live_id = int(item.get("id") or 0)
+    if live_id <= 0:
+        return False
+    live_url = f"https://vk.com/wall{int(ids[0])}_{live_id}"
+    if live_url == current_url:
+        return False
+
+    event_id = int(getattr(ev, "id", 0) or 0)
+    if event_id <= 0:
+        return False
+    async with db.get_session() as session:
+        from models import EventSource
+
+        stored = await session.get(Event, event_id)
+        if stored is None or not _event_has_managed_vk_post(stored):
+            return False
+        stored.source_vk_post_url = live_url
+        session.add(stored)
+        source_rows = list(
+            (
+                await session.execute(
+                    select(EventSource).where(
+                        EventSource.event_id == event_id,
+                        EventSource.source_url.in_([current_url, live_url]),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        has_live_source = any(row.source_url == live_url for row in source_rows)
+        for source_row in source_rows:
+            if source_row.source_url != current_url:
+                continue
+            if has_live_source:
+                await session.delete(source_row)
+            else:
+                source_row.source_url = live_url
+                session.add(source_row)
+                has_live_source = True
+        await session.commit()
+    ev.source_vk_post_url = live_url
+    logging.warning(
+        "vk.live-id recovery persisted event_id=%s old_url=%s live_url=%s",
+        event_id,
+        current_url,
+        live_url,
+    )
+    return True
+
+
 def _event_vk_publish_end_date(ev: Event) -> date | None:
     end_raw = (getattr(ev, "end_date", None) or "").strip()
     if end_raw:
@@ -14554,7 +14772,7 @@ def _event_start_has_passed_for_publication(
     return start_dt <= local_now
 
 
-VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v2"
+VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v4-city-location-and-exact-text-dedupe"
 
 
 def _tg_event_publish_window_hours() -> tuple[int, int]:
@@ -15252,7 +15470,12 @@ async def _should_skip_ticket_giveaway_publication(db: Database, event: Event) -
 
 
 async def schedule_event_update_tasks(
-    db: Database, ev: Event, *, drain_nav: bool = False, skip_vk_sync: bool = False
+    db: Database,
+    ev: Event,
+    *,
+    drain_nav: bool = False,
+    skip_vk_sync: bool = False,
+    refresh_existing_vk: bool = False,
 ) -> dict[JobTask, str]:
     eid = ev.id
     results: dict[JobTask, str] = {}
@@ -15282,18 +15505,50 @@ async def schedule_event_update_tasks(
             eid,
         )
         skip_vk_sync = True
+    media_dep_key: str | None = None
+    from event_media import event_media_require_cdn, is_event_media_cdn_url
+
+    event_photo_urls = [
+        str(value or "").strip()
+        for value in list(getattr(ev, "photo_urls", None) or [])
+        if str(value or "").strip()
+    ]
+    needs_media_reconcile = event_media_require_cdn() and (
+        not event_photo_urls
+        or any(not is_event_media_cdn_url(url) for url in event_photo_urls)
+    )
+    if needs_media_reconcile and "event_media_review" in JOB_HANDLERS:
+        media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
+        results[JobTask.event_media_review] = await enqueue_job(
+            db, eid, JobTask.event_media_review
+        )
     telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
     tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
     vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
     has_calendar_schedule = _calendar_schedule_is_supported(ev)
-    if (not disable_ics_jobs) and has_calendar_schedule and "ics_publish" in JOB_HANDLERS:
+    stale_ics_storage = (not has_calendar_schedule) and _event_has_ics_storage_projection(ev)
+    stale_tg_ics = (not has_calendar_schedule) and _event_has_tg_ics_projection(ev)
+    if (
+        (not disable_ics_jobs)
+        and (has_calendar_schedule or stale_ics_storage)
+        and "ics_publish" in JOB_HANDLERS
+    ):
         ics_dep = f"{JobTask.ics_publish.value}:{eid}"
         results[JobTask.ics_publish] = ics_dep
         await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
+    telegraph_deps = [key for key in (media_dep_key, ics_dep if stale_ics_storage else None) if key]
     results[JobTask.telegraph_build] = await enqueue_job(
-        db, eid, JobTask.telegraph_build, depends_on=None
+        db,
+        eid,
+        JobTask.telegraph_build,
+        depends_on=telegraph_deps or None,
+        replace_depends_on=True,
     )
-    if (not disable_ics_jobs) and has_calendar_schedule and "tg_ics_post" in JOB_HANDLERS:
+    if (
+        (not disable_ics_jobs)
+        and (has_calendar_schedule or stale_tg_ics)
+        and "tg_ics_post" in JOB_HANDLERS
+    ):
         tg_ics_deps = [telegraph_dep_key]
         if ics_dep:
             tg_ics_deps.append(ics_dep)
@@ -15309,9 +15564,20 @@ async def schedule_event_update_tasks(
         # keep `source_vk_post_url` pointing at the external source wall post;
         # those must still get a redactional post in `VK_EVENTS_GROUP_ID`, but
         # VK media/API failures must not block Telegram event announcements.
-        if not await _event_has_existing_managed_vk_post(ev):
+        if refresh_existing_vk or not await _event_has_existing_managed_vk_post(ev):
             results[JobTask.vk_sync] = vk_dep_key
-            await enqueue_job(db, eid, JobTask.vk_sync)
+            vk_enqueue_kwargs: dict[str, Any] = {
+                "requeue_done": refresh_existing_vk,
+            }
+            if stale_ics_storage and ics_dep:
+                vk_enqueue_kwargs["depends_on"] = [ics_dep]
+                vk_enqueue_kwargs["replace_depends_on"] = True
+            await enqueue_job(
+                db,
+                eid,
+                JobTask.vk_sync,
+                **vk_enqueue_kwargs,
+            )
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
         tg_event_deps = [telegraph_dep_key]
         if JobTask.tg_ics_post in results:
@@ -17039,6 +17305,7 @@ BACKOFF_SCHEDULE = [30, 120, 600, 3600]
 
 
 TASK_LABELS = {
+    "event_media_review": "Проверка изображений",
     "telegraph_build": "Telegraph (событие)",
     "vk_sync": "VK (событие)",
     "tg_event_publish": "Telegram (событие)",
@@ -17061,6 +17328,7 @@ TASK_LABELS = {
 # user-facing publish tasks to 1 hour so heavy operations
 # (vk_auto_import / nightly_page_sync) cannot starve them.
 JOB_TTL: dict[JobTask, int] = {
+    JobTask.event_media_review: 86400,
     JobTask.telegraph_build: 3600,
     JobTask.tg_event_publish: 3600,
     JobTask.tg_premium_emoji_edit: 3600,
@@ -17074,6 +17342,7 @@ JOB_TTL: dict[JobTask, int] = {
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
+    JobTask.event_media_review: 180,
     JobTask.telegraph_build: 900,
     JobTask.tg_event_publish: 180,
     JobTask.tg_premium_emoji_edit: 180,
@@ -17089,6 +17358,7 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
 DEFAULT_JOB_TTL = 3600
 DEFAULT_JOB_MAX_RUNTIME = 900
 EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
+    JobTask.event_media_review,
     JobTask.telegraph_build,
     JobTask.vk_sync,
     JobTask.tg_event_publish,
@@ -17400,6 +17670,7 @@ async def _run_due_jobs_once_locked(
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
     priority = {
+        JobTask.event_media_review: -2,
         JobTask.vk_sync: -1,
         JobTask.telegraph_build: 0,
         JobTask.tg_event_publish: 0,
@@ -17447,6 +17718,15 @@ async def _run_due_jobs_once_locked(
             event_id = int(j.event_id)
             added_at = tg_event_added_at.get(event_id)
             has_existing_tg_post = bool(tg_event_post_id.get(event_id))
+            payload = j.payload if isinstance(j.payload, dict) else {}
+            # A bounded, evidence-backed public repair must not sit forever
+            # behind the ordinary announcement/backfill lanes.  The regular
+            # Telegram spacing guard still applies, so this changes ordering,
+            # not the channel rate limit.  Producers may set this only for an
+            # already-published post whose public defect was independently
+            # confirmed.
+            if has_existing_tg_post and payload.get("public_repair_priority") is True:
+                return (task_priority, 0, j.id, 0)
             # When an old catch-up/backfill backlog is being throttled one post at
             # a time, fresh Smart Update imports must not be starved behind rows
             # that can be safely announced later. Within the fresh lane, newest
@@ -18146,7 +18426,11 @@ async def ensure_event_telegraph_link(e: Event, fest: Festival | None, db: Datab
 
 
 def _event_source_media_rehydrate_enabled() -> bool:
-    raw = (os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH") or "1").strip().lower()
+    raw = (
+        os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ENABLED")
+        or os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH")
+        or "1"
+    ).strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
 
@@ -18164,14 +18448,14 @@ async def _fetch_event_source_poster_candidates(
 
     Event sources are the durable evidence graph. Older imports, idempotent replays,
     or source-only merges may have kept the source URL/text while missing its media.
-    Telegraph rebuilds can safely repair that storage gap without changing event text.
+    The event-media outbox worker can repair that storage gap without changing event text.
     """
 
     url = (source_url or "").strip()
     stype = (source_type or "").strip().casefold()
     if not url:
         return []
-    if stype == "telegram" or "t.me/" in url:
+    if stype == "telegram" or "t.me/" in url or "telegram.me/" in url:
         try:
             from source_parsing.telegram.handlers import (
                 _fallback_fetch_posters_from_public_tg_page,
@@ -18228,7 +18512,7 @@ async def _fetch_event_source_poster_candidates(
             out.append(
                 PosterCandidate(
                     catbox_url=photo_url,
-                    sha256=_source_media_hash("vk-source-photo", photo_url),
+                    sha256=None,
                 )
             )
         return out
@@ -18241,6 +18525,13 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
     *,
     event_id: int,
 ) -> int:
+    """Reconcile missing multi-source media through Smart Update's media gate.
+
+    The historical name is kept for compatibility, but this function is invoked
+    by the event-media outbox job, never by the Telegraph renderer.
+    """
+
+    del ev
     if not _event_source_media_rehydrate_enabled():
         return 0
     try:
@@ -18254,137 +18545,83 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
         per_source_limit = 3
     per_source_limit = max(1, min(per_source_limit, 8))
 
-    try:
-        from models import EventPoster, EventSource
-    except Exception:
-        return 0
-
     source_rows = (
         await session.execute(
             select(EventSource.source_type, EventSource.source_url)
-            .where(EventSource.event_id == event_id)
+            .where(EventSource.event_id == int(event_id))
             .order_by(EventSource.imported_at.asc(), EventSource.id.asc())
             .limit(max_sources)
         )
     ).all()
-    if not source_rows:
-        return 0
-
-    source_urls = [
-        str(row[1] or "").strip()
-        for row in source_rows
-        if str(row[1] or "").strip()
-    ]
-    shared_source_urls: set[str] = set()
-    if source_urls:
-        source_counts = (
-            await session.execute(
-                select(
-                    EventSource.source_url,
-                    func.count(func.distinct(EventSource.event_id)),
-                )
-                .where(EventSource.source_url.in_(source_urls))
-                .group_by(EventSource.source_url)
-            )
-        ).all()
-        shared_source_urls = {
-            str(source_url or "").strip()
-            for source_url, event_count in source_counts
-            if str(source_url or "").strip() and int(event_count or 0) > 1
-        }
-
-    poster_rows = (
+    source_urls = [str(row[1] or "").strip() for row in source_rows if str(row[1] or "").strip()]
+    source_counts = (
         await session.execute(
-            select(EventPoster.poster_hash, EventPoster.catbox_url, EventPoster.supabase_url)
-            .where(EventPoster.event_id == event_id)
+            select(EventSource.source_url, func.count(func.distinct(EventSource.event_id)))
+            .where(EventSource.source_url.in_(source_urls))
+            .group_by(EventSource.source_url)
         )
     ).all()
-    existing_hashes = {
-        str(row[0] or "").strip()
-        for row in list(poster_rows or [])
-        if str(row[0] or "").strip()
+    shared_source_urls = {
+        str(source_url or "").strip()
+        for source_url, event_count in source_counts
+        if str(source_url or "").strip() and int(event_count or 0) > 1
     }
-    existing_urls = {
-        str(u or "").strip()
-        for row in list(poster_rows or [])
-        for u in (row[1], row[2])
-        if str(u or "").strip()
-    }
-    event_urls = {
-        str(u or "").strip()
-        for u in list(getattr(ev, "photo_urls", None) or [])
-        if str(u or "").strip()
-    }
-    existing_urls.update(event_urls)
 
-    # Avoid network calls on already-rich pages. When stored images are fewer than
-    # attached sources, the page may still miss source-specific illustrations.
-    if len(existing_urls) >= len(source_rows):
+    existing_count = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(EventPoster).where(
+                    EventPoster.event_id == int(event_id),
+                    EventPoster.review_status.in_(("approved", "pending_review")),
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    # INC-2026-05-05 still protects ordinary single-source rows from repeated
+    # aggregation.  A single-source event with no usable media is different:
+    # it must be allowed to recover through the same media gate.
+    if len(source_rows) < 2 and existing_count > 0:
+        return 0
+    if existing_count >= len(source_rows):
         return 0
 
-    added = 0
-    photo_urls = list(getattr(ev, "photo_urls", None) or [])
-    now = datetime.now(timezone.utc)
+    candidates: list[Any] = []
     for source_type, source_url in source_rows:
         source_url_clean = str(source_url or "").strip()
         if source_url_clean in shared_source_urls:
             logging.info(
-                "telegraph.source_media: skip shared multi-event source rehydrate event_id=%s source=%s",
+                "event_media.source_rehydrate: skip shared source event_id=%s source=%s",
                 event_id,
                 source_url_clean,
             )
             continue
-        candidates = await _fetch_event_source_poster_candidates(
-            str(source_type or ""),
-            source_url_clean,
-            limit=per_source_limit,
-        )
-        for poster in candidates:
-            display_url = str(
-                getattr(poster, "supabase_url", None)
-                or getattr(poster, "catbox_url", None)
-                or ""
-            ).strip()
-            if not display_url:
-                continue
-            digest = str(getattr(poster, "sha256", None) or "").strip()
-            if not digest:
-                digest = _source_media_hash("source-photo-url", display_url)
-            if digest in existing_hashes or display_url in existing_urls:
-                continue
-            session.add(
-                EventPoster(
-                    event_id=event_id,
-                    catbox_url=getattr(poster, "catbox_url", None),
-                    supabase_url=getattr(poster, "supabase_url", None),
-                    supabase_path=getattr(poster, "supabase_path", None),
-                    poster_hash=digest,
-                    phash=getattr(poster, "phash", None),
-                    ocr_text=getattr(poster, "ocr_text", None),
-                    ocr_title=getattr(poster, "ocr_title", None),
-                    prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
-                    completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
-                    total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
-                    updated_at=now,
-                )
+        candidates.extend(
+            await _fetch_event_source_poster_candidates(
+                str(source_type or ""),
+                source_url_clean,
+                limit=per_source_limit,
             )
-            existing_hashes.add(digest)
-            existing_urls.add(display_url)
-            if display_url not in photo_urls:
-                photo_urls.append(display_url)
-            added += 1
-    if added:
-        ev.photo_urls = photo_urls
-        ev.photo_count = len(photo_urls)
-        session.add(ev)
-        await session.flush()
-        logging.info(
-            "telegraph.source_media: rehydrated event_id=%s added_posters=%s sources=%s",
-            event_id,
-            added,
-            len(source_rows),
         )
-    return added
+    if not candidates:
+        return 0
+
+    from smart_event_update import _apply_posters
+
+    added, _urls, _preview, _rejected, _changed = await _apply_posters(
+        session,
+        int(event_id),
+        candidates,
+    )
+    await session.flush()
+    logging.info(
+        "event_media.source_rehydrate: reconciled event_id=%s candidates=%s added=%s sources=%s",
+        event_id,
+        len(candidates),
+        added,
+        len(source_rows),
+    )
+    return int(added)
 
 
 async def update_telegraph_event_page(
@@ -18402,7 +18639,7 @@ async def update_telegraph_event_page(
 
             def _infer_type(url: str) -> str:
                 u = (url or "").lower()
-                if "t.me/" in u:
+                if "t.me/" in u or "telegram.me/" in u:
                     return "telegram"
                 if "vk.com/wall" in u:
                     return "vk"
@@ -18414,6 +18651,13 @@ async def update_telegraph_event_page(
             if getattr(ev, "source_vk_post_url", None):
                 legacy_urls.append(str(ev.source_vk_post_url).strip())
             for url in [u for u in legacy_urls if u and u.startswith(("http://", "https://"))]:
+                if _event_source_url_is_managed_output(url):
+                    logging.info(
+                        "telegraph: skip managed VK projection in legacy source backfill event_id=%s source_url=%s",
+                        event_id,
+                        url,
+                    )
+                    continue
                 exists = await session.scalar(
                     select(func.count())
                     .select_from(EventSource)
@@ -18576,188 +18820,16 @@ async def update_telegraph_event_page(
                     summary.other_dates_more = int(more)
         except Exception:
             logging.warning("telegraph: failed to build other_dates for event %s", event_id, exc_info=True)
-        try:
-            await _rehydrate_missing_event_source_posters_for_telegraph(
-                session,
-                ev,
-                event_id=event_id,
-            )
-        except Exception:
-            logging.warning(
-                "telegraph: failed to rehydrate source posters for event %s",
-                event_id,
-                exc_info=True,
-            )
-        photos = list(ev.photo_urls or [])
-        # For rendering (Telegraph + Telegram cached previews), prefer Supabase when available.
-        # Catbox may be flaky (connection drops) and breaks Telegraph/Telegram previews when used
-        # as the only origin.
-        try:
-            poster_rows = (
-                await session.execute(
-                    select(
-                        EventPoster.catbox_url,
-                        EventPoster.supabase_url,
-                        EventPoster.ocr_title,
-                        EventPoster.ocr_text,
-                        EventPoster.updated_at,
-                        EventPoster.poster_hash,
-                        EventPoster.phash,
-                    ).where(EventPoster.event_id == event_id)
-                )
-            ).all()
-        except Exception:
-            poster_rows = []
-        prefer_supabase_raw = (os.getenv("TELEGRAPH_PREFER_SUPABASE") or "").strip().lower()
-        if prefer_supabase_raw in {"0", "false", "no", "off"}:
-            prefer_supabase = False
-        elif prefer_supabase_raw in {"1", "true", "yes", "on"}:
-            prefer_supabase = True
-        else:
-            # Default: prefer Supabase for stability.
-            prefer_supabase = True
-        poster_render_urls, exclude_urls = _select_eventposter_render_urls(
-            list(poster_rows or []), prefer_supabase=prefer_supabase
+        # Telegraph is a pure consumer of the approved canonical gallery.
+        # Source rehydration and duplicate adjudication run in event_media_review.
+        from event_media import get_event_gallery_urls
+
+        photos = await get_event_gallery_urls(
+            session,
+            int(event_id),
+            legacy_fallback=True,
         )
-        all_poster_urls: set[str] = set()
-        for catbox_url, supabase_url, _ocr_title, _ocr_text, _updated_at, _hash, _phash in list(poster_rows or []):
-            for u in (catbox_url, supabase_url):
-                u2 = (u or "").strip()
-                if u2:
-                    all_poster_urls.add(u2)
-        # If multiple posters are present (common for a single VK post that describes
-        # several events), prioritize the poster that best matches the event's title/date/time.
-        # This reduces cases where a wrong poster becomes the Telegraph cover.
-        if len(poster_render_urls) > 1 and poster_rows:
-            try:
-                url_to_ocr: dict[str, tuple[str | None, str | None]] = {}
-                for (
-                    catbox_url,
-                    supabase_url,
-                    ocr_title,
-                    ocr_text,
-                    _updated_at,
-                    _hash,
-                    _phash,
-                ) in list(poster_rows or []):
-                    for u in (catbox_url, supabase_url):
-                        u2 = (u or "").strip()
-                        if not u2:
-                            continue
-                        url_to_ocr[u2] = (ocr_title, ocr_text)
-
-                scored_urls: list[tuple[float, int, str]] = []
-                for idx, url in enumerate(poster_render_urls):
-                    ocr_title, ocr_text = url_to_ocr.get(str(url).strip(), (None, None))
-                    score = _score_eventposter_against_event(
-                        event_title=getattr(ev, "title", None),
-                        event_date=getattr(ev, "date", None),
-                        event_time=getattr(ev, "time", None),
-                        ocr_title=ocr_title,
-                        ocr_text=ocr_text,
-                    )
-                    scored_urls.append((float(score), idx, str(url).strip()))
-
-                scored_urls.sort(key=lambda t: (-t[0], t[1]))
-                best_score = scored_urls[0][0] if scored_urls else 0.0
-                # If we have at least one confident match, drop very low-scoring posters.
-                if best_score >= 4.0:
-                    filtered = [u for s, _i, u in scored_urls if s >= 2.0 and s >= (best_score - 2.0)]
-                    if filtered:
-                        poster_render_urls = filtered
-                    else:
-                        poster_render_urls = [scored_urls[0][2]]
-                else:
-                    # With weak signals, keep ordering but still avoid obviously unrelated posters
-                    # when one candidate is a clear winner (e.g., date/time match vs mismatch).
-                    second_score = scored_urls[1][0] if len(scored_urls) >= 2 else None
-                    if best_score >= 3.0 and (second_score is None or (best_score - second_score) >= 2.0 or second_score < 1.0):
-                        poster_render_urls = [scored_urls[0][2]]
-                    else:
-                        poster_render_urls = [u for _s, _i, u in scored_urls]
-            except Exception:
-                logging.warning("telegraph: failed to score poster relevance", exc_info=True)
-        if all_poster_urls:
-            keep_posters = {str(u).strip() for u in (poster_render_urls or []) if str(u or "").strip()}
-            if keep_posters:
-                photos = [
-                    u
-                    for u in photos
-                    if (u or "").strip()
-                    and ((str(u).strip() not in all_poster_urls) or (str(u).strip() in keep_posters))
-                ]
-        if exclude_urls:
-            photos = [u for u in photos if (u or "").strip() and str(u).strip() not in exclude_urls]
-        merged_photo_urls = False
-        validate_images_raw = (os.getenv("TELEGRAPH_VALIDATE_IMAGE_URLS") or "1").strip().lower()
-        validate_images = validate_images_raw in {"1", "true", "yes", "on"}
-        if validate_images:
-            posters_before_probe = list(poster_render_urls or [])
-            photos_before_probe = list(photos or [])
-            fallback_map: dict[str, str] = {}
-            for catbox_url, supabase_url, _ocr_title, _ocr_text, _updated_at, _hash, _phash in list(poster_rows or []):
-                c = (catbox_url or "").strip()
-                s = (supabase_url or "").strip()
-                if c and s:
-                    fallback_map[c] = s
-                    fallback_map[s] = c
-            poster_render_urls_probed, dropped_posters = await _replace_or_drop_broken_images(
-                list(poster_render_urls or []),
-                fallback_map=fallback_map,
-                label=f"eid={event_id}:posters",
-            )
-            if not poster_render_urls_probed and posters_before_probe:
-                # Avoid rendering a blank cover because of transient probe failures.
-                poster_render_urls_probed = posters_before_probe
-                dropped_posters = []
-            poster_render_urls = poster_render_urls_probed
-            photos_probed, dropped_photos = await _replace_or_drop_broken_images(
-                list(photos or []),
-                fallback_map={},
-                label=f"eid={event_id}:photos",
-            )
-            if not photos_probed and photos_before_probe:
-                photos_probed = photos_before_probe
-                dropped_photos = []
-            photos = photos_probed
-            if dropped_posters or dropped_photos:
-                merged_photo_urls = True
-            # Drop avatar-like tiny images when a real poster-sized illustration exists.
-            poster_render_urls_filtered, dropped_tiny_posters = _drop_tiny_illustrations_when_large_present(
-                list(poster_render_urls or []),
-                label=f"eid={event_id}:posters:tiny",
-            )
-            photos_filtered, dropped_tiny_photos = _drop_tiny_illustrations_when_large_present(
-                list(photos or []),
-                label=f"eid={event_id}:photos:tiny",
-            )
-            if dropped_tiny_posters or dropped_tiny_photos:
-                poster_render_urls = poster_render_urls_filtered
-                photos = photos_filtered
-                merged_photo_urls = True
-        # Keep Event.photo_urls resilient: ensure selected poster URLs are present (without duplicates)
-        for url in poster_render_urls:
-            if url and url not in photos:
-                photos.append(url)
-                merged_photo_urls = True
-        try:
-            dedupe_event_photos = globals().get("_dedupe_event_photo_urls_for_publish")
-            if callable(dedupe_event_photos):
-                photos_before_dedupe = list(photos or [])
-                posters_before_dedupe = list(poster_render_urls or [])
-                photos = await dedupe_event_photos(photos_before_dedupe)
-                poster_render_urls = await dedupe_event_photos(posters_before_dedupe)
-                if photos != photos_before_dedupe or poster_render_urls != posters_before_dedupe:
-                    merged_photo_urls = True
-        except Exception:
-            logging.warning(
-                "telegraph: failed to dedupe render photos for event %s",
-                event_id,
-                exc_info=True,
-            )
-        if merged_photo_urls or exclude_urls:
-            ev.photo_urls = list(photos)
-            ev.photo_count = len(ev.photo_urls)
+        poster_render_urls = list(photos)
         cover_url_raw = str(ev.preview_3d_url).strip() if ev.preview_3d_url else None
         cover_url = cover_url_raw
         force_cover_url = cover_url_raw
@@ -21049,6 +21121,10 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         )
         return False
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
+    # A postponed VK item may receive a different id at the exact moment it is
+    # published.  Recover the unique live projection before hash/idempotency
+    # checks so a stale stored id cannot create a duplicate wall post.
+    await _recover_managed_vk_live_url(db, ev, bot=bot)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
@@ -21074,6 +21150,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 str(getattr(ev, "location_address", "") or ""),
                 str(getattr(ev, "city", "") or ""),
                 str(getattr(ev, "ticket_link", "") or ""),
+                f"ics:{str(getattr(ev, 'ics_url', '') or '<none>')}",
                 json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
                 text_for_vk,
             ]
@@ -21120,7 +21197,10 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         db,
         bot,
         ics_url=ev.ics_url,
-        append_text=not replace_existing_text,
+        # A managed post is our public projection, not a new independent
+        # source. Rewrites must replace its previous body; appending creates a
+        # visible history of mutually inconsistent LLM drafts.
+        append_text=not (replace_existing_text or managed_vk_post),
     )
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,
@@ -21727,7 +21807,55 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     return True
 
 
+async def job_event_media_review(
+    event_id: int,
+    db: Database,
+    bot: Bot | None,
+) -> bool:
+    """Rehydrate source media and adjudicate one cached pair automatically."""
+
+    rehydrated = 0
+    cdn_updated = 0
+    cdn_failed = 0
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+        if event is None:
+            return False
+        rehydrated = await _rehydrate_missing_event_source_posters_for_telegraph(
+            session,
+            event,
+            event_id=int(event_id),
+        )
+        from event_media import (
+            event_media_require_cdn,
+            materialize_event_posters_to_cdn,
+            sync_event_gallery_projection,
+        )
+
+        if event_media_require_cdn():
+            cdn_updated, cdn_failed = await materialize_event_posters_to_cdn(
+                session, int(event_id)
+            )
+            await sync_event_gallery_projection(session, int(event_id))
+        await session.commit()
+
+    from event_media import review_next_event_media_pair
+
+    projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
+    if (rehydrated or cdn_updated) and not projection_changed:
+        async with db.get_session() as session:
+            fresh = await session.get(Event, int(event_id))
+        if fresh is not None:
+            await schedule_event_update_tasks(db, fresh)
+    if cdn_failed:
+        raise RuntimeError(
+            f"event_media_cdn_materialization_pending:event_id={event_id}:failed={cdn_failed}"
+        )
+    return bool(rehydrated or cdn_updated or projection_changed)
+
+
 JOB_HANDLERS = {
+    "event_media_review": job_event_media_review,
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
     "tg_event_publish": job_publish_tg_event_post,
@@ -22054,7 +22182,10 @@ def is_valid_url(text: str | None) -> bool:
     return bool(re.match(r"https?://", text))
 
 
-TELEGRAM_FOLDER_RX = re.compile(r"^https?://t\.me/addlist/[A-Za-z0-9_-]+/?$")
+TELEGRAM_FOLDER_RX = re.compile(
+    r"^https?://(?:t\.me|telegram\.me)/addlist/[A-Za-z0-9_-]+/?$",
+    re.IGNORECASE,
+)
 
 
 def _strip_qf(u: str) -> str:

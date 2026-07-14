@@ -1,6 +1,6 @@
 # INC-2026-06-24 Future event date/default-venue regressions
 
-Status: mitigated
+Status: mitigated (2026-07-14 recurrence tracked separately)
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / public event inventory (`@kldevents`, Telegraph month/week surfaces)
 Opened: 2026-06-24
@@ -8,6 +8,13 @@ Closed: —
 Owners: events-bot maintainer / Codex
 Related incidents: `INC-2026-06-18-tg-location-prose-still-extracted.md`, `INC-2026-05-30-active-duplicate-events-recall-gate.md`, `INC-2026-05-17-future-event-quality-regressions.md`, `INC-2026-05-05-event-quality-regression.md`, `INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md`, `INC-2026-05-01-future-event-quality-audit.md`, `INC-2026-05-02-pre-daily-event-quality.md`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/operations/incident-management.md`, `docs/reports/incidents/README.md`, `CHANGELOG.md`
+
+## Related recurrence
+
+The 2026-07-14 `Летний Экодвор` recurrence is tracked canonically in
+`INC-2026-07-14-synthetic-thin-source-public-copy.md`. This older incident remains the
+adjacent date/default-venue and thin-writer regression family, but release/repair evidence for
+event `6767` belongs to the newer record.
 
 ## Summary
 

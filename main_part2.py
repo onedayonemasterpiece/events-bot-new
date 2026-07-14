@@ -28,6 +28,7 @@ from markup import (
     format_tel_link_for_display,
     tel_href_for_phone_value,
 )
+from llm_source_grounding import claim_is_grounded
 
 from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
 from source_parsing.telegram.commands import tg_monitor_router
@@ -1979,7 +1980,11 @@ async def build_festival_page_content(db: Database, fest: Festival) -> tuple[str
         raw = str(url or "").strip()
         if not raw:
             return None
-        match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)/\d+\b", raw, flags=re.IGNORECASE)
+        match = re.search(
+            r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)/\d+\b",
+            raw,
+            flags=re.IGNORECASE,
+        )
         if not match:
             return None
         username = str(match.group(1) or "").strip()
@@ -1991,7 +1996,11 @@ async def build_festival_page_content(db: Database, fest: Festival) -> tuple[str
         raw = str(url or "").strip()
         if not raw:
             return ""
-        match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)", raw, flags=re.IGNORECASE)
+        match = re.search(
+            r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)",
+            raw,
+            flags=re.IGNORECASE,
+        )
         if not match:
             return ""
         username = str(match.group(1) or "").strip().lstrip("@")
@@ -2931,7 +2940,11 @@ def _parse_tg_post_ref(url: str | None) -> tuple[str, int] | None:
     text_value = (url or "").strip()
     if not text_value:
         return None
-    m = re.search(r"(?:https?://)?t\.me/([^/?#\s]+)/([0-9]+)", text_value, flags=re.I)
+    m = re.search(
+        r"(?:https?://)?(?:t\.me|telegram\.me)/([^/?#\s]+)/([0-9]+)",
+        text_value,
+        flags=re.I,
+    )
     if not m:
         return None
     username = m.group(1).strip().lstrip("@").lower()
@@ -4159,6 +4172,109 @@ async def _find_vk_postponed_wall_item_any_actor(
     return None
 
 
+async def _find_unique_live_managed_vk_item_for_event(
+    event: Event,
+    *,
+    owner_id: int,
+    db: Database | None,
+    bot: Bot | None,
+) -> dict | None:
+    """Recover a live wall item whose postponed id changed on publication.
+
+    VK can replace a postponed id while moving a post to the public wall.  The
+    old id then disappears from both ``wall.getById`` and ``filter=postponed``.
+    Recovery is intentionally fail-closed: a candidate must have the exact
+    generated title and date header, and there must be exactly one match in the
+    recent managed wall window.  This is an identity repair, not semantic event
+    matching; ambiguous rows are left for the normal sync/review path.
+    """
+
+    expected_title = str(getattr(event, "title", "") or "").strip()
+    header_lines = build_vk_source_header(event, None)
+    expected_date = next(
+        (str(line).strip() for line in header_lines if str(line).startswith("\U0001f4c5 ")),
+        "",
+    )
+    if not expected_title or not expected_date:
+        return None
+
+    actors = _vk_wall_get_actors(owner_id)
+    for actor in actors:
+        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+        items: list[dict] = []
+        actor_failed = False
+        for offset in (0, 100, 200):
+            try:
+                response = await _vk_api(
+                    "wall.get",
+                    {
+                        "owner_id": str(owner_id),
+                        "filter": "owner",
+                        "count": 100,
+                        "offset": offset,
+                    },
+                    db,
+                    bot,
+                    token=token,
+                    token_kind=actor.kind,
+                    skip_captcha=(actor.kind == "group"),
+                )
+            except VKAPIError as exc:
+                logging.warning(
+                    "vk.live-id recovery wall.get failed event_id=%s owner_id=%s actor=%s code=%s msg=%s",
+                    getattr(event, "id", None),
+                    owner_id,
+                    actor.label,
+                    exc.code,
+                    exc.message,
+                )
+                actor_failed = True
+                break
+            except Exception as exc:
+                logging.warning(
+                    "vk.live-id recovery wall.get transport failure event_id=%s owner_id=%s actor=%s error=%r",
+                    getattr(event, "id", None),
+                    owner_id,
+                    actor.label,
+                    exc,
+                )
+                actor_failed = True
+                break
+            page = _vk_postponed_items(response)
+            items.extend(page)
+            if len(page) < 100:
+                break
+        if actor_failed:
+            continue
+
+        matches: list[dict] = []
+        for item in items:
+            lines = [line.strip() for line in str(item.get("text") or "").splitlines()]
+            nonempty = [line for line in lines if line]
+            if nonempty and nonempty[0] == expected_title and expected_date in nonempty:
+                try:
+                    if int(item.get("id") or 0) > 0:
+                        matches.append(item)
+                except (TypeError, ValueError):
+                    continue
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            logging.warning(
+                "vk.live-id recovery ambiguous event_id=%s owner_id=%s matches=%s title=%r date=%r",
+                getattr(event, "id", None),
+                owner_id,
+                [item.get("id") for item in matches],
+                expected_title,
+                expected_date,
+            )
+            return None
+        # A successful authenticated wall read is authoritative for this
+        # bounded window; trying a lower-priority actor adds no useful signal.
+        return None
+    return None
+
+
 async def _resolve_existing_vk_post_url(
     post_url: str,
     *,
@@ -5111,9 +5227,15 @@ TG_EVENT_MAX_URL = "https://max.ru/channel_kenigevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
-TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
-TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
+# This is a final public-copy writer, not an internal processing stage.  Keep it
+# on Gemini Lite by policy; the call site disables cross-model fallbacks and
+# bounds each publication attempt to one request so a retry backlog cannot
+# multiply Lite calls within the same attempt.
+TG_EVENT_REWRITE_MODEL = "gemini-3.1-flash-lite"
+TG_EVENT_4O_FALLBACK_MODEL = "gpt-4o"
+TG_EVENT_4O_FALLBACK_DAILY_LIMIT = 100
+TG_EVENT_4O_FALLBACK_BUDGET_KEY = "tg_event_public_writer_4o"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v8-evidence-quoted-sentences"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
 _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
@@ -5124,6 +5246,34 @@ _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
 
 class TelegramEventPublishUncertainSendError(RuntimeError):
     """Telegram may have accepted a channel message, but the Bot API reply was lost."""
+
+
+class TelegramEventPublicWriterUnavailable(RuntimeError):
+    """No approved LLM writer could produce a valid Telegram public hook."""
+
+
+_TG_EVENT_HOOK_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sentences": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "evidence_quote": {
+                        "type": "string",
+                        "description": "Exact contiguous quote from organizer source evidence supporting this sentence.",
+                    },
+                },
+                "required": ["text", "evidence_quote"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["sentences"],
+    "additionalProperties": False,
+}
 
 
 def _is_telegram_event_uncertain_send_error(exc: Exception) -> bool:
@@ -5746,19 +5896,14 @@ def build_tg_event_announcement(
         time_part = ""
     lines.append(html.escape(f"📅 {day}{(' ' + time_part) if time_part else ''}"))
 
-    loc_parts: list[str] = []
-    loc = (event.location_name or "").strip()
+    loc = _compose_event_location(
+        event.location_name,
+        event.location_address,
+        event.city,
+        city_hashtag=True,
+    )
     if loc:
-        loc_parts.append(loc)
-    addr = event.location_address
-    if addr and event.city:
-        addr = strip_city_from_address(addr, event.city)
-    if addr:
-        loc_parts.append(addr)
-    if event.city:
-        loc_parts.append(_tg_event_city_hashtag(event.city) or event.city)
-    if loc_parts:
-        lines.append("📍 " + html.escape(", ".join(loc_parts)))
+        lines.append("📍 " + html.escape(loc))
 
     if event.pushkin_card:
         lines.append("✅ Пушкинская карта")
@@ -5823,34 +5968,222 @@ def _tg_event_date_label(event: Event) -> str:
     return str(getattr(event, "date", "") or "")
 
 
-def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
-    if _tg_event_source_is_utility_service(text):
-        return (
-            "Можно сдать до 4 чистых шин на переработку: их отправят на предприятие "
-            "и сделают из сырья новые полезные материалы."
+def _tg_event_source_evidence(event: Event) -> str:
+    values: list[str] = []
+    raw_source_texts = getattr(event, "source_texts", None)
+    if isinstance(raw_source_texts, str):
+        try:
+            parsed = json.loads(raw_source_texts)
+        except Exception:
+            parsed = []
+        raw_source_texts = parsed if isinstance(parsed, list) else []
+    if isinstance(raw_source_texts, (list, tuple)):
+        values.extend(str(item or "").strip() for item in raw_source_texts)
+    values.append(str(getattr(event, "source_text", None) or "").strip())
+    out: list[str] = []
+    seen: set[str] = set()
+    total = 0
+    for value in values:
+        clean = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not clean:
+            continue
+        key = clean.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean = clean[:2400]
+        if total + len(clean) > 9000:
+            clean = clean[: max(0, 9000 - total)]
+        if not clean:
+            break
+        out.append(clean)
+        total += len(clean)
+        if total >= 9000:
+            break
+    return "\n\n".join(out).strip()
+
+
+def _parse_tg_event_hook_payload(
+    raw: Any,
+    *,
+    evidence_corpus: str,
+) -> str | None:
+    data = raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+        try:
+            data = json.loads(text)
+        except Exception:
+            return None
+    if not isinstance(data, dict):
+        return None
+    items = data.get("sentences")
+    if not isinstance(items, list) or not 1 <= len(items) <= 3:
+        return None
+
+    sentences: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            return None
+        sentence = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        quote = re.sub(r"\s+", " ", str(item.get("evidence_quote") or "")).strip()
+        if not sentence or not quote:
+            return None
+        verdict = claim_is_grounded(
+            sentence,
+            evidence_corpus,
+            evidence_quote=quote,
+            min_ratio=0.45,
+            min_matches=2,
         )
-    for raw in (
-        getattr(event, "short_description", None),
-        getattr(event, "search_digest", None),
-        text,
-        getattr(event, "description", None),
-        getattr(event, "title", None),
+        if not verdict.ok:
+            logging.warning(
+                "tg_event.public_writer_grounding_rejected reason=%s matched=%s claim_tokens=%s sentence=%r",
+                verdict.reason,
+                verdict.matched,
+                verdict.claim_tokens,
+                sentence[:240],
+            )
+            return None
+        sentences.append(sentence)
+    return " ".join(sentences).strip() or None
+
+
+def _clean_tg_event_hook_candidate(
+    event: Event,
+    source: str,
+    raw: Any,
+    *,
+    max_chars: int,
+) -> str | None:
+    cleaned = re.sub(r"\s+", " ", str(raw or "")).strip().strip("\"'“”«»")
+    cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
+    cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
+    if not cleaned or _TG_EVENT_REPETITIVE_OPENING_RE.match(cleaned):
+        return None
+    if _tg_event_source_is_utility_service(source) and any(
+        marker in cleaned.casefold()
+        for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
     ):
-        value = re.sub(r"\s+", " ", str(raw or "")).strip()
-        if value:
-            sentence = re.split(r"(?<=[.!?])\s+", value, maxsplit=1)[0].strip()
-            sentence = re.sub(r",?\s*подробнее\s*\([^)]+\)\s*$", "", sentence, flags=re.I).strip()
-            if not sentence:
-                continue
-            if _TG_EVENT_REPETITIVE_OPENING_RE.match(sentence):
-                continue
-            base = sentence.rstrip(".!?").strip()
-            if sentence.endswith("?"):
-                return sentence
-            if len(base) > 1:
-                return f"{base}."
-            return base
-    return ""
+        return None
+    if len(cleaned) > max_chars + 30:
+        cleaned = _truncate_tg_plain_body(cleaned, max_chars + 30)
+    return cleaned or None
+
+
+async def _reserve_tg_event_4o_fallback(
+    db: Database | None,
+    *,
+    event_id: int | None,
+) -> int | None:
+    """Atomically reserve one of the 100 persisted UTC-day fallback requests."""
+
+    if db is None or TG_EVENT_4O_FALLBACK_DAILY_LIMIT <= 0:
+        return None
+    day = datetime.now(timezone.utc).date().isoformat()
+    limit = min(max(int(TG_EVENT_4O_FALLBACK_DAILY_LIMIT), 0), 100)
+    await db.exec_driver_sql(
+        """
+        INSERT OR IGNORE INTO llm_daily_request_budget(
+            budget_key, day, used, limit_value, updated_at
+        ) VALUES (?, ?, 0, ?, CURRENT_TIMESTAMP)
+        """,
+        (TG_EVENT_4O_FALLBACK_BUDGET_KEY, day, limit),
+    )
+    rows = await db.exec_driver_sql(
+        """
+        UPDATE llm_daily_request_budget
+        SET used = used + 1,
+            limit_value = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE budget_key = ? AND day = ? AND used < ?
+        RETURNING used
+        """,
+        (limit, TG_EVENT_4O_FALLBACK_BUDGET_KEY, day, limit),
+    )
+    if not rows:
+        logging.error(
+            "tg_event.public_writer_4o_budget_exhausted event_id=%s day=%s limit=%s",
+            event_id,
+            day,
+            limit,
+        )
+        return None
+    used = int(rows[0][0])
+    logging.warning(
+        "tg_event.public_writer_4o_reserved event_id=%s day=%s used=%s limit=%s",
+        event_id,
+        day,
+        used,
+        limit,
+    )
+    return used
+
+
+async def _build_tg_event_hook_via_4o(
+    event: Event,
+    source: str,
+    evidence_corpus: str,
+    prompt: str,
+    *,
+    db: Database | None,
+    max_chars: int,
+    max_output_tokens: int,
+) -> str:
+    event_id = getattr(event, "id", None)
+    reserved = await _reserve_tg_event_4o_fallback(db, event_id=event_id)
+    if reserved is None:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: 4o fallback budget is exhausted or unavailable"
+        )
+    try:
+        raw = await ask_4o(
+            prompt,
+            model=TG_EVENT_4O_FALLBACK_MODEL,
+            max_tokens=max_output_tokens,
+            temperature=0.4,
+            allow_model_fallback=False,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "tg_event_grounded_hook",
+                    "strict": True,
+                    "schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+                },
+            },
+            meta={
+                "consumer": "tg_event_publish_fallback",
+                "event_id": event_id,
+                "daily_request_no": reserved,
+                "daily_request_limit": min(TG_EVENT_4O_FALLBACK_DAILY_LIMIT, 100),
+            },
+        )
+    except Exception as exc:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: strict 4o fallback failed"
+        ) from exc
+    grounded = _parse_tg_event_hook_payload(
+        raw,
+        evidence_corpus=evidence_corpus,
+    )
+    cleaned = _clean_tg_event_hook_candidate(
+        event,
+        source,
+        grounded,
+        max_chars=max_chars,
+    )
+    if not cleaned:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: strict 4o fallback returned invalid text"
+        )
+    logging.warning(
+        "tg_event.public_writer_4o_used event_id=%s daily_request_no=%s",
+        event_id,
+        reserved,
+    )
+    return cleaned
 
 
 async def build_tg_event_hook_text(
@@ -5858,10 +6191,23 @@ async def build_tg_event_hook_text(
     text: str,
     *,
     promo_highlight: bool = False,
+    db: Database | None = None,
 ) -> str:
-    source = (text or "").strip()
-    if not source:
-        return _fallback_tg_event_hook_text(event, text)
+    source = (text or "").strip() or "\n".join(
+        str(value).strip()
+        for value in (
+            getattr(event, "description", None),
+            getattr(event, "short_description", None),
+            getattr(event, "search_digest", None),
+            getattr(event, "title", None),
+        )
+        if str(value or "").strip()
+    )
+    evidence_corpus = _tg_event_source_evidence(event)
+    if not evidence_corpus:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: no raw organizer source evidence"
+        )
     max_chars = TG_EVENT_PROMO_INTRO_MAX_CHARS if promo_highlight else TG_EVENT_INTRO_MAX_CHARS
     promo_instruction = ""
     if promo_highlight:
@@ -5872,6 +6218,13 @@ async def build_tg_event_hook_text(
         )
     prompt = (
         "Сделай короткий Telegram-анонс события на русском языке.\n"
+        "Верни только JSON по схеме sentences[]. Каждый элемент содержит `text` и `evidence_quote`.\n"
+        "`evidence_quote` — точная непрерывная цитата из блока «Организаторские источники», "
+        "которая прямо подтверждает всё предложение `text`. Нельзя использовать редакционный черновик как evidence.\n"
+        "Если конкретное предложение нельзя подтвердить одной точной цитатой, не пиши его.\n"
+        "Пиши близким к цитате пересказом: не объединяй факты из разных фрагментов в одно предложение. "
+        "Не добавляй обращения и приглашения (`друзья`, `вас ждёт`, `приглашаем`), если именно это обращение "
+        "не входит в подтверждающую цитату вместе со всеми остальными деталями предложения.\n"
         f"Формат: 1-3 предложения, до {max_chars} символов.\n"
         f"{promo_instruction}"
         "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
@@ -5887,9 +6240,15 @@ async def build_tg_event_hook_text(
         "а не как про концерт, фестиваль или развлекательную программу.\n"
         "Собственные имена и названия копируй буквально из названия или текста события; "
         "если не уверен в форме слова, лучше опусти имя, чем меняй написание.\n"
-        "Не выдумывай факты; используй только текст ниже.\n\n"
+        "Не выдумывай факты; используй только текст ниже. Любое обещание посетителю "
+        "(«вы увидите», «сможете», «пообщаетесь»), деталь программы, состав участников, "
+        "качество или редкость экспонатов должны быть прямо подтверждены текстом именно "
+        "будущего события. Не переноси детали прошедшего события в будущий анонс. "
+        "Если подтверждены только формат и общая тема, дай консервативные 1-2 предложения "
+        "о них без домысливания программы и активностей.\n\n"
         f"Название: {getattr(event, 'title', '')}\n"
-        f"Текст события:\n{source[:5000]}"
+        f"Организаторские источники (единственный источник фактов):\n{evidence_corpus}\n\n"
+        f"Редакционный черновик (только контекст, не evidence):\n{source[:5000]}"
     )
     try:
         from google_ai import GoogleAIClient, SecretsProvider
@@ -5900,11 +6259,22 @@ async def build_tg_event_hook_text(
             consumer="tg_event_publish",
             incident_notifier=notify_llm_incident,
         )
+        # This is a public-copy writer, not an event-processing stage. Project
+        # policy requires Gemini Lite first and forbids a Gemma fallback.
+        client.fallback_models = []
+        client.max_retries = 1
         raw, _usage = await client.generate_content_async(
             model=TG_EVENT_REWRITE_MODEL,
             prompt=prompt,
-            generation_config={"temperature": 0.4},
-            max_output_tokens=260 if promo_highlight else 180,
+            generation_config={
+                "temperature": 0.3,
+                "response_mime_type": "application/json",
+                # JSON Schema (including additionalProperties) belongs in the
+                # google-genai JSON-schema field. The protobuf response_schema
+                # path rejects it with INVALID_ARGUMENT/additional_properties.
+                "response_json_schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+            },
+            max_output_tokens=360 if promo_highlight else 260,
         )
     except Exception:
         logging.warning(
@@ -5912,22 +6282,32 @@ async def build_tg_event_hook_text(
             getattr(event, "id", None),
             exc_info=True,
         )
-        return _fallback_tg_event_hook_text(event, text)
-    cleaned = re.sub(r"\s+", " ", str(raw or "")).strip().strip("\"'“”«»")
-    cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
-    cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
-    if not cleaned:
-        return _fallback_tg_event_hook_text(event, text)
-    if _TG_EVENT_REPETITIVE_OPENING_RE.match(cleaned):
-        return _fallback_tg_event_hook_text(event, text)
-    if _tg_event_source_is_utility_service(text) and any(
-        marker in cleaned.casefold()
-        for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
-    ):
-        return _fallback_tg_event_hook_text(event, text)
-    if len(cleaned) > max_chars + 30:
-        cleaned = _truncate_tg_plain_body(cleaned, max_chars + 30)
-    return cleaned
+        raw = None
+    grounded = _parse_tg_event_hook_payload(
+        raw,
+        evidence_corpus=evidence_corpus,
+    )
+    cleaned = _clean_tg_event_hook_candidate(
+        event,
+        source,
+        grounded,
+        max_chars=max_chars,
+    )
+    if cleaned:
+        return cleaned
+    logging.warning(
+        "tg_event.public_writer_lite_invalid event_id=%s; trying strict 4o fallback",
+        getattr(event, "id", None),
+    )
+    return await _build_tg_event_hook_via_4o(
+        event,
+        source,
+        evidence_corpus,
+        prompt,
+        db=db,
+        max_chars=max_chars,
+        max_output_tokens=360 if promo_highlight else 260,
+    )
 
 
 def _truncate_tg_plain_body(text: str, max_chars: int) -> str:
@@ -5950,6 +6330,7 @@ async def build_tg_event_announcement_for_publish(
     text: str,
     festival: Festival | None = None,
     *,
+    db: Database | None = None,
     force_caption_limit: bool = False,
     include_calendar_link: bool = False,
     promo_highlight: bool = False,
@@ -5962,6 +6343,7 @@ async def build_tg_event_announcement_for_publish(
         event,
         text,
         promo_highlight=promo_highlight,
+        db=db,
     )
     message_html = build_tg_event_announcement(
         event,
@@ -6019,7 +6401,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_channel_medallion_editor_v8",
+                "tg_event_format=free_hashtag_premium_editor_channel_medallion_editor_v9_city_location_dedupe",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
@@ -6052,47 +6434,20 @@ def _chunked_tg_media(urls: Sequence[str], size: int = TG_EVENT_ALBUM_SIZE) -> l
     return [clean[i : i + size] for i in range(0, len(clean), size)]
 
 
-def _tg_media_dhash_from_url(url: str) -> str | None:
-    match = re.search(r"/p/dh16/[0-9a-f]{2}/([0-9a-f]{64})\.webp(?:[?#].*)?$", url, re.I)
-    return match.group(1).lower() if match else None
-
-
-def _tg_media_dhash_distance(left: str, right: str) -> int | None:
-    try:
-        return (int(left, 16) ^ int(right, 16)).bit_count()
-    except Exception:
-        return None
-
-
 def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
     clean: list[str] = []
     seen: set[str] = set()
-    seen_dhashes: list[str] = []
     for raw in urls or []:
         url = str(raw or "").strip()
         if not url or url in seen:
             continue
-        dhash = _tg_media_dhash_from_url(url)
-        if dhash:
-            duplicate = False
-            for seen_dhash in seen_dhashes:
-                distance = _tg_media_dhash_distance(dhash, seen_dhash)
-                if (
-                    distance is not None
-                    and distance <= TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE
-                ):
-                    duplicate = True
-                    break
-            if duplicate:
-                continue
-            seen_dhashes.append(dhash)
         seen.add(url)
         clean.append(url)
     return clean
 
 
 async def _dedupe_event_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
-    """Drop visually duplicate event photos across managed mirrors and source URLs."""
+    """Final exact-URL guard; visual identity is owned by event_media review."""
     return await _dedupe_vk_photo_urls_for_publish(photo_urls)
 
 
@@ -6194,6 +6549,20 @@ async def publish_tg_event_announcement(
             _tg_event_publish_media_urls(event)
         )
     )[:TG_EVENT_MAX_MEDIA]
+    from event_media import event_media_require_cdn, is_event_media_cdn_url
+
+    if event_media_require_cdn():
+        non_cdn = [url for url in photo_urls if not is_event_media_cdn_url(url)]
+        if non_cdn:
+            raise RuntimeError(
+                f"tg_event_publish_non_cdn_media:event_id={getattr(event, 'id', None)}"
+            )
+        if not photo_urls:
+            # Never silently downgrade a photo publication to text. The durable
+            # event_media_review job must repair/materialize media first.
+            raise RuntimeError(
+                f"tg_event_publish_missing_approved_cdn_media:event_id={getattr(event, 'id', None)}"
+            )
     chunks = _chunked_tg_media(photo_urls)
     if len(photo_urls) == 1:
         desired_mode = "photo_caption"
@@ -6219,6 +6588,7 @@ async def publish_tg_event_announcement(
         event,
         text,
         festival=festival,
+        db=db,
         force_caption_limit=bool(chunks),
         include_calendar_link=desired_mode == "album_caption",
         promo_highlight=promo_highlight,
@@ -6398,15 +6768,14 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
         time_part = ""
     lines.append(f"\U0001f4c5 {day}{(' ' + time_part) if time_part else ''}")
 
-    loc = event.location_name
-    addr = event.location_address
-    if addr and event.city:
-        addr = strip_city_from_address(addr, event.city)
-    if addr:
-        loc += f", {addr}"
-    if event.city:
-        loc += f", #{event.city}"
-    lines.append(f"\U0001f4cd {loc}")
+    loc = _compose_event_location(
+        event.location_name,
+        event.location_address,
+        event.city,
+        city_hashtag=True,
+    )
+    if loc:
+        lines.append(f"\U0001f4cd {loc}")
 
     if event.pushkin_card:
         lines.append("\u2705 Пушкинская карта")
@@ -6557,117 +6926,20 @@ def build_vk_source_message(
     return "\n".join(lines)
 
 
-def _vk_photo_near_dup_hamming_threshold() -> int:
-    raw = (
-        os.getenv("VK_PHOTO_NEAR_DUP_HAMMING")
-        or os.getenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING")
-        or "32"
-    )
-    try:
-        return max(0, int(str(raw).strip()))
-    except (TypeError, ValueError):
-        return 32
-
-
-def _quote_photo_url_for_request(url: str) -> str:
-    try:
-        parts = urlsplit(url)
-        return urlunsplit(
-            (
-                parts.scheme,
-                parts.netloc,
-                quote(parts.path, safe="/%:@"),
-                quote(parts.query, safe="=&?/:+,%"),
-                parts.fragment,
-            )
-        )
-    except Exception:
-        return url
-
-
-def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
-    match = re.search(
-        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
-        str(url or "").strip(),
-        flags=re.IGNORECASE,
-    )
-    return match.group(1).lower() if match else None
-
-
-async def _compute_vk_photo_url_dhash(url: str | None) -> str | None:
-    raw = str(url or "").strip()
-    if not raw:
-        return None
-    parsed = _extract_dhash_from_managed_photo_url(raw)
-    if parsed:
-        return parsed
-    try:
-        from media_dedup import compute_dhash_hex
-    except Exception:
-        return None
-    try:
-        session = get_http_session()
-        request_url = _quote_photo_url_for_request(raw)
-        async with span("http"):
-            async with HTTP_SEMAPHORE:
-                async with session.get(request_url) as resp:
-                    resp.raise_for_status()
-                    if resp.content_length and resp.content_length > MAX_DOWNLOAD_SIZE:
-                        return None
-                    buf = bytearray()
-                    async for chunk in resp.content.iter_chunked(64 * 1024):
-                        buf.extend(chunk)
-                        if len(buf) > MAX_DOWNLOAD_SIZE:
-                            return None
-        return await asyncio.to_thread(compute_dhash_hex, bytes(buf))
-    except Exception as exc:
-        logging.info("vk.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
-        return None
-
-
 async def _dedupe_vk_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
-    """Drop visually duplicate image URLs before uploading a VK media group."""
+    """Keep only exact URL uniqueness at the renderer boundary.
+
+    A perceptual distance is evidence, not permission for a publisher to hide
+    media that the canonical automated review approved.
+    """
     urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
-    if len(urls) < 2:
-        return urls
-    threshold = _vk_photo_near_dup_hamming_threshold()
-    if threshold <= 0:
-        out: list[str] = []
-        seen: set[str] = set()
-        for url in urls:
-            if url not in seen:
-                seen.add(url)
-                out.append(url)
-        return out
-
-    try:
-        from media_dedup import hamming_distance_hex
-    except Exception:
-        hamming_distance_hex = None
-
     kept: list[str] = []
-    kept_hashes: list[str | None] = []
     seen_urls: set[str] = set()
     for url in urls:
         if url in seen_urls:
             continue
         seen_urls.add(url)
-        phash = await _compute_vk_photo_url_dhash(url)
-        duplicate = False
-        if phash and hamming_distance_hex is not None:
-            for existing in kept_hashes:
-                if existing and hamming_distance_hex(phash, existing) <= threshold:
-                    logging.info(
-                        "vk.photo_dedup dropped near-duplicate hamming<=%d url=%s",
-                        threshold,
-                        url[:160],
-                    )
-                    duplicate = True
-                    break
-        if duplicate:
-            continue
         kept.append(url)
-        kept_hashes.append(phash)
     return kept
 
 
@@ -6678,7 +6950,9 @@ def _vk_require_media_for_telegram_source_posts() -> bool:
 
 def _url_looks_like_telegram_source(url: str | None) -> bool:
     value = str(url or "").strip().lower()
-    return value.startswith("https://t.me/") or value.startswith("http://t.me/")
+    return value.startswith(
+        ("https://t.me/", "http://t.me/", "https://telegram.me/", "http://telegram.me/")
+    )
 
 
 async def _event_has_telegram_origin(event: Event, db: Database | None) -> bool:
@@ -6864,12 +7138,47 @@ async def sync_vk_source_post(
                 break
         if ids:
             if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
-                logging.warning(
-                    "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
-                    event.id,
-                    len(ids),
-                    len(photo_urls_for_publish),
-                )
+                # Preserve an existing photo set on partial re-upload, but
+                # do not preserve *no media*.  Late rehydration commonly
+                # reaches a text-only projection after one of several raw
+                # source URLs has expired; attaching the successfully
+                # uploaded subset is strictly better and lets the normal
+                # media-completeness contract converge.
+                existing_has_photos = True  # provider failure => fail safe
+                try:
+                    existing_ids = _vk_owner_and_post_id(existing_vk_post_url)
+                    if existing_ids:
+                        existing_response = await vk_api(
+                            "wall.getById",
+                            posts=f"{existing_ids[0]}_{existing_ids[1]}",
+                        )
+                        existing_items = _vk_wall_get_by_id_items(existing_response)
+                        if existing_items:
+                            existing_has_photos = _vk_wall_item_has_photo(
+                                existing_items[0]
+                            )
+                except Exception:
+                    logging.warning(
+                        "VK partial media existing attachment probe failed event_id=%s url=%s",
+                        event.id,
+                        existing_vk_post_url,
+                        exc_info=True,
+                    )
+                if existing_has_photos:
+                    logging.warning(
+                        "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
+                        event.id,
+                        len(ids),
+                        len(photo_urls_for_publish),
+                    )
+                else:
+                    attachments = ids
+                    logging.warning(
+                        "VK photo upload partial for text-only existing post; attaching available media event_id=%s uploaded=%s expected=%s",
+                        event.id,
+                        len(ids),
+                        len(photo_urls_for_publish),
+                    )
             elif not existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
                 logging.error(
                     "sync_vk_source_post blocked partial source post media event_id=%s source_url=%s uploaded=%s expected=%s",
@@ -6942,10 +7251,23 @@ async def sync_vk_source_post(
             lines = _strip_vk_source_tail_lines(lines)
             texts.append("\n".join(lines).strip())
 
+        # Managed re-syncs may carry the same canonical body again (for
+        # example, a location-only repair). Preserve genuinely different text
+        # versions, but collapse exact adjacent copies so an idempotent repair
+        # cannot grow separator/body duplicates on every retry.
+        deduped_texts: list[str] = []
+        for previous_text in texts:
+            if previous_text and (
+                not deduped_texts or previous_text != deduped_texts[-1]
+            ):
+                deduped_texts.append(previous_text)
+        texts = deduped_texts
+
         text_clean = sanitize_for_vk(text).strip()
         if texts:
             if append_text:
-                texts.append(text_clean)
+                if text_clean and text_clean != texts[-1]:
+                    texts.append(text_clean)
             else:
                 texts[-1] = text_clean
         else:

@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-14-ecodvor-unknown-start-time-cursor.md`
+  - Scope: Telegram Monitoring parent/program versus child-activity time roles, Smart Update explicit-TBD anchor review, server time fallback and legitimate zero-event source cursor advancement.
+  - Must not regress: a child activity whose source explicitly says its start time is still being clarified must keep unknown time rather than inherit the parent `14:00–17:00` window; successfully scanned legitimate `events=[]` tail messages must advance the source cursor without entering Smart Update or polluting scanned-message metrics.
+- `INC-2026-07-14-synthetic-thin-source-public-copy.md`
+  - Scope: sparse-source Smart Update/public copy grounding, donation-vs-registration admission, managed VK evidence loops, VK body replacement and vector admission facets.
+  - Must not regress: every semantic public claim must be organizer-evidenced; public projections never become source evidence; unknown admission is neither registration nor `ticketed`; Lite remains the normal public writer with only the capped `gpt-4o` emergency lane.
+- `INC-2026-07-13-tg-media-downgrade-non-cdn-posters.md`
+  - Scope: Smart Update media materialization, existing-event source media repair, TelegramMonitor storage URLs, static galleries and `@kldevents` publishing.
+  - Must not regress: public event gallery URLs are strictly `static.kenigevents.ru`; missing source media stays in durable retry and can never create or downgrade to a Telegram text-only event post.
+
 - `INC-2026-07-13-runtime-logging-recurring-event-quality.md`
   - Scope: bounded permanent runtime logs, Fly volume hygiene, reversible production Telegram E2E authorization, complete future-event quality acceptance and vector/LLM evidence.
   - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator.

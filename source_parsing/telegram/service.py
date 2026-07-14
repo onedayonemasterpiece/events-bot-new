@@ -536,6 +536,8 @@ def _build_secrets_payload() -> str:
         "YC_SA_BOT_STORAGE_KEY",
         "YC_STORAGE_BUCKET",
         "YC_STORAGE_ENDPOINT",
+        "YC_STORAGE_PUBLIC_BASE_URL",
+        "PUBLIC_ASSET_BASE_URL",
     ):
         value = (os.getenv(key) or "").strip()
         if value:

@@ -48,8 +48,19 @@ VK monitoring operator seeds (`club194393485`, `ivsguide`, `natakkaz`) also live
 
 - `INSERT OR IGNORE` в `event_source` из `event.source_post_url` (тип выводится как `telegram`/`vk`/`legacy` по URL),
 - отдельный `INSERT OR IGNORE` из `event.source_vk_post_url` с `source_type='vk'`,
+- URL собственных managed VK-публикаций исключаются из обоих backfill-проходов, а ранее ошибочно созданные строки удаляются вместе с зависимыми фактами: публичная проекция не может становиться evidence,
 - можно отключить на больших БД (или для отладки) переменной окружения: `DB_INIT_SKIP_EVENT_SOURCE_BACKFILL=1`.
 
 ## Важно про Supabase‑миграции
 
 SQL‑миграции Supabase лежат отдельно в `migrations/` (например `001_google_ai.sql`, `002_google_ai_rpc_rollout.sql`) и не имеют отношения к SQLite схеме событий.
+
+## Event-media schema upgrade
+
+`Database.init()` adds the event-media status/fingerprint columns, partial
+per-event raw-SHA uniqueness, `event_media_pair_review` and
+`event_media_review_usage`. On a legacy DB, existing `EventPoster` rows become
+`approved` only when `review_status` is first introduced. This is a one-time
+compatibility migration: later restarts must not reset
+`pending_review`/`duplicate`/`rejected`/`unavailable` decisions. Regression:
+`tests/test_event_media_gate.py::test_review_status_migration_is_one_time_and_restart_safe`.

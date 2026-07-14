@@ -32,6 +32,7 @@ from remote_telegram_session import (
     format_remote_telegram_session_busy_lines,
     raise_if_remote_telegram_session_busy,
 )
+from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 from video_announce.kaggle_client import KaggleClient
 
 from .dedup import deduplicate_occurrence_rows
@@ -1012,10 +1013,9 @@ def _booking_url_for_digest(value: str | None) -> str | None:
         return None
     if raw.startswith("tel:"):
         return raw
-    if raw.lower().startswith("t.me/"):
-        return f"https://{raw}"
-    if raw.lower().startswith("telegram.me/"):
-        return f"https://{raw}"
+    canonical_tg = canonicalize_tg_url(raw)
+    if canonical_tg:
+        return canonical_tg
     return raw
 
 
@@ -1069,11 +1069,7 @@ def _normalize_digest_eligibility(
 
 
 def _is_tg_post_url(url: str | None) -> bool:
-    raw = collapse_ws(url)
-    if not raw.startswith("https://t.me/"):
-        return False
-    parts = raw.rstrip("/").split("/")
-    return len(parts) >= 5 and parts[-1].isdigit()
+    return parse_tg_post_url(collapse_ws(url)) is not None
 
 
 def _source_post_url(payload_url: str | None, fallback_url: str | None) -> str | None:

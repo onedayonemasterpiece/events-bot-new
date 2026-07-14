@@ -42,6 +42,10 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 9. **The staged-model mitigation was over-broad.** `SMART_UPDATE_FORCE_STAGED_GEMINI=1` moved every Smart Update contract onto Gemini Lite. The accepted two-event E2E replay made 20 Lite calls (10/event), while the production quota registry intentionally budgets 450 RPD for that model versus 1,500 RPD for Gemma. This was not a sub-hundred-call fallback and could exhaust the shared project lane after about 45 similar events.
 10. **Media completeness was not part of publication idempotency.** Multi-event VK intake dropped ambiguous/shared roundup posters; a later popular-review path rehydrated `event.photo_urls` but neither materialized raw VK CDN links durably nor rearmed Telegram/VK publication. Separately, VK hash/existence fast paths accepted text-only managed posts even when canonical media existed.
 11. **Opening and exhibition range were forced into one occurrence.** The anchor-role repair correctly noticed that `16:00` was an opening-only time, but the single-candidate contract had no explicit split rule. Event `6661` was consequently collapsed to the closing date instead of retaining the active 4–31 July exhibition (and, at initial future import time, a separate 4 July 16:00 opening occurrence).
+12. **VK could change a postponed id at the live transition.** Editing a post close to its publish slot could return/persist the old postponed id while VK exposed the public item under a new wall id. Exact-id and postponed lookups then both missed it, so an otherwise idempotent retry could create another post. Three repaired projections (`6661`, `6843`, `6846`) exposed this transition shape; their live ids were reconciled to `7269`, `7267`, `7268`.
+13. **The public-copy hook was not isolated from retry/fallback multiplication.** `TG_EVENT_REWRITE_MODEL` correctly used Gemini Lite, but the client inherited the process-wide retry/model chain and the hook ran again on each Telegram publication attempt. Runtime evidence at 10:04 showed the shared provider returning `429` on its minute quota while old media jobs were already on later retries. The quota-safe primary path is one Lite attempt per publication attempt, not changing the approved public writer.
+14. **Model routing conflated internal processing with public writing.** During mitigation, the Telegram intro writer was moved to Gemma without operator approval. This violated the product contract: extraction/match/grounding models may be optimized independently, while final public prose has its own approved writer. The correction fixes `tg_event_publish` to Gemini Lite and forbids runtime or global-chain substitution by Gemma.
+15. **The first correction invented deterministic public prose.** Falling back to a sentence assembled from canonical fields still bypassed the approved LLM writer contract. Public narrative must be authored by Lite or, only as an emergency, strict `gpt-4o`; if neither can return valid text, publication must fail closed rather than synthesize prose in code.
 
 ## Contributing Factors
 
@@ -103,8 +107,10 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 - [ ] distinguish legacy-debt repairs from rows created after each prevention SHA in monitoring metrics.
 - [x] delete the replay-created postponed duplicate `wall-231920894_7265`, restore event `6857` to `wall-231920894_7250`, and make postponed lookup use the correct authenticated collection;
 - [x] immediately stop the unbounded Lite route in production and retain Gemini Lite only for bounded facts/writer/grounding stages;
-- [ ] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API;
-- [ ] repair event `6661` to the active exhibition range on canonical/public surfaces (do not create a new historical opening row after the opening has passed);
+- [x] repair all confirmed current text-only Telegram/VK media projections and verify attachments through Telethon/VK API;
+- [x] repair event `6661` to the active exhibition range on canonical/public surfaces (do not create a new historical opening row after the opening has passed);
+- [x] reconcile changed postponed-to-live VK ids and add unique exact title+date live-id recovery before republish;
+- [x] keep Telegram public hook writing on one Gemini Lite call; if it fails, allow only strict `gpt-4o` behind an atomic persisted 100-request UTC-day cap, otherwise fail closed with no deterministic narrative;
 
 ## Follow-up Actions
 
@@ -114,11 +120,12 @@ The operator also rejected the temporary E2E authorization blocker: the approved
 
 ## Release And Closure Evidence
 
-- deployed SHA: `e278e072` (`origin/main`), including `8fd50472` Smart Update prevention and the earlier bounded logging/retention commits
-- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update) and `1633` (VK postponed idempotency/E2E acceptance)
-- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; full Smart Update set `77 passed` with four date-sensitive fixtures now past on 2026-07-13 (unrelated to this patch). The broad VK test files also expose 13 pre-existing mock-signature failures for newer location-marker/reservation kwargs; those are test-debt, not accepted as a pass.
-- post-deploy verification: `/healthz ready=true`, disk `408 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
-- quota containment: Fly release after the operator escalation has effective `SMART_UPDATE_FORCE_STAGED_GEMINI=0`, `SMART_UPDATE_G4_SPLIT_CREATE=1`, `/healthz ready=true`. Day-of-request accounting showed 74 Smart Update provider calls before containment (37 Gemma, 37 Lite); the exact live two-event replay accounted for 20 Lite calls. Recent completed production days created 19–42 rows (856/30 days), before merge-only updates; therefore 10/event had no safe headroom. The steady-state route normally budgets one Lite writer stage per matched update or about two Lite stages per create (facts + writer); core merge/revise/coverage/short-description/digest stays on Gemma, and rare grounding adds only a bounded call.
+- deployed SHA: `83a7dea3` (`origin/main`), including `533db6fa` quota/media prevention, `1b1364c8` exact live-id recovery, `cb22ff3d` managed source-ledger reconciliation, `0a96da95` partial-media repair and the final Lite→capped-strict-4o public-writer correction
+- deploy path: Fly releases `1630` (logging/retention), `1632` (staged Smart Update), `1633` (VK postponed idempotency/E2E acceptance), `1635`/`1636` (quota/media), `1637`/`1638` (live-id + source ledger), `1639` (partial late media), superseded `1640`/`1641` hook-routing mitigations, `1642` (Lite-only primary) and `1643` (no deterministic prose; capped strict 4o emergency writer)
+- regression checks: runtime logging/disk/source-debug `9 passed`; guide-media retention and adjacent guide publishing `13 passed`; Smart Update focused contracts `42 passed`; VK postponed/E2E focused contracts `3 passed`; public-writer/fallback/budget focused tests `13 passed`. The previously recorded broad Telegram file still contains one stale mock signature and eight date-sensitive June fixtures; these failures are not represented as green.
+- post-deploy verification: `/healthz ready=true`, disk `405 MiB` free, `PRAGMA quick_check=ok`, runtime mirror enabled/growing; exact VK API probe proved `filter=postponed` contains `7250` while `filter=all` does not. Live Telegram E2E `ops_run=3678` processed `vk_inbox=10052`, updated events `6856/6857` with no errors; vector sync `ops_run=3679` wrote four changed embeddings (`search_v3` + `related_v1`) and `3680` then proved all 532 documents unchanged/fresh. E2E role was restored to `is_superadmin=0, blocked=0`.
+- quota containment: Fly release after the operator escalation has effective `SMART_UPDATE_FORCE_STAGED_GEMINI=0`, `SMART_UPDATE_G4_SPLIT_CREATE=1`, `/healthz ready=true`. Day-of-request accounting showed 74 Smart Update provider calls before containment (37 Gemma, 37 Lite); the old exact live two-event replay accounted for 20 Lite calls. Recent completed production days created 19–42 rows (856/30 days), before merge-only updates; therefore 10/event had no safe headroom. The post-fix replay of the same source (`ops_run=3684`) used **5 Lite + 14 Gemma calls for two event updates**: Lite was limited to 2/3 bounded occurrence/fact-writer contracts per event while core match/merge/coverage/derived work remained on Gemma, a 75% reduction in Lite load. Vector sync `ops_run=3685/3686` then completed both document kinds with two changed embeddings per run and no call-cap omissions.
+- public-writer routing: release `1643` hard-codes `gemini-3.1-flash-lite` for the primary `tg_event_publish` writer, clears the global model chain and permits one Lite attempt. Invalid/unavailable Lite can reserve one strict `gpt-4o` request from `llm_daily_request_budget`; the DB check is atomic and never permits more than 100 per UTC day. `gpt-4o-mini`, Gemma and deterministic narrative are absent. A forced live failure-path smoke for event probe `9900715` reserved request `1/100`, invoked `model=gpt-4o`, logged `390` tokens and returned valid public copy; the persisted counter remained `1/100`. Internal event processing remains independently routed.
 
 ## 2026-07-13 media surface audit
 
@@ -136,8 +143,24 @@ The prevention contract is now: multi-event poster ownership is one bounded
 Gemma adjudication per source post with retrieval scores as hints; late VK
 rehydration materializes managed URLs and rearms ordinary public projections;
 VK existence/hash idempotency requires an actual photo attachment whenever
-canonical `photo_urls` are non-empty. Production data/public repair remains a
-closure gate above.
+canonical `photo_urls` are non-empty. All eight target VK projections now have
+photo attachments; the source rows were reconciled to live ids where VK changed
+them during postponed publication. Telegram replacements were intentionally
+serialized by the normal ten-minute public-send gate rather than bypassed in an
+incident script. Catch-up completed at message ids `2319`, `2321`–`2327`;
+Telethon verified photo media on all eight replacement captions, including the
+two-photo album for event `6850` at `2327`.
+
+The final live-wall crawl also found two unreferenced text-only transition
+duplicates: `7255` beside canonical photo post `7268` (event `6846`) and `7257`
+beside canonical photo post `7262` (event `6851`). Both duplicates were deleted;
+event/source/outbox state for `6851` was reconciled from stale `7244` to `7262`.
+Production regression events then exercised the prevention itself: `6802`
+recovered `6924→6994`, persisted the live id and gained a photo; `6732` recovered
+`6502→6648`, updated the managed source ledger and gained two photos. The first
+`6732` pass exposed a partial-upload branch that preserved an empty attachment
+set; that branch now attaches the successfully uploaded subset to text-only
+posts while retaining already-present media on an illustrated post.
 
 ## 2026-07-13 complete future audit
 

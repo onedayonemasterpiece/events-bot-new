@@ -15,6 +15,7 @@
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
+- Event-media automatic gate: `docs/features/event-media/README.md`
 - Event image duplicate release audit (SHA-256 → visual review): `docs/operations/event-image-duplicate-audit.md`
 - Medallion visual QA (all actual static-site Playwright targets; Telegram excluded): `docs/features/static-site-pages/medallion-visual-qa.md`
 - Final SEO/GEO and AI-search transparency gate (last pre-RC stage, after feature-complete UI/UX freeze): `docs/features/static-site-pages/seo-geo-release-optimization.md`

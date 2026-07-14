@@ -136,6 +136,44 @@ def clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def canonical_event_media_cdn_url(value: Any) -> str | None:
+    """Return a CDN event-media URL, rejecting every source/origin fallback."""
+
+    url = clean_text(value)
+    if not url:
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        cdn_base = clean_text(
+            os.getenv("PUBLIC_ASSET_BASE_URL") or "https://static.kenigevents.ru"
+        ).rstrip("/")
+        cdn = urllib.parse.urlsplit(cdn_base)
+    except Exception:
+        return None
+    if parsed.scheme not in {"http", "https"} or not cdn.netloc:
+        return None
+    if parsed.netloc.lower() == cdn.netloc.lower():
+        return urllib.parse.urlunsplit(
+            (cdn.scheme or "https", cdn.netloc, parsed.path, parsed.query, parsed.fragment)
+        )
+    current_bucket_prefix = "/kenigevents.ru/"
+    if (
+        parsed.netloc.lower() == "storage.yandexcloud.net"
+        and parsed.path.startswith(current_bucket_prefix)
+    ):
+        object_path = parsed.path[len(current_bucket_prefix) :]
+        return urllib.parse.urlunsplit(
+            (
+                cdn.scheme or "https",
+                cdn.netloc,
+                "/" + object_path,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+    return None
+
+
 def description_looks_truncated(description: str, source_text: str) -> bool:
     """Detect an incomplete LLM-written description and safely fall back to source text.
 
@@ -195,6 +233,15 @@ def clean_place(value: Any) -> str | None:
         return None
     text = re.sub(r"(?:^|[\s,;])#[\wА-Яа-яЁё-]+", "", text).strip(" ,;–—")
     return clean_text(text) or None
+
+
+def drop_city_only_venue(venue: str | None, city: str | None) -> str | None:
+    """Keep an honest city fallback without pretending that it is a venue."""
+    venue_key = re.sub(r"\s+", " ", str(venue or "")).strip(" #,;–—").casefold()
+    city_key = re.sub(r"\s+", " ", str(city or "")).strip(" #,;–—").casefold()
+    if venue_key and city_key and venue_key == city_key:
+        return None
+    return venue
 
 
 def slugify(value: str, fallback: str = "event") -> str:
@@ -651,29 +698,54 @@ def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] |
 
 
 def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, title: str) -> tuple[str | None, str, list[dict[str, Any]]]:
-    rows = con.execute(
-        "select supabase_url, catbox_url, ocr_text from eventposter where event_id=? order by id asc", (event_id,)
-    ).fetchall()
+    canonical_ledger_present = False
+    try:
+        rows = con.execute(
+            """
+            select supabase_url, catbox_url, ocr_text
+            from eventposter
+            where event_id=? and review_status='approved'
+            order by display_order asc, id asc
+            """,
+            (event_id,),
+        ).fetchall()
+        canonical_ledger_present = bool(rows) or bool(
+            con.execute(
+                "select 1 from eventposter where event_id=? limit 1", (event_id,)
+            ).fetchone()
+        )
+    except sqlite3.OperationalError:
+        # Read-only preview of a pre-migration snapshot. Production init adds
+        # review_status before the next build.
+        rows = con.execute(
+            "select supabase_url, catbox_url, ocr_text from eventposter where event_id=? order by id asc",
+            (event_id,),
+        ).fetchall()
+        canonical_ledger_present = bool(rows)
     ocr_by_url: dict[str, str] = {}
     poster_urls: list[str] = []
     for row in rows:
-        for url in [row["supabase_url"], row["catbox_url"]]:
-            url = clean_text(url)
-            if not url:
-                continue
-            poster_urls.append(url)
-            if row["ocr_text"]:
-                ocr_by_url[image_url_key(url)] = str(row["ocr_text"] or "")
+        # One EventPoster is one logical gallery item.  Its managed and source
+        # URLs are alternate locations, never two public images.
+        url = canonical_event_media_cdn_url(row["supabase_url"])
+        if not url:
+            continue
+        poster_urls.append(url)
+        if row["ocr_text"]:
+            ocr_by_url[image_url_key(url)] = str(row["ocr_text"] or "")
     photo_urls = read_json(photo_urls_raw, [])
     urls = []
     seen = set()
-    for url in list(photo_urls or []) + poster_urls:
-        url = clean_text(url)
+    # EventPoster is canonical. Legacy photo_urls is a temporary fallback only
+    # for rows that have not yet been materialized by the audited backfill.
+    source_urls = poster_urls if canonical_ledger_present else list(photo_urls or [])
+    for url in source_urls:
+        url = canonical_event_media_cdn_url(url)
         if not url or url in seen:
             continue
         seen.add(url)
         urls.append(url)
-    override_url = IMAGE_URL_OVERRIDES.get(event_id)
+    override_url = canonical_event_media_cdn_url(IMAGE_URL_OVERRIDES.get(event_id))
     if override_url:
         urls = [override_url] + [url for url in urls if image_url_key(url) != image_url_key(override_url)]
     assets: list[dict[str, Any]] = []
@@ -783,9 +855,15 @@ def split_current_datetime(value: str | None, current_date: str) -> tuple[str, s
     return match.group(1), match.group(2)
 
 
-def event_active_where(current_date: str, current_time: str | None = None) -> str:
+def event_active_where(
+    current_date: str,
+    current_time: str | None = None,
+    *,
+    columns: set[str] | None = None,
+) -> str:
+    available = columns
     start_not_elapsed = f"date > '{current_date}'"
-    if current_time:
+    if current_time and (available is None or "time" in available):
         start_not_elapsed = (
             f"({start_not_elapsed} or (date = '{current_date}' and "
             "(time is null or trim(time) = '' or substr(time, 1, 5) >= "
@@ -793,11 +871,18 @@ def event_active_where(current_date: str, current_time: str | None = None) -> st
         )
     else:
         start_not_elapsed = f"(date >= '{current_date}')"
-    return (
-        "date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
-        "and coalesce(nullif(trim(lifecycle_status),''),'active') = 'active' "
-        f"and ({start_not_elapsed} or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
-    )
+    clauses = ["date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"]
+    if available is None or "lifecycle_status" in available:
+        clauses.append("coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'")
+    if available is None or "silent" in available:
+        clauses.append("coalesce(silent,0) = 0")
+    if available is None or "end_date" in available:
+        clauses.append(
+            f"({start_not_elapsed} or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
+        )
+    else:
+        clauses.append(start_not_elapsed)
+    return " and ".join(clauses)
 
 
 def fetch_rows(
@@ -831,14 +916,25 @@ def fetch_rows(
             if len(ordered_rows) >= limit:
                 break
 
-    active = event_active_where(current_date, current_time)
+    event_columns = {
+        str(row[1]) for row in con.execute("pragma table_info('event')").fetchall()
+    }
+    active = event_active_where(current_date, current_time, columns=event_columns)
 
     if include_ids:
         placeholders = ",".join("?" for _ in include_ids)
         for row in con.execute(f"select * from event where {active} and id in ({placeholders})", include_ids):
             add_row(row)
 
-    today_time_order = "coalesce(nullif(time,''),'23:59') asc, id asc"
+    time_order = (
+        "coalesce(nullif(time,''),'23:59') asc, " if "time" in event_columns else ""
+    )
+    today_time_order = f"{time_order}id asc"
+    single_day_clause = (
+        "and (end_date is null or trim(end_date) = '' or end_date = date)"
+        if "end_date" in event_columns
+        else ""
+    )
     focus_from = normalize_date(focus_date_from)
     focus_to = normalize_date(focus_date_to)
     if focus_from and focus_to:
@@ -847,8 +943,8 @@ def fetch_rows(
             select * from event
             where {active}
               and date between ? and ?
-              and (end_date is null or trim(end_date) = '' or end_date = date)
-            order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc
+              {single_day_clause}
+            order by date asc, {time_order}id asc
             limit ?
             """,
             (focus_from, focus_to, max(limit * 2, 80)),
@@ -859,8 +955,8 @@ def fetch_rows(
             select * from event
             where {active}
               and date >= ?
-              and (end_date is null or trim(end_date) = '' or end_date = date)
-            order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc
+              {single_day_clause}
+            order by date asc, {time_order}id asc
             limit ?
             """,
             (focus_from, max(limit * 2, 80)),
@@ -878,13 +974,13 @@ def fetch_rows(
             select * from event
             where {active}
               and date > ?
-              and (end_date is null or trim(end_date) = '' or end_date = date)
-            order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc
+              {single_day_clause}
+            order by date asc, {time_order}id asc
             limit ?
             """,
             (current_date, max(limit * 2, 80)),
         )
-    if len(ordered_rows) < limit:
+    if len(ordered_rows) < limit and "end_date" in event_columns:
         add_query(
             f"""
             select * from event
@@ -892,14 +988,14 @@ def fetch_rows(
               and date < ?
               and end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
               and end_date >= ?
-            order by end_date asc, date desc, coalesce(nullif(time,''),'23:59') asc, id asc
+            order by end_date asc, date desc, {time_order}id asc
             limit ?
             """,
             (current_date, current_date, max(limit * 2, 80)),
         )
     if len(ordered_rows) < limit:
         add_query(
-            f"select * from event where {active} order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc limit ?",
+            f"select * from event where {active} order by date asc, {time_order}id asc limit ?",
             (max(limit * 3, limit + len(include_ids) + 20),),
         )
     return ordered_rows[:limit]
@@ -912,6 +1008,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     event_type = infer_event_type(row, topics)
     city = clean_place(row["city"])
     venue = clean_place(row["location_name"])
+    venue = drop_city_only_venue(venue, city)
     address = clean_place(row["location_address"])
     start_date = normalize_date(row["date"]) or current_date
     end_date = normalize_date(row["end_date"])

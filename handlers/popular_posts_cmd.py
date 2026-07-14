@@ -25,7 +25,10 @@ popular_posts_router = Router(name="popular_posts")
 
 _MAX_TG_MESSAGE_LEN = 3800  # conservative: keep room for entities/HTML
 
-_TG_POST_URL_RE = re.compile(r"(?:https?://)?t\.me/(?:s/)?([^/\s]+)/(\d+)", re.IGNORECASE)
+_TG_POST_URL_RE = re.compile(
+    r"(?:https?://)?(?:t\.me|telegram\.me)/(?:s/)?([^/\s]+)/(\d+)",
+    re.IGNORECASE,
+)
 _VK_WALL_PATH_RE = re.compile(r"^/wall-?(\d+)_([0-9]+)$", re.IGNORECASE)
 
 
@@ -121,7 +124,7 @@ def _canonical_tg_post_url(url: str | None) -> str | None:
     raw = str(url or "").strip()
     if not raw:
         return None
-    if "t.me/" not in raw.lower():
+    if "t.me/" not in raw.lower() and "telegram.me/" not in raw.lower():
         return None
     m = _TG_POST_URL_RE.search(raw)
     if not m:
@@ -173,7 +176,7 @@ def _canonical_source_url_for_lookup(url: str | None) -> str | None:
     if not raw:
         return None
     low = raw.lower()
-    if "t.me/" in low:
+    if "t.me/" in low or "telegram.me/" in low:
         return _canonical_tg_post_url(raw) or _strip_url_query_fragment(raw) or None
     if "vk.com/" in low:
         return _canonical_vk_wall_url(raw) or _strip_url_query_fragment(raw) or None
@@ -314,8 +317,12 @@ async def _resolve_telegraph_map(
         orig_to_key[raw] = key
         if key not in lookup_keys:
             lookup_keys.append(key)
-        if "t.me/" in key.lower():
-            m = re.search(r"t\.me/([^/\s]+)/(\d+)", key, flags=re.IGNORECASE)
+        if "t.me/" in key.lower() or "telegram.me/" in key.lower():
+            m = re.search(
+                r"(?:t\.me|telegram\.me)/([^/\s]+)/(\d+)",
+                key,
+                flags=re.IGNORECASE,
+            )
             if not m:
                 continue
             uname = str(m.group(1) or "").strip().lower()

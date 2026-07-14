@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from calendar import monthrange
+import hashlib
 import math
 import json
 import logging
@@ -15,8 +16,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
-from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
-import urllib.request
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import and_, delete, or_, select
 
@@ -27,7 +27,7 @@ from location_reference import (
     normalize_venue_key,
 )
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
-from media_dedup import compute_dhash_hex, hamming_distance_hex
+from llm_source_grounding import claim_is_grounded
 from models import (
     Event,
     EventIdentityDecisionLog,
@@ -37,6 +37,7 @@ from models import (
     PosterOcrCache,
 )
 from sections import MONTHS_RU
+from telegram_sources import canonicalize_tg_url
 from smart_update_identity import (
     IdentityGateMode,
     IdentityVectorEvidence,
@@ -461,15 +462,6 @@ SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS = _env_int(
     "SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS", 6, lo=0, hi=24
 )
 
-# Max Hamming distance (over the 256-bit dh16 perceptual hash) at which two
-# posters are treated as the same image and collapsed before publishing. The
-# live VK feed has shown same-frame re-encodes/crops at distance 28
-# (INC-2026-06-16), so keep a still-conservative 256-bit default just above
-# that. 0 disables near-dup dedup.
-SMART_UPDATE_POSTER_NEAR_DUP_HAMMING = _env_int(
-    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 32, lo=0, hi=64
-)
-
 # Optional: allow light emoji usage in *full* public descriptions (Telegraph/body).
 # Must not affect `search_digest` (explicitly emoji-free by prompt).
 # Default: enabled (light). Can be disabled via ENV if it turns out noisy.
@@ -624,8 +616,30 @@ MERGE_RESPONSE_FORMAT = {
                 "ticket_price_min": {"type": ["integer", "null"]},
                 "ticket_price_max": {"type": ["integer", "null"]},
                 "ticket_status": {"type": ["string", "null"]},
-                "added_facts": {"type": "array", "items": {"type": "string"}},
-                "duplicate_facts": {"type": "array", "items": {"type": "string"}},
+                "added_facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact": {"type": "string"},
+                            "evidence_quote": {"type": "string"},
+                        },
+                        "required": ["fact", "evidence_quote"],
+                        "additionalProperties": False,
+                    },
+                },
+                "duplicate_facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact": {"type": "string"},
+                            "evidence_quote": {"type": "string"},
+                        },
+                        "required": ["fact", "evidence_quote"],
+                        "additionalProperties": False,
+                    },
+                },
                 "conflict_facts": {"type": "array", "items": {"type": "string"}},
                 "skipped_conflicts": {"type": "array", "items": {"type": "string"}},
             },
@@ -2321,6 +2335,11 @@ def _estimate_fact_first_description_budget_chars(facts_text_clean: Sequence[str
     return max(800, min(SMART_UPDATE_DESCRIPTION_MAX_CHARS, budget))
 
 
+def _fact_first_is_sparse(facts_text_clean: Sequence[str]) -> bool:
+    facts = [str(f or "").strip() for f in (facts_text_clean or []) if str(f or "").strip()]
+    return len(facts) <= 4 or sum(len(f) for f in facts) < 320
+
+
 def _estimate_fact_first_description_max_tokens(
     *, budget_chars: int, floor: int = 1700, ceil: int = 4500
 ) -> int:
@@ -2344,6 +2363,18 @@ def _fact_first_description_prompt(
 ) -> str:
     facts_block = "\n".join(f"- {str(f).strip()}" for f in (facts_text_clean or []) if str(f or "").strip())
     budget_chars = _estimate_fact_first_description_budget_chars(facts_text_clean)
+    sparse_source = _fact_first_is_sparse(facts_text_clean)
+    structure_rules = (
+        "- SPARSE SOURCE MODE: фактов мало. Верни 1–2 коротких абзаца без `###` и без эпиграфа.\n"
+        "- Не пытайся заполнить объём или придумать второй смысловой блок. Краткий конкретный текст лучше воды."
+        if sparse_source
+        else (
+            "- Затем 2–3 блока с подзаголовками `### ...` (только `###`).\n"
+            "- Подзаголовки короткие (до ~60 символов), без точек, не полные предложения; не делай пустых блоков.\n"
+            "- Подзаголовки должны быть информативными; избегай общих вроде «Подробности».\n"
+            "- Под каждым `###` должно быть либо 2–4 предложения, либо список (2+ пунктов)."
+        )
+    )
     return textwrap.dedent(
         f"""\
         Ты пишешь Markdown‑анонс события для Telegram в стиле культурного журналиста: живо, конкретно, без рекламы.
@@ -2363,10 +2394,7 @@ def _fact_first_description_prompt(
           - После эпиграфа: пустая строка, затем лид ОДНИМ абзацем (1–2 предложения) без заголовка (без переносов строки).
           - В теле текста НЕ повторяй и НЕ пересказывай epigraph_fact: он уже прозвучал в эпиграфе.
         - Если epigraph_fact null: просто лид ОДНИМ абзацем (1–2 предложения) без заголовка (без переносов строки).
-        - Затем 2–3 блока с подзаголовками `### ...` (только `###`).
-        - Подзаголовки короткие (до ~60 символов), без точек, не полные предложения; не делай пустых блоков.
-        - Подзаголовки должны быть информативными; избегай общих вроде «Подробности».
-        - Под каждым `###` должно быть либо 2–4 предложения, либо список (2+ пунктов).
+        {structure_rules}
         - Абзацы средней длины: обычно 2–4 предложения; избегай микро‑абзацев из одной короткой фразы.
         - Объём: старайся уложиться примерно в лимит `description_budget_chars` символов, без воды.
         - Эмодзи: 1–2 штуки, как навигация (в лид/в 1 заголовке), без «ёлки».
@@ -2399,6 +2427,7 @@ def _fact_first_description_prompt(
         - event_type: {(event_type or '').strip()}
         - epigraph_fact (если null — эпиграф НЕ нужен): {epigraph_fact if epigraph_fact is not None else 'null'}
         - description_budget_chars: {budget_chars}
+        - sparse_source: {str(sparse_source).lower()}
 
         Факты (facts_text_clean):
         {facts_block}
@@ -2434,14 +2463,29 @@ def _g4_split_derived_fields_schema() -> dict[str, Any]:
 
 
 def _g4_rich_facts_schema() -> dict[str, Any]:
+    grounded_fact = {
+        "type": "object",
+        "properties": {
+            "fact": {"type": "string"},
+            "evidence_quote": {
+                "type": "string",
+                "description": (
+                    "Exact contiguous quote from source_text, raw_excerpt, or poster_texts "
+                    "that directly supports this fact."
+                ),
+            },
+        },
+        "required": ["fact", "evidence_quote"],
+        "additionalProperties": False,
+    }
     return {
         "type": "object",
         "properties": {
-            "public_core_facts": {"type": "array", "items": {"type": "string"}},
-            "program_or_examples": {"type": "array", "items": {"type": "string"}},
-            "context_methodology_facts": {"type": "array", "items": {"type": "string"}},
-            "people_org_facts": {"type": "array", "items": {"type": "string"}},
-            "logistics_facts": {"type": "array", "items": {"type": "string"}},
+            "public_core_facts": {"type": "array", "items": grounded_fact},
+            "program_or_examples": {"type": "array", "items": grounded_fact},
+            "context_methodology_facts": {"type": "array", "items": grounded_fact},
+            "people_org_facts": {"type": "array", "items": grounded_fact},
+            "logistics_facts": {"type": "array", "items": grounded_fact},
             "uncertain_or_drop": {"type": "array", "items": {"type": "string"}},
         },
         "required": [
@@ -2456,7 +2500,11 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
     }
 
 
-def _flatten_g4_rich_facts_payload(data: Any) -> list[str]:
+def _flatten_g4_rich_facts_payload(
+    data: Any,
+    *,
+    source_corpus: str | None = None,
+) -> list[str]:
     if not isinstance(data, dict):
         return []
     out: list[str] = []
@@ -2468,9 +2516,35 @@ def _flatten_g4_rich_facts_payload(data: Any) -> list[str]:
         "logistics_facts",
     ):
         for item in data.get(key) or []:
-            s = str(item or "").strip()
-            if s:
-                out.append(s)
+            if isinstance(item, dict):
+                fact = str(item.get("fact") or "").strip()
+                quote = str(item.get("evidence_quote") or "").strip()
+            else:
+                # Backward-compatible fail-closed handling for a provider that
+                # ignores the new object schema: a string fact is accepted only
+                # when it is lexically supported by the full source corpus.
+                fact = str(item or "").strip()
+                quote = ""
+            if not fact:
+                continue
+            if source_corpus is not None:
+                verdict = claim_is_grounded(
+                    fact,
+                    source_corpus,
+                    evidence_quote=quote or None,
+                    min_ratio=0.45,
+                    min_matches=2,
+                )
+                if not verdict.ok:
+                    logger.warning(
+                        "smart_update.rich_fact_rejected reason=%s matched=%s claim_tokens=%s fact=%r",
+                        verdict.reason,
+                        verdict.matched,
+                        verdict.claim_tokens,
+                        fact[:180],
+                    )
+                    continue
+            out.append(fact)
     return out
 
 
@@ -2570,6 +2644,7 @@ def _cleanup_g4_split_create_description(
     value: str | None,
     *,
     candidate: EventCandidate,
+    sparse_source: bool = False,
 ) -> str | None:
     raw = (value or "").strip()
     if not raw:
@@ -2583,12 +2658,14 @@ def _cleanup_g4_split_create_description(
     raw = _sanitize_description_output(raw, source_text="") or raw
     raw = _dedupe_description(raw) or raw
     raw = _normalize_plaintext_paragraphs(raw) or raw
-    raw = _ensure_minimal_description_headings(raw) or raw
+    if not sparse_source:
+        raw = _ensure_minimal_description_headings(raw) or raw
     raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
     if _description_needs_infoblock_logistics_strip(raw, candidate=candidate):
         raw = _strip_infoblock_logistics_from_description(raw, candidate=candidate) or raw
         raw = _normalize_plaintext_paragraphs(raw) or raw
-        raw = _ensure_minimal_description_headings(raw) or raw
+        if not sparse_source:
+            raw = _ensure_minimal_description_headings(raw) or raw
         raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
     if _description_needs_g4_split_create_logistics_reject(raw, candidate=candidate):
         logger.warning(
@@ -2621,6 +2698,7 @@ async def _llm_g4_split_create_writer(
         "Пушкинская карта" if candidate.pushkin_card else "",
     ]
     description_facts = _g4_split_description_facts(facts, anchors=anchors, max_items=30) or facts
+    sparse_source = _fact_first_is_sparse(description_facts)
     budget_chars = _estimate_fact_first_description_budget_chars(description_facts)
     desc_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1700, ceil=4200)
     payload = {
@@ -2629,6 +2707,7 @@ async def _llm_g4_split_create_writer(
         "description_budget_chars": budget_chars,
         "facts_text_clean": description_facts,
         "full_fact_count": len(facts),
+        "sparse_source": sparse_source,
         "infoblock_context": {
             "date": candidate.date,
             "time": candidate.time,
@@ -2649,7 +2728,8 @@ async def _llm_g4_split_create_writer(
         "`infoblock_context` нужен только чтобы НЕ повторять логистику в описании: дата, время, город, площадка, адрес, билеты, ссылки, цена, возраст, Пушкинская карта показываются отдельно.\n\n"
         f"{SMART_UPDATE_YO_RULE}\n\n"
         "Верни JSON:\n"
-        "- `description`: Markdown-текст; лид одним абзацем, затем 2-3 информативных `###` раздела; не сухая выжимка.\n"
+        "- `description`: Markdown-текст. Если `sparse_source=true`, верни 1–2 коротких конкретных абзаца без `###`; "
+        "не заполняй объём и не достраивай программу. Если false — лид и 2–3 информативных `###` раздела.\n"
         "- Сохрани цитаты, имена, названия, цифры и элементы списков из фактов; списки лучше оформить markdown-пунктами.\n"
         "- Identity facts (организатор, сообщество, площадка, название мира/франшизы/источника вдохновения) сохраняй точно по фактам; не заменяй их редакционными догадками.\n"
         "- Для лекций/паблик-токов/дискуссий: если `facts_text_clean` содержит несколько фактов вида `Спикер:`/`Лектор:`/`Участник:`/`Ведущий:`, "
@@ -2685,6 +2765,7 @@ async def _llm_g4_split_create_writer(
     description = _cleanup_g4_split_create_description(
         raw_description,
         candidate=candidate,
+        sparse_source=sparse_source,
     )
     if not description and raw_description.strip():
         try:
@@ -2699,6 +2780,7 @@ async def _llm_g4_split_create_writer(
             description = _cleanup_g4_split_create_description(
                 edited,
                 candidate=candidate,
+                sparse_source=sparse_source,
             )
     if not description:
         return None
@@ -2857,6 +2939,16 @@ def _fact_first_revise_prompt(
     policy_issues: Sequence[str],
 ) -> str:
     budget_chars = _estimate_fact_first_description_budget_chars(facts_text_clean)
+    sparse_source = _fact_first_is_sparse(facts_text_clean)
+    structure_rule = (
+        "SPARSE SOURCE MODE: оставь 1–2 коротких абзаца без `###` и без эпиграфа; не добавляй блоки ради объёма."
+        if sparse_source
+        else (
+            "Структура: лид (1–2 предложения) без заголовка, ОДНИМ абзацем → 2–3 блока `### ...` → "
+            "абзацы средней длины. Под каждым `###` — 2+ предложения ИЛИ список (2+ пунктов). "
+            "Не дроби на микро-разделы по 1 фразе."
+        )
+    )
     facts_block = "\n".join(f"- {str(f).strip()}" for f in (facts_text_clean or []) if str(f or "").strip())
     return textwrap.dedent(
         f"""\
@@ -2898,8 +2990,7 @@ def _fact_first_revise_prompt(
         - Факты вида `Формат: ...`: отрази формат явно; ключевые слова после `:` должны прозвучать.
         - Факты с цифрами/рейтинги/диапазоны: цифры должны совпадать с фактами.
         - Эпиграф: если epigraph_fact не null — blockquote до первого `###` и только один раз.
-        - Структура: лид (1–2 предложения) без заголовка, ОДНИМ абзацем → 2–3 блока `### ...` → абзацы средней длины.
-          Под каждым `###` — 2+ предложения ИЛИ список (2+ пунктов). Не дроби на микро‑разделы по 1 фразе.
+        - {structure_rule}
         - Подзаголовки должны быть информативными; избегай общих вроде «Подробности».
         - Эмодзи: 1–2 штуки, без «ёлки».
         - Запреты: нет даты/времени/города/площадки/адреса; нет URL/телефонов (кроме ссылок на плейлист Я.Музыки из facts_text_clean); нет цен/донатов; нет билетов/входа/регистрации/записи; нет возраста; нет «Пушкинская карта»; нет афиш.
@@ -2931,13 +3022,18 @@ def _fact_first_remove_posv_prompt(
         "facts_text_clean": [str(x).strip() for x in (facts_text_clean or []) if str(x or "").strip()],
         "description_md": _clip((description or "").strip(), 3200),
     }
+    structure_rule = (
+        "Сохрани 1–2 коротких абзаца без заголовков и эпиграфа."
+        if _fact_first_is_sparse(facts_text_clean)
+        else "Сохрани структуру: эпиграф (если есть), затем лид и 2–3 `###`."
+    )
     return (
         "В описании найден запрещённый корень «посвящ…» (посвящён/посвящена/посвящено и т.п.).\n"
         "Твоя задача: отредактировать `description_md` так, чтобы этот корень НЕ встречался нигде.\n\n"
         "Правила:\n"
         "- Верни ПОЛНЫЙ Markdown-текст (не частями).\n"
         "- Нельзя добавлять новые факты: источник истины — только `facts_text_clean`.\n"
-        "- Сохрани структуру: эпиграф (если есть) остаётся blockquote до первого `###`; затем лид; затем 2–3 `###`.\n"
+        f"- {structure_rule}\n"
         "- Нельзя добавлять логистику/CTA/ссылки/контакты/цены/возраст/афиши.\n"
         "- Слово/корень «посвящ» запрещён полностью. Перефразируй через «о/про/в центре — …», "
         "исправляя падежи/согласование.\n\n"
@@ -3100,7 +3196,8 @@ async def _llm_fact_first_description_md(
     # Keep the prompt bounded; fact-first relies on extracted facts, not raw sources.
     facts = _dedupe_source_facts(facts)[:28]
     facts = _dedupe_source_facts([_sanitize_fact_text_clean_for_prompt(f) for f in facts])[:28]
-    epigraph_fact = _pick_epigraph_fact(facts)
+    sparse_source = _fact_first_is_sparse(facts)
+    epigraph_fact = None if sparse_source else _pick_epigraph_fact(facts)
     budget_chars = _estimate_fact_first_description_budget_chars(facts)
     desc_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1700)
     revise_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1900)
@@ -3121,7 +3218,8 @@ async def _llm_fact_first_description_md(
         # dedupe/orphan-heading cleanup must happen AFTER it to avoid duplicate empty sections.
         raw = _dedupe_description(raw) or raw
         raw = _normalize_plaintext_paragraphs(raw) or raw
-        raw = _ensure_minimal_description_headings(raw) or raw
+        if not sparse_source:
+            raw = _ensure_minimal_description_headings(raw) or raw
         return raw.strip() or None
 
     def _collect_policy_issues(value: str) -> list[str]:
@@ -3130,19 +3228,28 @@ async def _llm_fact_first_description_md(
 
         # Headings count: keep it readable and consistent with the prompt.
         h3 = len(re.findall(r"(?m)^###\s+\S", desc_s))
-        if h3 < 2 or h3 > 3:
+        if sparse_source and h3:
+            issues.append("SPARSE SOURCE MODE: убери все `###`; оставь 1–2 коротких абзаца без заполнения объёма.")
+        elif (not sparse_source) and (h3 < 2 or h3 > 3):
             issues.append(
                 f"Сейчас заголовков `###` = {h3}; нужно 2–3. "
                 "Объедини близкие разделы и оставь ровно 2–3 информативных подзаголовка."
             )
 
-        lead_paras = _fact_first_lead_paragraph_count(desc_s)
-        if lead_paras == 0:
-            issues.append("Добавь лид одним абзацем (1–2 предложения) перед первым `###`.")
-        elif lead_paras > 1:
-            issues.append(
-                "Лид до первого `###` должен быть ОДНИМ абзацем (1–2 предложения), без лишних переносов строки."
-            )
+        if sparse_source:
+            sparse_paras = [p.strip() for p in re.split(r"\n{2,}", desc_s) if p.strip()]
+            if not sparse_paras:
+                issues.append("SPARSE SOURCE MODE: нужен один короткий содержательный абзац.")
+            elif len(sparse_paras) > 2:
+                issues.append("SPARSE SOURCE MODE: сократи до 1–2 абзацев; не добавляй структуру ради объёма.")
+        else:
+            lead_paras = _fact_first_lead_paragraph_count(desc_s)
+            if lead_paras == 0:
+                issues.append("Добавь лид одним абзацем (1–2 предложения) перед первым `###`.")
+            elif lead_paras > 1:
+                issues.append(
+                    "Лид до первого `###` должен быть ОДНИМ абзацем (1–2 предложения), без лишних переносов строки."
+                )
 
         h3_titles = [
             re.sub(r"\s+", " ", (m.group(1) or "")).strip()
@@ -3174,7 +3281,7 @@ async def _llm_fact_first_description_md(
                     f"{shown}{more}. Заголовки должны быть уникальными — объедини секции или переименуй."
                 )
 
-        micro_h3 = _fact_first_micro_h3_headings(desc_s)
+        micro_h3 = [] if sparse_source else _fact_first_micro_h3_headings(desc_s)
         if micro_h3:
             shown = ", ".join(micro_h3[:4])
             more = "" if len(micro_h3) <= 4 else f" (+{len(micro_h3) - 4})"
@@ -4570,6 +4677,58 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     return True, "llm_scoped"
 
 
+_EXPLICIT_UNKNOWN_START_TIME_RE = re.compile(
+    r"(?iu)\b(?:"
+    r"время\s+(?:начала|старта)|"
+    r"(?:точное\s+)?(?:начало|старт)"
+    r")\s+(?:пока\s+)?(?:уточняется|не\s+определен[оа]?|не\s+известн[оа]?|"
+    r"будет\s+(?:уточнен[оа]?|объявлен[оа]?|известн[оа]?))\b"
+)
+
+
+def _source_explicitly_leaves_start_time_unknown(text: str | None) -> bool:
+    return bool(_EXPLICIT_UNKNOWN_START_TIME_RE.search(str(text or "")))
+
+
+def _candidate_explicitly_leaves_start_time_unknown(
+    candidate: "EventCandidate",
+    corpus: str,
+) -> bool:
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    if "tg_time_explicitly_unknown" in metrics:
+        return bool(metrics.get("tg_time_explicitly_unknown"))
+    return _source_explicitly_leaves_start_time_unknown(corpus)
+
+
+_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC = (
+    "smart_update_explicit_unknown_start_llm_confirmed"
+)
+
+
+def _apply_llm_confirmed_unknown_start_time(
+    event: Any,
+    candidate: "EventCandidate",
+    *,
+    updated_keys: list[str],
+) -> bool:
+    """Apply the LLM-reviewed removal of a previously persisted wrong time."""
+
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    if not bool(metrics.get(_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC)):
+        return False
+    if not str(getattr(event, "time", "") or "").strip() and not bool(
+        getattr(event, "time_is_default", False)
+    ):
+        return False
+    event.time = ""
+    event.time_is_default = False
+    if "time" not in updated_keys:
+        updated_keys.append("time")
+    if "time_is_default" not in updated_keys:
+        updated_keys.append("time_is_default")
+    return True
+
+
 def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tuple[bool, str]:
     """High-recall router only; the LLM owns the date/time role decision."""
 
@@ -4578,6 +4737,8 @@ def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tupl
     corpus = _candidate_location_grounding_corpus(candidate)
     if not corpus:
         return False, "empty_source"
+    if _candidate_explicitly_leaves_start_time_unknown(candidate, corpus):
+        return True, "explicit_unknown_start_time"
     times = {
         f"{int(hour):02d}:{minute}"
         for hour, minute in re.findall(r"(?<!\d)([01]?\d|2[0-3])[.:]([0-5]\d)(?!\d)", corpus)
@@ -4626,6 +4787,9 @@ async def _llm_review_candidate_anchor_roles(
         "от полного периода работы и несколько отдельных occurrences от непрерывного range. "
         "Для многодневного периода ставь time=null, если единственное время относится "
         "только к открытию/вернисажу, а не к ежедневному расписанию всего периода. "
+        "Если у конкретной активности прямо сказано, что время начала уточняется, будет "
+        "объявлено или пока неизвестно, ставь time=null: часы всей ярмарки, фестиваля или "
+        "программы являются контекстом и не становятся временем начала этой активности. "
         "Если title означает саму выставку, выбирай полный период; если title явно означает "
         "открытие/вернисаж, выбирай только дату и время открытия. Не схлопывай выставку к дате закрытия. "
         "Если evidence однозначно поддерживает candidate — keep. Если однозначно даёт другие "
@@ -4651,7 +4815,10 @@ async def _llm_review_candidate_anchor_roles(
     corpus_norm = _norm_text_for_grounding(corpus)
     if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
         return False, "llm_evidence_not_verbatim"
+    explicit_unknown_start = _candidate_explicitly_leaves_start_time_unknown(candidate, corpus)
     if decision == "keep" and confidence >= 0.9:
+        if explicit_unknown_start and _valid_hhmm_or_none(candidate.time):
+            return False, "llm_time_conflicts_explicit_unknown"
         return True, "llm_keep"
     if decision != "repair" or confidence < 0.85:
         return False, f"llm_{decision or 'uncertain'}"
@@ -4664,6 +4831,8 @@ async def _llm_review_candidate_anchor_roles(
         return False, "llm_invalid_end_date"
     if data.get("time") and repaired_time is None:
         return False, "llm_invalid_time"
+    if explicit_unknown_start and repaired_time is not None:
+        return False, "llm_time_conflicts_explicit_unknown"
     if not repaired_date:
         return False, "llm_missing_date"
     if repaired_end and _parse_iso_date(repaired_end) < _parse_iso_date(repaired_date):
@@ -4740,6 +4909,31 @@ def _candidate_needs_llm_location_grounding_review(
     # transient provider failures still fail closed inside the review call.
     if SMART_UPDATE_LLM_DISABLED:
         return False, "llm_disabled"
+
+    # A structured event/festival label can be copied verbatim into the venue
+    # field while still not naming an attendee-facing place.  This is only a
+    # high-recall router: the LLM below owns the semantic verdict and may keep
+    # a genuine venue.  Keep the trigger narrow so it does not add a review to
+    # every social candidate merely because the title happens to mention its
+    # venue.
+    location_key = normalize_venue_key(candidate.location_name)
+    if location_key:
+        context_values = (
+            getattr(candidate, "festival", None),
+            getattr(candidate, "festival_full", None),
+            getattr(candidate, "festival_series", None),
+        )
+        for value in context_values:
+            context_key = normalize_venue_key(value)
+            if len(context_key) < 5:
+                continue
+            if (
+                location_key == context_key
+                or location_key.startswith(f"{context_key} ")
+                or location_key.endswith(f" {context_key}")
+            ):
+                return True, "location_overlaps_event_context"
+
     corpus = _candidate_location_grounding_corpus(candidate)
     if not corpus:
         return True, "missing_source_evidence"
@@ -4808,8 +5002,12 @@ async def _llm_review_candidate_location_grounding(
         "Reference/vector retrieval является только подсказкой и не доказывает площадку.\n"
         "Определи attendee-facing место проведения именно этого события. Не путай: "
         "площадку с артистом/организатором, парк с одноимённым дворцом спорта, "
-        "конкретный зал с широким кварталом, один остров/озеро с другим. "
+        "конкретный зал с широким кварталом, один остров/озеро с другим, а название "
+        "фестиваля, праздника или Дня города — с площадкой. Event context вроде "
+        "«День города в Янтарном» не является названием venue. "
         "Если источник явно называет более конкретное место, выбери его. "
+        "Если источник подтверждает только город/посёлок, но не attendee-facing площадку, "
+        "верни uncertain: не превращай событие или праздник в location_name. "
         "Ничего не выдумывай. Для repair верни короткую дословную evidence_quote. "
         "Если доказательств недостаточно — uncertain. Верни только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
@@ -8056,8 +8254,16 @@ async def _llm_extract_candidate_facts(
             "Ты извлекаешь ПОЛНЫЙ набор фактов о КОНКРЕТНОМ событии для Smart Update G4.\n"
             "Это quality-critical stage: лучше вернуть больше grounded фактов, чем сжать источник до короткой карточки.\n"
             "Верни JSON строго по схеме.\n\n"
+            "Evidence contract для каждого элемента public/program/context/people/logistics:\n"
+            "- Верни объект {fact, evidence_quote}.\n"
+            "- evidence_quote — точная непрерывная цитата из text/raw_excerpt/poster_texts, без пересказа.\n"
+            "- Цитата должна прямо подтверждать ВЕСЬ fact, а не быть просто соседней строкой по теме.\n"
+            "- Не выводи редакционные обобщения из названия проекта. Если источник не называет цель, "
+            "формат, пользу, регулярность или продолжение серии, не создавай такие факты.\n"
+            "- При коротком тизере нормально вернуть 1–3 факта или пустые секции: не заполняй схему догадками.\n\n"
             "Секции:\n"
-            "- public_core_facts: суть события, формат, цель, что будет происходить, что получает/делает участник.\n"
+            "- public_core_facts: только явно названные суть/формат/цель и явно обещанные действия участника. "
+            "Не достраивай их по типу, названию или общей тематике события.\n"
             "- context_methodology_facts: методология, исследование, источник концепции, важные числа, background, который объясняет событие.\n"
             "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры. "
             "Имена организаторов/сообществ/площадок, а также названия вымышленных миров, франшиз и культурных источников "
@@ -8146,7 +8352,19 @@ async def _llm_extract_candidate_facts(
     raw_facts = []
     if isinstance(data, dict):
         if SMART_UPDATE_G4_SPLIT_CREATE:
-            raw_facts = _flatten_g4_rich_facts_payload(data)
+            source_corpus = "\n\n".join(
+                str(value or "").strip()
+                for value in (
+                    payload.get("text"),
+                    payload.get("raw_excerpt"),
+                    *(payload.get("poster_texts") or []),
+                )
+                if str(value or "").strip()
+            )
+            raw_facts = _flatten_g4_rich_facts_payload(
+                data,
+                source_corpus=source_corpus,
+            )
         else:
             raw_facts = list(data.get("facts") or [])
 
@@ -9192,8 +9410,11 @@ def _normalize_url(url: str | None) -> str | None:
     value = url.strip()
     if not value:
         return None
+    canonical_tg = canonicalize_tg_url(value)
+    if canonical_tg:
+        return canonical_tg.rstrip("/")
     low = value.lower()
-    if low.startswith(("t.me/", "vk.cc/", "clck.ru/")):
+    if low.startswith(("t.me/", "telegram.me/", "vk.cc/", "clck.ru/")):
         value = f"https://{value}"
         low = value.lower()
     if low.startswith("http://"):
@@ -9289,11 +9510,67 @@ def _infer_source_type_from_url(url: str | None) -> str:
     value = (url or "").strip().lower()
     if not value:
         return "site"
-    if "t.me/" in value:
+    if "t.me/" in value or "telegram.me/" in value:
         return "telegram"
     if _is_vk_wall_url(value):
         return "vk"
     return "site"
+
+
+def _is_managed_vk_publication_url(url: str | None) -> bool:
+    value = str(url or "").strip()
+    match = re.search(r"(?i)(?:wall)?-([0-9]+)_[0-9]+", value)
+    if not match:
+        return False
+    owner_id = match.group(1)
+    managed_ids = {
+        str(os.getenv(name) or "").strip().lstrip("-")
+        for name in ("VK_EVENTS_GROUP_ID", "VK_AFISHA_GROUP_ID")
+    }
+    managed_ids.discard("")
+    # This is the established production default used by the publishing and
+    # Smart Update report surfaces when the env alias is omitted.
+    managed_ids.add("231920894")
+    return owner_id in managed_ids
+
+
+def _flatten_source_grounded_fact_items(
+    facts: Sequence[object],
+    *,
+    source_text: str | None,
+    log_context: str,
+) -> list[str]:
+    out: list[str] = []
+    for raw in facts or []:
+        if isinstance(raw, dict):
+            fact = str(raw.get("fact") or "").strip()
+            evidence_quote = str(raw.get("evidence_quote") or "").strip()
+        else:
+            # Backwards-compatible fail-closed handling for stale providers and
+            # fixtures: a bare string must still be supported by the full source.
+            fact = str(raw or "").strip()
+            evidence_quote = ""
+        if not fact:
+            continue
+        verdict = claim_is_grounded(
+            fact,
+            source_text,
+            evidence_quote=evidence_quote or None,
+            min_ratio=0.38,
+            min_matches=2,
+        )
+        if verdict.ok:
+            out.append(fact)
+            continue
+        logger.warning(
+            "smart_update.source_fact_rejected context=%s reason=%s matched=%s claim_tokens=%s fact=%r",
+            log_context,
+            verdict.reason,
+            verdict.matched,
+            verdict.claim_tokens,
+            fact[:180],
+        )
+    return out
 
 
 async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
@@ -9316,6 +9593,13 @@ async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
     now = datetime.now(timezone.utc)
     added = 0
     for url in urls:
+        if _is_managed_vk_publication_url(url):
+            logger.info(
+                "smart_update.legacy_source_skip_managed_vk event_id=%s source_url=%s",
+                event.id,
+                url,
+            )
+            continue
         exists = (
             await session.execute(
                 select(EventSource.id).where(
@@ -10810,6 +11094,10 @@ async def _llm_merge_event(
         "duplicate_facts должен содержать список фактов из candidate, которые уже есть в event_before.facts (дубли). "
         "conflict_facts должен содержать список конфликтов (см. выше) и выбранную сторону по доверию. "
         "Не включай в added_facts и duplicate_facts служебные заметки. "
+        "Каждый элемент added_facts и duplicate_facts верни объектом {fact, evidence_quote}. "
+        "evidence_quote — точная непрерывная цитата из candidate.text/raw_excerpt/poster_texts, "
+        "которая прямо подтверждает ВЕСЬ fact. Если такой цитаты нет, не возвращай факт. "
+        "Не выводи цель, формат, пользу, регулярность или продолжение серии только из названия/тематики. "
         "\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -13948,6 +14236,12 @@ async def _smart_event_update_impl(
     schedule_tasks: bool = True,
     schedule_kwargs: dict[str, Any] | None = None,
 ) -> SmartUpdateResult:
+    canonical_source_url = canonicalize_tg_url(candidate.source_url)
+    if canonical_source_url:
+        candidate.source_url = canonical_source_url
+    canonical_ticket_link = canonicalize_tg_url(candidate.ticket_link)
+    if canonical_ticket_link:
+        candidate.ticket_link = canonical_ticket_link
     logger.info(
         "smart_update.start source_type=%s source_url=%s title=%s date=%s time=%s location=%s city=%s posters=%d trust=%s festival_context=%s festival=%s festival_full=%s festival_source=%s festival_series=%s",
         candidate.source_type,
@@ -14034,6 +14328,13 @@ async def _smart_event_update_impl(
                 status="invalid",
                 reason=f"anchor_role_review:{anchor_result}",
             )
+        if (
+            anchor_review_trigger == "explicit_unknown_start_time"
+            and not _valid_hhmm_or_none(candidate.time)
+        ):
+            if not isinstance(candidate.metrics, dict):
+                candidate.metrics = {}
+            candidate.metrics[_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC] = True
     if _candidate_needs_llm_occurrence_scope_review(candidate) and not SMART_UPDATE_LLM_DISABLED:
         scope_ok, scope_result = await _llm_scope_candidate_occurrence(candidate)
         logger.info(
@@ -16042,7 +16343,8 @@ async def _smart_event_update_impl(
                 )
                 or description_value
             )
-            description_value = _ensure_minimal_description_headings(description_value) or description_value
+            if not _fact_first_is_sparse(bundled_facts or []):
+                description_value = _ensure_minimal_description_headings(description_value) or description_value
         if (not split_create_used) and _has_overlong_paragraph(description_value, limit=850):
             try:
                 reflown = await _llm_reflow_description_paragraphs(description_value)
@@ -16651,6 +16953,14 @@ async def _smart_event_update_impl(
             is_canonical_site=is_canonical_site,
         )
 
+        if _apply_llm_confirmed_unknown_start_time(
+            event_db,
+            candidate,
+            updated_keys=updated_keys,
+        ):
+            updated_fields = True
+            conflicting.pop("time", None)
+
         # Fill placeholder/missing time from any matched source (TG/VK/etc.), not only parser sources.
         # This prevents duplicate creation like: existing time=00:00 (legacy placeholder) + new source brings 19:00.
         if not is_canonical_site:
@@ -16828,7 +17138,11 @@ async def _smart_event_update_impl(
                 )
                 rows = (
                     await session.execute(
-                        select(EventSourceFact.fact)
+                        select(
+                            EventSourceFact.fact,
+                            EventSource.source_text,
+                            EventSource.source_url,
+                        )
                         .join(EventSource, EventSourceFact.source_id == EventSource.id)
                         .where(
                             EventSourceFact.event_id == int(event_db.id or 0),
@@ -16841,9 +17155,18 @@ async def _smart_event_update_impl(
                         )
                     )
                 ).all()
-                facts_before_list = _dedupe_source_facts(
-                    [str(r[0]).strip() for r in (rows or []) if (r and str(r[0] or "").strip())]
-                )[:80]
+                grounded_rows: list[str] = []
+                for row in rows or []:
+                    fact = str(row[0] or "").strip()
+                    source_url_for_fact = str(row[2] or "").strip()
+                    if not fact or _is_managed_vk_publication_url(source_url_for_fact):
+                        continue
+                    # Historical ledger facts may be faithful LLM paraphrases, so
+                    # do not semantically rewrite/drop them with a lexical rule.
+                    # New facts enter the ledger only through the evidence-quote
+                    # contracts below and in rich_facts_extract.
+                    grounded_rows.append(fact)
+                facts_before_list = _dedupe_source_facts(grounded_rows)[:80]
                 legacy_facts_seed: list[str] = []
                 # Keep a compact snapshot for operator audit/debug, but do not use it as facts_before.
                 # Also: if an older run created only a legacy note (without extracted facts), we still
@@ -16882,12 +17205,28 @@ async def _smart_event_update_impl(
                 if merge_data:
                     merge_digest_from_llm = _clean_search_digest(merge_data.get("search_digest"))
                     deterministic_skipped_conflicts = list(skipped_conflicts)
-                    added_facts = _filter_ungrounded_sensitive_facts(
+                    added_facts = _flatten_source_grounded_fact_items(
                         merge_data.get("added_facts") or [],
+                        source_text=(
+                            _strip_promo_lines(candidate.source_text)
+                            or candidate.source_text
+                        ),
+                        log_context=f"merge:{candidate.source_url or candidate.source_type}",
+                    )
+                    added_facts = _filter_ungrounded_sensitive_facts(
+                        added_facts,
                         candidate=candidate,
                     )
-                    duplicate_facts = _filter_ungrounded_sensitive_facts(
+                    duplicate_facts = _flatten_source_grounded_fact_items(
                         merge_data.get("duplicate_facts") or [],
+                        source_text=(
+                            _strip_promo_lines(candidate.source_text)
+                            or candidate.source_text
+                        ),
+                        log_context=f"merge_duplicate:{candidate.source_url or candidate.source_type}",
+                    )
+                    duplicate_facts = _filter_ungrounded_sensitive_facts(
+                        duplicate_facts,
                         candidate=candidate,
                     )
                     conflict_facts = list(merge_data.get("conflict_facts") or [])
@@ -17073,7 +17412,8 @@ async def _smart_event_update_impl(
                                     )
                                     or cleaned_ff
                                 )
-                                cleaned_ff = _ensure_minimal_description_headings(cleaned_ff) or cleaned_ff
+                                if not _fact_first_is_sparse(facts_text_clean):
+                                    cleaned_ff = _ensure_minimal_description_headings(cleaned_ff) or cleaned_ff
                                 cleaned_ff = _clip(cleaned_ff, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
                                 current = (event_db.description or "").strip()
                                 if cleaned_ff.strip() and cleaned_ff.strip() != current:
@@ -17877,7 +18217,12 @@ async def _smart_event_update_impl(
             async with db.get_session() as session:
                 refreshed = await session.get(Event, existing.id)
             if refreshed:
-                await schedule_event_update_tasks(db, refreshed, **(schedule_kwargs or {}))
+                task_kwargs = dict(schedule_kwargs or {})
+                # A managed VK post is an editable projection, not a terminal
+                # publication.  Re-arm its idempotent sync whenever Smart Update
+                # actually changed the canonical event.
+                task_kwargs["refresh_existing_vk"] = True
+                await schedule_event_update_tasks(db, refreshed, **task_kwargs)
         except Exception:
             logger.warning("smart_update: schedule/update failed for event %s", existing.id, exc_info=True)
 
@@ -17913,7 +18258,7 @@ async def _smart_event_update_impl(
 
 
 def _poster_relevance_quality(p: PosterCandidate) -> int:
-    """Cheap quality score to pick the survivor of a near-duplicate cluster."""
+    """Cheap quality score to pick the survivor of an exact identity collision."""
     q = 0
     title = getattr(p, "ocr_title", None)
     if title:
@@ -17924,74 +18269,6 @@ def _poster_relevance_quality(p: PosterCandidate) -> int:
     if getattr(p, "supabase_url", None):
         q += 1
     return q
-
-
-def _dedup_near_duplicate_posters(
-    posters: Sequence[PosterCandidate],
-) -> list[PosterCandidate]:
-    """Collapse visually near-identical posters by perceptual-hash Hamming distance.
-
-    Exact-byte (sha256) and exact-URL dedup elsewhere only catch identical files;
-    two re-encodes / crops / resolutions of the same poster have different bytes
-    (and often slightly different dh16 hashes), so both used to survive and publish
-    as a duplicate image (INC-2026-05-17). Here we keep, per near-dup cluster, the
-    highest-quality poster. Posters without a phash are always kept (we cannot prove
-    they are duplicates).
-    """
-    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
-    if threshold <= 0 or len(posters) < 2:
-        return list(posters)
-    kept: list[PosterCandidate] = []
-    kept_phashes: list[str] = []
-    for p in posters:
-        ph = (getattr(p, "phash", None) or "").strip().lower()
-        if ph:
-            dup_idx = None
-            for i, kph in enumerate(kept_phashes):
-                if kph and hamming_distance_hex(ph, kph) <= threshold:
-                    dup_idx = i
-                    break
-            if dup_idx is not None:
-                if _poster_relevance_quality(p) > _poster_relevance_quality(kept[dup_idx]):
-                    kept[dup_idx] = p
-                    kept_phashes[dup_idx] = ph
-                logger.info(
-                    "smart_update: dropped near-duplicate poster (hamming<=%d)",
-                    threshold,
-                )
-                continue
-        kept.append(p)
-        kept_phashes.append(ph)
-    return kept
-
-
-async def _backfill_missing_poster_candidate_phashes(
-    posters: Sequence[PosterCandidate],
-) -> None:
-    for poster in posters or []:
-        if (getattr(poster, "phash", None) or "").strip():
-            continue
-        url = (getattr(poster, "supabase_url", None) or getattr(poster, "catbox_url", None) or "").strip()
-        if not url:
-            continue
-        phash = await _photo_url_dhash(url)
-        if phash:
-            poster.phash = phash
-
-
-def _event_poster_display_url(row: EventPoster) -> str | None:
-    return (getattr(row, "supabase_url", None) or getattr(row, "catbox_url", None) or "").strip() or None
-
-
-def _event_poster_quality(row: EventPoster) -> int:
-    score = 0
-    if getattr(row, "ocr_title", None):
-        score += len(str(row.ocr_title))
-    if getattr(row, "ocr_text", None):
-        score += len(str(row.ocr_text))
-    if getattr(row, "supabase_url", None):
-        score += 2
-    return score
 
 
 def _normalize_poster_identity_url(url: str | None) -> str | None:
@@ -18022,7 +18299,8 @@ def _poster_identity_keys(
 ) -> tuple[tuple[str, str], ...]:
     """Return deterministic identity keys for poster merge dedup.
 
-    Strong keys are exact poster hash, Supabase object path, and exact phash.
+    Strong keys are exact content hash and Supabase object path. Perceptual
+    hashes never establish identity without automated visual adjudication.
     URL is intentionally last and weak: it is used only as a conservative
     fallback for legacy rows that lack stronger metadata.
     """
@@ -18038,9 +18316,6 @@ def _poster_identity_keys(
     supabase_path = str(getattr(poster, "supabase_path", "") or "").strip()
     if supabase_path:
         keys.append(("supabase_path", supabase_path))
-    phash = str(getattr(poster, "phash", "") or "").strip().lower()
-    if phash:
-        keys.append(("phash", phash))
     if include_weak_url:
         seen_urls: set[str] = set()
         for raw_url in (getattr(poster, "supabase_url", None), getattr(poster, "catbox_url", None)):
@@ -18111,191 +18386,6 @@ def _dedup_poster_candidates_by_identity(
     return kept
 
 
-async def _backfill_missing_eventposter_phashes(rows: Sequence[EventPoster]) -> None:
-    for row in rows or []:
-        if (getattr(row, "phash", None) or "").strip():
-            continue
-        url = _event_poster_display_url(row)
-        if not url:
-            continue
-        phash = await _photo_url_dhash(url)
-        if phash:
-            row.phash = phash
-
-
-async def _prune_near_duplicate_eventposters(session, rows: Sequence[EventPoster]) -> tuple[int, set[str]]:
-    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
-    if threshold <= 0 or len(rows or []) < 2:
-        return 0, set()
-    kept: list[EventPoster] = []
-    kept_phashes: list[str] = []
-    pruned_urls: set[str] = set()
-    pruned = 0
-    for row in rows:
-        ph = (getattr(row, "phash", None) or "").strip().lower()
-        if not ph:
-            kept.append(row)
-            kept_phashes.append("")
-            continue
-        dup_idx = None
-        for idx, existing in enumerate(kept_phashes):
-            if existing and hamming_distance_hex(ph, existing) <= threshold:
-                dup_idx = idx
-                break
-        if dup_idx is None:
-            kept.append(row)
-            kept_phashes.append(ph)
-            continue
-
-        survivor = kept[dup_idx]
-        if _event_poster_quality(row) > _event_poster_quality(survivor):
-            drop = survivor
-            kept[dup_idx] = row
-            kept_phashes[dup_idx] = ph
-        else:
-            drop = row
-        for url in (getattr(drop, "catbox_url", None), getattr(drop, "supabase_url", None)):
-            if url:
-                pruned_urls.add(str(url))
-        await session.delete(drop)
-        pruned += 1
-        logger.info(
-            "smart_update: pruned persisted near-duplicate eventposter id=%s hamming<=%d",
-            getattr(drop, "id", None),
-            threshold,
-        )
-    return pruned, pruned_urls
-
-
-def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
-    match = re.search(
-        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
-        str(url or "").strip(),
-        flags=re.IGNORECASE,
-    )
-    return match.group(1).lower() if match else None
-
-
-def _download_photo_for_hash(url: str, *, max_bytes: int) -> bytes | None:
-    request_url = _quote_photo_url_for_request(url)
-    req = urllib.request.Request(
-        request_url,
-        headers={"User-Agent": "events-bot-media-dedup/1.0"},
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        length = resp.headers.get("Content-Length")
-        if length:
-            try:
-                if int(length) > max_bytes:
-                    return None
-            except ValueError:
-                pass
-        data = resp.read(max_bytes + 1)
-        if len(data) > max_bytes:
-            return None
-        return data
-
-
-def _quote_photo_url_for_request(url: str) -> str:
-    try:
-        parts = urlsplit(url)
-        return urlunsplit(
-            (
-                parts.scheme,
-                parts.netloc,
-                quote(parts.path, safe="/%:@"),
-                quote(parts.query, safe="=&?/:+,%"),
-                parts.fragment,
-            )
-        )
-    except Exception:
-        return url
-
-
-async def _photo_url_dhash(url: str | None) -> str | None:
-    raw = str(url or "").strip()
-    if not raw:
-        return None
-    parsed = _extract_dhash_from_managed_photo_url(raw)
-    if parsed:
-        return parsed
-    if not raw.startswith(("http://", "https://")):
-        return None
-    try:
-        max_bytes = int(os.getenv("SMART_UPDATE_PHOTO_HASH_MAX_BYTES", "8000000") or "8000000")
-    except ValueError:
-        max_bytes = 8_000_000
-    try:
-        payload = await asyncio.to_thread(_download_photo_for_hash, raw, max_bytes=max_bytes)
-        if not payload:
-            return None
-        return await asyncio.to_thread(compute_dhash_hex, payload)
-    except Exception as exc:
-        logger.info("smart_update.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
-        return None
-
-
-async def _dedupe_photo_urls_by_phash(
-    photo_urls: Sequence[str],
-    *,
-    preferred_urls: set[str] | None = None,
-) -> list[str]:
-    """Collapse visually duplicate persisted image URLs.
-
-    `_dedup_near_duplicate_posters` handles the current candidate batch, but
-    events can already carry legacy `photo_urls` from a site/CDN import. When a
-    later Smart Update adds the same poster through managed storage, both URLs
-    used to survive in `Event.photo_urls` and then publish as duplicate VK
-    attachments. This normalizes the persisted image set itself.
-    """
-    urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
-    if len(urls) < 2:
-        return urls
-    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
-    if threshold <= 0:
-        out: list[str] = []
-        seen: set[str] = set()
-        for url in urls:
-            if url not in seen:
-                seen.add(url)
-                out.append(url)
-        return out
-    preferred = {str(u or "").strip() for u in (preferred_urls or set()) if str(u or "").strip()}
-    kept: list[str] = []
-    kept_hashes: list[str | None] = []
-    seen: set[str] = set()
-    for url in urls:
-        if url in seen:
-            continue
-        seen.add(url)
-        phash = await _photo_url_dhash(url)
-        duplicate_idx: int | None = None
-        if phash:
-            for idx, existing in enumerate(kept_hashes):
-                if existing and hamming_distance_hex(phash, existing) <= threshold:
-                    duplicate_idx = idx
-                    break
-        if duplicate_idx is None:
-            kept.append(url)
-            kept_hashes.append(phash)
-            continue
-        current_preferred = url in preferred
-        existing_preferred = kept[duplicate_idx] in preferred
-        if current_preferred and not existing_preferred:
-            logger.info(
-                "smart_update.photo_dedup replacing legacy near-duplicate with preferred url hamming<=%d",
-                threshold,
-            )
-            kept[duplicate_idx] = url
-            kept_hashes[duplicate_idx] = phash
-        else:
-            logger.info(
-                "smart_update.photo_dedup dropped near-duplicate photo_url hamming<=%d",
-                threshold,
-            )
-    return kept
-
-
 async def _apply_posters(
     session,
     event_id: int | None,
@@ -18303,298 +18393,186 @@ async def _apply_posters(
     poster_scope_hashes: Sequence[str] | None = None,
     event_title: str | None = None,
 ) -> tuple[int, list[str], bool, int, bool]:
+    """Persist candidates through the single fail-closed event-media gate.
+
+    Exact content/object identity may merge synchronously.  Perceptual hashes are
+    evidence only: every new second-or-later logical image remains quarantined
+    until the automated pair reviewer resolves it.
+    """
+
+    del event_title
     if not event_id:
         return 0, [], False, 0, False
-    await _backfill_missing_poster_candidate_phashes(posters)
-    posters = _dedup_near_duplicate_posters(posters)
+
+    from event_media import (
+        APPROVED,
+        DUPLICATE,
+        PENDING_REVIEW,
+        REJECTED,
+        UNAVAILABLE,
+        ensure_event_media_reviews,
+        event_media_require_cdn,
+        materialize_event_media_candidate_to_cdn,
+        resolve_poster_display_url,
+        sync_event_gallery_projection,
+    )
+
+    cdn_ready: dict[int, bool] = {}
+    if event_media_require_cdn():
+        for candidate in posters:
+            cdn_ready[id(candidate)] = await materialize_event_media_candidate_to_cdn(
+                candidate
+            )
     posters = _dedup_poster_candidates_by_identity(posters)
-    existing_rows = (
-        await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
-    ).scalars().all()
-    existing_map = {row.poster_hash: row for row in existing_rows}
+    existing_rows = list(
+        (
+            await session.execute(
+                select(EventPoster).where(EventPoster.event_id == int(event_id))
+            )
+        ).scalars().all()
+    )
+    existing_map = {str(row.poster_hash or "").strip(): row for row in existing_rows}
     existing_identity_index = _build_eventposter_identity_index(existing_rows)
-    added = 0
+    event = await session.get(Event, int(event_id))
+    before_urls = list(getattr(event, "photo_urls", None) or []) if event else []
+    before_count = int(getattr(event, "photo_count", 0) or 0) if event else 0
+    had_preview = bool(getattr(event, "preview_3d_url", None)) if event else False
     now = datetime.now(timezone.utc)
-    extra_urls: list[str] = []
+    added = 0
+    soft_rejected = 0
     added_urls: list[str] = []
-    preview_invalidated = False
-    pruned = 0
-    photo_urls_changed = False
+    next_order = max((int(getattr(row, "display_order", 0) or 0) for row in existing_rows), default=-1) + 1
 
-    def _pick_display_url(p: PosterCandidate) -> str | None:
-        return p.supabase_url or p.catbox_url
-
-    def _remember_url(url: str | None) -> None:
-        if url and url not in added_urls:
-            added_urls.append(url)
-
-    selected_hashes = {p.sha256 for p in posters if p.sha256}
-    scope_hashes = {
-        h.strip()
-        for h in (poster_scope_hashes or [])
-        if isinstance(h, str) and h.strip()
+    selected_hashes = {
+        str(p.sha256 or "").strip()
+        for p in posters
+        if str(p.sha256 or "").strip()
     }
-    pruned_urls: set[str] = set()
-    replaced_urls: set[str] = set()
-    to_delete_by_hash: dict[str, EventPoster] = {}
-
-    # 1) Exact prune: if the source provided the poster hash scope AND we have a non-empty
-    # selected set for this event, drop any previously attached posters from that scope that
-    # are not selected now.
-    #
-    # Important: if selection is empty, it usually means matching failed (OCR/title/time),
-    # and pruning would incorrectly delete posters (regression seen in TG monitoring re-imports).
+    scope_hashes = {
+        str(value or "").strip()
+        for value in (poster_scope_hashes or [])
+        if str(value or "").strip()
+    }
+    # A source-local scope may withdraw an old candidate, but never physically
+    # delete evidence.  Re-importing that exact candidate reopens review below.
     if scope_hashes and selected_hashes:
-        for h in scope_hashes:
-            if h in selected_hashes:
-                continue
-            row = existing_map.get(h)
-            if row:
-                to_delete_by_hash[row.poster_hash] = row
-
-    if to_delete_by_hash:
-        for row in to_delete_by_hash.values():
-            if row.catbox_url:
-                pruned_urls.add(row.catbox_url)
-            if getattr(row, "supabase_url", None):
-                pruned_urls.add(str(getattr(row, "supabase_url")))
-            await session.delete(row)
-        pruned = len(to_delete_by_hash)
+        for digest in scope_hashes - selected_hashes:
+            row = existing_map.get(digest)
+            if row and row.review_status not in {DUPLICATE, REJECTED}:
+                row.review_status = REJECTED
+                row.review_reason = "source_scope_withdrawn"
+                row.reviewed_at = now
+                session.add(row)
+                soft_rejected += 1
 
     for poster in posters:
-        digest = poster.sha256
+        poster_supabase_url = getattr(poster, "supabase_url", None)
+        poster_catbox_url = getattr(poster, "catbox_url", None)
+        poster_supabase_path = getattr(poster, "supabase_path", None)
+        poster_phash = getattr(poster, "phash", None)
+        poster_ocr_text = getattr(poster, "ocr_text", None)
+        poster_ocr_title = getattr(poster, "ocr_title", None)
+        display_url = str(poster_supabase_url or poster_catbox_url or "").strip()
+        digest = str(getattr(poster, "sha256", None) or "").strip().lower()
+        # Only a real SHA-256 may enter the byte-fingerprint column and its
+        # uniqueness guard.  Legacy callers sometimes supplied opaque ids here;
+        # those remain usable as poster identity but are not byte evidence.
+        digest_is_content = bool(re.fullmatch(r"[0-9a-f]{64}", digest))
+        if not digest and display_url:
+            digest = hashlib.sha256(f"url:{_normalize_poster_identity_url(display_url)}".encode()).hexdigest()
         if not digest:
-            url = _pick_display_url(poster)
-            if url:
-                extra_urls.append(url)
+            continue
+
+        row = existing_map.get(digest)
+        duplicate_reason = "poster_hash" if row else None
+        if row is None:
             row, duplicate_reason = _find_duplicate_eventposter_by_identity(
                 poster,
                 existing_identity_index,
             )
-            if not row:
-                continue
-        else:
-            row = existing_map.get(digest)
-            duplicate_reason = "poster_hash" if row else None
-            if not row:
-                row, duplicate_reason = _find_duplicate_eventposter_by_identity(
-                    poster,
-                    existing_identity_index,
-                )
-        if row:
+        if row is not None:
+            if poster_catbox_url and row.catbox_url != poster_catbox_url:
+                row.catbox_url = poster_catbox_url
+            if poster_supabase_url and row.supabase_url != poster_supabase_url:
+                row.supabase_url = poster_supabase_url
+            if poster_supabase_path:
+                row.supabase_path = poster_supabase_path
+            if poster_phash:
+                row.phash = poster_phash
+            if digest_is_content and not row.raw_sha256:
+                row.raw_sha256 = digest
+            if poster_ocr_text is not None:
+                row.ocr_text = poster_ocr_text
+            if poster_ocr_title is not None:
+                row.ocr_title = poster_ocr_title
+            if getattr(poster, "prompt_tokens", 0):
+                row.prompt_tokens = int(poster.prompt_tokens or 0)
+            if getattr(poster, "completion_tokens", 0):
+                row.completion_tokens = int(poster.completion_tokens or 0)
+            if getattr(poster, "total_tokens", 0):
+                row.total_tokens = int(poster.total_tokens or 0)
+            if row.review_status in {REJECTED, UNAVAILABLE}:
+                row.review_status = PENDING_REVIEW
+                row.review_reason = "source_candidate_reintroduced"
+                row.reviewed_at = None
+            if event_media_require_cdn() and not cdn_ready.get(id(poster), False):
+                row.review_status = PENDING_REVIEW
+                row.review_reason = "cdn_mirror_pending"
+                row.reviewed_at = None
+            row.updated_at = now
+            session.add(row)
             if duplicate_reason and duplicate_reason != "poster_hash":
                 logger.info(
-                    "smart_update: merged duplicate poster by %s event_id=%s",
+                    "smart_update: merged exact poster identity reason=%s event_id=%s",
                     duplicate_reason,
                     event_id,
                 )
-            changed = False
-            if poster.catbox_url:
-                if row.catbox_url != poster.catbox_url:
-                    if row.catbox_url:
-                        replaced_urls.add(str(row.catbox_url))
-                    row.catbox_url = poster.catbox_url
-                    changed = True
-            if poster.supabase_url:
-                if getattr(row, "supabase_url", None) != poster.supabase_url:
-                    if getattr(row, "supabase_url", None):
-                        replaced_urls.add(str(getattr(row, "supabase_url")))
-                    row.supabase_url = poster.supabase_url
-                    changed = True
-            if poster.supabase_path:
-                if getattr(row, "supabase_path", None) != poster.supabase_path:
-                    row.supabase_path = poster.supabase_path
-                    changed = True
-            if poster.phash:
-                row.phash = poster.phash
-            if poster.ocr_text is not None:
-                row.ocr_text = poster.ocr_text
-            if poster.ocr_title is not None:
-                row.ocr_title = poster.ocr_title
-            # OCR token accounting is best-effort: keep the latest non-zero values.
-            if getattr(poster, "prompt_tokens", 0):
-                row.prompt_tokens = int(getattr(poster, "prompt_tokens", 0) or 0)
-            if getattr(poster, "completion_tokens", 0):
-                row.completion_tokens = int(getattr(poster, "completion_tokens", 0) or 0)
-            if getattr(poster, "total_tokens", 0):
-                row.total_tokens = int(getattr(poster, "total_tokens", 0) or 0)
-            row.updated_at = now
-            if changed:
-                _remember_url(_pick_display_url(poster))
         else:
-            session.add(
-                EventPoster(
-                    event_id=event_id,
-                    catbox_url=poster.catbox_url,
-                    supabase_url=poster.supabase_url,
-                    supabase_path=poster.supabase_path,
-                    poster_hash=digest,
-                    phash=poster.phash,
-                    ocr_text=poster.ocr_text,
-                    ocr_title=poster.ocr_title,
-                    prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
-                    completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
-                    total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
-                    updated_at=now,
-                )
+            row = EventPoster(
+                event_id=int(event_id),
+                catbox_url=poster_catbox_url,
+                supabase_url=poster_supabase_url,
+                supabase_path=poster_supabase_path,
+                poster_hash=digest,
+                raw_sha256=digest if digest_is_content else None,
+                phash=poster_phash,
+                review_status=PENDING_REVIEW,
+                review_reason=(
+                    "cdn_mirror_pending"
+                    if event_media_require_cdn()
+                    and not cdn_ready.get(id(poster), False)
+                    else "awaiting_automated_pair_review"
+                ),
+                display_order=next_order,
+                ocr_text=poster_ocr_text,
+                ocr_title=poster_ocr_title,
+                prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
+                completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
+                total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
+                updated_at=now,
             )
+            next_order += 1
+            session.add(row)
+            await session.flush()
+            existing_rows.append(row)
+            existing_map[digest] = row
+            for key in _poster_identity_keys(row):
+                existing_identity_index.setdefault(key, row)
             added += 1
-            _remember_url(_pick_display_url(poster))
+        url = resolve_poster_display_url(row)
+        if url and url not in added_urls:
+            added_urls.append(url)
 
     await session.flush()
-    persisted_rows = (
-        await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
-    ).scalars().all()
-    await _backfill_missing_eventposter_phashes(persisted_rows)
-    persisted_pruned, persisted_pruned_urls = await _prune_near_duplicate_eventposters(
-        session,
-        persisted_rows,
-    )
-    if persisted_pruned:
-        pruned += persisted_pruned
-        pruned_urls |= persisted_pruned_urls
-        await session.flush()
-        persisted_rows = (
-            await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
-        ).scalars().all()
-
-    # Update event.photo_urls if possible
-    result = await session.execute(select(Event).where(Event.id == event_id))
-    event = result.scalar_one_or_none()
-    if event:
-        before_urls = list(event.photo_urls or [])
-        before_count = int(getattr(event, "photo_count", 0) or len(before_urls))
-        current = list(event.photo_urls or [])
-        removed_urls = pruned_urls | replaced_urls
-        if removed_urls:
-            current = [u for u in current if u not in removed_urls]
-        persisted_known_urls: set[str] = set()
-        persisted_display_urls: list[str] = []
-        for row in persisted_rows:
-            display_url = _event_poster_display_url(row)
-            for raw_url in (getattr(row, "catbox_url", None), getattr(row, "supabase_url", None)):
-                clean_url = str(raw_url or "").strip()
-                if clean_url:
-                    persisted_known_urls.add(clean_url)
-            if display_url and display_url not in persisted_display_urls:
-                persisted_display_urls.append(display_url)
-        if persisted_display_urls:
-            current = [u for u in current if u not in persisted_known_urls]
-            current = persisted_display_urls + [
-                u for u in current if u not in persisted_display_urls
-            ]
-        for poster in posters:
-            url = _pick_display_url(poster)
-            if url and url not in current:
-                current.append(url)
-        for url in extra_urls:
-            if url not in current:
-                current.append(url)
-        preferred_display_urls = {
-            _pick_display_url(poster)
-            for poster in posters
-            if _pick_display_url(poster)
-        }
-        # Prefer posters that are *relevant* to this event (by OCR vs event title/date/time),
-        # then fall back to OCR "quality" as a tie-breaker.
-        preferred_urls: list[str] = []
-        scored: list[tuple[float, int, int, str]] = []  # (relevance, quality, idx, url)
-        title_for_score = (event.title or event_title or "").strip()
-        date_for_score = (event.date or "").strip()
-        time_for_score = (event.time or "").strip()
-
-        def _norm(text: str | None) -> str:
-            value = (text or "").strip().casefold().replace("ё", "е")
-            value = unicodedata.normalize("NFKC", value)
-            value = value.replace("\xa0", " ")
-            value = re.sub(r"\s+", " ", value).strip()
-            return value
-
-        def _tokens(text: str | None) -> set[str]:
-            raw = _norm(text)
-            if not raw:
-                return set()
-            found = re.findall(r"[a-zа-я0-9]{3,}", raw, flags=re.IGNORECASE)
-            return {t for t in found if t and not t.isdigit()}
-
-        def _score_relevance(*, ocr_title: str | None, ocr_text: str | None) -> float:
-            ocr_combined = " ".join(
-                x for x in [(ocr_title or "").strip(), (ocr_text or "").strip()] if x
-            ).strip()
-            if not ocr_combined:
-                return 0.0
-            ocr_norm = _norm(ocr_combined)
-
-            title_tokens = _tokens(title_for_score)
-            ocr_tokens = _tokens(ocr_combined)
-            overlap = len(title_tokens & ocr_tokens) if (title_tokens and ocr_tokens) else 0
-            score = float(min(10, overlap * 2))
-
-            title_norm = _norm(title_for_score)
-            if title_norm and len(title_norm) >= 10 and title_norm in ocr_norm:
-                score += 4.0
-
-            d_raw = date_for_score
-            if d_raw:
-                try:
-                    d_obj = date.fromisoformat(d_raw.split("..", 1)[0].strip())
-                except Exception:
-                    d_obj = None
-                if d_obj is not None:
-                    day = d_obj.day
-                    month = d_obj.month
-                    if re.search(rf"\b0?{day}[./-]0?{month}\b", ocr_norm):
-                        score += 3.0
-
-            t_raw = time_for_score
-            if t_raw and t_raw != "00:00":
-                hhmm = re.sub(r"\s+", "", t_raw)
-                if re.match(r"^\d{1,2}:\d{2}$", hhmm):
-                    hh, mm = hhmm.split(":", 1)
-                    hh = hh.zfill(2)
-                    if f"{hh}:{mm}" in ocr_norm or f"{hh}.{mm}" in ocr_norm:
-                        score += 1.5
-
-            return score
-
-        for idx, poster in enumerate(posters):
-            url = _pick_display_url(poster)
-            if not url:
-                continue
-            quality = 0
-            if poster.ocr_title:
-                quality += len(poster.ocr_title)
-            if poster.ocr_text:
-                quality += len(poster.ocr_text)
-            if quality <= 0:
-                continue
-            relevance = _score_relevance(ocr_title=poster.ocr_title, ocr_text=poster.ocr_text)
-            scored.append((relevance, quality, idx, url))
-
-        if scored:
-            has_relevance = any(rel > 0.0 for rel, _q, _i, _u in scored)
-            if has_relevance:
-                scored_sorted = sorted(scored, key=lambda t: (-t[0], -t[1], t[2]))
-            else:
-                scored_sorted = sorted(scored, key=lambda t: (-t[1], t[2]))
-            for _rel, _quality, _idx, url in scored_sorted:
-                if url not in preferred_urls:
-                    preferred_urls.append(url)
-            current = preferred_urls + [url for url in current if url not in preferred_urls]
-        current = await _dedupe_photo_urls_by_phash(
-            current,
-            preferred_urls={str(u) for u in preferred_display_urls if u},
-        )
-        photo_urls_changed = (current != before_urls) or (len(current) != before_count)
-        event.photo_urls = current
-        event.photo_count = len(current)
-        # If the image set changed, any existing 3D preview becomes stale: force regeneration.
-        if photo_urls_changed and getattr(event, "preview_3d_url", None):
-            event.preview_3d_url = None
-            preview_invalidated = True
-        session.add(event)
-
-    return added, added_urls, preview_invalidated, pruned, photo_urls_changed
+    await ensure_event_media_reviews(session, int(event_id))
+    photo_urls_changed = await sync_event_gallery_projection(session, int(event_id))
+    event = await session.get(Event, int(event_id))
+    if event is not None:
+        after_urls = list(event.photo_urls or [])
+        after_count = int(event.photo_count or 0)
+        photo_urls_changed = photo_urls_changed or before_urls != after_urls or before_count != after_count
+    preview_invalidated = bool(had_preview and event is not None and not event.preview_3d_url)
+    return added, added_urls, preview_invalidated, soft_rejected, photo_urls_changed
 
 
 async def _ensure_event_source(
@@ -18644,6 +18622,18 @@ async def _ensure_event_source(
             trust_level=candidate.trust_level,
         )
     )
+    # Source-only merges are reconciled asynchronously by the same event-media
+    # gate; Telegraph/renderers are no longer allowed to attach media themselves.
+    try:
+        from event_media import enqueue_event_media_review_job
+
+        await enqueue_event_media_review_job(session, int(event_id))
+    except Exception:
+        logger.warning(
+            "smart_update: failed to enqueue source media reconcile event_id=%s",
+            event_id,
+            exc_info=True,
+        )
     return True, False
 
 
