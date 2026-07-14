@@ -71,6 +71,12 @@ If only part of a late media set can still be uploaded, a text-only projection
 receives the successfully materialized subset; an already illustrated post
 keeps its existing attachments on the same partial failure. This prevents the
 old "preserve nothing" branch from completing a repair job without a photo.
+An actual Smart Update merge also re-arms the existing managed VK projection:
+the idempotent worker edits the resolved live/postponed post even when the prior
+`vk_sync` job is already `done`. A no-change replay keeps the older duplicate
+prevention contract and does not requeue a complete managed post. This keeps
+canonical date/time/location/text repairs consistent across VK without turning
+routine source rescans into repeated public edits.
 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.

@@ -50,6 +50,10 @@ Telegram Monitoring run:
   `artifacts/codex/INC-2026-07-14-ecodvor-unknown-time-cursor/`.
 - 2026-07-14 15:43Z–15:45Z — first production replay proved the producer/server/anchor fix and
   cursor advancement, but exposed the existing-row merge-clear gap; incident remained open.
+- 2026-07-14 15:50Z–15:54Z — second production replay on machine version `1669` cleared the
+  canonical time and completed as `ops_run=3780`; Telegraph and Telegram were repaired.
+- 2026-07-14 16:04Z — public verification found managed VK still contained `14:00`: the
+  canonical merge scheduler treated a previously completed managed VK projection as terminal.
 
 ## Root Cause
 
@@ -65,6 +69,9 @@ Telegram Monitoring run:
 5. The existing-event merge path treated an empty candidate time only as missing data, not as an
    affirmative LLM-reviewed removal. The first post-fix replay correctly produced unknown time at
    the import/anchor boundary but left the previously stored `14:00` untouched.
+6. Smart Update scheduled `vk_sync` only when no complete managed VK post existed, and
+   `enqueue_job()` skipped a completed VK job for that post. That duplicate-prevention contract
+   incorrectly made an editable public projection terminal after later canonical field changes.
 
 ## Contributing Factors
 
@@ -137,7 +144,9 @@ Telegram Monitoring run:
 - [x] Apply explicit unknown time to an existing matched row only after the LLM anchor review
   succeeded; unreviewed empty time remains non-destructive.
 - [x] Advance source cursor for legitimate zero-event messages without polluting metrics/scanned rows.
-- [ ] Deploy, replay/catch up cursor, repair event `6878` and verify all public surfaces.
+- [x] Re-arm an existing completed managed VK projection only for an actual Smart Update merge;
+  retain the no-change/postponed-post duplicate guard.
+- [ ] Deploy the VK refresh correction, repair event `6878` on VK and verify all public surfaces.
 
 ## Follow-up Actions
 
@@ -155,5 +164,7 @@ Telegram Monitoring run:
 
 Time meaning remains LLM-first: producer and Smart Update prompts decide parent/child roles. The
 regex is deliberately narrow and only validates an exact explicit-unknown-start contract; it does
-not infer a replacement time or make general schedule decisions. Cursor advancement is a purely
-mechanical acknowledgement that the producer inspected a message and is independent of eventness.
+not infer a replacement time or make general schedule decisions. Cursor advancement and managed
+projection requeue are purely mechanical delivery acknowledgements; they do not decide event
+semantics. Existing VK updates still use the idempotent live/postponed identity resolution rather
+than creating a second post.

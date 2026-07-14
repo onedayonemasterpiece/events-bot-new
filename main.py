@@ -14027,6 +14027,7 @@ async def enqueue_job(
     depends_on: list[str] | None = None,
     replace_depends_on: bool = False,
     next_run_at: datetime | None = None,
+    requeue_done: bool = False,
 ) -> str:
     async with db.get_session() as session:
         now = datetime.now(timezone.utc)
@@ -14087,7 +14088,11 @@ async def enqueue_job(
         job = _normalize_job(res.scalar_one_or_none())
         dep_str = ",".join(depends_on) if depends_on else None
         if job:
-            if job.status == JobStatus.done and task == JobTask.vk_sync:
+            if (
+                job.status == JobStatus.done
+                and task == JobTask.vk_sync
+                and not requeue_done
+            ):
                 if ev is None or await _event_has_existing_managed_vk_post(ev):
                     logline("ENQ", event_id, "skipped", job_key=job_key)
                     return "skipped"
@@ -15296,7 +15301,12 @@ async def _should_skip_ticket_giveaway_publication(db: Database, event: Event) -
 
 
 async def schedule_event_update_tasks(
-    db: Database, ev: Event, *, drain_nav: bool = False, skip_vk_sync: bool = False
+    db: Database,
+    ev: Event,
+    *,
+    drain_nav: bool = False,
+    skip_vk_sync: bool = False,
+    refresh_existing_vk: bool = False,
 ) -> dict[JobTask, str]:
     eid = ev.id
     results: dict[JobTask, str] = {}
@@ -15374,9 +15384,14 @@ async def schedule_event_update_tasks(
         # keep `source_vk_post_url` pointing at the external source wall post;
         # those must still get a redactional post in `VK_EVENTS_GROUP_ID`, but
         # VK media/API failures must not block Telegram event announcements.
-        if not await _event_has_existing_managed_vk_post(ev):
+        if refresh_existing_vk or not await _event_has_existing_managed_vk_post(ev):
             results[JobTask.vk_sync] = vk_dep_key
-            await enqueue_job(db, eid, JobTask.vk_sync)
+            await enqueue_job(
+                db,
+                eid,
+                JobTask.vk_sync,
+                requeue_done=refresh_existing_vk,
+            )
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
         tg_event_deps = [telegraph_dep_key]
         if JobTask.tg_ics_post in results:

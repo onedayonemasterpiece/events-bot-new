@@ -18217,7 +18217,12 @@ async def _smart_event_update_impl(
             async with db.get_session() as session:
                 refreshed = await session.get(Event, existing.id)
             if refreshed:
-                await schedule_event_update_tasks(db, refreshed, **(schedule_kwargs or {}))
+                task_kwargs = dict(schedule_kwargs or {})
+                # A managed VK post is an editable projection, not a terminal
+                # publication.  Re-arm its idempotent sync whenever Smart Update
+                # actually changed the canonical event.
+                task_kwargs["refresh_existing_vk"] = True
+                await schedule_event_update_tasks(db, refreshed, **task_kwargs)
         except Exception:
             logger.warning("smart_update: schedule/update failed for event %s", existing.id, exc_info=True)
 
