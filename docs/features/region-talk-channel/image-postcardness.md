@@ -19,7 +19,10 @@ The current production-safe transition contract is
 - Telegram media with the same exact `grouped_id` and all VK photo
   attachments are acquired as one bounded post/album manifest. The default
   cap is 20 images, which covers a complete Telegram album and the practical
-  VK attachment bound used by this worker.
+  VK attachment bound used by this worker. A canary may explicitly lower
+  `REGION_TALK_IMAGE_MAX_IMAGES_PER_POST`; the image launcher propagates that
+  value into its private runtime config instead of silently reverting to the
+  default.
 - Every fetched image receives its own compact `image_frame_score_item` with
   content hash and model/version evidence. Kaggle-local file paths are not
   persisted.
