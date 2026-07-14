@@ -26,7 +26,7 @@ No worker patch was dropped, rejected or left in a dirty worktree. Both child la
 | R02 | Done for the two requested sources; follow-up sync explicitly scoped | Exact current registry review distinguishes Meduza's official match from Nebozhena's manual block. Both exact source identities receive a pre-fetch/vector/image/LLM terminal no-spend decision. Automated all-source registry snapshot sync/TTL remains a documented production follow-up, not falsely claimed complete. |
 | R03 | Done | The brief records the single-anchor album path, uncalibrated CLIP/mean score, threshold/design mismatch, source-level compounding and missing tests. |
 | R04 | Done | `docs/features/region-talk-channel/image-scoring-false-negative-review.md` includes full evidence, questions, expected consultant deliverables and acceptance protocol. |
-| R05 | Ready to push | Branch, commit and direct document link are prepared; final push evidence is reported in the user handoff. |
+| R05 | Done | Branch was pushed to `origin/integration/region-talk-image-compliance-review-20260714` and the remote ref was verified; the final remote head is reported in the user handoff. |
 
 ## Verification
 
