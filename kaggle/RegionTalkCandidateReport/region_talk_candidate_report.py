@@ -11566,9 +11566,6 @@ def promote_publication_text_restore_exact_rows(
         previous_updated = str((previous or {}).get("_ydb_updated_at") or (previous or {}).get("updated_at") or "")
         if previous is None or current_updated >= previous_updated:
             pending_by_url[url] = publication
-    if not pending_by_url:
-        return [dict(row) for row in link_rows]
-
     cached_payload_by_url: dict[str, dict[str, Any]] = {}
     cached_fields = {
         "post_date", "source_id", "source_title", "source_url", "source_kind",
@@ -11596,6 +11593,25 @@ def promote_publication_text_restore_exact_rows(
     for source in link_rows:
         row = dict(source)
         url = canonical_post_url_for_storage(row.get("post_url") or row.get("keyword_hit_post_url"))
+        if url in terminal_urls:
+            # Repair stale restore queue state produced before terminal URL
+            # monotonicity was enforced. Merely refusing a new promotion is
+            # insufficient when `retry_fetch`/`bge_ready_rescore` and the
+            # marker are already durable on the exact-link row.
+            if publication_text_restore_requested(row) or "publication_text_restore" in str(row.get("priority_reason") or ""):
+                if str(row.get("post_link_status") or "") in {"pending_fetch", "retry_fetch", "fetch_error", "bge_ready_rescore"}:
+                    row["post_link_status"] = "fetched"
+                row.update({
+                    "publication_text_restore_requested": "",
+                    "publication_text_restore_reason": "",
+                    "publication_text_restore_requested_at": "",
+                    "publication_text_restore_request_run_id": "",
+                    "priority_reason": "terminal_publication_restore_suppressed",
+                    "next_attempt_after": "",
+                    "next_action": "",
+                })
+            out.append(row)
+            continue
         publication = pending_by_url.get(url)
         if not publication:
             out.append(row)
@@ -15844,6 +15860,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "sources_history_ok": sum(1 for r in source_rows if str(r.get("fetch_status") or "") == "ok"),
         "source_status_counts": source_status_counts,
         "posts_fetched": len(posts),
+        "posts_unique_for_vector_planning": int(post_work_plan.get("posts_unique_for_vector_planning") or 0),
+        "posts_same_run_duplicates_collapsed": int(post_work_plan.get("posts_same_run_duplicates_collapsed") or 0),
         "posts_scored": posts_scored_count,
         "posts_deferred": len(runtime_deferred_posts),
         "posts_actionable_after_idempotency": int(post_work_plan.get("posts_actionable") or 0),
@@ -15852,7 +15870,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "posts_e5_payload_refresh_for_bge_text_restore_written": e5_restore_payload_rows_written,
         "posts_reusing_e5_for_bge_fusion": int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
         "posts_reusing_e5_for_policy_refresh": int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
-        "posts_waiting_for_bge_without_e5_recompute": int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
+        "posts_waiting_for_bge_without_e5_recompute": sum(
+            int(post_work_plan.get(key) or 0)
+            for key in ("posts_wait_bge_existing_e5", "posts_reuse_e5_wait_bge", "posts_reuse_e5_wait_bge_text_restore")
+        ),
         "posts_skipped_unchanged_current": int(post_work_plan.get("posts_skipped_unchanged") or 0),
         "posts_skipped_legacy_current_dual": int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
         "posts_with_ko_scope": sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
@@ -15931,13 +15952,18 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
         "posts_scored":posts_scored_count,"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
+        "posts_unique_for_vector_planning":int(post_work_plan.get("posts_unique_for_vector_planning") or 0),
+        "posts_same_run_duplicates_collapsed":int(post_work_plan.get("posts_same_run_duplicates_collapsed") or 0),
         "posts_actionable_after_idempotency":int(post_work_plan.get("posts_actionable") or 0),
         "posts_needing_new_e5":int(post_work_plan.get("posts_needs_e5") or 0),
         "posts_planned_e5_payload_refresh_for_bge_text_restore":e5_restore_payload_rows_planned,
         "posts_e5_payload_refresh_for_bge_text_restore_written":e5_restore_payload_rows_written,
         "posts_reusing_e5_for_bge_fusion":int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
         "posts_reusing_e5_for_policy_refresh":int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
-        "posts_waiting_for_bge_without_e5_recompute":int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
+        "posts_waiting_for_bge_without_e5_recompute":sum(
+            int(post_work_plan.get(key) or 0)
+            for key in ("posts_wait_bge_existing_e5", "posts_reuse_e5_wait_bge", "posts_reuse_e5_wait_bge_text_restore")
+        ),
         "posts_skipped_unchanged_current":int(post_work_plan.get("posts_skipped_unchanged") or 0),
         "posts_skipped_legacy_current_dual":int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
         "post_work_reasons_json":post_work_plan.get("post_work_reasons_json") or "{}",
@@ -16549,11 +16575,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         status="running",
         posts_scored=posts_scored_count,
         posts_deferred=len(runtime_deferred_posts),
+        posts_unique_for_vector_planning=int(post_work_plan.get("posts_unique_for_vector_planning") or 0),
+        posts_same_run_duplicates_collapsed=int(post_work_plan.get("posts_same_run_duplicates_collapsed") or 0),
         posts_skipped_unchanged=int(post_work_plan.get("posts_skipped_unchanged") or 0),
         posts_skipped_legacy_current_dual=int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
         posts_planned_e5_payload_refresh_for_bge_text_restore=e5_restore_payload_rows_planned,
         posts_e5_payload_refresh_for_bge_text_restore_written=e5_restore_payload_rows_written,
-        posts_waiting_for_bge_without_e5_recompute=int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
+        posts_waiting_for_bge_without_e5_recompute=sum(
+            int(post_work_plan.get(key) or 0)
+            for key in ("posts_wait_bge_existing_e5", "posts_reuse_e5_wait_bge", "posts_reuse_e5_wait_bge_text_restore")
+        ),
         candidates_created=len(candidates),
         image_queue_total=len(image_candidate_queue_sheet),
         scoring_stopped_by_runtime_budget=str(scoring_stopped_by_runtime_budget).lower(),

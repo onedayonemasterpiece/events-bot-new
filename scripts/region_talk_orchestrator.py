@@ -3177,7 +3177,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     }
     bge_pending_rows = bge_mod.collect_text_rows(
         item_kinds_for_bge,
-        existing_pks={str(v.get("_ydb_pk") or "") for v in vectors},
+        # Payloads, not only PKs, are required here: an existing BGE PK may
+        # carry a stale semantic-bank contract and must still count as
+        # actionable work. Passing a set would make the dry-run planner hide
+        # that backlog and suppress the worker launch.
+        existing_pks=_rows_by_pk(vectors),
         limit=bge_sample_limit,
     )
     bge_collect_stats = dict(getattr(bge_mod, "LAST_COLLECT_STATS", {}) or {})
@@ -3552,6 +3556,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "bge_backlog_capacity_percent": int(round((len(bge_pending_rows) / bge_capacity_rows) * 100)),
         "bge_backlog_within_next_run_capacity": int(len(bge_pending_rows) <= bge_capacity_rows),
         "bge_source_terminal_skipped_sample_total": _safe_int(bge_collect_stats.get("source_terminal_skipped")),
+        "bge_existing_stale_rescore_sample_total": _safe_int(bge_collect_stats.get("existing_stale_rescore")),
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
         **_heartbeat_metric_fields("bge", latest_rows.get("latest_business_heartbeat:bge_m3_enrichment")),
         **_heartbeat_metric_fields("image", latest_rows.get("latest_business_heartbeat:image_diagnostic")),

@@ -297,8 +297,10 @@ Important invariants:
   bank contract. A BGE PK identifies post/model/text but does not freeze the
   prototype bank; when the stored bank version/hash is stale, the worker
   recomputes and overwrites that same PK instead of counting it as already
-  complete. This prevents a permanent `wait_bge_existing_e5` loop after bank
-  calibration changes.
+  complete. The orchestrator passes existing BGE payloads (not only their PKs)
+  through the same contract check and therefore still launches the worker for
+  stale-bank rows. This prevents a permanent `wait_bge_existing_e5` loop after
+  bank calibration changes.
 - This is the current dual-vector normalizer: at most one BGE kernel may run at
   once, but while actionable E5-without-BGE rows remain the loop polls in the
   shorter downstream interval (60 seconds by default) and relaunches BGE after

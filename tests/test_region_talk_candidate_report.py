@@ -6445,7 +6445,13 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
 
     def test_publication_restore_does_not_reopen_legacy_llm_reject_decision(self) -> None:
         mod = load_module()
-        link = {"post_link_status": "fetched", "post_url": "https://t.me/rejected/9"}
+        link = {
+            "post_link_status": "bge_ready_rescore",
+            "post_url": "https://t.me/rejected/9",
+            "priority_reason": "publication_text_restore_after_active_payload_prune",
+            "publication_text_restore_requested": "true",
+            "publication_text_restore_reason": "legacy-bug",
+        }
         publication = {
             "post_url": "https://t.me/rejected/9",
             "publication_status": "text_restore_pending",
@@ -6453,7 +6459,9 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "llm_decision": "reject",
         }
         promoted = mod.promote_publication_text_restore_exact_rows([link], [], [publication], [])
-        self.assertEqual(promoted, [link])
+        self.assertEqual(promoted[0]["post_link_status"], "fetched")
+        self.assertEqual(promoted[0]["priority_reason"], "terminal_publication_restore_suppressed")
+        self.assertEqual(promoted[0]["publication_text_restore_requested"], "")
 
     def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
         mod = load_module()

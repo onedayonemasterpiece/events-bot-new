@@ -185,7 +185,10 @@ remain terminal. This veto is URL-level across duplicate historical
 publication rows: any durable delivered/Gemini/operator/tombstone/revoked row
 blocks an older pending projection. Historical rows where the normalized
 status lagged behind the provider result are covered too: durable
-`llm_decision=accept|reject` is terminal evidence and cannot be reopened. The
+`llm_decision=accept|reject` is terminal evidence and cannot be reopened. Any
+already-persisted restore marker on that terminal URL is actively cleared and
+its exact link returns to the fetched terminal state, so the historical bug
+cannot keep scheduling the same post. The
 only legacy terminal spelling
 intentionally migrated is
 `no_text_for_gemini + filtered_before_llm`, because that combination was
