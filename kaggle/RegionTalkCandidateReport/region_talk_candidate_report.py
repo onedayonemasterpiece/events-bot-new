@@ -85,10 +85,47 @@ POSITIVE_WORDS = ["красив", "атмосфер", "море", "дюны", "�
 SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09_local_scope_v2"
 LOCAL_REGION_SOURCE_STATUS = "rejected_local_region_source"
 SPAM_SOURCE_STATUS = "rejected_spam_source"
+COMPLIANCE_SOURCE_STATUS = "rejected_compliance_source"
 UNRESOLVABLE_VK_SOURCE_STATUS = "rejected_unresolvable_vk_source"
 UNRESOLVABLE_TELEGRAM_SOURCE_STATUS = "rejected_unresolvable_telegram_source"
 LOCAL_REGION_SOURCE_REASON = "source title/handle is Kaliningrad-local; keep for separate local-source monitoring, skip Region Talk external-publication scan"
 SPAM_SOURCE_REASON = "source title/hashtag/excerpt matches repeated hashtag-spam/commercial bait; skip Region Talk scan"
+COMPLIANCE_SOURCE_FILTER_VERSION = "region_talk_source_compliance_v1_2026_07_14"
+COMPLIANCE_SOURCE_REASON = "source is an exact no-spend compliance/editorial match; do not fetch posts or run vector/image/LLM scoring"
+# Exact identities only.  A title or fuzzy person-name match must never acquire
+# a legal label.  The dated evidence is deliberately stored with every terminal
+# row so a future registry-sync job can supersede it rather than turning this
+# into an unexplained forever blacklist.
+SOURCE_COMPLIANCE_NO_SPEND: dict[str, dict[str, str]] = {
+    "telegram:meduzalive": {
+        "source_compliance_display_name": "Медуза — LIVE",
+        "source_compliance_reason_code": "official_foreign_agent_exact_resource_and_undesirable_entity",
+        "source_compliance_match_basis": "exact_resource_url",
+        "source_compliance_registry_status": "official_match",
+        "source_foreign_agent_registry_match_status": "exact_resource_match",
+        "source_extremist_registry_match_status": "no_exact_match_found",
+        "source_undesirable_registry_match_status": "exact_entity_match",
+        "source_compliance_official_entity": "SIA Medusa Project (registration number 40103797863)",
+        "source_compliance_evidence_url": "https://reestrs.minjust.gov.ru/rest/registry/39b95df9-9a68-6b6d-e1e3-e6388507067e/export?search=meduzalive",
+        "source_compliance_secondary_evidence_url": "https://epp.genproc.gov.ru/ru/gprf/mass-media/news/main/e5996596/",
+        "source_compliance_registry_snapshot_at": "2026-07-10T14:27:00Z",
+        "source_compliance_checked_at": "2026-07-14",
+    },
+    "telegram:imnotbozhena": {
+        "source_compliance_display_name": "НЕБОЖЕНА",
+        "source_compliance_reason_code": "manual_editorial_source_block",
+        "source_compliance_match_basis": "manual_exact_handle",
+        "source_compliance_registry_status": "manual_block_no_official_legal_match_in_current_snapshot",
+        "source_foreign_agent_registry_match_status": "no_exact_match_in_current_snapshot",
+        "source_extremist_registry_match_status": "no_exact_match_found",
+        "source_undesirable_registry_match_status": "not_checked_as_exact_legal_entity_unresolved_author",
+        "source_compliance_official_entity": "",
+        "source_compliance_evidence_url": "https://reestrs.minjust.gov.ru/rest/registry/39b95df9-9a68-6b6d-e1e3-e6388507067e/export?search=imnotbozhena",
+        "source_compliance_secondary_evidence_url": "https://minjust.gov.ru/ru/documents/7822/",
+        "source_compliance_registry_snapshot_at": "2026-07-10T14:27:00Z",
+        "source_compliance_checked_at": "2026-07-14",
+    },
+}
 LOCAL_REGION_RATIO_MIN_POSTS = 30
 LOCAL_REGION_RATIO_MIN_KO_POSTS = 10
 LOCAL_REGION_RATIO_MIN_KO_RATIO = 0.35
@@ -1714,6 +1751,60 @@ def source_terminal_rejected_status(status: Any) -> bool:
     return source_rejected_by_text_volume_status(raw) or raw.startswith("rejected_")
 
 
+def source_compliance_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
+    """Return an exact-identity no-spend decision before any source fetch.
+
+    Legal registry identity is fail-safe here: only a canonical source key,
+    exact Telegram handle/URL, or exact source URL embedded in a post may
+    match.  Fuzzy title/name matching is intentionally forbidden.
+    """
+    item = row if isinstance(row, dict) else {}
+    candidate_keys: set[str] = set()
+    existing = str(item.get("canonical_source_key") or item.get("source_key") or "").strip().lower().rstrip("/")
+    if existing:
+        candidate_keys.add(existing)
+    platform = normalize_source_platform(
+        str(item.get("platform") or item.get("platform_guess") or ""),
+        str(item.get("canonical_url") or item.get("source_url") or item.get("post_url") or ""),
+    )
+    handles = [
+        item.get("handle"), item.get("username_or_handle"), item.get("recommended_username"),
+        item.get("canonical_url"), item.get("source_url"), item.get("normalized_url"),
+        item.get("recommended_canonical_url"), item.get("raw_url"), item.get("post_url"),
+        item.get("keyword_hit_source_url"), item.get("keyword_hit_post_url"),
+    ]
+    for value in handles:
+        raw = str(value or "").strip()
+        if not raw:
+            continue
+        match = re.search(r"(?:t\.me|telegram\.me)/@?([A-Za-z0-9_]{4,})", raw, flags=re.I)
+        if match:
+            candidate_keys.add("telegram:" + match.group(1).lower())
+        elif platform == "telegram":
+            handle = canonical_handle(raw).lstrip("@").split("/", 1)[0].lower()
+            if re.fullmatch(r"[a-z0-9_]{4,}", handle):
+                candidate_keys.add("telegram:" + handle)
+    match_key = next((key for key in sorted(candidate_keys) if key in SOURCE_COMPLIANCE_NO_SPEND), "")
+    if not match_key:
+        return {}
+    evidence = dict(SOURCE_COMPLIANCE_NO_SPEND[match_key])
+    return {
+        **evidence,
+        "source_queue_status": COMPLIANCE_SOURCE_STATUS,
+        "fetch_status": COMPLIANCE_SOURCE_STATUS,
+        "source_compliance_filter_version": COMPLIANCE_SOURCE_FILTER_VERSION,
+        "source_compliance_decision": "deny_no_spend",
+        "source_compliance_matched_key": match_key,
+        "source_topic_class": "compliance_excluded_source",
+        "source_quick_class": "compliance_source_reject",
+        "source_surface_filter_reason": str(evidence.get("source_compliance_reason_code") or COMPLIANCE_SOURCE_REASON),
+        "monitoring_exclusion_reason": COMPLIANCE_SOURCE_REASON,
+        "source_probe_reason": COMPLIANCE_SOURCE_REASON,
+        "next_action": "do_not_fetch_or_score_compliance_excluded_source",
+        "insertion_policy": "compliance_rejected_before_source_fetch",
+    }
+
+
 def _regex_hits(patterns: list[str], text: str) -> list[str]:
     hits: list[str] = []
     for pattern in patterns:
@@ -1811,6 +1902,9 @@ def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
+    compliance = source_compliance_terminal_fields(row)
+    if compliance:
+        return compliance
     if not getenv_bool("REGION_TALK_ENABLE_SOURCE_SURFACE_FILTER", True):
         return {}
     decision = source_discovery_surface_filter(row)
@@ -2069,6 +2163,16 @@ SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS = [
     "source_repeated_ko_ratio", "source_repeated_ko_span_days",
     "source_repeated_ko_oldest_date", "source_repeated_ko_newest_date",
 ]
+SOURCE_COMPLIANCE_STATE_FIELDS = [
+    "source_compliance_filter_version", "source_compliance_decision",
+    "source_compliance_matched_key", "source_compliance_display_name",
+    "source_compliance_reason_code", "source_compliance_match_basis",
+    "source_compliance_registry_status", "source_foreign_agent_registry_match_status",
+    "source_extremist_registry_match_status", "source_undesirable_registry_match_status",
+    "source_compliance_official_entity", "source_compliance_evidence_url",
+    "source_compliance_secondary_evidence_url", "source_compliance_registry_snapshot_at",
+    "source_compliance_checked_at",
+]
 
 
 SOURCE_STATE_FIELDS = [
@@ -2097,7 +2201,7 @@ SOURCE_STATE_FIELDS = [
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
     "next_action", "updated_at", "last_run_id",
-] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS + SOURCE_COMPLIANCE_STATE_FIELDS
 SOURCE_QUEUE_STATE_FIELDS = [
     "source_queue_id", "queue_seq", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
@@ -2136,7 +2240,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
     "source_locality_ledger_reconciled_run_id", "source_locality_ledger_reconciled_at",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
-] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS + SOURCE_COMPLIANCE_STATE_FIELDS
 SOURCE_CANDIDATE_STATE_FIELDS = [
     "source_candidate_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
     "canonical_source_key", "platform", "platform_guess", "handle", "recommended_username",
@@ -2155,7 +2259,7 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "fast_check_query_strategy", "fast_check_query_cursor", "fast_check_query_terms_total",
     "fast_check_query_wave", "fast_check_query_rpc_count_run", "fast_check_query_elapsed_seconds_run",
     "fast_check_query_terms_attempted", "fast_check_search_results_rejected_run", "fast_check_previous_status",
-] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS
+] + EXTERNAL_BLOGGER_EVIDENCE_STATE_FIELDS + SOURCE_LOCALITY_EVIDENCE_STATE_FIELDS + SOURCE_COMPLIANCE_STATE_FIELDS
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
     "from_source_id", "from_source_title", "from_post_id", "to_source_candidate_id",
@@ -3442,7 +3546,10 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
     terminal = source_local_region_terminal_fields({**row, **item})
     terminal_status = str(terminal.get("source_queue_status") or "")
     if source_terminal_rejected_status(terminal_status) and status in {"", "pending_fetch", "retry_fetch", "fetch_error"}:
-        if terminal_status == LOCAL_REGION_SOURCE_STATUS:
+        if terminal_status == COMPLIANCE_SOURCE_STATUS:
+            reason = COMPLIANCE_SOURCE_REASON
+            code = "source_compliance_rejected_before_exact_fetch"
+        elif terminal_status == LOCAL_REGION_SOURCE_STATUS:
             reason = LOCAL_REGION_SOURCE_REASON
             code = "source_local_region_rejected_before_exact_fetch"
         else:
@@ -3454,6 +3561,7 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
                 "source_surface_filter_version", "source_surface_filter_reason",
                 "source_local_hits", "source_spam_hits", "source_spam_hashtags",
                 "source_spoiler_entity_count", "monitoring_exclusion_reason",
+                *SOURCE_COMPLIANCE_STATE_FIELDS,
             }},
             "post_link_status": "terminal_source_rejected",
             "fetch_error_code": code,
@@ -3561,7 +3669,7 @@ def build_e5_text_vector_enrichment_rows(
             "source_quick_class": source_terminal.get("source_quick_class") or post.get("source_quick_class") or "",
             "source_surface_filter_reason": source_terminal.get("source_surface_filter_reason") or post.get("source_surface_filter_reason") or "",
             "monitoring_exclusion_reason": source_terminal.get("monitoring_exclusion_reason") or post.get("monitoring_exclusion_reason") or "",
-            "source_terminal_excluded": source_terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS},
+            "source_terminal_excluded": source_terminal_rejected_status(source_terminal_status),
             "post_date": post.get("post_date") or post.get("published_at") or "",
             "discovery_method": post.get("discovery_method") or "",
             "discovery_priority": post.get("discovery_priority") or "",
@@ -6101,7 +6209,7 @@ def reconcile_source_profile_locality(srow: dict[str, Any], sampled: list[dict[s
     elif (
         source_has_authoritative_confirmed_external_evidence(srow)
         and surface_class != "spam_source_reject"
-        and terminal_status != SPAM_SOURCE_STATUS
+        and terminal_status not in {SPAM_SOURCE_STATUS, COMPLIANCE_SOURCE_STATUS}
     ):
         locality = "nonlocal_russia"
         status = "authoritative_confirmed_external"
@@ -6674,7 +6782,7 @@ def apply_terminal_source_cleanup_to_candidate_memory(rows: list[dict[str, Any]]
     Candidate memory intentionally retains history, but terminal source rows
     must not remain operationally active or consume BGE/image/LLM capacity.
     """
-    stats = {"checked": 0, "local": 0, "spam": 0, "changed": 0, "already_terminal": 0}
+    stats = {"checked": 0, "local": 0, "spam": 0, "compliance": 0, "changed": 0, "already_terminal": 0}
     for row in rows:
         stats["checked"] += 1
         decision = source_local_region_terminal_fields(row)
@@ -6684,12 +6792,24 @@ def apply_terminal_source_cleanup_to_candidate_memory(rows: list[dict[str, Any]]
             or row.get("fetch_status")
             or ""
         )
-        if terminal_status not in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS}:
+        if terminal_status not in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS, COMPLIANCE_SOURCE_STATUS}:
             continue
-        kind = "local" if terminal_status == LOCAL_REGION_SOURCE_STATUS else "spam"
+        kind = (
+            "local" if terminal_status == LOCAL_REGION_SOURCE_STATUS
+            else "compliance" if terminal_status == COMPLIANCE_SOURCE_STATUS
+            else "spam"
+        )
         stats[kind] += 1
-        stage = "dropped_local_source" if kind == "local" else "dropped_spam_source"
-        lifecycle = "source_terminal_local_audit_only" if kind == "local" else "source_terminal_spam_audit_only"
+        stage = {
+            "local": "dropped_local_source",
+            "spam": "dropped_spam_source",
+            "compliance": "dropped_compliance_source",
+        }[kind]
+        lifecycle = {
+            "local": "source_terminal_local_audit_only",
+            "spam": "source_terminal_spam_audit_only",
+            "compliance": "source_terminal_compliance_audit_only",
+        }[kind]
         already_terminal = (
             str(row.get("current_stage") or "") == stage
             and str(row.get("current_lifecycle_status") or "") == lifecycle
@@ -6703,9 +6823,11 @@ def apply_terminal_source_cleanup_to_candidate_memory(rows: list[dict[str, Any]]
             row.get("monitoring_exclusion_reason") or row.get("source_surface_filter_reason") or terminal_status
         )
         row["why_not_publication_ready"] = row["candidate_memory_source_cleanup_reason"]
-        row["next_action"] = (
-            "keep_in_local_region_source_audit_list" if kind == "local" else "do_not_rescan_spam_source"
-        )
+        row["next_action"] = {
+            "local": "keep_in_local_region_source_audit_list",
+            "spam": "do_not_rescan_spam_source",
+            "compliance": "do_not_fetch_or_score_compliance_excluded_source",
+        }[kind]
         if already_terminal:
             stats["already_terminal"] += 1
         else:
@@ -6741,11 +6863,15 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
         stats["checked"] += 1
         source_terminal = source_local_region_terminal_fields(row)
         terminal_status = str(source_terminal.get("source_queue_status") or "")
-        if terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS}:
+        if terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS, COMPLIANCE_SOURCE_STATUS}:
             row.update(source_terminal)
             row["external_bge_m3_fusion_changed_this_run"] = "true"
             row["external_bge_m3_status"] = "skipped_source_terminal"
-            row["current_stage"] = "dropped_local_source" if terminal_status == LOCAL_REGION_SOURCE_STATUS else "dropped_spam_source"
+            row["current_stage"] = (
+                "dropped_local_source" if terminal_status == LOCAL_REGION_SOURCE_STATUS
+                else "dropped_compliance_source" if terminal_status == COMPLIANCE_SOURCE_STATUS
+                else "dropped_spam_source"
+            )
             row["current_lifecycle_status"] = "source_terminal_excluded_before_bge_fusion"
             row["why_not_publication_ready"] = str(source_terminal.get("monitoring_exclusion_reason") or terminal_status)
             row["next_action"] = str(source_terminal.get("next_action") or "skip_external_bge_fusion_for_terminal_source")
@@ -7705,6 +7831,7 @@ def build_unified_source_queue(
         "source_queue_pending_vk_total": sum(1 for r in out if r.get("platform") == "vk" and r.get("source_queue_status") == "pending_scan"),
         "source_queue_rejected_spam_source_total": sum(1 for r in out if r.get("source_queue_status") == SPAM_SOURCE_STATUS),
         "source_queue_rejected_local_region_source_total": sum(1 for r in out if r.get("source_queue_status") == LOCAL_REGION_SOURCE_STATUS),
+        "source_queue_rejected_compliance_source_total": sum(1 for r in out if r.get("source_queue_status") == COMPLIANCE_SOURCE_STATUS),
         "source_queue_non_target_skipped_this_run": skipped_non_target_queue_rows,
         "source_queue_low_image_quality_excluded_total": sum(1 for r in out if r.get("source_image_quality_status") == "exclude_low_image_quality"),
         "source_queue_only_telegram_vk": str(all(r.get("platform") in {"telegram", "vk"} for r in out)).lower(),
@@ -7884,6 +8011,8 @@ def image_queue_source_disqualification_reason(row: dict[str, Any]) -> str:
         return "local_kaliningrad_source_for_separate_monitoring"
     if terminal_status == SPAM_SOURCE_STATUS:
         return "spam_or_commercial_hashtag_source"
+    if terminal_status == COMPLIANCE_SOURCE_STATUS:
+        return "compliance_source_deny_no_spend"
     if not authoritative_external and (
         str(row.get("source_scope") or "") == "local_region"
         or str(row.get("source_geo_class") or "") == "kaliningrad_local"
@@ -8460,7 +8589,7 @@ def _publication_source_verdict(source: dict[str, Any]) -> str:
     scope = str(source.get("source_scope") or "").strip().lower().replace("-", "_")
     geo = str(source.get("source_geo_class") or "").strip().lower().replace("-", "_")
     quick = str(source.get("source_quick_class") or "").strip().lower()
-    if terminal_status == SPAM_SOURCE_STATUS or quick == "spam_source_reject":
+    if terminal_status in {SPAM_SOURCE_STATUS, COMPLIANCE_SOURCE_STATUS} or quick in {"spam_source_reject", "compliance_source_reject"}:
         return PUBLICATION_SOURCE_CONFIRMED_REJECTED
     if locality_class == "kaliningrad_local" or (
         locality_status != "authoritative_confirmed_external"
@@ -9945,7 +10074,12 @@ async def run_source_fast_check_ko(
         surface_terminal = source_local_region_terminal_fields(base_row)
         if source_terminal_rejected_status(surface_terminal.get("source_queue_status")):
             base_row.update(surface_terminal)
-            base_row["fast_check_status"] = "spam_source_reject" if surface_terminal.get("source_queue_status") == SPAM_SOURCE_STATUS else "local_region_source"
+            terminal_status = str(surface_terminal.get("source_queue_status") or "")
+            base_row["fast_check_status"] = (
+                "spam_source_reject" if terminal_status == SPAM_SOURCE_STATUS
+                else "compliance_source_reject" if terminal_status == COMPLIANCE_SOURCE_STATUS
+                else "local_region_source"
+            )
             base_row["next_action"] = surface_terminal.get("next_action") or "do_not_history_scan_after_fast_check_surface_filter"
             rows.append(base_row)
             write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status=str(base_row.get("source_queue_status") or "fast_check_surface_filtered"))

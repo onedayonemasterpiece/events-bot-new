@@ -38,6 +38,25 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_image_scoring_review_fixture_locks_operator_regressions_and_compliance_non_negatives(self) -> None:
+        fixture = json.loads(
+            (ROOT / "tests" / "fixtures" / "region_talk_image_scoring_review_cases.json").read_text(encoding="utf-8")
+        )
+        positives = fixture["operator_confirmed_positive_regressions"]
+        self.assertEqual(len(positives), 4)
+        self.assertEqual(
+            {row["post_url"] for row in positives},
+            {
+                "https://t.me/arkhlikbez/65432",
+                "https://t.me/arkhlikbez/65489",
+                "https://t.me/routecommunity/1342",
+                "https://t.me/figarotravel/7491",
+            },
+        )
+        exclusions = fixture["pre_scoring_compliance_exclusions"]
+        self.assertEqual({row["source_key"] for row in exclusions}, {"telegram:meduzalive", "telegram:imnotbozhena"})
+        self.assertTrue(all(row["must_not_be_used_as_image_negative"] for row in exclusions))
+
     def test_missing_telegram_username_is_terminal_but_generic_value_error_is_not(self) -> None:
         mod = load_module()
         self.assertTrue(mod.telegram_resolve_error_is_terminal_unresolvable(
@@ -1115,6 +1134,62 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(pending["current_stage"], "dropped_local_source")
         self.assertEqual(pending["external_bge_m3_status"], "skipped_source_terminal")
 
+    def test_source_compliance_gate_exactly_blocks_meduza_and_nebozhena_before_spend(self) -> None:
+        mod = load_module()
+        with mock.patch.dict(os.environ, {"REGION_TALK_ENABLE_SOURCE_SURFACE_FILTER": "0"}):
+            meduza = mod.source_local_region_terminal_fields({
+                "post_url": "https://t.me/meduzalive/144244",
+            })
+            nebozhena = mod.source_local_region_terminal_fields({
+                "canonical_source_key": "telegram:imnotbozhena",
+                "source_title": "НЕБОЖЕНА",
+            })
+
+        self.assertEqual(meduza["source_queue_status"], mod.COMPLIANCE_SOURCE_STATUS)
+        self.assertEqual(meduza["source_compliance_decision"], "deny_no_spend")
+        self.assertEqual(meduza["source_compliance_match_basis"], "exact_resource_url")
+        self.assertEqual(meduza["source_foreign_agent_registry_match_status"], "exact_resource_match")
+        self.assertEqual(meduza["source_extremist_registry_match_status"], "no_exact_match_found")
+        self.assertEqual(meduza["next_action"], "do_not_fetch_or_score_compliance_excluded_source")
+
+        self.assertEqual(nebozhena["source_queue_status"], mod.COMPLIANCE_SOURCE_STATUS)
+        self.assertEqual(nebozhena["source_compliance_reason_code"], "manual_editorial_source_block")
+        self.assertEqual(nebozhena["source_compliance_match_basis"], "manual_exact_handle")
+        self.assertEqual(
+            nebozhena["source_foreign_agent_registry_match_status"],
+            "no_exact_match_in_current_snapshot",
+        )
+
+        self.assertEqual(
+            mod.image_queue_source_disqualification_reason({"post_url": "https://t.me/meduzalive/144244"}),
+            "compliance_source_deny_no_spend",
+        )
+        self.assertEqual(
+            mod._publication_source_verdict({"source_url": "https://t.me/meduzalive"}),
+            mod.PUBLICATION_SOURCE_CONFIRMED_REJECTED,
+        )
+
+        pending = {
+            "post_url": "https://t.me/meduzalive/144244",
+            "vector_gate_status": "vector_defer_wait_bge_m3",
+            "current_stage": "dual_model_vector_enrichment_pending",
+        }
+        stats = mod.apply_external_bge_m3_fusion_to_candidate_memory(
+            [pending], e5_index={}, bge_index={}, lexicon=[]
+        )
+        self.assertEqual(stats["source_blocked"], 1)
+        self.assertEqual(pending["current_stage"], "dropped_compliance_source")
+        self.assertEqual(pending["external_bge_m3_status"], "skipped_source_terminal")
+
+    def test_source_compliance_gate_never_fuzzy_blocks_by_title(self) -> None:
+        mod = load_module()
+        decision = mod.source_compliance_terminal_fields({
+            "platform": "telegram",
+            "source_title": "Разбор публикации Медузы и Небожены",
+            "source_url": "https://t.me/unrelated_travel_author",
+        })
+        self.assertEqual(decision, {})
+
     def test_image_queue_blocks_dom_kitoboya_source(self) -> None:
         mod = load_module()
         reason = mod.image_queue_product_gate_reason({
@@ -1506,6 +1581,24 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(item["source_quick_class"], "local_region_source")
         self.assertEqual(item["next_action"], "do_not_fetch_exact_post_from_rejected_source")
         self.assertTrue(item["evidence_excerpt_hash"])
+        self.assertNotIn("keyword_hit_text_excerpt", item)
+
+    def test_post_link_queue_terminally_rejects_exact_compliance_source_before_fetch(self) -> None:
+        mod = load_module()
+        item = mod.post_link_queue_item_from_keyword_hit({
+            "keyword_hit_post_url": "https://t.me/meduzalive/144244",
+            "keyword_hit_source_url": "https://t.me/meduzalive",
+            "canonical_source_key": "telegram:meduzalive",
+            "source_title": "Медуза — LIVE",
+            "username_or_handle": "meduzalive",
+            "matched_query": "Калининград",
+            "keyword_hit_text_excerpt": "Текст поискового результата не должен загружаться дальше",
+            "discovery_type": "telegram_keyword_search",
+        }, run_id="unit-run")
+        self.assertEqual(item["post_link_status"], "terminal_source_rejected")
+        self.assertEqual(item["fetch_error_code"], "source_compliance_rejected_before_exact_fetch")
+        self.assertEqual(item["source_compliance_reason_code"], "official_foreign_agent_exact_resource_and_undesirable_entity")
+        self.assertEqual(item["next_action"], "do_not_fetch_exact_post_from_rejected_source")
         self.assertNotIn("keyword_hit_text_excerpt", item)
 
     def test_post_link_queue_removes_search_excerpt_after_exact_fetch(self) -> None:
