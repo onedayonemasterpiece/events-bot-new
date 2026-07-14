@@ -249,3 +249,31 @@ def test_russian_art_center_reference_resolves_oktyabrskaya_10() -> None:
         "location_address": "Октябрьская 10",
         "city": "Калининград",
     }
+
+
+def test_kldscope_reference_normalizes_official_channel_wording() -> None:
+    payload = {
+        "location_name": "Уютное пространство «КЛДскоп»",
+        "location_address": "ул. Земельная, д. 12",
+        "city": "Калининград",
+    }
+
+    normalise_event_location_from_reference(payload)
+
+    assert payload == {
+        "location_name": "КЛДскоп",
+        "location_address": "Земельная 12, 1 этаж, кабинет 3",
+        "city": "Калининград",
+    }
+
+    from_text = find_known_venue_in_text(
+        "19 июля, ул. Земельная, 12, каб. 3, пространство КЛДскоп",
+        city="Калининград",
+    )
+    assert from_text is not None
+    assert from_text.name == "КЛДскоп"
+    assert from_text.address == "Земельная 12, 1 этаж, кабинет 3"
+
+    declined = match_known_venue("КЛДскопе", city="Калининград")
+    assert declined is not None
+    assert declined.name == "КЛДскоп"
