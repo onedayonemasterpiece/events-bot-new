@@ -312,7 +312,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
-    def test_ydb_queue_leases_only_eligible_rows_and_persists_blocked_audit(self) -> None:
+    def test_ydb_queue_leases_only_eligible_rows_and_separates_refresh_from_terminal_block(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
             "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
@@ -354,14 +354,21 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 self.assertEqual([row["image_queue_id"] for row in leased], ["eligible"])
                 self.assertEqual(leased[0]["image_queue_status"], "image_analysis_in_progress")
                 self.assertEqual(mod.input_payload["publication_eligibility_pending_count"], 1)
-                self.assertEqual(mod.input_payload["publication_eligibility_blocked_count"], 3)
+                self.assertEqual(mod.input_payload["publication_eligibility_blocked_count"], 2)
+                self.assertEqual(mod.input_payload["publication_eligibility_refresh_deferred_count"], 1)
 
                 blocked_writes = [batch for stage, batch in writes if stage == "blocked_publication_eligibility"]
                 self.assertEqual(len(blocked_writes), 1)
                 blocked = blocked_writes[0]
                 self.assertEqual({row["image_queue_id"] for row in blocked}, {"rejected", "legacy", "local"})
-                self.assertTrue(all(row["image_queue_status"] == "rejected_publication_eligibility" for row in blocked))
-                self.assertTrue(all(row["image_eligibility_status"] == "blocked" for row in blocked))
+                by_id = {row["image_queue_id"]: row for row in blocked}
+                self.assertEqual(by_id["legacy"]["image_queue_status"], "needs_actual_image_fetch")
+                self.assertEqual(by_id["legacy"]["image_eligibility_status"], "deferred_refresh")
+                self.assertEqual(by_id["legacy"]["next_action"], "recompute_publication_eligibility_before_image_analysis")
+                self.assertEqual(by_id["rejected"]["image_queue_status"], "rejected_publication_eligibility")
+                self.assertEqual(by_id["local"]["image_queue_status"], "rejected_publication_eligibility")
+                self.assertEqual(by_id["rejected"]["image_eligibility_status"], "blocked")
+                self.assertEqual(by_id["local"]["image_eligibility_status"], "blocked")
                 self.assertTrue(all(row["image_eligibility_reason"] for row in blocked))
                 self.assertTrue(all(row["image_eligibility_expected_gate_version"] == "publication-gate-test-v1" for row in blocked))
             finally:
@@ -452,7 +459,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 "https://cdn.example/photo.jpg?size=large",
             )
 
-    def test_process_batch_rejects_before_media_fetch_or_scoring(self) -> None:
+    def test_process_batch_blocks_or_defers_before_media_fetch_or_scoring(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
             "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
@@ -504,9 +511,13 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
 
                 self.assertEqual(calls, {"telegram": 0, "vk": 0, "validate": 0})
                 self.assertEqual(len(result), 2)
-                self.assertTrue(all(row["image_queue_status"] == "rejected_publication_eligibility" for row in result))
+                by_id = {row["image_queue_id"]: row for row in result}
+                self.assertEqual(by_id["unsigned_tg"]["image_queue_status"], "needs_actual_image_fetch")
+                self.assertEqual(by_id["unsigned_tg"]["image_eligibility_status"], "deferred_refresh")
+                self.assertEqual(by_id["local_vk"]["image_queue_status"], "rejected_publication_eligibility")
                 self.assertEqual(mod.input_payload["publication_eligibility_pending_count"], 0)
-                self.assertEqual(mod.input_payload["publication_eligibility_blocked_count"], 2)
+                self.assertEqual(mod.input_payload["publication_eligibility_blocked_count"], 1)
+                self.assertEqual(mod.input_payload["publication_eligibility_refresh_deferred_count"], 1)
                 self.assertEqual([stage for stage, _batch in writes], ["blocked_publication_eligibility"])
             finally:
                 for key, value in old.items():
@@ -658,6 +669,82 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertTrue(mod.image_row_needs_contract_rescore(legacy))
             legacy["image_decision_contract_version"] = mod.IMAGE_DECISION_CONTRACT_VERSION
             self.assertFalse(mod.image_row_needs_contract_rescore(legacy))
+
+    def test_all_supported_legacy_gate_versions_can_enter_bounded_low_score_rescore(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            for version in sorted(mod.LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS):
+                with self.subTest(version=version):
+                    row = {
+                        "image_queue_status": "actual_scored",
+                        "image_model_input_type": "actual_image",
+                        "overall_media_score": 0.5,
+                        "image_decision_contract_version": "legacy-v1",
+                        "publication_eligibility_decision": "accept",
+                        "publication_eligibility_gate_version": version,
+                    }
+                    self.assertTrue(mod.image_row_needs_contract_rescore(row))
+
+    def test_stale_high_actual_image_attestation_is_deferred_without_losing_score(self) -> None:
+        old_expected = os.environ.get("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION")
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = (
+                    "region_talk_publication_eligibility_v5"
+                )
+                row = {
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "images_scored_actual_count": 3,
+                    "overall_media_score": 0.8,
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "region_talk_publication_eligibility_v4",
+                }
+                eligible, deferred = mod.partition_publication_eligible_rows([row])
+                self.assertEqual(eligible, [])
+                self.assertEqual(len(deferred), 1)
+                self.assertEqual(row["image_queue_status"], "actual_scored")
+                self.assertEqual(row["images_scored_actual_count"], 3)
+                self.assertEqual(row["image_eligibility_status"], "deferred_refresh")
+                # The YDB writer reapplies the audit immediately before the
+                # UPSERT; that must not collapse refresh work back to blocked.
+                mod.apply_publication_eligibility_audit(row)
+                self.assertEqual(row["image_eligibility_status"], "deferred_refresh")
+            finally:
+                if old_expected is None:
+                    os.environ.pop("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION", None)
+                else:
+                    os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = old_expected
+
+    def test_previous_version_only_terminalization_is_restored_to_actual_scored(self) -> None:
+        old_expected = os.environ.get("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION")
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = (
+                    "region_talk_publication_eligibility_v5"
+                )
+                row = {
+                    "image_queue_status": "rejected_publication_eligibility",
+                    "image_model_input_type": "actual_image",
+                    "images_scored_actual_count": 4,
+                    "overall_media_score": 0.8,
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "region_talk_publication_eligibility_v4",
+                }
+                eligible, deferred = mod.partition_publication_eligible_rows([row])
+                self.assertEqual(eligible, [])
+                self.assertEqual(len(deferred), 1)
+                self.assertEqual(row["image_queue_status"], "actual_scored")
+                self.assertEqual(row["images_scored_actual_count"], 4)
+                self.assertEqual(row["previous_image_queue_status"], "rejected_publication_eligibility")
+                self.assertEqual(row["image_eligibility_status"], "deferred_refresh")
+            finally:
+                if old_expected is None:
+                    os.environ.pop("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION", None)
+                else:
+                    os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = old_expected
 
     def test_v4_album_rescore_remains_authorized_after_lease_status_change(self) -> None:
         old_expected = os.environ.get("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION")

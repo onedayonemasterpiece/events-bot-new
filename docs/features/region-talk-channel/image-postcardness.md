@@ -44,6 +44,13 @@ The current production-safe transition contract is
   A row that was accepted by v4 and then blocked only by that circular status/
   gate-version transition is recoverable; a current source, compliance or text
   reject is never reopened by this exception.
+- A missing or stale publication attestation is refresh work for
+  CandidateReport, not evidence that the post or media is bad. ImageDiagnostic
+  writes `image_eligibility_status=deferred_refresh` and preserves an existing
+  `actual_scored` result, frame count and score. Only a current semantic,
+  source or compliance rejection becomes terminal. The orchestrator continues
+  to count accepted v2/v3/v4 low-score rows as versioned rescore work even if
+  an earlier migration attempt temporarily wrote the terminal image status.
 - Source-level exclusion based on average raw image score is disabled. Raw
   source image statistics remain diagnostics only; exact local/spam/legal
   exclusions are unaffected.
@@ -55,6 +62,21 @@ can be measured. A long-term automatic `AUTO_ACCEPT`/
 `AUTO_REJECT_ALL_WEAK` contract still requires the labelled, source-disjoint
 calibration and shadow acceptance gates in the external methodology. Until
 then, uncertain cases abstain into review instead of being rejected.
+
+### Live album canary, 2026-07-14
+
+The fixed CPU canary acquired two complete Telegram albums: 10/10 frames for
+`routecommunity/1342` and 7/7 for `hotostay/14641`. Thus the album acquisition
+and lease-recheck defects are closed: **2 post rows and 17 distinct frames**
+were fetched and scored. Reports and heartbeats now state post and frame counts
+separately; the old “actual images” label had in fact counted post rows.
+
+The canary also exposed the next real blocker: the runtime could not obtain the
+pyiqa NIMA weights, so both rows correctly became non-terminal
+`scoring_retry` instead of false accepts/rejects. CLIP came from the pinned
+Kaggle input and LAION loaded successfully. This is not proof of a calibrated
+production image decision; deterministic packaging of every required model or
+a versioned VLM review lane remains necessary before automatic acceptance.
 
 ## Principle
 

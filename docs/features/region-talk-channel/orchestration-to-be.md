@@ -157,6 +157,14 @@ calibrated strong-image decision. See
 for the source-disjoint calibration, shadow and automatic-reject stop/go
 criteria.
 
+A producer gate-version bump is not a quality rejection. Missing/stale
+attestations are written as `deferred_refresh`; existing actual-image evidence
+is preserved for CandidateReport to re-attest. Runtime heartbeats separate
+`publication_eligibility_blocked_count` (current terminal source/text/
+compliance blocks) from
+`publication_eligibility_refresh_deferred_count` (non-terminal contract
+refresh). They also report posts and distinct frames separately.
+
 If Telegram/VK media resolves to a video/non-image file or an image decoder
 cannot open the downloaded payload, ImageDiagnostic must write a terminal
 `image_queue_status=not_reviewable_unsupported_media` with
@@ -528,9 +536,12 @@ Important invariants:
   lack of eligible posts.
 - Every admitted image row carries a versioned pre-image attestation from the
   shared `publication_eligibility()` contract. Only `decision=accept` with
-  `gate_version=region_talk_publication_eligibility_v1` may be leased by
-  ImageDiagnostic. Unknown sources become `needs_source_review`; local/spam
-  sources are rejected. The finalizer joins the authoritative source ledger,
+  `gate_version=region_talk_publication_eligibility_v5` may enter the normal
+  ImageDiagnostic lane. A bounded v2/v3/v4 migration exception exists only for
+  old accepted low-score actual-image rows requiring the album-safe rescore;
+  stale/missing versions otherwise defer for producer refresh and never erase
+  prior image evidence. Unknown sources become `needs_source_review`;
+  local/spam sources are rejected. The finalizer joins the authoritative source ledger,
   reapplies the same contract to actual-image rows, refreshes legacy unsigned
   rows. Publication rows also carry a fingerprint of the authoritative source
   classification; the notifier rereads the live source ledger and sends only

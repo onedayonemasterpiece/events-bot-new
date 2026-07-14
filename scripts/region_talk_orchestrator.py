@@ -1096,6 +1096,53 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+LEGACY_IMAGE_PUBLICATION_GATES = frozenset({
+    "region_talk_publication_eligibility_v2",
+    "region_talk_publication_eligibility_v3",
+    "region_talk_publication_eligibility_v4",
+})
+
+
+def _image_contract_rescore_candidate(row: dict[str, Any]) -> bool:
+    """Keep old accepted low actual-image rows visible during v5 migration.
+
+    ImageDiagnostic may temporarily mark a stale producer attestation as
+    deferred while CandidateReport refreshes it.  The orchestrator therefore
+    reads both the current producer fields and the image consumer's observed
+    legacy attestation instead of hiding migration work behind the current
+    queue status.
+    """
+    score = _safe_float(row.get("overall_media_score") or row.get("final_visual_score"))
+    current_legacy_accept = (
+        str(row.get("publication_eligibility_decision") or "").lower() == "accept"
+        and str(row.get("publication_eligibility_gate_version") or "") in LEGACY_IMAGE_PUBLICATION_GATES
+    )
+    audited_legacy_accept = (
+        str(row.get("image_eligibility_decision") or "").lower() == "accept"
+        and str(row.get("image_eligibility_gate_version") or "") in LEGACY_IMAGE_PUBLICATION_GATES
+    )
+    current_decision = str(row.get("publication_eligibility_decision") or "").lower()
+    if current_decision not in {"", "accept"}:
+        circular_reason = str(
+            row.get("publication_eligibility_reason")
+            or row.get("publication_eligibility_primary_reason")
+            or ""
+        )
+        if circular_reason not in {
+            "image_queue_not_actual_scored",
+            "actual_image_required",
+            "image_quality_contract_decision_missing",
+        }:
+            return False
+    return bool(
+        str(row.get("image_model_input_type") or "") == "actual_image"
+        and str(row.get("image_decision_contract_version") or "") != "region_talk_image_album_guard_v2"
+        and score is not None
+        and score < float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE") or "0.66")
+        and (current_legacy_accept or audited_legacy_accept)
+    )
+
+
 def _avg_numeric(rows: list[dict[str, Any]], field: str) -> float:
     values = [_safe_float(r.get(field)) for r in rows]
     nums = [v for v in values if v is not None]
@@ -3165,13 +3212,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_scoring_retry = [r for r in images if str(r.get("image_quality_decision") or "") == "scoring_retry"]
     image_legacy_accept = [r for r in images if str(r.get("image_quality_decision") or "") == "legacy_auto_accept"]
     image_partial_acquisition = [r for r in images if str(r.get("image_acquisition_status") or "") == "partial"]
-    image_contract_rescore = [
-        r for r in image_actual
-        if str(r.get("image_decision_contract_version") or "") != "region_talk_image_album_guard_v2"
-        and _safe_float(r.get("overall_media_score") or r.get("final_visual_score")) is not None
-        and float(r.get("overall_media_score") or r.get("final_visual_score") or 0)
-        < float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE") or "0.66")
-    ]
+    image_contract_rescore = [row for row in images if _image_contract_rescore_candidate(row)]
     image_product_eligible = [
         r for r in images
         if str(r.get("publication_eligibility_decision") or "") == "accept"

@@ -26,6 +26,37 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_image_contract_rescore_metric_survives_temporary_migration_terminal_status(self) -> None:
+        mod = load_module()
+        row = {
+            "image_queue_status": "rejected_publication_eligibility",
+            "image_model_input_type": "actual_image",
+            "overall_media_score": 0.5,
+            "image_decision_contract_version": "legacy-v1",
+            "publication_eligibility_decision": "reject",
+            "publication_eligibility_gate_version": "region_talk_publication_eligibility_v5",
+            "publication_eligibility_reason": "image_queue_not_actual_scored",
+            "image_eligibility_decision": "accept",
+            "image_eligibility_gate_version": "region_talk_publication_eligibility_v4",
+        }
+        self.assertTrue(mod._image_contract_rescore_candidate(row))
+
+        row["image_decision_contract_version"] = "region_talk_image_album_guard_v2"
+        self.assertFalse(mod._image_contract_rescore_candidate(row))
+
+    def test_image_contract_rescore_metric_does_not_reopen_current_semantic_reject(self) -> None:
+        mod = load_module()
+        row = {
+            "image_model_input_type": "actual_image",
+            "overall_media_score": 0.5,
+            "image_decision_contract_version": "legacy-v1",
+            "publication_eligibility_decision": "reject",
+            "publication_eligibility_gate_version": "region_talk_publication_eligibility_v5",
+            "image_eligibility_decision": "reject",
+            "image_eligibility_gate_version": "region_talk_publication_eligibility_v5",
+        }
+        self.assertFalse(mod._image_contract_rescore_candidate(row))
+
     def test_text_vector_metric_read_projects_scalars_without_dense_embedding(self) -> None:
         mod = load_module()
         captured: dict[str, object] = {}

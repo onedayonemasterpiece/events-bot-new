@@ -27,6 +27,11 @@ IMAGE_LEGACY_SCORER_VERSION = "region_talk_cv_clip_laion_nima_legacy_v1"
 IMAGE_QUALITY_NEEDS_REVIEW = "needs_visual_review"
 IMAGE_QUALITY_LEGACY_ACCEPT = "legacy_auto_accept"
 IMAGE_QUALITY_SCORING_RETRY = "scoring_retry"
+LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS = {
+    "region_talk_publication_eligibility_v2",
+    "region_talk_publication_eligibility_v3",
+    "region_talk_publication_eligibility_v4",
+}
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
@@ -40,7 +45,8 @@ IMAGE_DIAG_HEARTBEAT_FIELDS = (
     "run_id", "event_name", "created_at", "phase", "reason", "attempt",
     "total", "leased", "remaining_budget", "pending", "blocked",
     "publication_eligibility_pending_count", "publication_eligibility_blocked_count",
-    "batch_index", "rows", "actual_scored", "actual_images", "failures",
+    "publication_eligibility_refresh_deferred_count",
+    "batch_index", "rows", "actual_scored", "actual_images", "actual_posts", "actual_frames", "failures",
     "xlsx", "html", "summary", "source", "max_items_per_run", "batch_size",
     "poll_interval_seconds", "wait_initial_seconds", "wait_after_drain_seconds",
     # Long CPU stages must identify the exact component and row. An event name
@@ -479,7 +485,7 @@ def publication_eligibility_gate_reason(row: dict) -> str:
         # fail-closed.
         rescore_helper = globals().get("image_row_needs_contract_rescore")
         if (
-            actual_version == "region_talk_publication_eligibility_v4"
+            actual_version in LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS
             and expected_version == "region_talk_publication_eligibility_v5"
             and callable(rescore_helper)
             and rescore_helper(row)
@@ -498,16 +504,57 @@ def apply_publication_eligibility_audit(row: dict, *, reason: str | None = None)
     row["image_eligibility_gate_version"] = observed_version or "missing"
     row["image_eligibility_expected_gate_version"] = expected_publication_eligibility_gate_version()
     row["image_eligibility_reason"] = gate_reason or str(row.get("publication_eligibility_reason") or "accepted")
-    row["image_eligibility_status"] = "blocked" if gate_reason else "accepted"
+    refresh_helper = globals().get("_publication_eligibility_refreshable")
+    refreshable = bool(gate_reason and callable(refresh_helper) and refresh_helper(gate_reason))
+    row["image_eligibility_status"] = "deferred_refresh" if refreshable else ("blocked" if gate_reason else "accepted")
     row["image_eligibility_checked_at"] = datetime.now(timezone.utc).isoformat()
     if gate_reason and not str(row.get("publication_eligibility_reason") or "").strip():
         row["publication_eligibility_reason"] = gate_reason
     return row
 
 
+def _publication_eligibility_refreshable(reason: str) -> bool:
+    return reason in {
+        "publication_eligibility_decision_missing",
+        "publication_eligibility_gate_version_missing",
+    } or reason.startswith("publication_eligibility_gate_version_mismatch:")
+
+
+def _legacy_actual_image_accept_attestation(row: dict) -> bool:
+    current_decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
+    current_gate = str(row.get("publication_eligibility_gate_version") or "").strip()
+    audit_decision = str(row.get("image_eligibility_decision") or "").strip().lower()
+    audit_gate = str(row.get("image_eligibility_gate_version") or "").strip()
+    return str(row.get("image_model_input_type") or "") == "actual_image" and (
+        (
+            current_decision == PUBLICATION_ELIGIBILITY_ACCEPT
+            and current_gate in LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS
+        )
+        or (
+            audit_decision == PUBLICATION_ELIGIBILITY_ACCEPT
+            and audit_gate in LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS
+        )
+    )
+
+
 def mark_publication_eligibility_blocked(row: dict, reason: str) -> dict:
     previous_status = str(row.get("image_queue_status") or "")
+    legacy_actual_accept = _legacy_actual_image_accept_attestation(row)
     apply_publication_eligibility_audit(row, reason=reason)
+    if _publication_eligibility_refreshable(reason):
+        # Missing/stale producer attestation is a CandidateReport refresh, not
+        # evidence that the actual image or post is bad.  In particular, a gate
+        # version bump must not destroy the old ``actual_scored`` state before
+        # CandidateReport can sign the new contract.
+        if legacy_actual_accept and previous_status == IMAGE_TERMINAL_ELIGIBILITY_STATUS:
+            row["image_queue_status"] = "actual_scored"
+            row["previous_image_queue_status"] = previous_status
+            row["status_changed_this_run"] = "true"
+            row["last_status_changed_at"] = datetime.now(timezone.utc).isoformat()
+        row["image_eligibility_status"] = "deferred_refresh"
+        row["next_action"] = "recompute_publication_eligibility_before_image_analysis"
+        row.setdefault("images_scored_actual_count", int(row.get("actual_image_count") or 0))
+        return row
     row["previous_image_queue_status"] = previous_status
     row["image_queue_status"] = IMAGE_TERMINAL_ELIGIBILITY_STATUS
     row["media_acquisition_status"] = "blocked_publication_eligibility"
@@ -532,9 +579,10 @@ def partition_publication_eligible_rows(batch: list[dict]) -> tuple[list[dict], 
     return eligible, blocked
 
 
-def expose_publication_eligibility_counters(*, pending: int, blocked: int) -> None:
+def expose_publication_eligibility_counters(*, pending: int, blocked: int, refresh_deferred: int = 0) -> None:
     input_payload["publication_eligibility_pending_count"] = max(0, int(pending))
     input_payload["publication_eligibility_blocked_count"] = max(0, int(blocked))
+    input_payload["publication_eligibility_refresh_deferred_count"] = max(0, int(refresh_deferred))
 
 def ydb_table_name(suffix: str = "state_kv") -> str:
     ns = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip() or "region_talk_compact").strip("_") or "region_talk_compact"
@@ -612,6 +660,7 @@ def ydb_upsert_cursor(name: str, payload: dict):
             "blocked": payload.get("blocked"),
             "publication_eligibility_pending_count": payload.get("publication_eligibility_pending_count"),
             "publication_eligibility_blocked_count": payload.get("publication_eligibility_blocked_count"),
+            "publication_eligibility_refresh_deferred_count": payload.get("publication_eligibility_refresh_deferred_count"),
             "progress_label": payload.get("progress_label"),
         }.items() if v not in (None, "", [], {})}
         def op(session):
@@ -698,14 +747,19 @@ def image_row_needs_contract_rescore(row: dict) -> bool:
     audit_decision = str(row.get("image_eligibility_decision") or "").strip().lower()
     audit_gate = str(row.get("image_eligibility_gate_version") or "").strip()
     audit_reason = str(row.get("image_eligibility_reason") or "").strip()
-    accepted_v4 = current_decision == PUBLICATION_ELIGIBILITY_ACCEPT and current_gate == "region_talk_publication_eligibility_v4"
-    accepted_v4_audit = (
-        audit_decision == PUBLICATION_ELIGIBILITY_ACCEPT
-        and audit_gate == "region_talk_publication_eligibility_v4"
-        and audit_reason
-        == "publication_eligibility_gate_version_mismatch:expected=region_talk_publication_eligibility_v5;actual=region_talk_publication_eligibility_v4"
+    accepted_legacy = (
+        current_decision == PUBLICATION_ELIGIBILITY_ACCEPT
+        and current_gate in LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS
     )
-    if not accepted_v4 and not accepted_v4_audit:
+    accepted_legacy_audit = (
+        audit_decision == PUBLICATION_ELIGIBILITY_ACCEPT
+        and audit_gate in LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS
+        and audit_reason == (
+            "publication_eligibility_gate_version_mismatch:expected="
+            f"region_talk_publication_eligibility_v5;actual={audit_gate}"
+        )
+    )
+    if not accepted_legacy and not accepted_legacy_audit:
         return False
     if current_decision not in {"", PUBLICATION_ELIGIBILITY_ACCEPT}:
         circular_reason = str(
@@ -919,7 +973,15 @@ def ydb_rows_for_diagnostic(limit_n: int):
     if retry_exhausted:
         ydb_upsert_image_rows(retry_exhausted, stage="media_fetch_retry_exhausted")
         log_event("media_fetch_retry_exhausted", phase="poll", rows=len(retry_exhausted), max_attempts=max_media_fetch_attempts())
-    expose_publication_eligibility_counters(pending=len(pending), blocked=len(blocked))
+    refresh_deferred = sum(
+        1 for row in blocked if str(row.get("image_eligibility_status") or "") == "deferred_refresh"
+    )
+    terminal_blocked = len(blocked) - refresh_deferred
+    expose_publication_eligibility_counters(
+        pending=len(pending),
+        blocked=terminal_blocked,
+        refresh_deferred=refresh_deferred,
+    )
     pending=sorted(pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))[:limit_n]
     now=datetime.now(timezone.utc).isoformat()
     for r in pending:
@@ -937,7 +999,8 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
             input_payload["queue_rows_total"] = total
             eligibility_pending = int(input_payload.get("publication_eligibility_pending_count") or 0)
             eligibility_blocked = int(input_payload.get("publication_eligibility_blocked_count") or 0)
-            log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n, pending=eligibility_pending, blocked=eligibility_blocked, publication_eligibility_pending_count=eligibility_pending, publication_eligibility_blocked_count=eligibility_blocked)
+            eligibility_refresh_deferred = int(input_payload.get("publication_eligibility_refresh_deferred_count") or 0)
+            log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n, pending=eligibility_pending, blocked=eligibility_blocked, publication_eligibility_pending_count=eligibility_pending, publication_eligibility_blocked_count=eligibility_blocked, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred)
             ydb_upsert_cursor("image_diagnostic", {
                 "phase": "poll",
                 "status": "running",
@@ -952,7 +1015,8 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
                 "blocked": eligibility_blocked,
                 "publication_eligibility_pending_count": eligibility_pending,
                 "publication_eligibility_blocked_count": eligibility_blocked,
-                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}; eligibility pending={eligibility_pending} blocked={eligibility_blocked}",
+                "publication_eligibility_refresh_deferred_count": eligibility_refresh_deferred,
+                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}; eligibility pending={eligibility_pending} blocked={eligibility_blocked} refresh_deferred={eligibility_refresh_deferred}",
             })
             if batch:
                 return batch, total
@@ -1635,18 +1699,28 @@ def apply_image_queue_status(r):
 
 def process_batch(batch_rows, batch_index: int):
     rows, eligibility_blocked_rows = partition_publication_eligible_rows(batch_rows)
+    eligibility_refresh_deferred_count = sum(
+        1 for row in eligibility_blocked_rows
+        if str(row.get("image_eligibility_status") or "") == "deferred_refresh"
+    )
+    eligibility_terminal_blocked_count = len(eligibility_blocked_rows) - eligibility_refresh_deferred_count
     if eligibility_blocked_rows:
-        expose_publication_eligibility_counters(pending=len(rows), blocked=len(eligibility_blocked_rows))
+        expose_publication_eligibility_counters(
+            pending=len(rows),
+            blocked=eligibility_terminal_blocked_count,
+            refresh_deferred=eligibility_refresh_deferred_count,
+        )
         ydb_upsert_image_rows(eligibility_blocked_rows, stage="blocked_publication_eligibility")
     elif source_mode != "ydb":
-        expose_publication_eligibility_counters(pending=len(rows), blocked=0)
+        expose_publication_eligibility_counters(pending=len(rows), blocked=0, refresh_deferred=0)
     attempt_at = datetime.now(timezone.utc).isoformat()
     for r in rows:
         r["media_fetch_attempt_count"] = int(r.get("media_fetch_attempt_count") or 0) + 1
         r["media_fetch_last_attempt_at"] = attempt_at
     eligibility_pending_count = int(input_payload.get("publication_eligibility_pending_count") or 0)
     eligibility_blocked_count = int(input_payload.get("publication_eligibility_blocked_count") or 0)
-    log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count)
+    eligibility_refresh_deferred_count = int(input_payload.get("publication_eligibility_refresh_deferred_count") or 0)
+    log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred_count)
     # Fetch media, no source/comment scanning.
     tg=[r for r in rows if "t.me/" in (r.get("post_url") or "")]
     vk=[r for r in rows if "vk.com/wall" in (r.get("post_url") or "")]
@@ -1717,7 +1791,7 @@ def process_batch(batch_rows, batch_index: int):
     ydb_upsert_image_rows(rows, stage="scored_or_retry")
     ydb_update_source_visual_rollups()
     result_rows = rows + eligibility_blocked_rows
-    log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(result_rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count)
+    log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(result_rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"), actual_posts=sum(1 for r in rows if r.get("images_scored_actual_count")), actual_frames=sum(int(r.get("images_scored_actual_count") or 0) for r in rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred_count)
     return result_rows
 
 all_processed_rows=[]
@@ -1755,6 +1829,7 @@ else:
     rows = process_batch(rows, 1) if rows else []
 
 actual_rows=[r for r in rows if r.get("final_visual_status")=="scored_actual_image"]
+actual_frame_count=sum(int(r.get("images_scored_actual_count") or 0) for r in actual_rows)
 top=sorted(actual_rows,key=lambda r:float(r.get("final_visual_score") or -1),reverse=True)
 low=sorted(actual_rows,key=lambda r:float(r.get("final_visual_score") or 999))
 disagree=sorted(actual_rows,key=lambda r:float(r.get("model_disagreement_score") or 0),reverse=True)
@@ -1771,10 +1846,15 @@ def timing_stats(field, data):
         {"metric":f"{field}_max","value":round(max(vals),3)},
     ]
 summary=[
-    {"metric":"run_id","value":RUN_ID}, {"metric":"input_rows","value":len(rows)}, {"metric":"actual_images_count","value":len(actual_rows)},
+    {"metric":"run_id","value":RUN_ID}, {"metric":"input_rows","value":len(rows)},
+    {"metric":"actual_posts_scored_count","value":len(actual_rows)},
+    {"metric":"actual_frames_scored_count","value":actual_frame_count},
+    # Backward-compatible alias: historically this counted posts, not images.
+    {"metric":"actual_images_count_legacy_post_count","value":len(actual_rows)},
     {"metric":"metadata_only_count","value":len(rows)-len(actual_rows)}, {"metric":"failures_count","value":len(errors)},
     {"metric":"publication_eligibility_pending_count","value":int(input_payload.get("publication_eligibility_pending_count") or 0)},
     {"metric":"publication_eligibility_blocked_count","value":int(input_payload.get("publication_eligibility_blocked_count") or 0)},
+    {"metric":"publication_eligibility_refresh_deferred_count","value":int(input_payload.get("publication_eligibility_refresh_deferred_count") or 0)},
     {"metric":"elapsed_seconds","value":round(time.monotonic()-RUN_STARTED,3)}, {"metric":"generated_at","value":datetime.now(timezone.utc).isoformat()},
 ]
 for field in ("media_download_seconds","image_decode_seconds","cv_inference_seconds","clip_inference_seconds","laion_inference_seconds","nima_inference_seconds","total_inference_seconds","total_processing_seconds"):
@@ -1810,7 +1890,7 @@ def card(r,label):
     img=f"<img src='{html.escape(rel(r.get('thumbnail_path')))}'>" if r.get("thumbnail_path") else "<div class='noimg'>no image</div>"
     return f"<a class='card' href='{html.escape(r.get('post_url') or '')}' target='_blank'>{img}<div><b>{label}</b> score {html.escape(str(r.get('final_visual_score','')))} cv {html.escape(str(r.get('cv_overall_media_score','')))} clip {html.escape(str(r.get('clip_postcardness_score','')))} laion {html.escape(str(r.get('laion_aesthetic_score','')))} nima {html.escape(str(r.get('nima_quality_score','')))}<br>time total {html.escape(str(r.get('total_processing_seconds','')))}s infer {html.escape(str(r.get('total_inference_seconds','')))}s<br>{html.escape(r.get('source_title') or '')}<br>{html.escape(r.get('post_url') or '')}</div></a>"
 html_doc="""<!doctype html><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;background:#111;color:#eee;margin:24px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}.card{display:block;background:#1e1e1e;border:1px solid #444;border-radius:12px;padding:10px;color:#eee;text-decoration:none}img{width:100%;height:210px;object-fit:cover;border-radius:8px}.noimg{height:210px;background:#333;display:flex;align-items:center;justify-content:center}</style>"""
-html_doc += f"<h1>Region Talk image diagnostic - {html.escape(RUN_ID)}</h1><p>Actual images: {len(actual_rows)}/{len(rows)}. Models: {html.escape(json.dumps(model_availability,ensure_ascii=False))}</p>"
+html_doc += f"<h1>Region Talk image diagnostic - {html.escape(RUN_ID)}</h1><p>Posts with actual media: {len(actual_rows)}/{len(rows)}; distinct frames scored: {actual_frame_count}. Models: {html.escape(json.dumps(model_availability,ensure_ascii=False))}</p>"
 html_doc += "<h2>Top high score</h2><div class='grid'>" + "".join(card(r,"HIGH") for r in top[:24]) + "</div>"
 html_doc += "<h2>Low score</h2><div class='grid'>" + "".join(card(r,"LOW") for r in low[:24]) + "</div>"
 html_path=OUT/"contact_sheet.html"; html_path.write_text(html_doc,encoding="utf-8")
@@ -1818,6 +1898,6 @@ summary_md=OUT/"summary.md"
 available_names=[k for k,v in model_availability.items() if v.get("available")]
 best="blend(" + ", ".join(available_names) + ")" if available_names else "no visual model available"
 timing_lines="\n".join(f"- {x['metric']}: {x['value']}" for x in summary if any(s in str(x.get("metric")) for s in ("_mean","_median","_p90","throughput_actual_images_per_min")))
-summary_md.write_text(f"""# Region Talk image diagnostic - {RUN_ID}\n\n- Input rows: {len(rows)} from image_candidate_queue.\n- Actual images fetched/decoded/scored: {len(actual_rows)}.\n- Metadata-only/failed rows: {len(rows)-len(actual_rows)}.\n- Elapsed seconds: {round(time.monotonic()-RUN_STARTED,3)}.\n\n## Models that worked\n\n```json\n{json.dumps(model_availability,ensure_ascii=False,indent=2)}\n```\n\n## Timing / throughput\n\n{timing_lines}\n\n## What worked\n\nThis run did not scan sources or comments; it only acquired media for queued image rows and scored actual decoded images.\n\n## What was weak\n\nRows without decoded actual images have no final visual score. Any unavailable model above is recorded with its exact loader error, not substituted with metadata heuristics.\n\n## Visually most convincing scoring\n\nCurrent recommendation: {best}. See `contact_sheet.html`.\n\n## Production recommendations\n\n1. Keep metadata-only rows out of visual ranking.\n2. Package LAION/NIMA weights as stable Kaggle model/input assets if live installs are too slow or flaky.\n3. Use CLIP prompt score as second opinion, not as sole score.\n4. Add screenshot/text/watermark/face/news detectors before publication readiness.\n""",encoding="utf-8")
+summary_md.write_text(f"""# Region Talk image diagnostic - {RUN_ID}\n\n- Input post rows: {len(rows)} from image_candidate_queue.\n- Posts with actual decoded media scored: {len(actual_rows)}.\n- Distinct actual frames scored across those posts: {actual_frame_count}.\n- Metadata-only/failed post rows: {len(rows)-len(actual_rows)}.\n- Elapsed seconds: {round(time.monotonic()-RUN_STARTED,3)}.\n\n## Models that worked\n\n```json\n{json.dumps(model_availability,ensure_ascii=False,indent=2)}\n```\n\n## Timing / throughput\n\n{timing_lines}\n\n## What worked\n\nThis run did not scan sources or comments; it only acquired media for queued image rows and scored actual decoded images.\n\n## What was weak\n\nRows without decoded actual images have no final visual score. Any unavailable model above is recorded with its exact loader error, not substituted with metadata heuristics.\n\n## Visually most convincing scoring\n\nCurrent recommendation: {best}. See `contact_sheet.html`.\n\n## Production recommendations\n\n1. Keep metadata-only rows out of visual ranking.\n2. Package LAION/NIMA weights as stable Kaggle model/input assets if live installs are too slow or flaky.\n3. Use CLIP prompt score as second opinion, not as sole score.\n4. Add screenshot/text/watermark/face/news detectors before publication readiness.\n""",encoding="utf-8")
 (OUT/"scored_images.json").write_text(json.dumps({"run_id":RUN_ID,"summary":summary,"model_availability":model_availability,"rows":rows,"errors":errors},ensure_ascii=False,indent=2),encoding="utf-8")
-log_event("report_written", phase="report", status="done", run_id=RUN_ID, actual_images=len(actual_rows), rows=len(rows), xlsx=str(xlsx), html=str(html_path), summary=str(summary_md), failures=len(errors), ydb_write="attempted")
+log_event("report_written", phase="report", status="done", run_id=RUN_ID, actual_images=len(actual_rows), actual_posts=len(actual_rows), actual_frames=actual_frame_count, rows=len(rows), xlsx=str(xlsx), html=str(html_path), summary=str(summary_md), failures=len(errors), ydb_write="attempted")
