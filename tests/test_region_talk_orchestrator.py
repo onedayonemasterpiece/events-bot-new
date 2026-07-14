@@ -25,6 +25,30 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_exact_post_probe_is_not_source_history_scan_evidence(self) -> None:
+        mod = load_module()
+        exact = {
+            "source_queue_status": "pending_scan",
+            "fetch_status": "ok",
+            "fetch_attempted": "true",
+            "posts_scanned": 1,
+            "history_fetch_mode": "exact_post_link_fetch",
+            "online_update_stage": "post_link_queue_exact_fetch",
+        }
+        self.assertTrue(mod._source_is_post_probe_only(exact))
+        self.assertFalse(mod._source_has_scan_evidence(exact))
+
+        completed_history = {**exact, "last_history_fetch_at": "2026-07-14T00:00:00+00:00"}
+        self.assertTrue(mod._source_has_scan_evidence(completed_history))
+
+    def test_primary_history_fetch_attempt_is_scan_evidence(self) -> None:
+        mod = load_module()
+        self.assertTrue(mod._source_has_scan_evidence({
+            "fetch_attempted": "true",
+            "history_fetch_mode": "delta_scan_active",
+            "posts_scanned": 0,
+        }))
+
     def test_confirmed_blogger_funnel_metrics_deduplicate_posts_and_separate_ledger(self) -> None:
         mod = load_module()
         sources = [

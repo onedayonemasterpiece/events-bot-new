@@ -337,6 +337,11 @@ Important invariants:
   only product exception. Successful live source-status evidence repairs a
   stale pending queue row with its original run lineage; queue reconstruction
   never relabels historical scans as work performed in the current run.
+- Orchestrator source metrics use the same evidence boundary. A fast-check or
+  exact-post fetch may increase post throughput, but it is reported separately
+  as `publics_pending_post_probe_only_total` and cannot increase the count of
+  publics whose history was scanned. `publics_with_any_processed_post_total`
+  remains available as the broader post-presence metric.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and a 7-query lexicon-driven Telegram global-search

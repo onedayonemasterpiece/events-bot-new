@@ -311,9 +311,13 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publics_rejected_spam_source_total')}"
         ),
         (
-            "Технический backlog — никогда не сканировались и pending / pending, но уже имеют scan evidence: "
+            "Технический backlog первичного прохода — pending без source-history evidence / pending с source-history evidence: "
             f"{value('publics_primary_unscanned_pending_total')}/"
             f"{value('publics_pending_with_scan_evidence_waiting_rescan_total')}"
+        ),
+        (
+            "Из primary pending уже имеют только точечный post-level probe (это не просмотр истории источника): "
+            f"{value('publics_pending_post_probe_only_total')}"
         ),
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
@@ -1976,11 +1980,49 @@ def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
 
 
 def _source_has_scan_evidence(row: dict[str, Any]) -> bool:
-    return bool(
-        _safe_int(row.get("posts_scanned")) > 0
-        or str(row.get("last_history_fetch_at") or "").strip()
+    explicit_history = bool(
+        str(row.get("last_history_fetch_at") or "").strip()
         or str(row.get("primary_scan_completed_at") or "").strip()
         or str(row.get("last_successful_delta_scan_at") or "").strip()
+    )
+    if explicit_history:
+        return True
+    if _source_is_post_probe_only(row):
+        return False
+    access_status = " ".join(
+        str(row.get(field) or "").lower()
+        for field in ("source_queue_status", "fetch_status", "last_scan_status")
+    )
+    access_attempted = any(marker in access_status for marker in (
+        "skipped_cached_entity_only_no_private_entity",
+        "skipped_telegram_resolve_cooldown",
+        "skipped_telegram_global_cooldown",
+        "error_floodwait_resolve",
+    ))
+    return bool(
+        _safe_int(row.get("posts_scanned")) > 0
+        or str(row.get("fetch_attempted") or "").strip().lower() in {"1", "true", "yes"}
+        or access_attempted
+    )
+
+
+def _source_is_post_probe_only(row: dict[str, Any]) -> bool:
+    """Separate exact-post/fast-check evidence from source-history work."""
+    mode = str(row.get("history_fetch_mode") or "").strip().lower()
+    if mode in {
+        "exact_post_link_fetch",
+        "ydb_candidate_links_only_no_discovery",
+        "history_disabled_discovery_only",
+    }:
+        return True
+    context = " ".join(
+        str(row.get(field) or "").strip().lower()
+        for field in ("discovery_type", "edge_type", "online_update_stage", "source_seed_id")
+    )
+    return bool(
+        "source_local_fast_check" in context
+        or "post_link_queue_exact_fetch" in context
+        or "ydb_candidate_links" in context
     )
 
 
@@ -2986,8 +3028,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         _latest_processed_post_metrics(processed_post_rows, latest_candidate_run_id)
     )
     processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
-    source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
-    source_with_posts_count = max(len(source_with_posts), len(processed_post_source_keys))
+    source_with_posts = [
+        r for r in source_rows
+        if _safe_int(r.get("posts_scanned")) > 0 and _source_has_scan_evidence(r)
+    ]
+    source_with_posts_count = len(source_with_posts)
+    source_with_any_processed_post_count = len(processed_post_source_keys)
     cursor_by_name: dict[str, dict[str, Any]] = {}
     for row in cursors:
         name = _queue_cursor_short_name(str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", ""))
@@ -2997,7 +3043,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     source_queue_integrity_metrics = _source_queue_integrity_metrics(source_rows, source_cursor_position)
     source_primary_unscanned_pending = [
         r for r, status in zip(source_rows, source_statuses)
-        if status in {"", "pending_scan"} and _safe_int(r.get("posts_scanned")) <= 0 and not str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip()
+        if status in {"", "pending_scan"} and not _source_has_scan_evidence(r)
     ]
     source_unscanned_after_cursor = [
         r for r, status in zip(source_rows, source_statuses)
@@ -3012,7 +3058,13 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     source_pending_with_scan_evidence = [
         r for r, status in zip(source_rows, source_statuses)
-        if status == "pending_scan" and (_safe_int(r.get("posts_scanned")) > 0 or str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip())
+        if status == "pending_scan" and _source_has_scan_evidence(r)
+    ]
+    source_pending_post_probe_only = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status in {"", "pending_scan"}
+        and _source_is_post_probe_only(r)
+        and not _source_has_scan_evidence(r)
     ]
     source_processed_no_ko = [r for r, status in zip(source_rows, source_statuses) if status == "processed_no_ko"]
     source_processed_ko_candidate = [r for r, status in zip(source_rows, source_statuses) if status == "processed_found_ko_candidate"]
@@ -3116,7 +3168,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_needs_rescan_or_retry_total": len(source_retry),
         "publics_scanned_with_posts_total": source_with_posts_count,
         "publics_scanned_with_posts_source_rows_total": len(source_with_posts),
-        "publics_scanned_with_posts_repair_delta_total": max(0, source_with_posts_count - len(source_with_posts)),
+        "publics_scanned_with_posts_repair_delta_total": 0,
+        "publics_with_any_processed_post_total": source_with_any_processed_post_count,
         "publics_primary_unscanned_pending_total": len(source_primary_unscanned_pending),
         "publics_unscanned_after_cursor_total": len(source_unscanned_after_cursor),
         "publics_backlog_after_cursor_total": len(source_backlog_after_cursor),
@@ -3125,6 +3178,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             if _safe_int(r.get("queue_order")) <= source_cursor_position and (_source_has_scan_evidence(r) or status.startswith("rejected_") or status.startswith("skipped") or status.startswith("error"))
         ),
         "publics_pending_with_scan_evidence_waiting_rescan_total": len(source_pending_with_scan_evidence),
+        "publics_pending_post_probe_only_total": len(source_pending_post_probe_only),
         "publics_processed_no_ko_total": len(source_processed_no_ko),
         "publics_processed_found_ko_candidate_total": len(source_processed_ko_candidate),
         "publics_processed_found_ko_low_image_quality_total": len(source_processed_ko_low_image),
