@@ -732,6 +732,14 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
                 publication_status="operator_rejected",
                 publication_candidate_status="filtered_before_llm",
             ),
+            candidate_row(
+                publication_status="text_restore_pending",
+                publication_candidate_status="tombstoned_reject",
+            ),
+            candidate_row(
+                publication_status="text_restore_pending",
+                publication_candidate_status="revoked",
+            ),
         ]
         for row in rows:
             with self.subTest(row=row):

@@ -3739,12 +3739,21 @@ def build_e5_text_vector_enrichment_rows(
             continue
         text = embedding_texts[idx] if idx < len(embedding_texts) else text_embedding_input_for_post(post)
         text_sha = text_vector_text_hash(text)
-        post_id = str(post.get("post_id") or stable_hash(post.get("post_url"), text_sha, length=16))
+        matched_e5 = post.get("_rt_e5_row") if isinstance(post.get("_rt_e5_row"), dict) else {}
+        stable_restore = str(post.get("_rt_work_kind") or "") == "reuse_e5_wait_bge_text_restore"
+        post_id = str(
+            (matched_e5.get("post_id") if stable_restore else "")
+            or post.get("post_id")
+            or stable_hash(post.get("post_url"), text_sha, length=16)
+        )
         post_url = str(post.get("post_url") or "")
         pos_class, pos_score = max(((label, scores.get(label, 0.0)) for label in positive_labels), key=lambda x: x[1])
         neg_class, neg_score = max(((label, scores.get(label, 0.0)) for label in negative_labels), key=lambda x: x[1])
         top_class, top_score = max(scores.items(), key=lambda x: x[1])
-        pk = text_vector_enrichment_pk(post_id, post_url, text_sha, E5_TEXT_MODEL_ID)
+        existing_pk = str(matched_e5.get("_ydb_pk") or "") if stable_restore else ""
+        if not existing_pk and stable_restore and matched_e5.get("text_vector_enrichment_id"):
+            existing_pk = "text_vector_enrichment_item:" + str(matched_e5.get("text_vector_enrichment_id"))
+        pk = existing_pk or text_vector_enrichment_pk(post_id, post_url, text_sha, E5_TEXT_MODEL_ID)
         source_terminal = source_local_region_terminal_fields(post)
         source_terminal_status = str(
             source_terminal.get("source_queue_status")
@@ -11504,6 +11513,26 @@ def promote_publication_text_restore_exact_rows(
     governed exact-fetch lane is re-opened.  Terminal publication decisions
     are deliberately not inferred as restore work.
     """
+    terminal_urls: set[str] = set()
+    for publication in publication_rows:
+        url = canonical_post_url_for_storage(publication.get("post_url"))
+        if not url:
+            continue
+        publication_status = str(publication.get("publication_status") or "")
+        candidate_status = str(publication.get("publication_candidate_status") or "")
+        if (
+            str(publication.get("sent_to_chat") or "").lower() == "true"
+            or publication_status.startswith(("gemini_", "operator_rejected", "eligibility_"))
+            or candidate_status in {
+                "llm_confirmed", "llm_rejected", "llm_needs_review", "sent_to_chat",
+                "accepted_for_publication", "tombstoned_reject", "revoked",
+            }
+            or candidate_status.startswith(("tombstoned", "revoked"))
+            or str(publication.get("publication_tombstone") or "").lower() == "true"
+            or str(publication.get("publication_revoked") or "").lower() == "true"
+        ):
+            terminal_urls.add(url)
+
     pending_by_url: dict[str, dict[str, Any]] = {}
     for publication in publication_rows:
         publication_status = str(publication.get("publication_status") or "")
@@ -11525,7 +11554,12 @@ def promote_publication_text_restore_exact_rows(
         if str(publication.get("publication_revoked") or "").lower() == "true":
             continue
         url = canonical_post_url_for_storage(publication.get("post_url"))
-        if url:
+        if not url or url in terminal_urls:
+            continue
+        previous = pending_by_url.get(url)
+        current_updated = str(publication.get("_ydb_updated_at") or publication.get("updated_at") or "")
+        previous_updated = str((previous or {}).get("_ydb_updated_at") or (previous or {}).get("updated_at") or "")
+        if previous is None or current_updated >= previous_updated:
             pending_by_url[url] = publication
     if not pending_by_url:
         return [dict(row) for row in link_rows]
@@ -11562,7 +11596,7 @@ def promote_publication_text_restore_exact_rows(
             out.append(row)
             continue
         status = str(row.get("post_link_status") or "")
-        if status in {"terminal_source_rejected", "terminal_bad_url", "operator_rejected"}:
+        if status.startswith("terminal_") or status == "operator_rejected":
             out.append(row)
             continue
         row.update({
@@ -11812,6 +11846,10 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                 "discovery_priority": "0",
                 "post_link_priority": 0,
                 "priority_reason": row.get("priority_reason") or "external_bge_m3_arrived_rescore_exact_post",
+                "publication_text_restore_requested": row.get("publication_text_restore_requested") or "",
+                "publication_text_restore_reason": row.get("publication_text_restore_reason") or "",
+                "publication_text_restore_requested_at": row.get("publication_text_restore_requested_at") or "",
+                "publication_text_restore_request_run_id": row.get("publication_text_restore_request_run_id") or "",
                 "keyword_hit_query": row.get("matched_query") or "",
                 "keyword_hit_hashtag": row.get("matched_hashtag") or "",
             }
@@ -14479,6 +14517,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     precomputed_embedding_scores: list[dict[str, Any]] = []
     embedding_texts_for_scoring: list[str] = []
     embedding_batch_deferred_error = ""
+    e5_restore_payload_rows_planned = 0
+    e5_restore_payload_rows_written = 0
     if posts_for_scoring and vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
         try:
             embedding_texts_for_scoring = [
@@ -14521,6 +14561,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 if str(p.get("_rt_work_kind") or "") == "reuse_e5_wait_bge_text_restore"
             ]
             restore_bge_posts = [posts_for_scoring[idx] for idx in restore_bge_positions]
+            e5_restore_payload_rows_planned = len(restore_bge_posts)
             restore_bge_texts = [embedding_texts_for_scoring[idx] for idx in restore_bge_positions]
             restore_bge_scores = [dict(posts_for_scoring[idx].get("_rt_e5_row") or {}) for idx in restore_bge_positions]
             e5_rows.extend(build_e5_text_vector_enrichment_rows(
@@ -14530,6 +14571,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 run_id=run_id,
             ))
             e5_rows_written = write_region_talk_text_vector_enrichment_items(e5_rows, run_id=run_id, stage="candidate_report_e5_scored")
+            if e5_rows and e5_rows_written >= len(e5_rows):
+                e5_restore_payload_rows_written = len(restore_bge_posts)
             if e5_rows or e5_rows_written or posts_for_scoring:
                 report_event(
                     "e5_text_vector_enrichment_written",
@@ -14538,7 +14581,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                     e5_text_vector_rows=len(e5_rows),
                     e5_text_vector_rows_written=e5_rows_written,
                     e5_text_vector_rows_reused=len(posts_for_scoring) - len(needs_e5_posts),
-                    e5_text_vector_rows_refreshed_for_bge_text_restore=len(restore_bge_posts),
+                    e5_text_vector_rows_refresh_planned_for_bge_text_restore=e5_restore_payload_rows_planned,
+                    e5_text_vector_rows_refreshed_for_bge_text_restore=e5_restore_payload_rows_written,
                     next_action="run_region_talk_bge_m3_enrichment",
                 )
         except Exception as exc:
@@ -15754,7 +15798,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "posts_deferred": len(runtime_deferred_posts),
         "posts_actionable_after_idempotency": int(post_work_plan.get("posts_actionable") or 0),
         "posts_needing_new_e5": int(post_work_plan.get("posts_needs_e5") or 0),
-        "posts_refreshing_e5_payload_for_bge_text_restore": int(post_work_plan.get("posts_reuse_e5_wait_bge_text_restore") or 0),
+        "posts_planned_e5_payload_refresh_for_bge_text_restore": e5_restore_payload_rows_planned,
+        "posts_e5_payload_refresh_for_bge_text_restore_written": e5_restore_payload_rows_written,
         "posts_reusing_e5_for_bge_fusion": int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
         "posts_reusing_e5_for_policy_refresh": int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
         "posts_waiting_for_bge_without_e5_recompute": int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
@@ -15838,7 +15883,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "posts_scored":posts_scored_count,"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
         "posts_actionable_after_idempotency":int(post_work_plan.get("posts_actionable") or 0),
         "posts_needing_new_e5":int(post_work_plan.get("posts_needs_e5") or 0),
-        "posts_refreshing_e5_payload_for_bge_text_restore":int(post_work_plan.get("posts_reuse_e5_wait_bge_text_restore") or 0),
+        "posts_planned_e5_payload_refresh_for_bge_text_restore":e5_restore_payload_rows_planned,
+        "posts_e5_payload_refresh_for_bge_text_restore_written":e5_restore_payload_rows_written,
         "posts_reusing_e5_for_bge_fusion":int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
         "posts_reusing_e5_for_policy_refresh":int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
         "posts_waiting_for_bge_without_e5_recompute":int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
@@ -16455,7 +16501,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         posts_deferred=len(runtime_deferred_posts),
         posts_skipped_unchanged=int(post_work_plan.get("posts_skipped_unchanged") or 0),
         posts_skipped_legacy_current_dual=int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
-        posts_refreshing_e5_payload_for_bge_text_restore=int(post_work_plan.get("posts_reuse_e5_wait_bge_text_restore") or 0),
+        posts_planned_e5_payload_refresh_for_bge_text_restore=e5_restore_payload_rows_planned,
+        posts_e5_payload_refresh_for_bge_text_restore_written=e5_restore_payload_rows_written,
         posts_waiting_for_bge_without_e5_recompute=int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
         candidates_created=len(candidates),
         image_queue_total=len(image_candidate_queue_sheet),

@@ -6283,7 +6283,9 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         text_hash = mod.text_vector_text_hash(mod.text_embedding_input_for_post(post))
         bank_version, bank_hash = mod.semantic_bank_version_and_hash(mod.semantic_bank_v1())
         e5 = {
-            "post_id": post["post_id"],
+            "_ydb_pk": "text_vector_enrichment_item:history-route-e5",
+            "text_vector_enrichment_id": "history-route-e5",
+            "post_id": "history_route_post_id",
             "post_url": post["post_url"],
             "text_hash": text_hash,
             "model_id": mod.E5_TEXT_MODEL_ID,
@@ -6318,6 +6320,8 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(len(refreshed), 1)
         self.assertEqual(refreshed[0]["full_text"], restored_text)
         self.assertEqual(refreshed[0]["text_hash"], text_hash)
+        self.assertEqual(refreshed[0]["_pk"], "text_vector_enrichment_item:history-route-e5")
+        self.assertEqual(refreshed[0]["post_id"], "history_route_post_id")
         self.assertEqual(refreshed[0]["semantic_scores_by_class"]["ko_visit_impression"], 0.81)
 
     def test_publication_ledger_reopens_text_restore_with_or_without_cached_text(self) -> None:
@@ -6371,6 +6375,38 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "https://t.me/cached/1",
             "https://t.me/network/2",
         ])
+
+    def test_publication_restore_never_overrides_duplicate_terminal_or_terminal_link(self) -> None:
+        mod = load_module()
+        links = [
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/sent/1"},
+            {"_kind": "post_link_queue_item", "post_link_status": "terminal_invalid_public_post_source", "post_url": "https://t.me/bad/2"},
+        ]
+        publications = [
+            {
+                "post_url": "https://t.me/sent/1",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "updated_at": "2026-07-14T20:00:00+00:00",
+            },
+            {
+                "post_url": "https://t.me/sent/1",
+                "publication_status": "gemini_accept",
+                "publication_candidate_status": "sent_to_chat",
+                "sent_to_chat": "true",
+                "updated_at": "2026-07-14T21:00:00+00:00",
+            },
+            {
+                "post_url": "https://t.me/bad/2",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+            },
+        ]
+        promoted = mod.promote_publication_text_restore_exact_rows(links, [], publications, [])
+        self.assertEqual(promoted[0]["post_link_status"], "fetched")
+        self.assertNotIn("publication_text_restore_requested", promoted[0])
+        self.assertEqual(promoted[1]["post_link_status"], "terminal_invalid_public_post_source")
+        self.assertNotIn("publication_text_restore_requested", promoted[1])
 
     def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
         mod = load_module()

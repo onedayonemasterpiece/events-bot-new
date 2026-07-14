@@ -437,7 +437,10 @@ def _terminal_decision_blocks_text_restore(publication: dict[str, Any]) -> bool:
         return True
     # ``filtered_before_llm`` is the one legacy status intentionally allowed
     # to migrate from the former terminal no-text bug.
-    if candidate_status in (TERMINAL_CANDIDATE_STATUSES - {"filtered_before_llm"}):
+    if (
+        candidate_status in (TERMINAL_CANDIDATE_STATUSES - {"filtered_before_llm"})
+        or candidate_status.startswith(("tombstoned", "revoked"))
+    ):
         return True
     if str(publication.get("publication_tombstone") or "").strip().lower() == "true":
         return True

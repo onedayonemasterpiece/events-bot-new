@@ -165,9 +165,12 @@ active body, and performs **no E5 inference**. The isolated BGE notebook then
 enriches that body, after which the next CandidateReport pass performs the
 normal dual fusion above. An ordinary previously processed row may remain a
 passive `wait_bge_existing_e5`; a near-final text restore may not, because its
-body is the required durable input to the external worker. The operator metric
-`posts_refreshing_e5_payload_for_bge_text_restore` makes this intermediate
-state explicit.
+body is the required durable input to the external worker. The operator metrics
+`posts_planned_e5_payload_refresh_for_bge_text_restore` and
+`posts_e5_payload_refresh_for_bge_text_restore_written` distinguish planning
+from a confirmed YDB write. The refresh preserves the matched E5 row's YDB PK
+even when exact-link and source-history routes produced different `post_id`
+values.
 
 Candidate memory identity is canonical post URL, not a fetch-route-specific
 `post_id`, so source-history and exact-link fetches cannot create a second product row for
@@ -178,7 +181,10 @@ bootstrapped from a legacy processed-post row rather than an already-migrated
 Gemini/operator/delivery verdicts are monotonic. A contradictory stale
 `text_restore_pending` projection cannot reopen a `sent_to_chat`,
 `llm_rejected`, tombstoned or revoked post, and terminal source/bad-link rows
-remain terminal. The only legacy terminal spelling intentionally migrated is
+remain terminal. This veto is URL-level across duplicate historical
+publication rows: any durable delivered/Gemini/operator/tombstone/revoked row
+blocks an older pending projection. The only legacy terminal spelling
+intentionally migrated is
 `no_text_for_gemini + filtered_before_llm`, because that combination was
 created by the historical premature-compaction bug before Gemini ran.
 
