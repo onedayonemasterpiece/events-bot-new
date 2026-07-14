@@ -48,6 +48,14 @@ IMAGE_TERMINAL = {
 
 
 def is_publication_terminal(row: dict[str, Any]) -> bool:
+    if str(row.get("publication_status") or "").lower() in {
+        "no_text_for_gemini",
+        "text_restore_pending",
+    }:
+        # Missing working text before the Gemini verdict is recoverable exact-
+        # post fetch work, not a semantic rejection and not a reason to erase
+        # active candidate/vector text from every projection.
+        return False
     return bool(
         str(row.get("sent_to_chat") or "").lower() == "true"
         or str(row.get("finalization_status") or "").lower() == "terminal"

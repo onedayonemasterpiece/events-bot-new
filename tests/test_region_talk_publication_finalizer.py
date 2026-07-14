@@ -684,7 +684,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertFalse(mod.is_newly_accepted_in_run(replayed))
         self.assertTrue(mod.is_newly_accepted_in_run({"publication_status": "gemini_accept"}))
 
-    def test_no_text_is_terminal_and_does_not_repeatedly_consume_llm_budget(self) -> None:
+    def test_no_text_enters_exact_restore_queue_without_consuming_llm_budget(self) -> None:
         mod = self.mod
         first = candidate_row(text="", short_summary="")
         with (
@@ -699,7 +699,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
                 default_env_var_name="KEY",
                 now_iso="2026-07-10T10:00:00+00:00",
             )
-        self.assertEqual(result[0]["publication_status"], "no_text_for_gemini")
+        self.assertEqual(result[0]["publication_status"], "text_restore_pending")
+        self.assertEqual(result[0]["publication_candidate_status"], "awaiting_text_restore")
+        self.assertEqual(result[0]["finalization_status"], "retryable")
         self.assertEqual(result[0]["attempt_count"], 0)
         fallback_mock.assert_called_once()
         llm_mock.assert_not_called()
@@ -709,23 +711,79 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             short_summary="",
             finalization_trigger=mod.finalization_trigger(result[0], now_iso="2026-07-11T10:00:00+00:00"),
         )
+        self.assertEqual(second["finalization_trigger"], "retry_due")
         with (
             mock.patch.object(mod.rt, "publication_eligibility", create=True, return_value=eligibility()),
-            mock.patch.object(mod, "telegram_public_text") as fallback_again,
+            mock.patch.object(mod, "telegram_public_text", return_value="") as fallback_again,
             mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_again,
         ):
-            self.assertEqual(
-                mod.verify_rows(
-                    [second],
-                    max_llm=1,
-                    model="gemini-test",
-                    default_env_var_name="KEY",
-                    now_iso="2026-07-11T10:00:00+00:00",
-                ),
-                [],
+            retried = mod.verify_rows(
+                [second],
+                max_llm=1,
+                model="gemini-test",
+                default_env_var_name="KEY",
+                now_iso="2026-07-11T10:00:00+00:00",
             )
-        fallback_again.assert_not_called()
+        self.assertEqual(retried[0]["publication_status"], "text_restore_pending")
+        fallback_again.assert_called_once()
         llm_again.assert_not_called()
+
+    def test_legacy_no_text_terminal_row_is_reopened_for_restore(self) -> None:
+        self.assertEqual(
+            self.mod.finalization_trigger(
+                {
+                    "publication_status": "no_text_for_gemini",
+                    "publication_candidate_status": "filtered_before_llm",
+                    "finalization_status": "terminal",
+                },
+                now_iso="2026-07-14T20:00:00+00:00",
+            ),
+            "retry_due",
+        )
+
+    def test_text_restore_handoff_preserves_active_telegram_cooldown(self) -> None:
+        mod = self.mod
+        captured = {}
+        existing = {
+            "post_link_queue_item:postlink_existing": {
+                "post_link_queue_id": "postlink_existing",
+                "post_url": "https://t.me/travelcase/10",
+                "post_link_status": "retry_fetch",
+                "attempt_count": 3,
+                "fetch_error_code": "FloodWaitError",
+                "next_attempt_after": "2026-07-15T02:00:00+00:00",
+            }
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        def capture(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = items
+            return len(items)
+
+        row = candidate_row(
+            publication_status="text_restore_pending",
+            publication_candidate_status="awaiting_text_restore",
+        )
+        with (
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-14T20:00:00+00:00"),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", return_value=existing),
+            mock.patch.object(mod.rt, "ensure_ydb_kv_table"),
+            mock.patch.object(mod.rt, "ydb_upsert_json_many", side_effect=capture),
+        ):
+            self.assertEqual(
+                mod.write_text_restore_post_link_rows(Pool(), object(), "table", [row], run_id="run-restore"),
+                1,
+            )
+        pk, kind, payload = captured["items"][0]
+        self.assertEqual(pk, "post_link_queue_item:postlink_existing")
+        self.assertEqual(kind, "post_link_queue_item")
+        self.assertEqual(payload["post_link_status"], "retry_fetch")
+        self.assertEqual(payload["attempt_count"], 3)
+        self.assertEqual(payload["fetch_error_code"], "FloodWaitError")
+        self.assertEqual(payload["next_attempt_after"], "2026-07-15T02:00:00+00:00")
 
     def test_public_tme_fallback_is_default_off_and_requires_explicit_opt_in(self) -> None:
         mod = self.mod

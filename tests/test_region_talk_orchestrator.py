@@ -1086,6 +1086,27 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(local_terminal["finalizer_pending_url_total"], 0)
 
+    def test_text_restore_is_visible_but_does_not_hot_loop_finalizer(self) -> None:
+        mod = load_module()
+        metrics = mod._publication_handoff_metrics(
+            [{
+                "post_url": "https://t.me/travel/10",
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+            }],
+            [{
+                "post_url": "https://t.me/travel/10",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "publication_eligibility_verdict": "eligible",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            }],
+            [],
+        )
+        self.assertEqual(metrics["publication_text_restore_pending_total"], 1)
+        self.assertEqual(metrics["publication_active_candidate_total"], 1)
+        self.assertEqual(metrics["finalizer_pending_url_total"], 0)
+
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()
         metrics = {

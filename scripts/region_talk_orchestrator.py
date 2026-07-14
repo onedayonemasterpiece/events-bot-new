@@ -590,10 +590,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publication_delivery_completed_total')}"
         ),
         (
-            "Финализатор — постов с оценённым фото / видео / non-terminal visual review / ещё требуют решения или обновления: "
+            "Финализатор — постов с оценённым фото / видео / non-terminal visual review / "
+            "ждут восстановления текста / ещё требуют решения или обновления: "
             f"{value('image_actual_scored_urls_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}/"
             f"{value('publication_visual_review_pending_total')}/"
+            f"{value('publication_text_restore_pending_total')}/"
             f"{value('finalizer_pending_url_total')}"
         ),
         (
@@ -2013,6 +2015,10 @@ def _publication_handoff_metrics(
         if str(row.get("sent_to_chat") or "").lower() == "true" or candidate_status == "sent_to_chat":
             return False
         publication_status = str(row.get("publication_status") or "").lower()
+        if publication_status == "text_restore_pending" or candidate_status == "awaiting_text_restore":
+            # CandidateReport, not the finalizer, owns the next operation: a
+            # governed exact Telethon refetch from post_link_queue_item.
+            return False
         gate_version = str(row.get("publication_eligibility_gate_version") or "")
         terminal_non_candidate = (
             candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"}
@@ -2049,7 +2055,7 @@ def _publication_handoff_metrics(
         eligibility_verdict = str(row.get("publication_eligibility_verdict") or "").lower()
         if not eligibility_verdict or gate_version != CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION:
             return True
-        retryable = publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"} or candidate_status in {
+        retryable = publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown", "no_text_for_gemini"} or candidate_status in {
             "llm_budget_deferred", "llm_error", "retry_due",
         }
         if not retryable:
@@ -2074,7 +2080,7 @@ def _publication_handoff_metrics(
     for url, row in publication_by_url.items():
         candidate_status = str(row.get("publication_candidate_status") or "").lower()
         publication_status = str(row.get("publication_status") or "").lower()
-        if candidate_status in {"ready_for_llm", "visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due"}:
+        if candidate_status in {"ready_for_llm", "visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due", "awaiting_text_restore"}:
             active_candidate_urls.add(url)
         elif publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"}:
             active_candidate_urls.add(url)
@@ -2101,6 +2107,7 @@ def _publication_handoff_metrics(
         "publication_unsent_confirmed_total": len(unsent_confirmed_urls),
         "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
         "publication_visual_review_pending_total": sum(1 for status in status_by_url.values() if status == "visual_review_pending"),
+        "publication_text_restore_pending_total": sum(1 for status in status_by_url.values() if status == "awaiting_text_restore"),
         "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error"}),
         "publication_rejected_total": sum(1 for status in status_by_url.values() if status in {"filtered_before_llm", "llm_rejected"}),
         "publication_source_evidence_backlog_total": len(source_evidence_urls),

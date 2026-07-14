@@ -129,6 +129,25 @@ The phrase “strict gate passed” must never be presented as “ready for
 publication”. Ready means Gemini-confirmed and not yet sent; sent is a separate
 terminal ledger.
 
+## Exact-text restoration after asynchronous media scoring
+
+The media worker may finish hours or runs after E5+BGE. A missing post body at
+that point is therefore **not** a content rejection and is not a terminal
+`filtered_before_llm` outcome. The finalizer records
+`publication_status=text_restore_pending` /
+`publication_candidate_status=awaiting_text_restore`, spends no Gemini budget,
+and reopens the exact Telegram URL as a priority-0 `post_link_queue_item`.
+CandidateReport performs the refetch through DISCOVERY1, its cached entity and
+the normal human-like request governor; the finalizer does not use public-web
+HTML as a hidden fallback. Existing FloodWait/cooldown evidence on an active
+exact-link retry is preserved.
+
+Legacy `no_text_for_gemini` rows are migrated into this retry contour. Working
+text remains lossless only while the candidate is active and is deleted after
+the actual Gemini/operator terminal verdict. This keeps YDB compact without
+allowing storage compaction to terminate an otherwise eligible post before
+Gemini sees it.
+
 The legacy field `drop_gate` is not by itself proof of a text rejection. It is
 also used for downstream media outcomes (`image_fetch_gate`,
 `image_postcardness_gate`, `candidate_score_gate`). A post waiting for its image

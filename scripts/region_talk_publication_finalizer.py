@@ -55,7 +55,6 @@ TERMINAL_PUBLICATION_STATUSES = {
     "gemini_accept",
     "gemini_reject",
     "gemini_needs_review",
-    "no_text_for_gemini",
 }
 TERMINAL_CANDIDATE_STATUSES = {
     "llm_confirmed",
@@ -65,8 +64,22 @@ TERMINAL_CANDIDATE_STATUSES = {
     "sent_to_chat",
     "accepted_for_publication",
 }
-RETRYABLE_PUBLICATION_STATUSES = {"gemini_rate_limited", "gemini_error", "gemini_unknown"}
-RETRYABLE_CANDIDATE_STATUSES = {"llm_budget_deferred", "llm_error", "retry_due"}
+RETRYABLE_PUBLICATION_STATUSES = {
+    "gemini_rate_limited",
+    "gemini_error",
+    "gemini_unknown",
+    # ``no_text_for_gemini`` was incorrectly terminal before the media lane
+    # completed.  Keep it retryable so existing rows migrate into the exact
+    # post text-restore contour without a manual backfill.
+    "no_text_for_gemini",
+    "text_restore_pending",
+}
+RETRYABLE_CANDIDATE_STATUSES = {
+    "llm_budget_deferred",
+    "llm_error",
+    "retry_due",
+    "awaiting_text_restore",
+}
 ELIGIBLE_VERDICTS = {"eligible", "accept", "allow", "allowed", "pass"}
 REJECT_VERDICTS = {
     "reject",
@@ -426,6 +439,12 @@ def finalization_trigger(publication: dict[str, Any] | None, *, now_iso: str, re
     # second Gemini request or masquerade as a newly accepted candidate.
     if str(publication.get("sent_to_chat") or "").strip().lower() == "true" or candidate_status == "sent_to_chat":
         return ""
+    if status in {"no_text_for_gemini", "text_restore_pending"}:
+        # Legacy ``no_text_for_gemini`` rows were incorrectly marked
+        # ``filtered_before_llm`` and therefore looked terminal through the
+        # candidate-status field.  Explicitly reopen them before the generic
+        # terminal checks below.
+        return "retry_due"
     if reverify_existing:
         return "reverify_requested"
     if status.startswith("eligibility_") or candidate_status.startswith(("tombstoned", "revoked", "eligibility_")):
@@ -1170,6 +1189,28 @@ def _mark_review_pending(row: dict[str, Any]) -> None:
     row["next_attempt_after"] = ""
 
 
+def _mark_text_restore_pending(row: dict[str, Any]) -> None:
+    """Keep an otherwise eligible post active until Telethon restores text.
+
+    Image scoring is asynchronous.  Treating a temporarily absent/pruned post
+    body as a terminal publication verdict caused the storage compactor to
+    delete the only remaining working copy before Gemini could run.  The
+    publication row now acts as a durable retry marker and the exact post URL
+    is handed back to CandidateReport's normal human-like Telethon queue.
+    """
+
+    row["publication_status"] = "text_restore_pending"
+    row["publication_candidate_status"] = "awaiting_text_restore"
+    row["publication_tombstone"] = "false"
+    row["publication_revoked"] = "false"
+    row["revoked_at"] = ""
+    row["finalization_status"] = "retryable"
+    row["llm_attempted_this_run"] = "false"
+    row["next_attempt_after"] = ""
+    row["text_restore_reason"] = "eligible_post_text_missing_after_async_media_scoring"
+    row["next_action"] = "refetch_exact_post_text_then_finalize"
+
+
 def _retry_after(now_iso: str, gate_status: str) -> str:
     now = _parse_time(now_iso) or datetime.now(timezone.utc)
     env_name = (
@@ -1245,11 +1286,7 @@ def verify_rows(
         if not row.get("text") and row.get("short_summary"):
             row["text"] = "summary: " + str(row.get("short_summary") or "")
         if not row.get("text"):
-            row["publication_status"] = "no_text_for_gemini"
-            row["publication_candidate_status"] = "filtered_before_llm"
-            row["finalization_status"] = "terminal"
-            row["llm_attempted_this_run"] = "false"
-            row["next_attempt_after"] = ""
+            _mark_text_restore_pending(row)
             results.append(row)
             continue
         if llm_calls >= max(0, max_llm):
@@ -1750,6 +1787,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "publication_eligibility_verdict", "publication_eligibility_evidence", "publication_eligibility_gate_version",
         "publication_eligibility_evidence_fingerprint",
         "publication_tombstone", "publication_revoked", "revoked_at", "finalization_status", "finalization_trigger",
+        "text_restore_reason", "next_action",
         "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run", "finalizer_state_version",
         "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",
         "source_onboarding_status", "source_onboarding_paragraph", "source_onboarding_profile_id",
@@ -1797,6 +1835,100 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         return 0
 
     def op(session: Any) -> int:
+        rt.ensure_ydb_kv_table(ydb, session, table)
+        return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
+
+    return int(pool.retry_operation_sync(op) or 0)
+
+
+def write_text_restore_post_link_rows(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    rows: list[dict[str, Any]],
+    *,
+    run_id: str,
+) -> int:
+    """Re-open exact Telegram links whose active text was compacted too soon.
+
+    This is a queue handoff only; the finalizer never fetches Telegram or falls
+    back to public web HTML. CandidateReport consumes these rows through its
+    role-scoped DISCOVERY1 Telethon session and existing request governor.
+    """
+
+    pending = [
+        row
+        for row in rows
+        if str(row.get("publication_status") or "") == "text_restore_pending"
+        and re.match(r"^https?://t\.me/[^/]+/[0-9]+$", normalize_post_url(str(row.get("post_url") or "")), re.I)
+    ]
+    if not pending:
+        return 0
+    now = rt.utc_now_iso()
+
+    def op(session: Any) -> int:
+        existing_items = rt.ydb_select_kind_items(
+            session,
+            ydb,
+            table,
+            "post_link_queue_item",
+            limit=5000,
+        )
+        existing_by_url = {
+            normalize_post_url(str(item.get("post_url") or item.get("keyword_hit_post_url") or "")): (pk, item)
+            for pk, item in existing_items.items()
+            if normalize_post_url(str(item.get("post_url") or item.get("keyword_hit_post_url") or ""))
+        }
+        items: list[tuple[str, str, dict[str, Any]]] = []
+        for row in pending:
+            post_url = normalize_post_url(str(row.get("post_url") or ""))
+            existing_pk, existing = existing_by_url.get(post_url, ("", {}))
+            queue_id = str(existing.get("post_link_queue_id") or "postlink_" + rt.stable_hash(post_url))
+            source_url = str(row.get("source_url") or existing.get("source_url") or "")
+            source_key = str(row.get("canonical_source_key") or existing.get("canonical_source_key") or "")
+            existing_status = str(existing.get("post_link_status") or "")
+            active_retry_statuses = {
+                "",
+                "pending_fetch",
+                "retry_fetch",
+                "fetch_error",
+                "retry_wait_entity_cache",
+            }
+            keep_active_retry = existing_status in active_retry_statuses and bool(existing)
+            payload = {
+                **{k: v for k, v in existing.items() if not str(k).startswith("_ydb_")},
+                "post_link_queue_id": queue_id,
+                "post_link_status": existing_status if keep_active_retry else "retry_fetch",
+                "post_link_priority": 0,
+                "priority_reason": "publication_text_restore_after_active_payload_prune",
+                "post_url": post_url,
+                "keyword_hit_post_url": post_url,
+                "source_key": source_key,
+                "canonical_source_key": source_key,
+                "source_url": source_url,
+                "keyword_hit_source_url": source_url,
+                "source_title": row.get("source_title") or existing.get("source_title") or "",
+                "handle": row.get("handle") or existing.get("handle") or "",
+                "username_or_handle": row.get("username_or_handle") or row.get("handle") or existing.get("username_or_handle") or existing.get("handle") or "",
+                "post_date": row.get("post_date") or existing.get("post_date") or "",
+                "discovery_type": "publication_text_restore",
+                "edge_type": "publication_text_restore",
+                "first_seen_run_id": existing.get("first_seen_run_id") or run_id,
+                "last_seen_run_id": run_id,
+                "run_id": run_id,
+                "updated_at": now,
+                "next_action": "refetch_exact_post_then_finalize_publication",
+            }
+            if not keep_active_retry:
+                payload.update({
+                    "last_attempt_run_id": "",
+                    "last_attempt_at": "",
+                    "fetch_error_code": "",
+                    "fetch_error_message": "",
+                    "next_attempt_after": "",
+                })
+            pk = str(existing_pk or f"post_link_queue_item:{queue_id}")
+            items.append((pk, "post_link_queue_item", payload))
         rt.ensure_ydb_kv_table(ydb, session, table)
         return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
 
@@ -2025,6 +2157,11 @@ def main() -> int:
         )
     )
     written = 0 if args.dry_run else write_publication_rows(pool, ydb, table, verified, run_id)
+    text_restore_links_written = (
+        0
+        if args.dry_run
+        else write_text_restore_post_link_rows(pool, ydb, table, verified, run_id=run_id)
+    )
     text_prune = (
         {"terminal_urls": 0, "rows_pruned": 0}
         if args.dry_run
@@ -2048,6 +2185,10 @@ def main() -> int:
         "accepted_new": sum(1 for row in verified if is_newly_accepted_in_run(row)),
         "accepted_total": sum(1 for row in rows if row.get("publication_status") == "gemini_accept" or row.get("publication_candidate_status") == "llm_confirmed"),
         "written": written,
+        "text_restore_pending_total": sum(
+            1 for row in verified if row.get("publication_status") == "text_restore_pending"
+        ),
+        "text_restore_post_links_written": text_restore_links_written,
         "terminal_text_urls_pruned": int(text_prune.get("terminal_urls") or 0),
         "terminal_text_rows_pruned": int(text_prune.get("rows_pruned") or 0),
         "source_evidence_priority_total": len(source_priority_rows),
@@ -2064,7 +2205,7 @@ def main() -> int:
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "verifier_llm_calls", "onboarding_profile_llm_calls", "onboarding_writer_llm_calls", "onboarding_profiles_reused", "onboarding_paragraphs_ready", "onboarding_needs_review", "onboarding_evidence_rows_written", "onboarding_profile_rows_written", "accepted_new", "accepted_total", "written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "verifier_llm_calls", "onboarding_profile_llm_calls", "onboarding_writer_llm_calls", "onboarding_profiles_reused", "onboarding_paragraphs_ready", "onboarding_needs_review", "onboarding_evidence_rows_written", "onboarding_profile_rows_written", "accepted_new", "accepted_total", "written", "text_restore_pending_total", "text_restore_post_links_written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

@@ -290,6 +290,12 @@ Post text is operational state, not historical content storage:
 4. `scripts/region_talk_state_maintenance.py` performs dry-run-first historical
    cleanup and compacts terminal image-ledger payloads. The publication
    finalizer performs the same text deletion for newly terminal posts.
+5. Missing text before the final Gemini verdict is recoverable work, not a
+   terminal verdict. The finalizer persists `text_restore_pending`, writes a
+   priority exact `post_link_queue_item`, and CandidateReport restores the body
+   through governed Telethon. `no_text_for_gemini` is a legacy retry status;
+   neither it nor `text_restore_pending` authorizes cross-projection text
+   deletion.
 
 `image_queue_item` is a historical idempotency ledger. Operator metrics must
 label its total as a ledger size, while active photo backlog, scored photos,
