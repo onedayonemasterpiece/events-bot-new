@@ -2616,6 +2616,25 @@ def _progress_signature(metrics: dict[str, Any]) -> tuple[tuple[str, int], ...]:
     return tuple(out)
 
 
+def _latest_fast_check_rows(source_rows: list[dict[str, Any]], candidate_run_id: str) -> list[dict[str, Any]]:
+    """Return sources actually queried by fast-check in the named run.
+
+    ``run_id``/``last_seen_run_id`` are generic source-overlay fields and are
+    refreshed by history, keyword and queue handoff paths too. Using them here
+    made the product readout claim e.g. 4 fast-checks/2 hits when the notebook's
+    durable fast-check event said 1/0. CandidateReport owns the dedicated
+    ``last_fast_check_run_id`` field, so no heuristic fallback is honest.
+    """
+    run_id = str(candidate_run_id or "").strip()
+    if not run_id:
+        return []
+    return [
+        row for row in source_rows
+        if str(row.get("fast_check_status") or "").strip()
+        and str(row.get("last_fast_check_run_id") or "").strip() == run_id
+    ]
+
+
 CANONICAL_METRIC_ALIASES = {
     "pending_scan": "publics_primary_unscanned_pending_total",
     "touched_or_left_pending": "publics_touched_or_not_pending_total",
@@ -3044,10 +3063,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     latest_source_scan_posts = sum(_safe_int(r.get("posts_scanned")) for r in latest_source_scan_rows)
     latest_source_scan_ko_rows = [row for row in latest_source_scan_rows if _source_has_ko_candidate(row)]
-    latest_fast_check_rows = [
-        row for row in fast_check_rows
-        if latest_candidate_run_id and str(row.get("run_id") or row.get("last_seen_run_id") or "") == latest_candidate_run_id
-    ]
+    latest_fast_check_rows = _latest_fast_check_rows(source_rows, latest_candidate_run_id)
     latest_fast_check_hit_rows = [row for row in latest_fast_check_rows if str(row.get("fast_check_status") or "") == "ko_hit"]
     history_depth_rows = [r for r in source_rows if _safe_float(r.get("history_avg_post_age_days")) is not None]
     latest_history_run = max([str(r.get("last_scan_run_id") or r.get("run_id") or "") for r in history_depth_rows] or [""])

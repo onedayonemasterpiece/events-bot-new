@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Fixed parallel Region Talk E5/BGE orchestration under transient YDB contention: the isolated BGE worker now recreates its YDB driver/session with bounded outer retries after exhausted deadline/resource errors and avoids reading the complete text-vector ledger twice in the E5-only lane; dual-vector selection and scoring are unchanged.
+- Fixed a misleading Region Talk latest-run metric: fast-check source/hit counts now use the dedicated `last_fast_check_run_id` instead of generic source-overlay run fields that are also touched by history and keyword stages.
 
 - Fixed Region Talk embedding runtime distribution after live Hugging Face/Xet 403s: CandidateReport and the isolated BGE worker now attach versioned complete E5/BGE Kaggle Model inputs, resolve non-canonical Kaggle mount paths (with official `kagglehub` cache fallback), and report the actual model origin, preserving the E5+BGE dual-vector contract without depending on unauthenticated network downloads.
 - Added an evidence-backed Region Talk source-onboarding stage: the finalizer now stores compact source evidence and reusable profile rows, validates every LLM claim/angle reference, generates a candidate-specific 300–600 character `О блогере` paragraph within the shared durable Gemini budget, and renders it in the operator chat only when support checks pass.

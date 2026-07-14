@@ -929,6 +929,12 @@ they must write `online_source_item` / `source_status_item`, but must not
 overwrite durable `source_queue_item` without `queue_order` and queue status.
 When YDB source status rows are merged back, empty live fields do not clobber
 non-empty durable queue fields.
+Latest-run fast-check throughput is keyed only by the dedicated
+`last_fast_check_run_id`. Generic `run_id` and `last_seen_run_id` are refreshed
+by history, keyword discovery and queue handoff too, so they are explicitly not
+accepted as evidence that a source was queried by fast-check. This keeps the
+stats line consistent with the notebook's `fast_check_ko_done` event rather
+than inflating checks/hits with old statuses touched by another stage.
 
 The product stats surface is rendered from the same orchestrator snapshot as
 the decision plan; it must not run a second aggregation with different grains.

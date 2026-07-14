@@ -993,6 +993,37 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["fast_check_exact_posts_text_rejection_reasons"], {"vector_reject_multi_region_roundup": 1})
         self.assertEqual(metrics["fast_check_exact_posts_text_pending_total"], 0)
 
+    def test_latest_fast_check_rows_use_dedicated_run_id_not_generic_overlay(self) -> None:
+        mod = load_module()
+        rows = [
+            {
+                "canonical_source_key": "telegram:actually-checked",
+                "fast_check_status": "no_hit_partial",
+                "last_fast_check_run_id": "candidate-run-2",
+                "run_id": "candidate-run-2",
+            },
+            {
+                "canonical_source_key": "telegram:old-hit-touched-by-history",
+                "fast_check_status": "ko_hit",
+                "last_fast_check_run_id": "candidate-run-1",
+                "run_id": "candidate-run-2",
+                "last_seen_run_id": "candidate-run-2",
+            },
+            {
+                "canonical_source_key": "telegram:old-no-hit-touched-by-keyword",
+                "fast_check_status": "no_hit",
+                "last_fast_check_run_id": "candidate-run-1",
+                "last_seen_run_id": "candidate-run-2",
+            },
+        ]
+
+        latest = mod._latest_fast_check_rows(rows, "candidate-run-2")
+
+        self.assertEqual(
+            [row["canonical_source_key"] for row in latest],
+            ["telegram:actually-checked"],
+        )
+
     def test_fast_check_exact_metrics_count_image_fetch_pending_as_text_passed(self) -> None:
         mod = load_module()
         sources = [
