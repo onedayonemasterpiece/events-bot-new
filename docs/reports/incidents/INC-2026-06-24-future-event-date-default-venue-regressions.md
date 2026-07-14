@@ -1,6 +1,6 @@
 # INC-2026-06-24 Future event date/default-venue regressions
 
-Status: active (2026-07-14 recurrence under repair)
+Status: mitigated (2026-07-14 recurrence tracked separately)
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / public event inventory (`@kldevents`, Telegraph month/week surfaces)
 Opened: 2026-06-24
@@ -9,56 +9,12 @@ Owners: events-bot maintainer / Codex
 Related incidents: `INC-2026-06-18-tg-location-prose-still-extracted.md`, `INC-2026-05-30-active-duplicate-events-recall-gate.md`, `INC-2026-05-17-future-event-quality-regressions.md`, `INC-2026-05-05-event-quality-regression.md`, `INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md`, `INC-2026-05-01-future-event-quality-audit.md`, `INC-2026-05-02-pre-daily-event-quality.md`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/operations/incident-management.md`, `docs/reports/incidents/README.md`, `CHANGELOG.md`
 
-## Recurrence: unsupported public copy and donation-as-registration (2026-07-14)
+## Related recurrence
 
-The owner of `Летний Экодвор` reported that the public card
-`https://telegra.ph/Letnij-EHkodvor-07-08` was generic AI prose rather than a useful
-description. Production event `6767` was affected on all managed surfaces:
-
-- Telegraph described an inferred “city ecological event” and invented goals/benefits;
-- Telegram `@kldevents/2243` invented an unsupported promise to accept up to four tyres;
-- managed VK `wall-231920894_7008` retained two different historical AI bodies and the
-  organizer publicly confirmed that the programme was wrong;
-- the only external Tinkoff donation URL was labelled as registration/tickets even though
-  the organizer explicitly said it is a donation link.
-
-Later organizer sources (`@ecoklgd/3317`, `@ecoklgd/3320`, `@ecodvor39/926`,
-`@ecodvor39/927`) contain concrete programme and collection information, but the first
-thin teaser (`@ecoklgd/3315`) had already seeded unsupported abstract facts. The fact-first
-writer then treated those facts as canonical, while the Telegram public intro writer had no
-per-sentence evidence contract. Managed VK projections were also backfilled into
-`event_source`, creating a publication-to-evidence feedback path.
-
-### 2026-07-14 root causes and regression contract
-
-1. Rich-fact extraction allowed free-form strings without a source quotation, so a sparse
-   teaser could acquire inferred purpose/format/series facts.
-2. Merge facts also lacked evidence provenance; a later fact-first rewrite could preserve
-   unsupported claims indefinitely.
-3. The Telegram public writer returned unstructured prose; length and style sanitizers
-   could not distinguish a fluent hallucination from a source-grounded sentence.
-4. Both Telegram Monitor and server link inference treated a sole external URL as a ticket
-   URL. Donation/support labels and payment-recipient URLs were not negative evidence.
-5. Managed VK edit history appended semantically different bodies, and managed output URLs
-   could be backfilled as if they were independent source evidence.
-
-Before closure, replay the exact thin teaser and later Ecoyard sources and assert:
-
-- each extracted or merged public fact carries an exact contiguous `evidence_quote` and an
-  unsupported purpose/format/tyre claim is rejected;
-- sparse facts produce a short honest description rather than mandatory headings/filler;
-- Telegram public sentences are generated only by Gemini Lite, or the persisted <=100/day
-  `gpt-4o` emergency lane, and every sentence is supported by an exact organizer quote;
-- a donation/support link is never `ticket_link` merely because it is the only URL, while an
-  explicitly labelled registration URL is retained;
-- managed VK publication URLs are excluded from legacy evidence backfill;
-- event `6767` is repaired in canonical SQLite, Telegraph, Telegram and VK, its vector is
-  refreshed, and the organizer complaint receives an acknowledgement after the public fix.
-
-Evidence is retained under
-`artifacts/codex/INC-2026-07-14-synthetic-thin-source-copy/`. Runtime file logging was on,
-but the 48-hour retention window had already expired for the initial 8/12 July generation;
-the durable source/fact/outbox rows and current public/API reads provide the causal evidence.
+The 2026-07-14 `Летний Экодвор` recurrence is tracked canonically in
+`INC-2026-07-14-synthetic-thin-source-public-copy.md`. This older incident remains the
+adjacent date/default-venue and thin-writer regression family, but release/repair evidence for
+event `6767` belongs to the newer record.
 
 ## Summary
 

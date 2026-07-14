@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-14-synthetic-thin-source-public-copy.md`
+  - Scope: sparse-source Smart Update/public copy grounding, donation-vs-registration admission, managed VK evidence loops, VK body replacement and vector admission facets.
+  - Must not regress: every semantic public claim must be organizer-evidenced; public projections never become source evidence; unknown admission is neither registration nor `ticketed`; Lite remains the normal public writer with only the capped `gpt-4o` emergency lane.
 - `INC-2026-07-13-tg-media-downgrade-non-cdn-posters.md`
   - Scope: Smart Update media materialization, existing-event source media repair, TelegramMonitor storage URLs, static galleries and `@kldevents` publishing.
   - Must not regress: public event gallery URLs are strictly `static.kenigevents.ru`; missing source media stays in durable retry and can never create or downgrade to a Telegram text-only event post.
