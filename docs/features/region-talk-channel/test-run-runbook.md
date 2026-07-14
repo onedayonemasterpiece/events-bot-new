@@ -356,6 +356,12 @@ The XLSX has:
 
 - Kaggle output download is filtered to report/log/state files by default; media files remain in Kaggle output and are not pulled locally unless `REGION_TALK_KAGGLE_OUTPUT_FILE_PATTERN` is overridden.
 - The mounted `region_talk_run_config.json` is authoritative for per-run `REGION_TALK_*` controls, including `REGION_TALK_RUN_ID`, so a stale Kaggle environment cannot rename a fresh run.
+- During album-safe image-scoring debug cycles the orchestrator launches at most
+  ten posts in batches of five by default.  Scheduled throughput may be tuned
+  explicitly with `REGION_TALK_ORCHESTRATOR_IMAGE_MAX_ITEMS_PER_RUN` and
+  `REGION_TALK_ORCHESTRATOR_IMAGE_BATCH_SIZE`; the batch size is always capped
+  by the per-run post limit.  This changes only work sizing, not the image
+  eligibility contract or queue ordering.
 - Waited Kaggle runs delete their temporary private input datasets (`region-talk-config-*`, `rt-secret-bundle-*`) after output download. Use `--keep-input-datasets` only when debugging a still-running kernel; otherwise secret/config datasets must not accumulate in Kaggle.
 
 ## z8/z9 YDB and VK smoke requirements

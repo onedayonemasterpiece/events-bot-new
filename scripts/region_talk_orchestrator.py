@@ -3744,11 +3744,24 @@ def build_decision_plan(
         ))
     image_actionable_work = int(metrics.get("image_actionable_work_total") or metrics.get("image_pending_total") or 0)
     if image_actionable_work >= image_threshold:
+        # Keep live debugging observable: the album-safe scorer can inspect up
+        # to 20 frames per post and loads several CPU models.  A fixed 30-post
+        # launch made the Kaggle UI look hung even when business heartbeats
+        # were healthy.  Ten posts is the bounded default while the explicit
+        # env overrides retain a throughput tuning knob for scheduled runs.
+        image_max_items = max(1, _env_int("REGION_TALK_ORCHESTRATOR_IMAGE_MAX_ITEMS_PER_RUN", 10))
+        image_batch_size = max(
+            1,
+            min(
+                image_max_items,
+                _env_int("REGION_TALK_ORCHESTRATOR_IMAGE_BATCH_SIZE", 5),
+            ),
+        )
         actions.append(_action(
             "launch_image_diagnostic",
             [
                 "python3", "kaggle/execute_region_talk_image_diagnostic.py",
-                "--source", "ydb", "--max-items-per-run", "30", "--batch-size", "10",
+                "--source", "ydb", "--max-items-per-run", str(image_max_items), "--batch-size", str(image_batch_size),
                 "--wait-initial-seconds", "120", "--wait-after-drain-seconds", "0",
                 "--image-poll-interval-seconds", "30", "--no-wait",
             ],

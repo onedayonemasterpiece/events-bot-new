@@ -359,6 +359,10 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertTrue(by_name["launch_image_diagnostic"]["parallel_safe"])
         self.assertIn("120", by_name["launch_image_diagnostic"]["cmd"])
         self.assertIn("--wait-after-drain-seconds", by_name["launch_image_diagnostic"]["cmd"])
+        image_cmd = by_name["launch_image_diagnostic"]["cmd"]
+        self.assertEqual(image_cmd[image_cmd.index("--max-items-per-run") + 1], "10")
+        self.assertEqual(image_cmd[image_cmd.index("--batch-size") + 1], "5")
+
         self.assertIn("--batch-limit", bge["cmd"])
         self.assertIn("48", bge["cmd"])
         self.assertIn("--batch-size", bge["cmd"])
@@ -410,6 +414,35 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT"], "1")
         self.assertEqual(main["env"]["REGION_TALK_YDB_STATE_WRITE_REQUEST_TIMEOUT_SECONDS"], "20")
         self.assertEqual(main["env"]["REGION_TALK_YDB_RETENTION_PRUNE"], "0")
+
+    def test_image_action_batch_is_explicitly_tunable_and_bounded(self) -> None:
+        mod = load_module()
+        metrics = {
+            "publication_sent_total": 0,
+            "publication_confirmed_total": 0,
+            "publication_unsent_confirmed_total": 0,
+            "image_actual_scored_total": 0,
+            "publication_candidate_total": 0,
+            "bge_pending_sample_total": 0,
+            "image_pending_total": 7,
+        }
+        with mock.patch.dict(
+            os.environ,
+            {
+                "REGION_TALK_ORCHESTRATOR_IMAGE_MAX_ITEMS_PER_RUN": "8",
+                "REGION_TALK_ORCHESTRATOR_IMAGE_BATCH_SIZE": "20",
+            },
+            clear=False,
+        ):
+            actions = mod.build_decision_plan(
+                metrics,
+                target_confirmed=20,
+                bge_threshold=1,
+                image_threshold=1,
+            )
+        image_cmd = next(a for a in actions if a["action"] == "launch_image_diagnostic")["cmd"]
+        self.assertEqual(image_cmd[image_cmd.index("--max-items-per-run") + 1], "8")
+        self.assertEqual(image_cmd[image_cmd.index("--batch-size") + 1], "8")
 
     def test_candidate_adaptive_budget_keeps_generic_history_small_and_fast_check_wide(self) -> None:
         mod = load_module()

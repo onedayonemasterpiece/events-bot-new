@@ -83,6 +83,18 @@ proof of a calibrated production image decision; deterministic packaging of
 every required model or a versioned VLM review lane remains necessary before
 automatic acceptance.
 
+A follow-up one-post CPU canary after that isolation fix acquired and scored
+all **10/10** frames of `routecommunity/1342`.  NIMA loaded successfully in
+about 41 seconds, proving that the model outage was fixed rather than hidden.
+The post was deliberately written as non-terminal `needs_visual_review`: its
+legacy anchor score was `0.518`, while the strongest shadow frame was `0.693`,
+which is exactly the album/scorer disagreement that must not be converted into
+either an uncalibrated auto-accept or a terminal reject.  The Kaggle API and
+downloaded report show this run completed in roughly five minutes.  If the web
+UI continues to display it as running for hours without logs, treat that as a
+stale UI surface and verify the API status, YDB business heartbeat and output
+report before cancelling or diagnosing a frozen model.
+
 ## Principle
 
 Do not run expensive VLM on every image. Use a cascade:
