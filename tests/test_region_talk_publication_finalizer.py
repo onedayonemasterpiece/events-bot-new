@@ -740,6 +740,11 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
                 publication_status="text_restore_pending",
                 publication_candidate_status="revoked",
             ),
+            candidate_row(
+                publication_status="text_restore_pending",
+                publication_candidate_status="awaiting_text_restore",
+                llm_decision="reject",
+            ),
         ]
         for row in rows:
             with self.subTest(row=row):

@@ -6324,6 +6324,41 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(refreshed[0]["post_id"], "history_route_post_id")
         self.assertEqual(refreshed[0]["semantic_scores_by_class"]["ko_visit_impression"], 0.81)
 
+    def test_vector_planner_collapses_same_run_exact_and_history_observations(self) -> None:
+        mod = load_module()
+        posts = [
+            {
+                "post_id": "history-route-id",
+                "post_url": "https://t.me/travel/77",
+                "platform_post_key": "tg:travel:77",
+                "text": "Короткая история о Калининграде.",
+                "discovery_method": "source_history",
+            },
+            {
+                "post_id": "exact-route-id",
+                "post_url": "https://t.me/travel/77",
+                "platform_post_key": "tg:travel:77",
+                "text": "Полный восстановленный личный рассказ о поездке в Калининград и на Куршскую косу.",
+                "discovery_method": "exact_post_link_queue",
+                "publication_text_restore_requested": "true",
+                "has_media": True,
+            },
+        ]
+        actionable, metrics = mod.plan_posts_for_vector_scoring(
+            posts,
+            previous_posts={},
+            e5_index={},
+            bge_m3_index={},
+            require_bge_m3=True,
+        )
+        self.assertEqual(len(actionable), 1)
+        self.assertEqual(actionable[0]["post_id"], "exact-route-id")
+        self.assertIn("Полный восстановленный", actionable[0]["_rt_embedding_text"])
+        self.assertEqual(metrics["posts_fetched"], 2)
+        self.assertEqual(metrics["posts_unique_for_vector_planning"], 1)
+        self.assertEqual(metrics["posts_same_run_duplicates_collapsed"], 1)
+        self.assertEqual(metrics["posts_needs_e5"], 1)
+
     def test_publication_ledger_reopens_text_restore_with_or_without_cached_text(self) -> None:
         mod = load_module()
         links = [
@@ -6407,6 +6442,18 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertNotIn("publication_text_restore_requested", promoted[0])
         self.assertEqual(promoted[1]["post_link_status"], "terminal_invalid_public_post_source")
         self.assertNotIn("publication_text_restore_requested", promoted[1])
+
+    def test_publication_restore_does_not_reopen_legacy_llm_reject_decision(self) -> None:
+        mod = load_module()
+        link = {"post_link_status": "fetched", "post_url": "https://t.me/rejected/9"}
+        publication = {
+            "post_url": "https://t.me/rejected/9",
+            "publication_status": "text_restore_pending",
+            "publication_candidate_status": "awaiting_text_restore",
+            "llm_decision": "reject",
+        }
+        promoted = mod.promote_publication_text_restore_exact_rows([link], [], [publication], [])
+        self.assertEqual(promoted, [link])
 
     def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
         mod = load_module()

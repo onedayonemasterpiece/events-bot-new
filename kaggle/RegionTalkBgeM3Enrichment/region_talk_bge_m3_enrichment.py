@@ -475,6 +475,7 @@ def semantic_bank_v1() -> dict[str, list[str]]:
             "Пост о Москве, московских парках, пляжах, маршрутах и прогулках, не связанный с Калининградской областью.",
             "Путешествие по Хайнаню, Турции, Беларуси, Европе, Кавказу, Байкалу, Сочи, Петербургу или другому региону, где Калининградская область не является основной темой.",
             "Рассказ о другом городе или стране, случайно содержащий слово, похожее на калининградский топоним.",
+            "Маршрут находится в другом регионе, а лес, дюны или побережье лишь похожи на Калининград; Калининград используется только для сравнения.",
         ],
         "multi_region_roundup": [
             "Подборка разных регионов России: Калининград, Байкал, Дагестан, Сочи, Карелия, Алтай и другие направления одним списком.",
@@ -484,6 +485,7 @@ def semantic_bank_v1() -> dict[str, list[str]]:
         "news_report": [
             "Новость, официальное сообщение, заявление властей, происшествие, политика, суд, полиция, транспортные планы или исследовательская новость.",
             "Информационная заметка СМИ о факте, находке, решении, субсидиях, запуске парома или событии без личного опыта посещения региона.",
+            "Локальная городская новость или федеральная новость, где место лишь контекст события.",
         ],
         "event_announcement": [
             "Анонс мероприятия, афиша, выставка, концерт, регистрация, билеты, расписание, программа, приглашаем прийти.",
@@ -771,7 +773,34 @@ def _is_product_priority_row(row: dict[str, Any]) -> bool:
     )
 
 
-def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, existing_pks: set[str], limit: int, include_existing: bool = False) -> list[dict[str, Any]]:
+def _existing_bge_row_is_current(row: dict[str, Any] | None, *, text_hash_value: str) -> bool:
+    """Return whether an existing BGE PK satisfies the active scoring bank.
+
+    A PK identifies model + post + text, but not the semantic prototype bank.
+    Reusing a stale row after that bank changes leaves CandidateReport waiting
+    forever: it correctly rejects the stale bank while the BGE worker skips the
+    already-present PK.  A stale row must therefore be overwritten in place.
+    """
+    if not isinstance(row, dict) or not row:
+        return False
+    semantic_version, semantic_hash = bank_version_and_hash(semantic_bank_v1(), version="semantic_bank_v1")
+    return bool(
+        _is_bge_text_vector_row(row)
+        and str(row.get("text_hash") or "") == text_hash_value
+        and str(row.get("encoder_contract") or "") == ENCODER_CONTRACT
+        and str(row.get("semantic_bank_version") or "") == semantic_version
+        and str(row.get("semantic_bank_hash") or "") == semantic_hash[:16]
+        and bool(row.get("semantic_scores_by_class"))
+    )
+
+
+def collect_text_rows(
+    items_by_kind: dict[str, dict[str, dict[str, Any]]],
+    *,
+    existing_pks: set[str] | dict[str, dict[str, Any]],
+    limit: int,
+    include_existing: bool = False,
+) -> list[dict[str, Any]]:
     global LAST_COLLECT_STATS
     rows: list[dict[str, Any]] = []
     stats = {
@@ -780,6 +809,7 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
         "non_e5_skipped": 0,
         "short_text_skipped": 0,
         "existing_skipped": 0,
+        "existing_stale_rescore": 0,
         "duplicate_skipped": 0,
         "eligible_rows": 0,
         "selected_rows": 0,
@@ -833,8 +863,14 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
             sha = source_text_hash or text_hash(text)
             pk = enrichment_pk(post_id, post_url, sha)
             if not include_existing and pk in existing_pks:
-                stats["existing_skipped"] += 1
-                continue
+                # Legacy callers/tests may provide only a set. Preserve their
+                # historical meaning (present == current). Live YDB loading
+                # passes the payload mapping so model/bank drift is auditable.
+                existing_row = existing_pks.get(pk) if isinstance(existing_pks, dict) else None
+                if not isinstance(existing_pks, dict) or _existing_bge_row_is_current(existing_row, text_hash_value=sha):
+                    stats["existing_skipped"] += 1
+                    continue
+                stats["existing_stale_rescore"] += 1
             dedupe_key = post_url or sha
             if dedupe_key in seen_text_or_url:
                 stats["duplicate_skipped"] += 1
@@ -917,7 +953,7 @@ def load_ydb_rows(limit: int, *, include_existing: bool = False) -> tuple[list[d
             if existing is None:
                 existing = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=max_scan)
             existing_pks = set(existing.keys())
-            rows = collect_text_rows(items_by_kind, existing_pks=existing_pks, limit=limit, include_existing=include_existing)
+            rows = collect_text_rows(items_by_kind, existing_pks=existing, limit=limit, include_existing=include_existing)
             meta = {
                 "table_path": table_path,
                 "input_kinds": kinds,

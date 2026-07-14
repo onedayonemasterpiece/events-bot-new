@@ -183,10 +183,20 @@ Gemini/operator/delivery verdicts are monotonic. A contradictory stale
 `llm_rejected`, tombstoned or revoked post, and terminal source/bad-link rows
 remain terminal. This veto is URL-level across duplicate historical
 publication rows: any durable delivered/Gemini/operator/tombstone/revoked row
-blocks an older pending projection. The only legacy terminal spelling
+blocks an older pending projection. Historical rows where the normalized
+status lagged behind the provider result are covered too: durable
+`llm_decision=accept|reject` is terminal evidence and cannot be reopened. The
+only legacy terminal spelling
 intentionally migrated is
 `no_text_for_gemini + filtered_before_llm`, because that combination was
 created by the historical premature-compaction bug before Gemini ran.
+
+Exact-link and source-history observations are collapsed by canonical platform
+post identity before vector planning. The richest active text (with explicit
+publication restore taking precedence) is scored once, so route-specific
+`post_id` values cannot create two E5 rows in the same run. Metrics expose raw
+observations, unique posts used for vector planning and collapsed duplicates
+separately.
 
 Source-onboarding evidence also treats the current restored candidate as the
 authoritative authored-post excerpt for its URL. An older compacted memory row

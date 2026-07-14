@@ -11520,8 +11520,10 @@ def promote_publication_text_restore_exact_rows(
             continue
         publication_status = str(publication.get("publication_status") or "")
         candidate_status = str(publication.get("publication_candidate_status") or "")
+        llm_decision = str(publication.get("llm_decision") or publication.get("publication_llm_decision") or "").lower()
         if (
             str(publication.get("sent_to_chat") or "").lower() == "true"
+            or llm_decision in {"accept", "reject"}
             or publication_status.startswith(("gemini_", "operator_rejected", "eligibility_"))
             or candidate_status in {
                 "llm_confirmed", "llm_rejected", "llm_needs_review", "sent_to_chat",
@@ -11537,12 +11539,15 @@ def promote_publication_text_restore_exact_rows(
     for publication in publication_rows:
         publication_status = str(publication.get("publication_status") or "")
         candidate_status = str(publication.get("publication_candidate_status") or "")
+        llm_decision = str(publication.get("llm_decision") or publication.get("publication_llm_decision") or "").lower()
         if (
             publication_status != "text_restore_pending"
             and candidate_status != "awaiting_text_restore"
         ):
             continue
         if str(publication.get("sent_to_chat") or "").lower() == "true":
+            continue
+        if llm_decision in {"accept", "reject"}:
             continue
         if candidate_status in {
             "llm_confirmed", "llm_rejected", "llm_needs_review", "sent_to_chat",
@@ -13712,6 +13717,47 @@ def _post_work_priority(row: dict[str, Any], previous_post: dict[str, Any] | Non
     )
 
 
+def _dedupe_same_run_post_observations(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse exact/history observations to one product post per run.
+
+    Telegram/VK fetch routes historically generated different ``post_id``
+    values for the same canonical URL.  Planning each observation separately
+    can schedule duplicate E5 work before either row becomes durable.  Keep the
+    richest observation while merging non-empty media/provenance fields from
+    every route.  A publication text-restore marker outranks a generic history
+    observation, then the longest working text wins.
+    """
+    grouped: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    def rank(row: dict[str, Any]) -> tuple[int, int, int, int]:
+        discovery = " ".join(str(row.get(k) or "") for k in (
+            "discovery_method", "priority_reason", "ydb_candidate_link_kind",
+        )).lower()
+        return (
+            int(publication_text_restore_requested(row)),
+            len(text_embedding_input_for_post(row)),
+            int(bool(row.get("ydb_candidate_link_pk") or "exact" in discovery or "post_link" in discovery)),
+            int(bool(row.get("has_media") or row.get("primary_media_path") or row.get("local_media_paths"))),
+        )
+
+    for original in posts:
+        row = dict(original)
+        key = durable_processed_post_key(row) or canonical_post_url_for_storage(row.get("post_url")) or str(row.get("post_id") or "")
+        if not key:
+            key = "observation:" + stable_hash(json.dumps(row, ensure_ascii=False, sort_keys=True, default=str), length=20)
+        previous = grouped.get(key)
+        if previous is None:
+            grouped[key] = row
+            order.append(key)
+            continue
+        if rank(row) >= rank(previous):
+            grouped[key] = merge_durable_post_records(previous, row)
+        else:
+            grouped[key] = merge_durable_post_records(row, previous)
+    return [grouped[key] for key in order]
+
+
 def plan_posts_for_vector_scoring(
     posts: list[dict[str, Any]],
     *,
@@ -13727,6 +13773,8 @@ def plan_posts_for_vector_scoring(
     the first durable state handoff, or the one-time fusion pass after BGE-M3
     arrives. Image/Gemini retries are owned by their own durable queues.
     """
+    input_posts_count = len(posts)
+    posts = _dedupe_same_run_post_observations(posts)
     actionable: list[dict[str, Any]] = []
     reasons: dict[str, int] = {}
     for original in posts:
@@ -13807,7 +13855,9 @@ def plan_posts_for_vector_scoring(
 
     actionable.sort(key=lambda r: r.get("_rt_work_priority") or (9, 9, 9, ""))
     return actionable, {
-        "posts_fetched": len(posts),
+        "posts_fetched": input_posts_count,
+        "posts_unique_for_vector_planning": len(posts),
+        "posts_same_run_duplicates_collapsed": input_posts_count - len(posts),
         "posts_actionable": len(actionable),
         "posts_needs_e5": reasons.get("needs_e5", 0),
         "posts_reuse_e5_wait_bge": reasons.get("reuse_e5_wait_bge", 0),

@@ -431,7 +431,14 @@ def _terminal_decision_blocks_text_restore(publication: dict[str, Any]) -> bool:
     """Keep delivered/operator/Gemini verdicts monotonic under stale rows."""
     status = str(publication.get("publication_status") or "").strip().lower()
     candidate_status = str(publication.get("publication_candidate_status") or "").strip().lower()
+    llm_decision = str(publication.get("llm_decision") or publication.get("publication_llm_decision") or "").strip().lower()
     if str(publication.get("sent_to_chat") or "").strip().lower() == "true" or candidate_status == "sent_to_chat":
+        return True
+    # Some historical rows persisted the provider verdict before the normalized
+    # publication status.  The decision itself is durable cost/product
+    # evidence and must not be reopened merely because a stale projection still
+    # says ``awaiting_text_restore``.
+    if llm_decision in {"accept", "reject"}:
         return True
     if status in TERMINAL_PUBLICATION_STATUSES or status.startswith("operator_rejected"):
         return True

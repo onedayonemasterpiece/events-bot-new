@@ -11,6 +11,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 BGE_MODULE_PATH = ROOT / "kaggle" / "RegionTalkBgeM3Enrichment" / "region_talk_bge_m3_enrichment.py"
 BGE_RUNNER_PATH = ROOT / "kaggle" / "execute_region_talk_bge_m3_enrichment.py"
+CANDIDATE_MODULE_PATH = ROOT / "kaggle" / "RegionTalkCandidateReport" / "region_talk_candidate_report.py"
 
 
 def load_bge_module():
@@ -31,7 +32,21 @@ def load_bge_runner_module():
     return module
 
 
+def load_candidate_module():
+    spec = importlib.util.spec_from_file_location("region_talk_candidate_report_for_bge_test", CANDIDATE_MODULE_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
+    def test_semantic_bank_matches_candidate_report_contract(self) -> None:
+        bge = load_bge_module()
+        candidate = load_candidate_module()
+        self.assertEqual(bge.semantic_bank_v1(), candidate.semantic_bank_v1())
+
     def test_bge_model_reference_finds_nested_kaggle_mount(self) -> None:
         mod = load_bge_module()
         keys = [
@@ -121,6 +136,43 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual(rows[0]["_embedding_text_hash"], sha)
         self.assertEqual(rows[0]["_paired_e5_text_hash"], sha)
         self.assertIn(":bge_m3:", rows[0]["_enrichment_pk"])
+
+    def test_collect_text_rows_rescores_existing_pk_when_semantic_bank_is_stale(self) -> None:
+        mod = load_bge_module()
+        text = "Личный отзыв о поездке в Калининградскую область и на Куршскую косу."
+        sha = mod.text_hash(text)
+        e5_row = {
+            "post_id": "p-stale-bank",
+            "post_url": "https://t.me/e5/2",
+            "model_id": "intfloat/multilingual-e5-base",
+            "model_short": "e5",
+            "text_hash": sha,
+            "text_excerpt": text,
+        }
+        bge_pk = mod.enrichment_pk(e5_row["post_id"], e5_row["post_url"], sha)
+        stale_bge = {
+            "post_id": e5_row["post_id"],
+            "post_url": e5_row["post_url"],
+            "model_id": mod.MODEL_ID,
+            "model_short": mod.MODEL_SHORT,
+            "encoder_contract": mod.ENCODER_CONTRACT,
+            "text_hash": sha,
+            "semantic_bank_version": "semantic_bank_v1",
+            "semantic_bank_hash": "stale-bank-hash",
+            "semantic_scores_by_class": {"ko_visit_impression": 0.7},
+        }
+        items = {"text_vector_enrichment_item": {"e5": e5_row, bge_pk: stale_bge}}
+        rows = mod.collect_text_rows(items, existing_pks=items["text_vector_enrichment_item"], limit=5)
+        self.assertEqual([row["post_id"] for row in rows], ["p-stale-bank"])
+        self.assertEqual(mod.LAST_COLLECT_STATS["existing_stale_rescore"], 1)
+        self.assertEqual(rows[0]["_enrichment_pk"], bge_pk)
+
+        version, bank_hash = mod.bank_version_and_hash(mod.semantic_bank_v1(), version="semantic_bank_v1")
+        current_bge = dict(stale_bge, semantic_bank_version=version, semantic_bank_hash=bank_hash[:16])
+        current_items = {"text_vector_enrichment_item": {"e5": e5_row, bge_pk: current_bge}}
+        current_rows = mod.collect_text_rows(current_items, existing_pks=current_items["text_vector_enrichment_item"], limit=5)
+        self.assertEqual(current_rows, [])
+        self.assertEqual(mod.LAST_COLLECT_STATS["existing_skipped"], 1)
 
     def test_collect_text_rows_skips_bge_vector_rows_by_default(self) -> None:
         mod = load_bge_module()

@@ -293,6 +293,12 @@ Important invariants:
   `REGION_TALK_BGE_MIN_TEXT_CHARS` (default 24). Generic ultra-short captions
   are excluded, but exact keyword/fast-check posts bypass that optimization:
   direct KO evidence must receive BGE and cannot remain permanently pending.
+- CandidateReport and the isolated BGE worker use the same semantic prototype
+  bank contract. A BGE PK identifies post/model/text but does not freeze the
+  prototype bank; when the stored bank version/hash is stale, the worker
+  recomputes and overwrites that same PK instead of counting it as already
+  complete. This prevents a permanent `wait_bge_existing_e5` loop after bank
+  calibration changes.
 - This is the current dual-vector normalizer: at most one BGE kernel may run at
   once, but while actionable E5-without-BGE rows remain the loop polls in the
   shorter downstream interval (60 seconds by default) and relaunches BGE after
