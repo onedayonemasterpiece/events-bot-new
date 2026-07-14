@@ -125,4 +125,4 @@ lanes:
     forbidden_files: ["**/*"]
     expected_output: Done/Partial/Missing/Blocked verdict with public evidence for every requirement.
     verification_scope: targeted
-    status: spawned
+    status: completed
