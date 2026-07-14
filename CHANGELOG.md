@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk ImageDiagnostic heartbeat payloads so model-load and per-image inference checkpoints retain the exact model, post URL, component scores and timings in YDB instead of exposing only a generic event name.
 - Fixed Region Talk orchestrator memory growth when reading the complete dual-vector ledger: control-plane metrics now use a server-side scalar YDB projection and never materialize dense E5/BGE embedding arrays, while the stored vectors and E5+BGE fusion contract remain unchanged.
 - Fixed Region Talk finalizer idempotency for compact eligibility evidence: the full evidence now has a durable fingerprint, legacy 700-character prefixes are recognized as unchanged, terminal tombstones no longer get rewritten or trigger repeated cross-ledger text-prune scans, and an unchanged source-attestation priority is no longer timestamped/written again on every downstream cycle.
 - Added Region Talk ImageDiagnostic heartbeats around media fetch, current-image inference and CLIP/LAION/NIMA model loading, so long CPU startup is distinguishable from a frozen image batch without changing the scoring ensemble.

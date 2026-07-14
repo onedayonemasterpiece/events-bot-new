@@ -30,6 +30,22 @@ HEARTBEAT_EVENTS = {
     "model_load_started", "model_load_done", "model_unavailable",
     "ydb_source_visual_rollup_written", "report_written", "image_queue_poll_finished_empty",
 }
+IMAGE_DIAG_HEARTBEAT_FIELDS = (
+    "run_id", "event_name", "created_at", "phase", "reason", "attempt",
+    "total", "leased", "remaining_budget", "pending", "blocked",
+    "publication_eligibility_pending_count", "publication_eligibility_blocked_count",
+    "batch_index", "rows", "actual_scored", "actual_images", "failures",
+    "xlsx", "html", "summary", "source", "max_items_per_run", "batch_size",
+    "poll_interval_seconds", "wait_initial_seconds", "wait_after_drain_seconds",
+    # Long CPU stages must identify the exact component and row. An event name
+    # such as model_load_started without the model/post/timing data is not an
+    # actionable heartbeat.
+    "model", "model_id", "device", "load_seconds", "elapsed_seconds", "error",
+    "index", "post_url", "image_queue_id", "source_title", "media_fetch_status",
+    "telegram", "vk", "actual_downloaded", "status", "final_visual_score",
+    "cv_score", "clip_score", "laion_score", "nima_score", "download_seconds",
+    "decode_seconds", "inference_seconds", "total_processing_seconds", "width", "height",
+)
 
 
 def max_media_fetch_attempts() -> int:
@@ -313,8 +329,7 @@ def write_region_talk_image_diag_heartbeat(payload: dict):
     if (os.getenv("REGION_TALK_IMAGE_DIAG_HEARTBEAT_YDB") or "1").lower() in {"0","false","no"}: return
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").lower() != "ydb" and not os.getenv("REGION_TALK_YDB_ENDPOINT"): return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
-    allowed=["run_id","event_name","created_at","phase","reason","attempt","total","leased","remaining_budget","pending","blocked","publication_eligibility_pending_count","publication_eligibility_blocked_count","batch_index","rows","actual_scored","actual_images","failures","xlsx","html","summary","source","max_items_per_run","batch_size","poll_interval_seconds","wait_initial_seconds","wait_after_drain_seconds"]
-    clean={k:payload.get(k) for k in allowed if payload.get(k) not in (None,"",[],{})}
+    clean={k:payload.get(k) for k in IMAGE_DIAG_HEARTBEAT_FIELDS if payload.get(k) not in (None,"",[],{})}
     clean.setdefault("run_id", RUN_ID); clean.setdefault("updated_at", now); clean.setdefault("notebook", "RegionTalkImageDiagnostic")
     def op(session):
         query=session.prepare(f"""DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;

@@ -38,6 +38,10 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertEqual(heartbeat.call_count, 2)
             self.assertEqual(heartbeat.call_args_list[0].args[0]["event_name"], "model_load_started")
             self.assertEqual(heartbeat.call_args_list[1].args[0]["event_name"], "image_inference_current")
+            self.assertIn("model", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
+            self.assertIn("post_url", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
+            self.assertIn("load_seconds", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
+            self.assertIn("final_visual_score", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
 
     def test_vk_fetch_uses_prefetched_public_url_before_vk_api(self) -> None:
         keys = (

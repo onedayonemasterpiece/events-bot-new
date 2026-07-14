@@ -129,6 +129,16 @@ Image acquisition failures remain retryable across separate notebook runs, but
 an item with `last_image_diag_run_id` equal to the current run is not leased
 again in that run. This prevents a persistent Telegram/VK authorization error
 from becoming a same-run hot retry loop while preserving later recovery.
+
+## Runtime observability
+
+Long image stages write the component and business-row context into the YDB
+heartbeat, not only a generic event name. Model load events retain
+`model`/`model_id`/`device`/timing or error; inference events retain the current
+post URL, image queue id, component scores and per-row timings. This makes a
+slow CLIP, LAION or NIMA load distinguishable from media acquisition and from
+an individual corrupt image while the Kaggle kernel is still running.
+
 # Media locator lifecycle
 
 `https://t.me/<handle>/<message_id>#media` is a **post-level marker**, not a
