@@ -26,6 +26,7 @@ assert_region_talk_kaggle_slots_free = _candidate_executor.assert_region_talk_ka
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkImageDiagnostic"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-image-diagnostic"
+DEFAULT_CLIP_KAGGLE_MODEL_SOURCE = "yujkaggle/openaiclip-vit-base-patch32/PyTorch/default/1"
 
 def _rows_from_xlsx(path: Path, top_n: int) -> tuple[list[dict[str, Any]], int]:
     from openpyxl import load_workbook
@@ -68,6 +69,10 @@ def stage_kernel(run_id: str, kernel_slug: str) -> Path:
     username=(os.getenv("KAGGLE_USERNAME") or "").strip()
     if username: meta["id"]=f"{username}/{kernel_slug}"
     meta["slug"]=kernel_slug; meta["title"]="Region Talk Image Diagnostic"; meta["enable_gpu"]=False; meta["enable_internet"]=True
+    model_source=str(os.getenv("REGION_TALK_CLIP_KAGGLE_MODEL_SOURCE") or DEFAULT_CLIP_KAGGLE_MODEL_SOURCE).strip()
+    model_sources=[str(item).strip() for item in (meta.get("model_sources") or []) if str(item).strip()]
+    if model_source and model_source not in model_sources: model_sources.append(model_source)
+    meta["model_sources"]=model_sources
     (dst/"kernel-metadata.json").write_text(json.dumps(meta,ensure_ascii=False,indent=2),encoding="utf-8")
     return dst
 
@@ -99,6 +104,8 @@ def main() -> int:
             "REGION_TALK_IMAGE_DIAG_QUEUE_SCAN_LIMIT",
             "REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK",
             "REGION_TALK_IMAGE_DIAG_STALE_LEASE_SECONDS",
+            "REGION_TALK_CLIP_MODEL_LOCAL_PATH", "REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL",
+            "REGION_TALK_CLIP_KAGGLE_MODEL_SOURCE",
             "REGION_TALK_STATE_BACKEND", "REGION_TALK_REQUIRE_YDB_STATE",
             "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET",
             "REGION_TALK_KAGGLE_SECRET_NAMES",

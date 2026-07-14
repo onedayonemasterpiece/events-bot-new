@@ -9,6 +9,9 @@
   "enable_internet": true,
   "dataset_sources": [],
   "competition_sources": [],
+  "model_sources": [
+    "yujkaggle/openaiclip-vit-base-patch32/PyTorch/default/1"
+  ],
   "kernel_sources": [],
   "slug": "region-talk-image-diagnostic"
 }

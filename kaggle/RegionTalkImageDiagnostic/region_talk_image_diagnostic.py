@@ -40,7 +40,7 @@ IMAGE_DIAG_HEARTBEAT_FIELDS = (
     # Long CPU stages must identify the exact component and row. An event name
     # such as model_load_started without the model/post/timing data is not an
     # actionable heartbeat.
-    "model", "model_id", "device", "load_seconds", "elapsed_seconds", "error",
+    "model", "model_id", "model_origin", "model_reference", "device", "load_seconds", "elapsed_seconds", "error",
     "index", "post_url", "image_queue_id", "source_title", "media_fetch_status",
     "telegram", "vk", "actual_downloaded", "status", "final_visual_score",
     "cv_score", "clip_score", "laion_score", "nima_score", "download_seconds",
@@ -98,6 +98,76 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from cryptography.fernet import Fernet
+
+
+CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return bool(default)
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_clip_model_dir(path: Path) -> bool:
+    """Return whether *path* contains a complete local HF CLIP contract."""
+    return bool(
+        path.is_dir()
+        and (path / "config.json").is_file()
+        and (path / "preprocessor_config.json").is_file()
+        and any((path / name).is_file() for name in ("model.safetensors", "pytorch_model.bin"))
+        and (path / "tokenizer.json").is_file()
+    )
+
+
+def clip_model_reference() -> tuple[str, str]:
+    """Resolve the pinned Kaggle CLIP input without a Hub metadata request.
+
+    Kaggle internet is used for public media acquisition, not as the durable
+    distribution channel for a 600 MB scoring model. Production runs attach a
+    versioned Kaggle Model and must therefore load the local directory with
+    ``local_files_only=True``.
+    """
+    explicit = str(os.getenv("REGION_TALK_CLIP_MODEL_LOCAL_PATH") or "").strip()
+    input_root = Path(os.getenv("REGION_TALK_KAGGLE_INPUT_ROOT") or "/kaggle/input")
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    model_root = input_root / "models" / "yujkaggle" / "openaiclip-vit-base-patch32"
+    candidates.extend(
+        [
+            model_root / "PyTorch" / "default" / "1",
+            model_root / "pytorch" / "default" / "1",
+            input_root / "openaiclip-vit-base-patch32" / "PyTorch" / "default" / "1",
+            input_root / "openaiclip-vit-base-patch32" / "pytorch" / "default" / "1",
+            input_root / "openaiclip-vit-base-patch32",
+        ]
+    )
+    if input_root.exists():
+        try:
+            for config in input_root.rglob("config.json"):
+                lowered = config.parent.as_posix().lower().replace("_", "-")
+                if "clip-vit-base-patch32" in lowered or "openaiclip-vit-base-patch32" in lowered:
+                    candidates.append(config.parent)
+        except Exception:
+            pass
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if _is_clip_model_dir(candidate):
+            origin = "kaggle_model_input" if str(candidate).startswith("/kaggle/input/") else "local_model_path"
+            return str(candidate), origin
+    require_local = _env_bool("REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL", Path("/kaggle/input").exists())
+    if require_local:
+        raise FileNotFoundError(
+            "complete local CLIP model input is required; expected the pinned "
+            "Kaggle model or REGION_TALK_CLIP_MODEL_LOCAL_PATH"
+        )
+    return CLIP_MODEL_ID, "huggingface_hub"
 
 
 def find_input_file(name: str) -> Path | None:
@@ -911,14 +981,20 @@ def maybe_clip():
     if CLIP["loaded"]: return True
     if CLIP["error"]: return False
     try:
+        t=time.monotonic(); model_reference, model_origin=clip_model_reference(); local_only=model_origin != "huggingface_hub"
+        if local_only:
+            # huggingface_hub reads offline mode during import, so this must be
+            # set before importing Transformers rather than immediately before
+            # from_pretrained().
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
         import torch
         from transformers import CLIPModel, CLIPProcessor
-        t=time.monotonic(); model_id="openai/clip-vit-base-patch32"; device="cuda" if torch.cuda.is_available() else "cpu"
-        log_event("model_load_started", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=model_id, device=device)
-        proc=CLIPProcessor.from_pretrained(model_id); model=CLIPModel.from_pretrained(model_id).to(device); model.eval()
+        device="cuda" if torch.cuda.is_available() else "cpu"
+        log_event("model_load_started", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=CLIP_MODEL_ID, model_origin=model_origin, model_reference=model_reference, device=device)
+        proc=CLIPProcessor.from_pretrained(model_reference, local_files_only=local_only); model=CLIPModel.from_pretrained(model_reference, local_files_only=local_only).to(device); model.eval()
         CLIP.update({"loaded":True,"torch":torch,"processor":proc,"model":model,"device":device})
-        model_availability["clip_iqa_postcardness_prompt_scorer"]={"available":True,"detail":f"{model_id} on {device}, load_seconds={round(time.monotonic()-t,2)}"}
-        log_event("model_load_done", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=model_id, device=device, load_seconds=round(time.monotonic()-t, 3))
+        model_availability["clip_iqa_postcardness_prompt_scorer"]={"available":True,"detail":f"{CLIP_MODEL_ID} from {model_origin} on {device}, load_seconds={round(time.monotonic()-t,2)}"}
+        log_event("model_load_done", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=CLIP_MODEL_ID, model_origin=model_origin, model_reference=model_reference, device=device, load_seconds=round(time.monotonic()-t, 3))
         return True
     except Exception as exc:
         CLIP["error"] = type(exc).__name__ + ": " + str(exc)[:500]

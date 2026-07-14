@@ -139,6 +139,24 @@ post URL, image queue id, component scores and per-row timings. This makes a
 slow CLIP, LAION or NIMA load distinguishable from media acquisition and from
 an individual corrupt image while the Kaggle kernel is still running.
 
+## Reproducible CLIP loading on Kaggle
+
+The image worker must not download the 600 MB CLIP encoder from Hugging Face
+during every CPU run. The kernel attaches the pinned Kaggle Model
+`yujkaggle/openaiclip-vit-base-patch32/PyTorch/default/1`, resolves the complete
+local Transformers directory under `/kaggle/input`, and calls both
+`CLIPProcessor.from_pretrained(...)` and `CLIPModel.from_pretrained(...)` with
+`local_files_only=True`. Kaggle product runs fail the CLIP component quickly if
+that model input is absent instead of waiting indefinitely on a Hub request.
+`REGION_TALK_CLIP_MODEL_LOCAL_PATH` remains available for an explicit local
+test path; `REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL=0` is a local-development
+escape hatch and is not the production default.
+
+Internet remains enabled because the worker still has to acquire public post
+media. It is not the model-distribution channel. Model heartbeats include
+`model_origin` and `model_reference`, so live acceptance can prove that the
+pinned input, not a network fallback, was used.
+
 # Media locator lifecycle
 
 `https://t.me/<handle>/<message_id>#media` is a **post-level marker**, not a

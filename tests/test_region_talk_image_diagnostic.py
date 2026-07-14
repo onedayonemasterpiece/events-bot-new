@@ -5,15 +5,27 @@ import os
 import sys
 import tempfile
 import unittest
+import json
+import shutil
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "kaggle" / "RegionTalkImageDiagnostic" / "region_talk_image_diagnostic.py"
+EXECUTOR_PATH = ROOT / "kaggle" / "execute_region_talk_image_diagnostic.py"
 
 
 def load_module():
     spec = importlib.util.spec_from_file_location("region_talk_image_diagnostic", MODULE_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_executor_module():
+    spec = importlib.util.spec_from_file_location("execute_region_talk_image_diagnostic", EXECUTOR_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -42,6 +54,86 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertIn("post_url", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
             self.assertIn("load_seconds", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
             self.assertIn("final_visual_score", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
+            self.assertIn("model_origin", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
+            self.assertIn("model_reference", mod.IMAGE_DIAG_HEARTBEAT_FIELDS)
+
+    def test_clip_model_reference_prefers_complete_explicit_local_directory(self) -> None:
+        keys = (
+            "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
+            "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
+            "REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION",
+            "REGION_TALK_CLIP_MODEL_LOCAL_PATH",
+            "REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                model_dir = Path(td) / "clip"
+                model_dir.mkdir()
+                for name in ("config.json", "preprocessor_config.json", "tokenizer.json"):
+                    (model_dir / name).write_text("{}", encoding="utf-8")
+                (model_dir / "pytorch_model.bin").write_bytes(b"weights")
+                os.environ["REGION_TALK_CLIP_MODEL_LOCAL_PATH"] = str(model_dir)
+                os.environ["REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL"] = "1"
+
+                reference, origin = mod.clip_model_reference()
+
+                self.assertEqual(reference, str(model_dir))
+                self.assertEqual(origin, "local_model_path")
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
+    def test_clip_model_reference_fails_fast_when_local_input_is_required(self) -> None:
+        keys = (
+            "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
+            "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
+            "REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION",
+            "REGION_TALK_CLIP_MODEL_LOCAL_PATH",
+            "REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL",
+            "REGION_TALK_KAGGLE_INPUT_ROOT",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                os.environ.pop("REGION_TALK_CLIP_MODEL_LOCAL_PATH", None)
+                os.environ["REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL"] = "1"
+                os.environ["REGION_TALK_KAGGLE_INPUT_ROOT"] = str(Path(td) / "empty-input")
+
+                with self.assertRaisesRegex(FileNotFoundError, "complete local CLIP model input"):
+                    mod.clip_model_reference()
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
+    def test_launcher_attaches_pinned_clip_model_source(self) -> None:
+        keys = ("KAGGLE_USERNAME", "REGION_TALK_CLIP_KAGGLE_MODEL_SOURCE")
+        old = {key: os.environ.get(key) for key in keys}
+        staged = None
+        try:
+            os.environ["KAGGLE_USERNAME"] = "unit-user"
+            os.environ.pop("REGION_TALK_CLIP_KAGGLE_MODEL_SOURCE", None)
+            executor = load_executor_module()
+            staged = executor.stage_kernel("unit-run", "unit-image-diagnostic")
+            metadata = json.loads((staged / "kernel-metadata.json").read_text(encoding="utf-8"))
+            self.assertIn(executor.DEFAULT_CLIP_KAGGLE_MODEL_SOURCE, metadata["model_sources"])
+            self.assertFalse(metadata["enable_gpu"])
+        finally:
+            if staged is not None:
+                shutil.rmtree(staged.parent, ignore_errors=True)
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
     def test_vk_fetch_uses_prefetched_public_url_before_vk_api(self) -> None:
         keys = (
