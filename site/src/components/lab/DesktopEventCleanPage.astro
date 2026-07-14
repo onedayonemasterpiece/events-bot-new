@@ -8,6 +8,7 @@ import {
   displayDate,
   displayDateTime,
   displayWeekdayLong,
+  eventHref,
   withBase,
 } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
@@ -16,7 +17,7 @@ type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
 type EditorialMotion = 'pinned' | 'continuous';
 type EditorialCropPolicy = 'exact' | 'bottom-safe';
-type OcrCompanionLayout = 'separate' | 'integrated' | 'arrival';
+type OcrCompanionLayout = 'separate' | 'arrival';
 type SplitMediaFit = 'natural' | 'viewport-cover';
 type RelatedMediaTreatment = 'cover' | 'ambient' | 'hybrid';
 
@@ -152,7 +153,6 @@ const galleryImages = (() => {
 const galleryId = `clean-hero-gallery-${event.id}`;
 const galleryTitleId = `${galleryId}-title`;
 const photoCount = galleryImages.length;
-const railCellLimit = 6;
 const indexedGalleryImages = galleryImages.map((image, galleryIndex) => ({ image, galleryIndex }));
 const ocrCompanion = ocrCompanionImageIndex === undefined
   ? undefined
@@ -162,14 +162,16 @@ const editorialRailImages = editorialRailCandidates;
 // Gallery keeps every source rendition so its source indexes remain stable. The compact rail,
 // however, only advertises distinct media identities supplied by the upstream/lab contract.
 const splitRailCandidates = indexedGalleryImages.filter(({ image, galleryIndex }) => galleryIndex !== 0 && !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
-const splitRailImages = splitRailCandidates.slice(0, splitRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
-const splitRailRemainingCount = splitRailCandidates.length - splitRailImages.length;
 const portraitSourceIndexSet = new Set(splitPortraitSourceIndexes);
-const splitPortraitImages = indexedGalleryImages.filter(({ image }) => portraitSourceIndexSet.has(image.sourceIndex ?? -1));
-const integratedCompanionPreviews = editorialRailCandidates
-  .filter(({ galleryIndex }) => galleryIndex !== 0)
-  .slice(0, 3);
-const integratedCompanionRemaining = Math.max(0, editorialRailCandidates.filter(({ galleryIndex }) => galleryIndex !== 0).length - integratedCompanionPreviews.length);
+const splitViewerImages = splitPortraitSourceIndexes.length > 0
+  ? indexedGalleryImages.filter(({ image }) => portraitSourceIndexSet.has(image.sourceIndex ?? -1))
+  : indexedGalleryImages.filter(({ image }) => !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
+const companionPreviewCandidates = editorialRailCandidates.filter(({ galleryIndex }) => galleryIndex !== 0);
+const viewerRecommendation = related[0];
+const viewerRecommendationImage = viewerRecommendation ? eventImageUrl(viewerRecommendation.image_url) || viewerRecommendation.image_url : null;
+const viewerRecommendationMeta = viewerRecommendation
+  ? [displayDateTime(viewerRecommendation), viewerRecommendation.venue_name || viewerRecommendation.city].filter(Boolean).join(' · ')
+  : '';
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
@@ -203,7 +205,7 @@ const descriptionHtml = (event.description_html || '')
   data-editorial-crop={candidate === 'editorial' ? editorialCropPolicy : undefined}
   data-ocr-companion-layout={ocrCompanion ? ocrCompanionLayout : undefined}
   data-split-media-fit={candidate === 'split' ? splitMediaFit : undefined}
-  data-split-portrait-viewer={splitPortraitViewer ? 'true' : undefined}
+  data-split-efficient-viewer={splitPortraitViewer ? 'true' : undefined}
   data-related-media-treatment={relatedMediaTreatment}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
   data-event-id={event.id}
@@ -224,48 +226,46 @@ const descriptionHtml = (event.description_html || '')
               <button
                 type="button"
                 class="desktop-prototype__media-opener"
-                data-portrait-strip-open={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? '' : undefined}
-                data-portrait-strip-start={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? heroImageIndex : undefined}
-                data-hero-gallery-open={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? undefined : galleryId}
+                data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
+                data-efficient-viewer-start={splitPortraitViewer ? String(galleryImages[0]?.sourceIndex ?? 'gallery-0') : undefined}
+                data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
                 data-hero-gallery-index="0"
-                aria-label={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? 'Открыть портретную серию' : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
+                aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
               >
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
-              {splitRailImages.length > 0 && (
-                <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail aria-label="Другие изображения события">
-                  {splitRailImages.map(({ image, galleryIndex }) => (
+              {splitRailCandidates.length > 0 && (
+                <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail data-responsive-split-rail aria-label="Другие изображения события">
+                  {splitRailCandidates.map(({ image, galleryIndex }) => (
                     <button
                       type="button"
+                      data-responsive-split-item
                       data-rail-aspect={railAspectBucket(image)}
                       style={`--rail-ratio:${railAspectValue(image).toFixed(4)};`}
                       data-image-text-mode={image.image_text_mode}
                       data-media-role={image.media_role}
                       data-source-index={image.sourceIndex}
-                      data-portrait-strip-open={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? '' : undefined}
-                      data-portrait-strip-start={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? image.sourceIndex : undefined}
-                      data-hero-gallery-open={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? undefined : galleryId}
+                      data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
+                      data-efficient-viewer-start={splitPortraitViewer ? String(image.sourceIndex ?? `gallery-${galleryIndex}`) : undefined}
+                      data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
                       data-hero-gallery-index={galleryIndex}
-                      aria-label={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? 'Открыть портретную серию' : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`}
+                      aria-label={splitPortraitViewer ? `Открыть быстрый просмотр с изображения ${galleryIndex + 1}` : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`}
                     >
                       <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
                       {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
                     </button>
                   ))}
-                  {splitRailRemainingCount > 0 && (
-                    <button
-                      type="button"
-                      class="desktop-prototype__media-rail-more"
-                      data-remaining-count={splitRailRemainingCount}
-                      data-portrait-strip-open={splitPortraitViewer ? '' : undefined}
-                      data-portrait-strip-start={splitPortraitViewer ? splitPortraitImages.find(({ image }) => !splitRailImages.some((railImage) => railImage.image.sourceIndex === image.sourceIndex))?.image.sourceIndex : undefined}
-                      data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
-                      data-hero-gallery-index={splitRailImages.at(-1)!.galleryIndex + 1}
-                      aria-label={splitPortraitViewer ? `Открыть портретную серию, ещё ${splitRailRemainingCount} фото` : `Открыть ещё ${splitRailRemainingCount} фото`}
-                    >
-                      <strong>+{splitRailRemainingCount}</strong><span>фото</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    class="desktop-prototype__media-rail-more"
+                    data-responsive-split-more
+                    data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
+                    data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
+                    hidden
+                    aria-label="Открыть остальные изображения"
+                  >
+                    <strong data-responsive-split-count></strong><span>фото</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -277,13 +277,13 @@ const descriptionHtml = (event.description_html || '')
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
-            {photoCount > 0 && !(editorialRail && editorialRailImages.length > 1) && ocrCompanionLayout !== 'integrated' && ocrCompanionLayout !== 'arrival' && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
+            {photoCount > 0 && !(editorialRail && editorialRailImages.length > 1) && ocrCompanionLayout !== 'arrival' && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
           </figure>
         )}
 
         {candidate === 'editorial' && (
           <aside class="desktop-editorial-side" data-editorial-side data-companion-arrival={ocrCompanionLayout === 'arrival' ? 'true' : undefined}>
-            {editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'integrated' && ocrCompanionLayout !== 'arrival' && (
+            {editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'arrival' && (
               <div class="desktop-prototype__media-rail desktop-prototype__media-rail--hero" data-hero-rail data-responsive-rail aria-label="Выбрать изображение">
                 {editorialRailImages.map(({ image, galleryIndex }, index) => (
                   <button
@@ -324,8 +324,14 @@ const descriptionHtml = (event.description_html || '')
                 </span>
               </button>
             )}
-            {ocrCompanion && (ocrCompanionLayout === 'integrated' || ocrCompanionLayout === 'arrival') && (
-              <section class="desktop-editorial-companion-board" data-editorial-companion-board data-companion-board-mode={ocrCompanionLayout} aria-label="Афиша и фотографии события">
+            {ocrCompanion && ocrCompanionLayout === 'arrival' && (
+              <section
+                class="desktop-editorial-companion-board"
+                style={`--ocr-ratio:${(ocrCompanion.image.width || 800) / (ocrCompanion.image.height || 1200)};`}
+                data-editorial-companion-board
+                data-companion-board-mode="arrival"
+                aria-label="Афиша и фотографии события"
+              >
                 <button
                   type="button"
                   class="desktop-editorial-companion desktop-editorial-companion--board"
@@ -342,16 +348,14 @@ const descriptionHtml = (event.description_html || '')
                   </span>
                 </button>
                 <div class="desktop-editorial-companion-board__previews">
-                  {integratedCompanionPreviews.map(({ image, galleryIndex }) => (
-                    <button type="button" style={`--preview-ratio:${railAspectValue(image).toFixed(4)};`} data-media-role={image.media_role} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} на весь экран`}>
+                  {companionPreviewCandidates.map(({ image, galleryIndex }) => (
+                    <button type="button" style={`--preview-ratio:${railAspectValue(image).toFixed(4)};`} data-companion-preview-item data-preview-aspect={railAspectBucket(image)} data-media-role={image.media_role} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} на весь экран`}>
                       <img src={image.src} alt="" width={image.width || 160} height={image.height || 120} loading="lazy" decoding="async" />
                     </button>
                   ))}
-                  {integratedCompanionRemaining > 0 && (
-                    <button type="button" class="desktop-editorial-companion-board__more" data-hero-gallery-open={galleryId} data-hero-gallery-index={integratedCompanionPreviews.at(-1)!.galleryIndex + 1} aria-label={`Открыть ещё ${integratedCompanionRemaining} фото`}>
-                      <strong>+{integratedCompanionRemaining}</strong><span>фото</span>
-                    </button>
-                  )}
+                  <button type="button" class="desktop-editorial-companion-board__more" data-companion-preview-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
+                    <strong data-companion-preview-count></strong><span>фото</span>
+                  </button>
                 </div>
               </section>
             )}
@@ -452,32 +456,40 @@ const descriptionHtml = (event.description_html || '')
     </div>
   </section>
 
-  {splitPortraitViewer && splitPortraitImages.length > 1 && (
-    <div class="desktop-portrait-viewer" data-portrait-viewer role="dialog" aria-modal="true" aria-hidden="true" aria-label={`Портретная серия: ${event.title}`} hidden>
+  {splitPortraitViewer && splitViewerImages.length > 1 && (
+    <div class="desktop-portrait-viewer" data-efficient-viewer role="dialog" aria-modal="true" aria-hidden="true" aria-label={`Быстрый просмотр изображений: ${event.title}`} hidden>
       <div class="desktop-portrait-viewer__topbar">
         <strong>Фото события</strong>
-        <button type="button" data-portrait-viewer-close aria-label="Закрыть портретную серию">×</button>
+        <button type="button" data-efficient-viewer-close aria-label="Закрыть просмотр изображений">×</button>
       </div>
-      <div class="desktop-portrait-viewer__viewport" data-portrait-viewer-viewport tabindex="0">
-        <div class="desktop-portrait-viewer__track" data-portrait-viewer-track>
-          {splitPortraitImages.map(({ image, galleryIndex }) => (
-            <button
-              type="button"
+      <div class="desktop-portrait-viewer__viewport" data-efficient-viewer-viewport tabindex="0">
+        <div class="desktop-portrait-viewer__track" data-efficient-viewer-track>
+          {splitViewerImages.map(({ image, galleryIndex }) => (
+            <figure
               class="desktop-portrait-viewer__item"
-              data-portrait-viewer-item
-              data-source-index={image.sourceIndex}
-              data-hero-gallery-open={galleryId}
-              data-hero-gallery-index={galleryIndex}
-              aria-label={`Открыть фото ${galleryIndex + 1} отдельно`}
+              data-efficient-viewer-item
+              data-source-index={String(image.sourceIndex ?? `gallery-${galleryIndex}`)}
+              data-gallery-index={galleryIndex}
             >
               <img src={image.src} alt={image.alt} width={image.width || 960} height={image.height || 1280} loading="lazy" decoding="async" />
-            </button>
+            </figure>
           ))}
+          {viewerRecommendation && (
+            <article class="desktop-portrait-viewer__recommendation" data-efficient-viewer-recommendation tabindex="-1">
+              {viewerRecommendationImage && <img src={viewerRecommendationImage} alt="" loading="lazy" decoding="async" />}
+              <div class="desktop-portrait-viewer__recommendation-card">
+                <span>Дальше можно похожее</span>
+                <h2>{viewerRecommendation.title}</h2>
+                {viewerRecommendationMeta && <p>{viewerRecommendationMeta}</p>}
+                <a href={eventHref(viewerRecommendation)}>Смотреть похожее</a>
+              </div>
+            </article>
+          )}
         </div>
       </div>
-      <button type="button" class="desktop-portrait-viewer__nav desktop-portrait-viewer__nav--prev" data-portrait-viewer-prev aria-label="Предыдущая группа фото">‹</button>
-      <button type="button" class="desktop-portrait-viewer__nav desktop-portrait-viewer__nav--next" data-portrait-viewer-next aria-label="Следующая группа фото">›</button>
-      <p class="desktop-portrait-viewer__counter" data-portrait-viewer-counter aria-live="polite"></p>
+      <button type="button" class="desktop-portrait-viewer__nav desktop-portrait-viewer__nav--prev" data-efficient-viewer-prev aria-label="Предыдущая группа фото">‹</button>
+      <button type="button" class="desktop-portrait-viewer__nav desktop-portrait-viewer__nav--next" data-efficient-viewer-next aria-label="Следующая группа фото или похожее событие">›</button>
+      <p class="desktop-portrait-viewer__counter" data-efficient-viewer-counter aria-live="polite"></p>
     </div>
   )}
 
@@ -565,20 +577,148 @@ const descriptionHtml = (event.description_html || '')
         new ResizeObserver(() => layoutResponsiveRail(rail)).observe(rail);
       });
 
+      const responsiveSplitRails = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-responsive-split-rail]'));
+      const layoutResponsiveSplitRail = (rail:HTMLElement) => {
+        const items = Array.from(rail.querySelectorAll<HTMLButtonElement>('[data-responsive-split-item]'));
+        const more = rail.querySelector<HTMLButtonElement>('[data-responsive-split-more]');
+        if (!items.length || !more || !rail.clientWidth) return;
+        const gap = Number.parseFloat(getComputedStyle(rail).gap) || 8;
+        const thumbHeight = Math.max(88, items[0]?.clientHeight || 104);
+        const moreWidth = 104;
+        items.forEach((item) => {
+          item.hidden = false;
+          const naturalRatio = Number.parseFloat(item.style.getPropertyValue('--rail-ratio')) || 1;
+          const width = clamp(thumbHeight * naturalRatio, 88, 196);
+          item.style.setProperty('--split-thumb-width', `${width.toFixed(2)}px`);
+          item.dataset.railCropAxis = naturalRatio < .84 ? 'vertical' : naturalRatio > 1.55 ? 'horizontal' : 'balanced';
+        });
+        more.hidden = true;
+        const preferredWidths = items.map((item) => Number.parseFloat(item.style.getPropertyValue('--split-thumb-width')) || 112);
+        const totalWidth = preferredWidths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, items.length - 1);
+        let visibleCount = items.length;
+        if (totalWidth > rail.clientWidth) {
+          let used = 0;
+          visibleCount = 0;
+          for (let index = 0; index < items.length; index += 1) {
+            const next = preferredWidths[index] + (visibleCount > 0 ? gap : 0);
+            const reserve = index < items.length - 1 ? gap + moreWidth : 0;
+            if (used + next + reserve > rail.clientWidth && visibleCount > 0) break;
+            used += next;
+            visibleCount += 1;
+          }
+          visibleCount = Math.max(1, Math.min(visibleCount, items.length - 1));
+        }
+        items.forEach((item, index) => { item.hidden = index >= visibleCount; });
+        const hiddenCount = items.length - visibleCount;
+        if (hiddenCount > 0) {
+          const firstHidden = items[visibleCount];
+          more.hidden = false;
+          more.dataset.remainingCount = String(hiddenCount);
+          more.dataset.efficientViewerStart = firstHidden.dataset.efficientViewerStart || '';
+          more.dataset.heroGalleryIndex = firstHidden.dataset.heroGalleryIndex || '0';
+          more.setAttribute('aria-label', `Открыть ещё ${hiddenCount} фото, начиная со следующего`);
+          const count = more.querySelector<HTMLElement>('[data-responsive-split-count]');
+          if (count) count.textContent = `+${hiddenCount}`;
+        }
+        rail.dataset.railComplete = hiddenCount === 0 ? 'true' : 'false';
+        rail.dataset.railVisibleCount = String(visibleCount);
+        rail.dataset.railHiddenCount = String(hiddenCount);
+      };
+      responsiveSplitRails.forEach((rail) => {
+        const relayout = () => layoutResponsiveSplitRail(rail);
+        rail.querySelectorAll<HTMLImageElement>('img').forEach((image) => {
+          image.addEventListener('load', relayout, { once:true });
+          image.addEventListener('error', relayout, { once:true });
+        });
+        relayout();
+        new ResizeObserver(relayout).observe(rail);
+      });
+
       const editorialSide = cleanRoot.querySelector<HTMLElement>('[data-editorial-side]');
       const editorialRail = editorialSide?.querySelector<HTMLElement>('[data-hero-rail]');
       const editorialAction = editorialSide?.querySelector<HTMLElement>(':scope > .desktop-prototype__action');
       const editorialContent = cleanRoot.querySelector<HTMLElement>('[data-editorial-content-flow]');
       const companionBoard = editorialSide?.querySelector<HTMLElement>('[data-editorial-companion-board]');
+      const companionPreviews = Array.from(companionBoard?.querySelectorAll<HTMLButtonElement>('[data-companion-preview-item]') || []);
+      const companionMore = companionBoard?.querySelector<HTMLButtonElement>('[data-companion-preview-more]');
+      let companionLayoutFrame = 0;
+      const layoutCompanionBoard = () => {
+        companionLayoutFrame = 0;
+        if (!companionBoard || !companionPreviews.length || !companionMore || !companionBoard.clientWidth) return;
+        const style = getComputedStyle(companionBoard);
+        const pad = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
+        const blockPad = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+        const gap = Number.parseFloat(style.columnGap) || 10;
+        const usableWidth = companionBoard.clientWidth - pad;
+        const posterRatio = Number.parseFloat(style.getPropertyValue('--ocr-ratio')) || 1;
+        const maxPosterHeight = Math.max(260, Math.min(window.innerHeight * .49, 432) - blockPad);
+        const minPreviewWidth = clamp(usableWidth * .28, 112, 172);
+        const posterHeight = Math.max(240, Math.min(maxPosterHeight, (usableWidth - minPreviewWidth - gap) / posterRatio));
+        const posterWidth = posterHeight * posterRatio;
+        companionBoard.style.setProperty('--companion-board-height', `${(posterHeight + blockPad).toFixed(2)}px`);
+        companionBoard.style.setProperty('--companion-poster-width', `${posterWidth.toFixed(2)}px`);
+        const previewWidth = Math.max(0, usableWidth - posterWidth - gap);
+        const columns = previewWidth >= 226 ? 2 : 1;
+        const rows = posterHeight >= 360 ? 3 : 2;
+        companionBoard.style.setProperty('--companion-preview-columns', String(columns));
+        companionBoard.style.setProperty('--companion-preview-rows', String(rows));
+        const slotBudget = columns * rows;
+        companionPreviews.forEach((item) => {
+          item.hidden = false;
+          item.dataset.previewSpan = 'single';
+        });
+        companionMore.hidden = true;
+        let usedSlots = 0;
+        let visibleCount = 0;
+        for (let index = 0; index < companionPreviews.length; index += 1) {
+          const item = companionPreviews[index];
+          const span = columns === 2 && item.dataset.previewAspect === 'landscape' ? 2 : 1;
+          const remainingAfter = companionPreviews.length - index - 1;
+          const reserve = remainingAfter > 0 ? 1 : 0;
+          if (usedSlots + span + reserve > slotBudget && visibleCount > 0) break;
+          item.dataset.previewSpan = span === 2 ? 'wide' : 'single';
+          usedSlots += span;
+          visibleCount += 1;
+        }
+        companionPreviews.forEach((item, index) => { item.hidden = index >= visibleCount; });
+        const hiddenCount = companionPreviews.length - visibleCount;
+        if (hiddenCount > 0) {
+          const firstHidden = companionPreviews[visibleCount];
+          companionMore.hidden = false;
+          companionMore.dataset.heroGalleryIndex = firstHidden.dataset.heroGalleryIndex || '0';
+          companionMore.setAttribute('aria-label', `Открыть ещё ${hiddenCount} фото`);
+          const count = companionMore.querySelector<HTMLElement>('[data-companion-preview-count]');
+          if (count) count.textContent = `+${hiddenCount}`;
+        }
+        companionBoard.dataset.companionVisibleCount = String(visibleCount);
+        companionBoard.dataset.companionHiddenCount = String(hiddenCount);
+      };
+      const scheduleCompanionLayout = () => {
+        if (companionLayoutFrame) return;
+        companionLayoutFrame = window.requestAnimationFrame(layoutCompanionBoard);
+      };
+      if (companionBoard) {
+        new ResizeObserver(scheduleCompanionLayout).observe(companionBoard);
+        scheduleCompanionLayout();
+      }
       let editorialSideGeometry:{ holdTop:number; dockTop:number; maxTravel:number; stickyTop:number } | null = null;
       let editorialSideLayoutFrame = 0;
       const updateEditorialSideMotion = () => {
         if (!editorialSide || !editorialAction) return;
         if (editorialSide.dataset.companionArrival === 'true') {
-          const stickyTop = 97;
-          const companionTop = stickyTop + editorialAction.offsetHeight + 12;
-          editorialSide.style.setProperty('--editorial-companion-stick-top', `${companionTop}px`);
-          if (companionBoard) companionBoard.dataset.companionPhase = companionBoard.getBoundingClientRect().top <= companionTop + 1 ? 'docked' : 'approaching';
+          if (!editorialSideGeometry || !editorialContent) return;
+          const informationTop = editorialContent.getBoundingClientRect().top;
+          const travel = clamp(editorialSideGeometry.holdTop - informationTop, 0, editorialSideGeometry.maxTravel);
+          const transform = `translate3d(0,${(-travel).toFixed(2)}px,0)`;
+          editorialAction.style.transform = transform;
+          if (companionBoard) companionBoard.style.transform = transform;
+          const released = editorialSide.getBoundingClientRect().top < editorialSideGeometry.stickyTop - 2;
+          const phase = released ? 'release' : travel <= .5 ? 'hold' : travel >= editorialSideGeometry.maxTravel - .5 ? 'docked' : 'join';
+          editorialSide.dataset.ctaPhase = phase;
+          editorialSide.dataset.ctaTravel = travel.toFixed(2);
+          editorialSide.dataset.ctaHoldTop = editorialSideGeometry.holdTop.toFixed(2);
+          editorialSide.dataset.ctaDockTop = editorialSideGeometry.dockTop.toFixed(2);
+          if (companionBoard) companionBoard.dataset.companionPhase = phase === 'docked' || phase === 'release' ? 'docked' : phase === 'join' ? 'approaching' : 'waiting';
           return;
         }
         if (!editorialSideGeometry || !editorialRail || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
@@ -596,6 +736,13 @@ const descriptionHtml = (event.description_html || '')
         editorialSideLayoutFrame = 0;
         if (!editorialSide || !editorialAction) return;
         if (editorialSide.dataset.companionArrival === 'true') {
+          if (!editorialContent) return;
+          editorialAction.style.removeProperty('transform');
+          companionBoard?.style.removeProperty('transform');
+          const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || 96;
+          const holdTop = editorialAction.getBoundingClientRect().top;
+          const dockTop = stickyTop + 1;
+          editorialSideGeometry = { holdTop, dockTop, maxTravel:Math.max(0, holdTop - dockTop), stickyTop };
           updateEditorialSideMotion();
           return;
         }
@@ -629,73 +776,113 @@ const descriptionHtml = (event.description_html || '')
       window.addEventListener('resize', () => window.requestAnimationFrame(measureEditorialCrop), { passive:true });
       window.requestAnimationFrame(measureEditorialCrop);
 
-      const portraitViewer = cleanRoot.querySelector<HTMLElement>('[data-portrait-viewer]');
-      const portraitViewport = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-viewport]');
-      const portraitTrack = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-track]');
-      const portraitItems = Array.from(portraitViewer?.querySelectorAll<HTMLButtonElement>('[data-portrait-viewer-item]') || []);
-      const portraitCounter = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-counter]');
-      let portraitReturnFocus:HTMLElement | null = null;
-      const portraitActiveIndex = () => {
-        if (!portraitViewport || !portraitItems.length) return 0;
-        const left = portraitViewport.getBoundingClientRect().left;
-        const exact = portraitItems.findIndex((item) => item.getBoundingClientRect().left >= left - 2);
-        return exact >= 0 ? exact : portraitItems.length - 1;
+      const efficientViewer = cleanRoot.querySelector<HTMLElement>('[data-efficient-viewer]');
+      const efficientViewport = efficientViewer?.querySelector<HTMLElement>('[data-efficient-viewer-viewport]');
+      const efficientTrack = efficientViewer?.querySelector<HTMLElement>('[data-efficient-viewer-track]');
+      const efficientItems = Array.from(efficientViewer?.querySelectorAll<HTMLElement>('[data-efficient-viewer-item]') || []);
+      const efficientRecommendation = efficientViewer?.querySelector<HTMLElement>('[data-efficient-viewer-recommendation]');
+      const efficientStops = [...efficientItems, ...(efficientRecommendation ? [efficientRecommendation] : [])];
+      const efficientCounter = efficientViewer?.querySelector<HTMLElement>('[data-efficient-viewer-counter]');
+      const efficientNext = efficientViewer?.querySelector<HTMLButtonElement>('[data-efficient-viewer-next]');
+      const efficientPrev = efficientViewer?.querySelector<HTMLButtonElement>('[data-efficient-viewer-prev]');
+      let efficientReturnFocus:HTMLElement | null = null;
+      const efficientActiveIndex = () => {
+        if (!efficientViewport || !efficientStops.length) return 0;
+        const left = efficientViewport.getBoundingClientRect().left;
+        const exact = efficientStops.findIndex((item) => item.getBoundingClientRect().left >= left - 2);
+        return exact >= 0 ? exact : efficientStops.length - 1;
       };
-      const updatePortraitViewer = () => {
-        if (!portraitViewport || !portraitItems.length) return;
-        const index = portraitActiveIndex();
-        portraitViewer?.style.setProperty('--portrait-visible-start', String(index));
-        portraitViewer?.setAttribute('data-visible-source-index', portraitItems[index]?.dataset.sourceIndex || '');
-        if (portraitCounter) portraitCounter.textContent = `${index + 1}–${Math.min(portraitItems.length, index + Math.max(1, Math.floor(portraitViewport.clientWidth / Math.max(1, portraitItems[index]?.clientWidth || 1))))} / ${portraitItems.length}`;
+      const updateEfficientViewer = () => {
+        if (!efficientViewport || !efficientItems.length) return;
+        const stopIndex = efficientActiveIndex();
+        const recommendationActive = Boolean(efficientRecommendation && efficientStops[stopIndex] === efficientRecommendation);
+        const imageIndex = Math.min(stopIndex, efficientItems.length - 1);
+        efficientViewer?.setAttribute('data-visible-source-index', recommendationActive ? 'recommendation' : efficientItems[imageIndex]?.dataset.sourceIndex || '');
+        efficientViewer?.setAttribute('data-viewer-phase', recommendationActive ? 'recommendation' : 'images');
+        if (efficientCounter) {
+          if (recommendationActive) efficientCounter.textContent = 'Похожее событие';
+          else {
+            const viewportRight = efficientViewport.getBoundingClientRect().right;
+            const visibleItems = efficientItems.filter((item) => {
+              const rect = item.getBoundingClientRect();
+              return rect.right > efficientViewport.getBoundingClientRect().left + 2 && rect.left < viewportRight - 2;
+            });
+            const lastVisible = visibleItems.at(-1);
+            const lastIndex = lastVisible ? efficientItems.indexOf(lastVisible) : imageIndex;
+            efficientCounter.textContent = `Фото ${imageIndex + 1}–${Math.max(imageIndex + 1, lastIndex + 1)} из ${efficientItems.length}`;
+          }
+        }
+        if (efficientNext) efficientNext.disabled = recommendationActive;
+        if (efficientPrev) efficientPrev.disabled = stopIndex <= 0;
       };
-      const scrollPortraitTo = (item:HTMLElement, behavior:ScrollBehavior='smooth') => {
-        if (!portraitViewport) return;
-        const contentInset = portraitTrack ? Number.parseFloat(getComputedStyle(portraitTrack).paddingLeft) || 0 : 0;
-        portraitViewport.scrollTo({ left:Math.max(0, item.offsetLeft - contentInset), behavior });
-        window.setTimeout(updatePortraitViewer, behavior === 'smooth' ? 360 : 0);
+      const scrollEfficientTo = (item:HTMLElement, behavior:ScrollBehavior='smooth') => {
+        if (!efficientViewport) return;
+        const contentInset = efficientTrack ? Number.parseFloat(getComputedStyle(efficientTrack).paddingLeft) || 0 : 0;
+        const targetLeft = Math.max(0, item.offsetLeft - contentInset);
+        if (reducedMotion.matches || behavior === 'auto') {
+          const previousBehavior = efficientViewport.style.scrollBehavior;
+          efficientViewport.style.scrollBehavior = 'auto';
+          efficientViewport.scrollLeft = targetLeft;
+          efficientViewport.style.scrollBehavior = previousBehavior;
+        } else {
+          efficientViewport.scrollTo({ left:targetLeft, behavior });
+        }
+        window.setTimeout(updateEfficientViewer, behavior === 'smooth' && !reducedMotion.matches ? 360 : 0);
       };
-      const closePortraitViewer = (restoreFocus=true) => {
-        if (!portraitViewer || portraitViewer.hidden) return;
-        portraitViewer.hidden = true;
-        portraitViewer.setAttribute('aria-hidden', 'true');
+      const closeEfficientViewer = (restoreFocus=true) => {
+        if (!efficientViewer || efficientViewer.hidden) return;
+        efficientViewer.hidden = true;
+        efficientViewer.setAttribute('aria-hidden', 'true');
         document.body.style.removeProperty('overflow');
-        if (restoreFocus) portraitReturnFocus?.focus();
+        if (restoreFocus) efficientReturnFocus?.focus();
       };
-      cleanRoot.querySelectorAll<HTMLElement>('[data-portrait-strip-open]').forEach((opener) => {
+      cleanRoot.querySelectorAll<HTMLElement>('[data-efficient-viewer-open]').forEach((opener) => {
         opener.addEventListener('click', () => {
-          if (!portraitViewer || !portraitViewport) return;
-          portraitReturnFocus = opener;
-          portraitViewer.hidden = false;
-          portraitViewer.setAttribute('aria-hidden', 'false');
+          if (!efficientViewer || !efficientViewport) return;
+          efficientReturnFocus = opener;
+          efficientViewer.hidden = false;
+          efficientViewer.setAttribute('aria-hidden', 'false');
           document.body.style.overflow = 'hidden';
-          const requestedSource = opener.dataset.portraitStripStart;
-          const requested = portraitItems.find((item) => item.dataset.sourceIndex === requestedSource) || portraitItems[0];
-          if (requested) scrollPortraitTo(requested, 'auto');
-          portraitViewport.focus();
-          updatePortraitViewer();
+          const requestedSource = opener.dataset.efficientViewerStart;
+          const requested = efficientItems.find((item) => item.dataset.sourceIndex === requestedSource) || efficientItems[0];
+          if (requested) scrollEfficientTo(requested, 'auto');
+          efficientViewport.focus();
+          updateEfficientViewer();
         });
       });
-      portraitViewer?.querySelector<HTMLButtonElement>('[data-portrait-viewer-close]')?.addEventListener('click', () => closePortraitViewer());
-      portraitViewer?.querySelector<HTMLButtonElement>('[data-portrait-viewer-next]')?.addEventListener('click', () => {
-        if (!portraitViewport) return;
-        const viewportRight = portraitViewport.getBoundingClientRect().right;
-        const partialRight = portraitItems.find((item) => {
+      efficientViewer?.querySelector<HTMLButtonElement>('[data-efficient-viewer-close]')?.addEventListener('click', () => closeEfficientViewer());
+      const moveEfficientNext = () => {
+        if (!efficientViewport || !efficientStops.length) return;
+        const viewportRight = efficientViewport.getBoundingClientRect().right;
+        const partialRight = efficientStops.find((item) => {
           const rect = item.getBoundingClientRect();
           return rect.left < viewportRight - 2 && rect.right > viewportRight + 2;
         });
-        const current = portraitActiveIndex();
-        const target = partialRight || portraitItems[Math.min(portraitItems.length - 1, current + 1)];
-        if (target) scrollPortraitTo(target);
-      });
-      portraitViewer?.querySelector<HTMLButtonElement>('[data-portrait-viewer-prev]')?.addEventListener('click', () => {
-        const current = portraitActiveIndex();
-        const target = portraitItems[Math.max(0, current - 1)];
-        if (target) scrollPortraitTo(target);
-      });
-      portraitItems.forEach((item) => item.addEventListener('click', () => closePortraitViewer(false)));
-      portraitViewport?.addEventListener('scroll', () => window.requestAnimationFrame(updatePortraitViewer), { passive:true });
+        const current = efficientActiveIndex();
+        const target = partialRight || efficientStops[Math.min(efficientStops.length - 1, current + 1)];
+        if (target) scrollEfficientTo(target);
+      };
+      const moveEfficientPrev = () => {
+        const current = efficientActiveIndex();
+        const target = efficientStops[Math.max(0, current - 1)];
+        if (target) scrollEfficientTo(target);
+      };
+      efficientNext?.addEventListener('click', moveEfficientNext);
+      efficientPrev?.addEventListener('click', moveEfficientPrev);
+      efficientViewport?.addEventListener('scroll', () => window.requestAnimationFrame(updateEfficientViewer), { passive:true });
       window.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && portraitViewer && !portraitViewer.hidden) closePortraitViewer();
+        if (!efficientViewer || efficientViewer.hidden) return;
+        if (event.key === 'Escape') closeEfficientViewer();
+        else if (event.key === 'ArrowRight') { event.preventDefault(); moveEfficientNext(); }
+        else if (event.key === 'ArrowLeft') { event.preventDefault(); moveEfficientPrev(); }
+        else if (event.key === 'Tab') {
+          const focusable = Array.from(efficientViewer.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],[tabindex="0"]'));
+          if (!focusable.length) return;
+          const current = focusable.indexOf(document.activeElement as HTMLElement);
+          const next = event.shiftKey ? (current <= 0 ? focusable.length - 1 : current - 1) : (current >= focusable.length - 1 ? 0 : current + 1);
+          event.preventDefault();
+          focusable[next]?.focus();
+        }
       });
 
       const markRotation = () => {
@@ -980,8 +1167,8 @@ const descriptionHtml = (event.description_html || '')
               mode = 'mixed-adaptive-ambient';
             }
           } else if (documentRatios.length === 1) {
-            targetRatio = documentRatios[0];
-            mode = 'document-natural';
+            targetRatio = Math.min(.9, documentRatios[0] * 1.1);
+            mode = 'document-bounded-vertical-crop';
           } else if (documentRatios.length > 1) {
             targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
             mode = 'document-minimax-contained';
@@ -992,17 +1179,19 @@ const descriptionHtml = (event.description_html || '')
             const image = card.querySelector<HTMLImageElement>('.event-card__media');
             const imageRatio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
             const isDocument = card.dataset.labMediaKind === 'document';
-            const cardRatio = isDocument ? imageRatio : targetRatio;
-            card.style.setProperty('--lab-row-media-ratio', cardRatio.toFixed(5));
-            card.dataset.labRowMedia = isDocument ? 'document-natural-exact' : mode;
+            card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
+            card.dataset.labRowMedia = mode;
             card.dataset.labRowIndex = String(rowIndex);
             const shell = card.querySelector<HTMLElement>('.event-card__media-shell');
             const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
             let cardTreatment = 'visual-cover';
-            if (isDocument) cardTreatment = 'document-natural';
+            if (isDocument) {
+              const verticalOnlyCrop = imageRatio <= targetRatio;
+              cardTreatment = verticalOnlyCrop && coverCrop <= .12 ? 'document-safe-cover' : 'ambient';
+            }
             card.dataset.labMediaTreatment = cardTreatment;
-            card.dataset.labCoverCrop = isDocument ? '0.0000' : Math.max(0, coverCrop).toFixed(4);
-            card.dataset.labRowWorstCrop = isDocument ? '0.0000' : Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
+            card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
+            card.dataset.labRowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
             if (shell && image?.currentSrc) shell.style.setProperty('--lab-ambient-image', `url(${JSON.stringify(image.currentSrc)})`);
           });
         });
@@ -1416,8 +1605,8 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--split .desktop-poster-track { position:relative; width:100%; height:auto; min-height:0; display:grid; align-content:start; transform:translate3d(0,0,0); will-change:transform; }
     .desktop-clean-event--split .desktop-prototype__media--poster-scroll .desktop-prototype__media-opener { position:relative; inset:auto; width:100%; height:auto; min-height:0; }
     .desktop-clean-event--split .desktop-prototype__media--poster-scroll .desktop-prototype__media-image { position:relative; inset:auto; width:100%; height:auto !important; min-height:0; display:block; margin:0; object-fit:contain !important; object-position:center top !important; transform:none !important; background:#1d1916; }
-    .desktop-prototype__media-rail--poster { position:relative; inset:auto; width:100%; min-height:124px; display:flex; flex-wrap:nowrap; align-items:stretch; gap:.5rem; padding:.65rem; overflow:hidden; border-radius:0; background:#292521; }
-    .desktop-prototype__media-rail--poster button { position:relative; flex:0 0 116px; width:116px; min-width:0; max-width:none; height:104px; }
+    .desktop-prototype__media-rail--poster { --split-rail-thumb-height:clamp(104px,13svh,148px); position:relative; inset:auto; width:100%; min-height:calc(var(--split-rail-thumb-height) + 20px); display:flex; flex-wrap:nowrap; align-items:stretch; gap:.5rem; padding:.65rem; overflow:hidden; border-radius:0; background:#292521; }
+    .desktop-prototype__media-rail--poster button { position:relative; flex:0 0 116px; width:116px; min-width:0; max-width:none; height:var(--split-rail-thumb-height); }
     .desktop-prototype__media-rail--poster button[data-rail-aspect="portrait"] { flex-basis:88px; width:88px; }
     .desktop-prototype__media-rail--poster button[data-rail-aspect="landscape"] { flex-basis:156px; width:156px; }
     .desktop-prototype__media-rail--poster button[data-image-text-mode="ocr_text"] img,
@@ -1597,10 +1786,15 @@ const descriptionHtml = (event.description_html || '')
     .desktop-portrait-viewer__viewport {
       min-width:0;
       min-height:0;
-      overflow:hidden;
+      overflow-x:auto;
+      overflow-y:hidden;
+      overscroll-behavior-x:contain;
+      scroll-snap-type:x proximity;
+      scrollbar-width:none;
       outline:none;
       scroll-behavior:smooth;
     }
+    .desktop-portrait-viewer__viewport::-webkit-scrollbar { display:none; }
     .desktop-portrait-viewer__track {
       width:max-content;
       height:100%;
@@ -1613,14 +1807,36 @@ const descriptionHtml = (event.description_html || '')
       flex:0 0 auto;
       width:auto;
       height:100%;
+      max-width:90vw;
+      margin:0;
       padding:0;
       overflow:hidden;
       border:0;
       border-radius:14px;
       background:#292521;
-      cursor:zoom-in;
+      cursor:default;
+      scroll-snap-align:start;
     }
-    .desktop-portrait-viewer__item img { width:auto; height:100%; display:block; object-fit:contain; }
+    .desktop-portrait-viewer__item img { width:auto; max-width:90vw; height:100%; display:block; object-fit:contain; }
+    .desktop-portrait-viewer__recommendation {
+      position:relative;
+      isolation:isolate;
+      flex:0 0 min(88vw,1280px);
+      width:min(88vw,1280px);
+      height:100%;
+      overflow:hidden;
+      border-radius:18px;
+      background:#292521;
+      scroll-snap-align:start;
+    }
+    .desktop-portrait-viewer__recommendation>img { position:absolute; z-index:-2; inset:0; width:100%; height:100%; object-fit:cover; }
+    .desktop-portrait-viewer__recommendation::after { content:""; position:absolute; z-index:-1; inset:0; background:linear-gradient(90deg,rgba(20,16,14,.92) 0%,rgba(20,16,14,.7) 48%,rgba(20,16,14,.28) 100%); }
+    .desktop-portrait-viewer__recommendation-card { width:min(620px,70%); height:100%; display:grid; align-content:center; justify-items:start; gap:1rem; padding:clamp(40px,6vw,92px); }
+    .desktop-portrait-viewer__recommendation-card span { color:#dd8a61; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+    .desktop-portrait-viewer__recommendation-card h2 { max-width:14ch; margin:0; color:#fffaf2; font-size:clamp(2.4rem,5vw,5.5rem); line-height:.95; letter-spacing:-.055em; }
+    .desktop-portrait-viewer__recommendation-card p { margin:0; color:#e2d4c7; font-size:clamp(1rem,1.5vw,1.3rem); }
+    .desktop-portrait-viewer__recommendation-card a { display:inline-flex; min-height:54px; align-items:center; justify-content:center; padding:.8rem 1.35rem; border-radius:999px; background:#bd4e20; color:#fff; font-weight:900; text-decoration:none; }
+    .desktop-portrait-viewer__recommendation-card a:focus-visible { outline:3px solid #fffaf2; outline-offset:4px; }
     .desktop-portrait-viewer__nav {
       position:fixed;
       z-index:3;
@@ -1634,6 +1850,7 @@ const descriptionHtml = (event.description_html || '')
       font-size:2.6rem;
       cursor:pointer;
     }
+    .desktop-portrait-viewer__nav:disabled { opacity:.28; cursor:not-allowed; }
     .desktop-portrait-viewer__nav--prev { left:20px; }
     .desktop-portrait-viewer__nav--next { right:20px; }
     .desktop-portrait-viewer__counter {
@@ -1693,8 +1910,8 @@ const descriptionHtml = (event.description_html || '')
 
     .desktop-editorial-companion-board {
       box-sizing:border-box;
-      height:min(49svh,432px);
-      grid-template-columns:minmax(0,58%) minmax(0,42%);
+      height:var(--companion-board-height,min(49svh,432px));
+      grid-template-columns:minmax(0,var(--companion-poster-width,58%)) minmax(0,1fr);
       grid-template-rows:minmax(0,1fr);
       gap:10px;
       padding:10px;
@@ -1706,15 +1923,15 @@ const descriptionHtml = (event.description_html || '')
     }
     .desktop-editorial-companion--board {
       width:100%;
-      height:auto;
+      height:100%;
       min-height:0;
       max-height:100%;
       order:0;
       grid-column:1;
       grid-row:1;
-      align-self:center;
+      align-self:stretch;
       justify-self:stretch;
-      aspect-ratio:var(--ocr-ratio);
+      aspect-ratio:auto;
       border-radius:13px;
       box-shadow:0 0 0 2px #4a4541;
     }
@@ -1725,51 +1942,65 @@ const descriptionHtml = (event.description_html || '')
       min-height:0;
       max-height:100%;
       overflow:hidden;
-      grid-template-columns:minmax(0,1fr);
-      grid-template-rows:repeat(4,minmax(0,1fr));
-      grid-auto-flow:row;
+      grid-template-columns:repeat(var(--companion-preview-columns,1),minmax(0,1fr));
+      grid-template-rows:repeat(var(--companion-preview-rows,3),minmax(0,1fr));
+      grid-auto-flow:row dense;
       gap:8px;
     }
+    .desktop-editorial-companion-board__previews [hidden] { display:none !important; }
     .desktop-editorial-companion-board__previews button { border-color:rgba(255,255,255,.16); }
+    .desktop-editorial-companion-board__previews button[data-preview-span="wide"] { grid-column:span 2; }
     .desktop-editorial-companion-board__previews img { object-fit:cover; object-position:center; }
     .desktop-editorial-companion-board__previews button:not([data-media-role="event_photo"]) img { object-fit:contain; background:#171412; }
 
     .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] {
-      position:relative;
-      top:auto;
-      align-self:stretch;
+      position:sticky;
+      top:96px;
+      align-self:start;
       align-content:start;
-      min-height:calc(100svh + 420px);
-      margin-top:clamp(98px,12svh,132px);
+      grid-template-rows:auto auto;
+      min-height:0;
+      margin-top:23px;
       overflow:visible;
     }
     .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] :global(.desktop-prototype__action) {
-      position:sticky;
-      top:97px;
+      position:relative;
+      top:auto;
       z-index:4;
       order:1;
+      margin-top:max(12px,calc(clamp(390px,57svh,620px) - 91px));
+      transform:translate3d(0,0,0);
+      transition:none;
+      will-change:transform;
     }
     .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] .desktop-editorial-companion-board {
-      position:sticky;
-      top:var(--editorial-companion-stick-top,336px);
+      position:relative;
+      top:auto;
       z-index:3;
       order:2;
-      margin-top:max(300px,calc(100svh - 390px));
+      margin-top:12px;
+      transform:translate3d(0,0,0);
+      transition:none;
+      will-change:transform;
     }
 
     .desktop-prototype__media-rail--poster button,
     .desktop-prototype__media-rail--poster button[data-rail-aspect="portrait"],
     .desktop-prototype__media-rail--poster button[data-rail-aspect="landscape"] {
-      flex:0 0 clamp(44px,calc(100px * var(--rail-ratio,1)),220px);
-      width:clamp(44px,calc(100px * var(--rail-ratio,1)),220px);
+      flex:0 0 var(--split-thumb-width,112px);
+      width:var(--split-thumb-width,112px);
+      min-width:88px;
+      max-width:196px;
     }
+    .desktop-prototype__media-rail--poster [hidden] { display:none !important; }
+    .desktop-prototype__media-rail--poster[data-rail-complete="true"] { justify-content:safe center; }
+    .desktop-prototype__media-rail--poster[data-rail-complete="false"] { justify-content:flex-start; }
+    .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more { flex:0 0 104px; width:104px; min-width:104px; }
     .desktop-prototype__media-rail--poster button[data-media-role="event_photo"] img { object-fit:cover; background:transparent; }
     .desktop-prototype__media-rail--poster button:not([data-media-role="event_photo"]) img { object-fit:contain; background:#181411; }
-
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-natural"] .event-card__media-shell) { background:transparent; }
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-natural"] .event-card__media) {
-      object-fit:contain !important;
-      object-position:center top !important;
+    .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-prototype__media-rail--poster button img {
+      object-fit:cover !important;
+      object-position:50% 50% !important;
       background:transparent !important;
     }
 
@@ -1783,5 +2014,6 @@ const descriptionHtml = (event.description_html || '')
     .desktop-prototype__media-image { transition:none !important; }
     [data-slow-media-viewport] { position:relative !important; top:auto !important; height:auto !important; overflow:visible !important; }
     [data-slow-media-track] { transform:none !important; }
+    .desktop-portrait-viewer__viewport { scroll-behavior:auto !important; }
   }
 </style>

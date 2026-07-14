@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260714t-desktop-focus-v10/lab/event-desktop/>. Preserved v9 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260714t-desktop-focus-v11/lab/event-desktop/>. Preserved v10 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v10/lab/event-desktop/>. Preserved v9 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -499,3 +499,37 @@ Antigravity **Gemini 3.1 Pro (High)** completed the pre-design consultation (`ex
 Local and public Chromium acceptance at `1536×864`, `1440×900` and `1920×1080` verifies a rail top of `96px` throughout hold/join/dock, CTA/content top equality in `join`, a `12px` dock gap, bounded release before related content, no horizontal overflow, no console errors, correct `attendee_information` copy, exact low-resolution thumbnail geometry, portrait partial-frame promotion and `0.0000` crop for all document related cards. The final public pass also confirms that every visible Garage rail cell paints after the eager/compositor repair. At `390×844` the desktop laboratory remains `display:none`, emits no desktop motion state and does not alter mobile behavior.
 
 Gemini **3.1 Pro (High)** then opened, scrolled and interacted with the published v10 routes and returned **SHIP** with no blocker/high/medium issue. All seven acceptance groups passed; the only low-severity watch item is possible browser-specific sticky jitter under unusually aggressive Safari trackpad scrolling. The Pro gate selected **B2 / scroll-arrival** as the product default because it keeps the first viewport focused on hero and CTA, then introduces the poster when reading begins; B1 remains the explicit comparison route. Prompt, response, provenance (`exit_status=0`, empty stderr), public screenshots and final Playwright output remain in ignored `artifacts/codex/desktop-event-focus-v10-20260714/`.
+
+## Desktop focus v11: compact arrival board and efficient mixed-media viewer
+
+V11 remains a noindex **desktop-only** review surface. It does not edit the production event route, mobile hero/decision block, production card component or the mobile fullscreen gallery. The accepted continuous «Гараж» composition remains the motion reference.
+
+### Arrival admission and media board
+
+The arrival specimen now follows the same measured side-stack admission contract as «Гараж». CTA starts low and remains still while the information slab first rises; when the slab reaches it, CTA and content rise together, CTA docks below the sticky header, and the complete side stack releases before `Смотрите дальше`. The poster board travels with CTA rather than appearing as a disconnected element above it.
+
+The event-identity poster fills its own source-ratio pane edge to edge without synthetic gray bands. Additional images occupy the remaining pane through an aspect-aware grid: landscape sources may span two columns, portrait/square sources retain useful minimum width, and the final cell becomes an exact-index `+N` gallery affordance when the board cannot show every source. The rejected immediate integrated-board comparison is removed from the active v11 route set; the arriving board is the sole current candidate.
+
+### Responsive low-resolution rail
+
+The low-resolution specimen no longer spends width on fixed thumbnail buckets. Each preview receives a bounded aspect-derived width, the rail displays as many real sources as the current viewport permits, and only then allocates a `+N` cell. Very tall sources keep a useful minimum width and receive a centered top/bottom thumbnail crop; the schedule card also fills its thumbnail without artificial side fields. These are navigation thumbnails only: fullscreen viewing still uses the source without that crop.
+
+### Efficient mixed-media fullscreen viewer
+
+Any hero, thumbnail or `+N` affordance in the low-resolution specimen opens the local desktop viewer at the **exact clicked source**. The viewer fits media to available height and packs as many portrait, square or landscape images horizontally as fit. Navigation promotes a partially visible right-edge image to the left edge. Images inside this viewer do not open a second single-image mode; this deliberately avoids a nested interaction model.
+
+After the final image, the same horizontal sequence ends with one related-event recommendation. Its hierarchy adapts the previously shipped mobile gallery-end pattern (`Дальше можно похожее` → event title/meta → `Смотреть похожее`) but is implemented only inside the desktop lab. It uses the first already-generated related event and does not alter mobile production markup or hydration.
+
+### Related-card normalization
+
+Every `Смотрите дальше` row again owns one shared media height. Ordinary photos use normalized cover. Very tall OCR/document sources may use a centered top-and-bottom crop only when the measured source loss is at most `12%`; otherwise they fall back to ambient contain. This restores aligned card rows while preventing the side-edge loss seen in earlier poster crops.
+
+### Consultant contract
+
+Antigravity **Gemini 3.1 Pro (High)** reviewed the v11 interaction plan before implementation (`exit=0`, no Flash/Lite substitution). It supported the exact-source height-fitted multi viewer, bounded thumbnail widths, one terminal recommendation and source-ratio poster pane. The implementation intentionally keeps the already accepted measured CTA state machine rather than replacing it with an unmeasured CSS approximation. Prompt, response and provenance are stored under ignored `artifacts/codex/desktop-event-focus-v11-20260714/gemini/`.
+
+### Public acceptance
+
+The generated preview and source-contract check pass for `preview-20260714t-desktop-focus-v11`. Public HTTP returns `200` for the overview, arrival, low-resolution and related-hybrid pages plus their generated JS/CSS. Public Chromium at `1536×864` verifies zero horizontal overflow; arrival moves from `hold` (CTA top `497.47px`, board top `749.39px`) to `docked` (CTA top `97.00px`, board top `348.92px`), and the poster pane/image rectangles are identical. The low-resolution rail exposes six real previews before `+5`; source `3` opens at visible source `3`, the viewer contains all 12 distinct mixed-orientation images and zero nested single-image openers, and navigation ends on the one-event recommendation. Related rows share exact media tops/bottoms; document losses of `10.69%` use centered cover while `21.58%` falls back to ambient contain. A fresh `390×844` load keeps the desktop root `display:none` with a zero rectangle and no desktop motion state.
+
+After publication, Antigravity **Gemini 3.1 Pro (High)** returned **SHIP** with no blocker/high/medium finding. It accepted A–E (arrival, low-resolution rail, efficient viewer, related normalization and overall product hierarchy), explicitly confirmed the no-single-image decision, and judged the terminal card a coherent adaptation of the previous mobile pattern. Final prompt, response, empty stderr and provenance (`status=0`) remain in ignored `artifacts/codex/desktop-event-focus-v11-20260714/gemini/`.

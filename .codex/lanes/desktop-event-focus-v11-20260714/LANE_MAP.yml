@@ -1,0 +1,111 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/feature/event-page-desktop-focus-v10-20260714
+base_branch: feature/event-page-desktop-focus-v10-20260714
+integration_branch: feature/event-page-desktop-focus-v11-20260714
+global_constraints:
+  - Desktop lab routes only; production mobile components and styles are read-only.
+  - Preserve the accepted Garage continuous composition.
+  - Use Gemini 3.1 Pro class for the design consultation and final gate.
+  - Do not introduce a single-image drill-down in the efficient multi-image viewer.
+  - Documentation and CHANGELOG must ship with behavior changes.
+verification_owner: L04
+stop_conditions:
+  - Any required change would modify site/src/layouts/EventLayout.astro, site/src/pages/sobytiya/**, or site/src/components/EventCard.astro.
+  - Public preview assets or HTML cannot be reproduced from the pushed branch.
+lanes:
+  - id: L01
+    role: planner
+    requirement_ids: []
+    target: Locate the previous mobile gallery-end related-event recommendation and document its reusable interaction contract.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v11
+    writable_files: []
+    forbidden_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/sobytiya/**
+      - site/src/components/EventCard.astro
+    expected_output: Read-only code/history map with exact files, commits, DOM/data contract, and safe desktop adaptation notes.
+    verification_scope: inspection_only
+    effort: medium
+    status: merged
+  - id: L02
+    role: planner
+    requirement_ids: []
+    target: Map v10 arrival, preview rail, low-resolution viewer, and related-card geometry to safe edit points.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v11
+    writable_files: []
+    forbidden_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/sobytiya/**
+      - site/src/components/EventCard.astro
+    expected_output: Read-only implementation map and regression risks.
+    verification_scope: inspection_only
+    effort: medium
+    status: merged
+  - id: L03
+    role: worker
+    requirement_ids:
+      - R01
+      - R02
+      - R03
+      - R04
+      - R05
+      - R06
+      - R07
+      - R08
+      - R09
+    target: Implement all coupled desktop-lab UI changes serially after discovery and consultant review.
+    depends_on:
+      - L01
+      - L02
+    execution_mode: serial_after_dependency
+    branch: feature/event-page-desktop-focus-v11-20260714
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v11
+    writable_files:
+      - site/src/components/lab/DesktopEventCleanPage.astro
+      - site/src/pages/lab/event-desktop/examples/[scenario].astro
+      - site/src/pages/lab/event-desktop/index.astro
+      - site/scripts/check-preview.mjs
+      - docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md
+      - CHANGELOG.md
+      - .codex/lanes/desktop-event-focus-v11-20260714/**
+    forbidden_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/sobytiya/**
+      - site/src/components/EventCard.astro
+    expected_output: One coherent desktop-only implementation, updated contracts/docs, and a clean commit.
+    verification_scope: full_local
+    effort: high
+    status: spawned
+  - id: L04
+    role: reviewer
+    requirement_ids: []
+    target: Audit R01-R09 against the final diff, browser evidence, and mobile-production exclusion.
+    depends_on:
+      - L03
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v11
+    writable_files: []
+    forbidden_files: []
+    expected_output: Requirement-by-requirement closure verdict and unresolved risk list.
+    verification_scope: targeted
+    effort: high
+    status: planned
+
+# Requirement matrix
+# R01: Arrival CTA starts low, holds while the information slab rises, then joins/docks/releases like Garage.
+# R02: Arrival poster fills its allocated block; secondary images pack/crop without unjustified gray fields.
+# R03: Remove the rejected immediate integrated companion route from the review surface.
+# R04: The low-resolution schedule thumbnail has no side fields.
+# R05: The low-resolution rail consumes available width and exposes more previews before +N.
+# R06: Very vertical rail thumbnails have a minimum width and bounded top/bottom crop.
+# R07: Related cards regain aligned rows with a modest intelligent top/bottom crop for very tall OCR media.
+# R08: Any low-resolution image opens a height-fitted multi-image viewer at the exact clicked source; no single-image drill-down.
+# R09: After the final viewer image, reuse/adapt the previous mobile related-event recommendation pattern without editing mobile production code.

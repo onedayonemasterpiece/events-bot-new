@@ -39,7 +39,7 @@ const required = [
   'lab/event-desktop/examples/editorial-photo-continuous-wide/index.html',
   'lab/event-desktop/examples/editorial-photo-continuous-near-square/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion/index.html',
-  'lab/event-desktop/examples/editorial-ocr-companion-integrated/index.html',
+  'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-desktop/examples/split-ocr/index.html',
   'lab/event-desktop/examples/split-portrait/index.html',
   'lab/event-desktop/examples/split-low-resolution/index.html',
@@ -120,7 +120,7 @@ const eventDesktopLabHtml = readFileSync(join(root, 'lab/event-desktop/index.htm
 for (const marker of [
   'data-desktop-event-lab',
   'data-desktop-media-families',
-  'data-desktop-focus-v10',
+  'data-desktop-focus-v11',
   'Continuous Editorial как приоритет',
   'Без плоских полей',
   'Editorial motion',
@@ -131,7 +131,6 @@ for (const marker of [
   'editorial-photo-continuous-wide',
   'editorial-photo-continuous-near-square',
   'editorial-ocr-companion',
-  'editorial-ocr-companion-integrated',
   'editorial-ocr-companion-arrival',
   'split-ocr',
   'split-portrait',
@@ -154,12 +153,11 @@ const desktopExampleContracts = [
   ['editorial-photo-continuous-wide', 5201, 'editorial', 'non-ocr', ['Фестиваль Pianissimo', 'data-editorial-motion="continuous"', 'data-editorial-crop="exact"', 'data-responsive-rail']],
   ['editorial-photo-continuous-near-square', 6583, 'editorial', 'non-ocr', ['Город в персональном зеркале', 'data-editorial-motion="continuous"', 'data-editorial-crop="bottom-safe"', '--image-position:50% 100%']],
   ['editorial-ocr-companion', 6323, 'editorial', 'ocr', ['Празднование Ивана Купалы', 'data-selected-media-policy="visual_only"', 'data-ocr-companion-layout="separate"', 'data-editorial-ocr-companion', 'data-media-role="attendee_information"', 'Полезная информация']],
-  ['editorial-ocr-companion-integrated', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ', 'data-ocr-companion-layout="integrated"', 'data-companion-board-mode="integrated"', 'data-editorial-companion-board', 'data-media-role="event_identity_poster"']],
-  ['editorial-ocr-companion-arrival', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ', 'data-ocr-companion-layout="arrival"', 'data-companion-arrival="true"', 'data-companion-board-mode="arrival"', 'data-editorial-companion-board']],
+  ['editorial-ocr-companion-arrival', 4671, 'editorial', 'ocr', ['ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ', 'data-ocr-companion-layout="arrival"', 'data-companion-arrival="true"', 'data-companion-board-mode="arrival"', 'data-editorial-companion-board', 'data-companion-preview-item']],
   ['split-ocr', 5077, 'split', 'ocr', ['Калининград и область как кинодекорация', 'data-slow-media-track', 'data-continuous-event-body']],
   ['split-portrait', 6550, 'split', 'non-ocr', ['Концерт 21-го военного оркестра', 'data-slow-media-speed="0.36"']],
-  ['split-low-resolution', 5761, 'split', 'non-ocr', ['Выставка фэнтези-картин', 'data-split-media-fit="viewport-cover"', 'data-split-media-rail', 'data-rail-aspect', 'data-remaining-count']],
-  ['split-multi-portrait', 5894, 'split', 'non-ocr', ['Живопись, которую мы не потеряли', 'data-split-portrait-viewer="true"', 'data-portrait-strip-open', 'data-portrait-viewer-item']],
+  ['split-low-resolution', 5761, 'split', 'non-ocr', ['Выставка фэнтези-картин', 'data-split-media-fit="viewport-cover"', 'data-split-media-rail', 'data-responsive-split-item', 'data-split-efficient-viewer="true"', 'data-efficient-viewer-recommendation', 'Дальше можно похожее', 'Смотреть похожее']],
+  ['split-multi-portrait', 5894, 'split', 'non-ocr', ['Живопись, которую мы не потеряли', 'data-split-efficient-viewer="true"', 'data-efficient-viewer-open', 'data-efficient-viewer-item']],
   ['split-ocr-with-photos', 6323, 'split', 'ocr', ['Празднование Ивана Купалы', 'data-split-media-rail', 'data-source-index="2"']],
   ['related-cover', 5658, 'editorial', 'non-ocr', ['data-related-media-treatment="cover"', 'data-related-treatment="cover"']],
   ['related-ambient', 5658, 'editorial', 'non-ocr', ['data-related-media-treatment="ambient"', 'data-related-treatment="ambient"']],
@@ -178,7 +176,6 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
     `desktop-prototype--${mediaPolicy}`,
     'data-clean-hero',
     'data-media-frame',
-    'data-hero-gallery-open',
     'data-hero-gallery-index',
     'data-hero-gallery',
     'О событии',
@@ -210,7 +207,11 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
     throw new Error(`Responsive rail overflow control in ${scenario} must be hydrated as a fullscreen-gallery opener before client layout assigns its exact index`);
   }
   if ((scenario === 'split-ocr' || scenario === 'split-portrait') && visibleHtml.includes('data-split-media-rail')) throw new Error(`Semantic-single example ${scenario} must not render a duplicate-only rail`);
+  const usesEfficientViewer = scenario === 'split-low-resolution' || scenario === 'split-multi-portrait';
+  if (!usesEfficientViewer && !html.includes('data-hero-gallery-open')) throw new Error(`Desktop example ${scenario} misses its standard fullscreen-gallery opener`);
+  if (usesEfficientViewer && /data-efficient-viewer-item[^>]*data-hero-gallery-open/iu.test(html)) throw new Error(`Efficient viewer ${scenario} must not drill down into the single-image gallery`);
 }
+if (existsSync(join(root, 'lab/event-desktop/examples/editorial-ocr-companion-integrated/index.html'))) throw new Error('Rejected immediate companion route must not be generated');
 
 const desktopCleanSource = readFileSync(join(siteDir, 'src/components/lab/DesktopEventCleanPage.astro'), 'utf8');
 for (const marker of [
@@ -246,19 +247,20 @@ for (const marker of [
   '--lab-ambient-image',
   'filter:blur(22px)',
   'data-responsive-rail-more',
-  'data-remaining-count',
+  'data-responsive-split-more',
   'data-editorial-crop',
   'bottom-safe',
   'data-editorial-companion-board',
-  'data-portrait-viewer',
-  'data-portrait-strip-open',
+  'data-efficient-viewer',
+  'data-efficient-viewer-open',
+  'data-efficient-viewer-recommendation',
   'data-companion-arrival',
   'editorialSide.dataset.ctaPhase',
   'backface-visibility:hidden',
   "media_role: EventImageMediaRole",
   "attendee_information: 'Полезная информация'",
-  'document-natural-exact',
-  'data-lab-media-treatment="document-natural"',
+  'document-bounded-vertical-crop',
+  "coverCrop <= .12 ? 'document-safe-cover' : 'ambient'",
   'forcedOcrSourceIndexes',
   'position:sticky; top:calc(73px + .75rem)',
   'padding-bottom:64px',
