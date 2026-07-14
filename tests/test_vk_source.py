@@ -1597,14 +1597,14 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     calls = []
 
     async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None, **kwargs):
-        calls.append((ev.title, text_for_vk))
+        calls.append((ev.title, text_for_vk, kwargs.get("append_text")))
         return "https://vk.com/wall-1_1"
 
     monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
 
     await main.job_sync_vk_source_post(event_id, db, None)
 
-    assert calls == [("New title", "Same body")]
+    assert calls == [("New title", "Same body", False)]
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
     assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")

@@ -20982,7 +20982,10 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         db,
         bot,
         ics_url=ev.ics_url,
-        append_text=not replace_existing_text,
+        # A managed post is our public projection, not a new independent
+        # source. Rewrites must replace its previous body; appending creates a
+        # visible history of mutually inconsistent LLM drafts.
+        append_text=not (replace_existing_text or managed_vk_post),
     )
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,
