@@ -82,7 +82,7 @@ lanes:
     expected_output: One coherent desktop-only implementation, updated contracts/docs, and a clean commit.
     verification_scope: full_local
     effort: high
-    status: spawned
+    status: committed
   - id: L04
     role: reviewer
     requirement_ids: []
@@ -97,7 +97,7 @@ lanes:
     expected_output: Requirement-by-requirement closure verdict and unresolved risk list.
     verification_scope: targeted
     effort: high
-    status: planned
+    status: merged
 
 # Requirement matrix
 # R01: Arrival CTA starts low, holds while the information slab rises, then joins/docks/releases like Garage.
