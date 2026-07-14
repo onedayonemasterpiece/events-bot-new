@@ -1,0 +1,128 @@
+mode: serial_integrator_with_parallel_read_only_discovery
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/feature/event-page-desktop-focus-v8-20260713
+base_sha: 6f3b610c1651d9ff07f6e456036862a782ea3d64
+base_branch: feature/event-page-desktop-focus-v8-20260713
+integration_branch: feature/event-page-desktop-focus-v9-20260714
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v9
+global_constraints:
+  - Desktop-only lab preview; do not alter the mobile event implementation or mobile rendering.
+  - Preserve the approved hero/content hierarchy and real event data.
+  - Every media interaction must open the existing fullscreen viewer at the selected source index.
+  - Use Gemini 3.1 Pro High for design consultation and final visual gate.
+  - Update the canonical desktop media-family document and CHANGELOG.md.
+  - Commit and push only task-owned files from the isolated clean worktree.
+verification_owner: L03-integrator
+stop_conditions:
+  - Any proposed change leaks into the mobile breakpoint or production event route.
+  - Gemini Pro is unavailable and the blocker has not been recorded.
+  - Public preview differs materially from the locally accepted build.
+requirements:
+  - id: R01
+    requirement: Continuous editorial remains priority; compare several real events and test bounded top-only crop for near-square horizontal heroes without cutting the bottom.
+    dependencies: [R03, R10]
+    done_when: Multiple real routes expose explicit framing policies and Playwright proves the bottom-safe crop bound at FHD/125-equivalent viewports.
+  - id: R02
+    requirement: Place the preview rail at the initial top-right low-value hero area.
+    dependencies: [R03]
+    done_when: The rail is visible top-right before scroll and never obscures primary event information.
+  - id: R03
+    requirement: Make the preview rail responsive so scaling uses available width instead of leaving empty cells/fields.
+    dependencies: []
+    done_when: The visible thumbnail count adapts to available width and +N represents only undisplayed media.
+  - id: R04
+    requirement: Give calendar/share/like controls more air and accessible spacing.
+    dependencies: [R10]
+    done_when: Controls retain at least 44px targets and 8px separation with balanced group padding at target viewports.
+  - id: R05
+    requirement: Make OCR companion laconic and scroll-safe; remove explanatory copy/inner fields and compare separate-rail versus integrated poster-plus-previews variants.
+    dependencies: [R03, R10]
+    done_when: No nested scrollbar, poster keeps exact aspect ratio with graphite outline, copy is absent, and both comparison routes work.
+  - id: R06
+    requirement: Fix Split OCR CTA admission label so “Бесплатно” fits at FHD 125%.
+    dependencies: []
+    done_when: Label has no clipping/overlap and CTA/actions remain usable at 1536x864 and 1440x900.
+  - id: R07
+    requirement: Prototype a height-fitted multi-portrait enlarged viewer, including partially visible right item promotion on next; decide whether the lower rail should be centered.
+    dependencies: [R10]
+    done_when: Navigation advances the right partial item to the left, fills the remaining viewport, and selected images open at their exact fullscreen index.
+  - id: R08
+    requirement: Let very tall related posters use slight bounded top-and-bottom crop to fill card width.
+    dependencies: [R10]
+    done_when: Target OCR cards fill the frame without large side fields and crop remains visually bounded.
+  - id: R09
+    requirement: Add a split portrait/OCR primary example with additional real photos below.
+    dependencies: [R03, R07]
+    done_when: A dedicated route shows one readable OCR primary plus additional photos and exact-index fullscreen interaction.
+  - id: R10
+    requirement: Gemini consultation, local/public Playwright QA, canonical docs, changelog, publish, and desktop-only regression proof.
+    dependencies: [R01, R02, R03, R04, R05, R06, R07, R08, R09]
+    done_when: Gemini artifacts and decision are recorded, preview is public, desktop checks pass, and 390px mobile root remains absent.
+lanes:
+  - id: L01-media-mapper
+    role: planner
+    support_requirement_ids: [R01, R03, R07, R09]
+    target: Inventory real event fixtures/media dimensions and identify candidates for continuous, portrait-strip, and OCR-plus-photos examples.
+    depends_on: []
+    execution_mode: parallel
+    effort: medium
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: Read-only mapping with exact fixture keys, source indexes, dimensions, and recommended routes.
+    verification_scope: inspection_only
+    status: completed
+  - id: L02-design-research
+    role: planner
+    support_requirement_ids: [R01, R04, R05, R07, R08]
+    target: Baseline browser metrics plus UI guidance; prepare evidence for Gemini Pro consultation.
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: Read-only UI audit covering framing, rail, action spacing, companion alternatives, portrait viewer, and card crop.
+    verification_scope: inspection_only
+    status: completed
+  - id: L03-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10]
+    target: Integrate all desktop-only implementation, docs, tests, publish, and public acceptance.
+    depends_on: [L01-media-mapper, L02-design-research]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: feature/event-page-desktop-focus-v9-20260714
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v9
+    writable_files:
+      - site/src/components/lab/DesktopEventCleanPage.astro
+      - site/src/pages/lab/event-desktop/examples/[scenario].astro
+      - site/src/pages/lab/event-desktop/index.astro
+      - site/scripts/check-preview.mjs
+      - docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md
+      - CHANGELOG.md
+      - .codex/lanes/desktop-event-focus-v9-20260714/**
+      - .codex/integration/desktop-event-focus-v9-20260714/**
+    forbidden_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/sobytiya/**
+      - site/src/components/EventCard.astro
+    expected_output: Clean committed/pushed v9 branch and public noindex preview.
+    verification_scope: full_local
+    status: in_progress
+  - id: L04-closure-review
+    role: reviewer
+    support_requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10]
+    target: Requirement-by-requirement closure audit after implementation and public QA.
+    depends_on: [L03-integrator]
+    execution_mode: serial_after_dependency
+    effort: high
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: Done/Partial/Missing/Blocked verdict with public evidence for every requirement.
+    verification_scope: targeted
+    status: planned

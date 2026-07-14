@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -392,3 +392,49 @@ V8 keeps the graphite section and the accepted light card/body surface with shar
 The local Playwright gate covers `1536×864` (Full HD at 125% browser/UI scaling) and `1440×900`. It waits for decoded hero/companion media before capturing, records no console errors, exact half-width Split media, zero low-resolution remainder, absent rails for duplicate-only sets, aspect-bucket rails for real multi-image sets, exact selected-index fullscreen opening (`requested=3`, `active=3`), normalized related-card row heights, top-safe pinned geometry and continuous exact-ratio geometry. At `390×844` the laboratory root remains in the static DOM but computes to `display:none`, a zero rectangle and zero horizontal overflow; production mobile components and behavior are not changed.
 
 Antigravity **Gemini 3.1 Pro (High)** completed both the pre-design review and final visual acceptance without Flash/Lite substitution. The public Playwright run returned `passed=true`, `failures=[]` across all nine scenario routes at `1536×864` and `1440×900`, including exact companion/rail gallery indexes and the corrected mobile isolation check. Gemini inspected those public captures and raw DOM measurements, rated all six main routes `PASS`, ranked **Hybrid → Ambient → Cover**, found no material blocker and returned **SHIP** for the noindex desktop v8 preview. Prompt, raw response, screenshots and Playwright JSON remain in ignored `artifacts/codex/desktop-event-focus-v8-20260713/`.
+
+## Desktop focus v9: adaptive Editorial media and portrait-set viewer
+
+V9 continues the same noindex **desktop-only** experiment. Every new selector is inside `@media (min-width:1024px)` and the implementation changes only the lab component, lab routes and preview checker. The production event route and accepted mobile hero/decision composition are not changed.
+
+### Priority Editorial framing
+
+Continuous Editorial is now compared on three real source shapes instead of one fixture:
+
+| Source reality | Event | Framing contract | Review route |
+|---|---|---|---|
+| `1280×853`, ratio `1.50` | «Спектакль „Гараж“» (`5658`) | Exact full-width natural ratio; no top or bottom crop. | `/lab/event-desktop/examples/editorial-photo-continuous/` |
+| `3072×1302`, ratio `2.36` | Pianissimo (`5201`) | Exact wide frame; the reading slab may enter the first viewport without stretching the image. | `/lab/event-desktop/examples/editorial-photo-continuous-wide/` |
+| `1280×960`, ratio `1.33` | «Город в персональном зеркале…» (`6583`) | Bottom-anchored cover with a hard `20%` source-height crop ceiling. Only the upper part is discarded; the lower source edge remains exact. | `/lab/event-desktop/examples/editorial-photo-continuous-near-square/` |
+
+The bounded near-square rule is `frameHeight = max(viewportHeight - 73px, 80% of natural full-width height)`. Runtime diagnostics publish `data-editorial-crop-fraction` and `data-editorial-bottom-delta`; acceptance requires `cropFraction <= 0.20` and a zero-pixel bottom mismatch. This is an explicit lab framing policy, not a substitute for future source-level saliency boxes.
+
+The compact gallery rail is a direct stage child at the initial top-right edge. It is no longer pinned by the obsolete `bottom` inset, and it recomputes visible cells from real width with a `72px` minimum, `8px` gap and one truthful `+N` cell. Failed media collapse rather than leaving an empty grid slot. At wider viewports more real previews become visible. The existing fullscreen viewer still owns every source and selected index.
+
+The secondary calendar/share/like controls retain their existing icon system but use `56×56px` targets and an approximately `11px` group gap. This is deliberately more air than v8 while preserving the compact secondary hierarchy.
+
+### OCR companion comparison
+
+Event `6323` supplies a real strong horizontal photo, a real `1179×1523` OCR poster and additional photographs. The OCR companion is always non-parallax, copy-free, source-ratio exact, fully contained, rounded and outlined with graphite; there is no inner grey/black field and no nested side scroll.
+
+Two fair variants remain available:
+
+1. `/editorial-ocr-companion/` — responsive top rail plus a separate readable poster below CTA;
+2. `/editorial-ocr-companion-integrated/` — CTA plus one poster/previews board, with the same exact-index fullscreen behavior.
+
+The service labels `Оригинальная афиша` and `Открыть полностью` are explicitly absent. The route comparison is kept because the separate arrangement scans more conventionally, while the integrated board spends less vertical space on duplicated media navigation.
+
+### Split/Fallback corrections
+
+- Split OCR admission now reserves its actual max-content width. `Бесплатно` is no longer forced into the old `100px` track at the Full-HD/125%-equivalent `1536×864` viewport.
+- `/split-ocr-with-photos/` uses event `6323`: the readable OCR source is primary and real distinct photographs remain in the physical lower rail.
+- `/split-multi-portrait/` uses the real six-image portrait subset of event `5894` (`source indexes 3, 5, 6, 8, 10, 11`). Its enlarged viewer fits every image to viewport height and lays out as many images horizontally as will fit. `Next` promotes the partially visible right-edge image to the left edge; clicking any item opens the production fullscreen gallery at that exact source index.
+- The physical lower rail uses `justify-content:safe center`: it is centered only when all cells fit and automatically returns to left alignment when navigation/overflow is necessary.
+
+### Related-card crop rule
+
+The selected hybrid keeps ordinary visual media on center `cover`. OCR/document cards receive a center safe-cover only when measured loss is at most `12%`; taller documents stay on ambient `contain`. This allows the real `1829×2560` poster to fill its row with a slight top-and-bottom crop, while the `803×1280` poster does not lose more than one fifth of its source merely to remove side fields.
+
+### Gemini design gate
+
+Antigravity **Gemini 3.1 Pro (High)** completed the pre-design review (`exit=0`, no Flash/Lite substitution). It rejected the v8 nested OCR side scroll and non-responsive rail, recommended the bounded bottom-anchored near-square crop, larger action hit areas, source-indexed portrait navigation and a hybrid related-card threshold. It ranked the integrated OCR board above the separate arrangement on compactness; both remain published for product comparison rather than hiding the trade-off. Local prompt and response are stored under `artifacts/codex/desktop-event-focus-v9-20260714/gemini/` and are not committed.

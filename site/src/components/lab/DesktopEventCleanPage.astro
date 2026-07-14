@@ -15,6 +15,8 @@ import { eventImageUrl } from '../../lib/assets';
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
 type EditorialMotion = 'pinned' | 'continuous';
+type EditorialCropPolicy = 'exact' | 'bottom-safe';
+type OcrCompanionLayout = 'separate' | 'integrated';
 type SplitMediaFit = 'natural' | 'viewport-cover';
 type RelatedMediaTreatment = 'cover' | 'ambient' | 'hybrid';
 
@@ -30,12 +32,16 @@ interface Props {
   heroObjectPosition?: string;
   editorialRail?: boolean;
   editorialMotion?: EditorialMotion;
+  editorialCropPolicy?: EditorialCropPolicy;
   ocrCompanionImageIndex?: number;
+  ocrCompanionLayout?: OcrCompanionLayout;
   autoRotate?: boolean;
   ocrSafeCover?: boolean;
   ocrSourceIndexes?: number[];
   duplicateSourceIndexes?: number[];
   splitMediaFit?: SplitMediaFit;
+  splitPortraitViewer?: boolean;
+  splitPortraitSourceIndexes?: number[];
   relatedMediaTreatment?: RelatedMediaTreatment;
 }
 
@@ -61,12 +67,16 @@ const {
   heroObjectPosition,
   editorialRail = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   editorialMotion = 'pinned',
+  editorialCropPolicy = 'exact',
   ocrCompanionImageIndex,
+  ocrCompanionLayout = 'separate',
   autoRotate = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   ocrSafeCover = false,
   ocrSourceIndexes = [],
   duplicateSourceIndexes = [],
   splitMediaFit = 'natural',
+  splitPortraitViewer = false,
+  splitPortraitSourceIndexes = [],
   relatedMediaTreatment = 'hybrid',
 } = Astro.props;
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
@@ -121,13 +131,18 @@ const ocrCompanion = ocrCompanionImageIndex === undefined
   ? undefined
   : indexedGalleryImages.find(({ image }) => image.sourceIndex === ocrCompanionImageIndex);
 const editorialRailCandidates = indexedGalleryImages.filter(({ galleryIndex }) => galleryIndex !== ocrCompanion?.galleryIndex);
-const editorialRailImages = editorialRailCandidates.slice(0, editorialRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
-const editorialRailRemainingCount = editorialRailCandidates.length - editorialRailImages.length;
+const editorialRailImages = editorialRailCandidates;
 // Gallery keeps every source rendition so its source indexes remain stable. The compact rail,
 // however, only advertises distinct media identities supplied by the upstream/lab contract.
 const splitRailCandidates = indexedGalleryImages.filter(({ image, galleryIndex }) => galleryIndex !== 0 && !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
 const splitRailImages = splitRailCandidates.slice(0, splitRailCandidates.length > railCellLimit ? railCellLimit - 1 : railCellLimit);
 const splitRailRemainingCount = splitRailCandidates.length - splitRailImages.length;
+const portraitSourceIndexSet = new Set(splitPortraitSourceIndexes);
+const splitPortraitImages = indexedGalleryImages.filter(({ image }) => portraitSourceIndexSet.has(image.sourceIndex ?? -1));
+const integratedCompanionPreviews = editorialRailCandidates
+  .filter(({ galleryIndex }) => galleryIndex !== 0)
+  .slice(0, 5);
+const integratedCompanionRemaining = Math.max(0, editorialRailCandidates.length - integratedCompanionPreviews.length);
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
@@ -157,7 +172,10 @@ const descriptionHtml = (event.description_html || '')
   data-media-policy={mediaPolicy}
   data-selected-media-policy={selectedMediaMode}
   data-editorial-motion={candidate === 'editorial' ? editorialMotion : undefined}
+  data-editorial-crop={candidate === 'editorial' ? editorialCropPolicy : undefined}
+  data-ocr-companion-layout={ocrCompanion ? ocrCompanionLayout : undefined}
   data-split-media-fit={candidate === 'split' ? splitMediaFit : undefined}
+  data-split-portrait-viewer={splitPortraitViewer ? 'true' : undefined}
   data-related-media-treatment={relatedMediaTreatment}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
   data-event-id={event.id}
@@ -181,7 +199,17 @@ const descriptionHtml = (event.description_html || '')
               {splitRailImages.length > 0 && (
                 <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail aria-label="Другие изображения события">
                   {splitRailImages.map(({ image, galleryIndex }) => (
-                    <button type="button" data-rail-aspect={railAspectBucket(image)} data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу, изображение ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1}`}>
+                    <button
+                      type="button"
+                      data-rail-aspect={railAspectBucket(image)}
+                      data-image-text-mode={image.image_text_mode}
+                      data-source-index={image.sourceIndex}
+                      data-portrait-strip-open={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? '' : undefined}
+                      data-portrait-strip-start={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? image.sourceIndex : undefined}
+                      data-hero-gallery-open={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? undefined : galleryId}
+                      data-hero-gallery-index={galleryIndex}
+                      aria-label={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? 'Открыть портретную серию' : image.image_text_mode === 'ocr_text' ? `Открыть афишу, изображение ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1}`}
+                    >
                       <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
                       {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
                     </button>
@@ -206,13 +234,28 @@ const descriptionHtml = (event.description_html || '')
           </figure>
         )}
 
+        {candidate === 'editorial' && editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'integrated' && (
+          <div class="desktop-prototype__media-rail desktop-prototype__media-rail--hero" data-hero-rail data-responsive-rail aria-label="Выбрать изображение">
+            {editorialRailImages.map(({ image, galleryIndex }, index) => (
+              <button type="button" class:list={[index === 0 && 'is-current']} data-responsive-rail-item data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу в полноэкранной галерее, фото ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1} в полноэкранной галерее`}>
+                <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
+                {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
+              </button>
+            ))}
+            <button type="button" class="desktop-prototype__media-rail-more" data-responsive-rail-more hidden aria-label="Открыть остальные фотографии">
+              <strong data-responsive-rail-count></strong><span>фото</span>
+            </button>
+          </div>
+        )}
+
         {candidate === 'editorial' && (
           <aside class="desktop-editorial-side" data-editorial-side>
             <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
-            {ocrCompanion && (
+            {ocrCompanion && ocrCompanionLayout === 'separate' && (
               <button
                 type="button"
                 class="desktop-editorial-companion"
+                style={`--ocr-ratio:${(ocrCompanion.image.width || 800) / (ocrCompanion.image.height || 1200)};`}
                 data-editorial-ocr-companion
                 data-source-index={ocrCompanion.image.sourceIndex}
                 data-hero-gallery-open={galleryId}
@@ -222,32 +265,37 @@ const descriptionHtml = (event.description_html || '')
                 <span class="desktop-editorial-companion__image">
                   <img src={ocrCompanion.image.src} alt="" width={ocrCompanion.image.width || 800} height={ocrCompanion.image.height || 1200} loading="lazy" decoding="async" />
                 </span>
-                <span class="desktop-editorial-companion__copy"><small>Оригинальная афиша</small><strong>Открыть полностью</strong></span>
-                <Icon name="image" />
               </button>
             )}
-            {editorialRail && editorialRailImages.length > 1 && (
-              <div class="desktop-prototype__media-rail" data-hero-rail aria-label="Выбрать изображение">
-                {editorialRailImages.map(({ image, galleryIndex }, index) => (
-                  <button type="button" class:list={[index === 0 && 'is-current']} data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу в полноэкранной галерее, фото ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1} в полноэкранной галерее`}>
-                    <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
-                    {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
-                  </button>
-                ))}
-                {editorialRailRemainingCount > 0 && (
-                  <button
-                    type="button"
-                    class="desktop-prototype__media-rail-more"
-                    data-hero-rail-more
-                    data-remaining-count={editorialRailRemainingCount}
-                    data-hero-gallery-open={galleryId}
-                    data-hero-gallery-index={editorialRailImages.at(-1)!.galleryIndex + 1}
-                    aria-label={`Открыть ещё ${editorialRailRemainingCount} фото`}
-                  >
-                    <strong>+{editorialRailRemainingCount}</strong><span>фото</span>
-                  </button>
-                )}
-              </div>
+            {ocrCompanion && ocrCompanionLayout === 'integrated' && (
+              <section class="desktop-editorial-companion-board" data-editorial-companion-board aria-label="Афиша и фотографии события">
+                <button
+                  type="button"
+                  class="desktop-editorial-companion desktop-editorial-companion--board"
+                  style={`--ocr-ratio:${(ocrCompanion.image.width || 800) / (ocrCompanion.image.height || 1200)};`}
+                  data-editorial-ocr-companion
+                  data-source-index={ocrCompanion.image.sourceIndex}
+                  data-hero-gallery-open={galleryId}
+                  data-hero-gallery-index={ocrCompanion.galleryIndex}
+                  aria-label="Открыть афишу события на весь экран"
+                >
+                  <span class="desktop-editorial-companion__image">
+                    <img src={ocrCompanion.image.src} alt="" width={ocrCompanion.image.width || 800} height={ocrCompanion.image.height || 1200} loading="lazy" decoding="async" />
+                  </span>
+                </button>
+                <div class="desktop-editorial-companion-board__previews">
+                  {integratedCompanionPreviews.map(({ image, galleryIndex }) => (
+                    <button type="button" data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`Открыть фото ${galleryIndex + 1} на весь экран`}>
+                      <img src={image.src} alt="" width={image.width || 160} height={image.height || 120} loading="lazy" decoding="async" />
+                    </button>
+                  ))}
+                  {integratedCompanionRemaining > 0 && (
+                    <button type="button" class="desktop-editorial-companion-board__more" data-hero-gallery-open={galleryId} data-hero-gallery-index={integratedCompanionPreviews.at(-1)!.galleryIndex + 1} aria-label={`Открыть ещё ${integratedCompanionRemaining} фото`}>
+                      <strong>+{integratedCompanionRemaining}</strong><span>фото</span>
+                    </button>
+                  )}
+                </div>
+              </section>
             )}
           </aside>
         )}
@@ -346,6 +394,35 @@ const descriptionHtml = (event.description_html || '')
     </div>
   </section>
 
+  {splitPortraitViewer && splitPortraitImages.length > 1 && (
+    <div class="desktop-portrait-viewer" data-portrait-viewer role="dialog" aria-modal="true" aria-label={`Портретная серия: ${event.title}`} hidden>
+      <div class="desktop-portrait-viewer__topbar">
+        <strong>Фото события</strong>
+        <button type="button" data-portrait-viewer-close aria-label="Закрыть портретную серию">×</button>
+      </div>
+      <div class="desktop-portrait-viewer__viewport" data-portrait-viewer-viewport tabindex="0">
+        <div class="desktop-portrait-viewer__track" data-portrait-viewer-track>
+          {splitPortraitImages.map(({ image, galleryIndex }) => (
+            <button
+              type="button"
+              class="desktop-portrait-viewer__item"
+              data-portrait-viewer-item
+              data-source-index={image.sourceIndex}
+              data-hero-gallery-open={galleryId}
+              data-hero-gallery-index={galleryIndex}
+              aria-label={`Открыть фото ${galleryIndex + 1} отдельно`}
+            >
+              <img src={image.src} alt={image.alt} width={image.width || 960} height={image.height || 1280} loading="lazy" decoding="async" />
+            </button>
+          ))}
+        </div>
+      </div>
+      <button type="button" class="desktop-portrait-viewer__nav desktop-portrait-viewer__nav--prev" data-portrait-viewer-prev aria-label="Предыдущая группа фото">‹</button>
+      <button type="button" class="desktop-portrait-viewer__nav desktop-portrait-viewer__nav--next" data-portrait-viewer-next aria-label="Следующая группа фото">›</button>
+      <p class="desktop-portrait-viewer__counter" data-portrait-viewer-counter aria-live="polite"></p>
+    </div>
+  )}
+
   {photoCount > 0 && (
     <div class="hero-gallery" id={galleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
       <div class="hero-gallery__chrome" aria-hidden="true"></div>
@@ -386,6 +463,130 @@ const descriptionHtml = (event.description_html || '')
       let mediaHovered = false;
 
       const clamp = (value:number, min=0, max=1) => Math.max(min, Math.min(max, value));
+      const responsiveRails = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-responsive-rail]'));
+      const layoutResponsiveRail = (rail:HTMLElement) => {
+        const allItems = Array.from(rail.querySelectorAll<HTMLButtonElement>('[data-responsive-rail-item]'));
+        const more = rail.querySelector<HTMLButtonElement>('[data-responsive-rail-more]');
+        if (!more || !allItems.length || !rail.clientWidth) return;
+        const validItems = allItems.filter((item) => {
+          const image = item.querySelector<HTMLImageElement>('img');
+          const failed = Boolean(image?.complete && !image.naturalWidth);
+          item.toggleAttribute('data-media-failed', failed);
+          return !failed;
+        });
+        allItems.forEach((item) => { item.hidden = !validItems.includes(item); });
+        more.hidden = true;
+        const gap = 8;
+        const minCell = 72;
+        const capacity = Math.max(2, Math.floor((rail.clientWidth + gap) / (minCell + gap)));
+        const visibleCount = validItems.length > capacity ? capacity - 1 : validItems.length;
+        validItems.forEach((item, index) => { item.hidden = index >= visibleCount; });
+        if (validItems.length > visibleCount) {
+          const firstHidden = validItems[visibleCount];
+          const remaining = validItems.length - visibleCount;
+          more.hidden = false;
+          more.dataset.heroGalleryOpen = firstHidden.dataset.heroGalleryOpen || '';
+          more.dataset.heroGalleryIndex = firstHidden.dataset.heroGalleryIndex || '0';
+          more.dataset.remainingCount = String(remaining);
+          more.setAttribute('aria-label', `Открыть ещё ${remaining} фото`);
+          const count = more.querySelector<HTMLElement>('[data-responsive-rail-count]');
+          if (count) count.textContent = `+${remaining}`;
+        }
+        const columns = visibleCount + (more.hidden ? 0 : 1);
+        rail.style.setProperty('--rail-columns', String(Math.max(1, columns)));
+        rail.dataset.railVisibleCount = String(visibleCount);
+        rail.dataset.railHiddenCount = String(Math.max(0, validItems.length - visibleCount));
+      };
+      responsiveRails.forEach((rail) => {
+        const images = Array.from(rail.querySelectorAll<HTMLImageElement>('img'));
+        images.forEach((image) => {
+          image.addEventListener('load', () => layoutResponsiveRail(rail), { once:true });
+          image.addEventListener('error', () => layoutResponsiveRail(rail), { once:true });
+        });
+        layoutResponsiveRail(rail);
+        new ResizeObserver(() => layoutResponsiveRail(rail)).observe(rail);
+      });
+
+      const measureEditorialCrop = () => {
+        if (cleanRoot.dataset.desktopFamily !== 'editorial' || !mediaFrame || !heroImage) return;
+        const frameHeight = mediaFrame.clientHeight;
+        const imageHeight = heroImage.offsetHeight;
+        const cropFraction = imageHeight > 0 ? clamp((imageHeight - frameHeight) / imageHeight) : 0;
+        const frameRect = mediaFrame.getBoundingClientRect();
+        const imageRect = heroImage.getBoundingClientRect();
+        cleanRoot.dataset.editorialCropFraction = cropFraction.toFixed(4);
+        cleanRoot.dataset.editorialBottomDelta = Math.abs(frameRect.bottom - imageRect.bottom).toFixed(2);
+      };
+      heroImage?.addEventListener('load', measureEditorialCrop, { once:true });
+      if (mediaFrame) new ResizeObserver(measureEditorialCrop).observe(mediaFrame);
+      window.addEventListener('resize', () => window.requestAnimationFrame(measureEditorialCrop), { passive:true });
+      window.requestAnimationFrame(measureEditorialCrop);
+
+      const portraitViewer = cleanRoot.querySelector<HTMLElement>('[data-portrait-viewer]');
+      const portraitViewport = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-viewport]');
+      const portraitItems = Array.from(portraitViewer?.querySelectorAll<HTMLButtonElement>('[data-portrait-viewer-item]') || []);
+      const portraitCounter = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-counter]');
+      let portraitReturnFocus:HTMLElement | null = null;
+      const portraitActiveIndex = () => {
+        if (!portraitViewport || !portraitItems.length) return 0;
+        const left = portraitViewport.getBoundingClientRect().left;
+        const exact = portraitItems.findIndex((item) => item.getBoundingClientRect().left >= left - 2);
+        return exact >= 0 ? exact : portraitItems.length - 1;
+      };
+      const updatePortraitViewer = () => {
+        if (!portraitViewport || !portraitItems.length) return;
+        const index = portraitActiveIndex();
+        portraitViewer?.style.setProperty('--portrait-visible-start', String(index));
+        portraitViewer?.setAttribute('data-visible-source-index', portraitItems[index]?.dataset.sourceIndex || '');
+        if (portraitCounter) portraitCounter.textContent = `${index + 1}–${Math.min(portraitItems.length, index + Math.max(1, Math.floor(portraitViewport.clientWidth / Math.max(1, portraitItems[index]?.clientWidth || 1))))} / ${portraitItems.length}`;
+      };
+      const scrollPortraitTo = (item:HTMLElement, behavior:ScrollBehavior='smooth') => {
+        if (!portraitViewport) return;
+        portraitViewport.scrollTo({ left:item.offsetLeft, behavior });
+        window.setTimeout(updatePortraitViewer, behavior === 'smooth' ? 360 : 0);
+      };
+      const closePortraitViewer = (restoreFocus=true) => {
+        if (!portraitViewer || portraitViewer.hidden) return;
+        portraitViewer.hidden = true;
+        document.body.style.removeProperty('overflow');
+        if (restoreFocus) portraitReturnFocus?.focus();
+      };
+      cleanRoot.querySelectorAll<HTMLElement>('[data-portrait-strip-open]').forEach((opener) => {
+        opener.addEventListener('click', () => {
+          if (!portraitViewer || !portraitViewport) return;
+          portraitReturnFocus = opener;
+          portraitViewer.hidden = false;
+          document.body.style.overflow = 'hidden';
+          const requestedSource = opener.dataset.portraitStripStart;
+          const requested = portraitItems.find((item) => item.dataset.sourceIndex === requestedSource) || portraitItems[0];
+          if (requested) scrollPortraitTo(requested, 'auto');
+          portraitViewport.focus();
+          updatePortraitViewer();
+        });
+      });
+      portraitViewer?.querySelector<HTMLButtonElement>('[data-portrait-viewer-close]')?.addEventListener('click', () => closePortraitViewer());
+      portraitViewer?.querySelector<HTMLButtonElement>('[data-portrait-viewer-next]')?.addEventListener('click', () => {
+        if (!portraitViewport) return;
+        const viewportRight = portraitViewport.getBoundingClientRect().right;
+        const partialRight = portraitItems.find((item) => {
+          const rect = item.getBoundingClientRect();
+          return rect.left < viewportRight - 2 && rect.right > viewportRight + 2;
+        });
+        const current = portraitActiveIndex();
+        const target = partialRight || portraitItems[Math.min(portraitItems.length - 1, current + 1)];
+        if (target) scrollPortraitTo(target);
+      });
+      portraitViewer?.querySelector<HTMLButtonElement>('[data-portrait-viewer-prev]')?.addEventListener('click', () => {
+        const current = portraitActiveIndex();
+        const target = portraitItems[Math.max(0, current - 1)];
+        if (target) scrollPortraitTo(target);
+      });
+      portraitItems.forEach((item) => item.addEventListener('click', () => closePortraitViewer(false)));
+      portraitViewport?.addEventListener('scroll', () => window.requestAnimationFrame(updatePortraitViewer), { passive:true });
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && portraitViewer && !portraitViewer.hidden) closePortraitViewer();
+      });
+
       const markRotation = () => {
         if (!rotationToggle) return;
         rotationToggle.setAttribute('aria-pressed', rotationEnabled ? 'true' : 'false');
@@ -685,7 +886,7 @@ const descriptionHtml = (event.description_html || '')
             if (isDocument) {
               if (relatedMediaTreatment === 'ambient') cardTreatment = 'ambient';
               else if (relatedMediaTreatment === 'cover') cardTreatment = 'document-cover';
-              else cardTreatment = 'ambient';
+              else cardTreatment = coverCrop <= .12 ? 'document-safe-cover' : 'ambient';
             }
             card.dataset.labMediaTreatment = cardTreatment;
             card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
@@ -1124,6 +1325,217 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:420px; }
     .desktop-editorial-companion { grid-template-columns:248px minmax(74px,1fr) 1.35rem; }
     .desktop-editorial-companion__image { width:248px; }
+  }
+
+  /* Desktop focus v9: responsive rail, bottom-safe Editorial crop and laconic media companions. */
+  @media (min-width:1024px) {
+    .desktop-clean-event--editorial[data-editorial-crop="bottom-safe"][data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media {
+      height:max(calc(100svh - 73px),calc(80vw / var(--image-ratio)));
+      overflow:hidden;
+    }
+    .desktop-clean-event--editorial[data-editorial-crop="bottom-safe"][data-editorial-motion="continuous"] .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image {
+      inset:auto 0 0;
+      height:calc(100vw / var(--image-ratio)) !important;
+      object-fit:cover !important;
+      object-position:50% 100% !important;
+    }
+
+    .desktop-clean-event--editorial .desktop-prototype__stage > .desktop-prototype__media-rail--hero {
+      position:absolute;
+      z-index:9;
+      top:clamp(18px,2.7svh,28px);
+      right:clamp(16px,2vw,32px);
+      bottom:auto;
+      left:auto;
+      width:min(calc(var(--editorial-side) - 2rem),560px);
+      height:auto;
+      align-self:start;
+      display:grid;
+      grid-template-columns:repeat(var(--rail-columns,6),minmax(0,1fr));
+      gap:8px;
+      padding:8px;
+      overflow:hidden;
+      border-radius:16px;
+      background:rgba(31,27,24,.88);
+      box-shadow:0 12px 28px rgba(22,17,14,.2);
+    }
+    .desktop-clean-event--editorial .desktop-prototype__stage > .desktop-prototype__media-rail--hero button {
+      width:auto;
+      min-width:0;
+      max-width:none;
+      height:52px;
+    }
+    .desktop-clean-event--editorial .desktop-prototype__stage > .desktop-prototype__media-rail--hero [hidden],
+    .desktop-portrait-viewer[hidden] { display:none !important; }
+
+    .desktop-clean-event--editorial .desktop-editorial-side {
+      max-height:none;
+      overflow:visible;
+      scrollbar-width:auto;
+    }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side {
+      margin-top:clamp(98px,12svh,132px);
+    }
+    .desktop-editorial-companion {
+      width:auto;
+      height:min(48svh,430px);
+      min-height:0;
+      aspect-ratio:var(--ocr-ratio);
+      justify-self:end;
+      display:block;
+      padding:0;
+      overflow:hidden;
+      border:0;
+      border-radius:14px;
+      background:transparent;
+      box-shadow:0 0 0 2px #3a3531,0 16px 32px rgba(31,23,18,.2);
+    }
+    .desktop-editorial-companion__image,
+    .desktop-editorial-companion__image img {
+      width:100%;
+      height:100%;
+      display:block;
+      aspect-ratio:inherit;
+      border-radius:12px;
+      background:transparent;
+      object-fit:contain;
+      object-position:center;
+    }
+    .desktop-editorial-companion-board {
+      order:2;
+      width:100%;
+      height:min(49svh,432px);
+      display:grid;
+      grid-template-columns:auto minmax(104px,1fr);
+      gap:10px;
+      align-items:stretch;
+    }
+    .desktop-editorial-companion--board { order:initial; height:100%; justify-self:start; }
+    .desktop-editorial-companion-board__previews {
+      min-width:0;
+      display:grid;
+      grid-template-rows:repeat(3,minmax(0,1fr));
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      grid-auto-flow:column dense;
+      gap:8px;
+    }
+    .desktop-editorial-companion-board__previews button {
+      min-width:0;
+      min-height:0;
+      padding:0;
+      overflow:hidden;
+      border:1px solid rgba(36,28,23,.25);
+      border-radius:10px;
+      background:#292521;
+      color:#fffaf2;
+      cursor:zoom-in;
+    }
+    .desktop-editorial-companion-board__previews img { width:100%; height:100%; display:block; object-fit:cover; }
+    .desktop-editorial-companion-board__more { display:grid; place-content:center; gap:.1rem; }
+    .desktop-editorial-companion-board__more strong { font-size:1.05rem; }
+    .desktop-editorial-companion-board__more span { font-size:.65rem; }
+
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline),
+    .desktop-clean-event--split.desktop-clean-event--non-ocr :global(.desktop-prototype__action--inline) {
+      grid-template-columns:minmax(132px,max-content) minmax(180px,1fr) auto;
+      column-gap:.9rem;
+    }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline > p),
+    .desktop-clean-event--split.desktop-clean-event--non-ocr :global(.desktop-prototype__action--inline > p) { min-width:132px; }
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline > p strong) { white-space:nowrap; }
+    .desktop-clean-event :global(.desktop-prototype__action-row) { gap:.7rem; }
+    .desktop-clean-event :global(.desktop-prototype__icon-action) { min-width:56px; min-height:56px; padding:.45rem; }
+
+    .desktop-prototype__media-rail--poster { justify-content:safe center; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) {
+      object-fit:cover !important;
+      object-position:50% 50% !important;
+    }
+
+    .desktop-portrait-viewer {
+      position:fixed;
+      z-index:10020;
+      inset:0;
+      display:grid;
+      grid-template-rows:64px minmax(0,1fr);
+      background:#171412;
+      color:#fffaf2;
+    }
+    .desktop-portrait-viewer__topbar {
+      z-index:2;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 clamp(20px,3vw,48px);
+      background:rgba(23,20,18,.96);
+      border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    .desktop-portrait-viewer__topbar strong { font-size:1rem; }
+    .desktop-portrait-viewer__topbar button {
+      width:46px;
+      height:46px;
+      padding:0;
+      border:0;
+      border-radius:50%;
+      background:rgba(255,255,255,.1);
+      color:#fff;
+      font-size:2rem;
+      cursor:pointer;
+    }
+    .desktop-portrait-viewer__viewport {
+      min-width:0;
+      min-height:0;
+      overflow:hidden;
+      outline:none;
+      scroll-behavior:smooth;
+    }
+    .desktop-portrait-viewer__track {
+      width:max-content;
+      height:100%;
+      display:flex;
+      align-items:stretch;
+      gap:12px;
+      padding:12px 12px 18px;
+    }
+    .desktop-portrait-viewer__item {
+      flex:0 0 auto;
+      width:auto;
+      height:100%;
+      padding:0;
+      overflow:hidden;
+      border:0;
+      border-radius:14px;
+      background:#292521;
+      cursor:zoom-in;
+    }
+    .desktop-portrait-viewer__item img { width:auto; height:100%; display:block; object-fit:contain; }
+    .desktop-portrait-viewer__nav {
+      position:fixed;
+      z-index:3;
+      top:50%;
+      width:56px;
+      height:72px;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:18px;
+      background:rgba(23,20,18,.82);
+      color:#fff;
+      font-size:2.6rem;
+      cursor:pointer;
+    }
+    .desktop-portrait-viewer__nav--prev { left:20px; }
+    .desktop-portrait-viewer__nav--next { right:20px; }
+    .desktop-portrait-viewer__counter {
+      position:fixed;
+      z-index:3;
+      right:28px;
+      bottom:24px;
+      margin:0;
+      padding:.5rem .75rem;
+      border-radius:999px;
+      background:rgba(23,20,18,.8);
+      font-size:.85rem;
+      font-variant-numeric:tabular-nums;
+    }
   }
 
   @media (prefers-reduced-motion:reduce) {

@@ -3,15 +3,20 @@ import EventLayout from '../../../layouts/EventLayout.astro';
 import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/event-desktop/');
-const title = `Desktop media focus v8 | ${SITE_NAME}`;
-const description = 'Desktop-only проверка Editorial и Split/Fallback: безопасный hero, крупная OCR-афиша, адаптивные превью и три обработки похожих карточек. Mobile не изменён.';
+const title = `Desktop media focus v9 | ${SITE_NAME}`;
+const description = 'Desktop-only проверка приоритетного Continuous Editorial, лаконичной OCR-афиши, адаптивных превью и портретной серии. Mobile не изменён.';
 const examples = [
   ['editorial-photo', 'Editorial · закреплённый hero', 'Верх фотографии защищён от кропа; нижняя часть раскрывается внутренним параллаксом.'],
-  ['editorial-photo-continuous', 'Editorial · непрерывный hero без кропа', 'Полная естественная высота фотографии движется вверх медленнее контента, без фиксации.'],
-  ['editorial-ocr-companion', 'Editorial · фото + крупная OCR-афиша', 'Горизонтальный кадр остаётся hero, оригинальная афиша получает самостоятельный читаемый блок.'],
+  ['editorial-photo-continuous', 'Continuous · 3:2 без кропа', 'Спектакль «Гараж»: полная естественная высота фотографии и верхняя правая адаптивная лента.'],
+  ['editorial-photo-continuous-wide', 'Continuous · широкий 2,36:1', 'Pianissimo: естественная высота сильной широкой фотографии без ненужного увеличения.'],
+  ['editorial-photo-continuous-near-square', 'Continuous · 4:3 bottom-safe', '«Город в персональном зеркале»: не более 20% кропа только сверху, нижняя граница сохранена.'],
+  ['editorial-ocr-companion', 'OCR companion A · отдельная лента', 'Афиша точного соотношения сторон под CTA; превью остаются в верхней правой зоне hero.'],
+  ['editorial-ocr-companion-integrated', 'OCR companion B · единый media-board', 'Та же крупная афиша и соседняя компактная сетка фотографий без служебных подписей.'],
   ['split-ocr', 'Split · одна OCR-афиша', 'Афиша занимает ровно 50% ширины; лента не появляется для повторного rendition той же картинки.'],
   ['split-portrait', 'Split · одна portrait-композиция', 'Семантически одинаковые варианты не создают ложную галерею.'],
   ['split-low-resolution', 'Split · низкое разрешение', 'Умеренный cover до 20% убирает пустой остаток; настоящие дополнительные изображения остаются в высокой ленте.'],
+  ['split-multi-portrait', 'Split · много вертикальных фото', 'Нажатие на портретное превью открывает height-fit просмотр нескольких фотографий одновременно.'],
+  ['split-ocr-with-photos', 'Split · OCR + реальные фото', 'Читаемая главная афиша и дополнительные фотографии под ней с точным переходом в полноэкранный просмотр.'],
 ];
 const relatedExamples = [
   ['related-cover', '01 · Compact cover', 'Самый короткий ряд, но агрессивно кропает OCR. Контрольный рискованный вариант.'],
@@ -21,15 +26,15 @@ const relatedExamples = [
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v8>
+  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v9>
     <div class="page-shell desktop-focus__shell">
-      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v8</span></nav>
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v9</span></nav>
 
       <section class="section-card desktop-focus__intro">
         <div class="section-card__inner">
           <p class="eyebrow">desktop only · mobile production untouched</p>
-          <h1>Два итоговых семейства вместо набора технических эскизов</h1>
-          <p class="lead"><strong>Editorial</strong> используется только для доказанно сильной горизонтальной фотографии. <strong>Split/Fallback</strong> принимает OCR-документы, портретные серии и изображения, которым не хватает разрешения для полноэкранного hero.</p>
+          <h1>Continuous Editorial как приоритет, Split — для документов и серий</h1>
+          <p class="lead"><strong>Editorial</strong> сравнивается сразу на трёх реальных форматах фотографии. <strong>Split/Fallback</strong> принимает OCR-документы, портретные серии и изображения, которым не хватает разрешения для полноэкранного hero.</p>
         </div>
       </section>
 
