@@ -28,6 +28,17 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
         os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = "publication-gate-test-v1"
         return load_module()
 
+    def test_long_model_and_inference_stages_publish_business_heartbeats(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            heartbeat = mock.Mock()
+            mod.write_region_talk_image_diag_heartbeat = heartbeat
+            mod.log_event("model_load_started", phase="model_load", model="clip")
+            mod.log_event("image_inference_current", phase="inference", index=1, total=1)
+            self.assertEqual(heartbeat.call_count, 2)
+            self.assertEqual(heartbeat.call_args_list[0].args[0]["event_name"], "model_load_started")
+            self.assertEqual(heartbeat.call_args_list[1].args[0]["event_name"], "image_inference_current")
+
     def test_vk_fetch_uses_prefetched_public_url_before_vk_api(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",

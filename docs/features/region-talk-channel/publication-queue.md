@@ -16,6 +16,18 @@ The finalizer persists both `llm_request_fingerprint` and
 terminal status. This makes replay/idempotency auditable instead of relying on
 an opaque status alone.
 
+Eligibility evidence can exceed the compact YDB string cap. The finalizer
+therefore persists `publication_eligibility_evidence_fingerprint` for the full
+evidence payload and uses it together with the gate version and authoritative
+source fingerprint. The readable evidence remains capped, but an unchanged
+terminal tombstone is no longer rewritten, re-pruned or reported as new work
+on every later finalizer run. Legacy 700-character evidence prefixes are
+recognized once without a migration rewrite; a real change beyond that prefix
+is detected after the durable fingerprint has been stored.
+An already-current source-attestation priority for the same source and
+five-post target is likewise reused rather than rotating between several
+qualifying posts and getting a fresh timestamp/YDB write on every invocation.
+
 Advertising is judged from commercial evidence in the main content. A trailing
 channel signature such as `Мы ВКонтакте | Мы в MAX` is cross-platform
 navigation, and `Фото:` / `Видео:` / `Источник:` is media attribution; neither

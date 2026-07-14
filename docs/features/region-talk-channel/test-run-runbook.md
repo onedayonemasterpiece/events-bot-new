@@ -372,7 +372,9 @@ The XLSX has:
 - CandidateReport and ImageDiagnostic heartbeat rows are separate:
   `latest_business_heartbeat` for source/text processing and
   `latest_business_heartbeat:image_diagnostic` for image scoring. Poll both while
-  the notebooks run.
+  the notebooks run. ImageDiagnostic heartbeats include media-fetch boundaries,
+  the current inference row, and CLIP/LAION/NIMA model-load start/completion so
+  a long CPU model download/load cannot look like an unexplained frozen batch.
 - Run notebooks sequentially when launching manually unless the operator has
   confirmed that the active Telegram-dependent notebooks use different auth
   bundles. CandidateReport defaults to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` and

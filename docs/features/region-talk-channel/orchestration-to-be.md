@@ -112,6 +112,9 @@ The final `report_written` business heartbeat is also a durable orchestration
 contract. It receives a bounded extra retry budget on transient YDB
 `RESOURCE_EXHAUSTED`; ordinary progress heartbeats retain the small default
 budget so observability recovery does not create sustained write pressure.
+Media-fetch, current-image inference and CLIP/LAION/NIMA model-load boundaries
+are durable heartbeats as well; this distinguishes slow CPU/model startup from
+a dead image worker without changing the visual consensus.
 
 Responsibilities stay unchanged:
 

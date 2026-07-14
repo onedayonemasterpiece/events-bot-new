@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk finalizer idempotency for compact eligibility evidence: the full evidence now has a durable fingerprint, legacy 700-character prefixes are recognized as unchanged, terminal tombstones no longer get rewritten or trigger repeated cross-ledger text-prune scans, and an unchanged source-attestation priority is no longer timestamped/written again on every downstream cycle.
+- Added Region Talk ImageDiagnostic heartbeats around media fetch, current-image inference and CLIP/LAION/NIMA model loading, so long CPU startup is distinguishable from a frozen image batch without changing the scoring ensemble.
 - Fixed Region Talk source-level idempotency: a successful newer `source_status_item` now repairs a stale pending canonical source row, preserves the original scan lineage, and is bulk-persisted as a changed row; queue reconstruction no longer stamps all historical scans with the current run. Exact-post/fast-check probes no longer masquerade as source-history completion. Known-KO/confirmed-source delta rescans are globally suppressed while any Telegram/VK source still lacks a first scan, except for explicit near-publication source attestation.
 - Fixed Region Talk source metrics to apply that same history boundary: exact-post and fast-check rows no longer inflate scanned-public or pending-with-history-evidence counts, and the broader “source has any processed post”/post-probe-only populations are reported separately.
 - Fixed repeated Region Talk selection of a deterministically missing Telegram username: `UsernameInvalid`/`UsernameNotOccupied` and Telethon's exact `No user has … as username` response now produce a terminal source verdict, while transient RPC/FloodWait failures remain retryable.

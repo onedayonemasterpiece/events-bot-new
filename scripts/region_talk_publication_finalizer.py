@@ -44,6 +44,7 @@ import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
 PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v4"
+PUBLICATION_ELIGIBILITY_EVIDENCE_STORAGE_MAX_CHARS = 700
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v1"
 SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v1"
@@ -788,6 +789,17 @@ def _json_evidence(value: Any) -> str:
         return str(value or "")
 
 
+def publication_eligibility_evidence_fingerprint(value: Any) -> str:
+    """Return a durable identity for the complete eligibility evidence.
+
+    Publication rows intentionally cap long audit strings at 700 characters.
+    Comparing that stored prefix with the next full helper response made every
+    terminal tombstone look changed on every finalizer run.  Keep the compact
+    human-readable prefix, but compare the full evidence through this digest.
+    """
+    return hashlib.sha256(_json_evidence(value).encode("utf-8")).hexdigest()
+
+
 def _eligibility_fields(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     authoritative_source = row.get("_authoritative_source")
     row["authoritative_source_fingerprint_version"] = AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION
@@ -850,8 +862,22 @@ def _eligibility_fields(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         normalized_verdict = "review"
     row["publication_eligibility_verdict"] = normalized_verdict
     row["publication_eligibility_evidence"] = _json_evidence(evidence)
+    row["publication_eligibility_evidence_fingerprint"] = publication_eligibility_evidence_fingerprint(
+        row["publication_eligibility_evidence"]
+    )
     row["publication_eligibility_gate_version"] = gate_version
     return normalized_verdict, result
+
+
+def _source_evidence_priority_is_current(source: dict[str, Any], *, target_posts: int) -> bool:
+    try:
+        stored_target = int(float(source.get("publication_source_evidence_target_posts") or 0))
+    except (TypeError, ValueError):
+        stored_target = 0
+    return (
+        rt._rt_bool(source.get("publication_source_evidence_priority"))
+        and stored_target == target_posts
+    )
 
 
 def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str) -> list[dict[str, Any]]:
@@ -888,10 +914,13 @@ def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str
         key = canonical_source_key_for_row(source) or canonical_source_key_for_row(row)
         if not key:
             continue
+        post_url = normalize_post_url(str(row.get("post_url") or ""))
+        if _source_evidence_priority_is_current(source, target_posts=target_posts):
+            continue
         updated = {
             **source,
             "publication_source_evidence_priority": "true",
-            "publication_source_evidence_post_url": normalize_post_url(str(row.get("post_url") or "")),
+            "publication_source_evidence_post_url": post_url,
             "publication_source_evidence_requested_at": now_iso,
             "publication_source_evidence_target_posts": target_posts,
             "priority_lane": "publication_source_evidence",
@@ -947,10 +976,13 @@ def strict_text_candidate_source_priority_updates(
             posts_scanned = 0
         if posts_scanned >= target_posts:
             continue
+        post_url = normalize_post_url(str(row.get("post_url") or ""))
+        if _source_evidence_priority_is_current(source, target_posts=target_posts):
+            continue
         by_key[key] = {
             **source,
             "publication_source_evidence_priority": "true",
-            "publication_source_evidence_post_url": normalize_post_url(str(row.get("post_url") or "")),
+            "publication_source_evidence_post_url": post_url,
             "publication_source_evidence_requested_at": now_iso,
             "publication_source_evidence_target_posts": target_posts,
             "priority_lane": "publication_source_evidence",
@@ -1067,13 +1099,32 @@ def _ineligible_state_is_current(row: dict[str, Any], verdict: str) -> bool:
     previous_status = str(previous.get("publication_status") or "")
     previous_candidate_status = str(previous.get("publication_candidate_status") or "")
     is_tombstone = previous_status.startswith("eligibility_") or previous_candidate_status.startswith(("tombstoned", "revoked"))
+    previous_evidence = str(previous.get("publication_eligibility_evidence") or "")
+    current_evidence = str(row.get("publication_eligibility_evidence") or "")
+    previous_evidence_fingerprint = str(previous.get("publication_eligibility_evidence_fingerprint") or "")
+    current_evidence_fingerprint = str(
+        row.get("publication_eligibility_evidence_fingerprint")
+        or publication_eligibility_evidence_fingerprint(current_evidence)
+    )
+    evidence_is_current = (
+        previous_evidence_fingerprint == current_evidence_fingerprint
+        if previous_evidence_fingerprint
+        else (
+            previous_evidence == current_evidence
+            # Backward compatibility for rows written before the fingerprint:
+            # compact_record stored exactly the first 700 characters.
+            or (
+                len(previous_evidence) == PUBLICATION_ELIGIBILITY_EVIDENCE_STORAGE_MAX_CHARS
+                and current_evidence.startswith(previous_evidence)
+            )
+        )
+    )
     return (
         is_tombstone
         and str(previous.get("publication_eligibility_verdict") or "") == verdict
         and str(previous.get("publication_eligibility_gate_version") or "")
         == str(row.get("publication_eligibility_gate_version") or "")
-        and str(previous.get("publication_eligibility_evidence") or "")
-        == str(row.get("publication_eligibility_evidence") or "")
+        and evidence_is_current
         and str(previous.get("authoritative_source_fingerprint_version") or "")
         == AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION
         and str(previous.get("authoritative_source_fingerprint") or "")
@@ -1665,6 +1716,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "memorable_detail_evidence", "original_photo_evidence", "whole_post_about_kaliningrad_oblast_score",
         "kaliningrad_mention_role", "llm_usage_input_tokens", "llm_usage_output_tokens", "llm_usage_total_tokens",
         "publication_eligibility_verdict", "publication_eligibility_evidence", "publication_eligibility_gate_version",
+        "publication_eligibility_evidence_fingerprint",
         "publication_tombstone", "publication_revoked", "revoked_at", "finalization_status", "finalization_trigger",
         "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run", "finalizer_state_version",
         "llm_request_fingerprint", "llm_prompt_version", "llm_budget_id", "llm_budget_status",

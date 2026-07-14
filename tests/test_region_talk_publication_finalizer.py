@@ -139,6 +139,50 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "nonlocal_travel_or_general_source",
         )
 
+    def test_ineligible_tombstone_accepts_legacy_truncated_evidence_prefix(self) -> None:
+        full_evidence = "e" * 700 + "changed-only-after-storage-cap"
+        row = {
+            "publication_eligibility_verdict": "reject",
+            "publication_eligibility_gate_version": "gate-v1",
+            "publication_eligibility_evidence": full_evidence,
+            "publication_eligibility_evidence_fingerprint": self.mod.publication_eligibility_evidence_fingerprint(full_evidence),
+            "authoritative_source_fingerprint": "source-v2-value",
+            "authoritative_source_fingerprint_version": self.mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "_previous_publication": {
+                "publication_status": "eligibility_reject_tombstone",
+                "publication_candidate_status": "tombstoned_reject",
+                "publication_eligibility_verdict": "reject",
+                "publication_eligibility_gate_version": "gate-v1",
+                "publication_eligibility_evidence": full_evidence[:700],
+                "authoritative_source_fingerprint": "source-v2-value",
+                "authoritative_source_fingerprint_version": self.mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            },
+        }
+        self.assertTrue(self.mod._ineligible_state_is_current(row, "reject"))
+
+    def test_ineligible_tombstone_fingerprint_detects_change_beyond_stored_prefix(self) -> None:
+        old_full_evidence = "e" * 700 + "old-tail"
+        new_full_evidence = "e" * 700 + "new-tail"
+        row = {
+            "publication_eligibility_verdict": "reject",
+            "publication_eligibility_gate_version": "gate-v1",
+            "publication_eligibility_evidence": new_full_evidence,
+            "publication_eligibility_evidence_fingerprint": self.mod.publication_eligibility_evidence_fingerprint(new_full_evidence),
+            "authoritative_source_fingerprint": "source-v2-value",
+            "authoritative_source_fingerprint_version": self.mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "_previous_publication": {
+                "publication_status": "eligibility_reject_tombstone",
+                "publication_candidate_status": "tombstoned_reject",
+                "publication_eligibility_verdict": "reject",
+                "publication_eligibility_gate_version": "gate-v1",
+                "publication_eligibility_evidence": old_full_evidence[:700],
+                "publication_eligibility_evidence_fingerprint": self.mod.publication_eligibility_evidence_fingerprint(old_full_evidence),
+                "authoritative_source_fingerprint": "source-v2-value",
+                "authoritative_source_fingerprint_version": self.mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            },
+        }
+        self.assertFalse(self.mod._ineligible_state_is_current(row, "reject"))
+
     def test_normalize_post_url_collapses_public_telegram_variants(self) -> None:
         variants = [
             "http://T.ME/TravelCase/10/",
@@ -751,6 +795,13 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(updates[0]["publication_source_evidence_priority"], "true")
         self.assertEqual(updates[0]["publication_source_evidence_target_posts"], 5)
 
+        source.update(updates[0])
+        with mock.patch.object(mod.rt, "publication_eligibility", side_effect=fake_gate):
+            self.assertEqual(
+                mod.source_evidence_priority_updates([row], now_iso="2026-07-10T13:00:00+00:00"),
+                [],
+            )
+
     def test_terminal_reject_clears_and_does_not_repromote_source_attestation(self) -> None:
         mod = self.mod
         source = {
@@ -806,6 +857,19 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(updates[0]["publication_source_evidence_priority"], "true")
         self.assertEqual(updates[0]["publication_source_evidence_target_posts"], 5)
         self.assertEqual(updates[0]["priority_reason"], "strict_text_candidate_needs_source_attestation")
+
+        source.update(updates[0])
+        # Attestation is source-level work. Another qualifying post from the
+        # same source must not rotate the priority URL and rewrite the row.
+        candidate["post_url"] = "https://t.me/umka_blog/2120"
+        self.assertEqual(
+            mod.strict_text_candidate_source_priority_updates(
+                [candidate],
+                {"telegram:umka_blog": source},
+                now_iso="2026-07-12T12:00:00+00:00",
+            ),
+            [],
+        )
 
     def test_durable_budget_exhaustion_defers_without_gemini_call(self) -> None:
         mod = self.mod

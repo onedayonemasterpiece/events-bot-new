@@ -24,6 +24,12 @@ PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
+HEARTBEAT_EVENTS = {
+    "kernel_started", "image_queue_poll", "image_batch_started", "image_batch_done",
+    "media_fetch_started", "media_fetch_done", "image_inference_current", "image_inference_result",
+    "model_load_started", "model_load_done", "model_unavailable",
+    "ydb_source_visual_rollup_written", "report_written", "image_queue_poll_finished_empty",
+}
 
 
 def max_media_fetch_attempts() -> int:
@@ -48,7 +54,7 @@ def log_event(name: str, **payload):
     payload.setdefault("event_name", name)
     payload.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     print("[region-talk-image-diagnostic] " + json.dumps(payload, ensure_ascii=False)[:1200], flush=True)
-    if name in {"kernel_started", "image_queue_poll", "image_batch_started", "image_batch_done", "ydb_source_visual_rollup_written", "report_written", "image_queue_poll_finished_empty"}:
+    if name in HEARTBEAT_EVENTS:
         hb = globals().get("write_region_talk_image_diag_heartbeat")
         if callable(hb):
             try:
@@ -893,13 +899,16 @@ def maybe_clip():
         import torch
         from transformers import CLIPModel, CLIPProcessor
         t=time.monotonic(); model_id="openai/clip-vit-base-patch32"; device="cuda" if torch.cuda.is_available() else "cpu"
+        log_event("model_load_started", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=model_id, device=device)
         proc=CLIPProcessor.from_pretrained(model_id); model=CLIPModel.from_pretrained(model_id).to(device); model.eval()
         CLIP.update({"loaded":True,"torch":torch,"processor":proc,"model":model,"device":device})
         model_availability["clip_iqa_postcardness_prompt_scorer"]={"available":True,"detail":f"{model_id} on {device}, load_seconds={round(time.monotonic()-t,2)}"}
+        log_event("model_load_done", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=model_id, device=device, load_seconds=round(time.monotonic()-t, 3))
         return True
     except Exception as exc:
         CLIP["error"] = type(exc).__name__ + ": " + str(exc)[:500]
         model_availability["clip_iqa_postcardness_prompt_scorer"]={"available":False,"detail":CLIP["error"]}
+        log_event("model_unavailable", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", error=CLIP["error"])
         return False
 
 def score_clip(im, r):
@@ -920,9 +929,11 @@ def maybe_laion():
     if LAION["loaded"]: return True
     if LAION["error"]: return False
     try:
+        t=time.monotonic()
+        log_event("model_load_started", phase="model_load", model="laion_aesthetic_predictor")
         if not maybe_clip():
             raise RuntimeError("CLIP unavailable; LAION aesthetic v1 needs CLIP ViT-B/32 embeddings")
-        torch=CLIP["torch"]; t=time.monotonic(); device=CLIP["device"]
+        torch=CLIP["torch"]; device=CLIP["device"]
         cache=Path.home()/".cache"/"region-talk-image-diagnostic"; cache.mkdir(parents=True, exist_ok=True)
         weights=cache/"sa_0_4_vit_b_32_linear.pth"
         if not weights.exists():
@@ -935,6 +946,7 @@ def maybe_laion():
         model.load_state_dict(state); model.eval()
         LAION.update({"loaded":True,"model":model})
         model_availability["laion_aesthetic_predictor"]={"available":True,"detail":f"LAION sa_0_4_vit_b_32_linear on CLIP ViT-B/32, load_seconds={round(time.monotonic()-t,2)}"}
+        log_event("model_load_done", phase="model_load", model="laion_aesthetic_predictor", device=device, load_seconds=round(time.monotonic()-t, 3))
         return True
     except Exception as exc:
         LAION["error"]=type(exc).__name__ + ": " + str(exc)[:500]
@@ -970,6 +982,7 @@ def maybe_nima():
     if NIMA["error"]: return False
     try:
         t=time.monotonic()
+        log_event("model_load_started", phase="model_load", model="nima_lightweight_quality")
         try:
             import pyiqa  # type: ignore
         except Exception:
@@ -983,6 +996,7 @@ def maybe_nima():
                 metric=pyiqa.create_metric(metric_name, device=device)
                 NIMA.update({"loaded":True,"metric":metric,"device":device,"metric_name":metric_name})
                 model_availability["nima_lightweight_quality"]={"available":True,"detail":f"pyiqa {metric_name} on {device}, load_seconds={round(time.monotonic()-t,2)}"}
+                log_event("model_load_done", phase="model_load", model="nima_lightweight_quality", model_id=metric_name, device=device, load_seconds=round(time.monotonic()-t, 3))
                 return True
             except Exception as exc:
                 last=type(exc).__name__ + ": " + str(exc)[:500]
