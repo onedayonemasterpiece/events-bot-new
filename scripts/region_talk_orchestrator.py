@@ -235,6 +235,23 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "source_onboarding_profile_item": 2500,
 }
 
+# The vector payload also contains the dense embedding. Loading thousands of
+# those arrays merely to count E5/BGE pairs can exceed the local orchestrator's
+# memory even though the useful metric fields are tiny. Keep this list scalar-
+# only and let YDB project it with JSON_VALUE.
+TEXT_VECTOR_METRIC_FIELDS = (
+    "model_short", "model_id", "encoder_contract", "post_url", "post_id",
+    "text_vector_enrichment_id", "paired_e5_text_hash", "text_hash",
+    "semantic_bank_version", "created_at", "updated_at",
+    "source_terminal_excluded", "source_queue_status", "fetch_status",
+    "source_scope", "source_geo_class", "source_quick_class", "source_topic_class",
+    "discovery_method", "priority_reason", "post_link_priority",
+    "keyword_hit_query", "keyword_hit_hashtag",
+    "text", "full_text", "text_excerpt", "short_summary", "why_keep_in_memory",
+    "why_this_is_about_kaliningrad", "what_positive", "what_neutral_or_useful",
+    "llm_reason", "publication_story_reason", "model_short_explanation",
+)
+
 
 def _env_int(name: str, default: int) -> int:
     raw = (os.getenv(name) or "").strip()
@@ -271,6 +288,52 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
         # actually fetching/writing posts.
         return max(1, cap)
     return max(1, min(max(1, int(requested_limit)), cap))
+
+
+def read_text_vector_metric_rows(pool: Any, ydb: Any, table: str, limit: int) -> list[dict[str, Any]]:
+    """Read vector metadata without materializing dense embedding arrays."""
+    max_items = max(1, int(limit))
+    page_size = max(1, min(500, _env_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200), max_items))
+    prefix = "text_vector_enrichment_item:"
+    prefix_upper = "text_vector_enrichment_item;"
+    after = prefix
+    projections = ", ".join(
+        f'JSON_VALUE(payload_json, "$.{field}") AS `{field}`'
+        for field in TEXT_VECTOR_METRIC_FIELDS
+    )
+    out: list[dict[str, Any]] = []
+    while len(out) < max_items:
+        query_text = (
+            "DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
+            f"SELECT pk, updated_at AS `_row_updated_at`, {projections} FROM `{table}` "
+            "WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
+            f"ORDER BY pk LIMIT {min(page_size, max_items - len(out))};"
+        )
+
+        def op(session: Any) -> Any:
+            query = session.prepare(query_text)
+            return session.transaction(ydb.StaleReadOnly()).execute(
+                query,
+                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+                commit_tx=True,
+            )
+
+        rows = pool.retry_operation_sync(op)[0].rows
+        if not rows:
+            break
+        for row in rows:
+            after = str(row.pk)
+            item = {
+                field: getattr(row, field, None)
+                for field in TEXT_VECTOR_METRIC_FIELDS
+                if getattr(row, field, None) not in (None, "")
+            }
+            item["_ydb_pk"] = after
+            item["_ydb_updated_at"] = str(getattr(row, "_row_updated_at", "") or "")
+            out.append(item)
+        if len(rows) < page_size:
+            break
+    return out
 
 
 def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
@@ -2886,7 +2949,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         truncated_kinds: list[str] = []
         for kind in kinds:
             kind_limit = _orchestrator_kind_limit(kind, limit)
-            loaded = read_kind_rows(pool, ydb, table, kind, kind_limit + 1)
+            loaded = (
+                read_text_vector_metric_rows(pool, ydb, table, kind_limit + 1)
+                if kind == "text_vector_enrichment_item"
+                else read_kind_rows(pool, ydb, table, kind, kind_limit + 1)
+            )
             if len(loaded) > kind_limit:
                 truncated_kinds.append(kind)
                 loaded = loaded[:kind_limit]

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk orchestrator memory growth when reading the complete dual-vector ledger: control-plane metrics now use a server-side scalar YDB projection and never materialize dense E5/BGE embedding arrays, while the stored vectors and E5+BGE fusion contract remain unchanged.
 - Fixed Region Talk finalizer idempotency for compact eligibility evidence: the full evidence now has a durable fingerprint, legacy 700-character prefixes are recognized as unchanged, terminal tombstones no longer get rewritten or trigger repeated cross-ledger text-prune scans, and an unchanged source-attestation priority is no longer timestamped/written again on every downstream cycle.
 - Added Region Talk ImageDiagnostic heartbeats around media fetch, current-image inference and CLIP/LAION/NIMA model loading, so long CPU startup is distinguishable from a frozen image batch without changing the scoring ensemble.
 - Fixed Region Talk source-level idempotency: a successful newer `source_status_item` now repairs a stale pending canonical source row, preserves the original scan lineage, and is bulk-persisted as a changed row; queue reconstruction no longer stamps all historical scans with the current run. Exact-post/fast-check probes no longer masquerade as source-history completion. Known-KO/confirmed-source delta rescans are globally suppressed while any Telegram/VK source still lacks a first scan, except for explicit near-publication source attestation.

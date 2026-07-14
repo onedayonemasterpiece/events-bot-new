@@ -9,6 +9,7 @@ import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,53 @@ def load_module():
 
 
 class RegionTalkOrchestratorTests(unittest.TestCase):
+    def test_text_vector_metric_read_projects_scalars_without_dense_embedding(self) -> None:
+        mod = load_module()
+        captured: dict[str, object] = {}
+        row = SimpleNamespace(
+            pk="text_vector_enrichment_item:e5_1",
+            _row_updated_at="2026-07-14T00:00:00+00:00",
+            model_short="e5",
+            model_id="intfloat/multilingual-e5-base",
+            encoder_contract=mod.CURRENT_E5_ENCODER_CONTRACT,
+            post_url="https://t.me/example/1",
+            post_id="tg:example:1",
+            text_hash="abc",
+            text="Калининград",
+        )
+
+        class Transaction:
+            def execute(self, query, params, commit_tx=True):
+                captured["query"] = query
+                captured["params"] = params
+                captured["commit_tx"] = commit_tx
+                return [SimpleNamespace(rows=[row])]
+
+        class Session:
+            def prepare(self, query_text):
+                captured["query_text"] = query_text
+                return query_text
+
+            def transaction(self, _mode):
+                return Transaction()
+
+        class Pool:
+            def retry_operation_sync(self, op):
+                return op(Session())
+
+        fake_ydb = SimpleNamespace(StaleReadOnly=lambda: object())
+        rows = mod.read_text_vector_metric_rows(Pool(), fake_ydb, "/db/state", 10)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["post_url"], "https://t.me/example/1")
+        self.assertEqual(rows[0]["_ydb_pk"], "text_vector_enrichment_item:e5_1")
+        self.assertNotIn("vector", rows[0])
+        self.assertNotIn("embedding", rows[0])
+        query_text = str(captured["query_text"])
+        self.assertIn('JSON_VALUE(payload_json, "$.model_short")', query_text)
+        self.assertNotIn('"$.vector"', query_text)
+        self.assertNotIn('"$.embedding"', query_text)
+
     def test_exact_post_probe_is_not_source_history_scan_evidence(self) -> None:
         mod = load_module()
         exact = {

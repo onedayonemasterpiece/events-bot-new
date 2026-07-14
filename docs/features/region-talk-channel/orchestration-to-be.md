@@ -15,6 +15,14 @@ The normal `RegionTalkCandidateReport` run should remain queue-driven and opport
 
 This keeps every launch useful in several directions while still bounding one Kaggle run to about 20-30 minutes. Explicit modes remain useful only for probes, recovery and tests (`vector_probe_only`, BGE-only batch validation, no-discovery maintenance), not as the default product workflow.
 
+The server-side orchestrator must not materialize dense E5/BGE embedding arrays
+merely to calculate queue and pairing metrics. It reads the complete vector
+ledger through a YDB scalar `JSON_VALUE` projection containing identity,
+contract, text-hash, lifecycle and the bounded working-text fields needed to
+decide whether BGE work is actionable. Actual dense vectors remain in YDB for
+dual-model fusion; this optimization changes only the control-plane read and
+does not remove either model or alter scoring.
+
 ## Notebook/process topology
 
 ### 1. `RegionTalkCandidateReport` — main queue consumer/producer
