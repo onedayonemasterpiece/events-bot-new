@@ -1386,15 +1386,14 @@ def maybe_clip():
     if CLIP["error"]: return False
     try:
         t=time.monotonic(); model_reference, model_origin=clip_model_reference(); local_only=model_origin != "huggingface_hub"
-        if local_only:
-            # huggingface_hub reads offline mode during import, so this must be
-            # set before importing Transformers rather than immediately before
-            # from_pretrained().
-            os.environ.setdefault("HF_HUB_OFFLINE", "1")
         import torch
         from transformers import CLIPModel, CLIPProcessor
         device="cuda" if torch.cuda.is_available() else "cpu"
         log_event("model_load_started", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", model_id=CLIP_MODEL_ID, model_origin=model_origin, model_reference=model_reference, device=device)
+        # ``local_files_only`` is the CLIP network guard. Do not set the
+        # process-wide HF_HUB_OFFLINE flag: huggingface_hub captures it at
+        # import time and that silently disables the later, independently
+        # required pyiqa/NIMA weight lookup in the same notebook.
         proc=CLIPProcessor.from_pretrained(model_reference, local_files_only=local_only); model=CLIPModel.from_pretrained(model_reference, local_files_only=local_only).to(device); model.eval()
         CLIP.update({"loaded":True,"torch":torch,"processor":proc,"model":model,"device":device})
         model_availability["clip_iqa_postcardness_prompt_scorer"]={"available":True,"detail":f"{CLIP_MODEL_ID} from {model_origin} on {device}, load_seconds={round(time.monotonic()-t,2)}"}

@@ -74,9 +74,14 @@ separately; the old “actual images” label had in fact counted post rows.
 The canary also exposed the next real blocker: the runtime could not obtain the
 pyiqa NIMA weights, so both rows correctly became non-terminal
 `scoring_retry` instead of false accepts/rejects. CLIP came from the pinned
-Kaggle input and LAION loaded successfully. This is not proof of a calibrated
-production image decision; deterministic packaging of every required model or
-a versioned VLM review lane remains necessary before automatic acceptance.
+Kaggle input and LAION loaded successfully. Root cause was not a three-hour
+NIMA inference: the CLIP loader set process-wide `HF_HUB_OFFLINE=1`; the
+Hugging Face client captured that flag and then refused the later pyiqa/NIMA
+weight lookup. CLIP now relies only on its own `local_files_only=True` guard
+and does not mutate the network policy of independent components. This is not
+proof of a calibrated production image decision; deterministic packaging of
+every required model or a versioned VLM review lane remains necessary before
+automatic acceptance.
 
 ## Principle
 

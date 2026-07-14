@@ -8,6 +8,7 @@ import unittest
 import json
 import shutil
 from pathlib import Path
+from types import ModuleType
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,6 +114,36 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                         os.environ.pop(key, None)
                     else:
                         os.environ[key] = value
+
+    def test_local_clip_load_does_not_disable_huggingface_for_later_nima(self) -> None:
+        old_offline = os.environ.pop("HF_HUB_OFFLINE", None)
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                mod.CLIP = {"loaded": False, "error": None}
+                mod.clip_model_reference = lambda: ("/pinned/clip", "kaggle_model_input")
+                fake_torch = ModuleType("torch")
+                fake_torch.cuda = mock.Mock()
+                fake_torch.cuda.is_available.return_value = False
+                fake_transformers = ModuleType("transformers")
+                processor = mock.Mock()
+                processor.from_pretrained.return_value = object()
+                model = mock.Mock()
+                model_instance = mock.Mock()
+                model_instance.to.return_value = model_instance
+                model.from_pretrained.return_value = model_instance
+                fake_transformers.CLIPProcessor = processor
+                fake_transformers.CLIPModel = model
+
+                with mock.patch.dict(sys.modules, {"torch": fake_torch, "transformers": fake_transformers}):
+                    self.assertTrue(mod.maybe_clip())
+
+                self.assertNotIn("HF_HUB_OFFLINE", os.environ)
+                processor.from_pretrained.assert_called_once_with("/pinned/clip", local_files_only=True)
+                model.from_pretrained.assert_called_once_with("/pinned/clip", local_files_only=True)
+            finally:
+                if old_offline is not None:
+                    os.environ["HF_HUB_OFFLINE"] = old_offline
 
     def test_launcher_attaches_pinned_clip_model_source(self) -> None:
         keys = ("KAGGLE_USERNAME", "REGION_TALK_CLIP_KAGGLE_MODEL_SOURCE")
