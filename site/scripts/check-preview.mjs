@@ -204,6 +204,9 @@ for (const [scenario, eventId, variant, mediaPolicy, scenarioMarkers] of desktop
   }
   if (/data-desktop-parallax[^>]*>[\s\S]{0,250}<img[^>]+data-image-text-mode="ocr_text"/iu.test(html)) throw new Error(`OCR example ${scenario} must not receive parallax`);
   if (variant === 'editorial' && visibleHtml.includes('desktop-prototype__photo-count')) throw new Error(`Editorial example ${scenario} must not duplicate its compact rail with a photo-count pill`);
+  if (visibleHtml.includes('data-responsive-rail') && !/data-responsive-rail-more[^>]*data-hero-gallery-open="clean-hero-gallery-[^"]+"[^>]*data-hero-gallery-index="0"/iu.test(visibleHtml)) {
+    throw new Error(`Responsive rail overflow control in ${scenario} must be hydrated as a fullscreen-gallery opener before client layout assigns its exact index`);
+  }
   if ((scenario === 'split-ocr' || scenario === 'split-portrait') && visibleHtml.includes('data-split-media-rail')) throw new Error(`Semantic-single example ${scenario} must not render a duplicate-only rail`);
 }
 
@@ -237,6 +240,7 @@ for (const marker of [
   'visual-squareish',
   'mixed-adaptive-ambient',
   'data-lab-media-treatment',
+  'data-lab-cover-crop',
   '--lab-ambient-image',
   'filter:blur(22px)',
   'data-responsive-rail-more',

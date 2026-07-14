@@ -242,7 +242,7 @@ const descriptionHtml = (event.description_html || '')
                 {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
               </button>
             ))}
-            <button type="button" class="desktop-prototype__media-rail-more" data-responsive-rail-more hidden aria-label="Открыть остальные фотографии">
+            <button type="button" class="desktop-prototype__media-rail-more" data-responsive-rail-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
               <strong data-responsive-rail-count></strong><span>фото</span>
             </button>
           </div>

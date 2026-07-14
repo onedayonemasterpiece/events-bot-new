@@ -71,6 +71,7 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- **Static site pages / desktop responsive media rail**: pre-hydrated the adaptive `+N` overflow cell as a fullscreen-gallery opener so its runtime first-hidden index remains clickable after the one-time gallery bootstrap, and extended the preview contract to guard that interaction hook.
 - **Static site pages / OCR hero classifier override**: preserved the visibly typographic event `6510` poster with an exporter-side source-grounded OCR override so event hero rendering uses `contain` rather than crop while upstream OCR classification is repaired.
 - **Static site pages / undeployed personal-feed RPC guard**: stopped auth-enabled static pages from calling the documented-but-not-yet-deployed `get_listing_personal_feed_v1` endpoint by default; the RPC now requires explicit `PUBLIC_PERSONAL_FEED_RPC_ENABLED=1`, while Yandex Auth/search remain available.
 - **Static site pages / Tretyakovka medallion**: rebuilt the gold `Т` as a clean non-overlapping SVG path so the previous stair-step defect in the stem is no longer visible.

@@ -111,7 +111,7 @@ lanes:
       - site/src/components/EventCard.astro
     expected_output: Clean committed/pushed v9 branch and public noindex preview.
     verification_scope: full_local
-    status: in_progress
+    status: committed
   - id: L04-closure-review
     role: reviewer
     support_requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10]
@@ -125,4 +125,4 @@ lanes:
     forbidden_files: ["**/*"]
     expected_output: Done/Partial/Missing/Blocked verdict with public evidence for every requirement.
     verification_scope: targeted
-    status: planned
+    status: spawned
