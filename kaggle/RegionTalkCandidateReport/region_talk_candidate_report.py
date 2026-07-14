@@ -2274,6 +2274,8 @@ COMMENT_DISCOVERY_STATE_FIELDS = [
 ]
 POST_LINK_QUEUE_STATE_FIELDS = [
     "post_link_queue_id", "post_link_status", "post_link_priority", "priority_reason",
+    "publication_text_restore_requested", "publication_text_restore_reason",
+    "publication_text_restore_requested_at", "publication_text_restore_request_run_id",
     "post_url", "keyword_hit_post_url", "source_key", "canonical_source_key",
     "source_url", "keyword_hit_source_url", "source_title", "handle", "username_or_handle",
     "matched_query", "matched_hashtag", "post_date", "hit_age_days",
@@ -3568,11 +3570,19 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
     lifecycle_cache = _REGION_TALK_TELEGRAM_RUNTIME.setdefault("post_link_lifecycle_by_id", {})
     queue_id = "postlink_" + stable_hash(post_url or row.get("source_candidate_id") or key)
     existing = dict(lifecycle_cache.get(queue_id) or lifecycle_cache.get(post_url) or {})
+    default_priority_reason = "global_hashtag_search_exact_post" if is_hashtag else "global_keyword_search_exact_post"
     item = {
         "post_link_queue_id": queue_id,
         "post_link_status": status,
         "post_link_priority": 0,
-        "priority_reason": "global_hashtag_search_exact_post" if is_hashtag else "global_keyword_search_exact_post",
+        # Exact links can be re-opened later by the publication finalizer.  Do
+        # not collapse that durable product intent back to the link's original
+        # discovery reason when recording fetch attempts/results.
+        "priority_reason": row.get("priority_reason") or existing.get("priority_reason") or default_priority_reason,
+        "publication_text_restore_requested": row.get("publication_text_restore_requested") or existing.get("publication_text_restore_requested") or "",
+        "publication_text_restore_reason": row.get("publication_text_restore_reason") or existing.get("publication_text_restore_reason") or "",
+        "publication_text_restore_requested_at": row.get("publication_text_restore_requested_at") or existing.get("publication_text_restore_requested_at") or "",
+        "publication_text_restore_request_run_id": row.get("publication_text_restore_request_run_id") or existing.get("publication_text_restore_request_run_id") or "",
         "post_url": post_url,
         "keyword_hit_post_url": post_url,
         "source_key": key,
@@ -11263,6 +11273,23 @@ def _candidate_link_handle(row: dict[str, Any]) -> str:
     return parsed[0].lower() if parsed else ""
 
 
+def publication_text_restore_requested(row: dict[str, Any]) -> bool:
+    """Recognize the durable publication-to-text-pipeline handoff.
+
+    The dedicated marker is authoritative.  The old priority/status spellings
+    remain readable so rows created before the marker rollout repair
+    themselves without a one-off migration.
+    """
+    marker = str(row.get("publication_text_restore_requested") or "").strip().lower()
+    return bool(
+        marker in {"1", "true", "yes", "on"}
+        or str(row.get("priority_reason") or "")
+        == "publication_text_restore_after_active_payload_prune"
+        or str(row.get("publication_status") or "") == "text_restore_pending"
+        or str(row.get("publication_candidate_status") or "") == "awaiting_text_restore"
+    )
+
+
 def candidate_link_rows_for_fetch(
     raw_rows: list[dict[str, Any]],
     limit: int,
@@ -11339,7 +11366,7 @@ def candidate_link_rows_for_fetch(
     )
     text_restoring = [
         row for row in ordered
-        if str(row.get("priority_reason") or "") == "publication_text_restore_after_active_payload_prune"
+        if publication_text_restore_requested(row)
         and str(row.get("post_link_status") or "") in {"", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache"}
     ][:text_restore_cap]
     text_restore_ids = {id(row) for row in text_restoring}
@@ -11462,6 +11489,104 @@ def promote_bge_ready_exact_rows(
     return out
 
 
+def promote_publication_text_restore_exact_rows(
+    link_rows: list[dict[str, Any]],
+    processed_rows: list[dict[str, Any]],
+    publication_rows: list[dict[str, Any]],
+    candidate_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Repair/re-open exact links for authoritative pending text restores.
+
+    The publication ledger is the source of truth.  Queue provenance can be
+    rewritten by later keyword/fetch lifecycle writes, so CandidateReport
+    joins the pending publication state on every exact-link load.  Existing
+    durable text takes the local rescore path; otherwise the same bounded,
+    governed exact-fetch lane is re-opened.  Terminal publication decisions
+    are deliberately not inferred as restore work.
+    """
+    pending_by_url: dict[str, dict[str, Any]] = {}
+    for publication in publication_rows:
+        publication_status = str(publication.get("publication_status") or "")
+        candidate_status = str(publication.get("publication_candidate_status") or "")
+        if (
+            publication_status != "text_restore_pending"
+            and candidate_status != "awaiting_text_restore"
+        ):
+            continue
+        if str(publication.get("sent_to_chat") or "").lower() == "true":
+            continue
+        if candidate_status in {
+            "llm_confirmed", "llm_rejected", "llm_needs_review", "sent_to_chat",
+            "accepted_for_publication", "tombstoned_reject", "revoked",
+        }:
+            continue
+        if str(publication.get("publication_tombstone") or "").lower() == "true":
+            continue
+        if str(publication.get("publication_revoked") or "").lower() == "true":
+            continue
+        url = canonical_post_url_for_storage(publication.get("post_url"))
+        if url:
+            pending_by_url[url] = publication
+    if not pending_by_url:
+        return [dict(row) for row in link_rows]
+
+    cached_payload_by_url: dict[str, dict[str, Any]] = {}
+    cached_fields = {
+        "post_date", "source_id", "source_title", "source_url", "source_kind",
+        "source_quick_class", "has_media", "media_count", "media_kind",
+        "primary_media_path", "local_media_paths", "rights_policy",
+        "embedded_links", "embedded_links_json",
+    }
+    cached_sources = list(processed_rows) + list(candidate_rows or []) + list(publication_rows)
+    cached_sources.sort(key=lambda item: str(item.get("updated_at") or item.get("_ydb_updated_at") or ""))
+    for source in cached_sources:
+        url = canonical_post_url_for_storage(source.get("post_url"))
+        if url not in pending_by_url:
+            continue
+        payload = cached_payload_by_url.setdefault(url, {})
+        text = str(source.get("full_text") or source.get("text") or "").strip()
+        if text:
+            payload["text"] = text
+        for field in cached_fields:
+            value = source.get(field)
+            if value not in (None, ""):
+                payload[field] = value
+
+    active_retry_statuses = {"", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache"}
+    out: list[dict[str, Any]] = []
+    for source in link_rows:
+        row = dict(source)
+        url = canonical_post_url_for_storage(row.get("post_url") or row.get("keyword_hit_post_url"))
+        publication = pending_by_url.get(url)
+        if not publication:
+            out.append(row)
+            continue
+        status = str(row.get("post_link_status") or "")
+        if status in {"terminal_source_rejected", "terminal_bad_url", "operator_rejected"}:
+            out.append(row)
+            continue
+        row.update({
+            "post_link_priority": 0,
+            "priority_reason": "publication_text_restore_after_active_payload_prune",
+            "publication_text_restore_requested": "true",
+            "publication_text_restore_reason": publication.get("text_restore_reason") or "eligible_post_text_missing_after_async_media_scoring",
+            "publication_text_restore_requested_at": publication.get("updated_at") or publication.get("last_attempt_at") or "",
+            "publication_text_restore_request_run_id": publication.get("run_id") or publication.get("last_seen_run_id") or "",
+        })
+        if status not in active_retry_statuses:
+            cached_payload = cached_payload_by_url.get(url) or {}
+            if str(cached_payload.get("text") or "").strip():
+                row["post_link_status"] = "bge_ready_rescore"
+                row["_cached_rescore_payload"] = cached_payload
+                row["next_action"] = "rebuild_publication_candidate_from_durable_text"
+            else:
+                row["post_link_status"] = "retry_fetch"
+                row["next_attempt_after"] = ""
+                row["next_action"] = "refetch_exact_post_then_finalize_publication"
+        out.append(row)
+    return out
+
+
 def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
@@ -11546,6 +11671,12 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                     rows,
                     list(processed_items.values()),
                     list(vector_items.values()),
+                    list(publication_items.values()),
+                    list(candidate_items.values()),
+                )
+                rows = promote_publication_text_restore_exact_rows(
+                    rows,
+                    list(processed_items.values()),
                     list(publication_items.values()),
                     list(candidate_items.values()),
                 )
@@ -11898,6 +12029,10 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                 "discovery_priority": "0" if str(row.get("_kind") or "") == "post_link_queue_item" else "2",
                 "post_link_priority": row.get("post_link_priority") if row.get("post_link_priority") not in (None, "") else (0 if str(row.get("_kind") or "") == "post_link_queue_item" else 2),
                 "priority_reason": row.get("priority_reason") or "",
+                "publication_text_restore_requested": row.get("publication_text_restore_requested") or "",
+                "publication_text_restore_reason": row.get("publication_text_restore_reason") or "",
+                "publication_text_restore_requested_at": row.get("publication_text_restore_requested_at") or "",
+                "publication_text_restore_request_run_id": row.get("publication_text_restore_request_run_id") or "",
                 "keyword_hit_query": row.get("matched_query") or "",
                 "keyword_hit_hashtag": row.get("matched_hashtag") or "",
             }
@@ -13574,10 +13709,7 @@ def plan_posts_for_vector_scoring(
         fingerprint = post_processing_fingerprint(text_hash=text_hash, require_bge_m3=require_bge_m3)
         previous_fingerprint = str((previous or {}).get("post_processing_fingerprint") or "")
         previous_stage = str((previous or {}).get("current_stage") or "")
-        text_restore_requested = (
-            str(row.get("priority_reason") or "")
-            == "publication_text_restore_after_active_payload_prune"
-        )
+        text_restore_requested = publication_text_restore_requested(row)
 
         if not text_hash:
             kind = "skip_no_text"

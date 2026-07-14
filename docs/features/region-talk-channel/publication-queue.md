@@ -137,6 +137,14 @@ that point is therefore **not** a content rejection and is not a terminal
 `publication_status=text_restore_pending` /
 `publication_candidate_status=awaiting_text_restore`, spends no Gemini budget,
 and reopens the exact Telegram URL as a priority-0 `post_link_queue_item`.
+The handoff has a dedicated durable
+`publication_text_restore_requested=true` marker plus request reason/time/run;
+`priority_reason` remains a backward-compatible ordering hint rather than the
+only product-state carrier. CandidateReport also joins the authoritative
+`publication_candidate_item` by canonical post URL on every exact-link load.
+This self-repairs older or concurrently rewritten keyword rows: a pending
+publication with durable full text takes a CPU/YDB-only local rebuild, while a
+row without text re-enters the same bounded exact Telegram fetch lane.
 CandidateReport performs the refetch through DISCOVERY1, its cached entity and
 the normal human-like request governor; the finalizer does not use public-web
 HTML as a hidden fallback. Existing FloodWait/cooldown evidence on an active
@@ -155,6 +163,13 @@ source-history and exact-link fetches cannot create a second product row for
 the same public post. This reuse also applies when candidate memory is being
 bootstrapped from a legacy processed-post row rather than an already-migrated
 `candidate_memory_item`.
+
+Gemini/operator/delivery verdicts are monotonic. A contradictory stale
+`text_restore_pending` projection cannot reopen a `sent_to_chat`,
+`llm_rejected`, tombstoned or revoked post, and terminal source/bad-link rows
+remain terminal. The only legacy terminal spelling intentionally migrated is
+`no_text_for_gemini + filtered_before_llm`, because that combination was
+created by the historical premature-compaction bug before Gemini ran.
 
 Source-onboarding evidence also treats the current restored candidate as the
 authoritative authored-post excerpt for its URL. An older compacted memory row

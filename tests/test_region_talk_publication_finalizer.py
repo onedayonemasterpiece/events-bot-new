@@ -711,6 +711,39 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertFalse(mod.is_newly_accepted_in_run(replayed))
         self.assertTrue(mod.is_newly_accepted_in_run({"publication_status": "gemini_accept"}))
 
+    def test_text_restore_never_reopens_delivered_or_rejected_terminal_rows(self) -> None:
+        mod = self.mod
+        rows = [
+            candidate_row(
+                publication_status="text_restore_pending",
+                publication_candidate_status="awaiting_text_restore",
+                sent_to_chat="true",
+            ),
+            candidate_row(
+                publication_status="text_restore_pending",
+                publication_candidate_status="llm_rejected",
+            ),
+            candidate_row(
+                publication_status="text_restore_pending",
+                publication_candidate_status="awaiting_text_restore",
+                publication_tombstone="true",
+            ),
+            candidate_row(
+                publication_status="operator_rejected",
+                publication_candidate_status="filtered_before_llm",
+            ),
+        ]
+        for row in rows:
+            with self.subTest(row=row):
+                self.assertEqual(mod.finalization_trigger(row, now_iso="2026-07-14T20:00:00+00:00"), "")
+
+        with mock.patch.object(mod.rt, "ydb_select_kind_items") as select_mock:
+            self.assertEqual(
+                mod.write_text_restore_post_link_rows(object(), object(), "table", rows, run_id="run-terminal"),
+                0,
+            )
+        select_mock.assert_not_called()
+
     def test_no_text_enters_exact_restore_queue_without_consuming_llm_budget(self) -> None:
         mod = self.mod
         first = candidate_row(text="", short_summary="")
@@ -811,6 +844,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["attempt_count"], 3)
         self.assertEqual(payload["fetch_error_code"], "FloodWaitError")
         self.assertEqual(payload["next_attempt_after"], "2026-07-15T02:00:00+00:00")
+        self.assertEqual(payload["priority_reason"], "publication_text_restore_after_active_payload_prune")
+        self.assertEqual(payload["publication_text_restore_requested"], "true")
+        self.assertEqual(payload["publication_text_restore_request_run_id"], "run-restore")
 
     def test_public_tme_fallback_is_default_off_and_requires_explicit_opt_in(self) -> None:
         mod = self.mod

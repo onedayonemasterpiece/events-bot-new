@@ -427,6 +427,25 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _terminal_decision_blocks_text_restore(publication: dict[str, Any]) -> bool:
+    """Keep delivered/operator/Gemini verdicts monotonic under stale rows."""
+    status = str(publication.get("publication_status") or "").strip().lower()
+    candidate_status = str(publication.get("publication_candidate_status") or "").strip().lower()
+    if str(publication.get("sent_to_chat") or "").strip().lower() == "true" or candidate_status == "sent_to_chat":
+        return True
+    if status in TERMINAL_PUBLICATION_STATUSES or status.startswith("operator_rejected"):
+        return True
+    # ``filtered_before_llm`` is the one legacy status intentionally allowed
+    # to migrate from the former terminal no-text bug.
+    if candidate_status in (TERMINAL_CANDIDATE_STATUSES - {"filtered_before_llm"}):
+        return True
+    if str(publication.get("publication_tombstone") or "").strip().lower() == "true":
+        return True
+    if str(publication.get("publication_revoked") or "").strip().lower() == "true":
+        return True
+    return False
+
+
 def finalization_trigger(publication: dict[str, Any] | None, *, now_iso: str, reverify_existing: bool = False) -> str:
     """Classify one normalized URL as never-finalized, retry-due, or inactive."""
     if not publication:
@@ -439,12 +458,14 @@ def finalization_trigger(publication: dict[str, Any] | None, *, now_iso: str, re
     # second Gemini request or masquerade as a newly accepted candidate.
     if str(publication.get("sent_to_chat") or "").strip().lower() == "true" or candidate_status == "sent_to_chat":
         return ""
+    if status.startswith("operator_rejected"):
+        return ""
     if status in {"no_text_for_gemini", "text_restore_pending"}:
         # Legacy ``no_text_for_gemini`` rows were incorrectly marked
         # ``filtered_before_llm`` and therefore looked terminal through the
         # candidate-status field.  Explicitly reopen them before the generic
         # terminal checks below.
-        return "retry_due"
+        return "" if _terminal_decision_blocks_text_restore(publication) else "retry_due"
     if reverify_existing:
         return "reverify_requested"
     if status.startswith("eligibility_") or candidate_status.startswith(("tombstoned", "revoked", "eligibility_")):
@@ -1871,6 +1892,7 @@ def write_text_restore_post_link_rows(
         row
         for row in rows
         if str(row.get("publication_status") or "") == "text_restore_pending"
+        and not _terminal_decision_blocks_text_restore(row)
         and re.match(r"^https?://t\.me/[^/]+/[0-9]+$", normalize_post_url(str(row.get("post_url") or "")), re.I)
     ]
     if not pending:
@@ -1912,6 +1934,10 @@ def write_text_restore_post_link_rows(
                 "post_link_status": existing_status if keep_active_retry else "retry_fetch",
                 "post_link_priority": 0,
                 "priority_reason": "publication_text_restore_after_active_payload_prune",
+                "publication_text_restore_requested": "true",
+                "publication_text_restore_reason": row.get("text_restore_reason") or "eligible_post_text_missing_after_async_media_scoring",
+                "publication_text_restore_requested_at": row.get("updated_at") or row.get("last_attempt_at") or now,
+                "publication_text_restore_request_run_id": run_id,
                 "post_url": post_url,
                 "keyword_hit_post_url": post_url,
                 "source_key": source_key,

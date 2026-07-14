@@ -1631,6 +1631,24 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertTrue(item["evidence_excerpt_hash"])
         self.assertIn("Калининград", item["keyword_hit_text_excerpt"])
 
+    def test_post_link_queue_item_preserves_publication_text_restore_marker(self) -> None:
+        mod = load_module()
+        item = mod.post_link_queue_item_from_keyword_hit({
+            "post_link_queue_id": "postlink_restore",
+            "post_link_status": "fetched",
+            "post_url": "https://t.me/travel_foo/123",
+            "source_url": "https://t.me/travel_foo",
+            "canonical_source_key": "telegram:travel_foo",
+            "priority_reason": "publication_text_restore_after_active_payload_prune",
+            "publication_text_restore_requested": "true",
+            "publication_text_restore_reason": "eligible_post_text_missing_after_async_media_scoring",
+            "publication_text_restore_requested_at": "2026-07-14T20:00:00+00:00",
+            "publication_text_restore_request_run_id": "finalizer-run",
+        }, run_id="candidate-run", status="fetched")
+        self.assertEqual(item["priority_reason"], "publication_text_restore_after_active_payload_prune")
+        self.assertEqual(item["publication_text_restore_requested"], "true")
+        self.assertEqual(item["publication_text_restore_request_run_id"], "finalizer-run")
+
     def test_post_link_queue_item_from_keyword_hit_terminally_rejects_local_source(self) -> None:
         mod = load_module()
         row = {
@@ -6220,7 +6238,8 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "post_url": "https://t.me/travel/10",
             "platform_post_key": "tg:travel:10",
             "text": "Личный рассказ о поездке в Калининград и на Куршскую косу.",
-            "priority_reason": "publication_text_restore_after_active_payload_prune",
+            "priority_reason": "global_keyword_search_exact_post",
+            "publication_text_restore_requested": "true",
         }
         text_hash = mod.text_vector_text_hash(mod.text_embedding_input_for_post(post))
         e5 = {
@@ -6250,6 +6269,58 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(actionable[0]["_rt_work_kind"], "reuse_e5_bge_text_restore")
         self.assertEqual(metrics["posts_needs_e5"], 0)
         self.assertEqual(metrics["posts_reuse_e5_bge_text_restore"], 1)
+
+    def test_publication_ledger_reopens_text_restore_with_or_without_cached_text(self) -> None:
+        mod = load_module()
+        links = [
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/cached/1", "priority_reason": "global_keyword_search_exact_post"},
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/network/2", "priority_reason": "global_keyword_search_exact_post"},
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/terminal/3", "priority_reason": "global_keyword_search_exact_post"},
+            {"_kind": "post_link_queue_item", "post_link_status": "fetched", "post_url": "https://t.me/stale/4", "priority_reason": "global_keyword_search_exact_post"},
+        ]
+        publications = [
+            {
+                "post_url": "https://t.me/cached/1",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "text_restore_reason": "eligible_post_text_missing_after_async_media_scoring",
+                "run_id": "finalizer-1",
+                "updated_at": "2026-07-14T20:00:00+00:00",
+            },
+            {
+                "post_url": "https://t.me/network/2",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+            },
+            {
+                "post_url": "https://t.me/terminal/3",
+                "publication_status": "gemini_reject",
+                "publication_candidate_status": "llm_rejected",
+            },
+            {
+                "post_url": "https://t.me/stale/4",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "llm_rejected",
+            },
+        ]
+        promoted = mod.promote_publication_text_restore_exact_rows(
+            links,
+            [],
+            publications,
+            [{"post_url": "https://t.me/cached/1", "full_text": "Полный восстановленный текст", "has_media": True}],
+        )
+        self.assertEqual(promoted[0]["post_link_status"], "bge_ready_rescore")
+        self.assertEqual((promoted[0]["_cached_rescore_payload"] or {}).get("text"), "Полный восстановленный текст")
+        self.assertEqual(promoted[0]["publication_text_restore_requested"], "true")
+        self.assertEqual(promoted[1]["post_link_status"], "retry_fetch")
+        self.assertEqual(promoted[1]["priority_reason"], "publication_text_restore_after_active_payload_prune")
+        self.assertEqual(promoted[2]["post_link_status"], "fetched")
+        self.assertEqual(promoted[3]["post_link_status"], "fetched")
+        selected = mod.candidate_link_rows_for_fetch(promoted, 1, cached_entity_handles={"network"})
+        self.assertEqual([row["post_url"] for row in selected], [
+            "https://t.me/cached/1",
+            "https://t.me/network/2",
+        ])
 
     def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
         mod = load_module()
