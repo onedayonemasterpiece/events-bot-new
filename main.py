@@ -21150,7 +21150,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 str(getattr(ev, "location_address", "") or ""),
                 str(getattr(ev, "city", "") or ""),
                 str(getattr(ev, "ticket_link", "") or ""),
-                str(getattr(ev, "ics_url", "") or ""),
+                f"ics:{str(getattr(ev, 'ics_url', '') or '<none>')}",
                 json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
                 text_for_vk,
             ]

@@ -19,7 +19,7 @@ def _expected_vk_source_hash(event, text):
                 str(event.location_address or ""),
                 str(event.city or ""),
                 str(event.ticket_link or ""),
-                str(event.ics_url or ""),
+                f"ics:{str(event.ics_url or '<none>')}",
                 json.dumps(list(event.photo_urls or []), ensure_ascii=False),
                 text,
             ]

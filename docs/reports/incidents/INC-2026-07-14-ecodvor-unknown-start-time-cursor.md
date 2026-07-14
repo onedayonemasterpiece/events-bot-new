@@ -85,7 +85,9 @@ Telegram Monitoring run:
    content hash and the update path sent a new message rather than editing the known post.
 9. Managed VK `vk_source_hash` omitted `event.ics_url`. Even after the cleanup dependency cleared
    the URL and shortlink, `job_sync_vk_source_post` considered the wall projection unchanged and
-   returned before removing its old `Добавить в календарь` line.
+   returned before removing its old `Добавить в календарь` line. The calendar component now uses
+   an explicit `ics:<none>` sentinel: the shared `content_hash()` collapses whitespace, so a blank
+   line would otherwise be indistinguishable from the old omitted field.
 
 ## Contributing Factors
 
