@@ -146,10 +146,13 @@ Ignored artifacts не являются GitHub deliverable; hashes нужны т
 
 ## 7. Gate status и следующий шаг
 
-- Accepted eligible reviews: **0 / 2**.
+- На момент этой отклонённой попытки accepted eligible reviews было **0 / 2**.
+- Текущий статус после отдельного полного evidence-capsule run: **1 / 2**; см.
+  [`consultant-gemini-3.1-pro-high-2026-07-14.md`](consultant-gemini-3.1-pro-high-2026-07-14.md).
 - Этот запуск: **не засчитан**, хотя использовал видимый Gemini Pro-class
   surface.
-- Phase B synthesis: **blocked**, потому что нет двух accepted reviews.
+- Phase B synthesis по-прежнему **blocked**, пока нет второго accepted review и
+  итогового synthesis.
 - Следующий reviewer должен работать по
   [`external-consultant-review-pack.md`](../../external-consultant-review-pack.md),
   назвать реально открытые files/ranges и не получать credit за checklist без

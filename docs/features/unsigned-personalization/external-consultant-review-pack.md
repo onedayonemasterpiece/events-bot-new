@@ -4,13 +4,13 @@
 >
 > **Target branch:** `feature/personalization-product-e2e-design`.
 
-> **Review status (2026-07-14):** accepted eligible reviews: **0 / 2**. A
-> `Gemini 3.1 Pro (High)` Antigravity attempt was run against
-> `b90cdaf0d77e67ba097a771f07122930a5a3a4da`, but rejected because its claimed
-> reading ledger did not match the transcript and no single response inspected
-> the mandatory docs, schemas, implementation, migrations and intake. Treat the
-> [attempt record](reviews/product-e2e/supplementary-gemini-pro-audit-attempt-2026-07-14.md)
-> only as supplementary probe material.
+> **Review status (2026-07-14):** accepted eligible reviews: **1 / 2**. The
+> [Gemini 3.1 Pro (High) review](reviews/product-e2e/consultant-gemini-3.1-pro-high-2026-07-14.md)
+> used a line-numbered 14-pack evidence capsule for exact SHA `bc4e1b2e`, with
+> all evidence delivered inline and `14/14` receipts validated. Its decisions
+> remain consultant proposals until the second eligible review and synthesis.
+> The earlier [rejected attempt](reviews/product-e2e/supplementary-gemini-pro-audit-attempt-2026-07-14.md)
+> remains supplementary probe material and is not counted.
 
 ## 1. Eligibility и provenance
 
