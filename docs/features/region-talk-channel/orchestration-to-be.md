@@ -23,6 +23,13 @@ decide whether BGE work is actionable. Actual dense vectors remain in YDB for
 dual-model fusion; this optimization changes only the control-plane read and
 does not remove either model or alter scoring.
 
+CandidateReport remains one self-contained Kaggle worker, but its reviewed
+Python source has crossed Kaggle's script-source limit of about 1 MB. The
+canonical launcher therefore uploads a small deterministic `zlib+b85` wrapper
+that expands the exact reviewed worker bytes in memory, with a local 950 KB
+safety gate before push. This is transport packaging only: it creates no
+additional mutable code dataset and changes no pipeline stage, model or queue.
+
 ## Notebook/process topology
 
 ### 1. `RegionTalkCandidateReport` — main queue consumer/producer

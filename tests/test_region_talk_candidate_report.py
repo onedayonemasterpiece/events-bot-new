@@ -5824,6 +5824,11 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         kernel_path = mod.prepared_kernel_path(run_id="unit-e5-model", kernel_slug="unit-e5-model")
         metadata = json.loads((kernel_path / "kernel-metadata.json").read_text(encoding="utf-8"))
         self.assertIn(mod.DEFAULT_E5_KAGGLE_MODEL_SOURCE, metadata["model_sources"])
+        prepared_source = (kernel_path / "region_talk_candidate_report.py").read_bytes()
+        self.assertLess(len(prepared_source), mod.KAGGLE_KERNEL_SOURCE_SAFETY_BYTES)
+        self.assertLess(len(prepared_source), mod.KAGGLE_KERNEL_SOURCE_MAX_BYTES)
+        self.assertIn(b"zlib+b85 packed", prepared_source)
+        compile(prepared_source, "prepared_region_talk_candidate_report.py", "exec")
 
     def test_launcher_config_propagates_llm_timeouts(self) -> None:
         import importlib.util
