@@ -1,5 +1,6 @@
 ---
 import { withBase } from '../../lib/events';
+import AnnouncementsWordmark from '../brand/AnnouncementsWordmark.astro';
 
 export type DesktopHeaderVariant = 'text-tag' | 'logo-eyelet' | 'signature-tab';
 
@@ -23,7 +24,7 @@ const navigation = [
     {variant === 'text-tag' && (
       <a class="desktop-header-concept__text-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
         <span>Полюбить Калининград</span>
-        <strong>Анонсы</strong>
+        <AnnouncementsWordmark class="desktop-header-concept__tag-wordmark" />
       </a>
     )}
 
@@ -34,7 +35,7 @@ const navigation = [
         </a>
         <a class="desktop-header-concept__inline-name" href={withBase('/__preview/')} tabindex="-1" aria-hidden="true">
           <strong>Полюбить Калининград</strong>
-          <span>Анонсы</span>
+          <AnnouncementsWordmark class="desktop-header-concept__inline-wordmark" />
         </a>
       </div>
     )}
@@ -42,7 +43,7 @@ const navigation = [
     {variant === 'signature-tab' && (
       <a class="desktop-header-concept__signature" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
         <span class="desktop-header-concept__signature-mark"><img src={withBase('/brand-mark-white.svg')} alt="" width="970" height="820" /></span>
-        <span class="desktop-header-concept__signature-copy"><small>Полюбить Калининград</small><strong>Анонсы</strong></span>
+        <span class="desktop-header-concept__signature-copy"><small>Полюбить Калининград</small><AnnouncementsWordmark class="desktop-header-concept__signature-wordmark" /></span>
       </a>
     )}
 
@@ -139,7 +140,7 @@ const navigation = [
     flex:0 0 auto;
     align-self:flex-start;
     width:222px;
-    min-height:76px;
+    height:76px;
     display:grid;
     align-content:center;
     gap:.12rem;
@@ -157,12 +158,7 @@ const navigation = [
     line-height:1.04;
     text-transform:uppercase;
   }
-  .desktop-header-concept__text-tag strong {
-    font-size:1.34rem;
-    font-weight:940;
-    letter-spacing:-.055em;
-    line-height:.95;
-  }
+  :global(.desktop-header-concept__tag-wordmark) { display:block; width:100%; height:auto; color:#fff; overflow:visible; }
 
   .desktop-header-concept__logo-eyelet-group {
     position:relative;
@@ -200,7 +196,7 @@ const navigation = [
     text-decoration:none;
   }
   .desktop-header-concept__inline-name strong { font-size:.93rem; font-weight:850; letter-spacing:-.025em; }
-  .desktop-header-concept__inline-name span { color:var(--header-brand); font-size:1.14rem; font-weight:940; letter-spacing:-.05em; }
+  :global(.desktop-header-concept__inline-wordmark) { display:block; width:146px; height:auto; color:var(--header-brand); overflow:visible; }
 
   .desktop-header-concept__signature {
     flex:0 0 auto;
@@ -227,7 +223,7 @@ const navigation = [
   .desktop-header-concept__signature-mark img { width:45px; height:38px; object-fit:contain; transform:translateY(-2px); }
   .desktop-header-concept__signature-copy { min-width:0; display:grid; gap:.05rem; line-height:1; }
   .desktop-header-concept__signature-copy small { font-size:.62rem; font-weight:790; letter-spacing:.045em; text-transform:uppercase; white-space:nowrap; }
-  .desktop-header-concept__signature-copy strong { font-size:1.25rem; font-weight:940; letter-spacing:-.055em; }
+  :global(.desktop-header-concept__signature-wordmark) { display:block; width:100%; height:auto; color:#fff; overflow:visible; }
 
   @media (max-width:1120px) {
     .desktop-header-concept__inner { gap:2rem; }
@@ -236,7 +232,7 @@ const navigation = [
     .desktop-header-concept__text-tag { width:196px; }
     .desktop-header-concept__logo-eyelet-group { gap:.62rem; }
     .desktop-header-concept__inline-name strong { font-size:.82rem; }
-    .desktop-header-concept__inline-name span { font-size:1rem; }
+    :global(.desktop-header-concept__inline-wordmark) { width:126px; }
     .desktop-header-concept__signature { width:218px; }
     .desktop-header-concept__signature-copy small { font-size:.55rem; }
     .desktop-header-concept__inline-name { display:none; }

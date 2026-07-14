@@ -14,6 +14,7 @@ The desktop contract is now:
 - use a `56px` working bar with link hit areas of at least `44px`;
 - keep the tag as a home link, not as a redundant desktop menu toggle;
 - use the existing mark as a one-colour white SVG directly on terracotta, without an inset card, outline or backing tile;
+- render the service word `Анонсы` with the working wide-`о` UI wordmark while keeping `Полюбить Калининград` as calm HTML endorsement text;
 - let the tag overlap the hero by a bounded `12–22px` rather than expanding the header;
 - use a responsive header container `min(1440px, 100% - clamp(48px, 5vw, 96px))`;
 - expose `aria-current="page"` and a visible indicator only for an exact current listing destination;
@@ -75,6 +76,7 @@ Shared tokens:
 - `56px` bar; `72×78px` terracotta eyelet; `22px` overlap.
 - `brand-mark-white.svg` preserves the accepted geometry as one white silhouette directly on the colored tag. There is no inner cream tile.
 - The full name remains a calm two-line wordmark at `>=1121px` and yields before navigation is compressed.
+- The second line uses `announcements-wordmark-ui.svg`; its single wide `о` is a service accent, not a replacement for the umbrella monogram inside the eyelet.
 - Best separation of permanent identity, readable name and visible navigation.
 
 ### 03 — Signature tab (`signature-tab`)
@@ -116,3 +118,5 @@ The neutral briefs, screenshots and raw consultant reports are stored under `art
 ## Production integration boundary
 
 This branch still adds only noindex lab routes, the white lab mark and validation. It does **not** change `site/src/layouts/EventLayout.astro`, production event/listing routes or the mobile drawer. After product selection, promote the accepted mark and spatial tokens into the shared header, derive exact current state from route identity, test normal/listing/event/search pages at the acceptance grid, and reconcile the production `1180px` page shell separately rather than silently changing every page width.
+
+The working lettering construction and its remaining P1 glyph refinements are maintained separately in `announcements-lettering-wide-o-2026-07-14.md`; selecting this header does not by itself declare the R2 lettering a final trademark master.

@@ -69,6 +69,8 @@ Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction coun
 
 Desktop header choice is isolated in the noindex `/lab/header-desktop/` surface and does not change the accepted mobile drawer tag or production header yet. The lab compares a text-only tag, a compact logo eyelet and a combined signature tab on the real `split-low-resolution` hero; the recommended eyelet now uses a one-colour white mark directly on terracotta, while all menus share a wider `1440px` container and a stable right edge. Event-detail examples deliberately have no current section; `/lab/header-desktop/listing/` demonstrates the exact-match `Выставки` active state. Canonical comparison and Gemini Pro evidence: `desktop-header-concepts-2026-07-14.md`.
 
+The service word `Анонсы` now has a separate noindex construction surface at `/lab/header-lettering/`. Its working UI optical master uses one expanded `о`, corrected weight and manual pair spacing, while preserving the original user-supplied concept package under `assets/announcements-lettering-wide-o/`. The runtime SVG is one path, transform-free and currentColor-driven; the R2 geometry plus two Gemini Pro reviews are documented in `announcements-lettering-wide-o-2026-07-14.md`. This is still an evaluation master, not a production favicon/mobile-brand replacement.
+
 ## Share / Open Graph
 
 The share experiment is closed. Production-like UI exposes only one `Поделиться` action. It attempts, in order:

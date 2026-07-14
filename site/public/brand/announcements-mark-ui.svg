@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1648 1152" role="img" aria-labelledby="title desc">
+  <title id="title">Знак Анонсов</title>
+  <desc id="desc">Одноцветная широкая мягко-прямоугольная буква о.</desc>
+  <path id="announcements-mark-ui" fill="currentColor" fill-rule="evenodd" d="
+    M824 24C1424 24 1624 154 1624 576C1624 998 1424 1128 824 1128C224 1128 24 998 24 576C24 154 224 24 824 24ZM824 254C434 254 274 360 274 576C274 792 434 898 824 898C1214 898 1374 792 1374 576C1374 360 1214 254 824 254Z"/>
+</svg>

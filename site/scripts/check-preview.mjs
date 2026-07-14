@@ -48,6 +48,9 @@ const required = [
   'lab/header-desktop/examples/logo-eyelet/index.html',
   'lab/header-desktop/examples/signature-tab/index.html',
   'lab/header-desktop/listing/index.html',
+  'lab/header-lettering/index.html',
+  'brand/announcements-wordmark-ui.svg',
+  'brand/announcements-mark-ui.svg',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -177,6 +180,17 @@ for (const marker of [
 ]) {
   if (!desktopHeaderListingHtml.includes(marker)) throw new Error(`Desktop header listing misses marker: ${marker}`);
 }
+const announcementsLetteringLabHtml = readFileSync(join(root, 'lab/header-lettering/index.html'), 'utf8');
+for (const marker of [
+  'data-announcements-lettering-lab',
+  'Один акцент. Ровный ритм.',
+  '190 → 260',
+  '204 → 63',
+  'announcements-wordmark-ui.svg#announcements-wordmark-ui',
+  'announcements-mark-ui.svg#announcements-mark-ui',
+]) {
+  if (!announcementsLetteringLabHtml.includes(marker)) throw new Error(`Announcements lettering lab misses marker: ${marker}`);
+}
 const desktopHeaderSource = readFileSync(join(siteDir, 'src/components/lab/DesktopHeaderConcept.astro'), 'utf8');
 for (const marker of [
   "'text-tag' | 'logo-eyelet' | 'signature-tab'",
@@ -190,6 +204,14 @@ for (const marker of [
 ]) {
   if (!desktopHeaderSource.includes(marker)) throw new Error(`Desktop header source misses contract marker: ${marker}`);
 }
+const announcementsWordmarkSource = readFileSync(join(siteDir, 'public/brand/announcements-wordmark-ui.svg'), 'utf8');
+if ((announcementsWordmarkSource.match(/<path\b/gu) || []).length !== 1) throw new Error('Announcements wordmark must use one compound path');
+if (announcementsWordmarkSource.includes('transform=')) throw new Error('Announcements wordmark must not contain transforms');
+if (Buffer.byteLength(announcementsWordmarkSource) >= 2048) throw new Error('Announcements wordmark must stay below 2 KiB');
+for (const forbidden of ['<text', 'stroke=', '<filter', '<mask']) {
+  if (announcementsWordmarkSource.includes(forbidden)) throw new Error(`Announcements wordmark contains forbidden SVG construct: ${forbidden}`);
+}
+if (!announcementsWordmarkSource.includes('fill="currentColor"')) throw new Error('Announcements wordmark must be currentColor-driven');
 
 const desktopExampleContracts = [
   ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'data-editorial-motion="pinned"', '--image-position:50% 80%', 'desktop-prototype__media-rail', 'data-continuous-event-body']],

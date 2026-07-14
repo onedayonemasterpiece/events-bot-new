@@ -1,0 +1,88 @@
+---
+import AnnouncementsWordmark from '../../../components/brand/AnnouncementsWordmark.astro';
+import DesktopHeaderConcept from '../../../components/lab/DesktopHeaderConcept.astro';
+import { withBase } from '../../../lib/events';
+
+const sizes = [20, 24, 32, 64] as const;
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>Леттеринг «Анонсы» — wide-o construction lab</title>
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" />
+    <style>
+      :root { font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#211914; background:#f6efe5; }
+      * { box-sizing:border-box; }
+      html { min-width:760px; }
+      body { margin:0; background:radial-gradient(circle at 10% 0,rgba(165,72,33,.11),transparent 34rem),#f6efe5; }
+      a:focus-visible { outline:3px solid rgba(15,118,110,.68); outline-offset:4px; }
+      .lettering-lab { width:min(1440px,calc(100% - clamp(3rem,5vw,6rem))); margin:0 auto; padding:clamp(4.5rem,8vw,8rem) 0 6rem; }
+      .lettering-lab__eyebrow { margin:0 0 .8rem; color:#9b3d1c; font-size:.75rem; font-weight:920; letter-spacing:.13em; text-transform:uppercase; }
+      h1 { max-width:11ch; margin:0; font-size:clamp(3.6rem,8vw,8.5rem); line-height:.84; letter-spacing:-.07em; }
+      .lettering-lab__lead { max-width:67ch; margin:1.4rem 0 0; color:#65584f; font-size:clamp(1.02rem,1.6vw,1.25rem); line-height:1.55; }
+      .lettering-lab :global(.lettering-lab__hero-mark) { width:min(100%,980px); height:auto; margin-top:clamp(3rem,7vw,6rem); color:#171310; overflow:visible; }
+      .lettering-lab__metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; margin-top:2rem; overflow:hidden; border:1px solid rgba(121,48,20,.15); border-radius:20px; background:#ddcdbd; }
+      .lettering-metric { min-height:130px; padding:1.1rem; background:#fffaf2; }
+      .lettering-metric small { display:block; color:#98401f; font-size:.66rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+      .lettering-metric strong { display:block; margin-top:.38rem; font-size:1.3rem; letter-spacing:-.035em; }
+      .lettering-metric span { display:block; margin-top:.35rem; color:#6b5e54; font-size:.82rem; line-height:1.35; }
+      .lettering-section { margin-top:clamp(4rem,8vw,7rem); }
+      .lettering-section h2 { margin:0; font-size:clamp(2.2rem,4.5vw,4.8rem); line-height:.9; letter-spacing:-.055em; }
+      .lettering-section>p { max-width:64ch; margin:.9rem 0 0; color:#665950; line-height:1.5; }
+      .lettering-sizes { display:flex; flex-wrap:wrap; align-items:flex-end; gap:clamp(2rem,5vw,5rem); margin-top:2.5rem; padding:2rem; border-radius:24px; background:#fffaf2; }
+      .lettering-size { display:grid; gap:.72rem; }
+      .lettering-size span { color:#9a4020; font-size:.72rem; font-weight:900; }
+      .lettering-size__frame { height:var(--sample-height); display:flex; align-items:center; }
+      .lettering-size__frame :global(.announcements-wordmark) { width:auto; height:100%; color:#191512; overflow:visible; }
+      .lettering-reverse { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(240px,.55fr); gap:1rem; margin-top:1rem; }
+      .lettering-tag { min-height:180px; display:grid; align-content:center; padding:2rem; border-radius:0 0 24px 24px; background:linear-gradient(155deg,#7b3014,#a54821); color:#fff; box-shadow:0 14px 28px rgba(103,43,19,.16); }
+      .lettering-tag small { font-size:.76rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+      .lettering-tag :global(.announcements-wordmark) { width:min(100%,520px); height:auto; margin-top:.7rem; color:#fff; overflow:visible; }
+      .lettering-mark { min-height:180px; display:grid; place-items:center; border-radius:24px; background:#fffaf2; color:#a54821; }
+      .lettering-mark svg { width:68%; height:auto; overflow:visible; }
+      .lettering-lab__back { min-height:44px; display:inline-flex; align-items:center; margin-top:3rem; color:#793014; font-weight:850; text-underline-offset:.24em; }
+      @media (max-width:980px) { .lettering-lab__metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .lettering-reverse { grid-template-columns:1fr; } }
+    </style>
+  </head>
+  <body>
+    <DesktopHeaderConcept variant="logo-eyelet" />
+    <main class="lettering-lab" data-announcements-lettering-lab>
+      <p class="lettering-lab__eyebrow">construction round 2 · UI optical master</p>
+      <h1>Один акцент. Ровный ритм.</h1>
+      <p class="lettering-lab__lead">Исходная широкая «о» была на треть легче соседних штрихов, а пара «о–н» раскрывалась в пробел. Рабочая версия заново собирает вес, кернинг и родство «о / с / ы», не масштабируя готовую круглую букву.</p>
+      <AnnouncementsWordmark class="lettering-lab__hero-mark" />
+
+      <section class="lettering-lab__metrics" aria-label="Исправления геометрии">
+        <article class="lettering-metric"><small>Вес «о»</small><strong>190 → 260</strong><span>Боковой curve stem стал тяжелее, но не превращает «о» в кнопку.</span></article>
+        <article class="lettering-metric"><small>Горизонталь «о»</small><strong>174 → 190</strong><span>Контраст сохраняет открытый counter в UI-кегле и на выворотке.</span></article>
+        <article class="lettering-metric"><small>Пара «о–н»</small><strong>204 → 63</strong><span>Знак снова становится буквой внутри слова, а не отдельной кнопкой.</span></article>
+        <article class="lettering-metric"><small>SVG</small><strong>1 path · 0 transform</strong><span>Вместо тысяч line-to точек — небольшое число cubic curves.</span></article>
+      </section>
+
+      <section class="lettering-section" aria-labelledby="lettering-size-title">
+        <h2 id="lettering-size-title">Оптические размеры</h2>
+        <p>Один UI-master проверяется в фактической высоте, а не только крупным логотипом на артборде.</p>
+        <div class="lettering-sizes">
+          {sizes.map((size) => (
+            <div class="lettering-size"><span>{size}px</span><div class="lettering-size__frame" style={`--sample-height:${size}px`}><AnnouncementsWordmark /></div></div>
+          ))}
+        </div>
+      </section>
+
+      <section class="lettering-section" aria-labelledby="lettering-reverse-title">
+        <h2 id="lettering-reverse-title">Reverse и самостоятельная «о»</h2>
+        <p>В слове «о» тяжелее; отдельный знак использует более открытую контрформу для 16–32 px.</p>
+        <div class="lettering-reverse">
+          <div class="lettering-tag"><small>Полюбить Калининград</small><AnnouncementsWordmark /></div>
+          <div class="lettering-mark"><svg viewBox="0 0 1648 1152" aria-hidden="true"><use href={`${withBase('/brand/announcements-mark-ui.svg')}#announcements-mark-ui`}></use></svg></div>
+        </div>
+      </section>
+
+      <a class="lettering-lab__back" href={withBase('/lab/header-desktop/')}>← Вернуться к вариантам шапки</a>
+    </main>
+  </body>
+</html>
