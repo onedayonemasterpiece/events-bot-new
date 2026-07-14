@@ -1,0 +1,102 @@
+---
+import { absoluteUrl, withBase } from '../../../lib/events';
+
+const variants = [
+  {
+    slug:'text-tag',
+    number:'01',
+    title:'Текстовая бирка',
+    status:'сильная преемственность',
+    summary:'Без символа: знакомая терракотовая бирка становится ниже и шире, а навигация остаётся полностью открытой.',
+    plus:'Самый прямой мост к мобильному паттерну.',
+    risk:'Остаётся проблема отсутствия самостоятельного знака.',
+  },
+  {
+    slug:'logo-eyelet',
+    number:'02',
+    title:'Знак-люверс',
+    status:'рекомендуемый баланс',
+    summary:'Компактная выступающая бирка несёт существующий знак, название остаётся спокойным текстовым якорем на линии меню.',
+    plus:'Лучше всего масштабируется под поиск и профиль.',
+    risk:'На промежуточной ширине текстовое название первым скрывается.',
+  },
+  {
+    slug:'signature-tab',
+    number:'03',
+    title:'Подпись-бирка',
+    status:'максимум узнаваемости',
+    summary:'Знак и название собраны в одну неглубокую фирменную плашку; шапка читается как законченный masthead.',
+    plus:'Самая сильная мгновенная идентификация бренда.',
+    risk:'Самый тяжёлый объект и меньше запаса под будущие инструменты.',
+  },
+] as const;
+const canonicalUrl = absoluteUrl('/lab/header-desktop/');
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <link rel="canonical" href={canonicalUrl} />
+    <title>Desktop header concepts — Полюбить Калининград Анонсы</title>
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" />
+    <style>
+      :root { font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#251c17; background:#f7eee2; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:radial-gradient(circle at 12% 0,rgba(165,72,33,.12),transparent 34rem),#f7eee2; }
+      a:focus-visible { outline:3px solid rgba(15,118,110,.68); outline-offset:4px; }
+      .header-concepts { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:clamp(3rem,7vw,7rem) 0 6rem; }
+      .header-concepts__eyebrow { margin:0 0 .65rem; color:#98401f; font-size:.76rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+      h1 { max-width:14ch; margin:0; font-size:clamp(3.2rem,7.6vw,7.5rem); line-height:.86; letter-spacing:-.07em; }
+      .header-concepts__lead { max-width:64ch; margin:1.4rem 0 0; color:#655950; font-size:clamp(1.05rem,2vw,1.28rem); line-height:1.55; }
+      .header-concepts__principles { display:flex; flex-wrap:wrap; gap:.5rem; margin:2rem 0 0; padding:0; list-style:none; }
+      .header-concepts__principles li { padding:.46rem .72rem; border:1px solid #d9c8b6; border-radius:999px; background:rgba(255,250,242,.78); color:#6f321d; font-size:.82rem; font-weight:820; }
+      .header-concepts__grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; margin-top:clamp(3rem,6vw,5.5rem); }
+      .header-concept-card { min-width:0; display:flex; flex-direction:column; padding:1.3rem; border:1px solid rgba(121,48,20,.15); border-radius:24px; background:#fffaf2; box-shadow:0 18px 42px rgba(67,43,26,.08); }
+      .header-concept-card--recommended { border-color:rgba(15,118,110,.42); box-shadow:0 18px 42px rgba(15,118,110,.10); }
+      .header-concept-card__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+      .header-concept-card__number { color:#a54821; font-size:.76rem; font-weight:950; letter-spacing:.12em; }
+      .header-concept-card__status { color:#0f6b64; font-size:.72rem; font-weight:850; text-align:right; }
+      .header-concept-card h2 { margin:2.8rem 0 .65rem; font-size:clamp(1.8rem,2.8vw,2.7rem); line-height:.94; letter-spacing:-.05em; }
+      .header-concept-card>p { margin:0; color:#665b52; line-height:1.5; }
+      .header-concept-card dl { display:grid; gap:.7rem; margin:1.4rem 0 1.6rem; }
+      .header-concept-card dl div { padding-top:.68rem; border-top:1px solid #eadfd3; }
+      .header-concept-card dt { color:#9a4020; font-size:.67rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+      .header-concept-card dd { margin:.2rem 0 0; color:#3e332c; font-size:.86rem; line-height:1.42; }
+      .header-concept-card__open { min-height:48px; margin-top:auto; display:inline-flex; align-items:center; justify-content:center; padding:.65rem 1rem; border-radius:14px; background:#28231f; color:#fffaf2; font-weight:850; text-decoration:none; }
+      .header-concept-card--recommended .header-concept-card__open { background:#0f6b64; }
+      .header-concepts__decision { display:grid; grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr); gap:2rem; margin-top:clamp(3rem,7vw,6rem); padding:clamp(1.4rem,3vw,2.6rem); border-radius:28px; background:#292521; color:#fffaf2; }
+      .header-concepts__decision h2 { margin:0; font-size:clamp(2rem,4vw,4rem); line-height:.94; letter-spacing:-.05em; }
+      .header-concepts__decision div:last-child { align-self:center; color:#d9cdc2; line-height:1.6; }
+      .header-concepts__decision strong { color:#fff; }
+      @media (max-width:900px) { .header-concepts__grid { grid-template-columns:1fr; } .header-concepts__decision { grid-template-columns:1fr; } .header-concept-card h2 { margin-top:1.6rem; } }
+    </style>
+  </head>
+  <body>
+    <main class="header-concepts" data-header-desktop-lab>
+      <p class="header-concepts__eyebrow">desktop only · mobile tag unchanged</p>
+      <h1>Одна идея, три степени бренда</h1>
+      <p class="header-concepts__lead">Во всех вариантах меню остаётся открытым, рабочая полоса имеет высоту 56 px, а выступающая часть бирки ограничена 12–22 px. Отличается не декор, а роль бренда: только слово, знак как отдельный якорь или полноценная подпись.</p>
+      <ul class="header-concepts__principles" aria-label="Общие требования"><li>5 видимых разделов</li><li>44 px hit area</li><li>aria-current</li><li>видимый focus</li><li>без изменений mobile</li></ul>
+
+      <section class="header-concepts__grid" aria-label="Три варианта desktop-шапки">
+        {variants.map((item) => (
+          <article class:list={['header-concept-card', item.slug === 'logo-eyelet' && 'header-concept-card--recommended']} data-header-concept-card={item.slug}>
+            <div class="header-concept-card__top"><span class="header-concept-card__number">{item.number}</span><span class="header-concept-card__status">{item.status}</span></div>
+            <h2>{item.title}</h2>
+            <p>{item.summary}</p>
+            <dl><div><dt>Сильная сторона</dt><dd>{item.plus}</dd></div><div><dt>Риск</dt><dd>{item.risk}</dd></div></dl>
+            <a class="header-concept-card__open" href={withBase(`/lab/header-desktop/examples/${item.slug}/`)}>Открыть на реальном hero</a>
+          </article>
+        ))}
+      </section>
+
+      <section class="header-concepts__decision" aria-labelledby="header-decision-title">
+        <h2 id="header-decision-title">Предварительно: вариант 02</h2>
+        <div><strong>«Знак-люверс»</strong> лучше отделяет постоянный бренд от меняющейся навигации и не повторяет мобильную бирку буквально. Он сохраняет выступающую геометрию, впервые вводит существующий знак и оставляет больше всего свободного места для будущего поиска или профиля. Финальный выбор — после просмотра трёх полноразмерных маршрутов.</div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -43,6 +43,10 @@ const required = [
   'lab/event-desktop/examples/related-cover/index.html',
   'lab/event-desktop/examples/related-ambient/index.html',
   'lab/event-desktop/examples/related-hybrid/index.html',
+  'lab/header-desktop/index.html',
+  'lab/header-desktop/examples/text-tag/index.html',
+  'lab/header-desktop/examples/logo-eyelet/index.html',
+  'lab/header-desktop/examples/signature-tab/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -136,6 +140,46 @@ for (const marker of [
   if (!eventDesktopLabHtml.includes(marker)) throw new Error(`Desktop event lab misses marker: ${marker}`);
 }
 if (eventDesktopLabHtml.includes('Узнать цену') || eventDesktopLabHtml.includes('Открыть условия') || eventDesktopLabHtml.includes('calendar-link__plus')) throw new Error('Desktop event lab leaks rejected CTA/icon copy');
+
+const desktopHeaderLabHtml = readFileSync(join(root, 'lab/header-desktop/index.html'), 'utf8');
+for (const marker of [
+  'data-header-desktop-lab',
+  'Одна идея, три степени бренда',
+  'text-tag',
+  'logo-eyelet',
+  'signature-tab',
+  'Знак-люверс',
+  'Предварительно: вариант 02',
+  '44 px hit area',
+]) {
+  if (!desktopHeaderLabHtml.includes(marker)) throw new Error(`Desktop header lab misses marker: ${marker}`);
+}
+for (const variant of ['text-tag', 'logo-eyelet', 'signature-tab']) {
+  const html = readFileSync(join(root, `lab/header-desktop/examples/${variant}/index.html`), 'utf8');
+  for (const marker of [
+    `data-header-desktop-example="${variant}"`,
+    `data-desktop-header-concept="${variant}"`,
+    'aria-label="Основная навигация"',
+    'aria-current="page"',
+    'Выставка фэнтези-картин',
+    'Все 3 варианта',
+  ]) {
+    if (!html.includes(marker)) throw new Error(`Desktop header example ${variant} misses marker: ${marker}`);
+  }
+}
+const desktopHeaderSource = readFileSync(join(siteDir, 'src/components/lab/DesktopHeaderConcept.astro'), 'utf8');
+for (const marker of [
+  "'text-tag' | 'logo-eyelet' | 'signature-tab'",
+  "withBase('/brand-mark.svg')",
+  'height:56px',
+  'min-height:44px',
+  'aria-current',
+  ':focus-visible',
+  '@media (max-width:1080px)',
+  '@media (prefers-reduced-motion:reduce)',
+]) {
+  if (!desktopHeaderSource.includes(marker)) throw new Error(`Desktop header source misses contract marker: ${marker}`);
+}
 
 const desktopExampleContracts = [
   ['editorial-photo', 5658, 'editorial', 'non-ocr', ['Спектакль «Гараж»', 'data-editorial-motion="pinned"', '--image-position:50% 80%', 'desktop-prototype__media-rail', 'data-continuous-event-body']],

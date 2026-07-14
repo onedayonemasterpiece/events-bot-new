@@ -1,0 +1,256 @@
+---
+import { withBase } from '../../lib/events';
+
+export type DesktopHeaderVariant = 'text-tag' | 'logo-eyelet' | 'signature-tab';
+
+interface Props {
+  variant: DesktopHeaderVariant;
+  current?: 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular';
+}
+
+const { variant, current = 'exhibitions' } = Astro.props;
+const navigation = [
+  { key: 'today', label: 'Сегодня', href: '/segodnya/' },
+  { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
+  { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
+  { key: 'exhibitions', label: 'Выставки', href: '/vystavki/' },
+  { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
+] as const;
+---
+
+<header class:list={['desktop-header-concept', `desktop-header-concept--${variant}`]} data-desktop-header-concept={variant}>
+  <div class="desktop-header-concept__inner">
+    {variant === 'text-tag' && (
+      <a class="desktop-header-concept__text-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+        <span>Полюбить Калининград</span>
+        <strong>Анонсы</strong>
+      </a>
+    )}
+
+    {variant === 'logo-eyelet' && (
+      <div class="desktop-header-concept__logo-eyelet-group">
+        <a class="desktop-header-concept__logo-eyelet" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+          <span><img src={withBase('/brand-mark.svg')} alt="" width="970" height="820" /></span>
+        </a>
+        <a class="desktop-header-concept__inline-name" href={withBase('/__preview/')} tabindex="-1" aria-hidden="true">
+          <strong>Полюбить Калининград</strong>
+          <span>Анонсы</span>
+        </a>
+      </div>
+    )}
+
+    {variant === 'signature-tab' && (
+      <a class="desktop-header-concept__signature" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+        <span class="desktop-header-concept__signature-mark"><img src={withBase('/brand-mark.svg')} alt="" width="970" height="820" /></span>
+        <span class="desktop-header-concept__signature-copy"><small>Полюбить Калининград</small><strong>Анонсы</strong></span>
+      </a>
+    )}
+
+    <nav class="desktop-header-concept__nav" aria-label="Основная навигация">
+      <ul>
+        {navigation.map((item) => (
+          <li>
+            <a href={withBase(item.href)} aria-current={item.key === current ? 'page' : undefined}>{item.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .desktop-header-concept {
+    --header-bg:#fffaf2;
+    --header-ink:#28211c;
+    --header-muted:#71665e;
+    --header-line:#e3d6c8;
+    --header-brand:#a54821;
+    --header-brand-dark:#7b3014;
+    --header-focus:#0f766e;
+    position:relative;
+    z-index:20;
+    min-width:760px;
+    border-bottom:1px solid var(--header-line);
+    background:rgba(255,250,242,.96);
+    color:var(--header-ink);
+    box-shadow:0 6px 22px rgba(69,45,28,.035);
+  }
+  .desktop-header-concept,
+  .desktop-header-concept * { box-sizing:border-box; }
+  .desktop-header-concept__inner {
+    position:relative;
+    width:min(1180px,calc(100% - 40px));
+    height:56px;
+    min-height:56px;
+    margin:0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:clamp(1rem,2.2vw,2.5rem);
+  }
+  .desktop-header-concept a { color:inherit; }
+  .desktop-header-concept a:focus-visible {
+    outline:3px solid color-mix(in srgb,var(--header-focus) 72%,transparent);
+    outline-offset:3px;
+  }
+  .desktop-header-concept__nav { min-width:0; margin-left:auto; }
+  .desktop-header-concept--text-tag .desktop-header-concept__nav { margin-left:238px; }
+  .desktop-header-concept--logo-eyelet .desktop-header-concept__nav { margin-left:300px; }
+  .desktop-header-concept--signature-tab .desktop-header-concept__nav { margin-left:268px; }
+  .desktop-header-concept__nav ul {
+    display:flex;
+    align-items:stretch;
+    justify-content:flex-end;
+    gap:clamp(.08rem,.55vw,.45rem);
+    margin:0;
+    padding:0;
+    list-style:none;
+  }
+  .desktop-header-concept__nav a {
+    position:relative;
+    min-height:44px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:.18rem clamp(.54rem,.8vw,.82rem);
+    border-radius:8px;
+    color:var(--header-muted);
+    font-size:clamp(.89rem,1vw,.98rem);
+    font-weight:610;
+    line-height:1.1;
+    text-decoration:none;
+    white-space:nowrap;
+  }
+  .desktop-header-concept__nav a::after {
+    content:"";
+    position:absolute;
+    left:.72rem;
+    right:.72rem;
+    bottom:2px;
+    height:2px;
+    border-radius:999px;
+    background:var(--header-brand);
+    opacity:0;
+    transform:scaleX(.55);
+    transition:opacity 160ms ease,transform 160ms ease;
+  }
+  .desktop-header-concept__nav a:hover { background:#f5eadc; color:var(--header-ink); }
+  .desktop-header-concept__nav a[aria-current="page"] { color:var(--header-brand-dark); font-weight:820; }
+  .desktop-header-concept__nav a[aria-current="page"]::after { opacity:1; transform:scaleX(1); }
+
+  .desktop-header-concept__text-tag {
+    position:absolute;
+    left:0;
+    top:0;
+    width:222px;
+    min-height:76px;
+    display:grid;
+    align-content:center;
+    gap:.12rem;
+    padding:.72rem 1rem .78rem;
+    border-radius:0 0 14px 14px;
+    background:linear-gradient(155deg,var(--header-brand-dark),var(--header-brand));
+    color:#fffaf2!important;
+    box-shadow:0 14px 28px rgba(103,43,19,.2),inset 0 1px rgba(255,255,255,.14);
+    text-decoration:none;
+  }
+  .desktop-header-concept__text-tag span {
+    font-size:.69rem;
+    font-weight:820;
+    letter-spacing:.055em;
+    line-height:1.04;
+    text-transform:uppercase;
+  }
+  .desktop-header-concept__text-tag strong {
+    font-size:1.34rem;
+    font-weight:940;
+    letter-spacing:-.055em;
+    line-height:.95;
+  }
+
+  .desktop-header-concept__logo-eyelet-group { position:absolute; left:0; top:0; width:280px; height:56px; display:flex; align-items:center; gap:.88rem; }
+  .desktop-header-concept__logo-eyelet {
+    align-self:flex-start;
+    width:76px;
+    height:78px;
+    display:grid;
+    place-items:center;
+    padding:.55rem;
+    border-radius:0 0 16px 16px;
+    background:linear-gradient(155deg,var(--header-brand-dark),var(--header-brand));
+    box-shadow:0 14px 28px rgba(103,43,19,.2),inset 0 1px rgba(255,255,255,.14);
+    text-decoration:none;
+  }
+  .desktop-header-concept__logo-eyelet>span {
+    width:57px;
+    height:52px;
+    display:grid;
+    place-items:center;
+    padding:.34rem;
+    border-radius:10px;
+    background:#fffaf2;
+  }
+  .desktop-header-concept__logo-eyelet img { width:100%; height:100%; object-fit:contain; }
+  .desktop-header-concept__inline-name { display:grid; gap:.05rem; line-height:1; text-decoration:none; }
+  .desktop-header-concept__inline-name strong { font-size:.93rem; font-weight:850; letter-spacing:-.025em; }
+  .desktop-header-concept__inline-name span { color:var(--header-brand); font-size:1.14rem; font-weight:940; letter-spacing:-.05em; }
+
+  .desktop-header-concept__signature {
+    position:absolute;
+    left:0;
+    top:0;
+    width:248px;
+    min-height:68px;
+    display:grid;
+    grid-template-columns:52px minmax(0,1fr);
+    align-items:center;
+    gap:.72rem;
+    padding:.48rem .9rem .55rem .62rem;
+    border-radius:0 0 14px 14px;
+    background:linear-gradient(155deg,var(--header-brand-dark),var(--header-brand));
+    color:#fffaf2!important;
+    box-shadow:0 12px 24px rgba(103,43,19,.18),inset 0 1px rgba(255,255,255,.14);
+    text-decoration:none;
+  }
+  .desktop-header-concept__signature-mark {
+    width:50px;
+    height:46px;
+    display:grid;
+    place-items:center;
+    padding:.3rem;
+    border-radius:10px;
+    background:#fffaf2;
+  }
+  .desktop-header-concept__signature-mark img { width:100%; height:100%; object-fit:contain; }
+  .desktop-header-concept__signature-copy { min-width:0; display:grid; gap:.05rem; line-height:1; }
+  .desktop-header-concept__signature-copy small { font-size:.62rem; font-weight:790; letter-spacing:.045em; text-transform:uppercase; white-space:nowrap; }
+  .desktop-header-concept__signature-copy strong { font-size:1.25rem; font-weight:940; letter-spacing:-.055em; }
+
+  @media (max-width:1120px) {
+    .desktop-header-concept__inner { width:min(100% - 28px,1180px); gap:.8rem; }
+    .desktop-header-concept__nav ul { gap:0; }
+    .desktop-header-concept__nav a { padding-inline:.5rem; font-size:.86rem; }
+    .desktop-header-concept__text-tag { width:196px; }
+    .desktop-header-concept--text-tag .desktop-header-concept__nav { margin-left:206px; }
+    .desktop-header-concept__logo-eyelet-group { min-width:230px; gap:.62rem; }
+    .desktop-header-concept--logo-eyelet .desktop-header-concept__nav { margin-left:240px; }
+    .desktop-header-concept__inline-name strong { font-size:.82rem; }
+    .desktop-header-concept__inline-name span { font-size:1rem; }
+    .desktop-header-concept__signature { width:218px; }
+    .desktop-header-concept--signature-tab .desktop-header-concept__nav { margin-left:228px; }
+    .desktop-header-concept__signature-copy small { font-size:.55rem; }
+  }
+  @media (max-width:1080px) {
+    .desktop-header-concept__inline-name { display:none; }
+    .desktop-header-concept__logo-eyelet-group { width:76px; min-width:76px; }
+    .desktop-header-concept--logo-eyelet .desktop-header-concept__nav { margin-left:86px; }
+  }
+  @media (max-width:880px) {
+    .desktop-header-concept__signature { width:76px; grid-template-columns:1fr; padding:.55rem; }
+    .desktop-header-concept--signature-tab .desktop-header-concept__nav { margin-left:86px; }
+    .desktop-header-concept__signature-copy { display:none; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .desktop-header-concept__nav a::after { transition:none; }
+  }
+</style>
