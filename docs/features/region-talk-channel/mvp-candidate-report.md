@@ -899,7 +899,15 @@ Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,
 `REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS=20`) before treating YDB state as
-unavailable.
+unavailable. The BGE worker applies the same contention discipline at its own
+read boundary: `REGION_TALK_BGE_YDB_LOAD_ATTEMPTS` (default `3`) recreates the
+driver/session after an exhausted `DEADLINE_EXCEEDED` or
+`RESOURCE_EXHAUSTED` attempt, with bounded delay controlled by
+`REGION_TALK_BGE_YDB_LOAD_RETRY_BASE_SECONDS` (default `3`). In the normal
+E5-only lane it also reuses the already loaded `text_vector_enrichment_item`
+ledger as the existing-vector index instead of scanning the same multi-thousand
+row kind twice. These are transport/read-efficiency safeguards only: the BGE
+selection, model and dual-vector quality contract do not change.
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.

@@ -890,35 +890,69 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
 
 
 def load_ydb_rows(limit: int, *, include_existing: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    ydb, driver, cfg = ydb_connect()
-    table_path = ydb_kv_table_path(cfg)
-    pool = ydb.SessionPool(driver)
     max_scan = max(limit * 5, getenv_int("REGION_TALK_BGE_YDB_SCAN_LIMIT", 1000))
     kinds = [k.strip() for k in re.split(r"[,;+\s]+", os.getenv("REGION_TALK_BGE_INPUT_KINDS") or "text_vector_enrichment_item,publication_candidate_item,candidate_memory_item,image_queue_item,processed_post_item,post_live_item") if k.strip()]
+    attempts = max(1, getenv_int("REGION_TALK_BGE_YDB_LOAD_ATTEMPTS", 3))
+    backoff = max(0.0, getenv_float("REGION_TALK_BGE_YDB_LOAD_RETRY_BASE_SECONDS", 3.0))
+    last_error: Exception | None = None
 
-    def op(session: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        ensure_ydb_kv_table(ydb, session, table_path)
-        items_by_kind: dict[str, dict[str, dict[str, Any]]] = {}
-        for kind in kinds:
-            items_by_kind[kind] = ydb_select_kind_items(session, ydb, table_path, kind, limit=max_scan)
-        existing = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=max_scan)
-        existing_pks = set(existing.keys())
-        rows = collect_text_rows(items_by_kind, existing_pks=existing_pks, limit=limit, include_existing=include_existing)
-        meta = {
-            "table_path": table_path,
-            "input_kinds": kinds,
-            "loaded_by_kind": {kind: len(items_by_kind.get(kind) or {}) for kind in kinds},
-            "existing_text_vector_enrichment_items": len(existing_pks),
-            "e5_only": getenv_bool("REGION_TALK_BGE_E5_ONLY", True),
-            "collect_stats": dict(LAST_COLLECT_STATS),
-        }
-        return rows, meta
+    # A main CandidateReport run may briefly contend for the same serverless
+    # YDB capacity. Recreate the driver/session on each bounded outer retry:
+    # SessionPool's internal retry can still exhaust on DEADLINE_EXCEEDED or
+    # RESOURCE_EXHAUSTED while the concurrent writer is active.
+    for attempt in range(1, attempts + 1):
+        ydb, driver, cfg = ydb_connect()
+        table_path = ydb_kv_table_path(cfg)
+        pool = ydb.SessionPool(driver)
 
-    try:
-        rows, meta = pool.retry_operation_sync(op)
-    finally:
-        driver.stop(timeout=5)
-    return rows, meta
+        def op(session: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            items_by_kind: dict[str, dict[str, dict[str, Any]]] = {}
+            for kind in kinds:
+                items_by_kind[kind] = ydb_select_kind_items(session, ydb, table_path, kind, limit=max_scan)
+            # In the production E5-only lane the input kind is already the
+            # complete vector ledger. Reuse that read instead of scanning the
+            # same 4k+ rows twice before every small BGE batch.
+            existing = items_by_kind.get("text_vector_enrichment_item")
+            if existing is None:
+                existing = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=max_scan)
+            existing_pks = set(existing.keys())
+            rows = collect_text_rows(items_by_kind, existing_pks=existing_pks, limit=limit, include_existing=include_existing)
+            meta = {
+                "table_path": table_path,
+                "input_kinds": kinds,
+                "loaded_by_kind": {kind: len(items_by_kind.get(kind) or {}) for kind in kinds},
+                "existing_text_vector_enrichment_items": len(existing_pks),
+                "e5_only": getenv_bool("REGION_TALK_BGE_E5_ONLY", True),
+                "collect_stats": dict(LAST_COLLECT_STATS),
+                "ydb_load_attempt": attempt,
+            }
+            return rows, meta
+
+        try:
+            return pool.retry_operation_sync(op)
+        except Exception as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+            delay = backoff * attempt
+            emit_event(
+                "bge_ydb_load_retry",
+                phase="load_ydb",
+                status="retrying",
+                run_id=str(os.getenv("REGION_TALK_RUN_ID") or ""),
+                attempt=attempt,
+                attempts_total=attempts,
+                retry_delay_seconds=round(delay, 3),
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+            )
+            if delay > 0:
+                time.sleep(delay)
+        finally:
+            driver.stop(timeout=5)
+    assert last_error is not None
+    raise last_error
 
 
 def make_fallback_rows(limit: int) -> list[dict[str, Any]]:

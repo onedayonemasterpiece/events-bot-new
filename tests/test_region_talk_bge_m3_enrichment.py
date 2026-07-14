@@ -219,6 +219,71 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual([row["post_id"] for row in rows], ["p-short-exact"])
         self.assertEqual(mod.LAST_COLLECT_STATS["short_text_skipped"], 1)
 
+    def test_ydb_load_retries_with_fresh_driver_and_does_not_scan_vector_kind_twice(self) -> None:
+        mod = load_bge_module()
+        drivers = []
+        events = []
+        select_calls = []
+
+        class FakeDriver:
+            def __init__(self, attempt: int) -> None:
+                self.attempt = attempt
+                self.stopped = False
+
+            def stop(self, timeout=5) -> None:
+                self.stopped = True
+
+        class FakePool:
+            def __init__(self, driver: FakeDriver) -> None:
+                self.driver = driver
+
+            def retry_operation_sync(self, operation):
+                if self.driver.attempt < 3:
+                    raise RuntimeError("Deadline exceeded on request")
+                return operation(object())
+
+        class FakeYdb:
+            SessionPool = FakePool
+
+        def connect():
+            driver = FakeDriver(len(drivers) + 1)
+            drivers.append(driver)
+            return FakeYdb, driver, {"database": "/local/test"}
+
+        text = "Личный отзыв о поездке в Калининградскую область, море и Куршская коса."
+        vector_rows = {
+            "text_vector_enrichment_item:e5": {
+                "post_id": "p-retry",
+                "post_url": "https://t.me/retry/1",
+                "model_id": "intfloat/multilingual-e5-base",
+                "model_short": "e5",
+                "text_hash": mod.text_hash(text),
+                "text_excerpt": text,
+            }
+        }
+
+        def select(_session, _ydb, _table, kind, *, limit):
+            select_calls.append(kind)
+            return vector_rows if kind == "text_vector_enrichment_item" else {}
+
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_BGE_INPUT_KINDS": "text_vector_enrichment_item",
+            "REGION_TALK_BGE_YDB_LOAD_ATTEMPTS": "3",
+            "REGION_TALK_BGE_YDB_LOAD_RETRY_BASE_SECONDS": "0",
+        }), mock.patch.object(mod, "ydb_connect", side_effect=connect), mock.patch.object(
+            mod, "ensure_ydb_kv_table"
+        ), mock.patch.object(mod, "ydb_select_kind_items", side_effect=select), mock.patch.object(
+            mod, "emit_event", side_effect=lambda name, **payload: events.append((name, payload))
+        ):
+            rows, meta = mod.load_ydb_rows(4)
+
+        self.assertEqual([row["post_id"] for row in rows], ["p-retry"])
+        self.assertEqual(meta["ydb_load_attempt"], 3)
+        self.assertEqual(len(drivers), 3)
+        self.assertTrue(all(driver.stopped for driver in drivers))
+        self.assertEqual(select_calls, ["text_vector_enrichment_item"])
+        self.assertEqual([name for name, _payload in events], ["bge_ydb_load_retry", "bge_ydb_load_retry"])
+
     def test_no_rows_emits_terminal_done_heartbeat(self) -> None:
         mod = load_bge_module()
         events: list[tuple[str, dict]] = []
