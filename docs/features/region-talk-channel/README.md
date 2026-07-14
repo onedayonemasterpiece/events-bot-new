@@ -92,6 +92,12 @@ public/future publish hot path has no provider/vector calls
 
 MVP vector recall must use **dual-model enrichment**, not an A/B choice: run both `intfloat/multilingual-e5-base` and `BAAI/bge-m3`, merge/union their top-K semantic matches and keep per-model evidence so recall becomes broader and quality improves through score fusion. The implementation must record `embedding_model`, `embedding_dim`, document version and per-model/fused scores so every accepted candidate remains auditable.
 
+The production CPU split is durable and independent: CandidateReport loads E5
+from a pinned Kaggle Model input, writes E5 evidence to YDB and releases the
+model; the separate BGE-M3 notebook enriches the same text rows later. A
+transient Hugging Face download failure is not a reason to weaken or replace the
+dual-vector contract.
+
 ### Kaggle static/offline discipline
 
 Related: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `kaggle_status.py`, `kaggle_registry.py`, `video_announce/kaggle_client.py`.

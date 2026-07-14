@@ -117,6 +117,7 @@ class DirectKaggleClient:
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport"
 ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-candidate-report"
+DEFAULT_E5_KAGGLE_MODEL_SOURCE = "ranaabdulrehman145/intfloatmultilingual-e5-base/Transformers/default/1"
 
 
 def load_env_file(path: Path) -> None:
@@ -638,6 +639,14 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str | None) -> Path:
     meta["title"] = "Region Talk Candidate Report"
     meta["enable_gpu"] = False
     meta["enable_internet"] = True
+    e5_model_source = str(
+        os.getenv("REGION_TALK_E5_KAGGLE_MODEL_SOURCE")
+        or DEFAULT_E5_KAGGLE_MODEL_SOURCE
+    ).strip()
+    model_sources = [str(item).strip() for item in (meta.get("model_sources") or []) if str(item).strip()]
+    if e5_model_source and e5_model_source not in model_sources:
+        model_sources.append(e5_model_source)
+    meta["model_sources"] = model_sources
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return dst
 

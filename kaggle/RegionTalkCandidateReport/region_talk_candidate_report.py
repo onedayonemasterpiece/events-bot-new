@@ -12383,6 +12383,54 @@ POST_PROCESSING_POLICY_VERSION = "region_talk_post_processing_v2_idempotent_dual
 TEXT_EMBEDDING_MODELS = [E5_TEXT_MODEL_ID, BGE_M3_TEXT_MODEL_ID]
 
 
+def _is_transformers_model_dir(path: Path) -> bool:
+    """Return whether *path* contains the minimum local HF model contract."""
+    return bool(
+        path.is_dir()
+        and (path / "config.json").is_file()
+        and any((path / name).is_file() for name in ("model.safetensors", "pytorch_model.bin"))
+        and any((path / name).is_file() for name in ("tokenizer.json", "sentencepiece.bpe.model", "spiece.model"))
+    )
+
+
+def text_embedding_model_reference(model_id: str) -> tuple[str, str]:
+    """Resolve a pinned Kaggle input before falling back to the HF Hub.
+
+    Kaggle internet access is not a durable model distribution mechanism: an
+    otherwise public Hugging Face weight download can be throttled or return a
+    transient 403.  CandidateReport therefore attaches a versioned Kaggle Model
+    and loads it with ``local_files_only``.  The Hub fallback is retained for
+    local development and deliberately reports its origin.
+    """
+    explicit = ""
+    if model_id == E5_TEXT_MODEL_ID:
+        explicit = str(os.getenv("REGION_TALK_E5_MODEL_LOCAL_PATH") or "").strip()
+    explicit = explicit or str(os.getenv("REGION_TALK_TEXT_EMBEDDING_MODEL_LOCAL_PATH") or "").strip()
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    if model_id == E5_TEXT_MODEL_ID:
+        root = Path("/kaggle/input/intfloatmultilingual-e5-base")
+        candidates.extend(
+            [
+                root / "transformers" / "default" / "1",
+                root / "Transformers" / "default" / "1",
+                root,
+            ]
+        )
+        if root.exists():
+            candidates.extend(sorted((p.parent for p in root.rglob("config.json")), reverse=True))
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if _is_transformers_model_dir(candidate):
+            return str(candidate), "kaggle_model_input" if str(candidate).startswith("/kaggle/input/") else "local_model_path"
+    return model_id, "huggingface_hub"
+
+
 def text_embedding_input_for_post(row: dict[str, Any]) -> str:
     """Compact deterministic text used for local E5 and sidecar BGE enrichment.
 
@@ -12574,8 +12622,10 @@ def _ensure_text_embedding_model(model_id: str) -> tuple[Any, Any, Any, str]:
             from transformers import AutoModel, AutoTokenizer  # type: ignore
         else:
             raise
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModel.from_pretrained(model_id)
+    model_reference, model_origin = text_embedding_model_reference(model_id)
+    local_only = model_origin != "huggingface_hub"
+    tokenizer = AutoTokenizer.from_pretrained(model_reference, local_files_only=local_only)
+    model = AutoModel.from_pretrained(model_reference, local_files_only=local_only)
     device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
     model.to(device)
     model.eval()
@@ -13168,7 +13218,8 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
     model_ids = text_embedding_model_ids_for_run()
     for model_index, model_id in enumerate(model_ids, start=1):
         started = time.monotonic()
-        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", texts_to_score=len(texts))
+        model_reference, model_origin = text_embedding_model_reference(model_id)
+        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_model_origin=model_origin, text_embedding_model_reference=model_reference, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", texts_to_score=len(texts))
         try:
             result = _run_embedding_model_pass_bounded(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, report_event=report_event)
             if not result.get("ok"):
@@ -13176,11 +13227,11 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
             for i, scores in enumerate(result.get("scores") or []):
                 if i < len(per_text) and isinstance(scores, dict):
                     per_text[i][model_id] = {str(k): float(v) for k, v in scores.items()}
-            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=1, text_embedding_passes_completed=model_index, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_model_origin=model_origin, text_embedding_model_reference=model_reference, text_embedding_models_loaded=1, text_embedding_passes_completed=model_index, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         except Exception as exc:
             err = f"{model_id}:{type(exc).__name__}:{str(exc)[:180]}"
             errors.append(err)
-            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_model_origin=model_origin, text_embedding_model_reference=model_reference, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         finally:
             release_text_embedding_model(model_id)
             emit("text_embedding_model_released", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index, text_embedding_execution_mode="sequential_one_model_in_memory")

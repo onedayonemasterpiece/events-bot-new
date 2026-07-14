@@ -76,6 +76,24 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             timeout_seconds=1,
         )
 
+    def test_e5_model_reference_prefers_explicit_local_model(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_E5_MODEL_LOCAL_PATH")
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                model_dir = Path(td)
+                for name in ("config.json", "model.safetensors", "tokenizer.json"):
+                    (model_dir / name).write_text("{}", encoding="utf-8")
+                os.environ["REGION_TALK_E5_MODEL_LOCAL_PATH"] = td
+                reference, origin = mod.text_embedding_model_reference(mod.E5_TEXT_MODEL_ID)
+                self.assertEqual(reference, td)
+                self.assertEqual(origin, "local_model_path")
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_E5_MODEL_LOCAL_PATH", None)
+            else:
+                os.environ["REGION_TALK_E5_MODEL_LOCAL_PATH"] = old
+
     def test_source_selection_prefers_cursor_queue_over_static_seed_rescans(self) -> None:
         mod = load_module()
         static_seed = self._seed(mod, "@staticold", priority=0, seed_id="seed_1")
@@ -5440,6 +5458,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
 
 class RegionTalkKaggleLauncherTests(unittest.TestCase):
+    def test_prepared_kernel_attaches_pinned_e5_model(self) -> None:
+        mod = load_runner_module()
+        kernel_path = mod.prepared_kernel_path(run_id="unit-e5-model", kernel_slug="unit-e5-model")
+        metadata = json.loads((kernel_path / "kernel-metadata.json").read_text(encoding="utf-8"))
+        self.assertIn(mod.DEFAULT_E5_KAGGLE_MODEL_SOURCE, metadata["model_sources"])
+
     def test_launcher_config_propagates_llm_timeouts(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")

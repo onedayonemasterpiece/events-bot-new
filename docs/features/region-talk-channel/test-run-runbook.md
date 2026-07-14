@@ -390,7 +390,14 @@ The XLSX has:
 - Each required text-embedding model pass is bounded by
   `REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS` (default `420`) and runs in
   its own subprocess by default (`REGION_TALK_TEXT_EMBEDDING_SUBPROCESS=1`).
-  Hugging Face Hub timeouts are set before import
+  CandidateReport pins `intfloat/multilingual-e5-base` as the versioned Kaggle
+  Model input
+  `ranaabdulrehman145/intfloatmultilingual-e5-base/Transformers/default/1` and
+  resolves `/kaggle/input/intfloatmultilingual-e5-base/...` before any network
+  access. This is the production path: a transient unauthenticated Hugging Face
+  403 must not stop E5 enrichment. `REGION_TALK_E5_MODEL_LOCAL_PATH` is the
+  explicit local-test override; Hugging Face remains only a development
+  fallback. Hub timeouts are set before import
   (`REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT`, `REGION_TALK_HF_HUB_ETAG_TIMEOUT`,
   `REGION_TALK_HF_HUB_DISABLE_XET`). The vector-priority profile is enabled by
   default (`REGION_TALK_PRIORITIZE_TEXT_VECTORS=1`): even if a smoke env

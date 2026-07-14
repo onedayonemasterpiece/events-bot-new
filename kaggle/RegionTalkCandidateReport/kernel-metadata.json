@@ -9,6 +9,9 @@
   "enable_internet": true,
   "dataset_sources": [],
   "competition_sources": [],
+  "model_sources": [
+    "ranaabdulrehman145/intfloatmultilingual-e5-base/Transformers/default/1"
+  ],
   "kernel_sources": [],
   "slug": "region-talk-candidate-report"
 }
