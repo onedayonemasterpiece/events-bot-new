@@ -938,6 +938,12 @@ than inflating checks/hits with old statuses touched by another stage.
 
 The product stats surface is rendered from the same orchestrator snapshot as
 the decision plan; it must not run a second aggregation with different grains.
+YDB endpoint discovery for that snapshot is itself bounded-retry work:
+`REGION_TALK_ORCHESTRATOR_YDB_CONNECT_ATTEMPTS` (default `3`) recreates and
+closes the driver after discovery timeout, with
+`REGION_TALK_ORCHESTRATOR_YDB_CONNECT_BACKOFF_SECONDS` (default `5`). This is
+separate from the SDK operation retry loop because endpoint discovery happens
+in `Driver.wait()` before a session pool exists.
 Every cycle reports the complete stock and transition diagnostics together:
 manual/keyword/hashtag/similar inflow, immutable queue-sequence integrity,
 exact ready/cooldown/entity-wait/fetched states, source and post throughput,

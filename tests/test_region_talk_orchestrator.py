@@ -301,6 +301,47 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES"] = old_sources
 
+    def test_ydb_endpoint_discovery_retries_with_fresh_closed_drivers(self) -> None:
+        mod = load_module()
+        drivers = []
+
+        class FakeDriver:
+            def __init__(self, attempt: int) -> None:
+                self.attempt = attempt
+                self.stopped = False
+
+            def wait(self, *, timeout: int, fail_fast: bool) -> None:
+                self.timeout = timeout
+                self.fail_fast = fail_fast
+                if self.attempt < 3:
+                    raise RuntimeError("Failed to resolve endpoints: Deadline exceeded")
+
+            def stop(self) -> None:
+                self.stopped = True
+
+        class FakeYdb:
+            @staticmethod
+            def Driver(**_kwargs):
+                driver = FakeDriver(len(drivers) + 1)
+                drivers.append(driver)
+                return driver
+
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_ORCHESTRATOR_YDB_CONNECT_ATTEMPTS": "3",
+            "REGION_TALK_ORCHESTRATOR_YDB_CONNECT_BACKOFF_SECONDS": "0",
+            "REGION_TALK_ORCHESTRATOR_YDB_CONNECT_TIMEOUT_SECONDS": "7",
+        }):
+            driver = mod._open_ydb_driver(
+                FakeYdb,
+                endpoint="grpcs://example",
+                database="/db",
+                credentials="token",
+            )
+
+        self.assertIs(driver, drivers[2])
+        self.assertEqual([item.stopped for item in drivers], [True, True, False])
+        self.assertTrue(all(item.timeout == 7 for item in drivers))
+
 
     def test_bge_batch_limit_is_configurable_for_backlog_catchup(self) -> None:
         old_limit = os.environ.get("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT")

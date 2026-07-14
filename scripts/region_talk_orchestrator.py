@@ -2772,12 +2772,45 @@ def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _open_ydb_driver(
+    ydb: Any,
+    *,
+    endpoint: str,
+    database: str,
+    credentials: Any,
+) -> Any:
+    attempts = max(1, _env_int("REGION_TALK_ORCHESTRATOR_YDB_CONNECT_ATTEMPTS", 3))
+    backoff = max(0, _env_int("REGION_TALK_ORCHESTRATOR_YDB_CONNECT_BACKOFF_SECONDS", 5))
+    timeout = max(1, _env_int("REGION_TALK_ORCHESTRATOR_YDB_CONNECT_TIMEOUT_SECONDS", 20))
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        driver = ydb.Driver(endpoint=endpoint, database=database, credentials=credentials)
+        try:
+            driver.wait(timeout=timeout, fail_fast=True)
+            return driver
+        except Exception as exc:
+            last_error = exc
+            try:
+                driver.stop()
+            except Exception:
+                pass
+            if attempt >= attempts:
+                raise
+            time.sleep(backoff * attempt)
+    assert last_error is not None
+    raise last_error
+
+
 def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_yc_fallback: bool = False) -> dict[str, Any]:
     ydb = ensure_ydb_module()
 
     endpoint, database = ydb_endpoint_database(allow_yc_fallback=allow_yc_fallback)
-    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb_credentials(ydb, allow_yc_fallback=allow_yc_fallback))
-    driver.wait(timeout=20, fail_fast=True)
+    driver = _open_ydb_driver(
+        ydb,
+        endpoint=endpoint,
+        database=database,
+        credentials=ydb_credentials(ydb, allow_yc_fallback=allow_yc_fallback),
+    )
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
     try:
