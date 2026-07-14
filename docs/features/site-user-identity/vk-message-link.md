@@ -1,6 +1,6 @@
 # VK identity linking through a verification message
 
-> Status: **post-release design / not implemented**. This is not an F1–F17 first-release blocker and must remain disabled until the legal texts, dedicated VK inbox and security canary are accepted.
+> Status: **post-release design / not implemented**. This is not an F1–F18 first-release blocker and must remain disabled until the legal texts, dedicated VK inbox and security canary are accepted.
 
 ## Decision
 

@@ -4,6 +4,8 @@
 >
 > Актуализация product scope: **2026-07-12** — D-1 event reminders, one-time localStorage email, Yandex/manual-email choice, saved-search public tags, metric-backed personalization E2E и экологичный Supabase 500 MB capacity/compaction gate.
 >
+> Актуализация product scope: **2026-07-14** — F18: mobile menu/footer share of KenigEvents through one centrally prerendered metric-bound service card, desktop copy-link behavior, claim-evidence and CDN/real-device gates.
+>
 > Базовая ревизия: `origin/main@323cb1e407c6`
 >
 > Post-audit integration milestone: `origin/main@c6396331` (2026-07-12) contains the transactional Postbox worker, authorized-key preamble fix and live worker evidence; source/fix/docs branches were merged and deleted from `origin`.
@@ -73,9 +75,10 @@
 | **F15** | Share generates image | **Partial** | Preview Web Share file → generated `1080×1350` canvas → text/copy fallback | Stable offline/server assets 1200×630, 1080×1350, 1080×1080; stale regeneration; CORS; Telegram/VK/MAX real-device tests |
 | **F16** | Correct image focus/crop | **Partial** | Renderer accepts focal/face metadata and keeps OCR-safe contain fallback | Producer currently emits empty focal/face metadata; implement enrichment, confidence/manual override, golden visual corpus |
 | **F17** | Admin issue report → ArtKodex repair/history | **Partial, branch-only** | Admin Edge/UI/history design and branch implementation exist | Merge; unique active/idempotency key; atomic poller claim; real ArtKodex owner; structured repair result; end-to-end repair/rebuild/history |
+| **F18** | Поделиться самим сервисом: mobile menu/footer card, desktop copy link | **Designed / release blocker** | Product/UX contract and historical `3d_intro` cube reference are documented; no current component, metric manifest, prerendered CDN asset or exact Pharmastaff source/SHA is attached | One shared all-pages component; mobile file/text share + fallbacks; desktop copy-only; conservative catalog metrics/claim evidence; deterministic WebP/CDN atomic promotion; real Android/iOS Telegram/VK/MAX checks; owner copy/visual sign-off |
 | **M1** | Event-detail medallion release readiness | **Partial / consolidated draft PR** | Draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38): clean main-based slice with 25 organizer/venue + 11 festival/venue-brand entries; 420-page preview/check and 38/38 browser image load evidence | Produce/accept P0 shortlist; refresh production gap within 48h of RC; provenance/alias/no-false-match/a11y/no-overflow gates; owner mobile/desktop visual sign-off; merge to main |
 | **M1-QA** | Exhaustive static-site medallion visual cleanliness | **Missing / release gate specified** | Lab load/screenshot evidence exists, but there is no SHA-bound Playwright inventory and screenshot verdict for every actual static-site target page/layout | Discover every static-site renderer/surface; capture every actual page at 390/1440 plus breakpoint combinations; zero clipping, dirty/cut shadows, alpha mattes, overlap, overflow, broken/unreadable medallions or uncaptured targets. Telegram medallions are out of scope. |
-| **M2** | No duplicate images inside an event gallery | **Blocked / baseline reported degraded** | Exact/mirror/near-duplicate prevention exists in parts of Smart Update/publish paths, but the owner reports many current duplicates and no exhaustive current active/future visual ledger exists | Run the canonical read-only SHA-256 → dHash/visual audit over 100% of eligible multi-image events; zero confirmed duplicate events/excess refs/unreviewed clusters; root-cause repair + replay + public-surface recheck |
+| **M2** | No duplicate images inside an event gallery | **Blocked / baseline complete, closure pending** | 2026-07-13 audit found confirmed duplicate gallery refs in `79/266` eligible events and recorded visual review for `158/158` multi-image events; the automatic event-media gate is now in main | Apply/verify production-safe cleanup/status migration, rebuild all public surfaces, repeat the full audit to zero confirmed/unreviewed failures and keep the automatic Smart Update gate healthy through the stability window |
 | **M3** | Consolidated source + site event engagement | **Partial / fragmented** | TG/VK snapshots and source counter sync exist; `/populyarnoe/` currently exports source metrics and ranks them with a private Astro formula while site likes are hardcoded to zero and site views/shares are absent; `/popular_posts`, daily and other consumers also aggregate separately | One versioned batch aggregate plus shared popular-event projection for source+site views/likes/shares; migrate `/populyarnoe/` and all other consumers; idempotency/freshness/reconciliation E2E; one compact current event row + bounded evidence/TTL and size forecast |
 | **M4** | Final SEO/GEO and AI-search transparency | **Designed / sequencing gate** | Static HTML, canonical, sitemap and JSON-LD foundations exist in preview, but there is no final feature-complete frozen-UI audit or reconciled multi-agent release evidence | Start only after public-feature integration plus UI/UX owner freeze; independent Codex + approved `agy` Gemini Pro + `a-opus` audits; remediate crawl/index/schema/content/performance/GEO gaps; rerun all gates on final RC |
 
@@ -157,8 +160,9 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | F15 | Preview implementation находится в main, production share-asset generator остаётся debt без отдельной завершённой ветки. |
 | F16 | Renderer contract находится в main; producer focal/face metadata и его feature branch не найдены. |
 | F17 | Есть side branch, но она mixed/stale и не закрывает idempotent ArtKodex poller/result E2E. |
+| F18 | Canonical product/UX contract подготовлен в release-doc branch; отдельной current-main implementation branch, shared component, renderer/manifest/CDN evidence и привязанного Pharmastaff reference пока нет. |
 
-Следовательно, документацию нельзя считать полностью и корректно оформленной по всем F1–F17. Корректная цель — один canonical feature home на capability/связную feature family, актуальный status matrix, routes, operations/tests и явная связь с implementation branch; создавать искусственную ветку на каждый ID необязательно.
+Следовательно, документацию нельзя считать полностью и корректно оформленной по всем F1–F18. Корректная цель — один canonical feature home на capability/связную feature family, актуальный status matrix, routes, operations/tests и явная связь с implementation branch; создавать искусственную ветку на каждый ID необязательно.
 
 ## 6. Аудит полноты документации
 
@@ -171,6 +175,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | Personal email/page | Canonical design v2 подготовлен | Реализация отсутствует; старая branch назначала неверного владельца | Новый main-based feature branch по принятому Supabase control-plane ADR |
 | Email delivery | Средняя, branch-only | Transactional follow и recommendation digest смешиваются концептуально | Разделить transactional/reminder и recommendation marketing streams |
 | UI/share/focus/medallions | Средняя/высокая | Medallion implementation was split across mixed branches; remaining shortlist was not release-routed | Use clean PR #38 only; finish production-backed P0 shortlist, provenance/alias checks and owner visual acceptance inside the frozen UI |
+| Service sharing F18 | Product/UX contract готов, implementation отсутствует | Точный оттестированный Pharmastaff source/SHA не найден; нет общего shell component, metric manifest, WebP prerender/CDN promotion и mobile/desktop evidence | Привязать Pharmastaff reference, реализовать один menu/footer component и central renderer, проверить claims/catalog hash, fallbacks, real devices и owner visual sign-off |
 | Transport | Канонический home/route и renderer/rail/bus child contracts консолидированы; draft PR #37 прошёл directory + full preview checks | Coverage уже требования; нет nightly atomic refresh и принятой интеграции в release UI | Сохранить один reusable slice; добавить city/provider/source matrix, ops runbook, automatic last-good refresh и UI acceptance |
 | Comment feedback | Сильная design/probe; Region Talk даёт зрелый prior art по YDB/queues/vectors/Telethon/compaction | Обе implementation/evidence branches сильно расходятся с main; опыт не консолидирован, reusable skills отсутствуют | Mandatory F14-0A Region Talk audit + adoption matrix, F14-0B skills, затем clean-port probe и отдельные storage/export/UI/operations stages |
 | Admin incident report | Хорошая product prose | Документ переоценивает готовность ArtKodex poller/idempotency | Явно разделить UI, DB queue, poller, repair result, E2E statuses |
@@ -195,7 +200,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 
 ### Stage 0 — Scope freeze и интеграционная база
 
-- [x] Утверждён полный F1–F17 launch scope; staged canaries не исключают ни одной фичи из первой публичной презентации.
+- [x] Утверждён полный F1–F18 launch scope; staged canaries не исключают ни одной фичи из первой публичной презентации.
 - [ ] Создать integration branch только от свежего `origin/main`.
 - [ ] Для каждой side branch записать owner, base/head SHA, rebase plan, tests, merge/reject decision.
 - [ ] Не переносить весь dirty checkout; cherry-pick/re-implement только проверяемые feature commits.
@@ -353,9 +358,15 @@ Smart Update является владельцем семантического 
 - [ ] Comment feedback implementation starts from current main only after F14-0 acceptance: incremental isolated YDB state, PII redaction/short retention, EventSource-derived sources, phrase-bank/vector-first gates, cached group verifier, static manifest, changed-hash build handoff, Astro fallback and manual canary. Do not copy Region Talk frontier/image/publication/writer stages or `DISCOVERY1/2` sessions.
 - [ ] Admin report: allowlisted auth, event snapshot, idempotency key/unique active constraint, atomic poller claim, crash/retry safety, structured repair result/history/re-report.
 - [ ] Offline focal/face/saliency enrichment with confidence/fallback/manual override and golden crop corpus.
-- [ ] Run the exhaustive [event image duplicate audit](../operations/event-image-duplicate-audit.md) on a hashed production snapshot: union `Event.photo_urls` + `EventPoster`, exact byte SHA-256, repo-compatible dHash/near-candidate recall, contact sheets and recorded visual review for 100% of eligible multi-image events.
+- [x] Establish the exhaustive 2026-07-13 [event image duplicate baseline](../operations/event-image-duplicate-audit.md): union `Event.photo_urls` + `EventPoster`, exact byte/pixel hashes, candidate review and recorded visual decisions for `158/158` eligible multi-image events; it found confirmed duplicate refs in `79/266` eligible events.
+- [ ] After production-safe cleanup/root-cause replay and public rebuild, repeat that full inventory audit on the RC snapshot and attach the zero-failure ledger; baseline evidence alone does not close M2.
 - [ ] RC/hypercare gate: `events_with_confirmed_intra_event_duplicates=0`, `confirmed_excess_duplicate_refs=0`, `unreviewed_candidate_clusters=0`; new/changed multi-image events remain clean through the 14-day quality window. Repair confirmed ingest/Smart Update/persistence/render root causes and replay incidents, not only DB URLs.
 - [ ] Stable share assets and real Telegram/VK/MAX tests.
+- [ ] F18 service share: one common shell component is visible under the expanded mobile brand tag and in the footer on every public page family; desktop renders copy-link semantics in the same two placements.
+- [ ] Bind the exact tested Pharmastaff organization-card share reference/SHA, then prove the transferred `canShare(files)`/transient-activation/cancel/error/fallback behavior with Playwright stubs and real Android/iOS Telegram/VK/MAX checks.
+- [ ] Generate the service card centrally from the accepted catalog snapshot: conservative event/city metrics + copy/template versions → deterministic `1080×1350` WebP (`<=350 KiB`) + manifest/hash → CDN upload before one atomic release promotion. No browser/per-click render and no user data.
+- [ ] F18 claim gate: superlatives/comparisons require reproducible dated evidence; the `<=20` personalization promise and D-1 reminder wording appear only after their own gates. Otherwise the accepted concise copy is «Найдите своё событие быстрее» with factual `{N}+`/city coverage and a visible `kenigevents.ru` CTA.
+- [ ] Owner approves the exact V1 lettering/logo card, thumbnail readability, both mobile placements and desktop copy state. The historical poster-cube/bento concept remains a future V2 and cannot delay release V1.
 
 ### Stage 6A — Final SEO/GEO optimization after UI/UX freeze
 
@@ -379,6 +390,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] Full active/future image-uniqueness ledger is attached to the RC evidence pack and current static/Telegraph/TG/VK surfaces have no confirmed within-event duplicate images.
 - [ ] Engagement reconciliation on the RC snapshot proves the shared function equals distinct TG/VK latest snapshots plus accepted site summaries; all named consumers use it and storage/freshness/last-good evidence is attached.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
+- [ ] F18 evidence is bound to this RC SHA: all page families expose both shell placements; mobile shares the current WebP/text/service URL or a tested fallback; desktop copies the service URL without native share; card metrics match the release catalog hash and CDN rollback follows the release manifest.
 - [ ] Favorites RC evidence covers every page-family menu surface and `/izbrannoe/`: save/repeat/undo, `N>0` badge, lifecycle rows, cross-tab/device, identity merge, logout/account switch, back/cache isolation and degraded Supabase with working ICS.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
@@ -400,7 +412,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 
 ### Stage 9 — Отдельный пострелизный релиз раздела «Фестивали»
 
-Эта стадия является самостоятельным release scope после первой публичной презентации и имеет собственные UI freeze, RC и evidence; она не расширяет задним числом F1–F17 presentation GO.
+Эта стадия является самостоятельным release scope после первой публичной презентации и имеет собственные UI freeze, RC и evidence; она не расширяет задним числом F1–F18 presentation GO.
 
 - [ ] Закрыть root causes фестивальной очереди: atomic claim/lease, normalized source idempotency, retry/quarantine/stale recovery, видимый backlog/run result и реально существующие live VK/TG/site queue E2E.
 - [ ] Запустить универсальный мониторинг как минимум официальных сайтов: source registry/cadence, changed-content fingerprints, bounded Playwright/PDF fetch, LLM-first evidence extraction, model migration/eval, atomic last-good and freshness alerts.
@@ -458,7 +470,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 
 ## 10. Открытые продуктовые и архитектурные решения
 
-1. **Scope — решено:** все F1–F17 обязательны для первого публичного релиза/презентации; staged canaries only manage risk.
+1. **Scope — решено:** все F1–F18 обязательны для первого публичного релиза/презентации; staged canaries only manage risk.
 2. **Personalization storage — решено:** Supabase/Postgres owns current identity/profile/favorites/subscriptions/email control plane; YDB owns analytics/history and the independent comment-feedback sidecar. См. `docs/architecture/personalization-data-ownership.md`.
 3. **Identity — решено на product level:** email-only user becomes a Supabase Auth identity through code or link; anonymous profile links automatically/intelligently under eligible personalization consent.
 4. **Favorites — решено:** calendar save и favorite — один durable saved-event state; like остаётся отдельным сигналом; email reminder — отдельный explicit transactional opt-in.
@@ -473,6 +485,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 13. **Personalization production KPI:** golden release gate `<=20` принят; после canary утвердить production percentile/SLO и minimum relevant-supply coverage, не смешивая mature/cold-start/no-supply cohorts.
 14. **Retention/ecological budget — требуется понятное product решение:** забывать/анонимизировать ли compact interest profile после `365d` без визита? Короткие technical logs всё равно удаляются раньше; consent/suppression/send-critical evidence живёт по отдельной safety/legal policy.
 15. **Festival release:** owner approves `/festivali/<edition-slug>/`, current/upcoming index plus archive, stable edition-id migration, daily changed-only website monitoring/max stale age and separately labelled public programme-only rows.
+16. **Service sharing — решено на product level:** F18 обязательна; mobile menu/footer share one centrally prerendered card, desktop copies the service URL, V1 uses existing lettering/logo and factual catalog-bound copy, while poster cubes are a future visual variant. Exact final copy/asset still requires owner UI sign-off and comparative claims require evidence.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
@@ -484,7 +497,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 6. **P1 — identity/telemetry/favorites/calendar/engagement:** F6/F7/F9/F10/F12 plus M3, включая Yandex/manual-email choice, видимый reminder state after save, migration of `/populyarnoe/`/`/popular_posts`/daily/video/static counters to one compact source+site engagement function and removal of the private Astro popularity formula.
 7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 8. **P1 — admin repair loop:** F17 after idempotency/poller contract.
-9. **P1 — media quality/share:** F15/F16.
+9. **P1 — media quality/share:** F15/F16/F18, причём service-share V1 использует существующий brand mark/lettering и central WebP prerender; poster-cube concept остаётся future V2.
 10. **P2 — transport:** land the validated preliminary slice through PR #37 only after release-UI placement is accepted; separately prototype/accept-or-defer the optional «Как добраться» gallery slide; F11 becomes production-safe only after the nightly source pipeline/atomic last-good gate is closed.
 11. **P2 — discussion signals:** F14 begins with the mandatory [Region Talk reuse/skills gate](../features/event-comment-feedback/region-talk-reuse-audit.md), not a stale-branch rebase: exact-SHA audit/adoption matrix → two validated project skills → clean current-main probe port → isolated YDB/manifest/UI/safety rollout.
 12. **P0 final gate — SEO/GEO:** only after steps 1–11 are integrated and the resulting UI/UX is immutably owner-accepted, M4 runs Codex + approved `agy` Gemini Pro + `a-opus` independent audits over crawl/index/schema/internal-link/performance and AI transparency/citability, then re-reviews the exact final RC after remediation.
@@ -499,7 +512,8 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 |---|---|---|
 | G1 | Надёжность разложена на build/promotion/rollback/SLO/security/canary gates | **Done (planning only)** |
 | G2 | Активные incident families, Smart Update ownership и регулярный audit/incident/root-cause/replay workflow перечислены | **Done (planning only)** |
-| F1–F17 | Каждое исходное требование имеет отдельный статус, evidence class и gate | **Done (planning only)** |
+| F1–F18 | Каждое исходное требование имеет отдельный статус, evidence class и gate | **Done (planning only)** |
+| F18 service share | Mobile menu/footer share, desktop copy-link, concise claim policy, metric-bound prerender, CDN/fallback/device/owner gates and future cube boundary documented | **Done (planning only; implementation/reference evidence missing)** |
 | F9 navigation | `Моё избранное`, positive-count badge, complete lifecycle page and privacy/E2E gates documented | **Done (planning only; implementation missing)** |
 | F11 refresh | KPPK/bus provider jobs, combined atomic manifest, provider last-good and single rebuild contract documented | **Done (planning only; implementation missing)** |
 | F14 reuse gate | Region Talk exact-SHA audit/adoption matrix, skill-first sequence, clean-port boundary and non-transferable stages documented | **Done (planning only; audit/skills/implementation missing)** |

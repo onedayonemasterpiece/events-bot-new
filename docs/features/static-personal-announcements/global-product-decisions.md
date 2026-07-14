@@ -1,6 +1,6 @@
 # Global product decisions for the static personal announcements release
 
-> Status: release-level product decisions accepted in the planning thread on 2026-07-11 and extended through 2026-07-13; retention and numerical quality thresholds remain to be set.
+> Status: release-level product decisions accepted in the planning thread on 2026-07-11 and extended through 2026-07-14; retention and numerical quality thresholds remain to be set.
 
 ## Working decisions
 
@@ -10,7 +10,7 @@
 4. **Supabase/Postgres is the durable user/profile and email control-plane owner.** YDB is analytics/history and comment-feedback sidecar only.
 5. **Profile linking is idempotent.** Login/logout cannot silently fork two durable profiles; reset/unlink/delete remain explicit operations.
 6. **Static fallback is mandatory.** Auth, personalization, telemetry, YDB, search provider or email failure must not make public event pages unusable.
-7. **All F1–F17 are required for the first public release/presentation.** Technical canaries may be staged, but no capability may be removed from the release scope or presented as a future beta.
+7. **All F1–F18 are required for the first public release/presentation.** Technical canaries may be staged, but no capability may be removed from the release scope or presented as a future beta.
 8. **Verified-email login supports both a code and a one-click link.** Both complete one Supabase Auth verification flow and recover the same identity.
 9. **Personal pages use a forwardable public secret link.** Anyone who has the high-entropy URL may open it without authentication. The page is `noindex` and contains no raw profile/private identity data; the token remains revocable/rotatable under retention policy.
 10. **Anonymous-to-authenticated profile linking is automatic and intelligent.** No extra merge-confirmation dialog is required after login. The merge is idempotent, deduplicates saved/action state, preserves explicit user actions over inferred interests, decays/conflict-checks inferred signals, shows the result and keeps reset/unlink available.
@@ -36,6 +36,7 @@
 30. **The full operations control dashboard is an important separate post-release release, but release-critical observability is not deferred.** Before the first presentation a protected compact scorecard must reconcile expected slot, run and actual delivery for static publication, transport, image dedup and promo. The later web dashboard is admin-only/read-only first, stores compact current/transition state and never treats missing evidence as green.
 31. **Event Comment Feedback reuses Region Talk experience only through an audit-and-skill gate.** Before F14 implementation, exact-SHA audit both divergent branches, classify every pattern as `reuse|adapt|reject|defer`, and create validated `region-talk-ydb-funnel-audit` plus `event-comment-feedback-pipeline` skills. Implementation then starts from current main; Region Talk source frontier, image/publication/writer stages and `DISCOVERY1/2` sessions are explicitly non-transferable.
 32. **Related events are an automatic two-lane release invariant, not a manual build feature.** Every effectful Smart Update create/update first projects current `search_v3`/`related_v1` hashes through the debounced vector lane and then triggers one full-catalog Kaggle related/static build 15 minutes after the last effect. Changed candidate windows require LLM verification; new events may update older anchors. Periodic vector and manifest-drift reconciliation plus scheduled lifecycle rebuild recover missed triggers, while stale/raw vector candidates never appear as verified `Похожие`.
+33. **KenigEvents itself is shareable through one centrally prerendered service card.** The common mobile shell exposes the action under the expanded brand tag and in the footer; the same desktop destinations copy the service URL instead of invoking native share. The card uses catalog-derived conservative metrics, WebP/CDN atomic publication and a visible CTA, is never rendered per click, and cannot publish «крупнейшая»/«быстрее других»/reminder claims without their evidence gates. Initial release uses the existing lettering/brand mark; the historical poster-cube concept is a future visual variant, not a V1 dependency.
 
 ## Consequences
 
@@ -60,6 +61,7 @@
 - All twelve release workstreams in the readiness checklist remain blockers.
 - The public recommendation-email launch can reach fewer than 200 users during canary or when provider seed/service contacts reduce usable plan capacity, but it can never exceed 200 active consented users without a later explicit product and infrastructure decision.
 - A passing vector-sync run alone does not satisfy F2: the promoted static manifest must match the accepted catalogue/vector/policy hashes, and create/update plus periodic-recovery E2E must prove the changed and reverse-affected related blocks.
+- Service-share metrics are claims, not decoration: their manifest must bind the eligible catalog hash and conservative counting rules. If a valid current metric/card is unavailable, the product degrades to an evergreen no-number card or link-only share rather than serving a known stale overclaim.
 
 ## Product decisions still required
 

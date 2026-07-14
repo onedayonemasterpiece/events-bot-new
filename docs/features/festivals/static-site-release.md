@@ -1,6 +1,6 @@
 # Separate post-release: static festival section
 
-> Status: **planned separate release after the first public static-site presentation**. This document is the canonical release contract for the festival section; it is not an F1–F17 presentation GO gate.
+> Status: **planned separate release after the first public static-site presentation**. This document is the canonical release contract for the festival section; it is not an F1–F18 presentation GO gate.
 
 ## Honest baseline
 

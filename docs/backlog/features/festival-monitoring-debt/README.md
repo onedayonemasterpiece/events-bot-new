@@ -4,7 +4,7 @@ Status: open
 Owner: product/engineering
 Created: 2026-06-08
 
-This debt is a mandatory dependency of the [separate post-release static festival release](../../../features/festivals/static-site-release.md), not a blocker for the first F1–F17 presentation by itself.
+This debt is a mandatory dependency of the [separate post-release static festival release](../../../features/festivals/static-site-release.md), not a blocker for the first F1–F18 presentation by itself.
 
 ## Summary
 

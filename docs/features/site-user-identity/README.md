@@ -14,7 +14,7 @@ Owns the global identity contract shared by search, personalization, favorites/c
 - anonymous-to-auth profile linking;
 - unlink, reset, account/profile deletion and audit.
 
-Post-release VK identity linking through a one-time direct-message challenge and privacy-preserving friend intersection is specified separately in [VK identity linking through a verification message](vk-message-link.md). It is not part of the F1–F17 first-release gate.
+Post-release VK identity linking through a one-time direct-message challenge and privacy-preserving friend intersection is specified separately in [VK identity linking through a verification message](vk-message-link.md). It is not part of the F1–F18 first-release gate.
 
 Search-specific UI remains in [authorized event search](../unsigned-personalization/authorized-event-search.md). Ranking/profile schemas remain in [unsigned personalization](../unsigned-personalization/README.md).
 

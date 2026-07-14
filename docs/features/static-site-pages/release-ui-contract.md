@@ -9,6 +9,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 ## Required surfaces
 
 - root/index and responsive navigation with one shared information architecture;
+- common mobile menu/footer service-share actions and their desktop copy-link variants;
 - today, tomorrow, weekend and relevant category listings;
 - event detail, gallery and quick-read organizer/venue/festival medallion row;
 - related/search/personal feed cards;
@@ -41,6 +42,12 @@ Acceptance requires:
 
 The detailed identity and action semantics live in [Site user identity](../site-user-identity/README.md#global-static-page-identity-shell-release-requirement).
 
+## Share the service itself
+
+F18 is separate from sharing an event. Every public HTML page family uses one common component with two placements: under the expanded mobile brand tag and in the footer. On mobile both invoke native share with the same centrally prerendered service-card WebP, concise text and `https://kenigevents.ru/`; on desktop both are labelled «Скопировать ссылку» and never invoke native share.
+
+The frozen UI must prove that these actions remain visible without competing with primary event/navigation CTAs, have consistent accessible names/focus/feedback and do not add the service image to event media. The asset is generated centrally from a catalog-bound metrics manifest, not by browser canvas or a per-click backend. Initial art uses the existing lettering/brand mark and a visible CTA; the historical poster-cube composition remains a future variant. Full copy, claim-evidence, CDN, fallback and device acceptance live in [Service sharing card](service-sharing.md).
+
 ## Optional gallery transport card
 
 The UI-freeze task may prototype one generated non-photo gallery slide **«Как добраться»** after genuine event media. It is derived from the same validated F11 snapshot/selector as the normal transport block, fails closed for stale/unsupported data and never becomes hero/OG/JSON-LD event media. The full accessible schedule block remains canonical; the slide itself is optional and may be owner-deferred without removing F11. See [the gallery-card contract](../event-transport/gallery-how-to-get-there-card.md).
@@ -61,6 +68,7 @@ The frozen event-detail UI consumes the single medallion slice from draft PR [#3
 - reduced-motion and no-JS behavior;
 - slow network and unavailable optional backend;
 - real Android/iOS browser checks for Yandex login, email code/link login, logout, forget-email, calendar and share;
+- mobile menu/footer service-card share and desktop menu/footer copy-link checks, including file/text/clipboard fallbacks;
 - visual baselines tied to one immutable preview build id;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 

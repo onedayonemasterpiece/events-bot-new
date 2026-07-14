@@ -5,9 +5,9 @@
 
 ## Purpose
 
-This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F17 from becoming an unowned flat checklist.
+This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F18 from becoming an unowned flat checklist.
 
-All F1–F17 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope.
+All F1–F18 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope.
 
 ## Capability ownership
 
@@ -30,6 +30,7 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 | F15 | Share with generated image | [Event sharing](../static-site-pages/event-sharing.md) | preview canvas; durable assets missing |
 | F16 | Correct image focus/crop | [Image framing](../static-site-pages/image-framing.md) | renderer preview; metadata producer missing |
 | F17 | Admin issue report → ArtKodex repair history | [Event issue reporting](../event-issue-reporting/README.md) | prototype branch; clean port required |
+| F18 | Share KenigEvents itself from the mobile menu/footer with a centrally prerendered service card; copy the service link on desktop | [Service sharing card](../static-site-pages/service-sharing.md) | release-blocking product/UX contract; exact Pharmastaff reference, implementation, CDN asset pipeline and evidence missing |
 
 ## Cross-cutting visual readiness
 
@@ -37,7 +38,7 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 |---|---|---|---|
 | M1 | Event-detail organizer/venue/festival medallions | [Event token medallions](../static-site-pages/event-token-medallions.md) | clean consolidated draft PR #38: 25 organizer/venue + 11 festival/venue-brand entries; P0 shortlist and owner visual sign-off pending |
 | M1-QA | Exhaustive medallion visual cleanliness | [Medallion visual QA](../static-site-pages/medallion-visual-qa.md) | separate release gate missing: Playwright must inventory and capture every actual target page/layout with zero clipping, dirty/cut shadows, alpha mattes, overflow or unreadable assets |
-| M2 | No duplicate images inside an event gallery | [Event image duplicate audit](../../operations/event-image-duplicate-audit.md) | current production baseline reported degraded; exhaustive hash-to-visual audit and root-cause burn-down pending |
+| M2 | No duplicate images inside an event gallery | [Event image duplicate audit](../../operations/event-image-duplicate-audit.md), [automatic event-media gate](../event-media/README.md) | 2026-07-13 baseline found duplicates in `79/266` eligible events and reviewed `158/158` multi-image events; automatic gate is in main, production cleanup/rebuild/public-surface closure pending |
 | M3 | Consolidated event engagement from sources and site | [Consolidated event engagement](../post-metrics/consolidated-event-engagement.md) | TG/VK source metrics and partial counters exist; `/populyarnoe/` is currently a source-only local-formula preview; one source+site read function, shared popular projection and ecological view/share persistence are missing |
 | M4 | Final SEO/GEO and AI-search transparency | [SEO/GEO release optimization](../static-site-pages/seo-geo-release-optimization.md) | mandatory last pre-RC gate; starts only after immutable UI/UX acceptance and integration of all public-HTML-changing release features, then requires independent Codex + `agy` Gemini Pro + `a-opus` audits |
 
@@ -57,8 +58,9 @@ Current decisions and questions that affect several feature families live in [gl
 ## Release sequencing constraints
 
 - Navigation keeps one cross-device information architecture but adapts its geometry: compact mobile brand-tag disclosure, persistent desktop horizontal navigation with the shallow hybrid tag as the recommended release candidate. The exact immutable preview still needs owner sign-off.
+- F18 adds one shared service-sharing action to that shell: on mobile it appears both under the expanded brand tag and in the footer and shares a centrally prerendered WebP card; on desktop the same destinations become «Скопировать ссылку». Browser/runtime image generation, unsupported superlatives and per-user payloads are forbidden; exact requirements live in the [service-sharing contract](../static-site-pages/service-sharing.md).
 - The gallery slide «Как добраться» is an optional F11 presentation candidate: it may summarize validated transport data after real event media, but cannot replace the accessible full schedule block or weaken the nightly refresh/fail-closed gates.
-- Release galleries require zero confirmed intra-event image duplicates across the full active/future public inventory. The current baseline must be established by the [read-only SHA-to-visual audit](../../operations/event-image-duplicate-audit.md), then each confirmed failure family is closed at its ingest/Smart Update/persistence/render root cause rather than by a one-off URL cleanup.
+- Release galleries require zero confirmed intra-event image duplicates across the full active/future public inventory. The 2026-07-13 [SHA-to-visual baseline](../../operations/event-image-duplicate-audit.md) found confirmed duplicate refs in `79/266` eligible events and reviewed all `158/158` multi-image events; each failure family now needs production-safe cleanup/root-cause closure, public rebuild and a zero-failure repeat audit rather than a one-off URL edit.
 - Popularity and counters are event-level, not separate source/site products: the global `/populyarnoe/` list, `/popular_posts`, daily, video selection and static counters must use the single [consolidated engagement contract](../post-metrics/consolidated-event-engagement.md) for source + site views/likes/shares, with compact current aggregates and bounded history under the Supabase storage budget. `/populyarnoe/` consumes a precomputed versioned order/score rather than calculating a private Astro formula; user filters may narrow it and the personalized slot remains separate.
 - F2 is not complete after a manual vector/Gemma preview: every effectful Smart Update create/update must automatically reach current `related_v1` vectors, a full active/future related graph, LLM verification of changed windows, checked Kaggle artifact and atomic promotion after the 15-minute quiet window. Periodic vector/manifest reconciliation and scheduled lifecycle refresh recover missed triggers and time-only expiry.
 - Medallion readiness is part of F5/UI presentation acceptance: use only clean draft PR #38, finish or explicitly owner-defer the production-backed P0 shortlist, refresh the gap audit within 48 hours of RC, then pass the separate exhaustive Playwright target-surface capture with zero visual defects before owner sign-off.
@@ -74,7 +76,7 @@ Current decisions and questions that affect several feature families live in [gl
 
 ## Separate post-release releases
 
-- [Static festival section](../festivals/static-site-release.md): queue/root-cause cleanup, permanent website monitoring, a distinct festival card, stable event↔edition relations and festival index/detail pages through the standard static promotion pipeline. It is explicitly outside the first F1–F17 presentation GO scope and has its own UI freeze/RC/SEO-GEO evidence.
+- [Static festival section](../festivals/static-site-release.md): queue/root-cause cleanup, permanent website monitoring, a distinct festival card, stable event↔edition relations and festival index/detail pages through the standard static promotion pipeline. It is explicitly outside the first F1–F18 presentation GO scope and has its own UI freeze/RC/SEO-GEO evidence.
 - [Operations control dashboard](../../backlog/features/operations-control-dashboard/README.md): protected read-only control centre for ingestion, video, promo, transport, static publishing, image dedup and other critical deliveries. A compact operator readiness scorecard remains a first-release reliability prerequisite; the polished web dashboard is an important later release.
 
 ## Documentation completion rule

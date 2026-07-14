@@ -95,6 +95,8 @@ Production must replace the same-page canvas fallback with a stable server/offli
 
 Admin backlog: add a one-click “prepare detailed event post” function that creates a richer ready-to-paste post package for Max/VK/Telegram (share image + caption + URL) for an operator, without changing public page SEO.
 
+Sharing KenigEvents itself is a separate mandatory release capability from sharing an event. The common mobile menu and footer share one centrally prerendered service-card WebP plus the service URL; the same desktop placements copy the service URL. It never uses the per-event canvas path or enters event media/JSON-LD. Canonical F18 contract: `docs/features/static-site-pages/service-sharing.md`.
+
 ## Event-page medallions
 
 Event detail pages render large quick-read **medallions** after the hero/title area on `/sobytiya/<slug>/`. These are medallions of the concrete event, not a card-list badge row. The current slice renders curated organizer avatars plus safe facts such as `Пушкинская карта`, free/price, family/charity/festival hints; speaker/celebrity avatar medallions are a P1 extension gated by source-grounded identity and cached avatars. Listing/search cards keep only the metadata formatting change: show a short weekday and render event type as plain text without `#`. Canonical contract: `docs/features/static-site-pages/event-token-medallions.md`.
@@ -174,10 +176,11 @@ Runtime policy: `ocr_text`/`unknown` stay `contain`/natural-ratio no-crop; `visu
 
 ## Связанные документы
 
-- Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
+- Release umbrella and F1–F18 map: `docs/features/static-personal-announcements/README.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
 - Responsive navigation decision/research: `docs/features/static-site-pages/responsive-navigation.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
+- Service sharing card, mobile share and desktop copy-link: `docs/features/static-site-pages/service-sharing.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
 - Event gallery duplicate release audit: `docs/operations/event-image-duplicate-audit.md`.
 - Event transport: `docs/features/event-transport/README.md`; optional gallery card: `docs/features/event-transport/gallery-how-to-get-there-card.md`.
