@@ -45,3 +45,12 @@ def test_canonical_sources_include_official_ecodvor_channel() -> None:
 
     assert source.trust_level == "high"
     assert source.default_location is None
+
+
+def test_canonical_sources_include_kldscope_with_grounded_default_location() -> None:
+    source = next(item for item in canonical_tg_sources() if item.username == "kldscope_news")
+
+    assert source.trust_level == "high"
+    assert source.default_location == (
+        "КЛДскоп, Земельная 12, 1 этаж, кабинет 3, Калининград"
+    )

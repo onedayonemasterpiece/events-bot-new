@@ -25,6 +25,7 @@
 
 ### Added
 
+- **Telegram Monitoring / КЛДскоп**: добавлен официальный `@kldscope_news` с `high` trust, source default и канонической площадкой `КЛДскоп, Земельная 12, 1 этаж, кабинет 3, Калининград`; официальные формулировки и склонения имени канонизируются через reference/alias layer.
 - **Site identity / post-release VK message linking**: specified a six-digit, short-lived VK direct-message challenge that links the authenticated site subject to the verified sender VK ID in the isolated YDB personal-data contour, transiently intersects public friends only against double-opted-in linked users, persists no full friend list/message body, and requires an honest personal-data policy, separate VK-link consent and user agreement before canary activation.
 
 - **Email infrastructure / inbound core**: added isolated Yandex Mail Trigger intake and YMQ delivery Cloud Function contracts with keyed idempotency, private normalized-envelope pointers, HMAC-authenticated minimized backend receipts, PII-safe logging, retry/DLQ fixtures, and a conservative plan-by-default desired-state reconciler that never touches Fly or mutates secretful/live traffic resources implicitly.

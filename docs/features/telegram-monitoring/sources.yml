@@ -94,6 +94,11 @@ sources:
     default_location: "Сигнал, Леонова 22, Калининград"
     notes: "организаторы, площадка"
 
+  - username: kldscope_news
+    trust_level: high
+    default_location: "КЛДскоп, Земельная 12, 1 этаж, кабинет 3, Калининград"
+    notes: "официальный канал общественного пространства; явная off-site площадка в посте имеет приоритет над default_location"
+
   - username: kaliningradlibrary
     trust_level: high
     default_location: "Научная библиотека, Мира 9, Калининград"
