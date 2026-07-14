@@ -6,16 +6,16 @@ const variants = [
     slug:'text-tag',
     number:'01',
     title:'Текстовая бирка',
-    status:'сильная преемственность',
-    summary:'Без символа: знакомая терракотовая бирка становится ниже и шире, а навигация остаётся полностью открытой.',
-    plus:'Самый прямой мост к мобильному паттерну.',
-    risk:'Остаётся проблема отсутствия самостоятельного знака.',
+    status:'рекомендуемый lockup',
+    summary:'Полное имя собрано в спокойную модульную закладку: зонтичный бренд читается одной строкой, сервисный леттеринг получает воздух, навигация остаётся открытой.',
+    plus:'Лучший мост к мобильной бирке без ложной кнопочности и без отдельного конкурирующего символа.',
+    risk:'Для favicon и аватара всё ещё понадобится самостоятельная малая марка.',
   },
   {
     slug:'logo-eyelet',
     number:'02',
     title:'Знак-люверс',
-    status:'рекомендуемый баланс',
+    status:'компактная альтернатива',
     summary:'Белый одноцветный знак лежит прямо на компактной выступающей бирке; название остаётся спокойным текстовым якорем.',
     plus:'Чистый силуэт без внутренней плашки и лучший запас под поиск или профиль.',
     risk:'На промежуточной ширине текстовое название первым скрывается.',
@@ -79,12 +79,12 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
     <main class="header-concepts" data-header-desktop-lab>
       <p class="header-concepts__eyebrow">desktop only · mobile tag unchanged</p>
       <h1>Одна идея, три степени бренда</h1>
-      <p class="header-concepts__lead">Во всех вариантах меню остаётся открытым и выровнено по правой границе расширенной 1440 px сетки. Рабочая полоса имеет высоту 56 px, а выступающая часть бирки ограничена 12–22 px. Active-state показывается только там, где раздел действительно является текущей страницей.</p>
+      <p class="header-concepts__lead">Во всех вариантах меню остаётся открытым и выровнено по правой границе расширенной 1440 px сетки. Рабочая полоса имеет высоту 56 px, а выступающая часть остаётся контролируемой — 11–31 px. Active-state показывается только там, где раздел действительно является текущей страницей.</p>
       <ul class="header-concepts__principles" aria-label="Общие требования"><li>5 видимых разделов</li><li>меню справа</li><li>44 px hit area</li><li>контекстный aria-current</li><li>видимый focus</li><li>без изменений mobile</li></ul>
 
       <section class="header-concepts__grid" aria-label="Три варианта desktop-шапки">
         {variants.map((item) => (
-          <article class:list={['header-concept-card', item.slug === 'logo-eyelet' && 'header-concept-card--recommended']} data-header-concept-card={item.slug}>
+          <article class:list={['header-concept-card', item.slug === 'text-tag' && 'header-concept-card--recommended']} data-header-concept-card={item.slug}>
             <div class="header-concept-card__top"><span class="header-concept-card__number">{item.number}</span><span class="header-concept-card__status">{item.status}</span></div>
             <h2>{item.title}</h2>
             <p>{item.summary}</p>
@@ -95,8 +95,8 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
       </section>
 
       <section class="header-concepts__decision" aria-labelledby="header-decision-title">
-        <h2 id="header-decision-title">Предварительно: вариант 02</h2>
-        <div><strong>«Знак-люверс»</strong> лучше отделяет постоянный бренд от меняющейся навигации и не повторяет мобильную бирку буквально. Белый монохромный знак больше не нуждается во внутренней плашке; меню получает стабильный правый якорь. Слово «Анонсы» теперь использует отдельный UI-wordmark с одной широкой «о». На event detail ни один раздел не подсвечивается, а точное состояние листинга можно проверить отдельно.<br /><a class="header-concepts__context-link" href={withBase('/lab/header-lettering/')}>Проверить конструкцию леттеринга</a><br /><a class="header-concepts__context-link" href={withBase('/lab/header-desktop/listing/')}>Открыть листинг с active-state</a></div>
+        <h2 id="header-decision-title">Фокус: вариант 01</h2>
+        <div><strong>«Текстовая бирка»</strong> теперь рассматривается как единый фиксированный lockup полного имени, а не контейнер с двумя независимо растянутыми строками. Solid terracotta убирает ложный CTA; сетка 4 px, стабильные 240×88 px и один и тот же масштаб на 1024–1920 сохраняют ритм. Зонтичная строка стала легче, но остаётся читаемой, а wide-«о» получает достаточный clear space. На event detail ни один раздел не подсвечивается, а точное состояние листинга можно проверить отдельно.<br /><a class="header-concepts__context-link" href={withBase('/lab/header-lettering/')}>Проверить конструкцию леттеринга</a><br /><a class="header-concepts__context-link" href={withBase('/lab/header-desktop/listing/')}>Открыть листинг с active-state</a></div>
       </section>
     </main>
   </body>

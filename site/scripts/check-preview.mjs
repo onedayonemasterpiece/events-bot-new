@@ -153,7 +153,7 @@ for (const marker of [
   'logo-eyelet',
   'signature-tab',
   'Знак-люверс',
-  'Предварительно: вариант 02',
+  'Фокус: вариант 01',
   '44 px hit area',
 ]) {
   if (!desktopHeaderLabHtml.includes(marker)) throw new Error(`Desktop header lab misses marker: ${marker}`);
@@ -201,6 +201,11 @@ for (const marker of [
   ':focus-visible',
   '@media (max-width:1120px)',
   '@media (prefers-reduced-motion:reduce)',
+  'width:240px',
+  'height:88px',
+  'background:var(--header-brand-tab)',
+  'box-shadow:none',
+  'white-space:nowrap',
 ]) {
   if (!desktopHeaderSource.includes(marker)) throw new Error(`Desktop header source misses contract marker: ${marker}`);
 }
