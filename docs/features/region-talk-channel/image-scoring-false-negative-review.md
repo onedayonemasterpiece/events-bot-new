@@ -1,6 +1,6 @@
 # Region Talk: review ложного отсева изображений
 
-Status: **external-consultant handoff / implementation review**. Audit date: **2026-07-14 UTC**. Review branch: [`integration/region-talk-image-compliance-review-20260714`](https://github.com/onedayonemasterpiece/events-bot-new/tree/integration/region-talk-image-compliance-review-20260714). Base: `origin/agent/region-talk/R04-live-canary` at `f7abc1c29d2522831e768d8af5d94b94033be210`.
+Status: **external-consultant handoff / implementation review**. Audit date: **2026-07-14 UTC**. Review branch: [`integration/region-talk-image-compliance-review-20260714`](https://github.com/onedayonemasterpiece/events-bot-new/tree/integration/region-talk-image-compliance-review-20260714). Integrated base: `origin/agent/region-talk/R04-live-canary` at `e047ff257035b9e4a1582413903f37253ad98f8c`; the read-only scoring audit began at its parent `f7abc1c29d2522831e768d8af5d94b94033be210` and the intervening commit does not change the scoring formula/thresholds.
 
 ## Короткий вывод
 

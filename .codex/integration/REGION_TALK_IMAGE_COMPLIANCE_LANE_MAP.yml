@@ -1,7 +1,7 @@
 mode: read_only_parallel_then_serial_integrator
 repo: onedayonemasterpiece/events-bot-new
 base_ref: origin/agent/region-talk/R04-live-canary
-base_sha: f7abc1c29d2522831e768d8af5d94b94033be210
+base_sha: e047ff257035b9e4a1582413903f37253ad98f8c
 base_branch: agent/region-talk/R04-live-canary
 integration_branch: integration/region-talk-image-compliance-review-20260714
 global_constraints:
@@ -93,7 +93,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: Dated official URLs, exact/unknown match status, identity caveats, and safe implementation guidance.
     verification_scope: inspection_only
-    status: spawned
+    status: merged
   - id: image-scoring-audit
     role: reviewer
     effort: extra-high
@@ -107,7 +107,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: Root-cause findings, code anchors, and a ranked test plan without threshold edits.
     verification_scope: inspection_only
-    status: spawned
+    status: merged
   - id: integrator
     role: worker
     effort: high
@@ -131,4 +131,4 @@ lanes:
       - artifacts/**
     expected_output: A clean pushed integration branch with a self-contained external-consultant handoff.
     verification_scope: targeted
-    status: in_progress
+    status: committed
