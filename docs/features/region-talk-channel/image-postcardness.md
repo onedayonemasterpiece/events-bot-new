@@ -95,6 +95,14 @@ UI continues to display it as running for hours without logs, treat that as a
 stale UI surface and verify the API status, YDB business heartbeat and output
 report before cancelling or diagnosing a frozen model.
 
+CandidateReport and ImageDiagnostic may run concurrently on their separate
+session roles.  Before CandidateReport writes an existing image row it must
+re-read the current YDB image ledger and merge only its source/text/vector
+eligibility fields.  Album acquisition, frame counts, model outputs and the
+versioned image decision belong to ImageDiagnostic and cannot be replaced by
+CandidateReport's older start-of-run snapshot.  A hard source/text/compliance
+rejection may still close the queue status while retaining that audit evidence.
+
 ## Principle
 
 Do not run expensive VLM on every image. Use a cascade:

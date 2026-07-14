@@ -6554,6 +6554,127 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         )
         self.assertEqual(selected, [])
 
+    def test_candidate_image_write_preserves_newer_album_diagnostic_evidence(self) -> None:
+        mod = load_module()
+        latest = {
+            "post_url": "https://t.me/routecommunity/1342",
+            "image_queue_status": "actual_scored",
+            "last_image_diag_run_id": "image-v3",
+            "last_image_diag_at": "2026-07-14T20:05:30+00:00",
+            "images_scored_actual_count": 10,
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "image_acquisition_status": "complete",
+            "expected_image_count": 10,
+            "fetched_image_count": 10,
+            "image_quality_decision": "needs_visual_review",
+            "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+            "shadow_best_frame_score": 0.693,
+            "next_action": "visual_review_nonterminal",
+        }
+        stale_candidate = {
+            "post_url": "https://t.me/routecommunity/1342",
+            "image_queue_status": "actual_scored",
+            "last_image_diag_run_id": "image-v2",
+            "images_scored_actual_count": 1,
+            "publication_eligibility_gate_version": "region_talk_publication_eligibility_v5",
+            "publication_eligibility_decision": "accept",
+            "next_action": "human_review_best_image",
+            "run_id": "candidate-newer-write",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(stale_candidate, latest)
+        self.assertEqual(merged["images_scored_actual_count"], 10)
+        self.assertEqual(merged["last_image_diag_run_id"], "image-v3")
+        self.assertEqual(merged["image_quality_decision"], "needs_visual_review")
+        self.assertEqual(merged["shadow_best_frame_score"], 0.693)
+        self.assertEqual(merged["next_action"], "visual_review_nonterminal")
+        self.assertEqual(merged["publication_eligibility_gate_version"], "region_talk_publication_eligibility_v5")
+
+    def test_candidate_image_write_can_add_hard_text_reject_without_losing_album_evidence(self) -> None:
+        mod = load_module()
+        latest = {
+            "image_queue_status": "actual_scored",
+            "last_image_diag_run_id": "image-v3",
+            "images_scored_actual_count": 6,
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "image_quality_decision": "needs_visual_review",
+            "next_action": "visual_review_nonterminal",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(
+            {
+                "image_queue_status": "rejected_text_gate",
+                "image_product_gate_reason": "post_ad_or_promo",
+                "next_action": "skip_text_rejected",
+            },
+            latest,
+        )
+        self.assertEqual(merged["image_queue_status"], "rejected_text_gate")
+        self.assertEqual(merged["next_action"], "skip_text_rejected")
+        self.assertEqual(merged["images_scored_actual_count"], 6)
+        self.assertEqual(merged["image_quality_decision"], "needs_visual_review")
+
+    def test_image_online_writer_merges_latest_diagnostic_row_before_bulk_upsert(self) -> None:
+        mod = load_module()
+        captured: dict[str, object] = {}
+
+        class Pool:
+            def retry_operation_sync(self, op, retry_settings=None):
+                return op(object())
+
+        def fake_bulk(_driver, _ydb, _table, items, _updated_at, *, chunk_size):
+            captured["items"] = items
+            return len(items)
+
+        old = {name: os.environ.get(name) for name in [
+            "REGION_TALK_STATE_BACKEND", "REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT",
+        ]}
+        try:
+            os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
+            os.environ["REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT"] = "1"
+            latest = {
+                "image_queue_item:imgq_album": {
+                    "image_queue_id": "imgq_album",
+                    "post_url": "https://t.me/blog/42",
+                    "image_queue_status": "actual_scored",
+                    "last_image_diag_run_id": "image-new",
+                    "images_scored_actual_count": 8,
+                    "image_decision_contract_version": "region_talk_image_album_guard_v2",
+                    "image_quality_decision": "needs_visual_review",
+                }
+            }
+            with mock.patch.object(mod, "_ydb_online_write_allowed", return_value=True), \
+                 mock.patch.object(mod, "_get_business_heartbeat_pool", return_value=(object(), object(), Pool(), "/db/table")), \
+                 mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
+                 mock.patch.object(mod, "ydb_retry_settings", return_value=None), \
+                 mock.patch.object(mod, "ydb_select_kind_items", return_value=latest) as select_latest, \
+                 mock.patch.object(mod, "ydb_bulk_upsert_json_many", side_effect=fake_bulk):
+                written = mod.write_region_talk_online_queue_items(
+                    [{
+                        "image_queue_id": "imgq_album",
+                        "post_url": "https://t.me/blog/42",
+                        "image_queue_status": "actual_scored",
+                        "images_scored_actual_count": 1,
+                        "publication_eligibility_gate_version": "region_talk_publication_eligibility_v5",
+                    }],
+                    kind="image_queue_item",
+                    id_fields=["image_queue_id", "post_url"],
+                    fields=mod.IMAGE_QUEUE_STATE_FIELDS,
+                    run_id="candidate-new",
+                    stage="unit",
+                )
+            self.assertEqual(written, 1)
+            select_latest.assert_called_once()
+            payload = captured["items"][0][2]
+            self.assertEqual(payload["images_scored_actual_count"], 8)
+            self.assertEqual(payload["last_image_diag_run_id"], "image-new")
+            self.assertEqual(payload["image_quality_decision"], "needs_visual_review")
+            self.assertEqual(payload["publication_eligibility_gate_version"], "region_talk_publication_eligibility_v5")
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
     def test_publication_online_writer_uses_normalized_url_primary_key(self) -> None:
         mod = load_module()
         captured: dict[str, object] = {}

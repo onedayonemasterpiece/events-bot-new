@@ -2315,7 +2315,16 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "image_product_gate_status", "image_product_gate_reason",
     "publication_eligibility_decision", "publication_eligibility_gate_version",
     "publication_eligibility_reason", "publication_eligibility_evidence_json",
-    "images_scored_actual_count", "next_action",
+    "images_scored_actual_count", "actual_image_count", "frame_scores_available_count",
+    "image_decision_contract_version", "image_acquisition_version", "image_scorer_version",
+    "expected_image_count", "fetched_image_count", "distinct_image_count",
+    "image_acquisition_status", "input_media_manifest_hash", "media_manifest_items",
+    "image_component_bundle_complete", "shadow_best_frame_index", "shadow_best_frame_score",
+    "shadow_best_frame_postcardness_score", "selected_media_ids",
+    "image_quality_decision", "image_quality_reason", "image_quality_terminality",
+    "image_eligibility_decision", "image_eligibility_gate_version",
+    "image_eligibility_expected_gate_version", "image_eligibility_reason",
+    "image_eligibility_status", "image_eligibility_checked_at", "next_action",
 ]
 POST_STATE_FIELDS = [
     "post_id", "source_id", "source_title", "platform", "platform_post_key", "post_url", "post_date",
@@ -3296,6 +3305,70 @@ def image_queue_rows_for_ydb_write(
     return selected
 
 
+IMAGE_DIAGNOSTIC_OWNED_FIELDS = {
+    "lease_run_id", "lease_at", "last_image_diag_run_id", "last_image_diag_stage", "last_image_diag_at",
+    "media_fetch_status", "media_fetch_error", "media_fetch_attempt_count", "media_fetch_last_attempt_at",
+    "media_fetch_retry_exhausted", "media_download_seconds", "media_acquisition_status",
+    "media_acquisition_error_type", "image_model_input_type", "image_model_type",
+    "images_scored_actual_count", "actual_image_count", "frame_scores_available_count",
+    "image_decision_contract_version", "image_acquisition_version", "image_scorer_version",
+    "expected_image_count", "fetched_image_count", "distinct_image_count",
+    "image_acquisition_status", "input_media_manifest_hash", "media_manifest_items",
+    "image_component_bundle_complete", "selected_media_ids",
+    "image_quality_decision", "image_quality_reason", "image_quality_terminality",
+    "shadow_best_frame_index", "shadow_best_frame_score", "shadow_best_frame_postcardness_score",
+    "cv_overall_media_score", "cv_technical_quality_score", "cv_aesthetic_score", "cv_postcardness_score",
+    "clip_postcardness_score", "clip_positive_mass", "clip_negative_mass", "clip_top_prompt",
+    "laion_aesthetic_score", "laion_aesthetic_raw_score", "nima_quality_score", "nima_quality_raw_score",
+    "overall_media_score", "postcardness_score", "aesthetic_score", "technical_quality_score",
+    "final_visual_score", "final_visual_status", "model_disagreement_score",
+    "image_width", "image_height", "image_file_bytes", "image_decode_seconds",
+    "cv_inference_seconds", "clip_inference_seconds", "laion_inference_seconds",
+    "nima_inference_seconds", "total_inference_seconds",
+}
+
+
+def merge_candidate_image_payload_with_latest(
+    candidate_payload: dict[str, Any],
+    latest_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge CandidateReport fields without clobbering a concurrent image result.
+
+    CandidateReport owns source/text/vector eligibility and queue admission;
+    ImageDiagnostic owns acquisition, leases, per-album evidence and model
+    decisions.  Because both notebooks intentionally run in parallel, a
+    CandidateReport start-of-run snapshot can be older than the image row at
+    write time.  Re-read the current YDB row and retain every diagnostic-owned
+    field.  A newly discovered hard semantic rejection may still close the
+    queue status, while ordinary refreshes keep the diagnostic status/action.
+    """
+    candidate = dict(candidate_payload or {})
+    latest = dict(latest_payload or {})
+    if not latest:
+        return candidate
+    merged = dict(latest)
+    merged.update(candidate)
+    latest_has_diagnostic_evidence = bool(
+        str(latest.get("last_image_diag_run_id") or "").strip()
+        or str(latest.get("image_decision_contract_version") or "").strip()
+        or int(_rt_float(latest.get("images_scored_actual_count"))) > 0
+    )
+    if not latest_has_diagnostic_evidence:
+        return merged
+    for field in IMAGE_DIAGNOSTIC_OWNED_FIELDS:
+        if field in latest:
+            merged[field] = latest[field]
+    candidate_status = str(candidate.get("image_queue_status") or "")
+    if candidate_status not in {"rejected_text_gate", "rejected_publication_eligibility"}:
+        for field in (
+            "image_queue_status", "previous_image_queue_status", "status_changed_this_run",
+            "last_status_changed_at", "status_color_hint", "row_fill_color", "next_action",
+        ):
+            if field in latest:
+                merged[field] = latest[field]
+    return merged
+
+
 def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: str, id_fields: list[str], fields: list[str], run_id: str, stage: str) -> int:
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return 0
@@ -3346,6 +3419,25 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
             ensure_ydb_kv_table(ydb, session, table_path)
 
         pool.retry_operation_sync(ensure_table, retry_settings=retry_settings)
+        if kind == "image_queue_item":
+            # CandidateReport and ImageDiagnostic use different Telegram
+            # sessions and may finish in either order.  Reconcile against the
+            # latest row immediately before BulkUpsert so a fresh album result
+            # cannot be replaced by the older CandidateReport snapshot.
+            def read_latest_image_rows(session: Any) -> dict[str, dict[str, Any]]:
+                return ydb_select_kind_items(
+                    session,
+                    ydb,
+                    table_path,
+                    "image_queue_item",
+                    limit=max(5000, len(items) * 2),
+                )
+
+            latest_image_rows = pool.retry_operation_sync(read_latest_image_rows, retry_settings=retry_settings)
+            items = [
+                (pk, item_kind, merge_candidate_image_payload_with_latest(payload, latest_image_rows.get(pk)))
+                for pk, item_kind, payload in items
+            ]
         if getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT", True):
             # Queue rows have independent stable primary keys and do not need a
             # single multi-row transaction.  BulkUpsert avoids compiling and
@@ -8396,7 +8488,12 @@ def build_image_candidate_queue(
             "row_fill_color": color,
             "media_acquisition_status": "actual_image_downloaded_and_scored" if actual else ("vk_public_url_ready" if status == "needs_actual_image_fetch" and str(direct_image_ref).startswith("http") else ("needs_actual_image_fetch" if status == "needs_actual_image_fetch" else ("unsupported_media_or_decode_failed" if status == "not_reviewable_unsupported_media" else "no_media_or_not_supported"))),
             "media_acquisition_error_type": "" if actual else (media.get("failure_reason") or row.get("failure_reason") or status),
-            "images_scored_actual_count": 1 if actual else 0,
+            "images_scored_actual_count": max(
+                int(_rt_float(entries[key].get("images_scored_actual_count"))),
+                int(_rt_float(media.get("images_scored_actual_count"))),
+                int(_rt_float(row.get("images_scored_actual_count"))),
+                1 if actual else 0,
+            ),
             "last_attempt_run_id": run_id if media.get("post_url") else entries[key].get("last_attempt_run_id", ""),
             "last_attempt_at": run_now if media.get("post_url") else entries[key].get("last_attempt_at", ""),
             "next_action": "human_review_best_image" if status == "actual_scored" else ("wait_for_image_diagnostic" if status == "image_analysis_in_progress" else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else ("skip_unsupported_media" if status == "not_reviewable_unsupported_media" else "skip_or_manual_open"))),
