@@ -5,6 +5,8 @@
 > Working branch: [`feature/personalization-product-e2e-design`](https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/personalization-product-e2e-design)
 >
 > Pending release-plan input: [PR #26 E2E acceptance draft](https://github.com/onedayonemasterpiece/events-bot-new/blob/agent/static-release/checklist-cdn-social/docs/features/unsigned-personalization/e2e-acceptance.md)
+>
+> Phase A output: [preliminary product E2E design](product-e2e-design.md). The seed remains the task contract; the design records the factual audit and provisional schemas without starting Phase B.
 
 ## Product objective
 

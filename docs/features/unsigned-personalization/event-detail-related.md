@@ -351,7 +351,7 @@ PLAYWRIGHT_HTML_OPEN=never \
 npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
 ```
 
-Last local run: `8 passed` (Playwright Chromium).
+Last local run: `9 passed` (Playwright Chromium, Phase A audit 2026-07-14).
 
 ## Real catalog probe
 

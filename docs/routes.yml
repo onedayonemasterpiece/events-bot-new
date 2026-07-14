@@ -363,6 +363,9 @@ features:
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
     production_integration: docs/features/unsigned-personalization/production-integration.md
     product_e2e_research_brief: docs/features/unsigned-personalization/product-e2e-research-brief.md
+    product_e2e_design: docs/features/unsigned-personalization/product-e2e-design.md
+    product_e2e_golden_persona_schema: docs/features/unsigned-personalization/schemas/product-e2e/golden-persona-v0.schema.json
+    product_e2e_catalog_timeline_schema: docs/features/unsigned-personalization/schemas/product-e2e/catalog-timeline-v0.schema.json
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_identity: docs/features/site-user-identity/README.md
     related_favorites_calendar: docs/features/event-favorites-calendar/README.md
@@ -378,6 +381,7 @@ features:
     llm_stress_scenarios: docs/features/unsigned-personalization/llm-stress-scenarios.md
     llm_stress_pack_builder: scripts/build_personalization_llm_stress_pack.py
     gherkin: tests/e2e/features/static_site_personalization.feature
+    gherkin_status: design_only_no_steps
     playwright_contract: tests/playwright/static_personalization_contract.spec.ts
     reference_client: static_site/personalization/personalization.js
     reference_demo: static_site/personalization/demo.html
@@ -387,7 +391,7 @@ features:
     capabilities:
       local_anonymous_profile: preview
       related_pgvector: canary_partial
-      longitudinal_product_e2e: research_task_seed_external_reviews_pending
+      longitudinal_product_e2e: phase_a_design_complete_external_reviews_pending
       authorized_search: canary_partial
       remote_telemetry_ingest: design
       durable_profile: design
@@ -395,6 +399,11 @@ features:
     entrypoints:
       - static_site/personalization/personalization.js
       - static_site/personalization/demo.html
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/sobytiya/[slug].astro
+      - site/src/pages/data/discovery/[eventId].json.ts
+      - site/src/components/PersonalFeedSlot.astro
+      - site/src/components/ListingPersonalFilter.astro
       - event_vector_sync.py
       - scripts/sync_event_search_vectors_to_supabase.py
       - site/src/components/AuthorizedEventSearch.astro

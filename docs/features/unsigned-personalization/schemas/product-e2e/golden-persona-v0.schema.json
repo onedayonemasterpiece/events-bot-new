@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/product-e2e/golden-persona-v0.schema.json",
+  "title": "Golden persona contract v0 (Phase A draft)",
+  "$comment": "Design-only. Probabilities, maturity thresholds, and final acceptance gates await eligible external consultant synthesis. This oracle must never be written as the application's finished profile.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "persona_id",
+    "persona_version",
+    "label_revision",
+    "synthetic_fixture",
+    "latent_interests",
+    "constraints",
+    "unknown_exploration_zone",
+    "maturity_rule",
+    "session_schedule_ref",
+    "behavior_policy_ref",
+    "ground_truth_ref",
+    "holdout_events",
+    "expected_profile_facets",
+    "expected_exclusions",
+    "no_relevant_supply",
+    "anti_bubble_expectations"
+  ],
+  "properties": {
+    "schema_version": { "const": "golden-persona/v0.1-draft" },
+    "persona_id": { "$ref": "#/$defs/stableId" },
+    "persona_version": { "type": "integer", "minimum": 1 },
+    "label_revision": { "$ref": "#/$defs/nonEmpty" },
+    "synthetic_fixture": { "const": true },
+    "description": { "type": "string", "maxLength": 1000 },
+    "latent_interests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positive", "negative"],
+      "properties": {
+        "positive": { "type": "array", "items": { "$ref": "#/$defs/interest" }, "uniqueItems": true },
+        "negative": { "type": "array", "items": { "$ref": "#/$defs/interest" }, "uniqueItems": true }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cities", "date_windows", "price", "accessibility"],
+      "properties": {
+        "cities": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+        "date_windows": { "type": "array", "items": { "$ref": "#/$defs/dateWindow" } },
+        "price": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "max", "free_preference"],
+          "properties": {
+            "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+            "max": { "type": ["number", "null"], "minimum": 0 },
+            "free_preference": { "type": ["boolean", "null"] }
+          }
+        },
+        "accessibility": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
+      }
+    },
+    "unknown_exploration_zone": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["facet_id", "relationship"],
+        "properties": {
+          "facet_id": { "$ref": "#/$defs/stableId" },
+          "relationship": { "enum": ["adjacent_unknown", "novel_unknown", "uncertain"] }
+        }
+      }
+    },
+    "maturity_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_ref", "required_evidence_classes", "status_at_start"],
+      "properties": {
+        "policy_ref": { "$ref": "#/$defs/nonEmpty" },
+        "required_evidence_classes": {
+          "type": "array",
+          "items": { "enum": ["valid_impression", "strong_positive", "explicit_negative", "return_session", "time_span"] },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "status_at_start": { "enum": ["cold", "reactivated"] }
+      }
+    },
+    "session_schedule_ref": { "$ref": "#/$defs/nonEmpty" },
+    "behavior_policy_ref": { "$ref": "#/$defs/nonEmpty" },
+    "ground_truth_ref": { "$ref": "#/$defs/nonEmpty" },
+    "holdout_events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fixture_event_id", "activation_day", "label", "label_source"],
+        "properties": {
+          "fixture_event_id": { "$ref": "#/$defs/stableId" },
+          "activation_day": { "type": "integer", "minimum": 1 },
+          "label": { "$ref": "#/$defs/relevanceLabel" },
+          "label_source": { "$ref": "#/$defs/nonEmpty" }
+        }
+      }
+    },
+    "expected_profile_facets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "allowed_adjacent", "forbidden"],
+      "properties": {
+        "required": { "$ref": "#/$defs/facetList" },
+        "allowed_adjacent": { "$ref": "#/$defs/facetList" },
+        "forbidden": { "$ref": "#/$defs/facetList" }
+      }
+    },
+    "expected_exclusions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_ids", "facets"],
+      "properties": {
+        "event_ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+        "facets": { "$ref": "#/$defs/facetList" }
+      }
+    },
+    "no_relevant_supply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scheduled_days", "expected_state"],
+      "properties": {
+        "scheduled_days": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
+        "expected_state": { "const": "separate_supply_failure" }
+      }
+    },
+    "anti_bubble_expectations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "useful_adjacent_event_ids",
+        "forbidden_return_event_ids",
+        "max_concentration_policy_ref",
+        "stale_interest_decay_policy_ref"
+      ],
+      "properties": {
+        "useful_adjacent_event_ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+        "forbidden_return_event_ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+        "max_concentration_policy_ref": { "$ref": "#/$defs/nonEmpty" },
+        "stale_interest_decay_policy_ref": { "$ref": "#/$defs/nonEmpty" }
+      }
+    }
+  },
+  "$defs": {
+    "stableId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{1,127}$" },
+    "nonEmpty": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "facetList": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+    "relevanceLabel": { "enum": ["relevant", "adjacent", "irrelevant", "prohibited"] },
+    "interest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["facet_id", "strength_band", "evidence_basis"],
+      "properties": {
+        "facet_id": { "$ref": "#/$defs/stableId" },
+        "strength_band": { "enum": ["weak", "medium", "strong"] },
+        "evidence_basis": { "const": "independent_label" }
+      }
+    },
+    "dateWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

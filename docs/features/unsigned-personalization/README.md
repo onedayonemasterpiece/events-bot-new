@@ -26,6 +26,7 @@ Authorized event search / pgvector RPC contract: `docs/features/unsigned-persona
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
 Product E2E-driven longitudinal personalization research task: `docs/features/unsigned-personalization/product-e2e-research-brief.md`.
+Pre-consultation Phase A audit, traceability, persona/catalog schemas, simulator and KPI design: `docs/features/unsigned-personalization/product-e2e-design.md`.
 Cross-feature data ownership ADR: `docs/architecture/personalization-data-ownership.md`.
 Site identity/profile linking: `docs/features/site-user-identity/README.md`.
 Durable favorites/calendar: `docs/features/event-favorites-calendar/README.md`.
@@ -514,7 +515,7 @@ Browser reference prototype уже покрывает `event_detail_related`, а
 - `static_site/personalization/demo.html`;
 - `tests/playwright/static_personalization_contract.spec.ts`.
 
-Последний локальный contract run: `8 passed` (Playwright Chromium).
+Последний локальный contract run: `9 passed` (Playwright Chromium, Phase A audit 2026-07-14).
 
 ## Implementation work breakdown
 
