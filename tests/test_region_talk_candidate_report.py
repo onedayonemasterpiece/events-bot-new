@@ -6284,6 +6284,47 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(matches[0]["post_id"], "exact_fetch_post_id")
         self.assertIn("Личный рассказ", matches[0]["full_text"])
 
+    def test_candidate_memory_reuses_legacy_bootstrap_id_for_same_public_url(self) -> None:
+        mod = load_module()
+        previous = {
+            "posts": {
+                "history_post_id": {
+                    "post_id": "history_post_id",
+                    "post_url": "https://t.me/travel/10",
+                    "platform_post_key": "tg:travel:10",
+                    "current_stage": "needs_image_review",
+                    "first_seen_run_id": "run-1",
+                }
+            }
+        }
+        current = [{
+            "post_id": "exact_fetch_post_id",
+            "post_url": "https://t.me/travel/10",
+            "platform_post_key": "tg:travel:10",
+            "source_id": "src1",
+            "source_title": "Travel",
+            "post_date": "2026-07-01T00:00:00+00:00",
+            "text": "Личный рассказ о Калининграде.",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "needs_image_review",
+            "candidate_score": 0.7,
+            "overall_media_score": 0.7,
+        }]
+
+        memory, _increment, _expired = mod.build_candidate_memory(
+            previous,
+            current,
+            [],
+            "run-2",
+            "2026-07-14T00:00:00+00:00",
+        )
+        matches = [row for row in memory if row.get("post_url") == "https://t.me/travel/10"]
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["candidate_memory_id"], "cmem_" + mod.stable_hash("tg:travel:10"))
+        self.assertEqual(matches[0]["post_id"], "exact_fetch_post_id")
+
     def test_candidate_launcher_defaults_to_live_ydb_backend(self) -> None:
         mod = load_runner_module()
         old_backend = os.environ.pop("REGION_TALK_STATE_BACKEND", None)

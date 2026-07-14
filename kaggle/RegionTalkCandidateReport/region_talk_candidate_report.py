@@ -6743,6 +6743,9 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
                 "manual_decision": prev.get("manual_decision", ""), "next_action": "keep_in_memory_or_refetch_source_later",
                 "why_keep_in_memory": "legacy candidate from previous post state", "why_not_publication_ready": "not refetched in this run yet",
             })
+            legacy_url = canonical_post_url_for_storage(prev.get("post_url"))
+            if legacy_url:
+                memory_id_by_url.setdefault(legacy_url, mid)
     current_by_id = {str(r.get("post_id")): r for r in current_rows if r.get("post_id")}
     for row in current_rows:
         if not is_candidate_memory_row(row):

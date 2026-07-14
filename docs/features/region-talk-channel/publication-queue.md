@@ -152,7 +152,9 @@ vectors are already current. That pass is `reuse_e5_bge_text_restore`: it
 reuses both durable vectors and does not load or run either encoder. Candidate
 memory identity is canonical post URL, not a fetch-route-specific `post_id`, so
 source-history and exact-link fetches cannot create a second product row for
-the same public post.
+the same public post. This reuse also applies when candidate memory is being
+bootstrapped from a legacy processed-post row rather than an already-migrated
+`candidate_memory_item`.
 
 Source-onboarding evidence also treats the current restored candidate as the
 authoritative authored-post excerpt for its URL. An older compacted memory row
