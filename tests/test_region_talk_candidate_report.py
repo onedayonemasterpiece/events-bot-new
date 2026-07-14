@@ -6270,6 +6270,56 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(metrics["posts_needs_e5"], 0)
         self.assertEqual(metrics["posts_reuse_e5_bge_text_restore"], 1)
 
+    def test_text_restore_with_stale_bge_refreshes_e5_payload_without_reencoding(self) -> None:
+        mod = load_module()
+        post = {
+            "post_id": "post_exact_route",
+            "post_url": "https://t.me/travel/10",
+            "platform_post_key": "tg:travel:10",
+            "text": "Полный восстановленный рассказ о поездке в Калининград и на Куршскую косу.",
+            "priority_reason": "global_keyword_search_exact_post",
+            "publication_text_restore_requested": "true",
+        }
+        text_hash = mod.text_vector_text_hash(mod.text_embedding_input_for_post(post))
+        bank_version, bank_hash = mod.semantic_bank_version_and_hash(mod.semantic_bank_v1())
+        e5 = {
+            "post_id": post["post_id"],
+            "post_url": post["post_url"],
+            "text_hash": text_hash,
+            "model_id": mod.E5_TEXT_MODEL_ID,
+            "model_short": "e5",
+            "encoder_contract": mod.E5_ENCODER_CONTRACT,
+            "semantic_bank_version": bank_version,
+            "semantic_bank_hash": bank_hash[:16],
+            "semantic_scores_by_class": {
+                "ko_visit_impression": 0.81,
+                "ad_promo": 0.03,
+            },
+        }
+        actionable, metrics = mod.plan_posts_for_vector_scoring(
+            [post],
+            previous_posts={"tg:travel:10": {"current_stage": "needs_image_review"}},
+            e5_index=mod.build_text_vector_enrichment_index({"text_vector_enrichment": {"e": e5}}, model="e5"),
+            bge_m3_index={},
+            require_bge_m3=True,
+        )
+        self.assertEqual(len(actionable), 1)
+        self.assertEqual(actionable[0]["_rt_work_kind"], "reuse_e5_wait_bge_text_restore")
+        self.assertEqual(metrics["posts_needs_e5"], 0)
+        self.assertEqual(metrics["posts_reuse_e5_wait_bge_text_restore"], 1)
+
+        restored_text = mod.text_embedding_input_for_post(actionable[0])
+        refreshed = mod.build_e5_text_vector_enrichment_rows(
+            actionable,
+            [dict(actionable[0]["_rt_e5_row"])],
+            [restored_text],
+            run_id="restore-run",
+        )
+        self.assertEqual(len(refreshed), 1)
+        self.assertEqual(refreshed[0]["full_text"], restored_text)
+        self.assertEqual(refreshed[0]["text_hash"], text_hash)
+        self.assertEqual(refreshed[0]["semantic_scores_by_class"]["ko_visit_impression"], 0.81)
+
     def test_publication_ledger_reopens_text_restore_with_or_without_cached_text(self) -> None:
         mod = load_module()
         links = [

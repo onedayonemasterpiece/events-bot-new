@@ -157,9 +157,20 @@ calls, cached-entity preference, pacing and cooldown behavior are unchanged.
 After a successful restore, CandidateReport must rebuild the current policy,
 fusion and candidate-memory projection even when the text hash and both E5/BGE
 vectors are already current. That pass is `reuse_e5_bge_text_restore`: it
-reuses both durable vectors and does not load or run either encoder. Candidate
-memory identity is canonical post URL, not a fetch-route-specific `post_id`, so
-source-history and exact-link fetches cannot create a second product row for
+reuses both durable vectors and does not load or run either encoder. If BGE
+does not yet match the restored full-text hash, the row takes
+`reuse_e5_wait_bge_text_restore`: CandidateReport reuses the current E5
+semantic scores, rewrites the same stable E5 ledger row with the lossless
+active body, and performs **no E5 inference**. The isolated BGE notebook then
+enriches that body, after which the next CandidateReport pass performs the
+normal dual fusion above. An ordinary previously processed row may remain a
+passive `wait_bge_existing_e5`; a near-final text restore may not, because its
+body is the required durable input to the external worker. The operator metric
+`posts_refreshing_e5_payload_for_bge_text_restore` makes this intermediate
+state explicit.
+
+Candidate memory identity is canonical post URL, not a fetch-route-specific
+`post_id`, so source-history and exact-link fetches cannot create a second product row for
 the same public post. This reuse also applies when candidate memory is being
 bootstrapped from a legacy processed-post row rather than an already-migrated
 `candidate_memory_item`.

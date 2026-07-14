@@ -13718,7 +13718,14 @@ def plan_posts_for_vector_scoring(
         elif require_bge_m3 and not bge_current:
             # E5 is already durable and the external BGE notebook consumes that
             # ledger directly. Re-encoding E5 cannot advance the product.
-            kind = "reuse_e5_wait_bge" if previous is None else "wait_bge_existing_e5"
+            # A publication text restore is different from an ordinary known
+            # wait: the external BGE worker must receive the restored lossless
+            # body even though its E5 scores are already current. Re-write the
+            # same stable E5 row from the durable scores; do not run E5 again.
+            if text_restore_requested:
+                kind = "reuse_e5_wait_bge_text_restore"
+            else:
+                kind = "reuse_e5_wait_bge" if previous is None else "wait_bge_existing_e5"
         elif text_restore_requested:
             # The exact post was fetched specifically because asynchronous
             # media scoring reached final verification after working text had
@@ -13757,7 +13764,7 @@ def plan_posts_for_vector_scoring(
             "_rt_previous_post": previous or {},
             "_rt_work_priority": _post_work_priority(row, previous),
         })
-        if kind in {"needs_e5", "reuse_e5_wait_bge", "reuse_e5_bge_fusion", "reuse_e5_bge_policy_refresh", "reuse_e5_bge_text_restore"}:
+        if kind in {"needs_e5", "reuse_e5_wait_bge", "reuse_e5_wait_bge_text_restore", "reuse_e5_bge_fusion", "reuse_e5_bge_policy_refresh", "reuse_e5_bge_text_restore"}:
             actionable.append(row)
 
     actionable.sort(key=lambda r: r.get("_rt_work_priority") or (9, 9, 9, ""))
@@ -13766,6 +13773,7 @@ def plan_posts_for_vector_scoring(
         "posts_actionable": len(actionable),
         "posts_needs_e5": reasons.get("needs_e5", 0),
         "posts_reuse_e5_wait_bge": reasons.get("reuse_e5_wait_bge", 0),
+        "posts_reuse_e5_wait_bge_text_restore": reasons.get("reuse_e5_wait_bge_text_restore", 0),
         "posts_reuse_e5_bge_fusion": reasons.get("reuse_e5_bge_fusion", 0),
         "posts_reuse_e5_bge_policy_refresh": reasons.get("reuse_e5_bge_policy_refresh", 0),
         "posts_reuse_e5_bge_text_restore": reasons.get("reuse_e5_bge_text_restore", 0),
@@ -14504,6 +14512,23 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 needs_e5_texts,
                 run_id=run_id,
             )
+            # Refresh only the lossless active body on the same stable E5 row
+            # for publication text restores awaiting BGE. Existing semantic
+            # scores are reused, so the main notebook still loads/runs E5 only
+            # for genuinely new text.
+            restore_bge_positions = [
+                idx for idx, p in enumerate(posts_for_scoring)
+                if str(p.get("_rt_work_kind") or "") == "reuse_e5_wait_bge_text_restore"
+            ]
+            restore_bge_posts = [posts_for_scoring[idx] for idx in restore_bge_positions]
+            restore_bge_texts = [embedding_texts_for_scoring[idx] for idx in restore_bge_positions]
+            restore_bge_scores = [dict(posts_for_scoring[idx].get("_rt_e5_row") or {}) for idx in restore_bge_positions]
+            e5_rows.extend(build_e5_text_vector_enrichment_rows(
+                restore_bge_posts,
+                restore_bge_scores,
+                restore_bge_texts,
+                run_id=run_id,
+            ))
             e5_rows_written = write_region_talk_text_vector_enrichment_items(e5_rows, run_id=run_id, stage="candidate_report_e5_scored")
             if e5_rows or e5_rows_written or posts_for_scoring:
                 report_event(
@@ -14513,6 +14538,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                     e5_text_vector_rows=len(e5_rows),
                     e5_text_vector_rows_written=e5_rows_written,
                     e5_text_vector_rows_reused=len(posts_for_scoring) - len(needs_e5_posts),
+                    e5_text_vector_rows_refreshed_for_bge_text_restore=len(restore_bge_posts),
                     next_action="run_region_talk_bge_m3_enrichment",
                 )
         except Exception as exc:
@@ -15728,6 +15754,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "posts_deferred": len(runtime_deferred_posts),
         "posts_actionable_after_idempotency": int(post_work_plan.get("posts_actionable") or 0),
         "posts_needing_new_e5": int(post_work_plan.get("posts_needs_e5") or 0),
+        "posts_refreshing_e5_payload_for_bge_text_restore": int(post_work_plan.get("posts_reuse_e5_wait_bge_text_restore") or 0),
         "posts_reusing_e5_for_bge_fusion": int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
         "posts_reusing_e5_for_policy_refresh": int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
         "posts_waiting_for_bge_without_e5_recompute": int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
@@ -15811,6 +15838,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "posts_scored":posts_scored_count,"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
         "posts_actionable_after_idempotency":int(post_work_plan.get("posts_actionable") or 0),
         "posts_needing_new_e5":int(post_work_plan.get("posts_needs_e5") or 0),
+        "posts_refreshing_e5_payload_for_bge_text_restore":int(post_work_plan.get("posts_reuse_e5_wait_bge_text_restore") or 0),
         "posts_reusing_e5_for_bge_fusion":int(post_work_plan.get("posts_reuse_e5_bge_fusion") or 0),
         "posts_reusing_e5_for_policy_refresh":int(post_work_plan.get("posts_reuse_e5_bge_policy_refresh") or 0),
         "posts_waiting_for_bge_without_e5_recompute":int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
@@ -16427,6 +16455,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         posts_deferred=len(runtime_deferred_posts),
         posts_skipped_unchanged=int(post_work_plan.get("posts_skipped_unchanged") or 0),
         posts_skipped_legacy_current_dual=int(post_work_plan.get("posts_skipped_legacy_current_dual") or 0),
+        posts_refreshing_e5_payload_for_bge_text_restore=int(post_work_plan.get("posts_reuse_e5_wait_bge_text_restore") or 0),
         posts_waiting_for_bge_without_e5_recompute=int(post_work_plan.get("posts_wait_bge_existing_e5") or 0),
         candidates_created=len(candidates),
         image_queue_total=len(image_candidate_queue_sheet),
