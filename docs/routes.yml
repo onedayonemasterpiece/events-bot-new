@@ -166,6 +166,7 @@ features:
     event_quality_operations: docs/operations/event-quality-release-monitoring.md
     email_operations: docs/operations/email-delivery.md
     service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
 
   digests:
     status: implemented
@@ -297,6 +298,7 @@ features:
     responsive_navigation: docs/features/static-site-pages/responsive-navigation.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
     service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
     image_framing: docs/features/static-site-pages/image-framing.md
     seo_geo_release_optimization: docs/features/static-site-pages/seo-geo-release-optimization.md
     related_event_transport: docs/features/event-transport/README.md
@@ -326,7 +328,7 @@ features:
       release_ui: candidate_signoff_pending
       responsive_navigation: adaptive_hybrid_selected_visual_signoff_pending
       sharing: preview_canvas_offline_generator_missing
-      service_sharing: release_blocker_design_only_central_prerender_and_ui_missing
+      service_sharing: release_blocker_design_only_desktop_windows_macos_matrix_pending
       popular_listing: partial_source_only_local_formula
       popular_listing_shared_projection: missing_release_gate
       image_framing: renderer_preview_metadata_producer_missing

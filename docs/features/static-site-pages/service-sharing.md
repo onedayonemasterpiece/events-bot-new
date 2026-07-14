@@ -1,6 +1,6 @@
 # Карточка «Поделиться сервисом»
 
-> Статус: **F18 — обязательный блокер первого публичного релиза; product/UX contract готов, реализация и release evidence отсутствуют**.
+> Статус: **F18 — обязательный блокер первого публичного релиза; mobile contract готов, desktop Windows/macOS rich-clipboard mode требует аналитики и тестирования, реализация и release evidence отсутствуют**.
 
 ## Назначение и граница фичи
 
@@ -23,7 +23,8 @@
 
 - **mobile (`<768px`)**: вызывается native Web Share с заранее подготовленным файлом карточки, коротким plain-text сообщением и URL сервиса;
 - если mobile browser/target не принимает файл, используется native share только текста+URL, затем clipboard fallback; обычная навигация никогда не блокируется;
-- **desktop (`>=768px`)**: native share намеренно не вызывается; действие называется **«Скопировать ссылку»**, копирует URL сервиса и показывает доступное подтверждение;
+- **desktop (`>=768px`)**: native share намеренно не вызывается; безопасный release baseline называется **«Скопировать ссылку»**, копирует короткий текст+URL и показывает доступное подтверждение;
+- desktop-кандидат **«Скопировать карточку»** может записывать один `ClipboardItem` с настоящим `image/png`, `text/html` и `text/plain`, но не становится release contract до фактической [Windows/macOS clipboard matrix](service-sharing-desktop-clipboard-research.md): target app само выбирает representation, поэтому нельзя обещать единое сообщение «изображение + подпись + ссылка»;
 - если Clipboard API недоступен, показывается выделяемая ссылка с обычным `<a>` fallback;
 - breakpoint, accessible name, focus/keyboard semantics и analytics reason должны быть едиными для обеих точек входа, без двух расходящихся реализаций.
 
@@ -81,6 +82,7 @@ Mobile-first поведение следует повторно использо
 1. production static export считает metrics из того же accepted catalog snapshot, который публикуется на сайт;
 2. формируется versioned `service-share-card` manifest: schema/copy/template versions, `catalog_hash`, metrics, `measured_at`, rendered asset URL, byte size и SHA-256;
 3. deterministic SVG-template рендерится централизованно в лёгкий `1080×1350` WebP; SVG остаётся source/template, а public file и CTA проходят visual/text checks;
+   тот же visual payload при необходимости детерминированно экспортирует настоящий PNG только для desktop clipboard compatibility, без повторной генерации композиции в browser;
 4. render запускается только когда изменился нормализованный payload: display bucket, city count, утверждённый текст/бренд/CTA или template version; одинаковый payload переиспользует существующий asset;
 5. content-addressed WebP и manifest публикуются в CDN до HTML promotion, затем current pointer переключается атомарно вместе с release manifest;
 6. если metrics/source/render validation не прошли, build использует заранее проверенную evergreen-карточку без числового обещания либо link-only fallback — но не старое заведомо ложное число.
@@ -88,6 +90,7 @@ Mobile-first поведение следует повторно использо
 Требования к asset:
 
 - WebP-first, `1080×1350`, целевой бюджет `<=350 KiB`; без случайных PNG/JPEG runtime assets;
+- desktop clipboard PNG — отдельное typed representation с тем же `visual_payload_hash`, настоящей PNG signature и собственными size/latency gates; он не используется как обычный page/LCP asset и допускается только после Windows/macOS matrix;
 - `https://static.kenigevents.ru/...` с immutable cache key, корректными `Content-Type`, CORS и checksum;
 - CTA, logo/lettering, текст и домен остаются читаемыми после уменьшения до ширины 360 px;
 - карточка не должна ухудшать LCP: загрузка/подготовка выполняется после critical content и с учётом проверенного Pharmastaff user-activation pattern;
@@ -111,6 +114,7 @@ Mobile-first поведение следует повторно использо
 
 - `service_share_opened` / `service_share_invoked` с `surface=mobile_menu|footer`;
 - `service_link_copied` для desktop/fallback;
+- `service_copy_attempted` / `service_copy_result` для desktop rich-clipboard candidate различают только `clipboard_card|text_link` и честный API/fallback result; clipboard contents и фактическую вставку/отправку не читают и не имитируют;
 - `share_file_unsupported`, `share_cancelled`, `share_error` как bounded reason counters.
 
 Web Share не позволяет честно утверждать фактическую отправку в target app, поэтому UI/метрики не называют `navigator.share()` «успешной доставкой». Ни одно событие не создаёт unbounded raw telemetry row без принятого compact-ingest contract.
@@ -121,7 +125,10 @@ Web Share не позволяет честно утверждать фактич
 - [ ] mobile Playwright на `390×844`: действие видно под раскрытой биркой и в footer; оба используют один current manifest/URL;
 - [ ] при `canShare(files)=true` в `navigator.share` передаются WebP file, короткий text и canonical service URL; payload не содержит текущий event/personal secret URL;
 - [ ] file-unsupported, API rejection/cancel, offline/CDN failure и Clipboard denial дают проверяемый fallback без broken UI;
-- [ ] desktop `1366/1440`: обе точки имеют label «Скопировать ссылку», не вызывают native share, копируют сервисный URL и объявляют результат через `aria-live`;
+- [ ] desktop `1366/1440`: обе точки не вызывают native share; D0 «Скопировать ссылку» всегда копирует текст+service URL либо показывает selectable fallback и объявляет результат через `aria-live`;
+- [ ] до решения о «Скопировать карточку» выполнена полная [Windows/macOS desktop clipboard research matrix](service-sharing-desktop-clipboard-research.md): Edge/Chrome/Firefox на Windows, Safari/Chrome/Firefox на macOS, controlled targets и реальные Telegram/VK/MAX/rich/plain applications;
+- [ ] D1 `text/html`-first и D2 `image/png`-first проверены как один `ClipboardItem` с тремя representations; ни один target-specific результат не обобщается без evidence, `empty_paste` после success запрещён;
+- [ ] owner по matrix выбирает D0, D1, D2 либо две явные desktop actions и фиксирует label/success/fallback; до этого основной контракт остаётся «Скопировать ссылку»;
 - [ ] real Android/iOS checks подтверждают Telegram, VK и MAX для file-share, text+URL fallback и возврата в браузер;
 - [ ] rendered card проходит screenshot/OCR/readability QA на исходном размере и thumbnail width 360 px; CTA и домен видимы, текст не обрезан;
 - [ ] metrics manifest совпадает с accepted catalog hash; displayed floor никогда не превышает eligible count; city count воспроизводим;
@@ -130,4 +137,4 @@ Web Share не позволяет честно утверждать фактич
 - [ ] точный Pharmastaff reference/SHA и перенесённые browser-behavior checks приложены к implementation PR;
 - [ ] owner подписывает точный copy/template/asset SHA и mobile/desktop screenshots в составе immutable UI release preview.
 
-F18 считается закрытой только когда код достижим из `origin/main`, public CDN asset и manifest опубликованы, автоматические/real-device проверки приложены к тому же RC SHA, а обе обязательные точки входа работают на всех page families.
+F18 считается закрытой только когда код достижим из `origin/main`, public CDN asset и manifest опубликованы, mobile и Windows/macOS desktop проверки приложены к тому же RC SHA, desktop mode выбран по matrix, а обе обязательные точки входа работают на всех page families.

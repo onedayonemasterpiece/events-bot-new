@@ -43,7 +43,8 @@
 
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F18, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
-  - share the service itself: `docs/features/static-site-pages/service-sharing.md` — mobile menu/footer Web Share card, desktop copy-link and centralized metric-bound prerender
+  - share the service itself: `docs/features/static-site-pages/service-sharing.md` — mobile menu/footer Web Share card, evidence-gated desktop copy and centralized metric-bound prerender
+  - F18 desktop clipboard research: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md` — Windows/macOS D0/D1/D2 paste matrix before rich-copy product selection
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
 - `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`
 - `docs/features/event-favorites-calendar/README.md` — durable favorite/calendar state and lifecycle semantics

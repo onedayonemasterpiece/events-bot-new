@@ -44,9 +44,9 @@ The detailed identity and action semantics live in [Site user identity](../site-
 
 ## Share the service itself
 
-F18 is separate from sharing an event. Every public HTML page family uses one common component with two placements: under the expanded mobile brand tag and in the footer. On mobile both invoke native share with the same centrally prerendered service-card WebP, concise text and `https://kenigevents.ru/`; on desktop both are labelled «Скопировать ссылку» and never invoke native share.
+F18 is separate from sharing an event. Every public HTML page family uses one common component with two placements: under the expanded mobile brand tag and in the footer. On mobile both invoke native share with the same centrally prerendered service-card WebP, concise text and `https://kenigevents.ru/`; on desktop neither invokes native share. Until the required Windows/macOS matrix is complete, the accepted desktop baseline remains «Скопировать ссылку». The candidate «Скопировать карточку» (`image/png` + `text/html` + `text/plain` in one `ClipboardItem`) cannot enter the frozen UI merely from API support: actual paste results in Windows/macOS browsers and target apps must be measured first.
 
-The frozen UI must prove that these actions remain visible without competing with primary event/navigation CTAs, have consistent accessible names/focus/feedback and do not add the service image to event media. The asset is generated centrally from a catalog-bound metrics manifest, not by browser canvas or a per-click backend. Initial art uses the existing lettering/brand mark and a visible CTA; the historical poster-cube composition remains a future variant. Full copy, claim-evidence, CDN, fallback and device acceptance live in [Service sharing card](service-sharing.md).
+The frozen UI must prove that these actions remain visible without competing with primary event/navigation CTAs, have consistent accessible names/focus/feedback and do not add the service image to event media. The asset is generated centrally from a catalog-bound metrics manifest, not by browser canvas or a per-click backend. Initial art uses the existing lettering/brand mark and a visible CTA; the historical poster-cube composition remains a future variant. Full copy, claim-evidence, CDN and fallback acceptance live in [Service sharing card](service-sharing.md); desktop selection and evidence live in [Windows/macOS clipboard research](service-sharing-desktop-clipboard-research.md).
 
 ## Optional gallery transport card
 
@@ -68,7 +68,7 @@ The frozen event-detail UI consumes the single medallion slice from draft PR [#3
 - reduced-motion and no-JS behavior;
 - slow network and unavailable optional backend;
 - real Android/iOS browser checks for Yandex login, email code/link login, logout, forget-email, calendar and share;
-- mobile menu/footer service-card share and desktop menu/footer copy-link checks, including file/text/clipboard fallbacks;
+- mobile menu/footer service-card share and desktop menu/footer copy checks, including D0 text/link fallback and the owner-selected D1/D2 rich clipboard behavior after native Windows/macOS evidence;
 - visual baselines tied to one immutable preview build id;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 

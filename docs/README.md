@@ -19,7 +19,8 @@
 - Event image duplicate release audit (SHA-256 → visual review): `docs/operations/event-image-duplicate-audit.md`
 - Medallion visual QA (all actual static-site Playwright targets; Telegram excluded): `docs/features/static-site-pages/medallion-visual-qa.md`
 - Final SEO/GEO and AI-search transparency gate (last pre-RC stage, after feature-complete UI/UX freeze): `docs/features/static-site-pages/seo-geo-release-optimization.md`
-- Share KenigEvents itself (mobile prerendered card / desktop copy link): `docs/features/static-site-pages/service-sharing.md`
+- Share KenigEvents itself (mobile prerendered card / evidence-gated desktop copy): `docs/features/static-site-pages/service-sharing.md`
+  - Windows/macOS desktop clipboard analytics and test matrix: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Personalization Supabase 500 MB storage/compaction: `docs/operations/personalization-storage-budget.md`
 - Consolidated event views/likes/shares (sources + site): `docs/features/post-metrics/consolidated-event-engagement.md`
