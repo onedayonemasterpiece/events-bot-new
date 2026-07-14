@@ -47,6 +47,7 @@ const required = [
   'lab/header-desktop/examples/text-tag/index.html',
   'lab/header-desktop/examples/logo-eyelet/index.html',
   'lab/header-desktop/examples/signature-tab/index.html',
+  'lab/header-desktop/listing/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -160,22 +161,31 @@ for (const variant of ['text-tag', 'logo-eyelet', 'signature-tab']) {
     `data-header-desktop-example="${variant}"`,
     `data-desktop-header-concept="${variant}"`,
     'aria-label="Основная навигация"',
-    'aria-current="page"',
     'Выставка фэнтези-картин',
     'Все 3 варианта',
   ]) {
     if (!html.includes(marker)) throw new Error(`Desktop header example ${variant} misses marker: ${marker}`);
   }
+  if (/<a[^>]+aria-current="page"/u.test(html)) throw new Error(`Desktop header event example ${variant} must not expose a false current section`);
+}
+const desktopHeaderListingHtml = readFileSync(join(root, 'lab/header-desktop/listing/index.html'), 'utf8');
+for (const marker of [
+  'data-header-desktop-listing',
+  'data-desktop-header-concept="logo-eyelet"',
+  'aria-current="page"',
+  'точное совпадение раздела',
+]) {
+  if (!desktopHeaderListingHtml.includes(marker)) throw new Error(`Desktop header listing misses marker: ${marker}`);
 }
 const desktopHeaderSource = readFileSync(join(siteDir, 'src/components/lab/DesktopHeaderConcept.astro'), 'utf8');
 for (const marker of [
   "'text-tag' | 'logo-eyelet' | 'signature-tab'",
-  "withBase('/brand-mark.svg')",
+  "withBase('/brand-mark-white.svg')",
   'height:56px',
   'min-height:44px',
   'aria-current',
   ':focus-visible',
-  '@media (max-width:1080px)',
+  '@media (max-width:1120px)',
   '@media (prefers-reduced-motion:reduce)',
 ]) {
   if (!desktopHeaderSource.includes(marker)) throw new Error(`Desktop header source misses contract marker: ${marker}`);

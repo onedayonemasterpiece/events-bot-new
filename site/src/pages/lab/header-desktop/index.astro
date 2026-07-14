@@ -16,8 +16,8 @@ const variants = [
     number:'02',
     title:'Знак-люверс',
     status:'рекомендуемый баланс',
-    summary:'Компактная выступающая бирка несёт существующий знак, название остаётся спокойным текстовым якорем на линии меню.',
-    plus:'Лучше всего масштабируется под поиск и профиль.',
+    summary:'Белый одноцветный знак лежит прямо на компактной выступающей бирке; название остаётся спокойным текстовым якорем.',
+    plus:'Чистый силуэт без внутренней плашки и лучший запас под поиск или профиль.',
     risk:'На промежуточной ширине текстовое название первым скрывается.',
   },
   {
@@ -67,6 +67,7 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
       .header-concept-card dd { margin:.2rem 0 0; color:#3e332c; font-size:.86rem; line-height:1.42; }
       .header-concept-card__open { min-height:48px; margin-top:auto; display:inline-flex; align-items:center; justify-content:center; padding:.65rem 1rem; border-radius:14px; background:#28231f; color:#fffaf2; font-weight:850; text-decoration:none; }
       .header-concept-card--recommended .header-concept-card__open { background:#0f6b64; }
+      .header-concepts__context-link { min-height:48px; display:inline-flex; align-items:center; justify-content:center; margin-top:1rem; padding:.65rem 1rem; border:1px solid rgba(255,255,255,.28); border-radius:14px; color:#fff; font-weight:850; text-decoration:none; }
       .header-concepts__decision { display:grid; grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr); gap:2rem; margin-top:clamp(3rem,7vw,6rem); padding:clamp(1.4rem,3vw,2.6rem); border-radius:28px; background:#292521; color:#fffaf2; }
       .header-concepts__decision h2 { margin:0; font-size:clamp(2rem,4vw,4rem); line-height:.94; letter-spacing:-.05em; }
       .header-concepts__decision div:last-child { align-self:center; color:#d9cdc2; line-height:1.6; }
@@ -78,8 +79,8 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
     <main class="header-concepts" data-header-desktop-lab>
       <p class="header-concepts__eyebrow">desktop only · mobile tag unchanged</p>
       <h1>Одна идея, три степени бренда</h1>
-      <p class="header-concepts__lead">Во всех вариантах меню остаётся открытым, рабочая полоса имеет высоту 56 px, а выступающая часть бирки ограничена 12–22 px. Отличается не декор, а роль бренда: только слово, знак как отдельный якорь или полноценная подпись.</p>
-      <ul class="header-concepts__principles" aria-label="Общие требования"><li>5 видимых разделов</li><li>44 px hit area</li><li>aria-current</li><li>видимый focus</li><li>без изменений mobile</li></ul>
+      <p class="header-concepts__lead">Во всех вариантах меню остаётся открытым и выровнено по правой границе расширенной 1440 px сетки. Рабочая полоса имеет высоту 56 px, а выступающая часть бирки ограничена 12–22 px. Active-state показывается только там, где раздел действительно является текущей страницей.</p>
+      <ul class="header-concepts__principles" aria-label="Общие требования"><li>5 видимых разделов</li><li>меню справа</li><li>44 px hit area</li><li>контекстный aria-current</li><li>видимый focus</li><li>без изменений mobile</li></ul>
 
       <section class="header-concepts__grid" aria-label="Три варианта desktop-шапки">
         {variants.map((item) => (
@@ -95,7 +96,7 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
 
       <section class="header-concepts__decision" aria-labelledby="header-decision-title">
         <h2 id="header-decision-title">Предварительно: вариант 02</h2>
-        <div><strong>«Знак-люверс»</strong> лучше отделяет постоянный бренд от меняющейся навигации и не повторяет мобильную бирку буквально. Он сохраняет выступающую геометрию, впервые вводит существующий знак и оставляет больше всего свободного места для будущего поиска или профиля. Финальный выбор — после просмотра трёх полноразмерных маршрутов.</div>
+        <div><strong>«Знак-люверс»</strong> лучше отделяет постоянный бренд от меняющейся навигации и не повторяет мобильную бирку буквально. Белый монохромный знак больше не нуждается во внутренней плашке; меню получает стабильный правый якорь. На event detail ни один раздел не подсвечивается, а точное состояние листинга можно проверить отдельно.<br /><a class="header-concepts__context-link" href={withBase('/lab/header-desktop/listing/')}>Открыть листинг с active-state</a></div>
       </section>
     </main>
   </body>

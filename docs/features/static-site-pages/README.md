@@ -67,7 +67,7 @@ Preview fixture note: production row `5370` («Точка и линия») curre
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction counter architecture: `docs/features/static-site-pages/reaction-counters.md`. Event-page medallions / quick-read tokens: `docs/features/static-site-pages/event-token-medallions.md`.
 
-Desktop header choice is isolated in the noindex `/lab/header-desktop/` surface and does not change the accepted mobile drawer tag or production header yet. The lab compares a text-only tag, a compact existing-logo eyelet and a combined signature tab on the real `split-low-resolution` hero; the current recommendation is the logo-eyelet because it preserves the protruding-tag geometry, introduces the existing brand mark and leaves the most room for visible navigation plus future search/account tools. Canonical comparison and consultant evidence: `desktop-header-concepts-2026-07-14.md`.
+Desktop header choice is isolated in the noindex `/lab/header-desktop/` surface and does not change the accepted mobile drawer tag or production header yet. The lab compares a text-only tag, a compact logo eyelet and a combined signature tab on the real `split-low-resolution` hero; the recommended eyelet now uses a one-colour white mark directly on terracotta, while all menus share a wider `1440px` container and a stable right edge. Event-detail examples deliberately have no current section; `/lab/header-desktop/listing/` demonstrates the exact-match `Выставки` active state. Canonical comparison and Gemini Pro evidence: `desktop-header-concepts-2026-07-14.md`.
 
 ## Share / Open Graph
 

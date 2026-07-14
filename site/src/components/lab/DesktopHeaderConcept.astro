@@ -8,7 +8,7 @@ interface Props {
   current?: 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular';
 }
 
-const { variant, current = 'exhibitions' } = Astro.props;
+const { variant, current } = Astro.props;
 const navigation = [
   { key: 'today', label: 'Сегодня', href: '/segodnya/' },
   { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
@@ -30,7 +30,7 @@ const navigation = [
     {variant === 'logo-eyelet' && (
       <div class="desktop-header-concept__logo-eyelet-group">
         <a class="desktop-header-concept__logo-eyelet" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
-          <span><img src={withBase('/brand-mark.svg')} alt="" width="970" height="820" /></span>
+          <img src={withBase('/brand-mark-white.svg')} alt="" width="970" height="820" />
         </a>
         <a class="desktop-header-concept__inline-name" href={withBase('/__preview/')} tabindex="-1" aria-hidden="true">
           <strong>Полюбить Калининград</strong>
@@ -41,7 +41,7 @@ const navigation = [
 
     {variant === 'signature-tab' && (
       <a class="desktop-header-concept__signature" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
-        <span class="desktop-header-concept__signature-mark"><img src={withBase('/brand-mark.svg')} alt="" width="970" height="820" /></span>
+        <span class="desktop-header-concept__signature-mark"><img src={withBase('/brand-mark-white.svg')} alt="" width="970" height="820" /></span>
         <span class="desktop-header-concept__signature-copy"><small>Полюбить Калининград</small><strong>Анонсы</strong></span>
       </a>
     )}
@@ -79,29 +79,26 @@ const navigation = [
   .desktop-header-concept * { box-sizing:border-box; }
   .desktop-header-concept__inner {
     position:relative;
-    width:min(1180px,calc(100% - 40px));
+    width:min(1440px,calc(100% - clamp(3rem,5vw,6rem)));
     height:56px;
     min-height:56px;
     margin:0 auto;
     display:flex;
     align-items:center;
     justify-content:space-between;
-    gap:clamp(1rem,2.2vw,2.5rem);
+    gap:clamp(2rem,4vw,4rem);
   }
   .desktop-header-concept a { color:inherit; }
   .desktop-header-concept a:focus-visible {
     outline:3px solid color-mix(in srgb,var(--header-focus) 72%,transparent);
     outline-offset:3px;
   }
-  .desktop-header-concept__nav { min-width:0; margin-left:auto; }
-  .desktop-header-concept--text-tag .desktop-header-concept__nav { margin-left:238px; }
-  .desktop-header-concept--logo-eyelet .desktop-header-concept__nav { margin-left:300px; }
-  .desktop-header-concept--signature-tab .desktop-header-concept__nav { margin-left:268px; }
+  .desktop-header-concept__nav { min-width:0; flex:0 0 auto; margin-left:auto; }
   .desktop-header-concept__nav ul {
     display:flex;
     align-items:stretch;
     justify-content:flex-end;
-    gap:clamp(.08rem,.55vw,.45rem);
+    gap:4px;
     margin:0;
     padding:0;
     list-style:none;
@@ -112,11 +109,11 @@ const navigation = [
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    padding:.18rem clamp(.54rem,.8vw,.82rem);
+    padding:.18rem 1rem;
     border-radius:8px;
     color:var(--header-muted);
     font-size:clamp(.89rem,1vw,.98rem);
-    font-weight:610;
+    font-weight:600;
     line-height:1.1;
     text-decoration:none;
     white-space:nowrap;
@@ -135,13 +132,12 @@ const navigation = [
     transition:opacity 160ms ease,transform 160ms ease;
   }
   .desktop-header-concept__nav a:hover { background:#f5eadc; color:var(--header-ink); }
-  .desktop-header-concept__nav a[aria-current="page"] { color:var(--header-brand-dark); font-weight:820; }
+  .desktop-header-concept__nav a[aria-current="page"] { color:var(--header-brand-dark); font-weight:760; }
   .desktop-header-concept__nav a[aria-current="page"]::after { opacity:1; transform:scaleX(1); }
 
   .desktop-header-concept__text-tag {
-    position:absolute;
-    left:0;
-    top:0;
+    flex:0 0 auto;
+    align-self:flex-start;
     width:222px;
     min-height:76px;
     display:grid;
@@ -168,37 +164,47 @@ const navigation = [
     line-height:.95;
   }
 
-  .desktop-header-concept__logo-eyelet-group { position:absolute; left:0; top:0; width:280px; height:56px; display:flex; align-items:center; gap:.88rem; }
-  .desktop-header-concept__logo-eyelet {
+  .desktop-header-concept__logo-eyelet-group {
+    position:relative;
+    flex:0 0 auto;
     align-self:flex-start;
-    width:76px;
+    height:78px;
+    display:flex;
+    align-items:flex-start;
+    gap:.9rem;
+  }
+  .desktop-header-concept__logo-eyelet {
+    flex:0 0 auto;
+    width:72px;
     height:78px;
     display:grid;
     place-items:center;
-    padding:.55rem;
+    padding:.6rem;
     border-radius:0 0 16px 16px;
     background:linear-gradient(155deg,var(--header-brand-dark),var(--header-brand));
     box-shadow:0 14px 28px rgba(103,43,19,.2),inset 0 1px rgba(255,255,255,.14);
     text-decoration:none;
   }
-  .desktop-header-concept__logo-eyelet>span {
-    width:57px;
-    height:52px;
-    display:grid;
-    place-items:center;
-    padding:.34rem;
-    border-radius:10px;
-    background:#fffaf2;
+  .desktop-header-concept__logo-eyelet img {
+    width:51px;
+    height:44px;
+    object-fit:contain;
+    transform:translateY(-4px);
   }
-  .desktop-header-concept__logo-eyelet img { width:100%; height:100%; object-fit:contain; }
-  .desktop-header-concept__inline-name { display:grid; gap:.05rem; line-height:1; text-decoration:none; }
+  .desktop-header-concept__inline-name {
+    height:56px;
+    display:grid;
+    align-content:center;
+    gap:.05rem;
+    line-height:1;
+    text-decoration:none;
+  }
   .desktop-header-concept__inline-name strong { font-size:.93rem; font-weight:850; letter-spacing:-.025em; }
   .desktop-header-concept__inline-name span { color:var(--header-brand); font-size:1.14rem; font-weight:940; letter-spacing:-.05em; }
 
   .desktop-header-concept__signature {
-    position:absolute;
-    left:0;
-    top:0;
+    flex:0 0 auto;
+    align-self:flex-start;
     width:248px;
     min-height:68px;
     display:grid;
@@ -217,37 +223,26 @@ const navigation = [
     height:46px;
     display:grid;
     place-items:center;
-    padding:.3rem;
-    border-radius:10px;
-    background:#fffaf2;
   }
-  .desktop-header-concept__signature-mark img { width:100%; height:100%; object-fit:contain; }
+  .desktop-header-concept__signature-mark img { width:45px; height:38px; object-fit:contain; transform:translateY(-2px); }
   .desktop-header-concept__signature-copy { min-width:0; display:grid; gap:.05rem; line-height:1; }
   .desktop-header-concept__signature-copy small { font-size:.62rem; font-weight:790; letter-spacing:.045em; text-transform:uppercase; white-space:nowrap; }
   .desktop-header-concept__signature-copy strong { font-size:1.25rem; font-weight:940; letter-spacing:-.055em; }
 
   @media (max-width:1120px) {
-    .desktop-header-concept__inner { width:min(100% - 28px,1180px); gap:.8rem; }
+    .desktop-header-concept__inner { gap:2rem; }
     .desktop-header-concept__nav ul { gap:0; }
-    .desktop-header-concept__nav a { padding-inline:.5rem; font-size:.86rem; }
+    .desktop-header-concept__nav a { padding-inline:.7rem; font-size:.86rem; }
     .desktop-header-concept__text-tag { width:196px; }
-    .desktop-header-concept--text-tag .desktop-header-concept__nav { margin-left:206px; }
-    .desktop-header-concept__logo-eyelet-group { min-width:230px; gap:.62rem; }
-    .desktop-header-concept--logo-eyelet .desktop-header-concept__nav { margin-left:240px; }
+    .desktop-header-concept__logo-eyelet-group { gap:.62rem; }
     .desktop-header-concept__inline-name strong { font-size:.82rem; }
     .desktop-header-concept__inline-name span { font-size:1rem; }
     .desktop-header-concept__signature { width:218px; }
-    .desktop-header-concept--signature-tab .desktop-header-concept__nav { margin-left:228px; }
     .desktop-header-concept__signature-copy small { font-size:.55rem; }
-  }
-  @media (max-width:1080px) {
     .desktop-header-concept__inline-name { display:none; }
-    .desktop-header-concept__logo-eyelet-group { width:76px; min-width:76px; }
-    .desktop-header-concept--logo-eyelet .desktop-header-concept__nav { margin-left:86px; }
   }
   @media (max-width:880px) {
     .desktop-header-concept__signature { width:76px; grid-template-columns:1fr; padding:.55rem; }
-    .desktop-header-concept--signature-tab .desktop-header-concept__nav { margin-left:86px; }
     .desktop-header-concept__signature-copy { display:none; }
   }
   @media (prefers-reduced-motion:reduce) {
