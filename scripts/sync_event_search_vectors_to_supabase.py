@@ -209,7 +209,7 @@ def event_tags(event: dict[str, Any], category: str) -> list[str]:
     ticket = event.get("ticket") or {}
     if ticket.get("is_free"):
         values.append("free")
-    else:
+    elif event_admission_type(event) in {"ticket", "registration_required", "phone"}:
         values.append("ticketed")
     if event.get("festival"):
         values.append("festival")

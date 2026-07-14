@@ -43,6 +43,7 @@ Migrations:
 Main tables:
 
 - `event_search_documents` — compact factual `search_digest` for query search, cleaner `related_digest` for event-to-event similarity, facets, dates, status, canonical path/slug and trusted `card_snapshot`; no raw OCR or source HTML.
+- Admission facets fail closed: an event with `unknown`/status-only admission is not tagged as `ticketed`; `ticketed` is emitted only for an explicit ticket, registration or phone-booking contract, while `free` still requires an explicit free flag.
 - `event_embeddings` — `gemini-embedding-2`, `embedding_dim=768`, `vector(768)`, `embedding_doc_kind` (`search_v3` or `related_v1`), partial HNSW cosine indexes, `(event_id, embedding_model, embedding_dim, embedding_doc_kind)` primary key.
 - `search_quota_plans`, `user_search_quota_ledger`, `event_search_requests` — authorized search quotas and privacy-preserving audit.
 
