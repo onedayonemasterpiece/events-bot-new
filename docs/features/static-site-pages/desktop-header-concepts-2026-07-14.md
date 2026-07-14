@@ -87,7 +87,7 @@ Shared tokens:
 - The complete name is a fixed left-aligned lockup: `11/12px` lightweight uppercase endorsement, `4px` gap, `192px` service wordmark.
 - No breakpoint resize between `1024` and `1920`; no gradient, inset or shadow; hover changes only the solid fill slightly.
 - Strongest literal continuity with mobile.
-- Approved static-site direction; the independent small mark is the matching transparent tag + wide-`о` favicon.
+- Approved static-site direction; the independent small mark is being compared as either the matching transparent tag + lower wide-`о` or the bare tag silhouette.
 
 ### 02 — Logo eyelet (`logo-eyelet`)
 
@@ -137,6 +137,6 @@ The neutral briefs, screenshots and raw consultant reports are stored under `art
 
 ## Integration state
 
-The accepted desktop concept and mobile production drawer now share `AnnouncementsLockup.astro`; the desktop concept keeps the fixed R3 geometry while mobile uses a taller R4 optical composition rather than a mechanical resize. Production event/listing route behavior and exact current-state semantics remain unchanged. The installed favicon uses the shared tag silhouette with a separate small-size wide `о`. Canonical rules have moved to [`design-system/`](design-system/README.md); this dated document remains the research and decision record.
+The accepted desktop concept and mobile production drawer now share `AnnouncementsLockup.astro`; the desktop concept keeps the fixed R3 geometry while mobile uses a taller R4 optical composition rather than a mechanical resize. Production event/listing route behavior and exact current-state semantics remain unchanged. Favicon selection is intentionally still open between the shared tag silhouette with a lower small-size wide `о` and the bare silhouette; candidate A is installed only for preview practicality. Canonical rules have moved to [`design-system/`](design-system/README.md); this dated document remains the research and decision record.
 
 Remaining rollout work is limited to promoting the accepted desktop header from its noindex comparison component into the production desktop layout after the separate page-shell release gate. That rollout must keep the acceptance grid and reconcile the production `1180px` content shell explicitly.

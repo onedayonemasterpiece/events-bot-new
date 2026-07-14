@@ -22,6 +22,8 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'brand/favicon-tag-wide-o.svg',
+  'brand/favicon-tag-only.svg',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -50,6 +52,8 @@ const required = [
   'lab/header-desktop/listing/index.html',
   'lab/header-lettering/index.html',
   'lab/design-system/index.html',
+  'lab/design-system/favicon/tag-o/index.html',
+  'lab/design-system/favicon/tag-only/index.html',
   'brand/announcements-wordmark-ui.svg',
   'brand/announcements-mark-ui.svg',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
@@ -199,6 +203,13 @@ for (const marker of [
   'data-announcements-lockup="desktop"',
   'data-announcements-lockup="mobile"',
   'data-favicon-browser-preview',
+  'data-favicon-choice-grid',
+  'data-favicon-choice="tag-o"',
+  'data-favicon-choice="tag-only"',
+  '/brand/favicon-tag-wide-o.svg',
+  '/brand/favicon-tag-only.svg',
+  '/lab/design-system/favicon/tag-o/',
+  '/lab/design-system/favicon/tag-only/',
   '128 × 96',
   '#98401F',
   '/favicon.svg',
@@ -206,6 +217,19 @@ for (const marker of [
 ]) {
   if (!brandDesignSystemLabHtml.includes(marker)) throw new Error(`Brand design-system lab misses marker: ${marker}`);
 }
+for (const [variant, asset] of [
+  ['tag-o', '/brand/favicon-tag-wide-o.svg'],
+  ['tag-only', '/brand/favicon-tag-only.svg'],
+]) {
+  const choiceHtml = readFileSync(join(root, `lab/design-system/favicon/${variant}/index.html`), 'utf8');
+  if (!choiceHtml.includes(`data-favicon-choice-page="${asset}"`) || !choiceHtml.includes('rel="icon"') || !choiceHtml.includes(asset) || !choiceHtml.includes('sizes="any"')) {
+    throw new Error(`Favicon choice ${variant} is not installed on its own review page`);
+  }
+}
+const wideOFaviconSvg = readFileSync(join(root, 'brand/favicon-tag-wide-o.svg'), 'utf8');
+if (!wideOFaviconSvg.includes('announcements-wide-o') || !wideOFaviconSvg.includes('M32 25') || !wideOFaviconSvg.includes('M32 31') || !wideOFaviconSvg.includes('fill="#fff"') || wideOFaviconSvg.includes('<rect')) throw new Error('Wide-o favicon candidate must keep the glyph in the lower tag field');
+const tagOnlyFaviconSvg = readFileSync(join(root, 'brand/favicon-tag-only.svg'), 'utf8');
+if (!tagOnlyFaviconSvg.includes('announcements-tag') || tagOnlyFaviconSvg.includes('announcements-wide-o') || tagOnlyFaviconSvg.includes('fill="#fff"') || tagOnlyFaviconSvg.includes('<rect')) throw new Error('Tag-only favicon candidate must contain only the transparent terracotta tag silhouette');
 const desktopHeaderSource = readFileSync(join(siteDir, 'src/components/lab/DesktopHeaderConcept.astro'), 'utf8');
 for (const marker of [
   "'text-tag' | 'logo-eyelet' | 'signature-tab'",

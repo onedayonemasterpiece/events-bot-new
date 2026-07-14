@@ -1,47 +1,69 @@
 # Favicon and small tag mark
 
-> **Normative status:** approved and installed as `site/public/favicon.svg`.
+> **Normative status:** choice round R5. The desktop/mobile full-name lockups remain approved; the final favicon has not yet been selected. Candidate A is temporarily installed as `site/public/favicon.svg` so ordinary preview pages expose a real favicon.
 
-## Concept
+## Shared contract
 
-At browser-tab size the full name is not recoverable. The favicon therefore reduces the identity to two durable cues:
-
-1. a solid terracotta tag attached to the top edge;
-2. the single expanded white `о` from the service lettering idea.
-
-This replaces the older two-colour PK monogram favicon. It does not replace the umbrella brand in full lockups; it is the small service mark for constrained static-site surfaces.
-
-## SVG geometry
+At browser-tab size the full service name is not recoverable. Both current candidates reduce the identity to a transparent `64×64` SVG with one solid terracotta hanging-tag silhouette:
 
 | Property | Contract |
 |---|---|
-| File | `site/public/favicon.svg` |
 | ViewBox | `0 0 64 64` |
 | Background | transparent; no full-artboard rectangle |
 | Tag | `x=6…58`, top flush at `y=0`, bottom at `y=63` |
 | Top corners | square |
 | Bottom corners | approximately `13px` radius |
 | Tag colour | `#98401f` |
-| Glyph | one compound white wide-`о`, `x=12…52`, optical centre `y=28`, `fill-rule="evenodd"` |
 | Raster dependency | none |
 
-The `о` uses a more open counter than the wordmark master. This is an optical small-size drawing, not a crop of the wordmark glyph. Its `6px` source side clear space equals `1.5px` at a `16px` render, while the optical centre is lifted `4px` above the artboard axis to compensate for the rounded-bottom mass. Side transparency prevents the colored tag from becoming a generic square app tile; the flush top and rounded bottom keep the hanging-tag silhouette recognizable.
+Side transparency prevents the coloured shape from becoming a generic square app tile. The flush top and rounded bottom must continue to read as a hanging tag, not a bookmark floating inside another tile.
 
-## HTML installation
+## Candidate A — tag + lower wide-`о`
 
-Every static HTML surface must use:
+Files:
+
+- comparison master: `site/public/brand/favicon-tag-wide-o.svg`;
+- temporarily installed copy: `site/public/favicon.svg`.
+
+The white compound `о` spans `x=12…52`, `y=25…49`; its optical centre is `y=37`, deliberately below the artboard centre. The asymmetric free field—more air above, less below—transfers the approved full-size lockup principle instead of vertically centring the glyph. Its counter spans `x=19…45`, `y=31…43` and remains open at `16px`.
+
+**Strength:** this is a service-specific mnemonic tied directly to the wide-`о` lettering in «Анонсы».
+
+**Risk:** the glyph adds detail at the smallest size and depends on careful rasterisation; it must never drift back to geometric centring.
+
+## Candidate B — tag only
+
+File: `site/public/brand/favicon-tag-only.svg`.
+
+This candidate removes the glyph completely and keeps only colour plus silhouette. It is the cleanest transfer of the physical-tag concept and remains especially stable at `16px`.
+
+**Strength:** maximum simplicity, no closed-counter or off-centre-letter problem, exact continuity with the shared tag silhouette.
+
+**Risk:** a plain hanging tag is less ownable and can be read as a generic bookmark/label without the full-name lockup nearby. Recognition therefore depends more heavily on repeated use of `#98401f` and the precise square-top/rounded-bottom geometry.
+
+## Installation and comparison
+
+Every static HTML surface uses the base-aware equivalent of:
 
 ```html
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 ```
 
-Use the base-aware equivalent in Astro. Do not add a cream background or inline raster fallback to the SVG. Cache-busting may be handled by the deployment path/version, not by duplicating assets.
+Until product selection, `/favicon.svg` mirrors candidate A only as a practical installed preview—not as a final brand decision. Do not silently replace it with candidate B or introduce a third geometry.
 
-## Small-size acceptance
+Review routes:
 
-- `16px`: terracotta silhouette remains distinct from the transparent sides; the `о` counter does not close.
-- `32px`: square top and rounded bottom are both perceptible.
-- `64px`: curves are smooth and the glyph is optically centered.
-- Light and dark browser chrome: the mark remains legible because the tag owns its colored field.
+- `/lab/design-system/` — side-by-side board at `16/32/64/128px`;
+- `/lab/design-system/favicon/tag-o/` — candidate A actually installed in the browser tab;
+- `/lab/design-system/favicon/tag-only/` — candidate B actually installed in the browser tab.
 
-The visual reference and faux installed browser tab live at `/lab/design-system/`.
+## Acceptance
+
+For both candidates:
+
+- `16px`: terracotta silhouette remains distinct from transparent sides;
+- `32px`: square top and rounded bottom are both perceptible;
+- light and dark browser chrome: the mark remains legible because it owns its coloured field;
+- no cream plate, outline, raster image or full-canvas background is allowed.
+
+For A, the `о` counter must remain open and the glyph must visibly occupy the lower field. For B, no accidental white path or hidden letter may remain.

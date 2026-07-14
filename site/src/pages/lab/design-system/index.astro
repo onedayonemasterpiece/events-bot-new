@@ -3,6 +3,20 @@ import AnnouncementsLockup from '../../../components/brand/AnnouncementsLockup.a
 import { withBase } from '../../../lib/events';
 
 const faviconSizes = [16, 32, 64, 128] as const;
+const faviconChoices = [
+  {
+    id: 'tag-o',
+    label: 'A · Бирка + нижняя «о»',
+    asset: '/brand/favicon-tag-wide-o.svg',
+    note: 'Узнаваемее как знак сервиса: широкая «о» продолжает леттеринг и теперь стоит в нижней части бирки.',
+  },
+  {
+    id: 'tag-only',
+    label: 'B · Только бирка',
+    asset: '/brand/favicon-tag-only.svg',
+    note: 'Чище и спокойнее в 16 px, но без буквы сильнее зависит от фирменного цвета и может считываться как общий bookmark.',
+  },
+] as const;
 ---
 
 <!doctype html>
@@ -40,20 +54,25 @@ const faviconSizes = [16, 32, 64, 128] as const;
       .metric { padding:1rem; background:#fffaf2; }
       .metric small { display:block; color:#98401f; font-size:.65rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
       .metric strong { display:block; margin-top:.35rem; font-size:1.15rem; }
-      .favicon-browser { margin-top:1.5rem; overflow:hidden; border:1px solid #cfcbc4; border-radius:16px; background:#f1f0ed; box-shadow:0 18px 38px rgba(58,43,32,.1); }
+      .favicon-choice-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin-top:1.5rem; }
+      .favicon-choice { display:flex; min-width:0; flex-direction:column; padding:1rem; border:1px solid rgba(121,48,20,.14); border-radius:22px; background:#fffaf2; }
+      .favicon-choice h3 { margin:.2rem 0 0; font-size:1.25rem; }
+      .favicon-choice p { margin:.65rem 0 0; color:#695d54; line-height:1.5; }
+      .favicon-browser { margin-top:1rem; overflow:hidden; border:1px solid #cfcbc4; border-radius:16px; background:#f1f0ed; }
       .browser-tab { width:min(340px,75%); min-height:48px; display:flex; align-items:center; gap:10px; padding:8px 14px; border-radius:14px 14px 0 0; background:#fff; font-size:.84rem; }
       .browser-tab img { width:20px; height:20px; }
       .browser-body { min-height:125px; display:grid; place-items:center; border-top:1px solid #ddd9d2; background:#fffaf2; color:#786d65; }
-      .favicon-sizes { display:flex; flex-wrap:wrap; align-items:flex-end; gap:clamp(1.5rem,5vw,4rem); margin-top:1rem; padding:2rem; border-radius:20px; background-color:#e7ded3; background-image:linear-gradient(45deg,#f8f2e9 25%,transparent 25%),linear-gradient(-45deg,#f8f2e9 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f8f2e9 75%),linear-gradient(-45deg,transparent 75%,#f8f2e9 75%); background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0; }
+      .favicon-sizes { display:flex; flex-wrap:wrap; align-items:flex-end; gap:clamp(1rem,3vw,2rem); margin-top:1rem; padding:1.5rem; border-radius:18px; background-color:#e7ded3; background-image:linear-gradient(45deg,#f8f2e9 25%,transparent 25%),linear-gradient(-45deg,#f8f2e9 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f8f2e9 75%),linear-gradient(-45deg,transparent 75%,#f8f2e9 75%); background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0; }
       .favicon-size { display:grid; justify-items:center; gap:.6rem; color:#5f534b; font-size:.72rem; font-weight:850; }
       .favicon-size img { display:block; width:var(--icon-size); height:var(--icon-size); }
+      .choice-link { min-height:44px; display:inline-flex; align-items:center; align-self:flex-start; margin-top:auto; padding-top:1rem; color:#793014; font-weight:850; text-underline-offset:.25em; }
       .back { min-height:44px; display:inline-flex; align-items:center; margin-top:3rem; color:#793014; font-weight:850; text-underline-offset:.25em; }
-      @media (max-width:760px) { .lockup-grid { grid-template-columns:1fr; } .specimen { min-height:290px; padding:1rem; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+      @media (max-width:760px) { .lockup-grid,.favicon-choice-grid { grid-template-columns:1fr; } .specimen { min-height:290px; padding:1rem; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     </style>
   </head>
   <body>
     <main data-brand-design-system-lab>
-      <p class="eyebrow">approved brand system · R4</p>
+      <p class="eyebrow">approved lockups · favicon choice R5</p>
       <h1>Одна бирка. Две пропорции.</h1>
       <p class="lead">Полное имя сервиса остаётся одинаковым, но не механически масштабируется: горизонтальная desktop-бирка и вытянутая mobile-ручка используют отдельную оптическую компоновку одного и того же леттеринга.</p>
 
@@ -73,11 +92,20 @@ const faviconSizes = [16, 32, 64, 128] as const;
       </section>
 
       <section class="section" aria-labelledby="favicon-title">
-        <h2 id="favicon-title">Бирка + широкая «о»</h2>
-        <p>Favicon не пытается уместить полное название. В 16–32 px остаются только узнаваемый силуэт бирки и одна широкая белая «о» с более открытой контрформой.</p>
-        <div class="favicon-browser" data-favicon-browser-preview><div class="browser-tab"><img src={withBase('/favicon.svg')} alt="" />Полюбить Калининград Анонсы</div><div class="browser-body">favicon.svg · transparent SVG</div></div>
-        <div class="favicon-sizes" aria-label="Проверка favicon на прозрачном фоне">
-          {faviconSizes.map((size) => <div class="favicon-size"><img src={withBase('/favicon.svg')} alt="" style={`--icon-size:${size}px`} /><span>{size}px</span></div>)}
+        <h2 id="favicon-title">Два favicon-кандидата</h2>
+        <p>Оба варианта сохраняют прозрачный SVG и один силуэт бирки. В A широкая «о» опущена вниз по тому же принципу, что и текст в полноразмерных lockup; B проверяет предельно лаконичный знак вообще без буквы. Финальный выбор пока не зафиксирован.</p>
+        <div class="favicon-choice-grid" data-favicon-choice-grid>
+          {faviconChoices.map((choice) => (
+            <article class="favicon-choice" data-favicon-choice={choice.id}>
+              <h3>{choice.label}</h3>
+              <p>{choice.note}</p>
+              <div class="favicon-browser" data-favicon-browser-preview><div class="browser-tab"><img src={withBase(choice.asset)} alt="" />Полюбить Калининград Анонсы</div><div class="browser-body">transparent SVG</div></div>
+              <div class="favicon-sizes" aria-label={`Проверка ${choice.label} на прозрачном фоне`}>
+                {faviconSizes.map((size) => <div class="favicon-size"><img src={withBase(choice.asset)} alt="" style={`--icon-size:${size}px`} /><span>{size}px</span></div>)}
+              </div>
+              <a class="choice-link" href={withBase(`/lab/design-system/favicon/${choice.id}/`)}>Открыть с установленным favicon →</a>
+            </article>
+          ))}
         </div>
       </section>
 

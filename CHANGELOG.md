@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site pages / favicon choice R5**: added two live transparent-SVG favicon candidates—a hanging tag with the wide `о` moved into the lower field and a bare hanging tag—plus separate routes that actually install each candidate, side-by-side `16/32/64/128px` QA and a documented pending-selection contract without reopening the approved desktop/mobile lockups.
 - **Static site / info partners logo board**: replaced `/partners/` card-like category tiles with a flat logo+caption board, corrected КППК naming/display, and changed visible captions to partner-specific context labels including Кантата as `партнёр по образовательной программе`.
 - **Static site / info partners density**: tightened the existing `/partners/` information-partner page on the smart-search branch into a denser logo-first board, preserving the real partner manifest while reducing card height, keeping short role labels, and retaining aspect-aware wide/tall spans plus the current `/poisk/` navigation.
 
