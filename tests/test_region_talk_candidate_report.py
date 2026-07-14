@@ -2822,7 +2822,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/author_travel", "https://t.me/corp_msp"])
         self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["source_selection_travel_priority_enabled"])
 
-    def test_publication_goal_can_rescan_known_ko_sources_before_pending(self) -> None:
+    def test_publication_goal_does_not_rescan_known_ko_while_primary_backlog_exists(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES")
         os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = "1"
@@ -2846,7 +2846,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "telegram:pending_new": {"canonical_source_key": "telegram:pending_new", "source_url": "https://t.me/pending_new", "source_queue_status": "pending_scan", "queue_order": 2},
             }}
             selected = mod.selected_sources_for_run([pending, known], 2, previous_state=previous_state)
-            self.assertEqual([s.canonical_url for s in selected], ["https://t.me/travel_yutturizm", "https://t.me/pending_new"])
+            self.assertEqual([s.canonical_url for s in selected], ["https://t.me/pending_new"])
+            self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["source_selection_global_primary_backlog_exists"])
+            self.assertEqual(
+                mod._REGION_TALK_TELEGRAM_RUNTIME["source_selection_rescan_suppressed_by_primary_backlog_total"],
+                1,
+            )
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", None)
@@ -4120,6 +4125,142 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(queue["telegram:old"]["ko_posts_found"], 1)
         self.assertEqual(queue["telegram:new"]["fetch_status"], "selected_for_run")
         self.assertEqual(queue["telegram:live"]["fetch_status"], "skipped_fetch_disabled")
+
+    def test_successful_source_status_repairs_pending_queue_without_fake_current_scan(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "vk:travel": {
+                    "canonical_source_key": "vk:travel",
+                    "platform": "vk",
+                    "source_url": "https://vk.com/travel",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 41,
+                    "_ydb_updated_at": "2026-07-13T00:00:00+00:00",
+                }
+            }
+        }
+        mod.merge_ydb_source_queue_status_items(
+            state,
+            {},
+            {
+                "source_status_item:vk:travel": {
+                    "canonical_source_key": "vk:travel",
+                    "platform": "vk",
+                    "source_url": "https://vk.com/travel",
+                    "fetch_status": "ok",
+                    "fetch_attempted": "true",
+                    "posts_scanned": 12,
+                    "run_id": "historical-scan-run",
+                    "updated_at": "2026-07-13T01:00:00+00:00",
+                    "_ydb_updated_at": "2026-07-13T01:00:00+00:00",
+                    "online_update_stage": "source_fetch",
+                }
+            },
+        )
+
+        rows, _metrics = mod.build_unified_source_queue(
+            state, [], [], [], [], [], [], {}, "repair-run", "2026-07-14T00:00:00+00:00"
+        )
+        row = next(item for item in rows if item["canonical_source_key"] == "vk:travel")
+
+        self.assertEqual(row["source_queue_status"], "processed_no_ko")
+        self.assertEqual(row["last_scan_status"], "ok")
+        self.assertEqual(row["last_scan_run_id"], "historical-scan-run")
+        self.assertNotEqual(row["last_scan_run_id"], "repair-run")
+        self.assertEqual(row["status_changed_this_run"], "true")
+        self.assertEqual(row["posts_scanned"], 12)
+
+    def test_exact_post_fetch_does_not_complete_source_primary_scan(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "telegram:travel": {
+                    "canonical_source_key": "telegram:travel",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/travel",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 42,
+                }
+            }
+        }
+        exact_source = {
+            "canonical_source_key": "telegram:travel",
+            "source_id": "src_ydb_link_travel",
+            "platform": "telegram",
+            "source_url": "https://t.me/travel",
+            "fetch_status": "ok",
+            "fetch_attempted": "true",
+            "posts_scanned": 1,
+            "history_fetch_mode": "exact_post_link_fetch",
+            "online_update_stage": "post_link_queue_exact_fetch",
+        }
+        exact_post = {
+            "source_id": "src_ydb_link_travel",
+            "post_url": "https://t.me/travel/10",
+            "text": "Калининград",
+            "kaliningrad_oblast_only_scope": True,
+            "current_stage": "semantic_candidate",
+        }
+
+        rows, _metrics = mod.build_unified_source_queue(
+            state,
+            [],
+            [exact_source],
+            [],
+            [],
+            [],
+            [],
+            {"src_ydb_link_travel": [exact_post]},
+            "exact-run",
+            "2026-07-14T00:00:00+00:00",
+        )
+        row = next(item for item in rows if item["canonical_source_key"] == "telegram:travel")
+
+        self.assertEqual(row["source_queue_status"], "pending_scan")
+        self.assertEqual(row.get("last_scan_run_id") or "", "")
+        self.assertEqual(row.get("last_history_fetch_at") or "", "")
+        self.assertEqual(row["history_fetch_mode"], "exact_post_link_fetch")
+
+    def test_repaired_historical_scan_is_mandatory_without_relabeling_all_history(self) -> None:
+        mod = load_module()
+        rows = [
+            {
+                "canonical_source_key": "vk:repaired",
+                "source_queue_status": "processed_no_ko",
+                "status_changed_this_run": "true",
+                "last_scan_run_id": "historical-run",
+                "queue_order": 10,
+            },
+            {
+                "canonical_source_key": "vk:old",
+                "source_queue_status": "processed_no_ko",
+                "status_changed_this_run": "false",
+                "last_scan_run_id": "historical-run",
+                "queue_order": 11,
+            },
+        ] + [
+            {
+                "canonical_source_key": f"vk:pending-{idx}",
+                "source_queue_status": "pending_scan",
+                "queue_order": 100 + idx,
+            }
+            for idx in range(10)
+        ]
+        old = os.environ.get("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS")
+        os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "3"
+        try:
+            handoff = mod._source_queue_handoff_rows(rows, 100, "repair-run")
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old
+
+        keys = {row["canonical_source_key"] for row in handoff}
+        self.assertIn("vk:repaired", keys)
+        self.assertNotIn("vk:old", keys)
+        self.assertTrue(all(row.get("last_scan_run_id") != "repair-run" for row in handoff))
 
     def test_ydb_source_status_overlay_does_not_clobber_queue_fields_with_empty_live_rows(self) -> None:
         mod = load_module()

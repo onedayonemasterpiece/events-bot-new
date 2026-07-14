@@ -190,9 +190,13 @@ four slots is reserved for that near-publication source and the evidence cohort
 uses the other three. Keyword and similar discovery are separate stages and
 remain enabled, so this allocation accelerates the high-probability cohort
 without stopping discovery or bypassing the publication tail.
-Evidence slots are platform-balanced **inside the same first-scan/rescan
-tier**. Every never-scanned confirmed source therefore outranks every
-confirmed-source delta rescan. When only one uncached Telegram source is
+Evidence slots are platform-balanced inside the first-scan tier. While the
+single canonical Telegram/VK queue still contains any source without durable
+primary-scan evidence, ordinary known-KO and confirmed-source delta rescans are
+not eligible at all. Rescans resume only after the complete first pass (or when
+a concrete dual-text finalist explicitly needs a bounded source-attestation
+completion). This prevents a productive cached source from consuming every
+run while unvisited sources remain. When only one uncached Telegram source is
 safely resolvable, the remaining slots are filled by never-scanned VK sources
 instead of repeating cached Telegram channels merely to preserve TG/VK/TG/VK
 symmetry. The in-memory selection pool is widened only enough to expose the
@@ -329,6 +333,21 @@ When the canonical queue is reconstructed from YDB, an older
 counters; it cannot overwrite a newer canonical queue repair with a stale
 terminal local/spam verdict. This is required for false-positive backfills to
 remain effective on the next notebook run.
+
+A newer successful `source_status_item` is also authoritative scan evidence
+when the corresponding canonical row is still stale `pending_scan`. Queue
+assembly repairs that row to `processed_no_ko`/`processed_found_ko_candidate`,
+persists the original scan run and timestamp, and writes only that changed row
+in the bounded bulk handoff. Merely rebuilding the queue must not stamp every
+historically scanned source with the current `last_scan_run_id`; otherwise
+latest-run metrics become false and the handoff grows into a whole-frontier
+rewrite.
+
+Post-level evidence is not source-history evidence. Fetching one durable exact
+post URL, or running source-local fast-check, may send that post directly into
+text scoring but must leave an otherwise unvisited public in `pending_scan`.
+The queue persists `history_fetch_mode` so a later merge cannot mistake an
+`exact_post_link_fetch` row for completion of the source's first pass.
 
 The orchestrated product run now defaults to
 `REGION_TALK_FAST_CHECK_QUERY_STRATEGY=adaptive_cursor_v1`; an explicit

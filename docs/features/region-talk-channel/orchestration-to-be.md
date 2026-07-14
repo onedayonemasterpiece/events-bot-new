@@ -330,6 +330,13 @@ Important invariants:
   measured headroom on scanning more high-probability sources, not on deeper
   history, and automatically returns to four after the cohort drains or either
   runtime/BGE guardrail is hit.
+- Source-history work is first-pass idempotent. As long as any Telegram/VK row
+  in the one canonical queue lacks durable primary-scan evidence, known-KO and
+  confirmed-blogger delta rescans are suppressed globally. A dual-text
+  finalist that explicitly needs bounded source-attestation completion is the
+  only product exception. Successful live source-status evidence repairs a
+  stale pending queue row with its original run lineage; queue reconstruction
+  never relabels historical scans as work performed in the current run.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and a 7-query lexicon-driven Telegram global-search
@@ -878,8 +885,9 @@ every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with
 `REGION_TALK_SOURCE_QUEUE_HANDOFF_PERSIST_REORDERED_TAIL=0`. The bounded payload
 keeps changed/current-run rows, keyword-evidence rows, the forward cursor
-neighbourhood and pending/retry backlog. Current-run scan rows
-(`last_scan_run_id`), fast-check rows and keyword-evidence rows are mandatory in
+neighbourhood and pending/retry backlog. Actual current-run scan rows
+(`last_scan_run_id` equal to the current run), fast-check rows and
+keyword-evidence rows are mandatory in
 the handoff. Keyword priority never creates a tail shift, preventing one search
 hit from turning a short run into thousands of transactional YDB upserts. If the mandatory set itself exceeds the configured handoff cap, it
 is still capped with current-run scan evidence first, then fast-check, then

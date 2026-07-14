@@ -836,6 +836,32 @@ def source_delta_rescan_interval_seconds() -> int:
     )
 
 
+def _source_row_is_non_primary_probe(row: dict[str, Any]) -> bool:
+    """Return true for post-level probes that are not a source-history scan.
+
+    Exact-link fetch and fast-check intentionally make a KO post available to
+    scoring immediately, but they do not complete the source's first history
+    pass.  Keeping this distinction prevents one fetched URL from moving the
+    whole public to ``processed_*`` and hiding it from the primary backlog.
+    """
+    mode = str(row.get("history_fetch_mode") or "").strip().lower()
+    if mode in {
+        "exact_post_link_fetch",
+        "ydb_candidate_links_only_no_discovery",
+        "history_disabled_discovery_only",
+    }:
+        return True
+    discovery = " ".join(
+        str(row.get(field) or "").strip().lower()
+        for field in ("discovery_type", "edge_type", "online_update_stage", "source_seed_id")
+    )
+    return bool(
+        "source_local_fast_check" in discovery
+        or "post_link_queue_exact_fetch" in discovery
+        or "ydb_candidate_links" in discovery
+    )
+
+
 def _source_has_primary_scan_evidence(qrow: dict[str, Any], cursor: dict[str, Any], status: str = "") -> bool:
     """Return true once a source consumed Telegram history budget at least once.
 
@@ -873,12 +899,20 @@ def _source_has_primary_scan_evidence(qrow: dict[str, Any], cursor: dict[str, An
         ]
     )
 
-    return bool(
+    explicit_history_evidence = bool(
         cursor.get("primary_scan_completed_at")
         or cursor.get("last_history_fetch_at")
         or cursor.get("last_successful_delta_scan_at")
         or qrow.get("last_history_fetch_at")
         or access_attempted
+    )
+    if explicit_history_evidence:
+        return True
+    if _source_row_is_non_primary_probe(qrow) or _source_row_is_non_primary_probe(cursor):
+        return False
+    return bool(
+        _rt_bool(qrow.get("fetch_attempted"))
+        or _rt_bool(cursor.get("fetch_attempted"))
         or _positive_int(qrow.get("posts_scanned"))
         or _positive_int(cursor.get("posts_scanned"))
     )
@@ -917,7 +951,7 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     if str(qrow.get("fast_check_status") or "").strip().lower() == "ko_hit":
         return {"due": True, "reason": "fast_check_ko_hit_priority", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
     scanned_before = _source_has_primary_scan_evidence(qrow, cursor, status)
-    if not scanned_before and status.startswith("processed_") and (
+    if not scanned_before and not _source_row_is_non_primary_probe(qrow) and status.startswith("processed_") and (
         qrow.get("_ydb_updated_at")
         or qrow.get("last_status_changed_at")
         or int(float(qrow.get("ko_posts_found") or 0)) > 0
@@ -1169,6 +1203,34 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     ))
     primary_due = [seed for seed, due in ordered if bool(due.get("due")) and not bool(due.get("is_rescan"))]
     rescan_due = [seed for seed, due in ordered if bool(due.get("due")) and bool(due.get("is_rescan"))]
+    state = previous_state if isinstance(previous_state, dict) else {}
+    durable_queue_rows = _previous_rows_dict(
+        state.get("unified_source_queue") or state.get("canonical_source_queue")
+    )
+
+    def durable_row_has_primary_scan_evidence(row: dict[str, Any]) -> bool:
+        status = str(row.get("source_queue_status") or row.get("fetch_status") or "")
+        if _source_has_primary_scan_evidence(row, {}, status):
+            return True
+        if not _source_row_is_non_primary_probe(row) and status.startswith("processed_") and (
+            row.get("_ydb_updated_at")
+            or row.get("last_status_changed_at")
+            or int(float(row.get("ko_posts_found") or 0)) > 0
+            or int(float(row.get("candidate_posts_found") or 0)) > 0
+        ):
+            return True
+        return False
+
+    global_primary_backlog_exists = any(
+        normalize_source_platform(
+            str(row.get("platform") or ""),
+            str(row.get("source_url") or row.get("canonical_url") or ""),
+        ) in {"telegram", "vk"}
+        and not source_terminal_rejected_status(str(row.get("source_queue_status") or row.get("fetch_status") or ""))
+        and not durable_row_has_primary_scan_evidence(row)
+        for row in durable_queue_rows
+        if isinstance(row, dict)
+    )
     confirmed_external_priority: list[Seed] = []
     confirmed_external_selected: list[Seed] = []
     confirmed_external_pairs: list[tuple[Seed, dict[str, Any]]] = []
@@ -1194,6 +1256,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             (seed, due) for seed, due in annotated
             if bool(due.get("due"))
             and str((due.get("queue_row") or {}).get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+            and (not bool(due.get("is_rescan")) or not global_primary_backlog_exists)
         ]
         confirmed_external_pairs = sorted(confirmed_external_pairs, key=lambda item: (
                 confirmed_pair_has_scan_evidence(item),
@@ -1251,7 +1314,8 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         confirmed_external_selected = balanced_evidence
         high_yield_rescan_pairs = [
             (seed, due) for seed, due in annotated
-            if bool(due.get("due")) and bool(due.get("is_rescan")) and str(due.get("reason") or "") == "publication_goal_known_ko_rescan"
+            if not global_primary_backlog_exists
+            and bool(due.get("due")) and bool(due.get("is_rescan")) and str(due.get("reason") or "") == "publication_goal_known_ko_rescan"
         ]
         high_yield_rescan = [
             seed for seed, due in sorted(high_yield_rescan_pairs, key=lambda item: (
@@ -1274,15 +1338,23 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
             seed for seed in primary_due
             if seed not in publication_completion and seed not in high_yield_rescan and seed not in confirmed_external_selected
         ]
-        if not selected:
+        if not selected and not global_primary_backlog_exists:
             selected = rescan_due
     else:
-        selected = primary_due if primary_due else rescan_due
-    if len(selected) < max(0, max_sources) and getenv_bool("REGION_TALK_ALLOW_NOT_DUE_SOURCE_FILL", False):
+        selected = primary_due if primary_due else ([] if global_primary_backlog_exists else rescan_due)
+    if (
+        len(selected) < max(0, max_sources)
+        and not global_primary_backlog_exists
+        and getenv_bool("REGION_TALK_ALLOW_NOT_DUE_SOURCE_FILL", False)
+    ):
         selected.extend([seed for seed, due in ordered if not bool(due.get("due")) and seed not in selected])
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_due_total"] = sum(1 for _seed, due in annotated if bool(due.get("due")))
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_primary_due_total"] = len(primary_due)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_rescan_due_total"] = len(rescan_due)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_global_primary_backlog_exists"] = bool(global_primary_backlog_exists)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_rescan_suppressed_by_primary_backlog_total"] = (
+        len(rescan_due) if global_primary_backlog_exists else 0
+    )
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"] = sum(1 for _seed, due in annotated if not bool(due.get("due")))
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_sample"] = [
         {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
@@ -2004,7 +2076,8 @@ SOURCE_STATE_FIELDS = [
     "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
-    "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
+    "source_queue_status", "fetch_attempted", "last_history_fetch_at", "history_fetch_mode",
+    "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
@@ -2034,7 +2107,8 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "discovery_type", "discovery_types", "edge_type", "edge_types_all",
     "keyword_discovery_status", "keyword_evidence_run_id", "keyword_evidence_at", "insertion_policy",
     "priority_lane", "priority_reason", "priority_updated_at",
-    "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
+    "last_processed_at", "last_scan_run_id", "last_scan_status", "fetch_attempted",
+    "last_history_fetch_at", "history_fetch_mode", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
@@ -7395,7 +7469,18 @@ def build_unified_source_queue(
         else:
             image_quality_source_status = "no_ko_posts_yet"
             monitoring_exclusion_reason = ""
-        fetch_status = str(srow.get("fetch_status") or rec.get("last_scan_status") or "")
+        # A successful live ``source_status_item`` may be newer than an older
+        # canonical queue row (for example after a bounded run completed its
+        # fetch but missed the final queue handoff).  Treat that durable status
+        # as source scan evidence and repair the queue instead of selecting the
+        # same public again.  ``last_scan_status`` remains the compact canonical
+        # field after the repair is written.
+        fetch_status = str(
+            srow.get("fetch_status")
+            or rec.get("fetch_status")
+            or rec.get("last_scan_status")
+            or ""
+        )
         previous_queue_status = str(rec.get("source_queue_status") or "")
         original_queue_status = previous_queue_status
         terminal_rejected_status = ""
@@ -7409,16 +7494,20 @@ def build_unified_source_queue(
             except Exception:
                 return False
 
+        successful_scan_status = fetch_status in {"ok", "ok_public_web", "no_public_web_posts"}
+        srow_non_primary_probe = bool(srow) and _source_row_is_non_primary_probe(srow)
+        non_primary_probe = srow_non_primary_probe or _source_row_is_non_primary_probe(rec)
+        rec_scan_evidence = _source_has_primary_scan_evidence(rec, {}, previous_queue_status)
+        srow_scan_evidence = bool(srow) and not srow_non_primary_probe and (
+            successful_scan_status
+            or source_terminal_rejected_status(fetch_status)
+            or _source_has_primary_scan_evidence(srow, {}, fetch_status)
+        )
         scan_evidence = bool(
-            fetch_status
-            or rec.get("last_history_fetch_at")
-            or srow.get("last_history_fetch_at")
-            or positive_int(rec.get("posts_scanned"))
-            or positive_int(srow.get("posts_scanned"))
-            or len(sampled) > 0
-            or actual_n > 0
-            or ko_posts > 0
-            or candidate_posts > 0
+            rec_scan_evidence
+            or srow_scan_evidence
+            or (len(sampled) > 0 and not non_primary_probe)
+            or (not non_primary_probe and (actual_n > 0 or ko_posts > 0 or candidate_posts > 0))
         )
         source_text_profile = "\n".join(
             str(r.get("text") or r.get("text_excerpt") or r.get("short_summary") or "")
@@ -7441,6 +7530,31 @@ def build_unified_source_queue(
             terminal_rejected_status = previous_queue_status
         fake_processed_without_scan = previous_queue_status.startswith("processed") and not scan_evidence and not terminal_rejected_status
         scanned = bool(terminal_rejected_status) or scan_evidence
+        srow_terminal_rejected = bool(srow) and bool(
+            source_terminal_rejected_status(
+                str(srow.get("source_queue_status") or srow.get("fetch_status") or "")
+            )
+        )
+        terminal_transition_this_run = bool(
+            terminal_rejected_status
+            and not source_terminal_rejected_status(original_queue_status)
+        )
+        scanned_this_run = bool(
+            srow_terminal_rejected
+            or terminal_transition_this_run
+            or srow_scan_evidence
+            or (sampled and not non_primary_probe)
+        )
+        prior_scan_run_id = str(rec.get("last_scan_run_id") or "")
+        if not prior_scan_run_id and rec_scan_evidence:
+            prior_scan_run_id = str(rec.get("run_id") or rec.get("last_seen_run_id") or "")
+        prior_scan_at = str(
+            rec.get("last_history_fetch_at")
+            or rec.get("last_processed_at")
+            or rec.get("updated_at")
+            or rec.get("_ydb_updated_at")
+            or ""
+        )
         if scanned:
             processed_orders.append(int(rec.get("queue_order") or 0))
         if terminal_rejected_status:
@@ -7469,9 +7583,16 @@ def build_unified_source_queue(
             "status_color_hint": color,
             "row_fill_color": color,
             "fake_processed_without_scan_evidence": str(fake_processed_without_scan).lower(),
-            "last_processed_at": run_now if scanned else rec.get("last_processed_at", ""),
-            "last_scan_run_id": run_id if scanned else rec.get("last_scan_run_id", ""),
-            "last_scan_status": fetch_status,
+            "last_processed_at": run_now if scanned_this_run else (rec.get("last_processed_at") or prior_scan_at),
+            "last_scan_run_id": run_id if scanned_this_run else prior_scan_run_id,
+            "last_scan_status": fetch_status if scanned else rec.get("last_scan_status", ""),
+            "fetch_attempted": srow.get("fetch_attempted") or rec.get("fetch_attempted") or "",
+            "history_fetch_mode": srow.get("history_fetch_mode") or rec.get("history_fetch_mode") or "",
+            "last_history_fetch_at": (
+                run_now
+                if srow_scan_evidence and successful_scan_status
+                else (srow.get("last_history_fetch_at") or rec.get("last_history_fetch_at") or prior_scan_at)
+            ),
             "posts_scanned": max(int(rec.get("posts_scanned") or 0), int(srow.get("posts_scanned") or 0), len(sampled)),
             "ko_posts_found": ko_posts,
             "candidate_posts_found": candidate_posts,
@@ -9242,7 +9363,7 @@ def confirmed_blogger_fast_check_query_ladder() -> list[str]:
 
     A 2026-07-13 cached-peer canary found six current-year KO posts that the
     broad three-query control did not return.  Keep broad recall first, then
-    spend the rest of the confirmed-source ten-query budget on distinctive
+    spend the rest of the confirmed-source thirty-query budget on distinctive
     low-frequency places.  Generic sources retain the stable global bank and
     its existing cursor semantics.
     """
@@ -9423,7 +9544,7 @@ def source_fast_check_queries(
             # stop-on-first-hit and the durable continuation cursor.
             per_source = max(
                 per_source,
-                max(1, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 10)),
+                max(1, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 30)),
             )
         bank = source_fast_check_query_bank_for_row(source_row)
         cursor = max(0, int(start_cursor or 0))
@@ -10541,7 +10662,7 @@ def fetch_vk_wall_for_seed(
             title = str(group.get("name") or seed.source_title or domain)
             post_row = {"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else "", **evidence_fields}
             append_post_online(posts, post_row, run_id=run_id, stage="vk_wall_fetch")
-        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_plus_evidence_search" if vk_search_queries_attempted else "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "VK wall.get plus bounded evidence-location wall.search" if vk_search_queries_attempted else "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind(), "vk_wall_resolve_status": vk_wall_resolve_status, "vk_wall_resolved_type": vk_wall_resolved_type, "vk_wall_search_query_count": len(vk_search_queries_attempted), "vk_wall_search_queries_attempted": "|".join(vk_search_queries_attempted), "vk_wall_search_matched_query": vk_search_matched_query, "vk_wall_search_hits": vk_search_hits})
+        src.update({"fetch_status": "ok", "fetch_attempted": "true", "last_history_fetch_at": utc_now_iso(), "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_plus_evidence_search" if vk_search_queries_attempted else "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "VK wall.get plus bounded evidence-location wall.search" if vk_search_queries_attempted else "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind(), "vk_wall_resolve_status": vk_wall_resolve_status, "vk_wall_resolved_type": vk_wall_resolved_type, "vk_wall_search_query_count": len(vk_search_queries_attempted), "vk_wall_search_queries_attempted": "|".join(vk_search_queries_attempted), "vk_wall_search_matched_query": vk_search_matched_query, "vk_wall_search_hits": vk_search_hits})
         return src, posts
     except Exception as exc:
         src.update({"fetch_status": "error_vk_wall_fetch", "vk_wall_probe_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]})
@@ -10770,6 +10891,7 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
             apply_post_age_summary(src_row, posts)
             src_row.update({
                 "fetch_status": "ok_public_web" if posts else "no_public_web_posts",
+                "last_history_fetch_at": utc_now_iso(),
                 "posts_scanned": len(posts),
                 "last_seen_post_date": max([str(p.get("post_date") or "") for p in posts] or [""]),
                 "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
@@ -11880,6 +12002,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         src_row["source_probe_reason"] = (src_row.get("source_probe_reason") or "") + " Stopped at the configured history age cutoff."
                 src_row["history_min_post_date"] = cutoff.isoformat() if cutoff else ""
                 src_row["history_fetch_runtime_seconds"] = round(time.monotonic() - history_fetch_started, 3)
+                if str(src_row.get("fetch_status") or "") == "ok":
+                    src_row["last_history_fetch_at"] = utc_now_iso()
                 if governor.humanlike_pacing_enabled:
                     await governor.humanlike_pause(
                         "history_source_pause",
