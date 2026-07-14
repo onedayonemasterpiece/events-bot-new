@@ -4700,6 +4700,35 @@ def _candidate_explicitly_leaves_start_time_unknown(
     return _source_explicitly_leaves_start_time_unknown(corpus)
 
 
+_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC = (
+    "smart_update_explicit_unknown_start_llm_confirmed"
+)
+
+
+def _apply_llm_confirmed_unknown_start_time(
+    event: Any,
+    candidate: "EventCandidate",
+    *,
+    updated_keys: list[str],
+) -> bool:
+    """Apply the LLM-reviewed removal of a previously persisted wrong time."""
+
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    if not bool(metrics.get(_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC)):
+        return False
+    if not str(getattr(event, "time", "") or "").strip() and not bool(
+        getattr(event, "time_is_default", False)
+    ):
+        return False
+    event.time = ""
+    event.time_is_default = False
+    if "time" not in updated_keys:
+        updated_keys.append("time")
+    if "time_is_default" not in updated_keys:
+        updated_keys.append("time_is_default")
+    return True
+
+
 def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tuple[bool, str]:
     """High-recall router only; the LLM owns the date/time role decision."""
 
@@ -14299,6 +14328,13 @@ async def _smart_event_update_impl(
                 status="invalid",
                 reason=f"anchor_role_review:{anchor_result}",
             )
+        if (
+            anchor_review_trigger == "explicit_unknown_start_time"
+            and not _valid_hhmm_or_none(candidate.time)
+        ):
+            if not isinstance(candidate.metrics, dict):
+                candidate.metrics = {}
+            candidate.metrics[_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC] = True
     if _candidate_needs_llm_occurrence_scope_review(candidate) and not SMART_UPDATE_LLM_DISABLED:
         scope_ok, scope_result = await _llm_scope_candidate_occurrence(candidate)
         logger.info(
@@ -16916,6 +16952,14 @@ async def _smart_event_update_impl(
             candidate,
             is_canonical_site=is_canonical_site,
         )
+
+        if _apply_llm_confirmed_unknown_start_time(
+            event_db,
+            candidate,
+            updated_keys=updated_keys,
+        ):
+            updated_fields = True
+            conflicting.pop("time", None)
 
         # Fill placeholder/missing time from any matched source (TG/VK/etc.), not only parser sources.
         # This prevents duplicate creation like: existing time=00:00 (legacy placeholder) + new source brings 19:00.

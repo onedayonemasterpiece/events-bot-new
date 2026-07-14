@@ -48,6 +48,8 @@ Telegram Monitoring run:
 - 2026-07-14 15:16Z — DB/result comparison identified unsupported `14:00` and cursor `933 < 935`.
 - 2026-07-14 15:20Z — exact producer result and production evidence were preserved under
   `artifacts/codex/INC-2026-07-14-ecodvor-unknown-time-cursor/`.
+- 2026-07-14 15:43Z–15:45Z — first production replay proved the producer/server/anchor fix and
+  cursor advancement, but exposed the existing-row merge-clear gap; incident remained open.
 
 ## Root Cause
 
@@ -60,6 +62,9 @@ Telegram Monitoring run:
    activity's start was explicitly unknown.
 4. The zero-event early-return path advanced the cursor only for structurally event-like producer
    misses. A legitimate non-event message returned before `_update_source_scan_meta()`.
+5. The existing-event merge path treated an empty candidate time only as missing data, not as an
+   affirmative LLM-reviewed removal. The first post-fix replay correctly produced unknown time at
+   the import/anchor boundary but left the previously stored `14:00` untouched.
 
 ## Contributing Factors
 
@@ -117,6 +122,8 @@ Telegram Monitoring run:
   validation for explicit unknown starts.
 - Added a server import safety rail that clears conflicting extracted time and disables broad
   text/OCR time fallback only for an exact explicit-TBD start statement.
+- Added an internal LLM-confirmed marker so merge can distinguish reviewed removal from ordinary
+  missing data and clear an already-persisted unsupported time.
 - Moved cursor advancement outside the event-like zero-result branch so every successfully scanned
   zero-event tail message advances source state.
 
@@ -127,6 +134,8 @@ Telegram Monitoring run:
   LLM repairs. This adds at most one Smart Update review call for a candidate with explicit TBD
   wording; it does not add per-event loops or a new producer call.
 - [x] Add server candidate fail-closed guard plus positive/negative controls.
+- [x] Apply explicit unknown time to an existing matched row only after the LLM anchor review
+  succeeded; unreviewed empty time remains non-destructive.
 - [x] Advance source cursor for legitimate zero-event messages without polluting metrics/scanned rows.
 - [ ] Deploy, replay/catch up cursor, repair event `6878` and verify all public surfaces.
 

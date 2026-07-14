@@ -141,6 +141,48 @@ async def test_explicit_unknown_activity_start_is_llm_repaired_to_null(monkeypat
     assert candidate.time is None
 
 
+def test_llm_confirmed_unknown_start_clears_persisted_merge_time() -> None:
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/ecodvor39/931",
+        source_text="Время начала уточняется.",
+        title="Джанкбук",
+        date="2026-08-08",
+        time="",
+        metrics={su._EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC: True},
+    )
+    event = type("EventStub", (), {"time": "14:00", "time_is_default": False})()
+    updated_keys: list[str] = []
+
+    assert su._apply_llm_confirmed_unknown_start_time(
+        event,
+        candidate,
+        updated_keys=updated_keys,
+    ) is True
+    assert event.time == ""
+    assert event.time_is_default is False
+    assert updated_keys == ["time", "time_is_default"]
+
+
+def test_unreviewed_unknown_start_does_not_clear_persisted_merge_time() -> None:
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/example/3",
+        source_text="Время начала уточняется.",
+        title="Лекция",
+        date="2026-08-08",
+        time="",
+    )
+    event = type("EventStub", (), {"time": "15:00", "time_is_default": False})()
+
+    assert su._apply_llm_confirmed_unknown_start_time(
+        event,
+        candidate,
+        updated_keys=[],
+    ) is False
+    assert event.time == "15:00"
+
+
 @pytest.mark.asyncio
 async def test_explicit_unknown_activity_start_rejects_llm_parent_window(monkeypatch) -> None:
     candidate = su.EventCandidate(
