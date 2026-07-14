@@ -92,6 +92,10 @@
   - если в fallback сломалась загрузка poster media в Catbox/Supabase, импорт не обнуляет иллюстрации: используется прямой CDN URL целевого Telegram media (`cdn*.telesco.pe`) как последний аварийный fallback.
   - `linked_source_urls` теперь обогащают медиа события: сервер пытается подтянуть афиши из linked Telegram постов (сначала из того же `telegram_results.json`, затем через `t.me/s/...` fallback) и добавляет их в candidate до Smart Update.
 - `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам. Эти вспомогательные linked-pass вызовы подавляют `vk_sync`, потому что публикационную задачу должен ставить только основной источник события.
+- Публичные Telegram URL принимаются с host `t.me` и `telegram.me` на source-add, linked-post,
+  Smart Update/source identity, media recovery, festival queue и operator lookup границах.
+  Любой принятый alias перед сохранением канонизируется в `https://t.me/...`; producer и public
+  output также пишут только `t.me`, поэтому смена host не создаёт дубль источника/события.
 - Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
@@ -235,7 +239,7 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - В `DEV_MODE!=1` DEV-режим не показывается в UI и отклоняется на уровне callback/task, даже если callback вызван вручную.
 - Планировщик (`scheduling.py`) — ежедневный запуск по ENV.
 
-Канонический список источников (prod/test) и их настройки: `docs/features/telegram-monitoring/sources.yml` (см. также `docs/features/telegram-monitoring/sources.md`).
+Канонический список источников (prod/test) и их настройки: `docs/features/telegram-monitoring/sources.yml` (см. также `docs/features/telegram-monitoring/sources.md`). В список входит официальный `@ecodvor39` с `high` trust и без `default_location`, чтобы площадка оставалась source-grounded.
 
 ## Основные модули
 

@@ -148,8 +148,10 @@ def _normalize_peer(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
         return ""
-    raw = re.sub(r"^https?://t\.me/", "@", raw, flags=re.IGNORECASE)
-    raw = re.sub(r"^t\.me/", "@", raw, flags=re.IGNORECASE)
+    raw = re.sub(
+        r"^https?://(?:t\.me|telegram\.me)/", "@", raw, flags=re.IGNORECASE
+    )
+    raw = re.sub(r"^(?:t\.me|telegram\.me)/", "@", raw, flags=re.IGNORECASE)
     if raw.startswith("@"):
         username = raw[1:].split("/", 1)[0].split("?", 1)[0].strip()
         return f"@{username}" if username else ""

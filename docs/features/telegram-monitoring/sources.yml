@@ -55,6 +55,10 @@ sources:
     trust_level: medium
     notes: "ЭкоКёниг; эконовости и экологические городские анонсы"
 
+  - username: ecodvor39
+    trust_level: high
+    notes: "официальный канал Экодвора; площадка может меняться, поэтому без default_location"
+
   - username: dramteatr39
     trust_level: high
     default_location: "Драматический театр, Мира 4, Калининград"

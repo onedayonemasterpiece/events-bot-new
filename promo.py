@@ -2521,7 +2521,11 @@ def _tg_channel_message_link(target_chat: str, message_id: int) -> str:
 
 def _tg_message_id_from_url(url: str | None) -> int | None:
     text = str(url or "").strip()
-    match = re.search(r"https?://t\.me/(?:c/\d+|[A-Za-z0-9_]+)/(\d+)(?:\D|$)", text)
+    match = re.search(
+        r"https?://(?:t\.me|telegram\.me)/(?:c/\d+|[A-Za-z0-9_]+)/(\d+)(?:\D|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
     if not match:
         return None
     try:
@@ -2576,12 +2580,14 @@ def _tg_url_matches_chat(url: str | None, chat: str | None) -> bool:
     if not text:
         return False
     source_name = str(chat or "").strip().lstrip("@").lower()
-    if source_name and f"t.me/{source_name}/" in text:
+    if source_name and (
+        f"t.me/{source_name}/" in text or f"telegram.me/{source_name}/" in text
+    ):
         return True
     # Private/internal channel links do not carry the public username.  Treat
     # them as forwardable for the configured channel, matching tg_repost source
     # selection behavior.
-    return "t.me/c/" in text
+    return "t.me/c/" in text or "telegram.me/c/" in text
 
 
 def _tg_source_url_for_chat(ev: Event, chat: str | None) -> str | None:
@@ -2665,8 +2671,14 @@ async def _recent_event_tg_posts(
         if not url:
             continue
         url_l = url.lower()
-        is_public_source_url = bool(source_name and f"t.me/{source_name}/" in url_l)
-        is_internal_tme_c_url = "t.me/c/" in url_l
+        is_public_source_url = bool(
+            source_name
+            and (
+                f"t.me/{source_name}/" in url_l
+                or f"telegram.me/{source_name}/" in url_l
+            )
+        )
+        is_internal_tme_c_url = "t.me/c/" in url_l or "telegram.me/c/" in url_l
         if source_name and not (is_public_source_url or is_internal_tme_c_url):
             continue
         rows.append((ev, url, until_utc))
@@ -2695,8 +2707,14 @@ async def _recent_event_tg_posts(
         if not url or url in seen_urls:
             continue
         url_l = url.lower()
-        is_public_source_url = bool(source_name and f"t.me/{source_name}/" in url_l)
-        is_internal_tme_c_url = "t.me/c/" in url_l
+        is_public_source_url = bool(
+            source_name
+            and (
+                f"t.me/{source_name}/" in url_l
+                or f"telegram.me/{source_name}/" in url_l
+            )
+        )
+        is_internal_tme_c_url = "t.me/c/" in url_l or "telegram.me/c/" in url_l
         if source_name and not (is_public_source_url or is_internal_tme_c_url):
             continue
         rows.append((ev, url, exposure.published_at or until_utc))

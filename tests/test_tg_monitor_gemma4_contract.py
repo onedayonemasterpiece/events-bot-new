@@ -37,6 +37,14 @@ def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:
     assert "instagram\\.com" in source
     assert "linktr\\.ee" in source
     assert "_is_disallowed_source_website_url" in source
+    assert "telegram\\.me" in source
+
+
+def test_tg_monitor_script_canonicalizes_telegram_me_linked_posts() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "(?:t\\.me|telegram\\.me)/[^/\\s]+/\\d+" in source
+    assert "'https://t.me/'" in source
 
 
 def test_strip_custom_emoji_preserves_meaningful_unicode_fallback() -> None:

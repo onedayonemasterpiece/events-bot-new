@@ -36,6 +36,7 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+- **Telegram source aliases / `@ecodvor39`**: added the official Ecoyard channel to permanent monitoring and made `telegram.me` an accepted input alias across source setup, linked-post extraction, Smart Update/source identity, media/festival/operator parsers and guide/social consumers; accepted aliases are persisted as canonical `https://t.me/...` URLs to prevent duplicate source identities.
 - **SQLite source grounding**: `Database.init()` now excludes and purges managed VK publication URLs from legacy `event_source` backfill, so a restart cannot turn public AI copy back into source evidence.
 - **Event vector admission grounding**: unknown/status-only admission is no longer mislabeled as `ticketed`; explicit tickets, registration and phone booking retain the tag.
 - **Thin-source public-copy grounding (INC-2026-07-14)**: require exact source quotations for Smart Update extracted/merged facts and every Gemini Lite/limited `gpt-4o` Telegram public sentence, allow honest sparse descriptions, exclude managed VK output from source evidence, replace rather than append historical managed VK bodies, and stop sole donation/support URLs from becoming ticket registration in both Telegram Monitor and server import.

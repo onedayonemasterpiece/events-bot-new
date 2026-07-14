@@ -36,6 +36,7 @@ from poster_media import PosterMedia, is_supabase_storage_url, process_media
 from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
 from models import Event, EventSource
+from telegram_sources import canonicalize_tg_url
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,9 @@ def _normalize_source_url_for_match(url: str | None) -> str | None:
     value = str(url).strip()
     if not value:
         return None
+    canonical_tg = canonicalize_tg_url(value)
+    if canonical_tg:
+        value = canonical_tg
     if value.startswith("http://") or value.startswith("https://"):
         value = value.rstrip("/")
     return value

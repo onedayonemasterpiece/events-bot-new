@@ -1,6 +1,7 @@
 from source_parsing.telegram.handlers import (
     _extract_message_link_items,
     _infer_ticket_link_from_message_links,
+    _parse_tg_source_url,
     _ticket_link_is_explicitly_non_admission,
 )
 
@@ -86,3 +87,20 @@ def test_explicit_registration_link_remains_ticket() -> None:
     )
 
     assert refined == "https://example.org/form"
+
+
+def test_telegram_me_link_payload_is_canonicalized_before_source_dedup() -> None:
+    items = _extract_message_link_items(
+        {
+            "links": [
+                {"url": "https://telegram.me/ecodvor39/926", "text": "Источник"},
+                {"url": "https://t.me/ecodvor39/926", "text": "Тот же источник"},
+            ]
+        }
+    )
+
+    assert [item["url"] for item in items] == ["https://t.me/ecodvor39/926"]
+    assert _parse_tg_source_url("https://telegram.me/s/ecodvor39/927?single") == (
+        "ecodvor39",
+        927,
+    )

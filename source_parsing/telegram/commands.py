@@ -327,7 +327,8 @@ async def handle_tg_callback(callback: CallbackQuery):
     elif action == "add":
         adding_source_sessions[user_id] = "add"
         await callback.message.answer(
-            "✍️ Пришлите @username или ссылку вида https://t.me/username.\n"
+            "✍️ Пришлите @username или ссылку вида https://t.me/username "
+            "(https://telegram.me/username тоже поддерживается).\n"
             "Примеры:\n"
             "  @meowafisha\n"
             "  https://t.me/meowafisha\n"

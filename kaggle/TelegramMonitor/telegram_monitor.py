@@ -1728,7 +1728,7 @@ def _build_source_metadata_prompt(payload: dict) -> str:
 
 _SOURCE_WEBSITE_BLOCK_RE = re.compile(
     r"^https?://(?:"
-    r"(?:www\.)?t\.me/"
+    r"(?:www\.)?(?:t\.me|telegram\.me)/"
     r"|(?:www\.)?telegra\.ph/"
     r"|(?:www\.)?instagram\.com/"
     r"|(?:www\.)?vk(?:video)?\.com/"
@@ -3995,7 +3995,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         link_spans = []  # list[{url, text, offset}]; offset may be None for buttons
 
         def _is_tg_post_url(u: str) -> bool:
-            return bool(re.search(r'(?i)t\.me/[^/\s]+/\d+', u or ''))
+            return bool(re.search(r'(?i)(?:t\.me|telegram\.me)/[^/\s]+/\d+', u or ''))
 
         def _add_link(url: str | None, text_label: str | None, offset: int | None, source: str) -> None:
             u = (url or '').strip()
@@ -4006,6 +4006,13 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 u = 'https://' + u
             if not re.match(r'^https?://', u, flags=re.I):
                 return
+            # Telegram exposes both public-link hosts. Persist one identity so the server-side
+            # linked-source and Smart Update dedup paths cannot treat aliases as separate posts.
+            u = re.sub(
+                r'(?i)^https?://(?:www\.)?(?:t\.me|telegram\.me)/',
+                'https://t.me/',
+                u,
+            )
             key = u.lower().rstrip('/')
             if key in {x['url'].lower().rstrip('/') for x in links_meta}:
                 return
@@ -4015,7 +4022,10 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 linked_source_urls.append(u)
 
         # Telegram post links in plain text (linked sources).
-        for m in re.finditer(r'(https?://)?t\.me/[^/\s]+/\d+(?:\?single)?', text_for_links):
+        for m in re.finditer(
+            r'(https?://)?(?:t\.me|telegram\.me)/[^/\s]+/\d+(?:\?single)?',
+            text_for_links,
+        ):
             raw = m.group(0)
             _add_link(raw, raw, m.start(), 'regex_tg')
 

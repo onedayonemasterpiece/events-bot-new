@@ -38,7 +38,7 @@ from models import (
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
 from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
-from telegram_sources import normalize_tg_username
+from telegram_sources import canonicalize_tg_url, normalize_tg_username, parse_tg_post_url
 from source_parsing.post_metrics import (
     PopularityBaseline,
     PopularityMarks,
@@ -547,6 +547,9 @@ def _clean_url(value: str | None) -> str | None:
         return None
     if re.match(r"(?i)^tg://user\?id=\d+$", raw):
         return raw
+    canonical_tg = canonicalize_tg_url(raw)
+    if canonical_tg:
+        raw = canonical_tg
     if not re.match(r"https?://", raw):
         return None
     if re.match(r"^https?://t\.me/addlist/", raw):
@@ -557,7 +560,7 @@ def _clean_url(value: str | None) -> str | None:
 _TRAILING_URL_PUNCT_RE = re.compile(r"[)\],.!?:;]+$", re.U)
 _BARE_URL_RE = re.compile(
     r"(?i)\b("
-    r"(?:t\.me|vk\.cc|clck\.ru|timepad\.ru|kassir\.ru|qtickets\.ru|ticketland\.ru|ticketscloud\.com|intickets\.ru)"
+    r"(?:t\.me|telegram\.me|vk\.cc|clck\.ru|timepad\.ru|kassir\.ru|qtickets\.ru|ticketland\.ru|ticketscloud\.com|intickets\.ru)"
     r"/[^\s<>()]+"
     r")"
 )
@@ -579,7 +582,7 @@ def _coerce_url(value: str | None) -> str | None:
         return raw
     if raw.lower().startswith(("http://", "https://")):
         return _clean_url(raw)
-    if raw.lower().startswith(("t.me/", "vk.cc/", "clck.ru/")):
+    if raw.lower().startswith(("t.me/", "telegram.me/", "vk.cc/", "clck.ru/")):
         return _clean_url(f"https://{raw}")
     m = _BARE_URL_RE.search(raw)
     if m:
@@ -807,17 +810,8 @@ def _extract_urls_from_text(text: str | None) -> list[str]:
 
 
 def _parse_tg_source_url(value: str | None) -> tuple[str | None, int | None]:
-    raw = _clean_url(value)
-    if not raw:
-        return None, None
-    m = re.search(r"t\.me/s/([^/]+)/([0-9]+)", raw, flags=re.IGNORECASE)
-    if not m:
-        m = re.search(r"t\.me/([^/]+)/([0-9]+)", raw, flags=re.IGNORECASE)
-    if not m:
-        return None, None
-    username = str(m.group(1) or "").strip() or None
-    message_id = _to_int(m.group(2))
-    return username, message_id
+    parsed = parse_tg_post_url(value)
+    return parsed if parsed else (None, None)
 
 
 def _normalize_video_status(value: Any) -> str | None:
@@ -2795,7 +2789,7 @@ def _event_local_location_candidate_ok(location_name: str | None, location_addre
     raw = str(location_name or "").strip()
     if not raw:
         return False
-    if "@" in raw or re.search(r"(?i)\bt\.me/", raw):
+    if "@" in raw or re.search(r"(?i)\b(?:t\.me|telegram\.me)/", raw):
         return False
     if (
         _looks_like_location_prose_fragment(raw)
@@ -3052,7 +3046,9 @@ _TICKET_CONTACT_LINE_RE = re.compile(
     r"(?iu)\b(билет\w*|вход\w*|регистрац\w*|запис(?:ь|аться)|брон(?:ь|ировать)|оплат\w*)\b"
 )
 _TG_HANDLE_IN_TEXT_RE = re.compile(r"(?i)@([a-z0-9_]{4,32})")
-_TG_LINK_IN_TEXT_RE = re.compile(r"(?i)(?:https?://)?t\.me/([a-z0-9_]{4,32})\b")
+_TG_LINK_IN_TEXT_RE = re.compile(
+    r"(?i)(?:https?://)?(?:t\.me|telegram\.me)/([a-z0-9_]{4,32})\b"
+)
 _PHONE_IN_TEXT_RE = re.compile(
     r"(?u)(?<!\d)(?:\+\s*7|8)\s*\(?\d{3}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)"
 )
@@ -3412,7 +3408,9 @@ def _normalize_source_suggestions(value: Any) -> dict[str, Any] | None:
         return None
     series = str(value.get("festival_series") or "").strip() or None
     website = _clean_url(str(value.get("website_url") or "").strip())
-    if website and re.match(r"^https?://(?:t\.me|telegra\.ph)/", website, flags=re.IGNORECASE):
+    if website and re.match(
+        r"^https?://(?:t\.me|telegram\.me|telegra\.ph)/", website, flags=re.IGNORECASE
+    ):
         website = None
     confidence = None
     try:
@@ -4927,7 +4925,10 @@ async def _reconcile_primary_import_vk_sync_jobs(db: Database) -> int:
                     & (JobOutbox.task == JobTask.vk_sync)
                     & (JobOutbox.status.in_([JobStatus.pending, JobStatus.running])),
                 )
-                .where(Event.source_post_url.like("%t.me/%"))
+                .where(
+                    Event.source_post_url.like("%t.me/%")
+                    | Event.source_post_url.like("%telegram.me/%")
+                )
                 .where(Event.date >= today)
                 .where(Event.lifecycle_status == "active")
                 .where(Event.silent.is_(False))

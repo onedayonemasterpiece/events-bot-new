@@ -1980,7 +1980,11 @@ async def build_festival_page_content(db: Database, fest: Festival) -> tuple[str
         raw = str(url or "").strip()
         if not raw:
             return None
-        match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)/\d+\b", raw, flags=re.IGNORECASE)
+        match = re.search(
+            r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)/\d+\b",
+            raw,
+            flags=re.IGNORECASE,
+        )
         if not match:
             return None
         username = str(match.group(1) or "").strip()
@@ -1992,7 +1996,11 @@ async def build_festival_page_content(db: Database, fest: Festival) -> tuple[str
         raw = str(url or "").strip()
         if not raw:
             return ""
-        match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)", raw, flags=re.IGNORECASE)
+        match = re.search(
+            r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)",
+            raw,
+            flags=re.IGNORECASE,
+        )
         if not match:
             return ""
         username = str(match.group(1) or "").strip().lstrip("@")
@@ -2932,7 +2940,11 @@ def _parse_tg_post_ref(url: str | None) -> tuple[str, int] | None:
     text_value = (url or "").strip()
     if not text_value:
         return None
-    m = re.search(r"(?:https?://)?t\.me/([^/?#\s]+)/([0-9]+)", text_value, flags=re.I)
+    m = re.search(
+        r"(?:https?://)?(?:t\.me|telegram\.me)/([^/?#\s]+)/([0-9]+)",
+        text_value,
+        flags=re.I,
+    )
     if not m:
         return None
     username = m.group(1).strip().lstrip("@").lower()
@@ -6938,7 +6950,9 @@ def _vk_require_media_for_telegram_source_posts() -> bool:
 
 def _url_looks_like_telegram_source(url: str | None) -> bool:
     value = str(url or "").strip().lower()
-    return value.startswith("https://t.me/") or value.startswith("http://t.me/")
+    return value.startswith(
+        ("https://t.me/", "http://t.me/", "https://telegram.me/", "http://telegram.me/")
+    )
 
 
 async def _event_has_telegram_origin(event: Event, db: Database | None) -> bool:

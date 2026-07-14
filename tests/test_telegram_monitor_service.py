@@ -23,7 +23,7 @@ async def test_build_config_payload_can_scope_to_single_source(tmp_path):
     await db.init()
 
     async with db.get_session() as session:
-        session.add(TelegramSource(username="kraftmarket39", enabled=True, trust_level="high"))
+        session.add(TelegramSource(username="testsourceurl", enabled=True, trust_level="high"))
         session.add(TelegramSource(username="otherchannel", enabled=True, trust_level="low"))
         session.add(TelegramSource(username="disabled", enabled=False, trust_level="high"))
         await session.commit()
@@ -31,12 +31,13 @@ async def test_build_config_payload_can_scope_to_single_source(tmp_path):
     payload = await _build_config_payload(
         db,
         run_id="single_source_test",
-        source_usernames=["@kraftmarket39", "disabled"],
+        source_usernames=["https://telegram.me/testsourceurl", "disabled"],
     )
 
-    assert payload["channels"] == ["kraftmarket39"]
-    assert [item["username"] for item in payload["sources"]] == ["kraftmarket39"]
-    assert payload["requested_source_usernames"] == ["disabled", "kraftmarket39"]
+    assert payload["channels"] == ["testsourceurl"]
+    assert [item["username"] for item in payload["sources"]] == ["testsourceurl"]
+    assert payload["requested_source_usernames"] == ["disabled", "testsourceurl"]
+    await db.engine.dispose()
 
 
 def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):

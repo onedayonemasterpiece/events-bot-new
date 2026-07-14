@@ -37,6 +37,7 @@ from models import (
     PosterOcrCache,
 )
 from sections import MONTHS_RU
+from telegram_sources import canonicalize_tg_url
 from smart_update_identity import (
     IdentityGateMode,
     IdentityVectorEvidence,
@@ -9347,8 +9348,11 @@ def _normalize_url(url: str | None) -> str | None:
     value = url.strip()
     if not value:
         return None
+    canonical_tg = canonicalize_tg_url(value)
+    if canonical_tg:
+        return canonical_tg.rstrip("/")
     low = value.lower()
-    if low.startswith(("t.me/", "vk.cc/", "clck.ru/")):
+    if low.startswith(("t.me/", "telegram.me/", "vk.cc/", "clck.ru/")):
         value = f"https://{value}"
         low = value.lower()
     if low.startswith("http://"):
@@ -9444,7 +9448,7 @@ def _infer_source_type_from_url(url: str | None) -> str:
     value = (url or "").strip().lower()
     if not value:
         return "site"
-    if "t.me/" in value:
+    if "t.me/" in value or "telegram.me/" in value:
         return "telegram"
     if _is_vk_wall_url(value):
         return "vk"
@@ -14170,6 +14174,12 @@ async def _smart_event_update_impl(
     schedule_tasks: bool = True,
     schedule_kwargs: dict[str, Any] | None = None,
 ) -> SmartUpdateResult:
+    canonical_source_url = canonicalize_tg_url(candidate.source_url)
+    if canonical_source_url:
+        candidate.source_url = canonical_source_url
+    canonical_ticket_link = canonicalize_tg_url(candidate.ticket_link)
+    if canonical_ticket_link:
+        candidate.ticket_link = canonical_ticket_link
     logger.info(
         "smart_update.start source_type=%s source_url=%s title=%s date=%s time=%s location=%s city=%s posters=%d trust=%s festival_context=%s festival=%s festival_full=%s festival_source=%s festival_series=%s",
         candidate.source_type,

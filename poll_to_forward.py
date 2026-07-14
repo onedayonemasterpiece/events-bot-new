@@ -820,7 +820,11 @@ def _extract_post_id_from_url(url: str | None) -> int | None:
     raw = str(url or "").strip()
     if not raw:
         return None
-    m = re.search(r"t\.me/(?:c/\d+/|[^/\s]+/)(\d+)", raw, flags=re.IGNORECASE)
+    m = re.search(
+        r"(?:t\.me|telegram\.me)/(?:c/\d+/|[^/\s]+/)(\d+)",
+        raw,
+        flags=re.IGNORECASE,
+    )
     if not m:
         return None
     try:

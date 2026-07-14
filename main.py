@@ -429,8 +429,13 @@ def mem_info(label: str = "", update: bool = True) -> tuple[int, int]:
 
 
 def normalize_telegraph_url(url: str | None) -> str | None:
-    if url and url.startswith("https://t.me/"):
-        return url.replace("https://t.me/", "https://telegra.ph/")
+    if url and re.match(r"^https://(?:t\.me|telegram\.me)/", url, flags=re.IGNORECASE):
+        return re.sub(
+            r"^https://(?:t\.me|telegram\.me)/",
+            "https://telegra.ph/",
+            url,
+            flags=re.IGNORECASE,
+        )
     return url
 
 
@@ -7959,12 +7964,20 @@ async def update_source_post_keyboard(event_id: int, db: Database, bot: Bot) -> 
     if ev.source_post_url and ev.source_chat_id and ev.source_chat_id > 0:
         chat_match = None
         msg_id = None
-        m = re.match(r"https://t.me/c/([0-9]+)/([0-9]+)", ev.source_post_url)
+        m = re.match(
+            r"https://(?:t\.me|telegram\.me)/c/([0-9]+)/([0-9]+)",
+            ev.source_post_url,
+            flags=re.IGNORECASE,
+        )
         if m:
             cid, msg_id = m.groups()
             chat_match = int("-100" + cid)
         else:
-            m = re.match(r"https://t.me/([A-Za-z0-9_]+)/([0-9]+)", ev.source_post_url)
+            m = re.match(
+                r"https://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)/([0-9]+)",
+                ev.source_post_url,
+                flags=re.IGNORECASE,
+            )
             if m:
                 username, msg_id = m.group(1), int(m.group(2))
                 try:
@@ -18241,7 +18254,7 @@ async def _fetch_event_source_poster_candidates(
     stype = (source_type or "").strip().casefold()
     if not url:
         return []
-    if stype == "telegram" or "t.me/" in url:
+    if stype == "telegram" or "t.me/" in url or "telegram.me/" in url:
         try:
             from source_parsing.telegram.handlers import (
                 _fallback_fetch_posters_from_public_tg_page,
@@ -18425,7 +18438,7 @@ async def update_telegraph_event_page(
 
             def _infer_type(url: str) -> str:
                 u = (url or "").lower()
-                if "t.me/" in u:
+                if "t.me/" in u or "telegram.me/" in u:
                     return "telegram"
                 if "vk.com/wall" in u:
                     return "vk"
@@ -21967,7 +21980,10 @@ def is_valid_url(text: str | None) -> bool:
     return bool(re.match(r"https?://", text))
 
 
-TELEGRAM_FOLDER_RX = re.compile(r"^https?://t\.me/addlist/[A-Za-z0-9_-]+/?$")
+TELEGRAM_FOLDER_RX = re.compile(
+    r"^https?://(?:t\.me|telegram\.me)/addlist/[A-Za-z0-9_-]+/?$",
+    re.IGNORECASE,
+)
 
 
 def _strip_qf(u: str) -> str:

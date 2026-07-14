@@ -43,7 +43,7 @@ def _is_vk_domain(url: str) -> bool:
 
 def _is_tg_domain(url: str) -> bool:
     u = (url or "").strip().lower()
-    return "t.me/" in u
+    return "t.me/" in u or "telegram.me/" in u
 
 
 def _looks_like_vk_wall(url: str) -> bool:
@@ -991,7 +991,11 @@ async def _process_tg_item(
     username = str(item.source_chat_username or "").strip()
     message_id = item.source_message_id
     if (not username or not message_id) and item.source_url:
-        m = re.search(r"t\.me/([^/]+)/([0-9]+)", item.source_url, flags=re.IGNORECASE)
+        m = re.search(
+            r"(?:t\.me|telegram\.me)/([^/]+)/([0-9]+)",
+            item.source_url,
+            flags=re.IGNORECASE,
+        )
         if m:
             username = username or str(m.group(1) or "").strip()
             message_id = message_id or int(m.group(2))

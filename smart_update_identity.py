@@ -14,6 +14,8 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from telegram_sources import canonicalize_tg_url
+
 
 class IdentityGateMode(str, Enum):
     OFF = "off"
@@ -829,6 +831,9 @@ def _normalize_url(value: str | None) -> str:
     raw = (value or "").strip()
     if not raw:
         return ""
+    canonical_tg = canonicalize_tg_url(raw)
+    if canonical_tg:
+        raw = canonical_tg
     try:
         parts = urlsplit(raw)
     except Exception:

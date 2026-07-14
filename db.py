@@ -836,7 +836,8 @@ class Database:
                         SELECT
                             e.id,
                             CASE
-                                WHEN e.source_post_url LIKE '%t.me/%' THEN 'telegram'
+                                WHEN e.source_post_url LIKE '%t.me/%'
+                                  OR e.source_post_url LIKE '%telegram.me/%' THEN 'telegram'
                                 WHEN e.source_post_url LIKE '%vk.com/%' THEN 'vk'
                                 ELSE 'legacy'
                             END,
