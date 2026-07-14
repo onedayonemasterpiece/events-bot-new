@@ -286,13 +286,13 @@ Per run, the orchestrator keeps this intentionally conservative:
 Confirmed non-local bloggers from `region_talk_external_blogger_evidence` are
 the high-probability exception to the generic two-query wave. With adaptive
 search enabled they may consume up to
-`REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE=10` source-local
+`REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE=30` source-local
 queries in one run, ordered by evidence-specific locations and then by the
 diverse regional place/POI bank. Up to 20 server-side matches per query are
 ranked by proximity to `visit_period_text` before selecting bounded exact links; this
 prevents a newer incidental mention (for example a Moscow miniature containing
 Kaliningrad) from hiding the independently evidenced 2025 trip. The confirmed
-pass continues its bounded ten-query wave after the first hit, emits no more
+pass continues its bounded thirty-query wave after the first hit, emits no more
 than two distinct exact posts per query and twelve per source, uses the same
 5–9 second human-like pauses, and never bypasses cached entity/FloodWait rules.
 Thus the
