@@ -362,6 +362,7 @@ features:
     semantic_vector_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
     production_integration: docs/features/unsigned-personalization/production-integration.md
+    product_e2e_research_brief: docs/features/unsigned-personalization/product-e2e-research-brief.md
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_identity: docs/features/site-user-identity/README.md
     related_favorites_calendar: docs/features/event-favorites-calendar/README.md
@@ -386,6 +387,7 @@ features:
     capabilities:
       local_anonymous_profile: preview
       related_pgvector: canary_partial
+      longitudinal_product_e2e: research_task_seed_external_reviews_pending
       authorized_search: canary_partial
       remote_telemetry_ingest: design
       durable_profile: design

@@ -25,6 +25,7 @@
 
 ### Added
 
+- **Personalization / product E2E-driven research task**: added a separate mobile-first longitudinal golden-persona research brief covering two-week virtual-time behavior simulation, interaction-driven profile formation, `cards_to_first_relevant` product outcomes, anti-bubble/serendipity guardrails, Playwright/Supabase evidence layers and a consultant-gated Phase A/Phase B implementation boundary.
 - **Site identity / post-release VK message linking**: specified a six-digit, short-lived VK direct-message challenge that links the authenticated site subject to the verified sender VK ID in the isolated YDB personal-data contour, transiently intersects public friends only against double-opted-in linked users, persists no full friend list/message body, and requires an honest personal-data policy, separate VK-link consent and user agreement before canary activation.
 
 - **Email infrastructure / inbound core**: added isolated Yandex Mail Trigger intake and YMQ delivery Cloud Function contracts with keyed idempotency, private normalized-envelope pointers, HMAC-authenticated minimized backend receipts, PII-safe logging, retry/DLQ fixtures, and a conservative plan-by-default desired-state reconciler that never touches Fly or mutates secretful/live traffic resources implicitly.
