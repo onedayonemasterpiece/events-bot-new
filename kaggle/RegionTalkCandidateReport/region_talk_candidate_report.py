@@ -12410,7 +12410,8 @@ def text_embedding_model_reference(model_id: str) -> tuple[str, str]:
     if explicit:
         candidates.append(Path(explicit).expanduser())
     if model_id == E5_TEXT_MODEL_ID:
-        root = Path("/kaggle/input/intfloatmultilingual-e5-base")
+        input_root = Path(os.getenv("REGION_TALK_KAGGLE_INPUT_ROOT") or "/kaggle/input")
+        root = input_root / "intfloatmultilingual-e5-base"
         candidates.extend(
             [
                 root / "transformers" / "default" / "1",
@@ -12420,6 +12421,18 @@ def text_embedding_model_reference(model_id: str) -> tuple[str, str]:
         )
         if root.exists():
             candidates.extend(sorted((p.parent for p in root.rglob("config.json")), reverse=True))
+        # Kaggle does not guarantee that the mounted directory equals the model
+        # slug.  Search the complete input mount, as the proven Qwen worker does,
+        # but accept only directories carrying both E5 identity and full model
+        # files so config datasets cannot be mistaken for the encoder.
+        if input_root.exists():
+            try:
+                for config in input_root.rglob("config.json"):
+                    lowered = config.parent.as_posix().lower().replace("_", "-")
+                    if "multilingual-e5-base" in lowered or "intfloatmultilingual-e5-base" in lowered:
+                        candidates.append(config.parent)
+            except Exception:
+                pass
     seen: set[str] = set()
     for candidate in candidates:
         key = str(candidate)
@@ -12428,6 +12441,18 @@ def text_embedding_model_reference(model_id: str) -> tuple[str, str]:
         seen.add(key)
         if _is_transformers_model_dir(candidate):
             return str(candidate), "kaggle_model_input" if str(candidate).startswith("/kaggle/input/") else "local_model_path"
+    if model_id == E5_TEXT_MODEL_ID and getenv_bool("REGION_TALK_E5_USE_KAGGLEHUB_FALLBACK", True):
+        source = str(os.getenv("REGION_TALK_E5_KAGGLE_MODEL_SOURCE") or "").strip()
+        if source:
+            try:
+                import kagglehub  # type: ignore
+
+                source_without_version = "/".join(source.strip("/").split("/")[:4])
+                downloaded = Path(kagglehub.model_download(source_without_version))
+                if _is_transformers_model_dir(downloaded):
+                    return str(downloaded), "kagglehub_model_cache"
+            except Exception:
+                pass
     return model_id, "huggingface_hub"
 
 

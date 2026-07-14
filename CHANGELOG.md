@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Fixed Region Talk E5 runtime distribution after a live Hugging Face 403: CandidateReport now attaches a versioned `multilingual-e5-base` Kaggle Model input and loads it locally before using the Hub fallback, preserving the E5+BGE dual-vector contract without depending on unauthenticated network downloads.
+- Fixed Region Talk E5 runtime distribution after a live Hugging Face 403: CandidateReport now attaches a versioned `multilingual-e5-base` Kaggle Model input, resolves non-canonical Kaggle mount paths (with official `kagglehub` cache fallback), and loads it locally before using the Hub fallback, preserving the E5+BGE dual-vector contract without depending on unauthenticated network downloads.
 - Added an evidence-backed Region Talk source-onboarding stage: the finalizer now stores compact source evidence and reusable profile rows, validates every LLM claim/angle reference, generates a candidate-specific 300–600 character `О блогере` paragraph within the shared durable Gemini budget, and renders it in the operator chat only when support checks pass.
 - Fixed Region Talk post-work idempotency and high-probability throughput: current unchanged posts are no longer re-encoded on source rescans, current E5 rows wait for BGE without E5 recomputation, BGE arrival triggers one fusion pass, and exact/confirmed-blogger/fast-check/keyword posts are prioritized before generic history within the actionable vector batch.
 - Clarified Region Talk per-run throughput metrics: newly first-seen posts are now separated from refreshed known posts, CandidateReport heartbeat counters own actual history/fetch/E5 work, and broad source-overlay updates remain visible but are no longer mislabeled as deeply scanned sources.

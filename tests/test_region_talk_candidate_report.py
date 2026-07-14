@@ -94,6 +94,35 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_E5_MODEL_LOCAL_PATH"] = old
 
+    def test_e5_model_reference_finds_nested_kaggle_mount(self) -> None:
+        mod = load_module()
+        keys = [
+            "REGION_TALK_E5_MODEL_LOCAL_PATH",
+            "REGION_TALK_TEXT_EMBEDDING_MODEL_LOCAL_PATH",
+            "REGION_TALK_KAGGLE_INPUT_ROOT",
+            "REGION_TALK_E5_USE_KAGGLEHUB_FALLBACK",
+        ]
+        old = {key: os.environ.get(key) for key in keys}
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                model_dir = Path(td) / "unexpected-owner-path" / "intfloat-multilingual-e5-base" / "version-1"
+                model_dir.mkdir(parents=True)
+                for name in ("config.json", "model.safetensors", "tokenizer.json"):
+                    (model_dir / name).write_text("{}", encoding="utf-8")
+                os.environ.pop("REGION_TALK_E5_MODEL_LOCAL_PATH", None)
+                os.environ.pop("REGION_TALK_TEXT_EMBEDDING_MODEL_LOCAL_PATH", None)
+                os.environ["REGION_TALK_KAGGLE_INPUT_ROOT"] = td
+                os.environ["REGION_TALK_E5_USE_KAGGLEHUB_FALLBACK"] = "0"
+                reference, origin = mod.text_embedding_model_reference(mod.E5_TEXT_MODEL_ID)
+                self.assertEqual(reference, str(model_dir))
+                self.assertEqual(origin, "local_model_path")
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_source_selection_prefers_cursor_queue_over_static_seed_rescans(self) -> None:
         mod = load_module()
         static_seed = self._seed(mod, "@staticold", priority=0, seed_id="seed_1")

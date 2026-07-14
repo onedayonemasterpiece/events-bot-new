@@ -394,7 +394,10 @@ The XLSX has:
   Model input
   `ranaabdulrehman145/intfloatmultilingual-e5-base/Transformers/default/1` and
   resolves `/kaggle/input/intfloatmultilingual-e5-base/...` before any network
-  access. This is the production path: a transient unauthenticated Hugging Face
+  access. Because Kaggle may assign a different mount directory, resolution also
+  scans the bounded input tree for a complete matching Transformers model and
+  then uses the official `kagglehub` model cache as a fallback. This is the
+  production path: a transient unauthenticated Hugging Face
   403 must not stop E5 enrichment. `REGION_TALK_E5_MODEL_LOCAL_PATH` is the
   explicit local-test override; Hugging Face remains only a development
   fallback. Hub timeouts are set before import
