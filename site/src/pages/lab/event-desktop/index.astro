@@ -3,32 +3,33 @@ import EventLayout from '../../../layouts/EventLayout.astro';
 import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/event-desktop/');
-const title = `Desktop media focus v9 | ${SITE_NAME}`;
-const description = 'Desktop-only проверка приоритетного Continuous Editorial, лаконичной OCR-афиши, адаптивных превью и портретной серии. Mobile не изменён.';
+const title = `Desktop media focus v10 | ${SITE_NAME}`;
+const description = 'Desktop-only проверка стабильной ленты/CTA, семантических media roles, единого OCR-board и многофотографийного portrait viewer. Mobile не изменён.';
 const examples = [
   ['editorial-photo', 'Editorial · закреплённый hero', 'Верх фотографии защищён от кропа; нижняя часть раскрывается внутренним параллаксом.'],
-  ['editorial-photo-continuous', 'Continuous · 3:2 без кропа', 'Спектакль «Гараж»: полная естественная высота фотографии и верхняя правая адаптивная лента.'],
+  ['editorial-photo-continuous', 'Continuous · rail + CTA admission', 'Спектакль «Гараж»: лента остаётся сверху, CTA ждёт информационный блок и только затем присоединяется снизу.'],
   ['editorial-photo-continuous-wide', 'Continuous · широкий 2,36:1', 'Pianissimo: естественная высота сильной широкой фотографии без ненужного увеличения.'],
   ['editorial-photo-continuous-near-square', 'Continuous · 4:3 bottom-safe', '«Город в персональном зеркале»: не более 20% кропа только сверху, нижняя граница сохранена.'],
-  ['editorial-ocr-companion', 'OCR companion A · отдельная лента', 'Афиша точного соотношения сторон под CTA; превью остаются в верхней правой зоне hero.'],
-  ['editorial-ocr-companion-integrated', 'OCR companion B · единый media-board', 'Та же крупная афиша и соседняя компактная сетка фотографий без служебных подписей.'],
+  ['editorial-ocr-companion', 'Service info · не афиша', '«Услуги в кемпинге» остаются полезным документом и больше не получают ложную метку «Афиша».'],
+  ['editorial-ocr-companion-integrated', 'OCR companion B1 · сразу', 'Настоящая квадратная афиша и горизонтальные фотографии образуют один графитовый media-board сразу под CTA.'],
+  ['editorial-ocr-companion-arrival', 'OCR companion B2 · приезжает', 'Тот же media-board сначала ниже сгиба, затем поднимается и стыкуется под закреплённым CTA.'],
   ['split-ocr', 'Split · одна OCR-афиша', 'Афиша занимает ровно 50% ширины; лента не появляется для повторного rendition той же картинки.'],
   ['split-portrait', 'Split · одна portrait-композиция', 'Семантически одинаковые варианты не создают ложную галерею.'],
   ['split-low-resolution', 'Split · низкое разрешение', 'Умеренный cover до 20% убирает пустой остаток; настоящие дополнительные изображения остаются в высокой ленте.'],
-  ['split-multi-portrait', 'Split · много вертикальных фото', 'Нажатие на портретное превью открывает height-fit просмотр нескольких фотографий одновременно.'],
+  ['split-multi-portrait', 'Split · много вертикальных фото', 'Нажатие на главный кадр или серию открывает несколько height-fit фотографий одновременно; частичный правый кадр становится первым.'],
   ['split-ocr-with-photos', 'Split · OCR + реальные фото', 'Читаемая главная афиша и дополнительные фотографии под ней с точным переходом в полноэкранный просмотр.'],
 ];
 const relatedExamples = [
   ['related-cover', '01 · Compact cover', 'Самый короткий ряд, но агрессивно кропает OCR. Контрольный рискованный вариант.'],
   ['related-ambient', '02 · Ambient preserve', 'Полная афиша поверх размытого продолжения изображения — без плоских полей и без потери текста.'],
-  ['related-hybrid', '03 · Adaptive hybrid', 'Рекомендуемый: ряд выбирает 4:5, 1:1 или 4:3; фото кропаются по фокусу, OCR полностью сохраняется поверх ambient.'],
+  ['related-hybrid', '03 · Exact documents', 'Рекомендуемый: фотографии допускают cover, но любая OCR-афиша получает собственную естественную пропорцию без обрезания краёв.'],
 ];
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v9>
+  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v10>
     <div class="page-shell desktop-focus__shell">
-      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v9</span></nav>
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v10</span></nav>
 
       <section class="section-card desktop-focus__intro">
         <div class="section-card__inner">

@@ -19,6 +19,20 @@ export interface ImageFocalPoint {
   y: number;
 }
 
+/**
+ * Semantic purpose of an event image. This is authored by the upstream
+ * multimodal/LLM pass; OCR presence alone must never imply that an image is
+ * the event's poster.
+ */
+export type EventImageMediaRole =
+  | 'event_identity_poster'
+  | 'event_photo'
+  | 'attendee_information'
+  | 'program_or_schedule'
+  | 'wayfinding'
+  | 'sponsor_or_brand'
+  | 'unknown_document';
+
 export interface EventImageAsset {
   src: string;
   width: number;
@@ -26,6 +40,7 @@ export interface EventImageAsset {
   alt: string;
   image_text_mode: 'ocr_text' | 'visual_only' | 'unknown';
   image_kind?: 'poster' | 'photo' | 'mixed' | 'fallback';
+  media_role?: EventImageMediaRole;
   ocr_boxes?: ImageBox[];
   face_boxes?: ImageBox[];
   saliency_boxes?: ImageBox[];

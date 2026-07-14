@@ -1,0 +1,59 @@
+task: desktop-event-focus-v10-20260714
+base: origin/feature/event-page-desktop-focus-v9-20260714
+integration_branch: feature/event-page-desktop-focus-v10-20260714
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v10
+scope: desktop-only lab event-page compositions; production and mobile templates are forbidden
+
+requirements:
+  R01: Keep the editorial photo preview rail independent from media parallax and let CTA join below it.
+  R02: Delay CTA upward travel until the rising information slab reaches the CTA vertical level, then preserve sticky/release behavior.
+  R03: Introduce explicit semantic media roles so service-information cards are never presented as event posters.
+  R04: Repair the integrated OCR companion as one graphite visual unit and add a scroll-arrival poster hypothesis as a separate comparison route.
+  R05: Remove thumbnail side fields by sizing preview cells from source aspect ratio without semantic text cropping.
+  R06: Open a desktop multi-portrait fullscreen viewer that displays several height-fitted images and advances by the partially visible right image.
+  R07: Never crop OCR/poster edges in related-event cards; keep mobile and production event routes byte-identical.
+
+lanes:
+  L01_runtime_map:
+    mode: read-only
+    owner: code_mapper
+    effort: medium
+    status: completed
+    requirements: [R01, R02, R06]
+    outputs: exact current DOM/CSS/JS paths, geometry contract, safe change points
+  L02_media_map:
+    mode: read-only
+    owner: explorer
+    effort: high
+    status: completed
+    requirements: [R03, R04, R05, R07]
+    outputs: fixture/source-role map, aspect-ratio evidence, safe rendering rules
+  L03_integration:
+    mode: writable-serial
+    owner: primary_agent
+    effort: high
+    status: completed
+    branch: feature/event-page-desktop-focus-v10-20260714
+    worktree: /home/dev/.codex/worktrees/events-bot-new/event-page-desktop-focus-v10
+    requirements: [R01, R02, R03, R04, R05, R06, R07]
+    files:
+      - site/src/components/lab/DesktopEventCleanPage.astro
+      - site/src/lib/types.ts
+      - site/src/pages/lab/event-desktop/examples/[scenario].astro
+      - site/src/pages/lab/event-desktop/index.astro
+      - site/scripts/check-preview.mjs
+      - docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md
+      - CHANGELOG.md
+  L04_closure:
+    mode: read-only
+    owner: checklist_reviewer
+    effort: high
+    status: completed
+    requirements: [R01, R02, R03, R04, R05, R06, R07]
+    gates: [desktop-playwright, public-preview, gemini-pro-review, forbidden-files-clean, docs, changelog]
+
+integration_order: [L01_runtime_map, L02_media_map, gemini_pro_consultation, L03_integration, L04_closure]
+forbidden_paths:
+  - site/src/layouts/EventLayout.astro
+  - site/src/pages/sobytiya/
+  - site/src/components/EventCard.astro

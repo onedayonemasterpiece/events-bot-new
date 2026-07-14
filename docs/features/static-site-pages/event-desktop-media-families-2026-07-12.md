@@ -2,7 +2,7 @@
 
 Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
 
-Current clean review target: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Current clean review target: <https://kenigevents.ru/preview-20260714t-desktop-focus-v10/lab/event-desktop/>. Preserved v9 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -444,3 +444,58 @@ Antigravity **Gemini 3.1 Pro (High)** completed the pre-design review (`exit=0`,
 The public build `preview-20260714t-desktop-focus-v9` passed the final Playwright matrix for all ten routes at `1536×864`, `1440×900` and `1920×1080`: HTTP `200`, no horizontal overflow, `>=44px` utility targets, `>=8px` action gaps, no actual nested companion scrollbar, no forbidden companion copy, exact poster ratio, an unclipped Split admission row, and a near-square Editorial crop of `19.97%` with `0px` lower-edge mismatch. The multi-portrait partial-frame promotion and selected-source fullscreen opening both passed. A closure audit caught that the runtime-created `+N` target had missed the one-time gallery bootstrap; after pre-hydrating that button, public interaction checks opened exact first-hidden indexes `4` for Continuous Editorial and `5` for OCR A. The corrected crop probe reads `data-lab-cover-crop`: related event `5382` uses document safe-cover at `10.69%`, while the taller `5783` poster measures `21.58%` and correctly falls back to ambient contain. At `390×844` the desktop lab root remained `display:none` with a zero rectangle and zero overflow; the production mobile implementation was not changed.
 
 Gemini **3.1 Pro (High)** then inspected and scrolled the public routes at the same three desktop viewport families and returned **SHIP** with no release blocker. It selected **OCR Companion B — integrated poster plus adjacent previews** over the separate-rail A variant because B forms one coherent media cluster, preserves more useful poster area and removes the visual split between navigation and poster. Continuous Editorial was accepted as the priority family across exact-ratio, wide and bounded near-square framing. After the `+N` repair, a targeted second Pro High gate accepted both exact-index interactions and the corrected hybrid-crop evidence and again returned **SHIP**; provenance records Antigravity `Gemini 3.1 Pro (High)`, `exit_status=0` and empty stderr for `2026-07-14T15:18:15Z–15:18:39Z`. The separate OCR A route remains only as a preserved comparison, not the recommended product direction. Final prompts, responses, provenance, screenshots and Playwright JSON remain in ignored `artifacts/codex/desktop-event-focus-v9-20260714/`.
+
+## Desktop focus v10: scroll admission and semantic media roles
+
+V10 is still a noindex **desktop-only** laboratory. Its styles and runtime are gated by `min-width:1024px`; the production event route, accepted mobile hero, mobile decision block and production event cards are outside the diff.
+
+### Continuous Editorial side-stack motion
+
+The «Garage» thumbnail rail is no longer attached to the parallax image. It has a stable top anchor under the sticky header and remains there while the event-information slab rises. The CTA follows an explicit four-phase motion contract rather than native sticky behavior:
+
+1. `hold`: the CTA remains at its initial vertical position while the information slab starts moving;
+2. `join`: when the information slab reaches the CTA top, both continue upward at the same visual rate;
+3. `docked`: the CTA stops `12px` below the stable thumbnail rail;
+4. `release`: before `Смотрите дальше`, the complete rail/CTA stack leaves with its containing section and cannot overlap the continuation feed.
+
+Runtime diagnostics expose `data-cta-phase` and the current travel distance for Playwright. The motion is derived from measured rail, CTA, content and related-section geometry; fixed timing constants do not decide the admission point.
+The above-the-fold rail images load eagerly and own a lightweight compositor layer so decoded remote sources cannot leave visually empty cells while the stable rail is docked.
+
+### Media role contract: OCR does not mean poster
+
+`EventImageAsset` now accepts an explicit semantic `media_role`:
+
+- `event_identity_poster`;
+- `event_photo`;
+- `attendee_information`;
+- `program_or_schedule`;
+- `wayfinding`;
+- `sponsor_or_brand`;
+- `unknown_document`.
+
+The role is an upstream multimodal/LLM decision. OCR is only evidence that an image contains text; deterministic OCR/keyword rules must not promote a document to event poster. Unknown OCR documents fail closed to `unknown_document`. UI copy such as `Афиша` is allowed only for `event_identity_poster`; attendee cards use `Полезная информация`, schedules use `Расписание`, maps use `Карта`, and unknown documents receive no false poster badge.
+
+The real event `6323` is the regression fixture: sources `0` and `1` are camping services/prices and are classified as `attendee_information`; sources `2–11` are event photos. The true-poster comparison uses event `4671`, where source `0` is `event_identity_poster` and the remaining selected media are event photos. These lab overrides model the required exporter payload; production classification must be supplied by the LLM-first media-enrichment stage rather than copied as event-id conditions.
+
+### Integrated poster board comparison
+
+The poster and additional images share one graphite surface, one outline language and one fullscreen gallery. The poster remains fully contained at its natural ratio. Adjacent landscape images retain landscape geometry instead of being forced into portrait cells.
+
+- **B1 / immediate:** the board is visible below CTA immediately;
+- **B2 / arrival:** only CTA is initially visible; the same board approaches during reading and docks `12px` below CTA.
+
+Both variants are retained because B1 improves immediate media discoverability while B2 keeps the first viewport quieter. No service labels such as `Оригинальная афиша` or `Открыть полностью` are rendered.
+
+### Thumbnail and fullscreen rules
+
+- Split thumbnail width follows the source ratio; visual photos use edge-to-edge cover, while semantic documents use contain. The low-resolution text-image specimen therefore has no artificial side fields created by a fixed thumbnail bucket.
+- A multi-portrait event opens the height-fitted multi-image viewer from the hero as well as from lower media affordances. Several portrait images are visible in one fullscreen viewport. `Next` promotes the partially visible right-edge image to the left content edge, reducing the number of navigation actions needed to scan the set.
+- `Смотрите дальше` uses `object-fit:contain` for semantic poster/document media and records measured crop as exactly `0`; a row may retain a larger normalization shell, but every source edge remains visible. Different document heights or inner breathing room are accepted as the honest trade-off. Only ordinary `event_photo` cards may use normalized cover.
+
+### Gemini design gate and acceptance
+
+Antigravity **Gemini 3.1 Pro (High)** completed the pre-design consultation (`exit=0`, no Flash/Lite substitution). It supported the rail/CTA state machine, explicit media roles, multi-portrait viewport, aspect-aware thumbnails and zero-crop document policy. It recommended retaining both immediate and arriving poster-board variants because their discoverability/density trade-off depends on viewport height. Prompt, raw response and provenance are stored under ignored `artifacts/codex/desktop-event-focus-v10-20260714/gemini/`.
+
+Local and public Chromium acceptance at `1536×864`, `1440×900` and `1920×1080` verifies a rail top of `96px` throughout hold/join/dock, CTA/content top equality in `join`, a `12px` dock gap, bounded release before related content, no horizontal overflow, no console errors, correct `attendee_information` copy, exact low-resolution thumbnail geometry, portrait partial-frame promotion and `0.0000` crop for all document related cards. The final public pass also confirms that every visible Garage rail cell paints after the eager/compositor repair. At `390×844` the desktop laboratory remains `display:none`, emits no desktop motion state and does not alter mobile behavior.
+
+Gemini **3.1 Pro (High)** then opened, scrolled and interacted with the published v10 routes and returned **SHIP** with no blocker/high/medium issue. All seven acceptance groups passed; the only low-severity watch item is possible browser-specific sticky jitter under unusually aggressive Safari trackpad scrolling. The Pro gate selected **B2 / scroll-arrival** as the product default because it keeps the first viewport focused on hero and CTA, then introduces the poster when reading begins; B1 remains the explicit comparison route. Prompt, response, provenance (`exit_status=0`, empty stderr), public screenshots and final Playwright output remain in ignored `artifacts/codex/desktop-event-focus-v10-20260714/`.

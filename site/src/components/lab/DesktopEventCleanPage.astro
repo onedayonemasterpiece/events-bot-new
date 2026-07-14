@@ -3,7 +3,7 @@ import Icon from '../Icon.astro';
 import EventCard from '../EventCard.astro';
 import EventTokenMedallions from '../EventTokenMedallions.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
-import type { EventImageAsset, PreviewEvent } from '../../lib/types';
+import type { EventImageAsset, EventImageMediaRole, PreviewEvent } from '../../lib/types';
 import {
   displayDate,
   displayDateTime,
@@ -16,7 +16,7 @@ type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
 type EditorialMotion = 'pinned' | 'continuous';
 type EditorialCropPolicy = 'exact' | 'bottom-safe';
-type OcrCompanionLayout = 'separate' | 'integrated';
+type OcrCompanionLayout = 'separate' | 'integrated' | 'arrival';
 type SplitMediaFit = 'natural' | 'viewport-cover';
 type RelatedMediaTreatment = 'cover' | 'ambient' | 'hybrid';
 
@@ -43,6 +43,8 @@ interface Props {
   splitPortraitViewer?: boolean;
   splitPortraitSourceIndexes?: number[];
   relatedMediaTreatment?: RelatedMediaTreatment;
+  mediaRoleOverrides?: Record<number, EventImageMediaRole>;
+  mediaDimensionOverrides?: Record<number, { width: number; height: number }>;
 }
 
 type GalleryImage = {
@@ -53,6 +55,7 @@ type GalleryImage = {
   height?: number;
   position?: string;
   sourceIndex?: number;
+  media_role: EventImageMediaRole;
 };
 
 const {
@@ -78,6 +81,8 @@ const {
   splitPortraitViewer = false,
   splitPortraitSourceIndexes = [],
   relatedMediaTreatment = 'hybrid',
+  mediaRoleOverrides = {},
+  mediaDimensionOverrides = {},
 } = Astro.props;
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
 const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
@@ -93,6 +98,25 @@ const selectedMediaMode = forcedOcrSourceIndexes.has(heroImageIndex)
   ? 'ocr_text'
   : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
 const selectedHeroIsOcr = selectedMediaMode !== 'visual_only';
+const fallbackMediaRole = (mode: EventImageAsset['image_text_mode']): EventImageMediaRole => mode === 'visual_only' ? 'event_photo' : 'unknown_document';
+const mediaRoleLabel = (role: EventImageMediaRole) => ({
+  event_identity_poster: 'Афиша',
+  attendee_information: 'Полезная информация',
+  program_or_schedule: 'Расписание',
+  wayfinding: 'Карта',
+  sponsor_or_brand: 'Партнёры',
+  event_photo: '',
+  unknown_document: '',
+}[role]);
+const mediaRoleAction = (role: EventImageMediaRole) => ({
+  event_identity_poster: 'Открыть афишу',
+  attendee_information: 'Открыть полезную информацию',
+  program_or_schedule: 'Открыть расписание',
+  wayfinding: 'Открыть карту',
+  sponsor_or_brand: 'Открыть информацию о партнёрах',
+  event_photo: 'Открыть фото',
+  unknown_document: 'Открыть изображение',
+}[role]);
 
 const galleryImages = (() => {
   const out: GalleryImage[] = [];
@@ -101,14 +125,17 @@ const galleryImages = (() => {
     const src = eventImageUrl(asset?.src) || asset?.src || '';
     if (!src || seen.has(src) || src.includes('files.catbox.moe')) return;
     seen.add(src);
+    const imageTextMode = sourceIndex !== undefined && forcedOcrSourceIndexes.has(sourceIndex)
+      ? 'ocr_text'
+      : asset?.image_text_mode || fallbackMode || 'unknown';
+    const dimensions = sourceIndex === undefined ? undefined : mediaDimensionOverrides[sourceIndex];
     out.push({
       src,
       alt: asset?.alt || heroAlt,
-      image_text_mode: sourceIndex !== undefined && forcedOcrSourceIndexes.has(sourceIndex)
-        ? 'ocr_text'
-        : asset?.image_text_mode || fallbackMode || 'unknown',
-      width: asset?.width,
-      height: asset?.height,
+      image_text_mode: imageTextMode,
+      media_role: (sourceIndex === undefined ? undefined : mediaRoleOverrides[sourceIndex]) || asset?.media_role || fallbackMediaRole(imageTextMode),
+      width: dimensions?.width || asset?.width,
+      height: dimensions?.height || asset?.height,
       position: asset?.recommended_object_position,
       sourceIndex,
     });
@@ -117,7 +144,7 @@ const galleryImages = (() => {
   else if (event.image_url) {
     const src = eventImageUrl(event.image_url) || event.image_url;
     seen.add(src);
-    out.push({ src, alt: heroAlt, image_text_mode: event.image_text_mode, width: preferredWidth, height: preferredHeight });
+    out.push({ src, alt: heroAlt, image_text_mode: event.image_text_mode, media_role: fallbackMediaRole(event.image_text_mode), width: preferredWidth, height: preferredHeight });
   }
   rawAssets.forEach((asset, index) => add(asset, event.image_text_mode, index));
   return out.slice(0, 12);
@@ -130,7 +157,7 @@ const indexedGalleryImages = galleryImages.map((image, galleryIndex) => ({ image
 const ocrCompanion = ocrCompanionImageIndex === undefined
   ? undefined
   : indexedGalleryImages.find(({ image }) => image.sourceIndex === ocrCompanionImageIndex);
-const editorialRailCandidates = indexedGalleryImages.filter(({ galleryIndex }) => galleryIndex !== ocrCompanion?.galleryIndex);
+const editorialRailCandidates = indexedGalleryImages.filter(({ image, galleryIndex }) => galleryIndex !== ocrCompanion?.galleryIndex && !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
 const editorialRailImages = editorialRailCandidates;
 // Gallery keeps every source rendition so its source indexes remain stable. The compact rail,
 // however, only advertises distinct media identities supplied by the upstream/lab contract.
@@ -141,14 +168,15 @@ const portraitSourceIndexSet = new Set(splitPortraitSourceIndexes);
 const splitPortraitImages = indexedGalleryImages.filter(({ image }) => portraitSourceIndexSet.has(image.sourceIndex ?? -1));
 const integratedCompanionPreviews = editorialRailCandidates
   .filter(({ galleryIndex }) => galleryIndex !== 0)
-  .slice(0, 5);
-const integratedCompanionRemaining = Math.max(0, editorialRailCandidates.length - integratedCompanionPreviews.length);
+  .slice(0, 3);
+const integratedCompanionRemaining = Math.max(0, editorialRailCandidates.filter(({ galleryIndex }) => galleryIndex !== 0).length - integratedCompanionPreviews.length);
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
   if (imageRatio > 1.18) return 'landscape';
   return 'square';
 };
+const railAspectValue = (image: GalleryImage) => Math.min(2.2, Math.max(.38, image.width && image.height ? image.width / image.height : 1));
 const usesLongFlow = true;
 
 const dateLabel = displayDate(event);
@@ -193,7 +221,15 @@ const descriptionHtml = (event.description_html || '')
         {candidate === 'split' ? (
           <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport data-split-media-fit={splitMediaFit}>
             <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.36">
-              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть афишу события «${event.title}» на весь экран`}>
+              <button
+                type="button"
+                class="desktop-prototype__media-opener"
+                data-portrait-strip-open={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? '' : undefined}
+                data-portrait-strip-start={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? heroImageIndex : undefined}
+                data-hero-gallery-open={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? undefined : galleryId}
+                data-hero-gallery-index="0"
+                aria-label={splitPortraitViewer && portraitSourceIndexSet.has(heroImageIndex) ? 'Открыть портретную серию' : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
+              >
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
               {splitRailImages.length > 0 && (
@@ -202,20 +238,31 @@ const descriptionHtml = (event.description_html || '')
                     <button
                       type="button"
                       data-rail-aspect={railAspectBucket(image)}
+                      style={`--rail-ratio:${railAspectValue(image).toFixed(4)};`}
                       data-image-text-mode={image.image_text_mode}
+                      data-media-role={image.media_role}
                       data-source-index={image.sourceIndex}
                       data-portrait-strip-open={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? '' : undefined}
                       data-portrait-strip-start={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? image.sourceIndex : undefined}
                       data-hero-gallery-open={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? undefined : galleryId}
                       data-hero-gallery-index={galleryIndex}
-                      aria-label={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? 'Открыть портретную серию' : image.image_text_mode === 'ocr_text' ? `Открыть афишу, изображение ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1}`}
+                      aria-label={splitPortraitViewer && portraitSourceIndexSet.has(image.sourceIndex ?? -1) ? 'Открыть портретную серию' : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`}
                     >
                       <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
-                      {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
+                      {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
                     </button>
                   ))}
                   {splitRailRemainingCount > 0 && (
-                    <button type="button" class="desktop-prototype__media-rail-more" data-remaining-count={splitRailRemainingCount} data-hero-gallery-open={galleryId} data-hero-gallery-index={splitRailImages.at(-1)!.galleryIndex + 1} aria-label={`Открыть ещё ${splitRailRemainingCount} фото`}>
+                    <button
+                      type="button"
+                      class="desktop-prototype__media-rail-more"
+                      data-remaining-count={splitRailRemainingCount}
+                      data-portrait-strip-open={splitPortraitViewer ? '' : undefined}
+                      data-portrait-strip-start={splitPortraitViewer ? splitPortraitImages.find(({ image }) => !splitRailImages.some((railImage) => railImage.image.sourceIndex === image.sourceIndex))?.image.sourceIndex : undefined}
+                      data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
+                      data-hero-gallery-index={splitRailImages.at(-1)!.galleryIndex + 1}
+                      aria-label={splitPortraitViewer ? `Открыть портретную серию, ещё ${splitRailRemainingCount} фото` : `Открыть ещё ${splitRailRemainingCount} фото`}
+                    >
                       <strong>+{splitRailRemainingCount}</strong><span>фото</span>
                     </button>
                   )}
@@ -230,26 +277,35 @@ const descriptionHtml = (event.description_html || '')
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
-            {photoCount > 0 && !(editorialRail && editorialRailImages.length > 1) && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
+            {photoCount > 0 && !(editorialRail && editorialRailImages.length > 1) && ocrCompanionLayout !== 'integrated' && ocrCompanionLayout !== 'arrival' && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
           </figure>
         )}
 
-        {candidate === 'editorial' && editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'integrated' && (
-          <div class="desktop-prototype__media-rail desktop-prototype__media-rail--hero" data-hero-rail data-responsive-rail aria-label="Выбрать изображение">
-            {editorialRailImages.map(({ image, galleryIndex }, index) => (
-              <button type="button" class:list={[index === 0 && 'is-current']} data-responsive-rail-item data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={image.image_text_mode === 'ocr_text' ? `Открыть афишу в полноэкранной галерее, фото ${galleryIndex + 1}` : `Открыть фото ${galleryIndex + 1} в полноэкранной галерее`}>
-                <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
-                {image.image_text_mode === 'ocr_text' && <span>Афиша</span>}
-              </button>
-            ))}
-            <button type="button" class="desktop-prototype__media-rail-more" data-responsive-rail-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
-              <strong data-responsive-rail-count></strong><span>фото</span>
-            </button>
-          </div>
-        )}
-
         {candidate === 'editorial' && (
-          <aside class="desktop-editorial-side" data-editorial-side>
+          <aside class="desktop-editorial-side" data-editorial-side data-companion-arrival={ocrCompanionLayout === 'arrival' ? 'true' : undefined}>
+            {editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'integrated' && ocrCompanionLayout !== 'arrival' && (
+              <div class="desktop-prototype__media-rail desktop-prototype__media-rail--hero" data-hero-rail data-responsive-rail aria-label="Выбрать изображение">
+                {editorialRailImages.map(({ image, galleryIndex }, index) => (
+                  <button
+                    type="button"
+                    class:list={[index === 0 && 'is-current']}
+                    data-responsive-rail-item
+                    data-image-text-mode={image.image_text_mode}
+                    data-media-role={image.media_role}
+                    data-source-index={image.sourceIndex}
+                    data-hero-gallery-open={galleryId}
+                    data-hero-gallery-index={galleryIndex}
+                    aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} в полноэкранной галерее`}
+                  >
+                    <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="eager" decoding="async" />
+                    {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
+                  </button>
+                ))}
+                <button type="button" class="desktop-prototype__media-rail-more" data-responsive-rail-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
+                  <strong data-responsive-rail-count></strong><span>фото</span>
+                </button>
+              </div>
+            )}
             <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
             {ocrCompanion && ocrCompanionLayout === 'separate' && (
               <button
@@ -257,27 +313,29 @@ const descriptionHtml = (event.description_html || '')
                 class="desktop-editorial-companion"
                 style={`--ocr-ratio:${(ocrCompanion.image.width || 800) / (ocrCompanion.image.height || 1200)};`}
                 data-editorial-ocr-companion
+                data-media-role={ocrCompanion.image.media_role}
                 data-source-index={ocrCompanion.image.sourceIndex}
                 data-hero-gallery-open={galleryId}
                 data-hero-gallery-index={ocrCompanion.galleryIndex}
-                aria-label="Открыть афишу события на весь экран"
+                aria-label={`${mediaRoleAction(ocrCompanion.image.media_role)} события на весь экран`}
               >
                 <span class="desktop-editorial-companion__image">
                   <img src={ocrCompanion.image.src} alt="" width={ocrCompanion.image.width || 800} height={ocrCompanion.image.height || 1200} loading="lazy" decoding="async" />
                 </span>
               </button>
             )}
-            {ocrCompanion && ocrCompanionLayout === 'integrated' && (
-              <section class="desktop-editorial-companion-board" data-editorial-companion-board aria-label="Афиша и фотографии события">
+            {ocrCompanion && (ocrCompanionLayout === 'integrated' || ocrCompanionLayout === 'arrival') && (
+              <section class="desktop-editorial-companion-board" data-editorial-companion-board data-companion-board-mode={ocrCompanionLayout} aria-label="Афиша и фотографии события">
                 <button
                   type="button"
                   class="desktop-editorial-companion desktop-editorial-companion--board"
                   style={`--ocr-ratio:${(ocrCompanion.image.width || 800) / (ocrCompanion.image.height || 1200)};`}
                   data-editorial-ocr-companion
+                  data-media-role={ocrCompanion.image.media_role}
                   data-source-index={ocrCompanion.image.sourceIndex}
                   data-hero-gallery-open={galleryId}
                   data-hero-gallery-index={ocrCompanion.galleryIndex}
-                  aria-label="Открыть афишу события на весь экран"
+                  aria-label={`${mediaRoleAction(ocrCompanion.image.media_role)} события на весь экран`}
                 >
                   <span class="desktop-editorial-companion__image">
                     <img src={ocrCompanion.image.src} alt="" width={ocrCompanion.image.width || 800} height={ocrCompanion.image.height || 1200} loading="lazy" decoding="async" />
@@ -285,7 +343,7 @@ const descriptionHtml = (event.description_html || '')
                 </button>
                 <div class="desktop-editorial-companion-board__previews">
                   {integratedCompanionPreviews.map(({ image, galleryIndex }) => (
-                    <button type="button" data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`Открыть фото ${galleryIndex + 1} на весь экран`}>
+                    <button type="button" style={`--preview-ratio:${railAspectValue(image).toFixed(4)};`} data-media-role={image.media_role} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} на весь экран`}>
                       <img src={image.src} alt="" width={image.width || 160} height={image.height || 120} loading="lazy" decoding="async" />
                     </button>
                   ))}
@@ -300,7 +358,7 @@ const descriptionHtml = (event.description_html || '')
           </aside>
         )}
 
-        <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined}>
+        <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
           <div class="desktop-prototype__info" data-title-panel>
             <p class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
@@ -395,7 +453,7 @@ const descriptionHtml = (event.description_html || '')
   </section>
 
   {splitPortraitViewer && splitPortraitImages.length > 1 && (
-    <div class="desktop-portrait-viewer" data-portrait-viewer role="dialog" aria-modal="true" aria-label={`Портретная серия: ${event.title}`} hidden>
+    <div class="desktop-portrait-viewer" data-portrait-viewer role="dialog" aria-modal="true" aria-hidden="true" aria-label={`Портретная серия: ${event.title}`} hidden>
       <div class="desktop-portrait-viewer__topbar">
         <strong>Фото события</strong>
         <button type="button" data-portrait-viewer-close aria-label="Закрыть портретную серию">×</button>
@@ -507,6 +565,55 @@ const descriptionHtml = (event.description_html || '')
         new ResizeObserver(() => layoutResponsiveRail(rail)).observe(rail);
       });
 
+      const editorialSide = cleanRoot.querySelector<HTMLElement>('[data-editorial-side]');
+      const editorialRail = editorialSide?.querySelector<HTMLElement>('[data-hero-rail]');
+      const editorialAction = editorialSide?.querySelector<HTMLElement>(':scope > .desktop-prototype__action');
+      const editorialContent = cleanRoot.querySelector<HTMLElement>('[data-editorial-content-flow]');
+      const companionBoard = editorialSide?.querySelector<HTMLElement>('[data-editorial-companion-board]');
+      let editorialSideGeometry:{ holdTop:number; dockTop:number; maxTravel:number; stickyTop:number } | null = null;
+      let editorialSideLayoutFrame = 0;
+      const updateEditorialSideMotion = () => {
+        if (!editorialSide || !editorialAction) return;
+        if (editorialSide.dataset.companionArrival === 'true') {
+          const stickyTop = 97;
+          const companionTop = stickyTop + editorialAction.offsetHeight + 12;
+          editorialSide.style.setProperty('--editorial-companion-stick-top', `${companionTop}px`);
+          if (companionBoard) companionBoard.dataset.companionPhase = companionBoard.getBoundingClientRect().top <= companionTop + 1 ? 'docked' : 'approaching';
+          return;
+        }
+        if (!editorialSideGeometry || !editorialRail || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
+        const informationTop = editorialContent.getBoundingClientRect().top;
+        const travel = clamp(editorialSideGeometry.holdTop - informationTop, 0, editorialSideGeometry.maxTravel);
+        editorialAction.style.transform = `translate3d(0,${(-travel).toFixed(2)}px,0)`;
+        const released = editorialSide.getBoundingClientRect().top < editorialSideGeometry.stickyTop - 2;
+        const phase = released ? 'release' : travel <= .5 ? 'hold' : travel >= editorialSideGeometry.maxTravel - .5 ? 'docked' : 'join';
+        editorialSide.dataset.ctaPhase = phase;
+        editorialSide.dataset.ctaTravel = travel.toFixed(2);
+        editorialSide.dataset.ctaHoldTop = editorialSideGeometry.holdTop.toFixed(2);
+        editorialSide.dataset.ctaDockTop = editorialSideGeometry.dockTop.toFixed(2);
+      };
+      const layoutEditorialSideMotion = () => {
+        editorialSideLayoutFrame = 0;
+        if (!editorialSide || !editorialAction) return;
+        if (editorialSide.dataset.companionArrival === 'true') {
+          updateEditorialSideMotion();
+          return;
+        }
+        if (!editorialRail || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
+        editorialAction.style.removeProperty('transform');
+        const holdTop = editorialAction.getBoundingClientRect().top;
+        const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || 97;
+        const dockTop = editorialRail.getBoundingClientRect().bottom + 12;
+        editorialSideGeometry = { holdTop, dockTop, maxTravel:Math.max(0, holdTop - dockTop), stickyTop };
+        updateEditorialSideMotion();
+      };
+      const scheduleEditorialSideLayout = () => {
+        if (editorialSideLayoutFrame) return;
+        editorialSideLayoutFrame = window.requestAnimationFrame(layoutEditorialSideMotion);
+      };
+      if (editorialSide) new ResizeObserver(scheduleEditorialSideLayout).observe(editorialSide);
+      scheduleEditorialSideLayout();
+
       const measureEditorialCrop = () => {
         if (cleanRoot.dataset.desktopFamily !== 'editorial' || !mediaFrame || !heroImage) return;
         const frameHeight = mediaFrame.clientHeight;
@@ -524,6 +631,7 @@ const descriptionHtml = (event.description_html || '')
 
       const portraitViewer = cleanRoot.querySelector<HTMLElement>('[data-portrait-viewer]');
       const portraitViewport = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-viewport]');
+      const portraitTrack = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-track]');
       const portraitItems = Array.from(portraitViewer?.querySelectorAll<HTMLButtonElement>('[data-portrait-viewer-item]') || []);
       const portraitCounter = portraitViewer?.querySelector<HTMLElement>('[data-portrait-viewer-counter]');
       let portraitReturnFocus:HTMLElement | null = null;
@@ -542,12 +650,14 @@ const descriptionHtml = (event.description_html || '')
       };
       const scrollPortraitTo = (item:HTMLElement, behavior:ScrollBehavior='smooth') => {
         if (!portraitViewport) return;
-        portraitViewport.scrollTo({ left:item.offsetLeft, behavior });
+        const contentInset = portraitTrack ? Number.parseFloat(getComputedStyle(portraitTrack).paddingLeft) || 0 : 0;
+        portraitViewport.scrollTo({ left:Math.max(0, item.offsetLeft - contentInset), behavior });
         window.setTimeout(updatePortraitViewer, behavior === 'smooth' ? 360 : 0);
       };
       const closePortraitViewer = (restoreFocus=true) => {
         if (!portraitViewer || portraitViewer.hidden) return;
         portraitViewer.hidden = true;
+        portraitViewer.setAttribute('aria-hidden', 'true');
         document.body.style.removeProperty('overflow');
         if (restoreFocus) portraitReturnFocus?.focus();
       };
@@ -556,6 +666,7 @@ const descriptionHtml = (event.description_html || '')
           if (!portraitViewer || !portraitViewport) return;
           portraitReturnFocus = opener;
           portraitViewer.hidden = false;
+          portraitViewer.setAttribute('aria-hidden', 'false');
           document.body.style.overflow = 'hidden';
           const requestedSource = opener.dataset.portraitStripStart;
           const requested = portraitItems.find((item) => item.dataset.sourceIndex === requestedSource) || portraitItems[0];
@@ -761,6 +872,7 @@ const descriptionHtml = (event.description_html || '')
           stage.dataset.mediaProgress = progress.toFixed(4);
           stage.dataset.mediaTravel = travel.toFixed(2);
         });
+        updateEditorialSideMotion();
       };
       const scheduleMotion = () => {
         if (frame) return;
@@ -769,7 +881,10 @@ const descriptionHtml = (event.description_html || '')
       updateParallax();
       scheduleLayout();
       window.addEventListener('scroll', scheduleMotion, { passive:true });
-      window.addEventListener('resize', scheduleLayout, { passive:true });
+      window.addEventListener('resize', () => {
+        scheduleLayout();
+        scheduleEditorialSideLayout();
+      }, { passive:true });
       reducedMotion.addEventListener?.('change', scheduleMotion);
       new ResizeObserver(scheduleLayout).observe(cleanRoot);
 
@@ -874,23 +989,20 @@ const descriptionHtml = (event.description_html || '')
             mode = 'document-pending-contained';
           }
           row.forEach((card) => {
-            card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
-            card.dataset.labRowMedia = mode;
-            card.dataset.labRowIndex = String(rowIndex);
-            const shell = card.querySelector<HTMLElement>('.event-card__media-shell');
             const image = card.querySelector<HTMLImageElement>('.event-card__media');
             const imageRatio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
-            const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
             const isDocument = card.dataset.labMediaKind === 'document';
+            const cardRatio = isDocument ? imageRatio : targetRatio;
+            card.style.setProperty('--lab-row-media-ratio', cardRatio.toFixed(5));
+            card.dataset.labRowMedia = isDocument ? 'document-natural-exact' : mode;
+            card.dataset.labRowIndex = String(rowIndex);
+            const shell = card.querySelector<HTMLElement>('.event-card__media-shell');
+            const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
             let cardTreatment = 'visual-cover';
-            if (isDocument) {
-              if (relatedMediaTreatment === 'ambient') cardTreatment = 'ambient';
-              else if (relatedMediaTreatment === 'cover') cardTreatment = 'document-cover';
-              else cardTreatment = coverCrop <= .12 ? 'document-safe-cover' : 'ambient';
-            }
+            if (isDocument) cardTreatment = 'document-natural';
             card.dataset.labMediaTreatment = cardTreatment;
-            card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
-            card.dataset.labRowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
+            card.dataset.labCoverCrop = isDocument ? '0.0000' : Math.max(0, coverCrop).toFixed(4);
+            card.dataset.labRowWorstCrop = isDocument ? '0.0000' : Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
             if (shell && image?.currentSrc) shell.style.setProperty('--lab-ambient-image', `url(${JSON.stringify(image.currentSrc)})`);
           });
         });
@@ -1536,6 +1648,133 @@ const descriptionHtml = (event.description_html || '')
       font-size:.85rem;
       font-variant-numeric:tabular-nums;
     }
+
+    /* Desktop focus v10: stable rail/CTA admission, semantic media and exact documents. */
+    .desktop-clean-event--editorial .desktop-editorial-side > .desktop-prototype__media-rail--hero {
+      position:relative;
+      inset:auto;
+      z-index:2;
+      order:1;
+      width:100%;
+      height:68px;
+      display:grid;
+      grid-template-columns:repeat(var(--rail-columns,6),minmax(0,1fr));
+      gap:8px;
+      padding:8px;
+      overflow:hidden;
+      border-radius:16px;
+      background:rgba(31,27,24,.9);
+      box-shadow:0 12px 28px rgba(22,17,14,.2);
+    }
+    .desktop-clean-event--editorial .desktop-editorial-side > .desktop-prototype__media-rail--hero button {
+      width:auto;
+      min-width:0;
+      max-width:none;
+      height:52px;
+    }
+    .desktop-clean-event--editorial .desktop-editorial-side > .desktop-prototype__media-rail--hero img {
+      transform:translate3d(0,0,0);
+      backface-visibility:hidden;
+    }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side {
+      position:sticky;
+      top:96px;
+      margin-top:23px;
+      grid-template-rows:auto auto;
+      align-content:start;
+    }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side :global(.desktop-prototype__action) {
+      order:2;
+      margin-top:max(12px,calc(clamp(390px,57svh,620px) - 91px));
+      transform:translate3d(0,0,0);
+      transition:none;
+      will-change:transform;
+    }
+
+    .desktop-editorial-companion-board {
+      box-sizing:border-box;
+      height:min(49svh,432px);
+      grid-template-columns:minmax(0,58%) minmax(0,42%);
+      grid-template-rows:minmax(0,1fr);
+      gap:10px;
+      padding:10px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:18px;
+      background:#292521;
+      box-shadow:0 16px 34px rgba(31,23,18,.25);
+    }
+    .desktop-editorial-companion--board {
+      width:100%;
+      height:auto;
+      min-height:0;
+      max-height:100%;
+      order:0;
+      grid-column:1;
+      grid-row:1;
+      align-self:center;
+      justify-self:stretch;
+      aspect-ratio:var(--ocr-ratio);
+      border-radius:13px;
+      box-shadow:0 0 0 2px #4a4541;
+    }
+    .desktop-editorial-companion-board__previews {
+      grid-column:2;
+      grid-row:1;
+      height:100%;
+      min-height:0;
+      max-height:100%;
+      overflow:hidden;
+      grid-template-columns:minmax(0,1fr);
+      grid-template-rows:repeat(4,minmax(0,1fr));
+      grid-auto-flow:row;
+      gap:8px;
+    }
+    .desktop-editorial-companion-board__previews button { border-color:rgba(255,255,255,.16); }
+    .desktop-editorial-companion-board__previews img { object-fit:cover; object-position:center; }
+    .desktop-editorial-companion-board__previews button:not([data-media-role="event_photo"]) img { object-fit:contain; background:#171412; }
+
+    .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] {
+      position:relative;
+      top:auto;
+      align-self:stretch;
+      align-content:start;
+      min-height:calc(100svh + 420px);
+      margin-top:clamp(98px,12svh,132px);
+      overflow:visible;
+    }
+    .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] :global(.desktop-prototype__action) {
+      position:sticky;
+      top:97px;
+      z-index:4;
+      order:1;
+    }
+    .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] .desktop-editorial-companion-board {
+      position:sticky;
+      top:var(--editorial-companion-stick-top,336px);
+      z-index:3;
+      order:2;
+      margin-top:max(300px,calc(100svh - 390px));
+    }
+
+    .desktop-prototype__media-rail--poster button,
+    .desktop-prototype__media-rail--poster button[data-rail-aspect="portrait"],
+    .desktop-prototype__media-rail--poster button[data-rail-aspect="landscape"] {
+      flex:0 0 clamp(44px,calc(100px * var(--rail-ratio,1)),220px);
+      width:clamp(44px,calc(100px * var(--rail-ratio,1)),220px);
+    }
+    .desktop-prototype__media-rail--poster button[data-media-role="event_photo"] img { object-fit:cover; background:transparent; }
+    .desktop-prototype__media-rail--poster button:not([data-media-role="event_photo"]) img { object-fit:contain; background:#181411; }
+
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-natural"] .event-card__media-shell) { background:transparent; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-natural"] .event-card__media) {
+      object-fit:contain !important;
+      object-position:center top !important;
+      background:transparent !important;
+    }
+
+    .desktop-portrait-viewer__track { box-sizing:border-box; }
+    .desktop-portrait-viewer__item { max-height:100%; }
   }
 
   @media (prefers-reduced-motion:reduce) {
