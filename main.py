@@ -18437,6 +18437,13 @@ async def update_telegraph_event_page(
             if getattr(ev, "source_vk_post_url", None):
                 legacy_urls.append(str(ev.source_vk_post_url).strip())
             for url in [u for u in legacy_urls if u and u.startswith(("http://", "https://"))]:
+                if _event_source_url_is_managed_output(url):
+                    logging.info(
+                        "telegraph: skip managed VK projection in legacy source backfill event_id=%s source_url=%s",
+                        event_id,
+                        url,
+                    )
+                    continue
                 exists = await session.scalar(
                     select(func.count())
                     .select_from(EventSource)

@@ -692,6 +692,17 @@ def test_tg_event_hook_payload_rejects_unrelated_tire_claim() -> None:
     assert main._parse_tg_event_hook_payload(raw, evidence_corpus=source) is None
 
 
+def test_managed_vk_projection_is_not_event_source_evidence(monkeypatch) -> None:
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+
+    assert main._event_source_url_is_managed_output(
+        "https://vk.com/wall-231920894_7008"
+    ) is True
+    assert main._event_source_url_is_managed_output(
+        "https://vk.com/wall-132625599_17342"
+    ) is False
+
+
 def test_build_tg_promo_event_publication_formats_markdown_body():
     event = _event(
         title="🗣️ Творческая встреча",
