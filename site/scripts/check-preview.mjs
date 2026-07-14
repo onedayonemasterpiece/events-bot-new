@@ -227,7 +227,7 @@ for (const [variant, asset] of [
   }
 }
 const wideOFaviconSvg = readFileSync(join(root, 'brand/favicon-tag-wide-o.svg'), 'utf8');
-if (!wideOFaviconSvg.includes('announcements-wide-o') || !wideOFaviconSvg.includes('M32 25') || !wideOFaviconSvg.includes('M32 31') || !wideOFaviconSvg.includes('fill="#fff"') || wideOFaviconSvg.includes('<rect')) throw new Error('Wide-o favicon candidate must keep the glyph in the lower tag field');
+if (!wideOFaviconSvg.includes('announcements-wide-o') || !wideOFaviconSvg.includes('M32 24') || !wideOFaviconSvg.includes('M32 30') || !wideOFaviconSvg.includes('52 36') || !wideOFaviconSvg.includes('fill="#fff"') || wideOFaviconSvg.includes('<rect')) throw new Error('Final wide-o favicon must keep the glyph at the approved lower optical centre y=36');
 const tagOnlyFaviconSvg = readFileSync(join(root, 'brand/favicon-tag-only.svg'), 'utf8');
 if (!tagOnlyFaviconSvg.includes('announcements-tag') || tagOnlyFaviconSvg.includes('announcements-wide-o') || tagOnlyFaviconSvg.includes('fill="#fff"') || tagOnlyFaviconSvg.includes('<rect')) throw new Error('Tag-only favicon candidate must contain only the transparent terracotta tag silhouette');
 const desktopHeaderSource = readFileSync(join(siteDir, 'src/components/lab/DesktopHeaderConcept.astro'), 'utf8');

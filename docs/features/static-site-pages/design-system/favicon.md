@@ -1,47 +1,36 @@
 # Favicon and small tag mark
 
-> **Normative status:** choice round R5. The desktop/mobile full-name lockups remain approved; the final favicon has not yet been selected. Candidate A is temporarily installed as `site/public/favicon.svg` so ordinary preview pages expose a real favicon.
+> **Normative status:** approved R6 and installed as `site/public/favicon.svg`. The selected mark is the transparent terracotta hanging tag with one lower-set white wide-`о`.
 
-## Shared contract
+## Final concept
 
-At browser-tab size the full service name is not recoverable. Both current candidates reduce the identity to a transparent `64×64` SVG with one solid terracotta hanging-tag silhouette:
+At browser-tab size the full service name is not recoverable. The favicon reduces the identity to three durable cues:
+
+1. the solid terracotta hanging-tag silhouette;
+2. a square top attached to the artboard edge and softly rounded bottom;
+3. the expanded white `о` from the «Анонсы» lettering, optically weighted toward the lower field.
+
+The bare-tag alternative was rejected because it became a generic bookmark/colour block at `16px`. The older two-colour `ПК` monogram was rejected because its multiple small shapes produced more noise and weaker continuity with the approved one-colour lockup.
+
+## SVG geometry
 
 | Property | Contract |
 |---|---|
+| Installed file | `site/public/favicon.svg` |
+| Brand master | `site/public/brand/favicon-tag-wide-o.svg` |
 | ViewBox | `0 0 64 64` |
 | Background | transparent; no full-artboard rectangle |
 | Tag | `x=6…58`, top flush at `y=0`, bottom at `y=63` |
-| Top corners | square |
-| Bottom corners | approximately `13px` radius |
+| Top / bottom corners | square / approximately `13px` radius |
 | Tag colour | `#98401f` |
+| Glyph outer | `x=12…52`, `y=24…48`, centre `y=36` |
+| Glyph counter | `x=19…45`, `y=30…42` |
+| Glyph colour | `#ffffff`, compound path with `fill-rule="evenodd"` |
 | Raster dependency | none |
 
-Side transparency prevents the coloured shape from becoming a generic square app tile. The flush top and rounded bottom must continue to read as a hanging tag, not a bookmark floating inside another tile.
+The glyph centre is `4` source units below the artboard centre, so the mark remains visibly bottom-weighted without appearing to fall into the rounded base. The `24…48` vertical bounds map exactly to `6…12px` in a `16px` raster, avoiding an unnecessary fractional vertical shift at the primary browser-tab size. Side transparency keeps the coloured tag from becoming a generic square app tile.
 
-## Candidate A — tag + lower wide-`о`
-
-Files:
-
-- comparison master: `site/public/brand/favicon-tag-wide-o.svg`;
-- temporarily installed copy: `site/public/favicon.svg`.
-
-The white compound `о` spans `x=12…52`, `y=25…49`; its optical centre is `y=37`, deliberately below the artboard centre. The asymmetric free field—more air above, less below—transfers the approved full-size lockup principle instead of vertically centring the glyph. Its counter spans `x=19…45`, `y=31…43` and remains open at `16px`.
-
-**Strength:** this is a service-specific mnemonic tied directly to the wide-`о` lettering in «Анонсы».
-
-**Risk:** the glyph adds detail at the smallest size and depends on careful rasterisation; it must never drift back to geometric centring.
-
-## Candidate B — tag only
-
-File: `site/public/brand/favicon-tag-only.svg`.
-
-This candidate removes the glyph completely and keeps only colour plus silhouette. It is the cleanest transfer of the physical-tag concept and remains especially stable at `16px`.
-
-**Strength:** maximum simplicity, no closed-counter or off-centre-letter problem, exact continuity with the shared tag silhouette.
-
-**Risk:** a plain hanging tag is less ownable and can be read as a generic bookmark/label without the full-name lockup nearby. Recognition therefore depends more heavily on repeated use of `#98401f` and the precise square-top/rounded-bottom geometry.
-
-## Installation and comparison
+## Installation
 
 Every static HTML surface uses the base-aware equivalent of:
 
@@ -49,21 +38,24 @@ Every static HTML surface uses the base-aware equivalent of:
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 ```
 
-Until product selection, `/favicon.svg` mirrors candidate A only as a practical installed preview—not as a final brand decision. Do not silently replace it with candidate B or introduce a third geometry.
-
-Review routes:
-
-- `/lab/design-system/` — side-by-side board at `16/32/64/128px`;
-- `/lab/design-system/favicon/tag-o/` — candidate A actually installed in the browser tab;
-- `/lab/design-system/favicon/tag-only/` — candidate B actually installed in the browser tab.
+Do not replace the final master with the bare tag, restore the old monogram, vertically centre the `о`, or introduce a cream backing plate, outline or raster fallback.
 
 ## Acceptance
 
-For both candidates:
+- `16px`: the terracotta silhouette remains distinct from transparent sides; the `о` counter stays open and its outer vertical bounds align to whole pixels.
+- `32px`: square top, rounded bottom and lower visual gravity are perceptible.
+- `64px`: curves remain smooth; top air is `24u`, bottom air is `15u` to the tag edge.
+- Light and dark browser chrome: the white glyph remains legible because the tag owns its coloured field.
+- The final SVG contains no `<rect>`, embedded raster or full-canvas background.
 
-- `16px`: terracotta silhouette remains distinct from transparent sides;
-- `32px`: square top and rounded bottom are both perceptible;
-- light and dark browser chrome: the mark remains legible because it owns its coloured field;
-- no cream plate, outline, raster image or full-canvas background is allowed.
+## Review record
 
-For A, the `о` counter must remain open and the glyph must visibly occupy the lower field. For B, no accidental white path or hidden letter may remain.
+Review routes remain available as QA/history:
+
+- `/lab/design-system/` — final mark and rejected bare-tag control at `16/32/64/128px`;
+- `/lab/design-system/favicon/tag-o/` — final mark actually installed in the browser tab;
+- `/lab/design-system/favicon/tag-only/` — rejected control.
+
+On 2026-07-14 product review selected the wide-`о` tag over both the bare tag and old monogram. A final optical-position board compared centres `y=37/36/35/34` at real CSS `16/20/32/64px`. Codex initially preferred `y=35` at display sizes; Gemini 3.1 Pro High preferred `y=36` because it preserved lower gravity while aligning `24…48` to the `16px` grid. The final synthesis selected `y=36` as the more appropriate favicon-first solution.
+
+Ignored raw evidence: `artifacts/codex/favicon-final-choice-20260714/` and `artifacts/codex/favicon-optical-position-20260714/`.

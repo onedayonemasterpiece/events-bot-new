@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="title desc">
   <title id="title">Полюбить Калининград Анонсы</title>
-  <desc id="desc">Фирменная терракотовая бирка с опущенной к нижнему краю широкой белой буквой о.</desc>
+  <desc id="desc">Фирменная терракотовая бирка с оптически нижней широкой белой буквой о.</desc>
   <path id="announcements-tag" fill="#98401f" d="M6 0H58V50C58 57.2 52.2 63 45 63H19C11.8 63 6 57.2 6 50Z"/>
-  <path id="announcements-wide-o" fill="#fff" fill-rule="evenodd" d="M32 25C46.7 25 52 28.2 52 37C52 45.8 46.7 49 32 49C17.3 49 12 45.8 12 37C12 28.2 17.3 25 32 25ZM32 31C22.5 31 19 32.7 19 37C19 41.3 22.5 43 32 43C41.5 43 45 41.3 45 37C45 32.7 41.5 31 32 31Z"/>
+  <path id="announcements-wide-o" fill="#fff" fill-rule="evenodd" d="M32 24C46.7 24 52 27.2 52 36C52 44.8 46.7 48 32 48C17.3 48 12 44.8 12 36C12 27.2 17.3 24 32 24ZM32 30C22.5 30 19 31.7 19 36C19 40.3 22.5 42 32 42C41.5 42 45 40.3 45 36C45 31.7 41.5 30 32 30Z"/>
 </svg>

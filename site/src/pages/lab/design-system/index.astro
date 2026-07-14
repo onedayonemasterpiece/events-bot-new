@@ -6,13 +6,13 @@ const faviconSizes = [16, 32, 64, 128] as const;
 const faviconChoices = [
   {
     id: 'tag-o',
-    label: 'A · Бирка + нижняя «о»',
+    label: 'Финал · Бирка + нижняя «о»',
     asset: '/brand/favicon-tag-wide-o.svg',
-    note: 'Узнаваемее как знак сервиса: широкая «о» продолжает леттеринг и теперь стоит в нижней части бирки.',
+    note: 'Утверждённый знак: широкая «о» продолжает леттеринг, остаётся в нижней части бирки и имеет pixel-aligned центр y=36.',
   },
   {
     id: 'tag-only',
-    label: 'B · Только бирка',
+    label: 'Отклонённый контроль · Только бирка',
     asset: '/brand/favicon-tag-only.svg',
     note: 'Чище и спокойнее в 16 px, но без буквы сильнее зависит от фирменного цвета и может считываться как общий bookmark.',
   },
@@ -72,7 +72,7 @@ const faviconChoices = [
   </head>
   <body>
     <main data-brand-design-system-lab>
-      <p class="eyebrow">approved lockups · favicon choice R5</p>
+      <p class="eyebrow">approved brand system · favicon R6</p>
       <h1>Одна бирка. Две пропорции.</h1>
       <p class="lead">Полное имя сервиса остаётся одинаковым, но не механически масштабируется: горизонтальная desktop-бирка и вытянутая mobile-ручка используют отдельную оптическую компоновку одного и того же леттеринга.</p>
 
@@ -92,8 +92,8 @@ const faviconChoices = [
       </section>
 
       <section class="section" aria-labelledby="favicon-title">
-        <h2 id="favicon-title">Два favicon-кандидата</h2>
-        <p>Оба варианта сохраняют прозрачный SVG и один силуэт бирки. В A широкая «о» опущена вниз по тому же принципу, что и текст в полноразмерных lockup; B проверяет предельно лаконичный знак вообще без буквы. Финальный выбор пока не зафиксирован.</p>
+        <h2 id="favicon-title">Финальный favicon</h2>
+        <p>Утверждена бирка с широкой белой «о»: она поднята из слишком низкой позиции `y=37` в гармоничную `y=36`, но остаётся заметно ниже геометрического центра `y=32`. Чистая бирка сохранена рядом только как отклонённый контроль.</p>
         <div class="favicon-choice-grid" data-favicon-choice-grid>
           {faviconChoices.map((choice) => (
             <article class="favicon-choice" data-favicon-choice={choice.id}>
