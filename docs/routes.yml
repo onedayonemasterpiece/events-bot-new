@@ -246,6 +246,7 @@ features:
     post_discovery: docs/features/region-talk-channel/post-discovery.md
     image_postcardness: docs/features/region-talk-channel/image-postcardness.md
     image_scoring_false_negative_review: docs/features/region-talk-channel/image-scoring-false-negative-review.md
+    image_scoring_audit_methodology_v2: docs/reference/image-scoring-audit-methodology-v2.md
     ydb_schema: docs/features/region-talk-channel/ydb-schema.md
     mvp_candidate_report: docs/features/region-talk-channel/mvp-candidate-report.md
     llm_verifier_contract: docs/features/region-talk-channel/llm-verifier-contract.md

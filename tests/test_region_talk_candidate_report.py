@@ -5167,12 +5167,14 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00")
         row = next(r for r in rows if r["canonical_source_key"] == "telegram:visual")
         self.assertEqual(row["actual_images_scored_count"], 3)
-        self.assertEqual(row["source_image_quality_status"], "exclude_low_image_quality")
-        self.assertEqual(row["source_queue_status"], "processed_found_ko_low_image_quality")
-        self.assertEqual(row["status_changed_this_run"], "true")
-        self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 1)
+        self.assertEqual(row["source_image_quality_status"], "unadjudicated_raw_score_low_observation")
+        self.assertEqual(row["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(row["status_changed_this_run"], "false")
+        self.assertEqual(row["source_image_quality_decision_use"], "diagnostic_only_not_source_exclusion")
+        self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 0)
+        self.assertEqual(metrics["source_queue_low_image_quality_observed_total"], 1)
 
-    def test_source_queue_marks_low_image_quality_sources_for_monitoring_exclusion(self) -> None:
+    def test_source_queue_keeps_low_raw_image_quality_as_nonterminal_observation(self) -> None:
         mod = load_module()
         previous = {
             "unified_source_queue_cursor_position": 0,
@@ -5192,10 +5194,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "run-q", "2026-07-07T00:00:00+00:00",
         )
         row = next(r for r in rows if r["canonical_source_key"] == "telegram:weakpics")
-        self.assertEqual(row["source_image_quality_status"], "exclude_low_image_quality")
-        self.assertEqual(row["source_queue_status"], "processed_found_ko_low_image_quality")
-        self.assertEqual(row["monitoring_exclusion_reason"], "kaliningrad_posts_found_but_actual_images_systematically_low_score")
-        self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 1)
+        self.assertEqual(row["source_image_quality_status"], "unadjudicated_raw_score_low_observation")
+        self.assertEqual(row["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(row["monitoring_exclusion_reason"], "")
+        self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 0)
+        self.assertEqual(metrics["source_queue_low_image_quality_observed_total"], 1)
 
     def test_status_event_writes_business_heartbeat_hook(self) -> None:
         mod = load_module()
@@ -5844,7 +5847,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS"], "45")
             self.assertEqual(env["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
-            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v4")
+            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v5")
         finally:
             for key, value in old.items():
                 if value is None:
@@ -6858,6 +6861,37 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(outside_quantization["eligible"])
         self.assertFalse(low_aesthetic["eligible"])
         self.assertEqual(low_aesthetic["primary_reason"], "overall_media_score_below_threshold")
+
+    def test_publication_eligibility_keeps_album_quality_uncertainty_nonterminal(self) -> None:
+        mod = load_module()
+        row = {
+            "post_url": "https://t.me/travelcase/album",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "personal_blog",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "image_quality_decision": "needs_visual_review",
+            "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+            "image_acquisition_status": "complete",
+            "expected_image_count": 6,
+            "fetched_image_count": 6,
+            "images_scored_actual_count": 6,
+            "overall_media_score": 0.50,
+            "postcardness_score": 0.40,
+        }
+        decision = mod.publication_eligibility(row)
+        self.assertFalse(decision["eligible"])
+        self.assertEqual(decision["decision"], "needs_visual_review")
+        self.assertEqual(decision["primary_reason"], "image_quality_needs_visual_review")
+        self.assertEqual(decision["media_review_mode"], "visual_review_pending")
+        self.assertEqual(decision["evidence"]["images_scored_actual_count"], 6)
 
     def test_final_verifier_prompt_does_not_treat_short_author_footer_as_ad(self) -> None:
         mod = load_module()

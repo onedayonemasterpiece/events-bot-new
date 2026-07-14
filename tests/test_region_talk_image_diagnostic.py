@@ -168,6 +168,51 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_vk_fetch_downloads_every_photo_attachment(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            old_token = os.environ.get("VK_USER_TOKEN")
+            os.environ["VK_USER_TOKEN"] = "unit-token"
+
+            class Response:
+                def __init__(self, *, payload=None, content=b""):
+                    self._payload = payload
+                    self.content = content
+
+                def json(self):
+                    return self._payload
+
+                def raise_for_status(self):
+                    return None
+
+            payload = {
+                "response": [{
+                    "attachments": [
+                        {"type": "photo", "photo": {"sizes": [{"width": 100, "height": 100, "url": "https://cdn.example/1.jpg"}]}},
+                        {"type": "photo", "photo": {"sizes": [{"width": 200, "height": 100, "url": "https://cdn.example/2.jpg"}]}},
+                    ]
+                }]
+            }
+
+            def fake_get(url, **_kwargs):
+                if "wall.getById" in url:
+                    return Response(payload=payload)
+                return Response(content=url.encode("utf-8"))
+
+            try:
+                with mock.patch.object(mod.requests, "get", side_effect=fake_get):
+                    row = {"image_queue_id": "vk-album", "post_url": "https://vk.com/wall-1_2"}
+                    mod.fetch_vk(row)
+                self.assertEqual(len(mod._actual_media_paths(row)), 2)
+                self.assertEqual(row["expected_image_count"], 2)
+                self.assertEqual(row["fetched_image_count"], 2)
+                self.assertEqual(row["image_acquisition_status"], "complete")
+            finally:
+                if old_token is None:
+                    os.environ.pop("VK_USER_TOKEN", None)
+                else:
+                    os.environ["VK_USER_TOKEN"] = old_token
+
     def test_image_specific_runtime_config_wins_over_generic_glob_order(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
@@ -500,7 +545,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 else:
                     os.environ["REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT"] = old_allow_missing
 
-    def test_repeated_empty_media_fetch_becomes_terminal_after_bounded_attempts(self) -> None:
+    def test_repeated_empty_media_fetch_becomes_nonterminal_visual_review_after_bounded_attempts(self) -> None:
         old_attempts = os.environ.get("REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS")
         os.environ["REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS"] = "3"
         with tempfile.TemporaryDirectory() as td:
@@ -515,15 +560,183 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     "actual_image_count": 0,
                 }
                 mod.apply_image_queue_status(row)
-                self.assertEqual(row["image_queue_status"], "broken_media")
-                self.assertEqual(row["media_acquisition_status"], "terminal_media_fetch_exhausted")
-                self.assertEqual(row["next_action"], "terminal_broken_media_no_retry")
+                self.assertEqual(row["image_queue_status"], "needs_visual_review")
+                self.assertEqual(row["media_acquisition_status"], "media_fetch_exhausted_requires_nonterminal_review")
+                self.assertEqual(row["image_quality_decision"], "needs_visual_review")
+                self.assertEqual(row["image_quality_terminality"], "nonterminal")
+                self.assertEqual(row["next_action"], "visual_review_or_acquisition_repair")
                 self.assertEqual(row["media_fetch_retry_exhausted"], "true")
             finally:
                 if old_attempts is None:
                     os.environ.pop("REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS", None)
                 else:
                     os.environ["REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS"] = old_attempts
+
+    def test_media_refs_and_manifest_are_plural_and_compact(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            first = Path(td) / "first.jpg"
+            second = Path(td) / "second.jpg"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+            row = {"image_queue_id": "album"}
+            mod._apply_acquired_paths(
+                row,
+                [str(first), str(second)],
+                media_ids=["tg:10", "tg:11"],
+                expected=2,
+                status="complete",
+            )
+            self.assertEqual(mod._actual_media_paths(row), [str(first), str(second)])
+            self.assertEqual(row["expected_image_count"], 2)
+            self.assertEqual(row["fetched_image_count"], 2)
+            self.assertEqual(row["distinct_image_count"], 2)
+            self.assertEqual(row["image_acquisition_status"], "complete")
+            self.assertTrue(row["input_media_manifest_hash"])
+            self.assertNotIn("path", row["media_manifest_items"][0])
+
+    def test_album_quality_low_score_is_review_not_terminal_reject(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "expected_image_count": 2,
+                "fetched_image_count": 2,
+                "image_acquisition_status": "complete",
+            }
+            frames = [
+                {
+                    "frame_index": index,
+                    "media_id": f"tg:{index}",
+                    "final_visual_status": "scored_actual_image",
+                    "final_visual_score": 0.50 + index / 100,
+                    "cv_overall_media_score": 0.6,
+                    "clip_postcardness_score": 0.4,
+                    "laion_aesthetic_score": 0.5,
+                    "nima_quality_score": 0.5,
+                    "cv_technical_quality_score": 0.7,
+                }
+                for index in (1, 2)
+            ]
+            mod.apply_album_quality_decision(row, frames)
+            mod.apply_image_queue_status(row)
+            self.assertEqual(row["image_quality_decision"], "needs_visual_review")
+            self.assertEqual(row["image_quality_terminality"], "nonterminal")
+            self.assertEqual(row["image_queue_status"], "actual_scored")
+            self.assertEqual(row["images_scored_actual_count"], 2)
+            self.assertEqual(row["shadow_best_frame_index"], 2)
+
+    def test_missing_required_component_routes_to_scoring_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {"expected_image_count": 1, "fetched_image_count": 1, "image_acquisition_status": "complete"}
+            frame = {
+                "frame_index": 1,
+                "media_id": "tg:1",
+                "final_visual_status": "scored_actual_image",
+                "final_visual_score": 0.9,
+                "cv_overall_media_score": 0.9,
+                "clip_postcardness_score": 0.9,
+                "laion_aesthetic_score": 0.9,
+                # NIMA deliberately absent.
+            }
+            mod.apply_album_quality_decision(row, [frame])
+            mod.apply_image_queue_status(row)
+            self.assertEqual(row["image_quality_decision"], "scoring_retry")
+            self.assertEqual(row["image_queue_status"], "scoring_retry")
+
+    def test_legacy_low_score_row_is_reopened_once_for_v2_album_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            legacy = {
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+                "overall_media_score": 0.5,
+                "image_decision_contract_version": "legacy-v1",
+            }
+            self.assertTrue(mod.image_row_needs_contract_rescore(legacy))
+            legacy["image_decision_contract_version"] = mod.IMAGE_DECISION_CONTRACT_VERSION
+            self.assertFalse(mod.image_row_needs_contract_rescore(legacy))
+
+    def test_telegram_album_selection_uses_exact_grouped_id(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+
+            class Message:
+                def __init__(self, message_id, grouped_id):
+                    self.id = message_id
+                    self.grouped_id = grouped_id
+
+            class Client:
+                async def get_messages(self, _handle, ids):
+                    self.ids = ids
+                    return [Message(102, 7), Message(100, 7), Message(101, 8), None]
+
+            client = Client()
+            anchor = Message(100, 7)
+            selected = __import__("asyncio").run(mod._telegram_album_messages(client, "example", anchor, 100))
+            self.assertEqual([message.id for message in selected], [100, 102])
+            self.assertIn(100, client.ids)
+
+    def test_locked_operator_positives_cannot_be_terminal_quality_rejects(self) -> None:
+        fixture_path = ROOT / "tests" / "fixtures" / "region_talk_image_scoring_review_cases.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            for case in fixture["operator_confirmed_positive_regressions"]:
+                row = {
+                    "expected_image_count": case["album_image_count"],
+                    "fetched_image_count": 1,
+                    "image_acquisition_status": "partial",
+                }
+                frame = {
+                    "frame_index": 1,
+                    "media_id": "anchor",
+                    "final_visual_status": "scored_actual_image",
+                    "final_visual_score": case["overall_media_score"],
+                    "cv_overall_media_score": case["cv_overall_media_score"],
+                    "clip_postcardness_score": case["clip_postcardness_score"],
+                    "laion_aesthetic_score": case["laion_aesthetic_score"],
+                    "nima_quality_score": case["nima_quality_score"],
+                    "cv_technical_quality_score": case["technical_quality_score"],
+                }
+                mod.apply_album_quality_decision(row, [frame])
+                mod.apply_image_queue_status(row)
+                self.assertTrue(case["must_not_be_terminal_quality_reject"], case["post_url"])
+                self.assertEqual(row["image_quality_decision"], "needs_visual_review", case["post_url"])
+                self.assertEqual(row["image_quality_terminality"], "nonterminal", case["post_url"])
+
+    def test_image_rollup_repairs_legacy_raw_score_source_exclusion(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            images = [
+                {
+                    "post_url": f"https://t.me/visual/{index}",
+                    "source_url": "https://t.me/visual",
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "publication-gate-test-v1",
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "overall_media_score": score,
+                }
+                for index, score in enumerate((0.2, 0.3, 0.4), 1)
+            ]
+            source = {
+                "canonical_source_key": "telegram:visual",
+                "source_url": "https://t.me/visual",
+                "source_queue_status": "processed_found_ko_low_image_quality",
+                "monitoring_exclusion_reason": "kaliningrad_posts_found_but_actual_images_systematically_low_score",
+            }
+            writes = []
+            mod.ydb_select_kind = lambda kind, _limit: images if kind == "image_queue_item" else []
+            mod.ydb_select_source_queue = lambda _limit: [source]
+            mod.ydb_upsert_source_rows = lambda rows, *, stage: writes.extend(dict(row) for row in rows)
+            mod.ydb_update_source_visual_rollups()
+            self.assertEqual(len(writes), 1)
+            self.assertEqual(writes[0]["source_queue_status"], "processed_found_ko_candidate")
+            self.assertEqual(writes[0]["source_image_quality_status"], "unadjudicated_raw_score_low_observation")
+            self.assertEqual(writes[0]["monitoring_exclusion_reason"], "")
 
 
 if __name__ == "__main__":

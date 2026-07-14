@@ -52,7 +52,7 @@ ACTION_KERNEL_SLUGS = {
 
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
-CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
+CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
 POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
 
@@ -384,6 +384,16 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
+            "Стабильный реестр внешних блогеров — записей / confirmed / needs review / "
+            "поддерживаемых TG+VK источников / уже в очереди / ещё не заведены в очередь: "
+            f"{value('external_blogger_registry_records_total')}/"
+            f"{value('external_blogger_registry_confirmed_records_total')}/"
+            f"{value('external_blogger_registry_needs_review_records_total')}/"
+            f"{value('external_blogger_registry_canonical_tg_vk_sources_total')}/"
+            f"{value('external_blogger_registry_canonical_sources_in_queue_total')}/"
+            f"{value('external_blogger_registry_canonical_sources_missing_from_queue_total')}"
+        ),
+        (
             "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
             "fast-check дал точную ссылку / VK-поиск проверен / VK-поиск дал пост / ещё активно ждут просмотра / ошибочно локальный / спам / недоступный TG / недоступный VK: "
             f"{value('confirmed_external_blogger_sources_total')}/"
@@ -558,12 +568,16 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('bge_source_terminal_skipped_sample_total')}"
         ),
         (
-            "Медиа — исторических строк / фото сейчас ждут оценки / фото реально оценено / "
-            "сильных фото >=0.70 / видео для ручного просмотра: "
+            "Медиа — исторических постов / ждут оценки / постов реально оценено / отдельных кадров оценено / "
+            "legacy auto-accept / требуют визуальной проверки / partial albums / scoring retry / видео вручную: "
             f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
             f"{value('image_actual_scored_total')}/"
-            f"{value('image_strong_actual_ge_0_70_total')}/"
+            f"{value('image_actual_frames_scored_total')}/"
+            f"{value('image_legacy_auto_accept_total')}/"
+            f"{value('image_visual_review_pending_total')}/"
+            f"{value('image_partial_album_acquisition_total')}/"
+            f"{value('image_scoring_retry_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}"
         ),
         (
@@ -576,9 +590,10 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publication_delivery_completed_total')}"
         ),
         (
-            "Финализатор — постов с оценённым фото / видео / ещё требуют решения или обновления: "
+            "Финализатор — постов с оценённым фото / видео / non-terminal visual review / ещё требуют решения или обновления: "
             f"{value('image_actual_scored_urls_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}/"
+            f"{value('publication_visual_review_pending_total')}/"
             f"{value('finalizer_pending_url_total')}"
         ),
         (
@@ -771,6 +786,60 @@ def _source_alias_keys(row: dict[str, Any]) -> set[str]:
     return {a.lower().rstrip("/") for a in aliases if a}
 
 
+def _evidence_relation_is_local(value: Any) -> bool:
+    relation = re.sub(r"\s+", " ", str(value or "").strip().lower().replace("ё", "е"))
+    return any(marker in relation for marker in (
+        "lives in region", "living in region", "resident of region", "local resident", "local blogger",
+        "живет в регионе", "житель региона", "местный", "переехал в калининград", "переехала в калининград",
+    ))
+
+
+def _evidence_canonical_source_keys(row: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    telegram_url = str(row.get("telegram_url") or "").strip()
+    handle = _telegram_handle_from_url(telegram_url)
+    if handle:
+        keys.add(f"telegram:{handle}")
+    vk_url = str(row.get("vk_public_url") or "").strip()
+    match = re.search(r"(?:https?://)?(?:www\.)?vk\.com/([^/?#]+)", vk_url, re.I)
+    if match:
+        identity = match.group(1).strip().lower()
+        if identity and identity not in {"wall", "feed", "video"}:
+            keys.add(f"vk:{identity}")
+    return keys
+
+
+def _external_blogger_registry_metrics(
+    evidence_rows: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
+) -> dict[str, int]:
+    confirmed = [row for row in evidence_rows if str(row.get("confirmation_status") or "").strip().lower() == "confirmed_external"]
+    review = [row for row in evidence_rows if str(row.get("confirmation_status") or "").strip().lower() == "needs_externality_review"]
+    eligible_records = [row for row in confirmed if not _evidence_relation_is_local(row.get("region_relation_status"))]
+    canonical_keys = set().union(*(_evidence_canonical_source_keys(row) for row in eligible_records)) if eligible_records else set()
+    queue_keys: set[str] = set()
+    for row in source_rows:
+        canonical = str(row.get("canonical_source_key") or "").strip().lower().rstrip("/")
+        if canonical:
+            queue_keys.add(canonical)
+        for alias in _source_alias_keys(row):
+            if alias.startswith(("telegram:", "vk:")):
+                queue_keys.add(alias)
+    queued = canonical_keys & queue_keys
+    records_with_supported_source = sum(1 for row in eligible_records if _evidence_canonical_source_keys(row))
+    return {
+        "external_blogger_registry_records_total": len(evidence_rows),
+        "external_blogger_registry_confirmed_records_total": len(confirmed),
+        "external_blogger_registry_needs_review_records_total": len(review),
+        "external_blogger_registry_confirmed_local_excluded_records_total": len(confirmed) - len(eligible_records),
+        "external_blogger_registry_eligible_records_total": len(eligible_records),
+        "external_blogger_registry_records_with_supported_tg_vk_source_total": records_with_supported_source,
+        "external_blogger_registry_canonical_tg_vk_sources_total": len(canonical_keys),
+        "external_blogger_registry_canonical_sources_in_queue_total": len(queued),
+        "external_blogger_registry_canonical_sources_missing_from_queue_total": len(canonical_keys - queue_keys),
+    }
+
+
 def _confirmed_external_blogger_funnel_metrics(
     source_rows: list[dict[str, Any]],
     processed_post_rows: list[dict[str, Any]],
@@ -822,7 +891,10 @@ def _confirmed_external_blogger_funnel_metrics(
     for row in unique_posts.values():
         keys = matching_source_keys(row)
         processed_source_keys.update(keys)
-        if str(row.get("vector_gate_status") or "") == "vector_accept_candidate":
+        if (
+            str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
+            and str(row.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3"
+        ):
             vector_accepted_source_keys.update(keys)
         url = str(row.get("post_url") or "").strip().rstrip("/")
         if url:
@@ -899,7 +971,10 @@ def _confirmed_external_blogger_funnel_metrics(
         "confirmed_external_blogger_sources_with_processed_posts_total": len(processed_source_keys),
         "confirmed_external_blogger_vector_accepted_posts_total": len({
             identity(row) for row in unique_posts.values()
-            if str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
+            if (
+                str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
+                and str(row.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3"
+            )
         }),
         "confirmed_external_blogger_sources_with_vector_accepted_posts_total": len(vector_accepted_source_keys),
         "confirmed_external_blogger_image_queue_posts_total": len(image_urls),
@@ -1952,7 +2027,7 @@ def _publication_handoff_metrics(
     for url, row in publication_by_url.items():
         candidate_status = str(row.get("publication_candidate_status") or "").lower()
         publication_status = str(row.get("publication_status") or "").lower()
-        if candidate_status in {"ready_for_llm", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due"}:
+        if candidate_status in {"ready_for_llm", "visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due"}:
             active_candidate_urls.add(url)
         elif publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"}:
             active_candidate_urls.add(url)
@@ -1978,7 +2053,8 @@ def _publication_handoff_metrics(
         "publication_sent_total": len(sent_urls),
         "publication_unsent_confirmed_total": len(unsent_confirmed_urls),
         "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
-        "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"llm_needs_review", "llm_budget_deferred", "llm_error"}),
+        "publication_visual_review_pending_total": sum(1 for status in status_by_url.values() if status == "visual_review_pending"),
+        "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error"}),
         "publication_rejected_total": sum(1 for status in status_by_url.values() if status in {"filtered_before_llm", "llm_rejected"}),
         "publication_source_evidence_backlog_total": len(source_evidence_urls),
         "publication_source_evidence_backlog_urls": source_evidence_urls,
@@ -2923,6 +2999,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     )
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
+    external_blogger_evidence_rows: list[dict[str, Any]] = []
+    external_blogger_evidence_read_ok = False
     try:
         kinds = [
             "source_queue_item",
@@ -2934,6 +3012,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "telegram_entity_cache_item",
             "candidate_memory_item",
             "image_queue_item",
+            "image_frame_score_item",
             "publication_candidate_item",
             "region_talk_llm_budget_item",
             "publication_delivery_item",
@@ -2972,12 +3051,41 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             return out
         latest_rows = pool.retry_operation_sync(read_latest_rows)
         latest_state = latest_rows.get("latest_state") or {}
+        evidence_table_name = (os.getenv("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_TABLE") or "region_talk_external_blogger_evidence").strip()
+        evidence_table = evidence_table_name if evidence_table_name.startswith("/") else database.rstrip("/") + "/" + evidence_table_name.lstrip("/")
+        evidence_limit = max(1, _env_int("REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS", 2000))
+        def read_external_evidence(session: Any) -> list[dict[str, Any]]:
+            query = (
+                f"SELECT record_id, confirmation_status, region_relation_status, telegram_url, vk_public_url, "
+                f"vk_video_url, rutube_url, pipeline_status FROM `{evidence_table}` "
+                f"ORDER BY record_id LIMIT {evidence_limit};"
+            )
+            result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, commit_tx=True)
+            rows = result_sets[0].rows if result_sets else []
+            return [{
+                "record_id": getattr(row, "record_id", None),
+                "confirmation_status": getattr(row, "confirmation_status", None),
+                "region_relation_status": getattr(row, "region_relation_status", None),
+                "telegram_url": getattr(row, "telegram_url", None),
+                "vk_public_url": getattr(row, "vk_public_url", None),
+                "vk_video_url": getattr(row, "vk_video_url", None),
+                "rutube_url": getattr(row, "rutube_url", None),
+                "pipeline_status": getattr(row, "pipeline_status", None),
+            } for row in rows]
+        try:
+            external_blogger_evidence_rows = pool.retry_operation_sync(read_external_evidence)
+            external_blogger_evidence_read_ok = True
+        except Exception:
+            # Registry observability must not make the whole orchestrator blind
+            # if the separately managed stable table is temporarily missing.
+            external_blogger_evidence_rows = []
     finally:
         driver.stop()
 
     latest_run_funnel = latest_state.get("run_funnel_metrics") if isinstance(latest_state.get("run_funnel_metrics"), dict) else {}
     candidates = rows_by_kind["candidate_memory_item"]
     images = rows_by_kind["image_queue_item"]
+    image_frame_scores = rows_by_kind["image_frame_score_item"]
     publications = rows_by_kind["publication_candidate_item"]
     llm_budgets = rows_by_kind["region_talk_llm_budget_item"]
     deliveries = rows_by_kind["publication_delivery_item"]
@@ -3053,6 +3161,17 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     image_in_progress = [r for r in images if str(r.get("image_queue_status") or "") == "image_analysis_in_progress"]
     image_actual = [r for r in images if str(r.get("image_queue_status") or "") == "actual_scored" and str(r.get("image_model_input_type") or "") == "actual_image"]
+    image_visual_review = [r for r in images if str(r.get("image_quality_decision") or "") == "needs_visual_review"]
+    image_scoring_retry = [r for r in images if str(r.get("image_quality_decision") or "") == "scoring_retry"]
+    image_legacy_accept = [r for r in images if str(r.get("image_quality_decision") or "") == "legacy_auto_accept"]
+    image_partial_acquisition = [r for r in images if str(r.get("image_acquisition_status") or "") == "partial"]
+    image_contract_rescore = [
+        r for r in image_actual
+        if str(r.get("image_decision_contract_version") or "") != "region_talk_image_album_guard_v2"
+        and _safe_float(r.get("overall_media_score") or r.get("final_visual_score")) is not None
+        and float(r.get("overall_media_score") or r.get("final_visual_score") or 0)
+        < float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE") or "0.66")
+    ]
     image_product_eligible = [
         r for r in images
         if str(r.get("publication_eligibility_decision") or "") == "accept"
@@ -3210,6 +3329,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         # instead of a transient pre-BGE defer or later text compaction.
         source_rows, [*processed_post_rows, *candidates], images, publications, deliveries,
     )
+    external_blogger_registry_metrics = _external_blogger_registry_metrics(
+        external_blogger_evidence_rows,
+        source_rows,
+    )
+    external_blogger_registry_metrics["external_blogger_registry_read_ok"] = int(external_blogger_evidence_read_ok)
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_unique_keys)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
@@ -3286,6 +3410,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "fast_check_ko_spam_rejected_sources_total": len(fast_check_spam_rows),
         "fast_check_ko_hit_post_links_total": sum(1 for r in fast_check_hit_rows if str(r.get("fast_check_hit_post_url") or r.get("keyword_hit_post_url") or "").strip()),
         **confirmed_external_blogger_metrics,
+        **external_blogger_registry_metrics,
         "rejected_sources_total": len(rejected_sources),
         "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
         "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,
@@ -3332,9 +3457,19 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_pending_vk_without_url_total": len(image_pending_vk_without_url),
         "image_in_progress_total": len(image_in_progress),
         "image_actual_scored_total": len(image_actual),
+        "image_frame_scores_total": len(image_frame_scores),
+        "image_actual_frames_scored_total": sum(_safe_int(row.get("images_scored_actual_count")) for row in image_actual),
+        "image_visual_review_pending_total": len(image_visual_review),
+        "image_scoring_retry_total": len(image_scoring_retry),
+        "image_legacy_auto_accept_total": len(image_legacy_accept),
+        "image_partial_album_acquisition_total": len(image_partial_acquisition),
+        "image_contract_rescore_backlog_total": len(image_contract_rescore),
+        "image_actionable_work_total": len(image_pending) + len(image_scoring_retry) + len(image_contract_rescore),
         **image_terminal_metrics,
-        "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),
-        "image_strong_actual_ge_0_70_total": len(strong_images),
+        "image_legacy_diagnostic_ge_0_66_total": len(strong_images_ge_066),
+        "image_legacy_diagnostic_ge_0_70_total": len(strong_images),
+        "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),  # compatibility only
+        "image_strong_actual_ge_0_70_total": len(strong_images),  # compatibility only
         **publication_metrics,
         "publication_delivery_rows_total": len(deliveries),
         "publication_delivery_completed_total": sum(1 for row in deliveries if str(row.get("status") or "") == "delivered"),
@@ -3566,7 +3701,8 @@ def build_decision_plan(
                 "REGION_TALK_BGE_BATCH_SIZE": "4",
             },
         ))
-    if int(metrics.get("image_pending_total") or 0) >= image_threshold:
+    image_actionable_work = int(metrics.get("image_actionable_work_total") or metrics.get("image_pending_total") or 0)
+    if image_actionable_work >= image_threshold:
         actions.append(_action(
             "launch_image_diagnostic",
             [
@@ -3575,7 +3711,12 @@ def build_decision_plan(
                 "--wait-initial-seconds", "120", "--wait-after-drain-seconds", "0",
                 "--image-poll-interval-seconds", "30", "--no-wait",
             ],
-            "text-confirmed image queue has pending rows; uses DISCOVERY2",
+            (
+                "text-confirmed image work is pending (new/retry/versioned album rescore="
+                f"{int(metrics.get('image_pending_total') or 0)}/"
+                f"{int(metrics.get('image_scoring_retry_total') or 0)}/"
+                f"{int(metrics.get('image_contract_rescore_backlog_total') or 0)}); uses DISCOVERY2"
+            ),
             resource="telegram:DISCOVERY2",
             parallel_safe=True,
             timeout_seconds=300,

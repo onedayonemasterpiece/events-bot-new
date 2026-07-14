@@ -127,9 +127,35 @@ a dead image worker without changing the visual consensus.
 Responsibilities stay unchanged:
 
 - lease `image_queue_item` rows that already passed text/source/vector gates;
-- fetch actual images;
-- compute postcardness/aesthetic/technical/safety scores;
-- write `image_queue_status=actual_scored` with `image_model_input_type=actual_image`.
+- acquire the bounded complete Telegram `grouped_id` album or every VK photo
+  attachment and persist a compact manifest rather than a Kaggle-local path;
+- compute per-frame postcardness/aesthetic/technical diagnostics and persist
+  compact `image_frame_score_item` rows;
+- write the versioned post-level album decision together with
+  `image_model_input_type=actual_image`.
+
+The transitional deployed image contract is
+`region_talk_image_album_guard_v2`; CandidateReport/finalizer consume
+`region_talk_publication_eligibility_v5`. It preserves the unchanged legacy
+positive path only for a completely acquired album. Partial acquisition,
+missing component output and uncalibrated low legacy scores are non-terminal
+`needs_visual_review`/`scoring_retry`, not publication tombstones. The
+orchestrator includes pending, retry and old-contract low-score rescore rows in
+`image_actionable_work_total`; a queue with only versioned rescore work must
+still launch ImageDiagnostic. Source-level exclusion by average raw image
+score is disabled and repaired only for the exact former image-quality reason;
+local/spam/compliance decisions remain terminal.
+
+The scorecard reports post rows and per-frame work separately:
+`image_actual_scored_total`, `image_actual_frames_scored_total`,
+`image_legacy_auto_accept_total`, `image_visual_review_pending_total`,
+`image_partial_album_acquisition_total`, `image_scoring_retry_total` and
+`image_contract_rescore_backlog_total`. The historical `>=0.66`/`>=0.70`
+counters remain compatibility diagnostics only and may not be described as a
+calibrated strong-image decision. See
+[`image-scoring-audit-methodology-v2.md`](../../reference/image-scoring-audit-methodology-v2.md)
+for the source-disjoint calibration, shadow and automatic-reject stop/go
+criteria.
 
 If Telegram/VK media resolves to a video/non-image file or an image decoder
 cannot open the downloaded payload, ImageDiagnostic must write a terminal

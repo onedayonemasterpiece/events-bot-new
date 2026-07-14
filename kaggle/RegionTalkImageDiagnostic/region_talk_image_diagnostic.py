@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, base64, html, json, os, random, re, subprocess, sys, time, urllib.parse
+import asyncio, base64, hashlib, html, json, os, random, re, subprocess, sys, time, urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, median, pstdev
@@ -20,7 +20,13 @@ IMAGE_TERMINAL_SKIP_STATUSES = {
     "broken_media",
 }
 PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
-PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
+IMAGE_DECISION_CONTRACT_VERSION = "region_talk_image_album_guard_v2"
+IMAGE_ACQUISITION_VERSION = "region_talk_plural_media_v2"
+IMAGE_LEGACY_SCORER_VERSION = "region_talk_cv_clip_laion_nima_legacy_v1"
+IMAGE_QUALITY_NEEDS_REVIEW = "needs_visual_review"
+IMAGE_QUALITY_LEGACY_ACCEPT = "legacy_auto_accept"
+IMAGE_QUALITY_SCORING_RETRY = "scoring_retry"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
@@ -50,6 +56,155 @@ IMAGE_DIAG_HEARTBEAT_FIELDS = (
 
 def max_media_fetch_attempts() -> int:
     return max(1, int(os.getenv("REGION_TALK_IMAGE_MAX_MEDIA_FETCH_ATTEMPTS") or "3"))
+
+
+def max_images_per_post() -> int:
+    # Telegram albums normally contain at most 10 media items, while VK posts
+    # may expose more photo attachments.  The safe guardrail is full bounded
+    # acquisition, not a silent first-image sample; callers may lower this only
+    # for an explicitly labelled canary/cost experiment.
+    return max(1, min(20, int(os.getenv("REGION_TALK_IMAGE_MAX_IMAGES_PER_POST") or "20")))
+
+
+def legacy_publication_media_threshold() -> float:
+    return float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE") or "0.66")
+
+
+def _media_ref_list(value) -> list[str]:
+    """Normalize compact YDB/list media references without treating text as one URL."""
+    if isinstance(value, (list, tuple)):
+        raw = list(value)
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+                raw = list(parsed) if isinstance(parsed, list) else [text]
+            except Exception:
+                raw = re.split(r"[|\n]", text)
+        else:
+            raw = re.split(r"[|\n]", text)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        ref = str(item or "").strip().strip("'\"")
+        if ref and ref not in seen:
+            seen.add(ref)
+            out.append(ref)
+    return out
+
+
+def _actual_media_paths(row: dict) -> list[str]:
+    paths = _media_ref_list(row.get("actual_media_paths"))
+    single = str(row.get("actual_media_path") or "").strip()
+    if single and single not in paths:
+        paths.insert(0, single)
+    return paths
+
+
+def _set_actual_media_paths(row: dict, paths: list[str]) -> None:
+    unique = _media_ref_list(paths)[:max_images_per_post()]
+    row["actual_media_paths"] = unique
+    row["actual_media_path"] = unique[0] if unique else ""
+    row["fetched_image_count"] = len(unique)
+
+
+def _media_manifest_hash(items: list[dict]) -> str:
+    payload = [
+        {
+            "media_id": str(item.get("media_id") or ""),
+            "ordinal": int(item.get("ordinal") or 0),
+            "content_sha256": str(item.get("content_sha256") or ""),
+        }
+        for item in items
+    ]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _manifest_item(path: str, *, media_id: str, ordinal: int) -> dict:
+    p = Path(path)
+    try:
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+    except Exception:
+        digest = ""
+    return {
+        "media_id": media_id,
+        "ordinal": int(ordinal),
+        "content_sha256": digest,
+        "suffix": p.suffix.lower(),
+    }
+
+
+def _apply_media_manifest(row: dict, items: list[dict], *, expected: int, status: str) -> None:
+    row["image_decision_contract_version"] = IMAGE_DECISION_CONTRACT_VERSION
+    row["image_acquisition_version"] = IMAGE_ACQUISITION_VERSION
+    row["expected_image_count"] = max(0, int(expected))
+    row["fetched_image_count"] = len(items)
+    row["distinct_image_count"] = len({str(item.get("content_sha256") or item.get("media_id") or "") for item in items})
+    row["image_acquisition_status"] = status
+    row["input_media_manifest_hash"] = _media_manifest_hash(items) if items else ""
+    row["media_manifest_items"] = items
+
+
+def _expected_image_count(row: dict, fallback: int = 1) -> int:
+    for key in ("expected_image_count", "image_count", "media_count", "album_size"):
+        try:
+            value = int(float(row.get(key) or 0))
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    return max(0, int(fallback))
+
+
+def _row_direct_image_refs(row: dict) -> list[str]:
+    refs: list[str] = []
+    for key in (
+        "image_urls", "media_photo_urls", "vk_media_photo_urls", "actual_media_urls",
+        "image_url_or_local_path", "primary_media_path",
+    ):
+        for value in _media_ref_list(row.get(key)):
+            ref = direct_image_url(value)
+            if ref and ref not in refs:
+                refs.append(ref)
+    return refs[:max_images_per_post()]
+
+
+def _apply_acquired_paths(
+    row: dict,
+    paths: list[str],
+    *,
+    media_ids: list[str] | None = None,
+    expected: int,
+    status: str,
+) -> None:
+    _set_actual_media_paths(row, paths)
+    ids = list(media_ids or [])
+    items = [
+        _manifest_item(path, media_id=ids[index] if index < len(ids) else f"frame:{index + 1}", ordinal=index + 1)
+        for index, path in enumerate(_actual_media_paths(row))
+    ]
+    _apply_media_manifest(row, items, expected=expected, status=status)
+    if paths:
+        row["media_fetch_status"] = "downloaded" if status == "complete" else "downloaded_partial_album"
+        row["media_fetch_error"] = "" if status == "complete" else "album acquisition is incomplete"
+
+
+def _download_direct_image_refs(row: dict, refs: list[str], *, name_prefix: str) -> tuple[list[str], list[str]]:
+    paths: list[str] = []
+    errors: list[str] = []
+    for index, ref in enumerate(refs[:max_images_per_post()], 1):
+        suffix = ".jpg"
+        match = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", ref, re.I)
+        if match:
+            suffix = "." + match.group(1).lower().replace("jpeg", "jpg")
+        try:
+            paths.append(_download_http_image(ref, MEDIA / f"{row['image_queue_id']}_{name_prefix}_{index}{suffix}"))
+        except Exception as exc:
+            errors.append(f"{index}:{type(exc).__name__}: {str(exc)[:160]}")
+    return paths, errors
 
 
 def image_work_key(row: dict) -> str:
@@ -308,6 +463,19 @@ def publication_eligibility_gate_reason(row: dict) -> str:
     if not actual_version:
         return "publication_eligibility_gate_version_missing"
     if actual_version != expected_version:
+        # One bounded migration exception: rows already accepted by v4 and
+        # terminalized only by the old single-image quality scorer may be
+        # reacquired under the v5 album contract. Source/text/compliance
+        # semantics are unchanged; all other stale producer versions remain
+        # fail-closed.
+        rescore_helper = globals().get("image_row_needs_contract_rescore")
+        if (
+            actual_version == "region_talk_publication_eligibility_v4"
+            and expected_version == "region_talk_publication_eligibility_v5"
+            and callable(rescore_helper)
+            and rescore_helper(row)
+        ):
+            return ""
         return f"publication_eligibility_gate_version_mismatch:expected={expected_version};actual={actual_version}"
     return ""
 
@@ -510,6 +678,20 @@ def stale_image_lease(r):
     ttl = int(os.getenv("REGION_TALK_IMAGE_DIAG_STALE_LEASE_SECONDS") or "1800")
     return (datetime.now(timezone.utc) - dt).total_seconds() >= max(0, ttl)
 
+
+def image_row_needs_contract_rescore(row: dict) -> bool:
+    if str(row.get("image_decision_contract_version") or "") == IMAGE_DECISION_CONTRACT_VERSION:
+        return False
+    if str(row.get("image_queue_status") or "") != "actual_scored":
+        return False
+    if str(row.get("image_model_input_type") or "") != "actual_image":
+        return False
+    try:
+        score = float(row.get("overall_media_score") or row.get("final_visual_score") or 0)
+    except (TypeError, ValueError):
+        score = 0.0
+    return score < legacy_publication_media_threshold()
+
 def ydb_upsert_image_rows(batch, *, stage: str):
     if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
@@ -526,7 +708,38 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'im
             r["queue_item_updated_at"] = now
             if previous_status:
                 r.setdefault("last_status_changed_at", now)
-            tx.execute(query,{"$pk":"image_queue_item:"+key.replace("image_queue_item:",""),"$payload_json":json.dumps(r,ensure_ascii=False),"$updated_at":now},commit_tx=False)
+            payload = dict(r)
+            # Kaggle-local paths are transient and unusable after the notebook
+            # exits. Persist compact manifest hashes/scores, not filesystem
+            # names or duplicated path lists.
+            for transient_key in ("actual_media_path", "actual_media_paths", "thumbnail_path", "unsupported_media_path"):
+                payload.pop(transient_key, None)
+            tx.execute(query,{"$pk":"image_queue_item:"+key.replace("image_queue_item:",""),"$payload_json":json.dumps(payload,ensure_ascii=False),"$updated_at":now},commit_tx=False)
+        tx.commit()
+    try: pool.retry_operation_sync(op)
+    finally: driver.stop(timeout=5)
+
+
+def ydb_upsert_frame_score_rows(batch):
+    if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0", "false", "no"}:
+        return
+    ydb, driver, table_path = ydb_connect(); pool = ydb.SessionPool(driver); now = datetime.now(timezone.utc).isoformat()
+    def op(session):
+        query = session.prepare(f"""DECLARE $pk AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'image_frame_score_item', $payload_json, $updated_at);""")
+        tx = session.transaction(ydb.SerializableReadWrite())
+        for row in batch:
+            frame_id = str(row.get("image_frame_score_id") or "")
+            if not frame_id:
+                continue
+            payload = dict(row)
+            payload["frame_score_updated_at"] = now
+            payload["last_image_diag_run_id"] = RUN_ID
+            tx.execute(query, {
+                "$pk": "image_frame_score_item:" + frame_id.replace("image_frame_score_item:", ""),
+                "$payload_json": json.dumps(payload, ensure_ascii=False),
+                "$updated_at": now,
+            }, commit_tx=False)
         tx.commit()
     try: pool.retry_operation_sync(op)
     finally: driver.stop(timeout=5)
@@ -583,12 +796,24 @@ def ydb_update_source_visual_rollups():
         avg=round(sum(scores)/len(scores),3) if scores else ""
         low=sum(1 for x in scores if x < min_score)
         previous_status=str(srow.get("source_queue_status") or "")
-        if len(scores) >= min_n and avg != "" and float(avg) < min_score:
-            qstatus="processed_found_ko_low_image_quality"; img_status="exclude_low_image_quality"; reason="kaliningrad_posts_found_but_actual_images_systematically_low_score"
-        elif len(scores) > 0:
-            qstatus=previous_status or "processed_found_ko_candidate"; img_status="monitor_candidate_image_quality_ok"; reason=""
+        previous_reason=str(srow.get("monitoring_exclusion_reason") or "")
+        legacy_quality_reason="kaliningrad_posts_found_but_actual_images_systematically_low_score"
+        # Raw uncalibrated image scores are observation only. They must never
+        # terminalize a source: one scorer error would otherwise amplify into
+        # loss of every future post from that author. Repair only the exact old
+        # image-quality exclusion; unrelated local/spam/compliance decisions
+        # remain untouched.
+        if previous_status == "processed_found_ko_low_image_quality" and previous_reason in {"", legacy_quality_reason}:
+            qstatus="processed_found_ko_candidate"
         else:
-            qstatus=previous_status or "processed_found_ko_candidate"; img_status="needs_more_actual_image_evidence"; reason=""
+            qstatus=previous_status or "processed_found_ko_candidate"
+        if len(scores) >= min_n and avg != "" and float(avg) < min_score:
+            img_status="unadjudicated_raw_score_low_observation"
+        elif len(scores) > 0:
+            img_status="unadjudicated_raw_score_observation"
+        else:
+            img_status="needs_more_actual_image_evidence"
+        reason="" if previous_reason == legacy_quality_reason else previous_reason
         changed=bool(previous_status and previous_status != qstatus)
         srow.update({
             "source_queue_status": qstatus, "previous_source_queue_status": previous_status if changed else srow.get("previous_source_queue_status", ""),
@@ -596,6 +821,8 @@ def ydb_update_source_visual_rollups():
             "ko_posts_found": max(int(srow.get("ko_posts_found") or 0), len(matches)), "candidate_posts_found": max(int(srow.get("candidate_posts_found") or 0), len(matches)),
             "actual_images_scored_count": len(scores), "avg_actual_image_score": avg, "low_actual_image_count": low,
             "source_image_quality_status": img_status, "source_image_quality_min_actual_scored": min_n, "source_image_quality_min_avg_score": min_score,
+            "source_image_quality_decision_use": "diagnostic_only_not_source_exclusion",
+            "source_image_quality_contract_version": IMAGE_DECISION_CONTRACT_VERSION,
             "monitoring_exclusion_reason": reason,
         })
         updated.append(srow)
@@ -616,12 +843,17 @@ def ydb_rows_for_diagnostic(limit_n: int):
         status=str(r.get("image_queue_status") or "")
         input_type=str(r.get("image_model_input_type") or "")
         lease=str(r.get("lease_run_id") or "")
-        if status == "actual_scored" and input_type == "actual_image": continue
+        if status == "actual_scored" and input_type == "actual_image" and not image_row_needs_contract_rescore(r): continue
         if status in IMAGE_TERMINAL_SKIP_STATUSES: continue
+        if status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
+            continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
-            r["image_queue_status"] = "broken_media"
-            r["media_acquisition_status"] = "terminal_media_fetch_exhausted"
-            r["next_action"] = "terminal_broken_media_no_retry"
+            r["image_queue_status"] = "needs_visual_review"
+            r["media_acquisition_status"] = "media_fetch_exhausted_requires_nonterminal_review"
+            r["image_quality_decision"] = IMAGE_QUALITY_NEEDS_REVIEW
+            r["image_quality_reason"] = "media_acquisition_exhausted_without_complete_album"
+            r["image_quality_terminality"] = "nonterminal"
+            r["next_action"] = "visual_review_or_acquisition_repair"
             r["media_fetch_retry_exhausted"] = "true"
             retry_exhausted.append(r)
             continue
@@ -636,6 +868,11 @@ def ydb_rows_for_diagnostic(limit_n: int):
             r["image_queue_status"] = "needs_actual_image_fetch"
             r["media_acquisition_status"] = "needs_actual_image_fetch"
             r["actual_image_retry_reason"] = "metadata_only_actual_scored_is_not_final_visual_evidence"
+        elif image_row_needs_contract_rescore(r):
+            r["previous_image_queue_status"] = status
+            r["image_queue_status"] = "needs_actual_image_fetch"
+            r["media_acquisition_status"] = "versioned_album_rescore_required"
+            r["actual_image_retry_reason"] = "legacy_low_score_requires_album_complete_rescore_or_review"
         if status == "image_analysis_in_progress" and lease and lease != RUN_ID and not stale_image_lease(r): continue
         if status == "image_analysis_in_progress" and lease and lease != RUN_ID and stale_image_lease(r):
             r["previous_image_queue_status"] = status
@@ -793,27 +1030,54 @@ async def telegram_media_humanlike_pause(index: int, total: int) -> None:
     log_event("telegram_media_humanlike_pause", phase="telegram_fetch", seconds=round(delay, 3), after_index=index, total=total)
     await asyncio.sleep(delay)
 
+
+def _telegram_message_is_image(message) -> bool:
+    if getattr(message, "photo", None) is not None:
+        return True
+    file_obj = getattr(message, "file", None)
+    mime_type = str(getattr(file_obj, "mime_type", "") or "").lower()
+    return mime_type.startswith("image/")
+
+
+async def _telegram_album_messages(client, handle: str, anchor, mid: int) -> list:
+    grouped_id = getattr(anchor, "grouped_id", None)
+    if grouped_id is None:
+        return [anchor]
+    radius = max(12, max_images_per_post() + 2)
+    ids = list(range(max(1, mid - radius), mid + radius + 1))
+    nearby = await client.get_messages(handle, ids=ids)
+    messages = [
+        message for message in (nearby or [])
+        if message is not None and getattr(message, "grouped_id", None) == grouped_id
+    ]
+    messages.sort(key=lambda message: int(getattr(message, "id", 0) or 0))
+    return messages or [anchor]
+
+
 async def fetch_telegram(batch):
     remaining = []
     for r in batch:
-        direct_url = direct_image_url(r.get("image_url_or_local_path") or r.get("primary_media_path") or "")
-        if direct_url:
+        direct_refs = _row_direct_image_refs(r)
+        if direct_refs:
             t0 = time.monotonic()
-            try:
-                suffix = ".jpg"
-                m = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", direct_url, re.I)
-                if m:
-                    suffix = "." + m.group(1).lower().replace("jpeg", "jpg")
-                path = MEDIA / f"{r['image_queue_id']}_public_url{suffix}"
-                r["actual_media_path"] = _download_http_image(direct_url, path)
+            paths, direct_errors = _download_direct_image_refs(r, direct_refs, name_prefix="public_url")
+            expected = _expected_image_count(r, len(direct_refs))
+            status = "complete" if paths and len(paths) >= expected and not direct_errors else "partial"
+            if paths:
+                _apply_acquired_paths(
+                    r,
+                    paths,
+                    media_ids=[f"direct:{index}" for index in range(1, len(paths) + 1)],
+                    expected=expected,
+                    status=status,
+                )
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
-                r["media_fetch_status"] = "downloaded_public_url"
-                r["media_fetch_error"] = ""
-                log_event("image_fetch_result", phase="public_url_fetch", image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=True, seconds=r.get("media_download_seconds"))
+                r["media_fetch_status"] = "downloaded_public_url" if status == "complete" else "downloaded_partial_album"
+                if direct_errors:
+                    r["media_fetch_error"] = "; ".join(direct_errors)[:300]
+                log_event("image_fetch_result", phase="public_url_fetch", image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=True, actual_images=len(paths), expected_images=expected, seconds=r.get("media_download_seconds"))
+            if status == "complete":
                 continue
-            except Exception as exc:
-                r["media_download_seconds"] = round(time.monotonic()-t0, 3)
-                r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]
         remaining.append(r)
     batch = remaining
     if not batch:
@@ -843,7 +1107,9 @@ async def fetch_telegram(batch):
                     public_url = _public_tg_post_image_url(handle, mid) if public_tg_html_fallback_enabled() else ""
                     if public_url:
                         path = MEDIA / f"{r['image_queue_id']}_{handle}_{mid}_public.jpg"
-                        r["actual_media_path"] = _download_http_image(public_url, path)
+                        downloaded = _download_http_image(public_url, path)
+                        expected = _expected_image_count(r, 1)
+                        _apply_acquired_paths(r, [downloaded], media_ids=[f"telegram:{mid}"], expected=expected, status="complete" if expected <= 1 else "partial")
                         r["media_fetch_status"]="downloaded_public_tg_html"
                         r["media_download_seconds"] = round(time.monotonic()-t0, 3)
                         log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
@@ -852,13 +1118,38 @@ async def fetch_telegram(batch):
                         r["media_fetch_status"]="needs_actual_image_fetch"
                         r["media_fetch_error"]="telegram message has no direct media; public t.me/s fallback disabled"
                         continue
-                path = await client.download_media(msg, file=str(MEDIA / f"{r['image_queue_id']}_{handle}_{mid}"))
-                r["media_download_seconds"] = round(time.monotonic()-t0, 3)
-                if path:
-                    if _path_is_unsupported_media(path):
-                        mark_unsupported_media(r, f"telegram media is not an image: {Path(str(path)).suffix.lower() or 'unknown'}", path=path)
+                album_messages = await _telegram_album_messages(client, handle, msg, mid)
+                image_messages = [message for message in album_messages if _telegram_message_is_image(message)]
+                unsupported_messages = [message for message in album_messages if getattr(message, "media", None) and not _telegram_message_is_image(message)]
+                expected = len(image_messages)
+                if not image_messages:
+                    if unsupported_messages:
+                        suffix = str(getattr(getattr(unsupported_messages[0], "file", None), "ext", "") or "unknown")
+                        mark_unsupported_media(r, f"telegram media is not an image: {suffix}")
                     else:
-                        r["actual_media_path"] = str(path); r["media_fetch_status"] = "downloaded"
+                        r["media_fetch_status"] = "needs_actual_image_fetch"
+                        r["media_fetch_error"] = "telegram post contains no image frames"
+                    continue
+                paths: list[str] = []
+                media_ids: list[str] = []
+                download_errors: list[str] = []
+                for frame_index, message in enumerate(image_messages[:max_images_per_post()], 1):
+                    message_id = int(getattr(message, "id", 0) or 0)
+                    try:
+                        path = await client.download_media(message, file=str(MEDIA / f"{r['image_queue_id']}_{handle}_{message_id}"))
+                        if path and not _path_is_unsupported_media(path):
+                            paths.append(str(path))
+                            media_ids.append(f"telegram:{message_id}")
+                        else:
+                            download_errors.append(f"{message_id}:empty_or_unsupported")
+                    except Exception as frame_exc:
+                        download_errors.append(f"{message_id}:{type(frame_exc).__name__}: {str(frame_exc)[:100]}")
+                r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+                acquisition_complete = bool(paths) and len(paths) == expected and not download_errors and expected <= max_images_per_post()
+                if paths:
+                    _apply_acquired_paths(r, paths, media_ids=media_ids, expected=expected, status="complete" if acquisition_complete else "partial")
+                    if download_errors:
+                        r["media_fetch_error"] = "; ".join(download_errors)[:300]
                 else:
                     r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="download_media returned empty path"
             except Exception as exc:
@@ -866,7 +1157,9 @@ async def fetch_telegram(batch):
                     public_url = _public_tg_post_image_url(handle, mid) if public_tg_html_fallback_enabled() else ""
                     if public_url:
                         path = MEDIA / f"{r['image_queue_id']}_{handle}_{mid}_public.jpg"
-                        r["actual_media_path"] = _download_http_image(public_url, path)
+                        downloaded = _download_http_image(public_url, path)
+                        expected = _expected_image_count(r, 1)
+                        _apply_acquired_paths(r, [downloaded], media_ids=[f"telegram:{mid}"], expected=expected, status="complete" if expected <= 1 else "partial")
                         r["media_fetch_status"]="downloaded_public_tg_html"
                     else:
                         r["media_fetch_status"]="needs_actual_image_fetch"
@@ -874,7 +1167,7 @@ async def fetch_telegram(batch):
                 except Exception as web_exc:
                     r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:160] + "; public_html=" + type(web_exc).__name__ + ": " + str(web_exc)[:120]
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
-            log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
+            log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), actual_images=len(_actual_media_paths(r)), expected_images=r.get("expected_image_count"), acquisition_status=r.get("image_acquisition_status"), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
             if idx % 10 == 0:
                 log_event("media_fetch_progress", phase="media_fetch", done=idx, total=len(batch), actual=sum(1 for x in batch if x.get("actual_media_path")))
             await telegram_media_humanlike_pause(idx, len(batch))
@@ -883,21 +1176,19 @@ async def fetch_telegram(batch):
 
 def fetch_vk(r):
     t0 = time.monotonic()
-    direct_url = direct_image_url(r.get("image_url_or_local_path") or r.get("primary_media_path") or "")
-    if direct_url:
-        try:
-            suffix = ".jpg"
-            match = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", direct_url, re.I)
-            if match:
-                suffix = "." + match.group(1).lower().replace("jpeg", "jpg")
-            path = MEDIA / f"{r['image_queue_id']}_vk_public_url{suffix}"
-            r["actual_media_path"] = _download_http_image(direct_url, path)
-            r["media_fetch_status"] = "downloaded_public_url"
-            r["media_fetch_error"] = ""
+    direct_refs = _row_direct_image_refs(r)
+    if direct_refs:
+        paths, errors = _download_direct_image_refs(r, direct_refs, name_prefix="vk_public_url")
+        expected = _expected_image_count(r, len(direct_refs))
+        status = "complete" if paths and len(paths) >= expected and not errors else "partial"
+        if paths:
+            _apply_acquired_paths(r, paths, media_ids=[f"vk_direct:{index}" for index in range(1, len(paths) + 1)], expected=expected, status=status)
+            r["media_fetch_status"] = "downloaded_public_url" if status == "complete" else "downloaded_partial_album"
+            if errors:
+                r["media_fetch_error"] = "; ".join(errors)[:300]
             r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+        if status == "complete":
             return
-        except Exception as exc:
-            r["media_fetch_error"] = "direct_url=" + type(exc).__name__ + ": " + str(exc)[:220]
     token = os.getenv("VK_USER_TOKEN") or os.getenv("VK_ACCESS_TOKEN4") or os.getenv("VK_ACCESS_TOKEN5") or os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or ""
     owner, pid = parse_vk(r.get("post_url", ""))
     if not token or owner is None:
@@ -916,9 +1207,21 @@ def fetch_vk(r):
                     best = max(sizes, key=lambda s: int(s.get("width") or 0)*int(s.get("height") or 0))
                     if best.get("url"): photos.append(best.get("url"))
         if not photos: raise RuntimeError("no VK photo attachment")
-        img = requests.get(photos[0], timeout=35); img.raise_for_status()
-        path = MEDIA / f"{r['image_queue_id']}_vk_{owner}_{pid}.jpg"; path.write_bytes(img.content)
-        r["actual_media_path"] = str(path); r["media_fetch_status"]="downloaded"; r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+        paths=[]; media_ids=[]; download_errors=[]
+        for frame_index, photo_url in enumerate(photos[:max_images_per_post()], 1):
+            try:
+                img = requests.get(photo_url, timeout=35); img.raise_for_status()
+                path = MEDIA / f"{r['image_queue_id']}_vk_{owner}_{pid}_{frame_index}.jpg"; path.write_bytes(img.content)
+                paths.append(str(path)); media_ids.append(f"vk:{owner}_{pid}:{frame_index}")
+            except Exception as frame_exc:
+                download_errors.append(f"{frame_index}:{type(frame_exc).__name__}: {str(frame_exc)[:120]}")
+        if not paths:
+            raise RuntimeError("all VK photo downloads failed: " + "; ".join(download_errors)[:200])
+        complete = len(paths) == len(photos) and not download_errors and len(photos) <= max_images_per_post()
+        _apply_acquired_paths(r, paths, media_ids=media_ids, expected=len(photos), status="complete" if complete else "partial")
+        if download_errors:
+            r["media_fetch_error"] = "; ".join(download_errors)[:300]
+        r["media_download_seconds"] = round(time.monotonic()-t0, 3)
     except Exception as exc:
         r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]; r["media_download_seconds"] = round(time.monotonic()-t0, 3)
 
@@ -1128,19 +1431,143 @@ def finalize(r):
     r["total_inference_seconds"] = round(sum(float(r.get(k) or 0) for k in ("cv_inference_seconds","clip_inference_seconds","laion_inference_seconds","nima_inference_seconds")), 3)
     r["total_processing_seconds"] = round(sum(float(r.get(k) or 0) for k in ("media_download_seconds","image_decode_seconds","total_inference_seconds")), 3)
 
+
+FRAME_SCORE_FIELDS = (
+    "cv_technical_quality_score", "cv_aesthetic_score", "cv_postcardness_score", "cv_overall_media_score",
+    "clip_postcardness_score", "clip_positive_mass", "clip_negative_mass", "clip_top_prompt",
+    "laion_aesthetic_raw_score", "laion_aesthetic_score", "nima_quality_raw_score", "nima_quality_score",
+    "final_visual_score", "model_disagreement_score", "image_width", "image_height", "image_file_bytes",
+    "cv_inference_seconds", "clip_inference_seconds", "laion_inference_seconds", "nima_inference_seconds",
+    "total_inference_seconds", "image_decode_seconds", "final_visual_status",
+)
+
+
+def _frame_component_bundle_complete(frame: dict) -> bool:
+    return all(frame.get(key) not in (None, "") for key in (
+        "cv_overall_media_score", "clip_postcardness_score", "laion_aesthetic_score", "nima_quality_score",
+    ))
+
+
+def _legacy_frame_passes(frame: dict) -> bool:
+    try:
+        overall = float(frame.get("final_visual_score") or 0)
+        postcardness = float(frame.get("clip_postcardness_score") or frame.get("cv_postcardness_score") or 0)
+        aesthetic = float(frame.get("laion_aesthetic_score") or frame.get("cv_aesthetic_score") or 0)
+        technical = float(frame.get("cv_technical_quality_score") or 0)
+    except (TypeError, ValueError):
+        return False
+    primary = overall >= legacy_publication_media_threshold() and postcardness >= float(
+        os.getenv("REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE") or "0.55"
+    )
+    narrow_override = (
+        overall >= float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_OVERALL_MEDIA_SCORE") or "0.63")
+        and postcardness >= float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_POSTCARDNESS_SCORE") or "0.85")
+        and aesthetic + float(os.getenv("REGION_TALK_PUBLICATION_SCORE_QUANTIZATION_EPSILON") or "0.001")
+        >= float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_AESTHETIC_SCORE") or "0.52")
+        and technical >= float(os.getenv("REGION_TALK_PUBLICATION_NEAR_MIN_TECHNICAL_SCORE") or "0.68")
+    )
+    return primary or narrow_override
+
+
+def _compact_frame_score(parent: dict, frame: dict, *, frame_index: int, media_item: dict) -> dict:
+    parent_key = str(parent.get("image_queue_id") or parent.get("post_url") or "")
+    media_id = str(media_item.get("media_id") or f"frame:{frame_index}")
+    compact = {
+        "image_frame_score_id": f"{parent_key}:{frame_index}",
+        "image_queue_id": parent.get("image_queue_id") or "",
+        "post_url": parent.get("post_url") or "",
+        "canonical_source_key": parent.get("canonical_source_key") or parent.get("source_key") or "",
+        "frame_index": frame_index,
+        "media_id": media_id,
+        "content_sha256": media_item.get("content_sha256") or "",
+        "image_decision_contract_version": IMAGE_DECISION_CONTRACT_VERSION,
+        "image_acquisition_version": IMAGE_ACQUISITION_VERSION,
+        "image_scorer_version": IMAGE_LEGACY_SCORER_VERSION,
+    }
+    compact.update({key: frame.get(key) for key in FRAME_SCORE_FIELDS if frame.get(key) not in (None, "")})
+    return compact
+
+
+def apply_album_quality_decision(row: dict, frame_scores: list[dict]) -> dict:
+    scored = [frame for frame in frame_scores if frame.get("final_visual_status") == "scored_actual_image"]
+    row["image_decision_contract_version"] = IMAGE_DECISION_CONTRACT_VERSION
+    row["image_scorer_version"] = IMAGE_LEGACY_SCORER_VERSION
+    row["images_scored_actual_count"] = len(scored)
+    row["actual_image_count"] = len(scored)
+    row["frame_scores_available_count"] = len(scored)
+    row["image_component_bundle_complete"] = str(bool(scored) and all(_frame_component_bundle_complete(frame) for frame in scored)).lower()
+    if not scored:
+        row["image_quality_decision"] = IMAGE_QUALITY_SCORING_RETRY
+        row["image_quality_reason"] = "no_decodable_scored_image"
+        return row
+
+    ranked = sorted(scored, key=lambda frame: float(frame.get("final_visual_score") or -1), reverse=True)
+    best = ranked[0]
+    anchor = scored[0]
+    for key in FRAME_SCORE_FIELDS:
+        if anchor.get(key) not in (None, ""):
+            row[key] = anchor.get(key)
+    row["overall_media_score"] = anchor.get("final_visual_score")
+    row["postcardness_score"] = anchor.get("clip_postcardness_score") or anchor.get("cv_postcardness_score")
+    row["aesthetic_score"] = anchor.get("laion_aesthetic_score") or anchor.get("cv_aesthetic_score")
+    row["technical_quality_score"] = anchor.get("cv_technical_quality_score")
+    row["shadow_best_frame_index"] = int(best.get("frame_index") or 1)
+    row["shadow_best_frame_score"] = best.get("final_visual_score")
+    row["shadow_best_frame_postcardness_score"] = best.get("clip_postcardness_score") or best.get("cv_postcardness_score")
+    row["selected_media_ids"] = json.dumps(
+        [str(frame.get("media_id") or "") for frame in ranked[: min(3, len(ranked))]],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+    expected = int(row.get("expected_image_count") or len(scored))
+    fetched = int(row.get("fetched_image_count") or len(_actual_media_paths(row)))
+    acquisition_complete = str(row.get("image_acquisition_status") or "") == "complete" and expected == fetched
+    components_complete = all(_frame_component_bundle_complete(frame) for frame in scored)
+    if not acquisition_complete:
+        row["image_quality_decision"] = IMAGE_QUALITY_NEEDS_REVIEW
+        row["image_quality_reason"] = "incomplete_album_never_terminal_quality_reject"
+        row["image_quality_terminality"] = "nonterminal"
+    elif not components_complete:
+        row["image_quality_decision"] = IMAGE_QUALITY_SCORING_RETRY
+        row["image_quality_reason"] = "required_legacy_component_unavailable"
+        row["image_quality_terminality"] = "nonterminal"
+    elif _legacy_frame_passes(anchor):
+        # Preserve only the already-established legacy success path. Later
+        # frames are shadow diagnostics until the labelled album calibration
+        # required by the external audit is complete.
+        row["image_quality_decision"] = IMAGE_QUALITY_LEGACY_ACCEPT
+        row["image_quality_reason"] = "complete_album_anchor_passed_existing_quality_contract"
+        row["image_quality_terminality"] = "contract_version"
+    else:
+        row["image_quality_decision"] = IMAGE_QUALITY_NEEDS_REVIEW
+        row["image_quality_reason"] = "uncalibrated_legacy_low_score_requires_visual_review"
+        row["image_quality_terminality"] = "nonterminal"
+    return row
+
 def apply_image_queue_status(r):
     previous_status = str(r.get("image_queue_status") or "")
     if r.get("actual_image_count"):
-        r["image_queue_status"] = "actual_scored"
+        quality_decision = str(r.get("image_quality_decision") or "")
+        if quality_decision == IMAGE_QUALITY_SCORING_RETRY:
+            r["image_queue_status"] = "scoring_retry"
+        elif quality_decision == IMAGE_QUALITY_NEEDS_REVIEW:
+            r["image_queue_status"] = "actual_scored"
+        else:
+            r["image_queue_status"] = "actual_scored"
         r["image_model_input_type"] = "actual_image"
-        r["image_model_type"] = "multi_model_visual_consensus"
-        r["overall_media_score"] = r.get("final_visual_score")
-        r["postcardness_score"] = r.get("visual_consensus_score") or r.get("clip_postcardness_score") or r.get("cv_postcardness_score")
-        r["aesthetic_score"] = r.get("laion_aesthetic_score") or r.get("cv_aesthetic_score")
-        r["technical_quality_score"] = r.get("cv_technical_quality_score")
-        r["media_acquisition_status"] = "actual_image_downloaded_and_scored"
-        r["images_scored_actual_count"] = 1
-        r["next_action"] = "human_review_best_image"
+        r["image_model_type"] = "versioned_album_legacy_diagnostics"
+        r["media_acquisition_status"] = (
+            "actual_album_downloaded_and_scored"
+            if str(r.get("image_acquisition_status") or "") == "complete"
+            else "partial_album_requires_retry_or_review"
+        )
+        if quality_decision == IMAGE_QUALITY_LEGACY_ACCEPT:
+            r["next_action"] = "publication_verification"
+        elif quality_decision == IMAGE_QUALITY_SCORING_RETRY:
+            r["next_action"] = "retry_required_image_components"
+        else:
+            r["next_action"] = "visual_review_nonterminal"
     else:
         if _row_has_terminal_media_failure(r):
             r["image_queue_status"] = IMAGE_TERMINAL_UNSUPPORTED_STATUS
@@ -1150,11 +1577,14 @@ def apply_image_queue_status(r):
             r["images_scored_actual_count"] = 0
             r["next_action"] = "skip_unsupported_media"
         elif int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
-            r["image_queue_status"] = "broken_media"
-            r["media_acquisition_status"] = "terminal_media_fetch_exhausted"
+            r["image_queue_status"] = "needs_visual_review"
+            r["media_acquisition_status"] = "media_fetch_exhausted_requires_nonterminal_review"
             r["images_scored_actual_count"] = 0
             r["media_fetch_retry_exhausted"] = "true"
-            r["next_action"] = "terminal_broken_media_no_retry"
+            r["image_quality_decision"] = IMAGE_QUALITY_NEEDS_REVIEW
+            r["image_quality_reason"] = "media_acquisition_exhausted_without_complete_album"
+            r["image_quality_terminality"] = "nonterminal"
+            r["next_action"] = "visual_review_or_acquisition_repair"
         else:
             r["image_queue_status"] = "needs_actual_image_fetch"
             r["media_acquisition_status"] = "needs_actual_image_fetch"
@@ -1205,19 +1635,44 @@ def process_batch(batch_rows, batch_index: int):
     log_event("media_fetch_done", phase="media_fetch", actual_downloaded=sum(1 for r in rows if r.get("actual_media_path")), total=len(rows))
 
     for i, r in enumerate(rows, 1):
-        log_event("image_inference_current", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), source_title=r.get("source_title"), media_fetch_status=r.get("media_fetch_status"))
-        im=validate_image(r)
-        if im is None:
-            errors.append({"image_queue_id":r.get("image_queue_id"),"post_url":r.get("post_url"),"stage":"media_acquisition_or_decode","error":r.get("media_fetch_error") or "no image"})
+        media_paths = _actual_media_paths(r)
+        if media_paths and not r.get("media_manifest_items"):
+            expected = _expected_image_count(r, len(media_paths))
+            manifest = [_manifest_item(path, media_id=f"frame:{idx}", ordinal=idx) for idx, path in enumerate(media_paths, 1)]
+            _apply_media_manifest(r, manifest, expected=expected, status="complete" if len(media_paths) == expected else "partial")
+        log_event("image_inference_current", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), source_title=r.get("source_title"), media_fetch_status=r.get("media_fetch_status"), actual_images=len(media_paths), expected_images=r.get("expected_image_count"))
+        frame_scores: list[dict] = []
+        compact_frame_rows: list[dict] = []
+        manifest_items = list(r.get("media_manifest_items") or [])
+        for frame_index, media_path in enumerate(media_paths, 1):
+            frame = {
+                "actual_media_path": media_path,
+                "frame_index": frame_index,
+                "media_id": str((manifest_items[frame_index - 1] if frame_index <= len(manifest_items) else {}).get("media_id") or f"frame:{frame_index}"),
+            }
+            im = validate_image(frame)
+            if im is None:
+                errors.append({"image_queue_id":r.get("image_queue_id"),"post_url":r.get("post_url"),"frame_index":frame_index,"stage":"media_acquisition_or_decode","error":frame.get("media_fetch_error") or "no image"})
+                continue
+            try:
+                score_cv(im, frame); score_clip(im, frame); score_laion(im, frame); score_nima(frame); finalize(frame)
+            finally:
+                try: im.close()
+                except Exception: pass
+            frame_scores.append(frame)
+            media_item = manifest_items[frame_index - 1] if frame_index <= len(manifest_items) else _manifest_item(media_path, media_id=f"frame:{frame_index}", ordinal=frame_index)
+            compact_frame_rows.append(_compact_frame_score(r, frame, frame_index=frame_index, media_item=media_item))
+        if compact_frame_rows:
+            ydb_upsert_frame_score_rows(compact_frame_rows)
+        if not frame_scores:
+            errors.append({"image_queue_id":r.get("image_queue_id"),"post_url":r.get("post_url"),"stage":"media_acquisition_or_decode","error":r.get("media_fetch_error") or "no decodable image"})
+            r["actual_image_count"] = 0
             finalize(r)
-            apply_image_queue_status(r)
-            ydb_upsert_image_rows([r], stage="scored_or_retry")
-            log_event("image_inference_result", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("final_visual_status"), error=r.get("media_fetch_error"))
-            continue
-        score_cv(im,r); score_clip(im,r); score_laion(im,r); score_nima(r); finalize(r)
+        else:
+            apply_album_quality_decision(r, frame_scores)
         apply_image_queue_status(r)
         ydb_upsert_image_rows([r], stage="scored_or_retry")
-        log_event("image_inference_result", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("final_visual_status"), final_visual_score=r.get("final_visual_score"), cv_score=r.get("cv_overall_media_score"), clip_score=r.get("clip_postcardness_score"), laion_score=r.get("laion_aesthetic_score"), nima_score=r.get("nima_quality_score"), download_seconds=r.get("media_download_seconds"), decode_seconds=r.get("image_decode_seconds"), inference_seconds=r.get("total_inference_seconds"), total_processing_seconds=r.get("total_processing_seconds"), width=r.get("image_width"), height=r.get("image_height"))
+        log_event("image_inference_result", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("final_visual_status"), image_quality_decision=r.get("image_quality_decision"), image_quality_reason=r.get("image_quality_reason"), actual_images=r.get("images_scored_actual_count"), expected_images=r.get("expected_image_count"), final_visual_score=r.get("final_visual_score"), shadow_best_frame_score=r.get("shadow_best_frame_score"), cv_score=r.get("cv_overall_media_score"), clip_score=r.get("clip_postcardness_score"), laion_score=r.get("laion_aesthetic_score"), nima_score=r.get("nima_quality_score"), download_seconds=r.get("media_download_seconds"), decode_seconds=r.get("image_decode_seconds"), inference_seconds=r.get("total_inference_seconds"), total_processing_seconds=r.get("total_processing_seconds"), width=r.get("image_width"), height=r.get("image_height"))
         if i % 10 == 0: log_event("inference_progress", phase="inference", done=i, total=len(rows), actual_scored=sum(1 for x in rows if x.get("final_visual_status")=="scored_actual_image"))
 
     for r in rows:

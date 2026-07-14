@@ -194,6 +194,17 @@ valid Telegram channel and VK community **or personal profile** into the same
 canonical `unified_source_queue`. Admission is idempotent by
 `canonical_source_key`; no second blogger queue or second cursor is created.
 
+The 2026-07-14 registry snapshot contains 238 evidence records: 186
+`confirmed_external` and 52 `needs_externality_review`. Those are record
+counts, not unique source counts: one person may carry Telegram, VK, VK Video,
+RUTUBE and several evidence URLs. Current product ingestion canonicalizes only
+supported Telegram and VK identities; VK Video/RUTUBE remain evidence for the
+same author until a dedicated source reader exists. `pipeline_status=stored_only`
+does not block confirmed rows. The orchestrator therefore reports the stable
+registry denominator, eligible confirmed records, unique canonical TG/VK
+sources, already queued sources and missing queue admissions separately; it
+must not present 238 records as 238 scanned communities.
+
 Such rows carry `priority_lane=confirmed_external_blogger` and are selected
 ahead of generic backlog and old no-hit continuations. Existing terminal
 spam/local decisions are not silently erased. New admission or first evidence

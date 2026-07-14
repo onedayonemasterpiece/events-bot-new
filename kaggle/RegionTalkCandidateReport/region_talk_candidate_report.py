@@ -7644,21 +7644,23 @@ def build_unified_source_queue(
         actual_n = len(actual_scores) if actual_scores else int(rec.get("actual_images_scored_count") or 0)
         avg_score = round(sum(actual_scores) / len(actual_scores), 3) if actual_scores else rec.get("avg_actual_image_score", "")
         low_count = sum(1 for x in actual_scores if x < image_quality_min_score) if actual_scores else int(rec.get("low_actual_image_count") or 0)
+        legacy_image_exclusion_reason = "kaliningrad_posts_found_but_actual_images_systematically_low_score"
+        prior_monitoring_reason = str(srow.get("monitoring_exclusion_reason") or rec.get("monitoring_exclusion_reason") or "")
         if candidate_posts > 0 and actual_n >= image_quality_min_n and avg_score != "" and float(avg_score) < image_quality_min_score:
-            image_quality_source_status = "exclude_low_image_quality"
-            monitoring_exclusion_reason = "kaliningrad_posts_found_but_actual_images_systematically_low_score"
+            image_quality_source_status = "unadjudicated_raw_score_low_observation"
+            monitoring_exclusion_reason = "" if prior_monitoring_reason == legacy_image_exclusion_reason else prior_monitoring_reason
         elif candidate_posts > 0 and actual_n > 0:
-            image_quality_source_status = "monitor_candidate_image_quality_ok"
-            monitoring_exclusion_reason = ""
+            image_quality_source_status = "unadjudicated_raw_score_observation"
+            monitoring_exclusion_reason = "" if prior_monitoring_reason == legacy_image_exclusion_reason else prior_monitoring_reason
         elif candidate_posts > 0:
             image_quality_source_status = "needs_more_actual_image_evidence"
-            monitoring_exclusion_reason = ""
+            monitoring_exclusion_reason = "" if prior_monitoring_reason == legacy_image_exclusion_reason else prior_monitoring_reason
         elif ko_posts > 0:
             image_quality_source_status = "ko_posts_no_candidate_images_yet"
-            monitoring_exclusion_reason = ""
+            monitoring_exclusion_reason = "" if prior_monitoring_reason == legacy_image_exclusion_reason else prior_monitoring_reason
         else:
             image_quality_source_status = "no_ko_posts_yet"
-            monitoring_exclusion_reason = ""
+            monitoring_exclusion_reason = "" if prior_monitoring_reason == legacy_image_exclusion_reason else prior_monitoring_reason
         # A successful live ``source_status_item`` may be newer than an older
         # canonical queue row (for example after a bounded run completed its
         # fetch but missed the final queue handoff).  Treat that durable status
@@ -7751,8 +7753,6 @@ def build_unified_source_queue(
             qstatus, color, next_action = terminal_rejected_status, "gray_rejected", "do_not_rescan_rejected_source"
             image_quality_source_status = "source_rejected_before_candidate_scoring"
             monitoring_exclusion_reason = str(srow.get("monitoring_exclusion_reason") or rec.get("monitoring_exclusion_reason") or HIGH_VOLUME_TEXT_POSTS_REASON)
-        elif scanned and image_quality_source_status == "exclude_low_image_quality":
-            qstatus, color, next_action = "processed_found_ko_low_image_quality", "yellow_retry", "exclude_from_monitoring_candidates_but_keep_posts_for_review"
         elif scanned and (ko_posts > 0 or candidate_posts > 0):
             qstatus, color, next_action = "processed_found_ko_candidate", "green_found_ko", "prioritize_delta_rescan_or_manual_review_posts"
         elif scanned and fetch_status in {"ok", "ok_public_web"}:
@@ -7792,6 +7792,8 @@ def build_unified_source_queue(
             "source_image_quality_status": image_quality_source_status,
             "source_image_quality_min_actual_scored": image_quality_min_n,
             "source_image_quality_min_avg_score": image_quality_min_score,
+            "source_image_quality_decision_use": "diagnostic_only_not_source_exclusion",
+            "source_image_quality_contract_version": "region_talk_image_album_guard_v2",
             "source_scope": srow.get("source_scope") or rec.get("source_scope") or surface_fields.get("source_scope", ""),
             "source_geo_class": srow.get("source_geo_class") or rec.get("source_geo_class") or surface_fields.get("source_geo_class", ""),
             "source_topic_class": srow.get("source_topic_class") or rec.get("source_topic_class") or surface_fields.get("source_topic_class", ""),
@@ -7871,7 +7873,8 @@ def build_unified_source_queue(
         "source_queue_rejected_local_region_source_total": sum(1 for r in out if r.get("source_queue_status") == LOCAL_REGION_SOURCE_STATUS),
         "source_queue_rejected_compliance_source_total": sum(1 for r in out if r.get("source_queue_status") == COMPLIANCE_SOURCE_STATUS),
         "source_queue_non_target_skipped_this_run": skipped_non_target_queue_rows,
-        "source_queue_low_image_quality_excluded_total": sum(1 for r in out if r.get("source_image_quality_status") == "exclude_low_image_quality"),
+        "source_queue_low_image_quality_excluded_total": 0,
+        "source_queue_low_image_quality_observed_total": sum(1 for r in out if r.get("source_image_quality_status") == "unadjudicated_raw_score_low_observation"),
         "source_queue_only_telegram_vk": str(all(r.get("platform") in {"telegram", "vk"} for r in out)).lower(),
         "source_queue_only_target_source_urls": str(all(is_target_source_url(str(r.get("platform") or ""), str(r.get("canonical_url") or r.get("source_url") or "")) for r in out)).lower(),
     }
@@ -8586,6 +8589,16 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         return False, "actual_image_required"
     if str(row.get("image_queue_status") or "") not in {"", "actual_scored"}:
         return False, "image_queue_not_actual_scored"
+    image_quality_decision = str(row.get("image_quality_decision") or "")
+    if image_quality_decision == "needs_visual_review":
+        return False, "image_quality_needs_visual_review"
+    if image_quality_decision == "scoring_retry":
+        return False, "image_quality_scoring_retry"
+    if (
+        str(row.get("image_decision_contract_version") or "") == "region_talk_image_album_guard_v2"
+        and image_quality_decision not in {"legacy_auto_accept"}
+    ):
+        return False, "image_quality_contract_decision_missing"
     overall = _rt_float(row.get("overall_media_score"))
     postcardness = _rt_float(row.get("postcardness_score"))
     aesthetic = _rt_float(row.get("aesthetic_score"))
@@ -8611,7 +8624,7 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = (
     os.getenv("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION")
-    or "region_talk_publication_eligibility_v4"
+    or "region_talk_publication_eligibility_v5"
 )
 PUBLICATION_SOURCE_CONFIRMED_EXTERNAL = "confirmed_nonlocal_or_mixed_external"
 PUBLICATION_SOURCE_CONFIRMED_REJECTED = "confirmed_local_or_spam"
@@ -8752,6 +8765,13 @@ def publication_eligibility(
         "text_vector_fusion_status": merged.get("text_vector_fusion_status") or "",
         "image_model_input_type": merged.get("image_model_input_type") or "",
         "image_queue_status": merged.get("image_queue_status") or "",
+        "image_quality_decision": merged.get("image_quality_decision") or "",
+        "image_quality_reason": merged.get("image_quality_reason") or "",
+        "image_decision_contract_version": merged.get("image_decision_contract_version") or "",
+        "image_acquisition_status": merged.get("image_acquisition_status") or "",
+        "expected_image_count": merged.get("expected_image_count") or 0,
+        "fetched_image_count": merged.get("fetched_image_count") or 0,
+        "images_scored_actual_count": merged.get("images_scored_actual_count") or 0,
         "media_kind": "video" if video_manual_review else (merged.get("media_kind") or ""),
         "manual_media_review_required": video_manual_review,
         "eligibility_phase": eligibility_phase,
@@ -8769,6 +8789,13 @@ def publication_eligibility(
             "fused_e5_bge_m3_required",
             "not_confirmed_kaliningrad_oblast_scope",
         } or product_gate_reason.startswith("vector_defer") else "reject"
+    elif not base_ok and base_reason in {
+        "image_quality_needs_visual_review",
+        "image_quality_scoring_retry",
+        "image_quality_contract_decision_missing",
+    }:
+        primary_reason = base_reason
+        decision = "needs_visual_review"
     elif not base_ok:
         primary_reason = base_reason or "publication_base_gate_rejected"
         decision = "reject"
@@ -8782,7 +8809,13 @@ def publication_eligibility(
         "primary_reason": primary_reason,
         "evidence": evidence,
         "gate_version": PUBLICATION_ELIGIBILITY_GATE_VERSION,
-        "media_review_mode": "operator_video_review" if video_manual_review else "scored_actual_image",
+        "media_review_mode": (
+            "operator_video_review"
+            if video_manual_review
+            else "visual_review_pending"
+            if decision == "needs_visual_review"
+            else "scored_actual_image"
+        ),
     }
 
 

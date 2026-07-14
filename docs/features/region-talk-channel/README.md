@@ -8,6 +8,7 @@
 - [Post discovery](post-discovery.md) — мониторинг утверждённых источников, semantic bank v1 и candidate scoring.
 - [Image postcardness](image-postcardness.md) — каскад оценки фотографий и VLM JSON contract.
 - [Image-scoring false-negative review](image-scoring-false-negative-review.md) — live evidence, locked operator labels, compliance no-spend gate и полный prompt для внешнего консультанта.
+- [Image-scoring audit methodology v2](../../reference/image-scoring-audit-methodology-v2.md) — принятый consultant decision record: album-level acquisition, selective decision, calibration/shadow и stop/go критерии.
 - [YDB schema draft](ydb-schema.md) — все новые persistent-данные фичи живут в YDB, не в SQLite.
 - [MVP candidate report](mvp-candidate-report.md) — cumulative/delta-aware XLSX review workbook contract.
 - [Seed sources v1](seed-sources-v1.md) + [CSV](seed-sources-v1.csv) — стартовый seed-list для MVP-1 probe.

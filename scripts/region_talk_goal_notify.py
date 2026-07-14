@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v4"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
 DEFAULT_NOTIFY_CHAT_ID = "-5563945596"

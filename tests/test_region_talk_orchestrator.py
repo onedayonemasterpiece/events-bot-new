@@ -127,6 +127,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         fused_candidate = {
             **processed_post,
             "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
         }
         metrics = mod._confirmed_external_blogger_funnel_metrics(
             sources,
@@ -150,6 +151,38 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["confirmed_external_blogger_publication_confirmed_posts_total"], 0)
         self.assertEqual(metrics["confirmed_external_blogger_sources_with_publication_confirmed_posts_total"], 0)
         self.assertEqual(metrics["confirmed_external_blogger_sources_with_delivery_completed_posts_total"], 0)
+
+    def test_external_blogger_registry_metrics_expose_raw_and_canonical_denominators(self) -> None:
+        mod = load_module()
+        evidence = [
+            {
+                "record_id": "1",
+                "confirmation_status": "confirmed_external",
+                "region_relation_status": "external visitor",
+                "telegram_url": "https://t.me/blogger",
+                "vk_public_url": "https://vk.com/writer",
+            },
+            {
+                "record_id": "2",
+                "confirmation_status": "confirmed_external",
+                "region_relation_status": "местный блогер",
+                "telegram_url": "https://t.me/local",
+            },
+            {
+                "record_id": "3",
+                "confirmation_status": "needs_externality_review",
+                "telegram_url": "https://t.me/review",
+            },
+        ]
+        source_rows = [{"canonical_source_key": "telegram:blogger", "platform": "telegram", "source_url": "https://t.me/blogger"}]
+        metrics = mod._external_blogger_registry_metrics(evidence, source_rows)
+        self.assertEqual(metrics["external_blogger_registry_records_total"], 3)
+        self.assertEqual(metrics["external_blogger_registry_confirmed_records_total"], 2)
+        self.assertEqual(metrics["external_blogger_registry_needs_review_records_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_confirmed_local_excluded_records_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_canonical_tg_vk_sources_total"], 2)
+        self.assertEqual(metrics["external_blogger_registry_canonical_sources_in_queue_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_canonical_sources_missing_from_queue_total"], 1)
 
     def test_confirmed_blogger_metrics_count_terminal_missing_telegram_username(self) -> None:
         mod = load_module()

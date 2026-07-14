@@ -1144,6 +1144,32 @@ def _mark_ineligible(row: dict[str, Any], verdict: str, *, now_iso: str) -> None
     row["next_attempt_after"] = ""
 
 
+def _review_state_is_current(row: dict[str, Any]) -> bool:
+    previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+    return bool(
+        previous
+        and str(previous.get("publication_status") or "") == "needs_visual_review"
+        and str(previous.get("publication_eligibility_verdict") or "") == "review"
+        and str(previous.get("publication_eligibility_gate_version") or "")
+        == str(row.get("publication_eligibility_gate_version") or "")
+        and str(previous.get("publication_eligibility_evidence_fingerprint") or "")
+        == str(row.get("publication_eligibility_evidence_fingerprint") or "")
+        and str(previous.get("authoritative_source_fingerprint") or "")
+        == str(row.get("authoritative_source_fingerprint") or "")
+    )
+
+
+def _mark_review_pending(row: dict[str, Any]) -> None:
+    row["publication_status"] = "needs_visual_review"
+    row["publication_candidate_status"] = "visual_review_pending"
+    row["publication_tombstone"] = "false"
+    row["publication_revoked"] = "false"
+    row["revoked_at"] = ""
+    row["finalization_status"] = "review_pending"
+    row["llm_attempted_this_run"] = "false"
+    row["next_attempt_after"] = ""
+
+
 def _retry_after(now_iso: str, gate_status: str) -> str:
     now = _parse_time(now_iso) or datetime.now(timezone.utc)
     env_name = (
@@ -1169,6 +1195,12 @@ def verify_rows(
     llm_calls = 0
     for row in rows:
         verdict, _raw_eligibility = _eligibility_fields(row)
+        if verdict == "review":
+            if _review_state_is_current(row):
+                continue
+            _mark_review_pending(row)
+            results.append(row)
+            continue
         if verdict != "eligible":
             if _ineligible_state_is_current(row, verdict):
                 continue

@@ -1,13 +1,53 @@
 # Image postcardness scoring
 
-Status: **implemented single-anchor scorer under calibration review**. Goal: make MVP visibly useful by showing selected photos + model image report + why they are “открыточные”.
+Status: **album-safe guardrails implemented; calibrated album scorer remains under evaluation**. Goal: make MVP visibly useful by showing selected photos + model image report + why they are “открыточные”, without silently discarding a good album because its first frame or one unavailable model scored poorly.
 
 > The 2026-07-14 live audit found at least four operator-confirmed false
-> rejects among 18 exact image-only rejects. The runtime currently scores one
-> anchor frame, not the complete Telegram/VK album, and its arithmetic
-> multi-model score is not calibrated. Do not lower the threshold as an
-> isolated fix. Canonical evidence and the external-consultant brief:
+> rejects among 18 exact image-only rejects. The old runtime scored one anchor
+> frame and treated an uncalibrated arithmetic score as a terminal quality
+> verdict. Do not lower the threshold as an isolated fix. Canonical evidence:
 > [image-scoring false-negative review](image-scoring-false-negative-review.md).
+> The accepted external methodology and its stop/go criteria are recorded in
+> [image-scoring audit methodology v2](../../reference/image-scoring-audit-methodology-v2.md).
+
+## Deployed album-safe transition contract
+
+The current production-safe transition contract is
+`region_talk_image_album_guard_v2`; its publication attestation is
+`region_talk_publication_eligibility_v5`.
+
+- Telegram media with the same exact `grouped_id` and all VK photo
+  attachments are acquired as one bounded post/album manifest. The default
+  cap is 20 images, which covers a complete Telegram album and the practical
+  VK attachment bound used by this worker.
+- Every fetched image receives its own compact `image_frame_score_item` with
+  content hash and model/version evidence. Kaggle-local file paths are not
+  persisted.
+- `expected_image_count`, `fetched_image_count`,
+  `image_acquisition_status`, `input_media_manifest_hash` and
+  `selected_media_ids` make partial acquisition explicit.
+- A partial album, exhausted acquisition, missing required model component or
+  low legacy score is **non-terminal**: it becomes `needs_visual_review` or
+  `scoring_retry`, never `AUTO_REJECT_ALL_WEAK` and never a permanent
+  tombstone.
+- The previous positive path is preserved only when the complete album's
+  anchor also passes the unchanged legacy contract. Later-frame best score is
+  recorded as shadow evidence; it is not used as an uncalibrated raw-max
+  shortcut.
+- Old low-score single-anchor rows are eligible for an idempotent versioned
+  rescore. The four operator-locked positive cases are regression fixtures and
+  cannot become terminal quality rejects.
+- Source-level exclusion based on average raw image score is disabled. Raw
+  source image statistics remain diagnostics only; exact local/spam/legal
+  exclusions are unaffected.
+
+This transition intentionally does **not** claim that the legacy CV/CLIP/
+LAION/NIMA score is calibrated. Full scoring of acquired frames is currently
+used as a bounded canary/diagnostic baseline so that frame coverage and cost
+can be measured. A long-term automatic `AUTO_ACCEPT`/
+`AUTO_REJECT_ALL_WEAK` contract still requires the labelled, source-disjoint
+calibration and shadow acceptance gates in the external methodology. Until
+then, uncertain cases abstain into review instead of being rejected.
 
 ## Principle
 
@@ -178,22 +218,20 @@ hashes, eligibility evidence and media state but not another durable copy of
 the full post text. Exact text remains only in active candidate/vector/Gemini
 work and is removed after the final verdict.
 
-The current (not yet golden-set-calibrated) publication media gate uses
-`overall_media_score >= 0.66` by default. A
-narrow near-threshold lane prevents a weighted-score edge case from discarding
-an exceptional postcard before Gemini: `overall >= 0.63`, `postcardness >=
-0.85`, `aesthetic >= 0.52` and `technical >= 0.68` must all hold. This does not
-auto-accept the post; it only permits the final Gemini review. The calibrated
-contract is `region_talk_publication_eligibility_v4`. The narrow high-postcard
-lane applies a `0.001` tolerance only to its three-decimal aesthetic boundary,
-so a score reported as `0.519` is not discarded against `0.520`; `0.518` still
-fails. The overall, postcardness and technical floors are unchanged.
+The legacy score path still computes `overall_media_score >= 0.66` by default
+and retains its narrow near-threshold lane (`overall >= 0.63`, `postcardness >=
+0.85`, `aesthetic >= 0.52`, `technical >= 0.68`). These numbers are now
+explicitly labelled **legacy diagnostics**, not calibrated probabilities.
+They may preserve an already-established positive path for a completely
+acquired album, but they may not create a terminal quality reject.
 
-These thresholds describe the deployed v4 behavior; the word `calibrated`
-does not mean that a labelled source-disjoint holdout has validated them.
-Until the review protocol is complete, album/high-disagreement low scores
-should be considered candidates for a non-terminal review lane, not evidence
-that a lower global number is safe.
+The current contract is `region_talk_publication_eligibility_v5`. It maps
+partial acquisition, missing component evidence and low/uncertain legacy
+scores to non-terminal visual review/retry. It does not use the highest raw
+frame score as a new accept rule, does not lower `0.66`, and does not invent
+new weights. Automatic all-weak rejection remains disabled until a labelled
+source-disjoint holdout validates the post-level selective decision described
+in the external methodology.
 
 Final Gemini verifier prompt v5 treats a short recurring author footer with
 links to excursions, useful services or the author's other profiles as neutral

@@ -183,6 +183,41 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         }
         self.assertFalse(self.mod._ineligible_state_is_current(row, "reject"))
 
+    def test_visual_review_state_is_nonterminal_and_idempotent(self) -> None:
+        mod = self.mod
+        row = candidate_row()
+        with (
+            mock.patch.object(mod.rt, "publication_eligibility", return_value=eligibility("needs_visual_review")),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm,
+        ):
+            result = mod.verify_rows(
+                [row],
+                max_llm=10,
+                model="gemini-test",
+                default_env_var_name="KEY",
+                now_iso="2026-07-14T18:00:00+00:00",
+            )
+        llm.assert_not_called()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(row["publication_status"], "needs_visual_review")
+        self.assertEqual(row["publication_candidate_status"], "visual_review_pending")
+        self.assertEqual(row["publication_tombstone"], "false")
+        self.assertEqual(row["finalization_status"], "review_pending")
+
+        previous = dict(row)
+        repeated = candidate_row(_previous_publication=previous)
+        with mock.patch.object(mod.rt, "publication_eligibility", return_value=eligibility("needs_visual_review")):
+            self.assertEqual(
+                mod.verify_rows(
+                    [repeated],
+                    max_llm=10,
+                    model="gemini-test",
+                    default_env_var_name="KEY",
+                    now_iso="2026-07-14T19:00:00+00:00",
+                ),
+                [],
+            )
+
     def test_normalize_post_url_collapses_public_telegram_variants(self) -> None:
         variants = [
             "http://T.ME/TravelCase/10/",
@@ -553,7 +588,10 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(gate_mock.call_count, 3)
         llm_mock.assert_not_called()
         self.assertEqual([row["publication_eligibility_verdict"] for row in result], ["review", "reject", "reject"])
-        self.assertEqual(unknown["publication_candidate_status"], "tombstoned_review")
+        self.assertEqual(unknown["publication_status"], "needs_visual_review")
+        self.assertEqual(unknown["publication_candidate_status"], "visual_review_pending")
+        self.assertEqual(unknown["publication_tombstone"], "false")
+        self.assertEqual(unknown["finalization_status"], "review_pending")
         self.assertEqual(local["publication_status"], "eligibility_revoked")
         self.assertEqual(local["publication_candidate_status"], "revoked")
         self.assertEqual(local["publication_revoked"], "true")
