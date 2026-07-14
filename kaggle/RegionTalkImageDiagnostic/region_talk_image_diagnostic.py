@@ -457,6 +457,15 @@ def publication_eligibility_gate_reason(row: dict) -> str:
         return local_reason
     decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
     if decision != PUBLICATION_ELIGIBILITY_ACCEPT:
+        # Recover the exact v4→v5 migration cycle produced when a row was
+        # safely admitted by v4, leased for album rescore, and then rechecked
+        # after its status had changed to ``image_analysis_in_progress``.  A
+        # later CandidateReport may consequently sign only the circular
+        # image-status rejection.  This exception never bypasses a semantic,
+        # source, compliance or text rejection; it only allows the original
+        # accepted low single-anchor row to reach non-terminal album review.
+        if image_row_needs_contract_rescore(row):
+            return ""
         return "publication_eligibility_decision_missing" if not decision else f"publication_eligibility_decision_not_accept:{decision}"
     actual_version = str(row.get("publication_eligibility_gate_version") or "").strip()
     expected_version = expected_publication_eligibility_gate_version()
@@ -682,10 +691,34 @@ def stale_image_lease(r):
 def image_row_needs_contract_rescore(row: dict) -> bool:
     if str(row.get("image_decision_contract_version") or "") == IMAGE_DECISION_CONTRACT_VERSION:
         return False
-    if str(row.get("image_queue_status") or "") != "actual_scored":
-        return False
     if str(row.get("image_model_input_type") or "") != "actual_image":
         return False
+    current_decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
+    current_gate = str(row.get("publication_eligibility_gate_version") or "").strip()
+    audit_decision = str(row.get("image_eligibility_decision") or "").strip().lower()
+    audit_gate = str(row.get("image_eligibility_gate_version") or "").strip()
+    audit_reason = str(row.get("image_eligibility_reason") or "").strip()
+    accepted_v4 = current_decision == PUBLICATION_ELIGIBILITY_ACCEPT and current_gate == "region_talk_publication_eligibility_v4"
+    accepted_v4_audit = (
+        audit_decision == PUBLICATION_ELIGIBILITY_ACCEPT
+        and audit_gate == "region_talk_publication_eligibility_v4"
+        and audit_reason
+        == "publication_eligibility_gate_version_mismatch:expected=region_talk_publication_eligibility_v5;actual=region_talk_publication_eligibility_v4"
+    )
+    if not accepted_v4 and not accepted_v4_audit:
+        return False
+    if current_decision not in {"", PUBLICATION_ELIGIBILITY_ACCEPT}:
+        circular_reason = str(
+            row.get("publication_eligibility_reason")
+            or row.get("publication_eligibility_primary_reason")
+            or ""
+        ).strip()
+        if circular_reason not in {
+            "image_queue_not_actual_scored",
+            "actual_image_required",
+            "image_quality_contract_decision_missing",
+        }:
+            return False
     try:
         score = float(row.get("overall_media_score") or row.get("final_visual_score") or 0)
     except (TypeError, ValueError):
@@ -844,7 +877,11 @@ def ydb_rows_for_diagnostic(limit_n: int):
         input_type=str(r.get("image_model_input_type") or "")
         lease=str(r.get("lease_run_id") or "")
         if status == "actual_scored" and input_type == "actual_image" and not image_row_needs_contract_rescore(r): continue
-        if status in IMAGE_TERMINAL_SKIP_STATUSES: continue
+        needs_contract_rescore = image_row_needs_contract_rescore(r)
+        if status in IMAGE_TERMINAL_SKIP_STATUSES and not (
+            status == IMAGE_TERMINAL_ELIGIBILITY_STATUS and needs_contract_rescore
+        ):
+            continue
         if status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
             continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
@@ -868,7 +905,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
             r["image_queue_status"] = "needs_actual_image_fetch"
             r["media_acquisition_status"] = "needs_actual_image_fetch"
             r["actual_image_retry_reason"] = "metadata_only_actual_scored_is_not_final_visual_evidence"
-        elif image_row_needs_contract_rescore(r):
+        elif needs_contract_rescore:
             r["previous_image_queue_status"] = status
             r["image_queue_status"] = "needs_actual_image_fetch"
             r["media_acquisition_status"] = "versioned_album_rescore_required"

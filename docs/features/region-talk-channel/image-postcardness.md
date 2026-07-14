@@ -40,6 +40,10 @@ The current production-safe transition contract is
 - Old low-score single-anchor rows are eligible for an idempotent versioned
   rescore. The four operator-locked positive cases are regression fixtures and
   cannot become terminal quality rejects.
+- The v4→v5 migration authorization survives the temporary image lease status.
+  A row that was accepted by v4 and then blocked only by that circular status/
+  gate-version transition is recoverable; a current source, compliance or text
+  reject is never reopened by this exception.
 - Source-level exclusion based on average raw image score is disabled. Raw
   source image statistics remain diagnostics only; exact local/spam/legal
   exclusions are unaffected.

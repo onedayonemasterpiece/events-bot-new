@@ -652,10 +652,70 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 "image_model_input_type": "actual_image",
                 "overall_media_score": 0.5,
                 "image_decision_contract_version": "legacy-v1",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "region_talk_publication_eligibility_v4",
             }
             self.assertTrue(mod.image_row_needs_contract_rescore(legacy))
             legacy["image_decision_contract_version"] = mod.IMAGE_DECISION_CONTRACT_VERSION
             self.assertFalse(mod.image_row_needs_contract_rescore(legacy))
+
+    def test_v4_album_rescore_remains_authorized_after_lease_status_change(self) -> None:
+        old_expected = os.environ.get("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION")
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = (
+                    "region_talk_publication_eligibility_v5"
+                )
+                row = {
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "overall_media_score": 0.5,
+                    "image_decision_contract_version": "legacy-v1",
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "region_talk_publication_eligibility_v4",
+                }
+                eligible, blocked = mod.partition_publication_eligible_rows([row])
+                self.assertEqual(len(eligible), 1)
+                self.assertEqual(blocked, [])
+
+                row["image_queue_status"] = "image_analysis_in_progress"
+                eligible, blocked = mod.partition_publication_eligible_rows([row])
+                self.assertEqual(len(eligible), 1)
+                self.assertEqual(blocked, [])
+            finally:
+                if old_expected is None:
+                    os.environ.pop("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION", None)
+                else:
+                    os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = old_expected
+
+    def test_failed_v4_to_v5_rescore_cycle_is_recoverable_but_semantic_reject_is_not(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_status": "rejected_publication_eligibility",
+                "image_model_input_type": "actual_image",
+                "overall_media_score": 0.5,
+                "image_decision_contract_version": "legacy-v1",
+                "publication_eligibility_decision": "reject",
+                "publication_eligibility_gate_version": "region_talk_publication_eligibility_v5",
+                "publication_eligibility_reason": "image_queue_not_actual_scored",
+                "image_eligibility_decision": "accept",
+                "image_eligibility_gate_version": "region_talk_publication_eligibility_v4",
+                "image_eligibility_reason": (
+                    "publication_eligibility_gate_version_mismatch:expected="
+                    "region_talk_publication_eligibility_v5;actual=region_talk_publication_eligibility_v4"
+                ),
+            }
+            self.assertTrue(mod.image_row_needs_contract_rescore(row))
+            self.assertEqual(mod.publication_eligibility_gate_reason(row), "")
+
+            row["publication_eligibility_reason"] = "source_local"
+            self.assertFalse(mod.image_row_needs_contract_rescore(row))
+            self.assertEqual(
+                mod.publication_eligibility_gate_reason(row),
+                "publication_eligibility_decision_not_accept:reject",
+            )
 
     def test_telegram_album_selection_uses_exact_grouped_id(self) -> None:
         with tempfile.TemporaryDirectory() as td:
