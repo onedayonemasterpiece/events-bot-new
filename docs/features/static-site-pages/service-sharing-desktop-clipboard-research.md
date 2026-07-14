@@ -2,6 +2,17 @@
 
 > Статус: **обязательная аналитика и cross-platform test plan; product behavior «Скопировать карточку» ещё не принято**. До завершения матрицы безопасный desktop baseline F18 остаётся «Скопировать ссылку».
 
+## Место в единой F18
+
+Это не отдельная desktop-фича и не третья точка входа. F18 реализуется как **один адаптивный service-sharing component** в двух общих placements — под раскрытой бренд-биркой/в навигационном shell и в footer:
+
+- на mobile та же action вызывает системный Web Share с централизованно подготовленной карточкой, текстом и canonical URL, затем использует mobile fallbacks;
+- на desktop та же action в тех же placements не вызывает native share, а записывает принятый D0/D1/D2 payload в clipboard;
+- смысл действия, service URL, версия карточки, copy/claim gates, доступное имя и семейство аналитики общие; меняется только platform transport;
+- mobile и desktop не получают расходящиеся компоненты, manifests или независимо редактируемый текст, и в одном breakpoint не показываются две конкурирующие кнопки «поделиться»/«скопировать».
+
+Следовательно, эта страница является дочерним test gate основного [контракта F18](service-sharing.md), а не самостоятельным feature contract. Product acceptance проверяет комплекс целиком: mobile system share и desktop clipboard behavior одного RC SHA.
+
 ## Зачем нужен отдельный gate
 
 На desktop нет требования вызывать native share. Возможное улучшение — по одному явному клику записать в системный clipboard одну карточку с несколькими представлениями:
