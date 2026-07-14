@@ -37,6 +37,7 @@ run_dataset_slug = _candidate_executor.run_dataset_slug
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkBgeM3Enrichment"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-bge-m3-enrichment"
 ACTIVE_KERNEL_STATUSES = {"RUNNING", "PENDING", "QUEUED", "INITIALIZING"}
+DEFAULT_BGE_KAGGLE_MODEL_SOURCE = "andreasbis/baai-bge-m3/Transformers/default/1"
 
 
 def getenv_bool(name: str, default: bool = False) -> bool:
@@ -119,6 +120,8 @@ def build_config_dataset(client: Any, *, username: str, run_id: str, args: argpa
         "REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT": os.environ.get("REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT", "60"),
         "REGION_TALK_HF_HUB_ETAG_TIMEOUT": os.environ.get("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20"),
         "REGION_TALK_HF_HUB_DISABLE_XET": os.environ.get("REGION_TALK_HF_HUB_DISABLE_XET", "1"),
+        "REGION_TALK_BGE_KAGGLE_MODEL_SOURCE": os.environ.get("REGION_TALK_BGE_KAGGLE_MODEL_SOURCE", DEFAULT_BGE_KAGGLE_MODEL_SOURCE),
+        "REGION_TALK_BGE_USE_KAGGLEHUB_FALLBACK": os.environ.get("REGION_TALK_BGE_USE_KAGGLEHUB_FALLBACK", "1"),
         "REGION_TALK_OUTPUT_DIR": f"artifacts/region-talk/runs/{run_id}",
         "REGION_TALK_PLACE_LEXICON_FILE": "kaliningrad-place-lexicon-v1.csv",
     }
@@ -144,6 +147,11 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str) -> Path:
     meta["title"] = "Region Talk BGE-M3 Enrichment"
     meta["enable_gpu"] = getenv_bool("REGION_TALK_BGE_ENABLE_GPU", False)
     meta["enable_internet"] = True
+    model_source = str(os.getenv("REGION_TALK_BGE_KAGGLE_MODEL_SOURCE") or DEFAULT_BGE_KAGGLE_MODEL_SOURCE).strip()
+    model_sources = [str(item).strip() for item in (meta.get("model_sources") or []) if str(item).strip()]
+    if model_source and model_source not in model_sources:
+        model_sources.append(model_source)
+    meta["model_sources"] = model_sources
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return dst
 

@@ -413,6 +413,13 @@ The XLSX has:
   tail by default (`REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER=1`) rather
   than silently replacing the accepted dual-vector process or hanging after the
   bounded run.
+- The separate BGE worker follows the same offline distribution rule and pins
+  the complete `BAAI/bge-m3` model as
+  `andreasbis/baai-bge-m3/Transformers/default/1`. It resolves the mounted model
+  recursively (or through the official `kagglehub` cache) and reports
+  `model_origin/model_reference` in its load heartbeat. A Hugging Face/Xet 403
+  must leave the E5 rows pending and retryable; it must never trigger a
+  single-vector production fallback.
 - The dual-vector implementation is sequential and batched by design: one model
   is loaded, the whole text batch is encoded, the model is released/GC-ed, and
   only then the second model is loaded for the same batch. Heartbeats use

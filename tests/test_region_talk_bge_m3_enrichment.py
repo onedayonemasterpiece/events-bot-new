@@ -32,6 +32,40 @@ def load_bge_runner_module():
 
 
 class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
+    def test_bge_model_reference_finds_nested_kaggle_mount(self) -> None:
+        mod = load_bge_module()
+        keys = [
+            "REGION_TALK_BGE_MODEL_LOCAL_PATH",
+            "REGION_TALK_KAGGLE_INPUT_ROOT",
+            "REGION_TALK_BGE_USE_KAGGLEHUB_FALLBACK",
+        ]
+        old = {key: os.environ.get(key) for key in keys}
+        try:
+            with TemporaryDirectory() as td:
+                model_dir = Path(td) / "models" / "owner" / "baai-bge-m3" / "transformers" / "default" / "1"
+                model_dir.mkdir(parents=True)
+                for name in ("config.json", "pytorch_model.bin", "tokenizer.json"):
+                    (model_dir / name).write_text("{}", encoding="utf-8")
+                os.environ.pop("REGION_TALK_BGE_MODEL_LOCAL_PATH", None)
+                os.environ["REGION_TALK_KAGGLE_INPUT_ROOT"] = td
+                os.environ["REGION_TALK_BGE_USE_KAGGLEHUB_FALLBACK"] = "0"
+                reference, origin = mod.bge_model_reference()
+                self.assertEqual(reference, str(model_dir))
+                self.assertEqual(origin, "local_model_path")
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_bge_launcher_attaches_pinned_model_source(self) -> None:
+        mod = load_bge_runner_module()
+        kernel_path = mod.prepared_kernel_path(run_id="unit-bge-model", kernel_slug="unit-bge-model")
+        import json
+        metadata = json.loads((kernel_path / "kernel-metadata.json").read_text(encoding="utf-8"))
+        self.assertIn(mod.DEFAULT_BGE_KAGGLE_MODEL_SOURCE, metadata["model_sources"])
+
     def test_secret_names_do_not_package_telegram_sessions(self) -> None:
         mod = load_bge_runner_module()
         names = mod.bge_secret_names()

@@ -25,6 +25,64 @@ RUN_STARTED_MONOTONIC = time.monotonic()
 LAST_COLLECT_STATS: dict[str, int] = {}
 
 
+def _is_bge_model_dir(path: Path) -> bool:
+    return bool(
+        path.is_dir()
+        and (path / "config.json").is_file()
+        and any((path / name).is_file() for name in ("model.safetensors", "pytorch_model.bin"))
+        and any((path / name).is_file() for name in ("tokenizer.json", "sentencepiece.bpe.model"))
+    )
+
+
+def bge_model_reference() -> tuple[str, str]:
+    """Resolve the pinned complete BGE-M3 Kaggle model before HF Hub."""
+    explicit = str(os.getenv("REGION_TALK_BGE_MODEL_LOCAL_PATH") or "").strip()
+    input_root = Path(os.getenv("REGION_TALK_KAGGLE_INPUT_ROOT") or "/kaggle/input")
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    candidates.extend(
+        [
+            input_root / "models" / "andreasbis" / "baai-bge-m3" / "transformers" / "default" / "1",
+            input_root / "baai-bge-m3" / "transformers" / "default" / "1",
+            input_root / "bge-m3" / "transformers" / "default" / "1",
+        ]
+    )
+    if input_root.exists():
+        try:
+            for config in input_root.rglob("config.json"):
+                lowered = config.parent.as_posix().lower().replace("_", "-")
+                if "bge-m3" in lowered:
+                    candidates.append(config.parent)
+        except Exception:
+            pass
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if _is_bge_model_dir(candidate):
+            origin = "kaggle_model_input" if str(candidate).startswith("/kaggle/input/") else "local_model_path"
+            return str(candidate), origin
+    if getenv_bool("REGION_TALK_BGE_USE_KAGGLEHUB_FALLBACK", True):
+        source = str(os.getenv("REGION_TALK_BGE_KAGGLE_MODEL_SOURCE") or "").strip()
+        if source:
+            try:
+                import kagglehub  # type: ignore
+
+                source_without_version = "/".join(source.strip("/").split("/")[:4])
+                downloaded = Path(kagglehub.model_download(source_without_version))
+                if _is_bge_model_dir(downloaded):
+                    return str(downloaded), "kagglehub_model_cache"
+                for config in downloaded.rglob("config.json"):
+                    if _is_bge_model_dir(config.parent):
+                        return str(config.parent), "kagglehub_model_cache"
+            except Exception:
+                pass
+    return MODEL_ID, "huggingface_hub"
+
+
 def apply_runtime_env_defaults() -> None:
     os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", os.getenv("REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT", "60"))
     os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", os.getenv("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20"))
@@ -536,7 +594,8 @@ class BgeEncoder:
 
     def load(self) -> None:
         started = time.monotonic()
-        emit_event("bge_model_load_started", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, backend=self.backend)
+        model_reference, model_origin = bge_model_reference()
+        emit_event("bge_model_load_started", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, model_origin=model_origin, model_reference=model_reference, backend=self.backend)
         if self.backend in {"flagembedding", "flag", "bge"}:
             try:
                 from FlagEmbedding import BGEM3FlagModel  # type: ignore
@@ -553,9 +612,9 @@ class BgeEncoder:
                 use_fp16 = bool(self.device == "cuda" and getenv_bool("REGION_TALK_BGE_USE_FP16", True))
             except Exception:
                 self.device = "cpu"
-            self.model = BGEM3FlagModel(MODEL_ID, use_fp16=use_fp16)
+            self.model = BGEM3FlagModel(model_reference, use_fp16=use_fp16)
             self.backend = "flagembedding"
-            emit_event("bge_model_load_done", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, backend=self.backend, device=self.device, use_fp16=use_fp16, elapsed_seconds=round(time.monotonic() - started, 3))
+            emit_event("bge_model_load_done", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, model_origin=model_origin, model_reference=model_reference, backend=self.backend, device=self.device, use_fp16=use_fp16, elapsed_seconds=round(time.monotonic() - started, 3))
             return
         if self.backend in {"sentence-transformers", "sentence_transformers", "st"}:
             try:
@@ -566,10 +625,10 @@ class BgeEncoder:
                     from sentence_transformers import SentenceTransformer  # type: ignore
                 else:
                     raise
-            self.model = SentenceTransformer(MODEL_ID)
+            self.model = SentenceTransformer(model_reference)
             self.device = str(getattr(self.model, "device", "unknown"))
             self.backend = "sentence_transformers"
-            emit_event("bge_model_load_done", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, backend=self.backend, device=self.device, elapsed_seconds=round(time.monotonic() - started, 3))
+            emit_event("bge_model_load_done", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, model_origin=model_origin, model_reference=model_reference, backend=self.backend, device=self.device, elapsed_seconds=round(time.monotonic() - started, 3))
             return
         raise RuntimeError(f"unsupported REGION_TALK_BGE_BACKEND={self.backend}")
 
