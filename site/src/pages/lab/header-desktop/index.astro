@@ -41,7 +41,7 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <link rel="canonical" href={canonicalUrl} />
     <title>Desktop header concepts — Полюбить Калининград Анонсы</title>
-    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" />
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <style>
       :root { font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#251c17; background:#f7eee2; }
       * { box-sizing:border-box; }
@@ -77,10 +77,10 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
   </head>
   <body>
     <main class="header-concepts" data-header-desktop-lab>
-      <p class="header-concepts__eyebrow">desktop only · mobile tag unchanged</p>
+      <p class="header-concepts__eyebrow">approved desktop lockup · R3</p>
       <h1>Одна идея, три степени бренда</h1>
       <p class="header-concepts__lead">Во всех вариантах меню остаётся открытым и выровнено по правой границе расширенной 1440 px сетки. Рабочая полоса имеет высоту 56 px, а выступающая часть остаётся контролируемой — 11–31 px. Active-state показывается только там, где раздел действительно является текущей страницей.</p>
-      <ul class="header-concepts__principles" aria-label="Общие требования"><li>5 видимых разделов</li><li>меню справа</li><li>44 px hit area</li><li>контекстный aria-current</li><li>видимый focus</li><li>без изменений mobile</li></ul>
+      <ul class="header-concepts__principles" aria-label="Общие требования"><li>5 видимых разделов</li><li>меню справа</li><li>44 px hit area</li><li>контекстный aria-current</li><li>видимый focus</li><li>единая lockup-система</li></ul>
 
       <section class="header-concepts__grid" aria-label="Три варианта desktop-шапки">
         {variants.map((item) => (
@@ -96,7 +96,7 @@ const canonicalUrl = absoluteUrl('/lab/header-desktop/');
 
       <section class="header-concepts__decision" aria-labelledby="header-decision-title">
         <h2 id="header-decision-title">Фокус: вариант 01</h2>
-        <div><strong>«Текстовая бирка»</strong> теперь рассматривается как единый фиксированный lockup полного имени, а не контейнер с двумя независимо растянутыми строками. Solid terracotta убирает ложный CTA; сетка 4 px, стабильные 240×88 px и один и тот же масштаб на 1024–1920 сохраняют ритм. Зонтичная строка стала легче, но остаётся читаемой, а wide-«о» получает достаточный clear space. На event detail ни один раздел не подсвечивается, а точное состояние листинга можно проверить отдельно.<br /><a class="header-concepts__context-link" href={withBase('/lab/header-lettering/')}>Проверить конструкцию леттеринга</a><br /><a class="header-concepts__context-link" href={withBase('/lab/header-desktop/listing/')}>Открыть листинг с active-state</a></div>
+        <div><strong>«Текстовая бирка»</strong> принята как единый фиксированный lockup полного имени, а не контейнер с двумя независимо растянутыми строками. Solid terracotta убирает ложный CTA; сетка 4 px, стабильные 240×88 px и один и тот же масштаб на 1024–1920 сохраняют ритм. Зонтичная строка стала легче, но остаётся читаемой, а wide-«о» получает достаточный clear space. На event detail ни один раздел не подсвечивается, а точное состояние листинга можно проверить отдельно.<br /><a class="header-concepts__context-link" href={withBase('/lab/design-system/')}>Открыть общую lockup-систему и favicon</a><br /><a class="header-concepts__context-link" href={withBase('/lab/header-lettering/')}>Проверить конструкцию леттеринга</a><br /><a class="header-concepts__context-link" href={withBase('/lab/header-desktop/listing/')}>Открыть листинг с active-state</a></div>
       </section>
     </main>
   </body>

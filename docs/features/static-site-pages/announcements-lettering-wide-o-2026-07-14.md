@@ -1,6 +1,6 @@
 # «Анонсы» wide-o lettering — 2026-07-14
 
-> **Status:** working UI optical master R2; suitable for header/layout evaluation, not declared a final trademark master.
+> **Status:** approved static-site UI optical master R2; display/trademark refinements remain a separate future round.
 >
 > **Lab:** `/lab/header-lettering/`; the desktop-header examples consume the same runtime vector.
 
@@ -98,13 +98,13 @@ The wordmark `о` uses four cubic segments for the outer contour and four for th
 
 - a separate optical drawing, not the wordmark `о` cropped mechanically;
 - lighter sides and a more open counter for small sizes;
-- not promoted to the production favicon in this choice-lab branch.
+- its open-counter logic is adapted into the production tag favicon rather than cropped mechanically.
 
 ### HTML integration
 
 `site/src/components/brand/AnnouncementsWordmark.astro` references the external path through same-origin SVG `<use>`. Colour remains controlled by CSS `color`, while the functional home link keeps the accessible label. Visible page titles and metadata still contain normal text.
 
-## Honest remaining P1 work
+## Honest remaining display-master P1 work
 
 R2 is a working optical master, not a claim of a finished trademark drawing. A later display/master round should still consider:
 
@@ -126,6 +126,6 @@ R2 is a working optical master, not a claim of a finished trademark drawing. A l
 | Header `1280–1920px` | Wordmark is calm enough not to compete with the event title or right-aligned navigation. |
 | SVG | One wordmark path, zero transforms, `<2KiB`, currentColor, no text/stroke/filter/mask. |
 
-## Production boundary
+## Production use
 
-This round changes only noindex labs and their brand assets. It does not replace the production favicon, production header or accepted mobile tag. Promotion requires explicit product acceptance of the header lockup and a separate mobile/production regression pass.
+The user approved the R3 full-name text tag on 2026-07-14. The R2 wordmark is now consumed by the shared desktop/mobile lockup component, and its optically opened standalone-`о` logic informs the installed transparent tag favicon. Normative placement, sizes and clear space are maintained in [`design-system/brand-lockups.md`](design-system/brand-lockups.md) and [`design-system/favicon.md`](design-system/favicon.md); this document remains the construction/audit record.

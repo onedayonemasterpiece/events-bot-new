@@ -1,5 +1,18 @@
 # Event hero lab — 2026-06-27
 
+## 2026-07-14 approved mobile brand-handle update
+
+The drawer behavior below remains unchanged, but its visual lockup is now governed by the static-site design system:
+
+- handle `128×96px` plus safe-area top, solid `#98401f`, `0 0 12px 12px` radius;
+- shared outlined `Анонсы` wordmark at `104px` width;
+- umbrella endorsement intentionally split into `ПОЛЮБИТЬ / КАЛИНИНГРАД` at a subordinate `8/9px`, weight `600`, opacity `0.9`;
+- static content lockup with no periodic title sway;
+- lighter contextual shadow because the handle overlays event photography;
+- the native `<details>` monolithic drawer, top attachment, no chevron and plain full-width navigation rail are preserved.
+
+This is an optical mobile adaptation, not a proportional reduction of the approved `240×88px` desktop tag. Canonical geometry and prohibited changes: [`design-system/brand-lockups.md`](design-system/brand-lockups.md). Visual QA: `/lab/design-system/` plus a real event page at `320/360/390/430px`.
+
 ## Задача
 
 После визуального ревью v18/v19 mobile hero был признан недостаточно сильным: v19 стал технически безопаснее для изображений, но всё ещё выглядел как “картинка + текстовый блок”, а не как эмоциональная обложка события. Поэтому v20 разделил два уровня, а v21 усилил именно первый mobile экран:

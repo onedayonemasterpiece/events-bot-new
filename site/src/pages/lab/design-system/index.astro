@@ -1,0 +1,87 @@
+---
+import AnnouncementsLockup from '../../../components/brand/AnnouncementsLockup.astro';
+import { withBase } from '../../../lib/events';
+
+const faviconSizes = [16, 32, 64, 128] as const;
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>Brand lockups — Полюбить Калининград Анонсы</title>
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+    <style>
+      :root { font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#251d18; background:#f4ece1; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:radial-gradient(circle at 5% 0,rgba(152,64,31,.13),transparent 32rem),#f4ece1; }
+      main { width:min(1160px,calc(100% - 32px)); margin:0 auto; padding:clamp(3rem,8vw,7rem) 0 6rem; }
+      .eyebrow { margin:0 0 .7rem; color:#98401f; font-size:.74rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+      h1 { max-width:12ch; margin:0; font-size:clamp(3.2rem,9vw,7.8rem); line-height:.85; letter-spacing:-.07em; }
+      .lead { max-width:65ch; margin:1.25rem 0 0; color:#695d54; font-size:clamp(1rem,2vw,1.22rem); line-height:1.55; }
+      .section { margin-top:clamp(3.5rem,8vw,7rem); }
+      .section h2 { margin:0; font-size:clamp(2.1rem,5vw,4.4rem); line-height:.9; letter-spacing:-.055em; }
+      .section>p { max-width:65ch; color:#695d54; line-height:1.55; }
+      .lockup-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(270px,.55fr); gap:1rem; margin-top:1.5rem; }
+      .specimen { min-height:360px; display:grid; place-items:center; padding:2rem; border:1px solid rgba(121,48,20,.14); border-radius:24px; background:#fffaf2; overflow:hidden; }
+      .desktop-rail { width:min(100%,720px); height:168px; align-self:center; border-bottom:1px solid #e3d6c8; background:#fffaf2; }
+      .desktop-tag { width:240px; height:88px; padding:18px 24px 16px; border-radius:0 0 12px 12px; background:#98401f; color:white; }
+      .desktop-tag :global(.announcements-lockup) { display:grid; grid-template-rows:12px auto; gap:4px; }
+      .desktop-tag :global(.announcements-lockup__endorsement) { font-size:11px; font-weight:600; line-height:12px; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+      .desktop-tag :global(.announcements-lockup__wordmark) { display:block; width:192px; height:auto; color:#fff; overflow:visible; }
+      .mobile-stage { min-height:360px; align-items:start; background:linear-gradient(155deg,#6f665e,#cbb9a8); }
+      .mobile-tag { width:128px; height:96px; justify-self:start; margin-left:clamp(0px,6vw,50px); display:grid; align-content:end; padding:21px 12px 16px; border-radius:0 0 12px 12px; background:#98401f; color:#fff; box-shadow:0 12px 28px rgba(72,45,25,.24); }
+      .mobile-tag :global(.announcements-lockup) { display:grid; grid-template-rows:18px auto; gap:6px; width:104px; }
+      .mobile-tag :global(.announcements-lockup__endorsement) { display:grid; font-size:8px; font-weight:600; line-height:9px; letter-spacing:.09em; text-transform:uppercase; opacity:.9; }
+      .mobile-tag :global(.announcements-lockup__wordmark) { display:block; width:104px; height:auto; color:#fff; overflow:visible; }
+      .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; margin-top:1rem; overflow:hidden; border:1px solid #decebf; border-radius:18px; background:#decebf; }
+      .metric { padding:1rem; background:#fffaf2; }
+      .metric small { display:block; color:#98401f; font-size:.65rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+      .metric strong { display:block; margin-top:.35rem; font-size:1.15rem; }
+      .favicon-browser { margin-top:1.5rem; overflow:hidden; border:1px solid #cfcbc4; border-radius:16px; background:#f1f0ed; box-shadow:0 18px 38px rgba(58,43,32,.1); }
+      .browser-tab { width:min(340px,75%); min-height:48px; display:flex; align-items:center; gap:10px; padding:8px 14px; border-radius:14px 14px 0 0; background:#fff; font-size:.84rem; }
+      .browser-tab img { width:20px; height:20px; }
+      .browser-body { min-height:125px; display:grid; place-items:center; border-top:1px solid #ddd9d2; background:#fffaf2; color:#786d65; }
+      .favicon-sizes { display:flex; flex-wrap:wrap; align-items:flex-end; gap:clamp(1.5rem,5vw,4rem); margin-top:1rem; padding:2rem; border-radius:20px; background-color:#e7ded3; background-image:linear-gradient(45deg,#f8f2e9 25%,transparent 25%),linear-gradient(-45deg,#f8f2e9 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f8f2e9 75%),linear-gradient(-45deg,transparent 75%,#f8f2e9 75%); background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0; }
+      .favicon-size { display:grid; justify-items:center; gap:.6rem; color:#5f534b; font-size:.72rem; font-weight:850; }
+      .favicon-size img { display:block; width:var(--icon-size); height:var(--icon-size); }
+      .back { min-height:44px; display:inline-flex; align-items:center; margin-top:3rem; color:#793014; font-weight:850; text-underline-offset:.25em; }
+      @media (max-width:760px) { .lockup-grid { grid-template-columns:1fr; } .specimen { min-height:290px; padding:1rem; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    </style>
+  </head>
+  <body>
+    <main data-brand-design-system-lab>
+      <p class="eyebrow">approved brand system · R4</p>
+      <h1>Одна бирка. Две пропорции.</h1>
+      <p class="lead">Полное имя сервиса остаётся одинаковым, но не механически масштабируется: горизонтальная desktop-бирка и вытянутая mobile-ручка используют отдельную оптическую компоновку одного и того же леттеринга.</p>
+
+      <section class="section" aria-labelledby="lockups-title">
+        <h2 id="lockups-title">Lockup-система</h2>
+        <p>Сплошная терракота, белый одноцветный леттеринг, квадратный верх и мягко скруглённый низ. На мобильном зонтичный бренд намеренно переносится на две строки, а слово «Анонсы» сохраняет сильный широкий ритм.</p>
+        <div class="lockup-grid">
+          <div class="specimen"><div class="desktop-rail"><div class="desktop-tag"><AnnouncementsLockup variant="desktop" /></div></div></div>
+          <div class="specimen mobile-stage"><div class="mobile-tag"><AnnouncementsLockup variant="mobile" /></div></div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><small>Desktop</small><strong>240 × 88</strong></div>
+          <div class="metric"><small>Mobile</small><strong>128 × 96</strong></div>
+          <div class="metric"><small>Цвет</small><strong>#98401F</strong></div>
+          <div class="metric"><small>Низ</small><strong>R12</strong></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="favicon-title">
+        <h2 id="favicon-title">Бирка + широкая «о»</h2>
+        <p>Favicon не пытается уместить полное название. В 16–32 px остаются только узнаваемый силуэт бирки и одна широкая белая «о» с более открытой контрформой.</p>
+        <div class="favicon-browser" data-favicon-browser-preview><div class="browser-tab"><img src={withBase('/favicon.svg')} alt="" />Полюбить Калининград Анонсы</div><div class="browser-body">favicon.svg · transparent SVG</div></div>
+        <div class="favicon-sizes" aria-label="Проверка favicon на прозрачном фоне">
+          {faviconSizes.map((size) => <div class="favicon-size"><img src={withBase('/favicon.svg')} alt="" style={`--icon-size:${size}px`} /><span>{size}px</span></div>)}
+        </div>
+      </section>
+
+      <a class="back" href={withBase('/lab/header-desktop/examples/text-tag/')}>← Открыть согласованную desktop-бирку</a>
+    </main>
+  </body>
+</html>

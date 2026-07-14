@@ -270,6 +270,9 @@ features:
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
+    design_system: docs/features/static-site-pages/design-system/README.md
+    brand_lockups: docs/features/static-site-pages/design-system/brand-lockups.md
+    favicon_mark: docs/features/static-site-pages/design-system/favicon.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py

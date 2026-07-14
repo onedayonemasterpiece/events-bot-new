@@ -49,6 +49,7 @@ const required = [
   'lab/header-desktop/examples/signature-tab/index.html',
   'lab/header-desktop/listing/index.html',
   'lab/header-lettering/index.html',
+  'lab/design-system/index.html',
   'brand/announcements-wordmark-ui.svg',
   'brand/announcements-mark-ui.svg',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
@@ -191,6 +192,20 @@ for (const marker of [
 ]) {
   if (!announcementsLetteringLabHtml.includes(marker)) throw new Error(`Announcements lettering lab misses marker: ${marker}`);
 }
+const brandDesignSystemLabHtml = readFileSync(join(root, 'lab/design-system/index.html'), 'utf8');
+for (const marker of [
+  'data-brand-design-system-lab',
+  'Одна бирка. Две пропорции.',
+  'data-announcements-lockup="desktop"',
+  'data-announcements-lockup="mobile"',
+  'data-favicon-browser-preview',
+  '128 × 96',
+  '#98401F',
+  '/favicon.svg',
+  'sizes="any"',
+]) {
+  if (!brandDesignSystemLabHtml.includes(marker)) throw new Error(`Brand design-system lab misses marker: ${marker}`);
+}
 const desktopHeaderSource = readFileSync(join(siteDir, 'src/components/lab/DesktopHeaderConcept.astro'), 'utf8');
 for (const marker of [
   "'text-tag' | 'logo-eyelet' | 'signature-tab'",
@@ -324,7 +339,7 @@ if (desktopCleanSource.includes('editorialMediaExitProgress')) throw new Error('
 if (desktopCleanSource.includes('<section class="event-gallery"') || desktopCleanSource.includes('DesktopEventPagePrototype')) throw new Error('Desktop clean examples must not restore the rejected lower gallery/technical prototype shell');
 
 const genericFaviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
-if (!genericFaviconSvg.includes('viewBox="160 230 970 820"') || !genericFaviconSvg.includes('left-monogram') || !genericFaviconSvg.includes('brand-k-mark') || !genericFaviconSvg.includes('heart-block') || !genericFaviconSvg.includes('#2d3035') || !genericFaviconSvg.includes('#af481f') || genericFaviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(genericFaviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');
+if (!genericFaviconSvg.includes('viewBox="0 0 64 64"') || !genericFaviconSvg.includes('announcements-tag') || !genericFaviconSvg.includes('announcements-wide-o') || !genericFaviconSvg.includes('#98401f') || !genericFaviconSvg.includes('fill="#fff"') || genericFaviconSvg.includes('<rect') || /<image\b|data:image\//iu.test(genericFaviconSvg)) throw new Error('Favicon must use the transparent terracotta tag with square top, rounded bottom and one white wide-o vector');
 const genericEvent = eventsData.events.find((event) => !event.end_date || event.end_date === event.start_date) || eventsData.events[0];
 if (!genericEvent) throw new Error('Preview fixture must contain at least one event');
 const genericEventHtml = readFileSync(join(root, `sobytiya/${genericEvent.slug}/index.html`), 'utf8');
@@ -401,7 +416,7 @@ if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !/(Открыт�
 if (!controlHtml.includes('data-gallery-src=') || /class="hero-gallery__image"[^>]*\ssrc=/u.test(controlHtml)) throw new Error('Fullscreen gallery images must be lazy hydrated from data-gallery-src, not eagerly loaded in hidden HTML');
 if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
 if (controlHtml.includes('mobile-discovery-menu__brand-icon') || controlHtml.includes('/brand-mark.svg')) throw new Error('Mobile discovery tag must not expose the rejected brand icon/brand-mark animation');
-if (!controlHtml.includes('mobile-discovery-menu__label') || !controlHtml.includes('hydrateMobileBrandSway') || !controlHtml.includes('--brand-sway-x') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and the calculated title-sway label contract');
+if (!controlHtml.includes('data-announcements-lockup="mobile"') || !controlHtml.includes('announcements-wordmark-ui.svg') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and the shared mobile lettering lockup');
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 const ticketClusterTrial = controlVisibleHtml.includes('data-event-decision-variant="ticket-cluster"');
@@ -484,7 +499,7 @@ if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankE
 if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
 if (!controlHtml.includes('/favicon.svg') || !controlHtml.includes('sizes="any"')) throw new Error('Control page misses scalable favicon link');
 const faviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
-if (!faviconSvg.includes('viewBox="160 230 970 820"') || !faviconSvg.includes('left-monogram') || !faviconSvg.includes('brand-k-mark') || !faviconSvg.includes('heart-block') || !faviconSvg.includes('#2d3035') || !faviconSvg.includes('#af481f') || faviconSvg.includes('fill="#fff6ea"') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the tightly cropped transparent two-color PK monogram vector without embedded raster or background plate');
+if (!faviconSvg.includes('viewBox="0 0 64 64"') || !faviconSvg.includes('announcements-tag') || !faviconSvg.includes('announcements-wide-o') || !faviconSvg.includes('#98401f') || !faviconSvg.includes('fill="#fff"') || faviconSvg.includes('<rect') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the transparent terracotta tag with square top, rounded bottom and one white wide-o vector');
 const footerSocialUrls = [
   'https://t.me/kenigevents',
   'https://t.me/kldevents',
@@ -719,7 +734,7 @@ if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/i
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
 if (!/event-hero--poster-billboard\.event-hero--poster-stage \.event-hero__image[\s\S]*?\{[^}]*width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero image itself must be full viewport width on mobile');
-if (!/mobile-discovery-menu__summary\{[^}]*background:\s*linear-gradient\([^}]*#793014[^}]*#a54821/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use a site-palette discovery drawer handle and stable after-hero state');
+if (!/mobile-discovery-menu__summary\{[^}]*background:\s*#98401f/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use the approved solid brand tag and stable after-hero state');
 if (
   !/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*position:\s*fixed[^}]*transform:\s*translate3d\(0,\s*calc\(-1\s*\*\s*var\(--drawer-rail-h\)\s*-\s*env\(safe-area-inset-top\)\),\s*0\)/iu.test(css)
   || !/mobile-discovery-menu\[open\]\{[^}]*transform:\s*(?:translate3d\(0,\s*0,\s*0\)|translateZ\(0\))/iu.test(css)
@@ -730,8 +745,8 @@ if (
 ) throw new Error('Mobile discovery navigation must be a monolithic drawer: one root object slides down/up, with the handle attached to the panel and no transitional gap');
 if (!/mobile-discovery-menu__panel\{[^}]*border-radius:\s*0/iu.test(css) || !/mobile-discovery-menu__links a\{[^}]*border:\s*0[^}]*border-radius:\s*0[^}]*background:\s*transparent/iu.test(css)) throw new Error('Mobile discovery drawer menu must be a flat rail with plain text links, not rounded/pill buttons');
 if (/mobile-discovery-menu__brand-icon|brand-icon-mask|mobile-brand-icon-cycle|mobile-brand-text-cycle/iu.test(css)) throw new Error('Rejected brand icon animation must not remain in mobile discovery CSS');
-if (!/mobile-discovery-menu__label\{[^}]*animation:\s*mobile-brand-title-sway/iu.test(css) || !/@keyframes\s+mobile-brand-title-sway/iu.test(css) || !/--brand-sway-x:\s*0px/iu.test(css) || !/translate3d\(var\(--brand-sway-x\),0,0\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery handle must keep only a calculated two-state title-sway animation');
-if (!/mobile-discovery-menu__label\{[^}]*width:\s*100%[^}]*max-width:\s*100%/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*min-height:\s*calc\(5\.35rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the gallery tag geometry and wrap the two-line service kicker instead of clipping it');
+if (/mobile-brand-title-sway|--brand-sway-x|hydrateMobileBrandSway/iu.test(`${css}\n${controlHtml}`)) throw new Error('Approved mobile brand lockup must remain static rather than sway inside the tag');
+if (!/mobile-discovery-menu__lockup\{[^}]*grid-template-rows:\s*18px auto[^}]*gap:\s*6px[^}]*width:\s*104px/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*width:\s*8rem[^}]*min-height:\s*calc\(6rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the approved 128×96 optical lockup geometry');
 if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !/--hero-poster-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = isPosterStage ? 56 : 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps and OCR posters must move as one full-width visual without gray internal gaps');

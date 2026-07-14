@@ -1,5 +1,6 @@
 ---
 import { withBase } from '../../lib/events';
+import AnnouncementsLockup from '../brand/AnnouncementsLockup.astro';
 import AnnouncementsWordmark from '../brand/AnnouncementsWordmark.astro';
 
 export type DesktopHeaderVariant = 'text-tag' | 'logo-eyelet' | 'signature-tab';
@@ -23,8 +24,7 @@ const navigation = [
   <div class="desktop-header-concept__inner">
     {variant === 'text-tag' && (
       <a class="desktop-header-concept__text-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
-        <span>Полюбить Калининград</span>
-        <AnnouncementsWordmark class="desktop-header-concept__tag-wordmark" />
+        <AnnouncementsLockup variant="desktop" class="desktop-header-concept__text-lockup" />
       </a>
     )}
 
@@ -143,10 +143,7 @@ const navigation = [
     align-self:flex-start;
     width:240px;
     height:88px;
-    display:grid;
-    grid-template-rows:12px auto;
-    align-content:start;
-    gap:4px;
+    display:block;
     padding:18px 24px 16px;
     border-radius:0 0 12px 12px;
     background:var(--header-brand-tab);
@@ -156,7 +153,13 @@ const navigation = [
     transition:background-color 160ms ease;
   }
   .desktop-header-concept__text-tag:hover { background:var(--header-brand-tab-hover); }
-  .desktop-header-concept__text-tag span {
+  :global(.desktop-header-concept__text-lockup) {
+    display:grid;
+    grid-template-rows:12px auto;
+    align-content:start;
+    gap:4px;
+  }
+  :global(.desktop-header-concept__text-lockup .announcements-lockup__endorsement) {
     overflow:visible;
     font-size:11px;
     font-weight:600;
@@ -165,7 +168,7 @@ const navigation = [
     text-transform:uppercase;
     white-space:nowrap;
   }
-  :global(.desktop-header-concept__tag-wordmark) { display:block; width:192px; height:auto; color:#fff; overflow:visible; }
+  :global(.desktop-header-concept__text-lockup .announcements-lockup__wordmark) { display:block; width:192px; height:auto; color:#fff; overflow:visible; }
 
   .desktop-header-concept__logo-eyelet-group {
     position:relative;

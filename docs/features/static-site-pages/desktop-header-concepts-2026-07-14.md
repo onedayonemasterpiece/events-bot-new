@@ -1,6 +1,6 @@
 # Desktop header concepts — 2026-07-14
 
-> **Status:** noindex choice lab; not a production-header decision. Mobile remains unchanged.
+> **Status:** text-tag R3 approved as the static-site brand/header direction; noindex alternatives remain as decision history.
 >
 > **Routes:** `/lab/header-desktop/`, `/lab/header-desktop/examples/{text-tag|logo-eyelet|signature-tab}/` and `/lab/header-desktop/listing/`.
 
@@ -19,7 +19,7 @@ The desktop contract is now:
 - use a responsive header container `min(1440px, 100% - clamp(48px, 5vw, 96px))`;
 - expose `aria-current="page"` and a visible indicator only for an exact current listing destination;
 - expose no active primary destination on an individual event, home or search page;
-- keep the existing mobile `<details>` drawer/tag implementation unchanged.
+- preserve the mobile `<details>` drawer behavior while moving its content to the shared optically adapted lettering lockup.
 
 ## Research and UX decisions
 
@@ -87,7 +87,7 @@ Shared tokens:
 - The complete name is a fixed left-aligned lockup: `11/12px` lightweight uppercase endorsement, `4px` gap, `192px` service wordmark.
 - No breakpoint resize between `1024` and `1920`; no gradient, inset or shadow; hover changes only the solid fill slightly.
 - Strongest literal continuity with mobile.
-- Current focused recommendation; an independent small avatar/favicon mark remains a separate decision.
+- Approved static-site direction; the independent small mark is the matching transparent tag + wide-`о` favicon.
 
 ### 02 — Logo eyelet (`logo-eyelet`)
 
@@ -105,7 +105,7 @@ Shared tokens:
 
 ## Recommendation
 
-Continue the current focused evaluation with **01 / Text tag**, right-align the menu, and keep active state contextual.
+Use **01 / Text tag** as the approved direction, keep the menu right-aligned, and keep active state contextual.
 
 The tag and menu should not be forced into symmetrical halves: they have different visual weights. The correct balance is asymmetric but anchored — the fixed full-name lockup at the shared left grid edge, navigation at the shared right grid edge, elastic whitespace between them. This preserves the comfortable right alignment while making the umbrella/service relationship explicit without a competing icon.
 
@@ -135,8 +135,8 @@ The neutral briefs, screenshots and raw consultant reports are stored under `art
 | Keyboard | Every functional link has a visible `3px` focus ring; the duplicate visual wordmark is not in the tab sequence. |
 | Reduced motion | Current-state transition is disabled under `prefers-reduced-motion`. |
 
-## Production integration boundary
+## Integration state
 
-This branch still adds only noindex lab routes, the white lab mark and validation. It does **not** change `site/src/layouts/EventLayout.astro`, production event/listing routes or the mobile drawer. After product selection, promote the accepted mark and spatial tokens into the shared header, derive exact current state from route identity, test normal/listing/event/search pages at the acceptance grid, and reconcile the production `1180px` page shell separately rather than silently changing every page width.
+The accepted desktop concept and mobile production drawer now share `AnnouncementsLockup.astro`; the desktop concept keeps the fixed R3 geometry while mobile uses a taller R4 optical composition rather than a mechanical resize. Production event/listing route behavior and exact current-state semantics remain unchanged. The installed favicon uses the shared tag silhouette with a separate small-size wide `о`. Canonical rules have moved to [`design-system/`](design-system/README.md); this dated document remains the research and decision record.
 
-The working lettering construction and its remaining P1 glyph refinements are maintained separately in `announcements-lettering-wide-o-2026-07-14.md`; selecting this header does not by itself declare the R2 lettering a final trademark master.
+Remaining rollout work is limited to promoting the accepted desktop header from its noindex comparison component into the production desktop layout after the separate page-shell release gate. That rollout must keep the acceptance grid and reconcile the production `1180px` content shell explicitly.

@@ -392,7 +392,7 @@ The feed-card A/B has been resolved for normal event pages: `split-actions` is n
 - the long description is visible HTML, followed by a compact icon facts block; public source count/views and source links are hidden until auth exists, with a temporary notice that sources, mentions and extended statistics will be available to registered users;
 - native mobile share is attempted by one visible `Поделиться` button; duplicate Telegram/VK/WhatsApp share pills were removed, and fallback copies the URL when system share is unavailable.
 - footer social navigation mirrors the Telegraph editorial footer and adds Max: Telegram `@kenigevents` + `@kldevents`, VK `kenigeventsofficial` + `klgdevents` + `vk.ru/im/channels/-239844596`, and `max.ru/join/...`; site footer uses visible Telegram/VK/Max SVG icons, while Telegraph remains plain links only.
-- a tightly cropped transparent graphite/terracotta PK-monogram favicon is emitted from `site/public/favicon.svg` with `sizes="any"`; it has no white/cream plate and occupies the full tab-icon width while preserving transparent corners;
+- a transparent terracotta hanging-tag favicon with one optically open white wide `о` is emitted from `site/public/favicon.svg` with `sizes="any"`; its square top, rounded bottom and transparent side corners preserve the shared tag silhouette at browser-tab size;
 - footer exposes compact social navigation and `mailto:info@kenigevents.ru`.
 
 

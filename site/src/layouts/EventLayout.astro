@@ -1,5 +1,6 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
+import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 
 interface Props {
@@ -1619,62 +1620,57 @@ const FOOTER_SOCIAL_LINKS = [
           left: var(--drawer-handle-left);
           top: calc(var(--drawer-rail-h) + env(safe-area-inset-top) - 7px);
           z-index: 2;
-          --brand-tag-side-gap: 0.76rem;
-          --brand-sway-x: 0px;
-          width: 7.45rem;
-          min-height: calc(5.35rem + env(safe-area-inset-top));
+          width: 8rem;
+          min-height: calc(6rem + env(safe-area-inset-top));
           display: inline-grid;
           align-content: end;
           justify-items: start;
-          gap: 0.04rem;
           overflow: hidden;
           isolation: isolate;
-          padding: max(1.32rem, calc(env(safe-area-inset-top) + 0.92rem)) 0.72rem 0.58rem;
+          padding: max(1.35rem, calc(env(safe-area-inset-top) + 0.95rem)) 0.75rem 1rem;
           border: 0;
-          border-radius: 0 0 10px 10px;
-          background: linear-gradient(160deg, #793014 0%, #a54821 100%);
+          border-radius: 0 0 12px 12px;
+          background: #98401f;
           color: #fffdf8;
-          box-shadow: 0 20px 42px rgba(72, 45, 25, 0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
+          box-shadow: 0 12px 28px rgba(72, 45, 25, 0.24);
           text-decoration: none;
           touch-action: manipulation;
           pointer-events: auto;
-          transition: box-shadow 220ms ease;
+          transition: background-color 160ms ease, box-shadow 220ms ease;
         }
         .mobile-discovery-menu[open] .mobile-discovery-menu__summary {
-          box-shadow: 0 18px 38px rgba(72, 45, 25, 0.30), 0 1px 0 rgba(255,255,255,0.12) inset;
+          box-shadow: 0 10px 24px rgba(72, 45, 25, 0.22);
         }
-        .mobile-discovery-menu__label {
+        @media (hover:hover) and (pointer:fine) {
+          .mobile-discovery-menu__summary:hover { background:#893719; }
+        }
+        .mobile-discovery-menu__lockup {
           position: relative;
           z-index: 1;
           display: grid;
-          gap: 0.04rem;
-          width: 100%;
+          grid-template-rows: 18px auto;
+          align-content: end;
+          gap: 6px;
+          width: 104px;
           min-width: 0;
-          max-width: 100%;
-          margin-left: 0;
           justify-self: start;
-          transform-origin: left center;
-          will-change: transform;
-          animation: mobile-brand-title-sway 14s cubic-bezier(0.22, 0.86, 0.32, 1) 2.8s infinite;
         }
-        @keyframes mobile-brand-title-sway {
-          0%, 18% { transform: translate3d(0, 0, 0); }
-          30%, 48% { transform: translate3d(var(--brand-sway-x), 0, 0); }
-          62%, 100% { transform: translate3d(0, 0, 0); }
-        }
-        .mobile-discovery-menu__kicker {
-          font-size: 0.56rem;
-          font-weight: 850;
-          line-height: 1.05;
-          letter-spacing: 0.055em;
+        .mobile-discovery-menu__lockup .announcements-lockup__endorsement {
+          display: grid;
+          gap: 0;
+          font-size: 8px;
+          font-weight: 600;
+          line-height: 9px;
+          letter-spacing: 0.09em;
           text-transform: uppercase;
           opacity: 0.9;
         }
-        .mobile-discovery-menu__name {
-          font-size: 1.24rem;
-          font-weight: 950;
-          line-height: 0.9;
-          letter-spacing: -0.065em;
+        .mobile-discovery-menu__lockup .announcements-lockup__wordmark {
+          display: block;
+          width: 104px;
+          height: auto;
+          color: #fff;
+          overflow: visible;
         }
         .mobile-discovery-menu__panel {
           position: absolute;
@@ -1982,10 +1978,7 @@ const FOOTER_SOCIAL_LINKS = [
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
           <summary class="mobile-discovery-menu__summary" aria-label="Открыть навигацию афиши">
-            <span class="mobile-discovery-menu__label">
-              <span class="mobile-discovery-menu__kicker">Полюбить Калининград</span>
-              <span class="mobile-discovery-menu__name">Анонсы</span>
-            </span>
+            <AnnouncementsLockup variant="mobile" class="mobile-discovery-menu__lockup" />
           </summary>
           <div class="mobile-discovery-menu__panel" aria-label="Дополнительная навигация афиши">
             <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
@@ -3759,21 +3752,6 @@ const FOOTER_SOCIAL_LINKS = [
         }
 
 
-        function hydrateMobileBrandSway() {
-          const summary = document.querySelector('.mobile-discovery-menu__summary');
-          const label = summary?.querySelector('.mobile-discovery-menu__label');
-          if (!summary || !label) return;
-          const update = () => {
-            const summaryRect = summary.getBoundingClientRect();
-            const labelRect = label.getBoundingClientRect();
-            const leftGap = Math.max(0, labelRect.left - summaryRect.left);
-            const shift = Math.max(0, summaryRect.width - labelRect.width - leftGap * 2);
-            summary.style.setProperty('--brand-sway-x', `${shift.toFixed(1)}px`);
-          };
-          update();
-          window.addEventListener('resize', update, { passive: true });
-        }
-
         function hydrateListingFilterFooterGuard() {
           const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
           if (!bars.length) return;
@@ -4247,7 +4225,6 @@ const FOOTER_SOCIAL_LINKS = [
         }
 
         hydrateImmersiveHeader();
-        hydrateMobileBrandSway();
         hydrateMobileDiscoveryMenu();
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
