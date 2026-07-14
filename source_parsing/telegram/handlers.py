@@ -1173,6 +1173,13 @@ def _source_text_explicitly_mentions_location(
 _SCHED_LINE_RE = re.compile(r"(^|\s)(\d{1,2})[./](\d{1,2})\s*\|", re.IGNORECASE)
 _SCHED_LINE_START_RE = re.compile(r"^\s*\d{1,2}[./]\d{1,2}\s*\|", re.IGNORECASE)
 _TIME_TOKEN_RE = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
+_EXPLICIT_UNKNOWN_START_TIME_RE = re.compile(
+    r"(?iu)\b(?:"
+    r"время\s+(?:начала|старта)|"
+    r"(?:точное\s+)?(?:начало|старт)"
+    r")\s+(?:пока\s+)?(?:уточняется|не\s+определен[оа]?|не\s+известн[оа]?|"
+    r"будет\s+(?:уточнен[оа]?|объявлен[оа]?|известн[оа]?))\b"
+)
 
 _RECURRING_WORDS_RE = re.compile(
     r"\b(ежедневн|кажд(ый|ая|ое|ую)\s+д(ень|ня)|по\s+будням|кажд(ый|ую)\s+"
@@ -1265,6 +1272,18 @@ def _time_is_supported_by_texts(time_value: str | None, *texts: str | None) -> b
     if not supported:
         return False
     return any(token in supported for token in wanted)
+
+
+def _source_explicitly_leaves_start_time_unknown(*texts: str | None) -> bool:
+    """Narrow fail-closed check for an explicitly TBD event start.
+
+    The producer/Smart Update LLM still owns time-role semantics. This guard only
+    prevents a concrete time elsewhere in the same post (for example the parent
+    festival window) from overwriting an exact source statement that the named
+    activity's start is not known yet.
+    """
+
+    return any(_EXPLICIT_UNKNOWN_START_TIME_RE.search(str(text or "")) for text in texts)
 
 
 def _time_value_matches_event_date_marker(time_value: str | None, event_date: str | None) -> bool:
@@ -4482,15 +4501,39 @@ def _build_candidate(
             )
 
     try:
+        message_event_count = len(message.get("events") or [])
+    except Exception:
+        message_event_count = 1
+    # Full-message TBD wording is safe only for a single extracted activity.
+    # In a multi-activity digest it may belong to a sibling, so the server
+    # leaves that semantic decision to the per-event producer/Smart Update LLM.
+    explicit_unknown_start_time = _source_explicitly_leaves_start_time_unknown(
+        raw_excerpt,
+        event_source_text_raw if message_event_count <= 1 else None,
+        event_source_text if message_event_count <= 1 else None,
+        message_text_s if message_event_count <= 1 else None,
+    )
+    if explicit_unknown_start_time and str(time_raw or "").strip():
+        logger.warning(
+            "telegram: cleared extracted time conflicting with explicit unknown start "
+            "source=%s message_id=%s title=%r time=%r",
+            username,
+            message_id,
+            title,
+            time_raw,
+        )
+        time_raw = ""
+
+    try:
         current_time = str(time_raw or "").strip()
-        if not current_time:
+        if not current_time and not explicit_unknown_start_time:
             inferred_start = _infer_time_from_event_text(event_source_text, event_date=str(date_raw).strip() if date_raw else None)
             if inferred_start:
                 time_raw = inferred_start
     except Exception:
         pass
 
-    if not str(time_raw or "").strip():
+    if not str(time_raw or "").strip() and not explicit_unknown_start_time:
         time_probe_text = str(event_source_text or "")
         raw_probe = event_source_text_raw.strip()
         if raw_probe and raw_probe not in time_probe_text:
@@ -4511,7 +4554,7 @@ def _build_candidate(
 
     # If time is still missing, try poster OCR (common in schedule posts where the body text
     # mentions only "в воскресенье" but the poster contains explicit date/time).
-    if not str(time_raw or "").strip():
+    if not str(time_raw or "").strip() and not explicit_unknown_start_time:
         try:
             probe_payload = assigned_posters_payload or posters_payload or []
             chunks: list[str] = []
@@ -4707,6 +4750,7 @@ def _build_candidate(
             "tg_city_overridden_by_default": bool(city_overridden_by_default),
             "tg_ticket_link_from_post_author": bool(ticket_link_from_post_author),
             "tg_time_is_default": bool(time_is_default),
+            "tg_time_explicitly_unknown": bool(explicit_unknown_start_time),
         }
     )
 
@@ -5334,7 +5378,6 @@ async def process_telegram_results(
                     events_imported=0,
                     error="producer_zero_events:clear_event_signals",
                 )
-                await _update_source_scan_meta(db, int(source.id), int(message_id))
                 report.skipped_posts.append(
                     {
                         "source_username": username,
@@ -5344,6 +5387,10 @@ async def process_telegram_results(
                         "text_excerpt": _build_excerpt(str(message.get("text") or ""), max_len=240),
                     }
                 )
+            # The producer successfully scanned this message even when it is a
+            # legitimate non-event. Advancing only for event-like zero results
+            # makes the source tail sticky and repeats LLM/media work every day.
+            await _update_source_scan_meta(db, int(source.id), int(message_id))
             continue
 
         processed_no += 1

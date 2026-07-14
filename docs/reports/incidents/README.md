@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-14-ecodvor-unknown-start-time-cursor.md`
+  - Scope: Telegram Monitoring parent/program versus child-activity time roles, Smart Update explicit-TBD anchor review, server time fallback and legitimate zero-event source cursor advancement.
+  - Must not regress: a child activity whose source explicitly says its start time is still being clarified must keep unknown time rather than inherit the parent `14:00–17:00` window; successfully scanned legitimate `events=[]` tail messages must advance the source cursor without entering Smart Update or polluting scanned-message metrics.
 - `INC-2026-07-14-synthetic-thin-source-public-copy.md`
   - Scope: sparse-source Smart Update/public copy grounding, donation-vs-registration admission, managed VK evidence loops, VK body replacement and vector admission facets.
   - Must not regress: every semantic public claim must be organizer-evidenced; public projections never become source evidence; unknown admission is neither registration nor `ticketed`; Lite remains the normal public writer with only the capped `gpt-4o` emergency lane.

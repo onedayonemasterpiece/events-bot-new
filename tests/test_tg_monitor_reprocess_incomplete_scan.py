@@ -83,7 +83,7 @@ def _kraftmarket_incident_results_path(tmp_path: Path) -> Path:
                     "Лекции Дмитрия Манкевича о становлении здравоохранения в первые годы "
                     "становления области перенесена в Историко-художественный музей на ту же дату "
                     "и то же время.\n\n"
-                    "19 июня 18:30\n"
+                    "19 августа 18:30\n"
                     "Историко-художественный музей, Клиническая 21, #Калининград\n"
                     "Лекция проходит в рамках фестиваля «80 историй о главном».\n"
                     "ПЕРЕНОС, билеты действительны\n"
@@ -99,7 +99,7 @@ def _kraftmarket_incident_results_path(tmp_path: Path) -> Path:
                 "events": [
                     {
                         "title": "Калининградское здравоохранение в период становления области",
-                        "date": "2026-06-19",
+                        "date": "2026-08-19",
                         "time": "18:30",
                         "location_name": "Историко-художественный музей",
                         "location_address": "Клиническая 21",
@@ -118,10 +118,10 @@ def _kraftmarket_incident_results_path(tmp_path: Path) -> Path:
                 "message_date": "2026-06-12T16:14:11+00:00",
                 "source_link": "https://t.me/kraftmarket39/287",
                 "text": (
-                    "15.06 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог "
+                    "15.08 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог "
                     "стать великим композитором.\n\n"
                     "Событие проходит в рамках образовательной программы фестиваля Кантата.\n\n"
-                    "15 июня 12:45\n"
+                    "15 августа 12:45\n"
                     "Филиал Третьяковской галереи, Парадная наб. 3, #Калининград\n"
                     "Бесплатно, по регистрации"
                 ),
@@ -135,7 +135,7 @@ def _kraftmarket_incident_results_path(tmp_path: Path) -> Path:
                 "events": [
                     {
                         "title": "Бородин. Гениальный дилетант",
-                        "date": "2026-06-15",
+                        "date": "2026-08-15",
                         "time": "12:45",
                         "location_name": "Филиал Третьяковской галереи",
                         "location_address": "Парадная наб. 3",
@@ -256,11 +256,11 @@ async def test_reprocesses_kraftmarket_producer_zero_events_after_fixed_producer
         "https://t.me/kraftmarket39/287",
     ]
     assert calls[0].title == "Калининградское здравоохранение в период становления области"
-    assert calls[0].date == "2026-06-19"
+    assert calls[0].date == "2026-08-19"
     assert calls[0].time == "18:30"
     assert calls[0].festival == "80 историй о главном"
     assert calls[1].title == "Бородин. Гениальный дилетант"
-    assert calls[1].date == "2026-06-15"
+    assert calls[1].date == "2026-08-15"
     assert calls[1].time == "12:45"
     assert calls[1].festival == "Кантата"
     async with db.raw_conn() as conn:
@@ -442,6 +442,80 @@ async def test_stores_skip_breakdown_for_new_incomplete_scan(tmp_path, monkeypat
         row = await cur.fetchone()
     assert row[0:3] == ("skipped", 1, 0)
     assert json.loads(row[3]) == {"skip_breakdown": {"invalid:missing_location": 1}}
+
+
+@pytest.mark.asyncio
+async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT id FROM telegram_source WHERE username=?",
+            ("ecodvor39",),
+        )
+        row = await cur.fetchone()
+        assert row is not None
+        source_id = int(row[0])
+        await conn.execute(
+            "UPDATE telegram_source SET last_scanned_message_id=NULL, last_scan_at=NULL WHERE id=?",
+            (source_id,),
+        )
+        await conn.commit()
+
+    payload = {
+        "schema_version": 2,
+        "run_id": "INC-2026-07-14-ecodvor-zero-tail",
+        "generated_at": "2026-07-14T15:00:00+00:00",
+        "stats": {"sources_total": 1, "messages_scanned": 2, "events_extracted": 0},
+        "messages": [
+            {
+                "source_username": "ecodvor39",
+                "message_id": 934,
+                "message_date": "2026-07-13T18:32:01+00:00",
+                "source_link": "https://t.me/ecodvor39/934",
+                "text": "История фриганской жизни. Подробности программы будут позже.",
+                "events": [],
+            },
+            {
+                "source_username": "ecodvor39",
+                "message_id": 935,
+                "message_date": "2026-07-14T09:43:05+00:00",
+                "source_link": "https://t.me/ecodvor39/935",
+                "text": "Что можно принести в зону рукодельного свопа.",
+                "events": [],
+            },
+        ],
+    }
+    path = tmp_path / "zero_tail_results.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    async def fail_smart_update(*_args, **_kwargs):
+        raise AssertionError("true zero-event tail must not enter Smart Update")
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fail_smart_update)
+    report = await tg_handlers.process_telegram_results(path, db)
+
+    assert report.events_created == 0
+    assert report.events_merged == 0
+    async with db.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT last_scanned_message_id, last_scan_at FROM telegram_source WHERE id=?",
+                (source_id,),
+            )
+        ).fetchone()
+        scanned_count = (
+            await (
+                await conn.execute(
+                    "SELECT count(*) FROM telegram_scanned_message WHERE source_id=?",
+                    (source_id,),
+                )
+            ).fetchone()
+        )[0]
+    assert row[0] == 935
+    assert row[1] is not None
+    assert scanned_count == 0
+    await db.close()
 
 
 def test_zero_ticket_price_does_not_override_false_free_flag_for_tg_candidate():

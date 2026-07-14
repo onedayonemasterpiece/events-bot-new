@@ -4677,6 +4677,29 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     return True, "llm_scoped"
 
 
+_EXPLICIT_UNKNOWN_START_TIME_RE = re.compile(
+    r"(?iu)\b(?:"
+    r"время\s+(?:начала|старта)|"
+    r"(?:точное\s+)?(?:начало|старт)"
+    r")\s+(?:пока\s+)?(?:уточняется|не\s+определен[оа]?|не\s+известн[оа]?|"
+    r"будет\s+(?:уточнен[оа]?|объявлен[оа]?|известн[оа]?))\b"
+)
+
+
+def _source_explicitly_leaves_start_time_unknown(text: str | None) -> bool:
+    return bool(_EXPLICIT_UNKNOWN_START_TIME_RE.search(str(text or "")))
+
+
+def _candidate_explicitly_leaves_start_time_unknown(
+    candidate: "EventCandidate",
+    corpus: str,
+) -> bool:
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    if "tg_time_explicitly_unknown" in metrics:
+        return bool(metrics.get("tg_time_explicitly_unknown"))
+    return _source_explicitly_leaves_start_time_unknown(corpus)
+
+
 def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tuple[bool, str]:
     """High-recall router only; the LLM owns the date/time role decision."""
 
@@ -4685,6 +4708,8 @@ def _candidate_needs_llm_anchor_role_review(candidate: "EventCandidate") -> tupl
     corpus = _candidate_location_grounding_corpus(candidate)
     if not corpus:
         return False, "empty_source"
+    if _candidate_explicitly_leaves_start_time_unknown(candidate, corpus):
+        return True, "explicit_unknown_start_time"
     times = {
         f"{int(hour):02d}:{minute}"
         for hour, minute in re.findall(r"(?<!\d)([01]?\d|2[0-3])[.:]([0-5]\d)(?!\d)", corpus)
@@ -4733,6 +4758,9 @@ async def _llm_review_candidate_anchor_roles(
         "от полного периода работы и несколько отдельных occurrences от непрерывного range. "
         "Для многодневного периода ставь time=null, если единственное время относится "
         "только к открытию/вернисажу, а не к ежедневному расписанию всего периода. "
+        "Если у конкретной активности прямо сказано, что время начала уточняется, будет "
+        "объявлено или пока неизвестно, ставь time=null: часы всей ярмарки, фестиваля или "
+        "программы являются контекстом и не становятся временем начала этой активности. "
         "Если title означает саму выставку, выбирай полный период; если title явно означает "
         "открытие/вернисаж, выбирай только дату и время открытия. Не схлопывай выставку к дате закрытия. "
         "Если evidence однозначно поддерживает candidate — keep. Если однозначно даёт другие "
@@ -4758,7 +4786,10 @@ async def _llm_review_candidate_anchor_roles(
     corpus_norm = _norm_text_for_grounding(corpus)
     if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
         return False, "llm_evidence_not_verbatim"
+    explicit_unknown_start = _candidate_explicitly_leaves_start_time_unknown(candidate, corpus)
     if decision == "keep" and confidence >= 0.9:
+        if explicit_unknown_start and _valid_hhmm_or_none(candidate.time):
+            return False, "llm_time_conflicts_explicit_unknown"
         return True, "llm_keep"
     if decision != "repair" or confidence < 0.85:
         return False, f"llm_{decision or 'uncertain'}"
@@ -4771,6 +4802,8 @@ async def _llm_review_candidate_anchor_roles(
         return False, "llm_invalid_end_date"
     if data.get("time") and repaired_time is None:
         return False, "llm_invalid_time"
+    if explicit_unknown_start and repaired_time is not None:
+        return False, "llm_time_conflicts_explicit_unknown"
     if not repaired_date:
         return False, "llm_missing_date"
     if repaired_end and _parse_iso_date(repaired_end) < _parse_iso_date(repaired_date):

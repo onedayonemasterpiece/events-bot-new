@@ -3237,6 +3237,8 @@ async def extract_events(
         'ticket_link is only for attendee admission: an explicitly labelled ticket, registration, booking, or entry-payment URL. '
         'Donation/fundraiser/project-support/tip links (including a Tinkoff link labelled "Поддержать"), social profiles, and generic details links are not ticket_link; leave it empty. '
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
+        'If a named activity explicitly says its start time is being clarified, will be announced, or is not known yet, '
+        'leave that activity time empty. Do not copy the enclosing festival, fair, venue, or full-program hours into it. '
         'Festival/campaign anchor contract: when the source explicitly says the event is part of a named festival '
         '(for example "фестиваль «Кантата»", "фестиваля Кантата", "80 историй о главном", or kgd80.ru), '
         'fill festival with the exact campaign-covering festival name: "Кантата" or "80 историй о главном". '

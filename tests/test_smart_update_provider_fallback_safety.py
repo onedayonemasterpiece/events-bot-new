@@ -102,6 +102,81 @@ async def test_collapsed_exhibition_range_is_llm_repaired(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_explicit_unknown_activity_start_is_llm_repaired_to_null(monkeypatch) -> None:
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/ecodvor39/931",
+        source_text=(
+            'Приглашаем на мастер-класс "Джанкбук: блокнот из случайных сокровищ".\n'
+            "Время начала уточняется. Программа Экодвора пока формируется.\n"
+            "Летний Экодвор пройдёт 8 августа с 14:00 до 17:00."
+        ),
+        title="Джанкбук: блокнот из случайных сокровищ",
+        date="2026-08-08",
+        time="14:00",
+        location_name="Железнодорожные ворота",
+        city="Калининград",
+        event_type="мастер-класс",
+    )
+    needed, trigger = su._candidate_needs_llm_anchor_role_review(candidate)
+    assert (needed, trigger) == (True, "explicit_unknown_start_time")
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "repair",
+            "confidence": 0.99,
+            "date": "2026-08-08",
+            "end_date": None,
+            "time": None,
+            "evidence_quotes": [
+                "Время начала уточняется",
+                "Летний Экодвор пройдёт 8 августа с 14:00 до 17:00",
+            ],
+            "reason_short": "14:00–17:00 is the parent event window, not the workshop start.",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    ok, reason = await su._llm_review_candidate_anchor_roles(candidate, trigger_reason=trigger)
+    assert (ok, reason) == (True, "llm_repair")
+    assert candidate.time is None
+
+
+@pytest.mark.asyncio
+async def test_explicit_unknown_activity_start_rejects_llm_parent_window(monkeypatch) -> None:
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/ecodvor39/931",
+        source_text=(
+            "Время начала уточняется. Программа Экодвора пока формируется. "
+            "Летний Экодвор пройдёт 8 августа с 14:00 до 17:00."
+        ),
+        title="Джанкбук: блокнот из случайных сокровищ",
+        date="2026-08-08",
+        time="14:00",
+        location_name="Железнодорожные ворота",
+        city="Калининград",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "repair",
+            "confidence": 0.99,
+            "date": "2026-08-08",
+            "end_date": None,
+            "time": "14:00",
+            "evidence_quotes": ["Время начала уточняется", "с 14:00 до 17:00"],
+            "reason_short": "incorrectly copied the enclosing window",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_review_candidate_anchor_roles(
+        candidate,
+        trigger_reason="explicit_unknown_start_time",
+    ) == (False, "llm_time_conflicts_explicit_unknown")
+    assert candidate.time == "14:00"
+
+
+@pytest.mark.asyncio
 async def test_bundle_grounding_rejects_unrelated_fallback_fields(monkeypatch) -> None:
     candidate = su.EventCandidate(
         source_type="vk",

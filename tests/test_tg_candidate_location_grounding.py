@@ -1138,3 +1138,103 @@ def test_short_program_and_reminder_fragments_are_not_event_local_locations() ->
         'В программе — бессмертные «Ave Maria» Ф. Шуберта', None
     ) is False
     assert h._event_local_location_candidate_ok('И не забывайте', None) is False
+
+
+def test_ecodvor_activity_tbd_start_does_not_inherit_parent_hours() -> None:
+    from source_parsing.telegram.handlers import _build_candidate
+
+    source_text = (
+        'Приглашаем на мастер-класс "Джанкбук: блокнот из случайных сокровищ".\n'
+        "Продолжительность: около часа.\n"
+        "Время начала уточняется. Программа Экодвора пока формируется.\n"
+        "Летний Экодвор пройдёт 8 августа с 14:00 до 17:00 в Железнодорожных воротах."
+    )
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    candidate = _build_candidate(
+        src,
+        {
+            "source_username": "ecodvor39",
+            "message_id": 931,
+            "source_link": "https://t.me/ecodvor39/931",
+            "text": source_text,
+        },
+        {
+            "title": "Джанкбук: блокнот из случайных сокровищ",
+            "date": "2026-08-08",
+            "time": "14:00",
+            "end_date": "2026-08-08",
+            "location_name": "Железнодорожные ворота",
+            "city": "Калининград",
+            "event_type": "мастер-класс",
+            "source_text": source_text,
+        },
+    )
+
+    assert candidate.time == ""
+    assert candidate.time_is_default is False
+    assert candidate.metrics["tg_time_explicitly_unknown"] is True
+
+
+def test_unknown_gathering_time_does_not_erase_explicit_activity_start() -> None:
+    from source_parsing.telegram.handlers import _build_candidate
+
+    source_text = (
+        "Время сбора участников уточняется. "
+        "Мастер-класс начнётся 8 августа в 15:00. "
+        "Экодвор работает с 14:00 до 17:00."
+    )
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    candidate = _build_candidate(
+        src,
+        {
+            "source_username": "example",
+            "message_id": 1,
+            "source_link": "https://t.me/example/1",
+            "text": source_text,
+        },
+        {
+            "title": "Мастер-класс",
+            "date": "2026-08-08",
+            "time": "15:00",
+            "location_name": "Железнодорожные ворота",
+            "city": "Калининград",
+            "source_text": source_text,
+        },
+    )
+
+    assert candidate.time == "15:00"
+    assert candidate.metrics["tg_time_explicitly_unknown"] is False
+
+
+def test_sibling_tbd_activity_does_not_erase_other_activity_start() -> None:
+    from source_parsing.telegram.handlers import _build_candidate
+
+    source_text = (
+        "Лекция о фриганстве — время начала уточняется.\n"
+        "Мастер-класс по коллажу начнётся 8 августа в 15:00.\n"
+        "Экодвор работает с 14:00 до 17:00."
+    )
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    events = [
+        {"title": "Лекция о фриганстве", "date": "2026-08-08", "time": ""},
+        {"title": "Мастер-класс по коллажу", "date": "2026-08-08", "time": "15:00"},
+    ]
+    candidate = _build_candidate(
+        src,
+        {
+            "source_username": "example",
+            "message_id": 2,
+            "source_link": "https://t.me/example/2",
+            "text": source_text,
+            "events": events,
+        },
+        {
+            **events[1],
+            "location_name": "Железнодорожные ворота",
+            "city": "Калининград",
+            "source_text": source_text,
+        },
+    )
+
+    assert candidate.time == "15:00"
+    assert candidate.metrics["tg_time_explicitly_unknown"] is False
