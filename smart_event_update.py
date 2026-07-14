@@ -27,6 +27,7 @@ from location_reference import (
     normalize_venue_key,
 )
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
+from llm_source_grounding import claim_is_grounded
 from models import (
     Event,
     EventIdentityDecisionLog,
@@ -614,8 +615,30 @@ MERGE_RESPONSE_FORMAT = {
                 "ticket_price_min": {"type": ["integer", "null"]},
                 "ticket_price_max": {"type": ["integer", "null"]},
                 "ticket_status": {"type": ["string", "null"]},
-                "added_facts": {"type": "array", "items": {"type": "string"}},
-                "duplicate_facts": {"type": "array", "items": {"type": "string"}},
+                "added_facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact": {"type": "string"},
+                            "evidence_quote": {"type": "string"},
+                        },
+                        "required": ["fact", "evidence_quote"],
+                        "additionalProperties": False,
+                    },
+                },
+                "duplicate_facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact": {"type": "string"},
+                            "evidence_quote": {"type": "string"},
+                        },
+                        "required": ["fact", "evidence_quote"],
+                        "additionalProperties": False,
+                    },
+                },
                 "conflict_facts": {"type": "array", "items": {"type": "string"}},
                 "skipped_conflicts": {"type": "array", "items": {"type": "string"}},
             },
@@ -2311,6 +2334,11 @@ def _estimate_fact_first_description_budget_chars(facts_text_clean: Sequence[str
     return max(800, min(SMART_UPDATE_DESCRIPTION_MAX_CHARS, budget))
 
 
+def _fact_first_is_sparse(facts_text_clean: Sequence[str]) -> bool:
+    facts = [str(f or "").strip() for f in (facts_text_clean or []) if str(f or "").strip()]
+    return len(facts) <= 4 or sum(len(f) for f in facts) < 320
+
+
 def _estimate_fact_first_description_max_tokens(
     *, budget_chars: int, floor: int = 1700, ceil: int = 4500
 ) -> int:
@@ -2334,6 +2362,18 @@ def _fact_first_description_prompt(
 ) -> str:
     facts_block = "\n".join(f"- {str(f).strip()}" for f in (facts_text_clean or []) if str(f or "").strip())
     budget_chars = _estimate_fact_first_description_budget_chars(facts_text_clean)
+    sparse_source = _fact_first_is_sparse(facts_text_clean)
+    structure_rules = (
+        "- SPARSE SOURCE MODE: фактов мало. Верни 1–2 коротких абзаца без `###` и без эпиграфа.\n"
+        "- Не пытайся заполнить объём или придумать второй смысловой блок. Краткий конкретный текст лучше воды."
+        if sparse_source
+        else (
+            "- Затем 2–3 блока с подзаголовками `### ...` (только `###`).\n"
+            "- Подзаголовки короткие (до ~60 символов), без точек, не полные предложения; не делай пустых блоков.\n"
+            "- Подзаголовки должны быть информативными; избегай общих вроде «Подробности».\n"
+            "- Под каждым `###` должно быть либо 2–4 предложения, либо список (2+ пунктов)."
+        )
+    )
     return textwrap.dedent(
         f"""\
         Ты пишешь Markdown‑анонс события для Telegram в стиле культурного журналиста: живо, конкретно, без рекламы.
@@ -2353,10 +2393,7 @@ def _fact_first_description_prompt(
           - После эпиграфа: пустая строка, затем лид ОДНИМ абзацем (1–2 предложения) без заголовка (без переносов строки).
           - В теле текста НЕ повторяй и НЕ пересказывай epigraph_fact: он уже прозвучал в эпиграфе.
         - Если epigraph_fact null: просто лид ОДНИМ абзацем (1–2 предложения) без заголовка (без переносов строки).
-        - Затем 2–3 блока с подзаголовками `### ...` (только `###`).
-        - Подзаголовки короткие (до ~60 символов), без точек, не полные предложения; не делай пустых блоков.
-        - Подзаголовки должны быть информативными; избегай общих вроде «Подробности».
-        - Под каждым `###` должно быть либо 2–4 предложения, либо список (2+ пунктов).
+        {structure_rules}
         - Абзацы средней длины: обычно 2–4 предложения; избегай микро‑абзацев из одной короткой фразы.
         - Объём: старайся уложиться примерно в лимит `description_budget_chars` символов, без воды.
         - Эмодзи: 1–2 штуки, как навигация (в лид/в 1 заголовке), без «ёлки».
@@ -2389,6 +2426,7 @@ def _fact_first_description_prompt(
         - event_type: {(event_type or '').strip()}
         - epigraph_fact (если null — эпиграф НЕ нужен): {epigraph_fact if epigraph_fact is not None else 'null'}
         - description_budget_chars: {budget_chars}
+        - sparse_source: {str(sparse_source).lower()}
 
         Факты (facts_text_clean):
         {facts_block}
@@ -2424,14 +2462,29 @@ def _g4_split_derived_fields_schema() -> dict[str, Any]:
 
 
 def _g4_rich_facts_schema() -> dict[str, Any]:
+    grounded_fact = {
+        "type": "object",
+        "properties": {
+            "fact": {"type": "string"},
+            "evidence_quote": {
+                "type": "string",
+                "description": (
+                    "Exact contiguous quote from source_text, raw_excerpt, or poster_texts "
+                    "that directly supports this fact."
+                ),
+            },
+        },
+        "required": ["fact", "evidence_quote"],
+        "additionalProperties": False,
+    }
     return {
         "type": "object",
         "properties": {
-            "public_core_facts": {"type": "array", "items": {"type": "string"}},
-            "program_or_examples": {"type": "array", "items": {"type": "string"}},
-            "context_methodology_facts": {"type": "array", "items": {"type": "string"}},
-            "people_org_facts": {"type": "array", "items": {"type": "string"}},
-            "logistics_facts": {"type": "array", "items": {"type": "string"}},
+            "public_core_facts": {"type": "array", "items": grounded_fact},
+            "program_or_examples": {"type": "array", "items": grounded_fact},
+            "context_methodology_facts": {"type": "array", "items": grounded_fact},
+            "people_org_facts": {"type": "array", "items": grounded_fact},
+            "logistics_facts": {"type": "array", "items": grounded_fact},
             "uncertain_or_drop": {"type": "array", "items": {"type": "string"}},
         },
         "required": [
@@ -2446,7 +2499,11 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
     }
 
 
-def _flatten_g4_rich_facts_payload(data: Any) -> list[str]:
+def _flatten_g4_rich_facts_payload(
+    data: Any,
+    *,
+    source_corpus: str | None = None,
+) -> list[str]:
     if not isinstance(data, dict):
         return []
     out: list[str] = []
@@ -2458,9 +2515,35 @@ def _flatten_g4_rich_facts_payload(data: Any) -> list[str]:
         "logistics_facts",
     ):
         for item in data.get(key) or []:
-            s = str(item or "").strip()
-            if s:
-                out.append(s)
+            if isinstance(item, dict):
+                fact = str(item.get("fact") or "").strip()
+                quote = str(item.get("evidence_quote") or "").strip()
+            else:
+                # Backward-compatible fail-closed handling for a provider that
+                # ignores the new object schema: a string fact is accepted only
+                # when it is lexically supported by the full source corpus.
+                fact = str(item or "").strip()
+                quote = ""
+            if not fact:
+                continue
+            if source_corpus is not None:
+                verdict = claim_is_grounded(
+                    fact,
+                    source_corpus,
+                    evidence_quote=quote or None,
+                    min_ratio=0.45,
+                    min_matches=2,
+                )
+                if not verdict.ok:
+                    logger.warning(
+                        "smart_update.rich_fact_rejected reason=%s matched=%s claim_tokens=%s fact=%r",
+                        verdict.reason,
+                        verdict.matched,
+                        verdict.claim_tokens,
+                        fact[:180],
+                    )
+                    continue
+            out.append(fact)
     return out
 
 
@@ -2560,6 +2643,7 @@ def _cleanup_g4_split_create_description(
     value: str | None,
     *,
     candidate: EventCandidate,
+    sparse_source: bool = False,
 ) -> str | None:
     raw = (value or "").strip()
     if not raw:
@@ -2573,12 +2657,14 @@ def _cleanup_g4_split_create_description(
     raw = _sanitize_description_output(raw, source_text="") or raw
     raw = _dedupe_description(raw) or raw
     raw = _normalize_plaintext_paragraphs(raw) or raw
-    raw = _ensure_minimal_description_headings(raw) or raw
+    if not sparse_source:
+        raw = _ensure_minimal_description_headings(raw) or raw
     raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
     if _description_needs_infoblock_logistics_strip(raw, candidate=candidate):
         raw = _strip_infoblock_logistics_from_description(raw, candidate=candidate) or raw
         raw = _normalize_plaintext_paragraphs(raw) or raw
-        raw = _ensure_minimal_description_headings(raw) or raw
+        if not sparse_source:
+            raw = _ensure_minimal_description_headings(raw) or raw
         raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
     if _description_needs_g4_split_create_logistics_reject(raw, candidate=candidate):
         logger.warning(
@@ -2611,6 +2697,7 @@ async def _llm_g4_split_create_writer(
         "Пушкинская карта" if candidate.pushkin_card else "",
     ]
     description_facts = _g4_split_description_facts(facts, anchors=anchors, max_items=30) or facts
+    sparse_source = _fact_first_is_sparse(description_facts)
     budget_chars = _estimate_fact_first_description_budget_chars(description_facts)
     desc_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1700, ceil=4200)
     payload = {
@@ -2619,6 +2706,7 @@ async def _llm_g4_split_create_writer(
         "description_budget_chars": budget_chars,
         "facts_text_clean": description_facts,
         "full_fact_count": len(facts),
+        "sparse_source": sparse_source,
         "infoblock_context": {
             "date": candidate.date,
             "time": candidate.time,
@@ -2639,7 +2727,8 @@ async def _llm_g4_split_create_writer(
         "`infoblock_context` нужен только чтобы НЕ повторять логистику в описании: дата, время, город, площадка, адрес, билеты, ссылки, цена, возраст, Пушкинская карта показываются отдельно.\n\n"
         f"{SMART_UPDATE_YO_RULE}\n\n"
         "Верни JSON:\n"
-        "- `description`: Markdown-текст; лид одним абзацем, затем 2-3 информативных `###` раздела; не сухая выжимка.\n"
+        "- `description`: Markdown-текст. Если `sparse_source=true`, верни 1–2 коротких конкретных абзаца без `###`; "
+        "не заполняй объём и не достраивай программу. Если false — лид и 2–3 информативных `###` раздела.\n"
         "- Сохрани цитаты, имена, названия, цифры и элементы списков из фактов; списки лучше оформить markdown-пунктами.\n"
         "- Identity facts (организатор, сообщество, площадка, название мира/франшизы/источника вдохновения) сохраняй точно по фактам; не заменяй их редакционными догадками.\n"
         "- Для лекций/паблик-токов/дискуссий: если `facts_text_clean` содержит несколько фактов вида `Спикер:`/`Лектор:`/`Участник:`/`Ведущий:`, "
@@ -2675,6 +2764,7 @@ async def _llm_g4_split_create_writer(
     description = _cleanup_g4_split_create_description(
         raw_description,
         candidate=candidate,
+        sparse_source=sparse_source,
     )
     if not description and raw_description.strip():
         try:
@@ -2689,6 +2779,7 @@ async def _llm_g4_split_create_writer(
             description = _cleanup_g4_split_create_description(
                 edited,
                 candidate=candidate,
+                sparse_source=sparse_source,
             )
     if not description:
         return None
@@ -2847,6 +2938,16 @@ def _fact_first_revise_prompt(
     policy_issues: Sequence[str],
 ) -> str:
     budget_chars = _estimate_fact_first_description_budget_chars(facts_text_clean)
+    sparse_source = _fact_first_is_sparse(facts_text_clean)
+    structure_rule = (
+        "SPARSE SOURCE MODE: оставь 1–2 коротких абзаца без `###` и без эпиграфа; не добавляй блоки ради объёма."
+        if sparse_source
+        else (
+            "Структура: лид (1–2 предложения) без заголовка, ОДНИМ абзацем → 2–3 блока `### ...` → "
+            "абзацы средней длины. Под каждым `###` — 2+ предложения ИЛИ список (2+ пунктов). "
+            "Не дроби на микро-разделы по 1 фразе."
+        )
+    )
     facts_block = "\n".join(f"- {str(f).strip()}" for f in (facts_text_clean or []) if str(f or "").strip())
     return textwrap.dedent(
         f"""\
@@ -2888,8 +2989,7 @@ def _fact_first_revise_prompt(
         - Факты вида `Формат: ...`: отрази формат явно; ключевые слова после `:` должны прозвучать.
         - Факты с цифрами/рейтинги/диапазоны: цифры должны совпадать с фактами.
         - Эпиграф: если epigraph_fact не null — blockquote до первого `###` и только один раз.
-        - Структура: лид (1–2 предложения) без заголовка, ОДНИМ абзацем → 2–3 блока `### ...` → абзацы средней длины.
-          Под каждым `###` — 2+ предложения ИЛИ список (2+ пунктов). Не дроби на микро‑разделы по 1 фразе.
+        - {structure_rule}
         - Подзаголовки должны быть информативными; избегай общих вроде «Подробности».
         - Эмодзи: 1–2 штуки, без «ёлки».
         - Запреты: нет даты/времени/города/площадки/адреса; нет URL/телефонов (кроме ссылок на плейлист Я.Музыки из facts_text_clean); нет цен/донатов; нет билетов/входа/регистрации/записи; нет возраста; нет «Пушкинская карта»; нет афиш.
@@ -2921,13 +3021,18 @@ def _fact_first_remove_posv_prompt(
         "facts_text_clean": [str(x).strip() for x in (facts_text_clean or []) if str(x or "").strip()],
         "description_md": _clip((description or "").strip(), 3200),
     }
+    structure_rule = (
+        "Сохрани 1–2 коротких абзаца без заголовков и эпиграфа."
+        if _fact_first_is_sparse(facts_text_clean)
+        else "Сохрани структуру: эпиграф (если есть), затем лид и 2–3 `###`."
+    )
     return (
         "В описании найден запрещённый корень «посвящ…» (посвящён/посвящена/посвящено и т.п.).\n"
         "Твоя задача: отредактировать `description_md` так, чтобы этот корень НЕ встречался нигде.\n\n"
         "Правила:\n"
         "- Верни ПОЛНЫЙ Markdown-текст (не частями).\n"
         "- Нельзя добавлять новые факты: источник истины — только `facts_text_clean`.\n"
-        "- Сохрани структуру: эпиграф (если есть) остаётся blockquote до первого `###`; затем лид; затем 2–3 `###`.\n"
+        f"- {structure_rule}\n"
         "- Нельзя добавлять логистику/CTA/ссылки/контакты/цены/возраст/афиши.\n"
         "- Слово/корень «посвящ» запрещён полностью. Перефразируй через «о/про/в центре — …», "
         "исправляя падежи/согласование.\n\n"
@@ -3090,7 +3195,8 @@ async def _llm_fact_first_description_md(
     # Keep the prompt bounded; fact-first relies on extracted facts, not raw sources.
     facts = _dedupe_source_facts(facts)[:28]
     facts = _dedupe_source_facts([_sanitize_fact_text_clean_for_prompt(f) for f in facts])[:28]
-    epigraph_fact = _pick_epigraph_fact(facts)
+    sparse_source = _fact_first_is_sparse(facts)
+    epigraph_fact = None if sparse_source else _pick_epigraph_fact(facts)
     budget_chars = _estimate_fact_first_description_budget_chars(facts)
     desc_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1700)
     revise_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1900)
@@ -3111,7 +3217,8 @@ async def _llm_fact_first_description_md(
         # dedupe/orphan-heading cleanup must happen AFTER it to avoid duplicate empty sections.
         raw = _dedupe_description(raw) or raw
         raw = _normalize_plaintext_paragraphs(raw) or raw
-        raw = _ensure_minimal_description_headings(raw) or raw
+        if not sparse_source:
+            raw = _ensure_minimal_description_headings(raw) or raw
         return raw.strip() or None
 
     def _collect_policy_issues(value: str) -> list[str]:
@@ -3120,19 +3227,28 @@ async def _llm_fact_first_description_md(
 
         # Headings count: keep it readable and consistent with the prompt.
         h3 = len(re.findall(r"(?m)^###\s+\S", desc_s))
-        if h3 < 2 or h3 > 3:
+        if sparse_source and h3:
+            issues.append("SPARSE SOURCE MODE: убери все `###`; оставь 1–2 коротких абзаца без заполнения объёма.")
+        elif (not sparse_source) and (h3 < 2 or h3 > 3):
             issues.append(
                 f"Сейчас заголовков `###` = {h3}; нужно 2–3. "
                 "Объедини близкие разделы и оставь ровно 2–3 информативных подзаголовка."
             )
 
-        lead_paras = _fact_first_lead_paragraph_count(desc_s)
-        if lead_paras == 0:
-            issues.append("Добавь лид одним абзацем (1–2 предложения) перед первым `###`.")
-        elif lead_paras > 1:
-            issues.append(
-                "Лид до первого `###` должен быть ОДНИМ абзацем (1–2 предложения), без лишних переносов строки."
-            )
+        if sparse_source:
+            sparse_paras = [p.strip() for p in re.split(r"\n{2,}", desc_s) if p.strip()]
+            if not sparse_paras:
+                issues.append("SPARSE SOURCE MODE: нужен один короткий содержательный абзац.")
+            elif len(sparse_paras) > 2:
+                issues.append("SPARSE SOURCE MODE: сократи до 1–2 абзацев; не добавляй структуру ради объёма.")
+        else:
+            lead_paras = _fact_first_lead_paragraph_count(desc_s)
+            if lead_paras == 0:
+                issues.append("Добавь лид одним абзацем (1–2 предложения) перед первым `###`.")
+            elif lead_paras > 1:
+                issues.append(
+                    "Лид до первого `###` должен быть ОДНИМ абзацем (1–2 предложения), без лишних переносов строки."
+                )
 
         h3_titles = [
             re.sub(r"\s+", " ", (m.group(1) or "")).strip()
@@ -3164,7 +3280,7 @@ async def _llm_fact_first_description_md(
                     f"{shown}{more}. Заголовки должны быть уникальными — объедини секции или переименуй."
                 )
 
-        micro_h3 = _fact_first_micro_h3_headings(desc_s)
+        micro_h3 = [] if sparse_source else _fact_first_micro_h3_headings(desc_s)
         if micro_h3:
             shown = ", ".join(micro_h3[:4])
             more = "" if len(micro_h3) <= 4 else f" (+{len(micro_h3) - 4})"
@@ -8075,8 +8191,16 @@ async def _llm_extract_candidate_facts(
             "Ты извлекаешь ПОЛНЫЙ набор фактов о КОНКРЕТНОМ событии для Smart Update G4.\n"
             "Это quality-critical stage: лучше вернуть больше grounded фактов, чем сжать источник до короткой карточки.\n"
             "Верни JSON строго по схеме.\n\n"
+            "Evidence contract для каждого элемента public/program/context/people/logistics:\n"
+            "- Верни объект {fact, evidence_quote}.\n"
+            "- evidence_quote — точная непрерывная цитата из text/raw_excerpt/poster_texts, без пересказа.\n"
+            "- Цитата должна прямо подтверждать ВЕСЬ fact, а не быть просто соседней строкой по теме.\n"
+            "- Не выводи редакционные обобщения из названия проекта. Если источник не называет цель, "
+            "формат, пользу, регулярность или продолжение серии, не создавай такие факты.\n"
+            "- При коротком тизере нормально вернуть 1–3 факта или пустые секции: не заполняй схему догадками.\n\n"
             "Секции:\n"
-            "- public_core_facts: суть события, формат, цель, что будет происходить, что получает/делает участник.\n"
+            "- public_core_facts: только явно названные суть/формат/цель и явно обещанные действия участника. "
+            "Не достраивай их по типу, названию или общей тематике события.\n"
             "- context_methodology_facts: методология, исследование, источник концепции, важные числа, background, который объясняет событие.\n"
             "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры. "
             "Имена организаторов/сообществ/площадок, а также названия вымышленных миров, франшиз и культурных источников "
@@ -8165,7 +8289,19 @@ async def _llm_extract_candidate_facts(
     raw_facts = []
     if isinstance(data, dict):
         if SMART_UPDATE_G4_SPLIT_CREATE:
-            raw_facts = _flatten_g4_rich_facts_payload(data)
+            source_corpus = "\n\n".join(
+                str(value or "").strip()
+                for value in (
+                    payload.get("text"),
+                    payload.get("raw_excerpt"),
+                    *(payload.get("poster_texts") or []),
+                )
+                if str(value or "").strip()
+            )
+            raw_facts = _flatten_g4_rich_facts_payload(
+                data,
+                source_corpus=source_corpus,
+            )
         else:
             raw_facts = list(data.get("facts") or [])
 
@@ -9315,6 +9451,62 @@ def _infer_source_type_from_url(url: str | None) -> str:
     return "site"
 
 
+def _is_managed_vk_publication_url(url: str | None) -> bool:
+    value = str(url or "").strip()
+    match = re.search(r"(?i)(?:wall)?-([0-9]+)_[0-9]+", value)
+    if not match:
+        return False
+    owner_id = match.group(1)
+    managed_ids = {
+        str(os.getenv(name) or "").strip().lstrip("-")
+        for name in ("VK_EVENTS_GROUP_ID", "VK_AFISHA_GROUP_ID")
+    }
+    managed_ids.discard("")
+    # This is the established production default used by the publishing and
+    # Smart Update report surfaces when the env alias is omitted.
+    managed_ids.add("231920894")
+    return owner_id in managed_ids
+
+
+def _flatten_source_grounded_fact_items(
+    facts: Sequence[object],
+    *,
+    source_text: str | None,
+    log_context: str,
+) -> list[str]:
+    out: list[str] = []
+    for raw in facts or []:
+        if isinstance(raw, dict):
+            fact = str(raw.get("fact") or "").strip()
+            evidence_quote = str(raw.get("evidence_quote") or "").strip()
+        else:
+            # Backwards-compatible fail-closed handling for stale providers and
+            # fixtures: a bare string must still be supported by the full source.
+            fact = str(raw or "").strip()
+            evidence_quote = ""
+        if not fact:
+            continue
+        verdict = claim_is_grounded(
+            fact,
+            source_text,
+            evidence_quote=evidence_quote or None,
+            min_ratio=0.38,
+            min_matches=2,
+        )
+        if verdict.ok:
+            out.append(fact)
+            continue
+        logger.warning(
+            "smart_update.source_fact_rejected context=%s reason=%s matched=%s claim_tokens=%s fact=%r",
+            log_context,
+            verdict.reason,
+            verdict.matched,
+            verdict.claim_tokens,
+            fact[:180],
+        )
+    return out
+
+
 async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
     """Ensure legacy single-source fields are represented in event_source.
 
@@ -9335,6 +9527,13 @@ async def _ensure_legacy_event_sources(session, event: Event | None) -> int:
     now = datetime.now(timezone.utc)
     added = 0
     for url in urls:
+        if _is_managed_vk_publication_url(url):
+            logger.info(
+                "smart_update.legacy_source_skip_managed_vk event_id=%s source_url=%s",
+                event.id,
+                url,
+            )
+            continue
         exists = (
             await session.execute(
                 select(EventSource.id).where(
@@ -10829,6 +11028,10 @@ async def _llm_merge_event(
         "duplicate_facts должен содержать список фактов из candidate, которые уже есть в event_before.facts (дубли). "
         "conflict_facts должен содержать список конфликтов (см. выше) и выбранную сторону по доверию. "
         "Не включай в added_facts и duplicate_facts служебные заметки. "
+        "Каждый элемент added_facts и duplicate_facts верни объектом {fact, evidence_quote}. "
+        "evidence_quote — точная непрерывная цитата из candidate.text/raw_excerpt/poster_texts, "
+        "которая прямо подтверждает ВЕСЬ fact. Если такой цитаты нет, не возвращай факт. "
+        "Не выводи цель, формат, пользу, регулярность или продолжение серии только из названия/тематики. "
         "\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -16061,7 +16264,8 @@ async def _smart_event_update_impl(
                 )
                 or description_value
             )
-            description_value = _ensure_minimal_description_headings(description_value) or description_value
+            if not _fact_first_is_sparse(bundled_facts or []):
+                description_value = _ensure_minimal_description_headings(description_value) or description_value
         if (not split_create_used) and _has_overlong_paragraph(description_value, limit=850):
             try:
                 reflown = await _llm_reflow_description_paragraphs(description_value)
@@ -16847,7 +17051,11 @@ async def _smart_event_update_impl(
                 )
                 rows = (
                     await session.execute(
-                        select(EventSourceFact.fact)
+                        select(
+                            EventSourceFact.fact,
+                            EventSource.source_text,
+                            EventSource.source_url,
+                        )
                         .join(EventSource, EventSourceFact.source_id == EventSource.id)
                         .where(
                             EventSourceFact.event_id == int(event_db.id or 0),
@@ -16860,9 +17068,18 @@ async def _smart_event_update_impl(
                         )
                     )
                 ).all()
-                facts_before_list = _dedupe_source_facts(
-                    [str(r[0]).strip() for r in (rows or []) if (r and str(r[0] or "").strip())]
-                )[:80]
+                grounded_rows: list[str] = []
+                for row in rows or []:
+                    fact = str(row[0] or "").strip()
+                    source_url_for_fact = str(row[2] or "").strip()
+                    if not fact or _is_managed_vk_publication_url(source_url_for_fact):
+                        continue
+                    # Historical ledger facts may be faithful LLM paraphrases, so
+                    # do not semantically rewrite/drop them with a lexical rule.
+                    # New facts enter the ledger only through the evidence-quote
+                    # contracts below and in rich_facts_extract.
+                    grounded_rows.append(fact)
+                facts_before_list = _dedupe_source_facts(grounded_rows)[:80]
                 legacy_facts_seed: list[str] = []
                 # Keep a compact snapshot for operator audit/debug, but do not use it as facts_before.
                 # Also: if an older run created only a legacy note (without extracted facts), we still
@@ -16901,12 +17118,28 @@ async def _smart_event_update_impl(
                 if merge_data:
                     merge_digest_from_llm = _clean_search_digest(merge_data.get("search_digest"))
                     deterministic_skipped_conflicts = list(skipped_conflicts)
-                    added_facts = _filter_ungrounded_sensitive_facts(
+                    added_facts = _flatten_source_grounded_fact_items(
                         merge_data.get("added_facts") or [],
+                        source_text=(
+                            _strip_promo_lines(candidate.source_text)
+                            or candidate.source_text
+                        ),
+                        log_context=f"merge:{candidate.source_url or candidate.source_type}",
+                    )
+                    added_facts = _filter_ungrounded_sensitive_facts(
+                        added_facts,
                         candidate=candidate,
                     )
-                    duplicate_facts = _filter_ungrounded_sensitive_facts(
+                    duplicate_facts = _flatten_source_grounded_fact_items(
                         merge_data.get("duplicate_facts") or [],
+                        source_text=(
+                            _strip_promo_lines(candidate.source_text)
+                            or candidate.source_text
+                        ),
+                        log_context=f"merge_duplicate:{candidate.source_url or candidate.source_type}",
+                    )
+                    duplicate_facts = _filter_ungrounded_sensitive_facts(
+                        duplicate_facts,
                         candidate=candidate,
                     )
                     conflict_facts = list(merge_data.get("conflict_facts") or [])
@@ -17092,7 +17325,8 @@ async def _smart_event_update_impl(
                                     )
                                     or cleaned_ff
                                 )
-                                cleaned_ff = _ensure_minimal_description_headings(cleaned_ff) or cleaned_ff
+                                if not _fact_first_is_sparse(facts_text_clean):
+                                    cleaned_ff = _ensure_minimal_description_headings(cleaned_ff) or cleaned_ff
                                 cleaned_ff = _clip(cleaned_ff, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
                                 current = (event_db.description or "").strip()
                                 if cleaned_ff.strip() and cleaned_ff.strip() != current:

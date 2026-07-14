@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -495,11 +496,26 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
             assert "Любое обещание посетителю" in prompt
             assert "Не переноси детали прошедшего события" in prompt
             assert "без домысливания программы и активностей" in prompt
+            assert "evidence_quote" in prompt
+            assert kwargs["generation_config"]["response_mime_type"] == "application/json"
             assert self.fallback_models == []
             assert self.max_retries == 1
             return (
-                "Можно сдать до 4 чистых шин на переработку: из них сделают "
-                "резиновую крошку и другие полезные материалы.",
+                json.dumps(
+                    {
+                        "sentences": [
+                            {
+                                "text": "Принимается не более 4 шин от одного человека; собранное сырьё направят на переработку.",
+                                "evidence_quote": (
+                                    "Собранное сырье будет направлено на перерабатывающее предприятие, "
+                                    "где из шин изготовят новые полезные продукты. От одного физического "
+                                    "лица принимается не более 4 шин."
+                                ),
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
                 {},
             )
 
@@ -508,7 +524,7 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     hook = await main.build_tg_event_hook_text(event, source)
 
     assert len(clients) == 1
-    assert hook.startswith("Можно сдать")
+    assert hook.startswith("Принимается не более 4 шин")
     assert "Что здесь стоит увидеть?" not in hook
 
 
@@ -541,14 +557,24 @@ async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(monkeypatch):
 
     async def fake_ask_4o(prompt, **kwargs):
         calls.append((prompt, kwargs))
-        return "Редкая камерная программа прозвучит в живом исполнении."
+        return json.dumps(
+            {
+                "sentences": [
+                    {
+                        "text": "Музыканты исполнят редкую камерную программу.",
+                        "evidence_quote": "Музыканты исполнят редкую камерную программу.",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
 
     monkeypatch.setattr(main, "_reserve_tg_event_4o_fallback", fake_reserve)
     monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
 
     hook = await main.build_tg_event_hook_text(event, source, db="db")
 
-    assert hook.startswith("Редкая камерная программа")
+    assert hook.startswith("Музыканты исполнят")
     assert len(calls) == 1
     assert calls[0][1]["model"] == "gpt-4o"
     assert calls[0][1]["allow_model_fallback"] is False
@@ -619,10 +645,19 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
             assert "до 500 символов" in prompt
             assert "Это промо-событие" in prompt
             assert "2-3 самые сильные конкретные причины" in prompt
-            assert kwargs["max_output_tokens"] == 260
+            assert kwargs["max_output_tokens"] == 360
             return (
-                "Редкая камерная программа для тех, кто хочет услышать живой ансамбль "
-                "в спокойном формате. В описании есть детали состава и настроения вечера.",
+                json.dumps(
+                    {
+                        "sentences": [
+                            {
+                                "text": "Музыканты играют редкую камерную программу.",
+                                "evidence_quote": "Музыканты играют редкую программу.",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
                 {},
             )
 
@@ -634,7 +669,27 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
         promo_highlight=True,
     )
 
-    assert hook.startswith("Редкая камерная программа")
+    assert hook.startswith("Музыканты играют")
+
+
+def test_tg_event_hook_payload_rejects_unrelated_tire_claim() -> None:
+    source = (
+        "На Летнем Экодворе будет специалистка Центра защиты леса. "
+        "Также собирают чистые материалы для повторного использования."
+    )
+    raw = json.dumps(
+        {
+            "sentences": [
+                {
+                    "text": "Можно сдать до 4 шин на переработку.",
+                    "evidence_quote": "чистые материалы для повторного использования",
+                }
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+    assert main._parse_tg_event_hook_payload(raw, evidence_corpus=source) is None
 
 
 def test_build_tg_promo_event_publication_formats_markdown_body():

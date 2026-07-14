@@ -1356,7 +1356,9 @@ EVENT_ARRAY_SCHEMA = {
             ),
             'ticket_link': _string_schema(
                 'Registration or ticket URL; empty string if none. A ticket or registration URL is not by itself '
-                'evidence that the event is free.'
+                'evidence that the event is free. Donation, fundraiser, project-support, tip, Boosty/Patreon, or '
+                'Tinkoff support links are not admission links and must be empty unless the source explicitly labels '
+                'that exact URL as payment for entry/ticket/registration.'
             ),
             'ticket_price_min': {
                 'type': 'number',
@@ -3232,6 +3234,8 @@ async def extract_events(
         'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
         'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
         'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+        'ticket_link is only for attendee admission: an explicitly labelled ticket, registration, booking, or entry-payment URL. '
+        'Donation/fundraiser/project-support/tip links (including a Tinkoff link labelled "Поддержать"), social profiles, and generic details links are not ticket_link; leave it empty. '
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
         'Festival/campaign anchor contract: when the source explicitly says the event is part of a named festival '
         '(for example "фестиваль «Кантата»", "фестиваля Кантата", "80 историй о главном", or kgd80.ru), '
@@ -3513,6 +3517,7 @@ async def extract_events(
             'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
             'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
             'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+            'Donation, fundraiser, and project-support URLs are never ticket_link unless the source explicitly labels that exact URL as attendee entry payment. '
             'Use empty string for unknown text fields. '
             'If text or ticket URL names a festival campaign context such as "Кантата" or "80 историй о главном"/kgd80.ru, '
             'set festival exactly to "Кантата" or "80 историй о главном" on the returned event. '
@@ -4334,11 +4339,21 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         def _ticketish(label: str | None, url: str | None) -> bool:
             t = (label or '').strip().casefold()
             u = (url or '').strip().casefold()
-            if any(k in t for k in ['билет', 'регист', 'запис', 'more info', 'подробнее', 'здесь', 'here', 'tickets']):
+            if any(k in t for k in ['донат', 'пожертв', 'поддержать', 'поддержка проекта', 'сбор средств', 'donate', 'donation']):
+                return False
+            if any(k in t for k in ['билет', 'регист', 'запис', 'купить', 'ticket', 'tickets', 'register', 'registration']):
                 return True
             if any(d in u for d in ['timepad.ru', 'kassir.ru', 'qtickets.ru', 'ticketland.ru', 'ticketscloud.com', 'intickets.ru']):
                 return True
             return False
+
+        def _non_admission_link(label: str | None, url: str | None) -> bool:
+            t = (label or '').strip().casefold()
+            u = (url or '').strip().casefold()
+            return (
+                any(k in t for k in ['донат', 'пожертв', 'поддержать', 'поддержка проекта', 'сбор средств', 'donate', 'donation'])
+                or any(d in u for d in ['boosty.to', 'patreon.com'])
+            )
 
         def _ru_month(m: int) -> str:
             return {1:'января',2:'февраля',3:'марта',4:'апреля',5:'мая',6:'июня',7:'июля',8:'августа',9:'сентября',10:'октября',11:'ноября',12:'декабря'}.get(m, '')
@@ -4369,12 +4384,11 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             return None
 
         def _pick_link(cands: list[dict]) -> str | None:
-            # Prefer ticketish labels/domains.
+            # Admission is an explicit semantic contract. A sole external URL
+            # is not evidence of tickets/registration (it may be a donation).
             for c in cands:
                 if _ticketish(c.get('text'), c.get('url')):
                     return c.get('url')
-            if len(cands) == 1:
-                return cands[0].get('url')
             return None
 
         def _more_specific_ticket_link(current: str | None, candidate: str | None) -> bool:
@@ -4399,6 +4413,13 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             if len(cleaned_events) == 1:
                 ev = cleaned_events[0]
                 current_ticket = (ev.get('ticket_link') or '').strip()
+                if current_ticket and any(
+                    (c.get('url') or '').strip().rstrip('/') == current_ticket.rstrip('/')
+                    and _non_admission_link(c.get('text'), c.get('url'))
+                    for c in link_spans
+                ):
+                    ev['ticket_link'] = ''
+                    current_ticket = ''
                 ticketish = [c for c in link_spans if _ticketish(c.get('text'), c.get('url'))]
                 if current_ticket and ticketish:
                     picked_specific = _pick_link(ticketish)
@@ -4422,6 +4443,13 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                     ev = cleaned_events[idx_ev]
                     seg_links = [c for c in link_spans if isinstance(c.get('offset'), int) and p <= int(c['offset']) < end]
                     current_ticket = (ev.get('ticket_link') or '').strip()
+                    if current_ticket and any(
+                        (c.get('url') or '').strip().rstrip('/') == current_ticket.rstrip('/')
+                        and _non_admission_link(c.get('text'), c.get('url'))
+                        for c in seg_links
+                    ):
+                        ev['ticket_link'] = ''
+                        current_ticket = ''
                     if current_ticket:
                         ticketish = [c for c in seg_links if _ticketish(c.get('text'), c.get('url'))]
                         picked_specific = _pick_link(ticketish)

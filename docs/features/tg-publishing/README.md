@@ -108,3 +108,17 @@
 
 - Unit: `tests/test_tg_event_publish.py`.
 - Live E2E для фичи удобно гонять через `/vk_auto_import --limit=1`: событие должно появиться в `@kldevents` captioned media-постом с hook, публично открываемой календарной кнопкой/ссылкой, датным/городским/type/festival hashtag line, `Подробнее` на Telegraph, footer links и дедуплицированными изображениями; тот же Smart Update должен иметь рабочий managed VK-пост в `klgdevents`, подтверждённый не только DB URL, но и `wall.getById`. При сравнении каналов последние managed Smart Update события должны идти в одинаковом порядке; допустимы только разные времена публикации из-за VK/Telegram quiet-window spacing.
+
+### Grounded public intro contract (2026-07-14)
+
+The event-announcement intro is a public text and remains isolated from cheap bulk-processing
+model routing. It uses one Gemini Lite attempt; only the existing persisted `gpt-4o` emergency
+lane (maximum 100 calls per UTC day) may write a fallback. Gemma, mini models, and deterministic
+narrative fallbacks are prohibited.
+
+Both approved writers return structured sentences with an exact contiguous `evidence_quote`
+from the organizer source corpus. The publisher verifies that the quote occurs in the raw
+source and supports the whole sentence, including every number. Invalid JSON, a missing quote,
+or an unsupported sentence fails closed (or proceeds to the bounded approved emergency writer)
+instead of publishing fluent filler. Canonical description text can be supplied as draft
+context, but it is not evidence and cannot authorize a claim.

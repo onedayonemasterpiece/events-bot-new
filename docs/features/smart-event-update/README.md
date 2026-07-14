@@ -666,3 +666,18 @@ with `scripts/inspect/audit_public_exhibition_duplicates.py`.  It scans the
 canonical SQLite event inventory read-only and emits JSON/Prometheus acceptance
 metrics, including
 `events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"}`.
+
+### Sparse-source and fact evidence contract (2026-07-14)
+
+Public facts extracted from a candidate, including facts returned by the merge stage, must be
+LLM-selected objects `{fact, evidence_quote}`. `evidence_quote` is an exact contiguous fragment
+of that candidate's text/OCR and must directly support the complete fact. A narrow verifier may
+reject an invalid contract, but it does not rewrite or infer meaning. In particular, the model
+must not infer an event's goal, format, benefits, regularity, or “continuation of a series” from
+the project name or topic.
+
+Thin teasers are allowed to yield only one to three facts. The fact-first writer then produces
+one or two short paragraphs without forced headings or filler; sparsity is an honest state, not
+a prompt to invent detail. Later concrete organizer sources can enrich the same event through
+the normal LLM merge. Managed VK publication URLs are output projections and are excluded from
+legacy `event_source` backfill, preventing published AI copy from becoming circular evidence.

@@ -428,3 +428,12 @@ Edit this file to tweak how requests are sent to 4o.
   "rationale_short": "В названии и описании явно указан фестиваль и приведён официальный сайт."
 }
 ```
+
+## Event public-copy grounding (2026-07-14)
+
+For source-derived public facts and Telegram announcement sentences, require the model to return
+an exact contiguous `evidence_quote` alongside each claim. The quote must support the entire
+claim rather than merely share its topic; unsupported numbers fail the contract. Sparse sources
+may produce sparse output. Never fill a schema by inferring goals, format, benefits, programme,
+regularity, or series continuity from a title. Deterministic code may validate the evidence
+contract and fail closed, but may not synthesize or semantically repair public prose.

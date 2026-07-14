@@ -28,6 +28,7 @@ from markup import (
     format_tel_link_for_display,
     tel_href_for_phone_value,
 )
+from llm_source_grounding import claim_is_grounded
 
 from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
 from source_parsing.telegram.commands import tg_monitor_router
@@ -5222,7 +5223,7 @@ TG_EVENT_REWRITE_MODEL = "gemini-3.1-flash-lite"
 TG_EVENT_4O_FALLBACK_MODEL = "gpt-4o"
 TG_EVENT_4O_FALLBACK_DAILY_LIMIT = 100
 TG_EVENT_4O_FALLBACK_BUDGET_KEY = "tg_event_public_writer_4o"
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v7-source-grounded-attendee-actions"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v8-evidence-quoted-sentences"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
 _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
@@ -5237,6 +5238,30 @@ class TelegramEventPublishUncertainSendError(RuntimeError):
 
 class TelegramEventPublicWriterUnavailable(RuntimeError):
     """No approved LLM writer could produce a valid Telegram public hook."""
+
+
+_TG_EVENT_HOOK_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sentences": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "evidence_quote": {
+                        "type": "string",
+                        "description": "Exact contiguous quote from organizer source evidence supporting this sentence.",
+                    },
+                },
+                "required": ["text", "evidence_quote"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["sentences"],
+    "additionalProperties": False,
+}
 
 
 def _is_telegram_event_uncertain_send_error(exc: Exception) -> bool:
@@ -5931,6 +5956,89 @@ def _tg_event_date_label(event: Event) -> str:
     return str(getattr(event, "date", "") or "")
 
 
+def _tg_event_source_evidence(event: Event) -> str:
+    values: list[str] = []
+    raw_source_texts = getattr(event, "source_texts", None)
+    if isinstance(raw_source_texts, str):
+        try:
+            parsed = json.loads(raw_source_texts)
+        except Exception:
+            parsed = []
+        raw_source_texts = parsed if isinstance(parsed, list) else []
+    if isinstance(raw_source_texts, (list, tuple)):
+        values.extend(str(item or "").strip() for item in raw_source_texts)
+    values.append(str(getattr(event, "source_text", None) or "").strip())
+    out: list[str] = []
+    seen: set[str] = set()
+    total = 0
+    for value in values:
+        clean = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not clean:
+            continue
+        key = clean.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean = clean[:2400]
+        if total + len(clean) > 9000:
+            clean = clean[: max(0, 9000 - total)]
+        if not clean:
+            break
+        out.append(clean)
+        total += len(clean)
+        if total >= 9000:
+            break
+    return "\n\n".join(out).strip()
+
+
+def _parse_tg_event_hook_payload(
+    raw: Any,
+    *,
+    evidence_corpus: str,
+) -> str | None:
+    data = raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+        try:
+            data = json.loads(text)
+        except Exception:
+            return None
+    if not isinstance(data, dict):
+        return None
+    items = data.get("sentences")
+    if not isinstance(items, list) or not 1 <= len(items) <= 3:
+        return None
+
+    sentences: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            return None
+        sentence = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        quote = re.sub(r"\s+", " ", str(item.get("evidence_quote") or "")).strip()
+        if not sentence or not quote:
+            return None
+        verdict = claim_is_grounded(
+            sentence,
+            evidence_corpus,
+            evidence_quote=quote,
+            min_ratio=0.45,
+            min_matches=2,
+        )
+        if not verdict.ok:
+            logging.warning(
+                "tg_event.public_writer_grounding_rejected reason=%s matched=%s claim_tokens=%s sentence=%r",
+                verdict.reason,
+                verdict.matched,
+                verdict.claim_tokens,
+                sentence[:240],
+            )
+            return None
+        sentences.append(sentence)
+    return " ".join(sentences).strip() or None
+
+
 def _clean_tg_event_hook_candidate(
     event: Event,
     source: str,
@@ -6005,6 +6113,7 @@ async def _reserve_tg_event_4o_fallback(
 async def _build_tg_event_hook_via_4o(
     event: Event,
     source: str,
+    evidence_corpus: str,
     prompt: str,
     *,
     db: Database | None,
@@ -6024,6 +6133,14 @@ async def _build_tg_event_hook_via_4o(
             max_tokens=max_output_tokens,
             temperature=0.4,
             allow_model_fallback=False,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "tg_event_grounded_hook",
+                    "strict": True,
+                    "schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+                },
+            },
             meta={
                 "consumer": "tg_event_publish_fallback",
                 "event_id": event_id,
@@ -6035,10 +6152,14 @@ async def _build_tg_event_hook_via_4o(
         raise TelegramEventPublicWriterUnavailable(
             "Telegram public writer unavailable: strict 4o fallback failed"
         ) from exc
+    grounded = _parse_tg_event_hook_payload(
+        raw,
+        evidence_corpus=evidence_corpus,
+    )
     cleaned = _clean_tg_event_hook_candidate(
         event,
         source,
-        raw,
+        grounded,
         max_chars=max_chars,
     )
     if not cleaned:
@@ -6070,6 +6191,11 @@ async def build_tg_event_hook_text(
         )
         if str(value or "").strip()
     )
+    evidence_corpus = _tg_event_source_evidence(event)
+    if not evidence_corpus:
+        raise TelegramEventPublicWriterUnavailable(
+            "Telegram public writer unavailable: no raw organizer source evidence"
+        )
     max_chars = TG_EVENT_PROMO_INTRO_MAX_CHARS if promo_highlight else TG_EVENT_INTRO_MAX_CHARS
     promo_instruction = ""
     if promo_highlight:
@@ -6080,6 +6206,10 @@ async def build_tg_event_hook_text(
         )
     prompt = (
         "Сделай короткий Telegram-анонс события на русском языке.\n"
+        "Верни только JSON по схеме sentences[]. Каждый элемент содержит `text` и `evidence_quote`.\n"
+        "`evidence_quote` — точная непрерывная цитата из блока «Организаторские источники», "
+        "которая прямо подтверждает всё предложение `text`. Нельзя использовать редакционный черновик как evidence.\n"
+        "Если конкретное предложение нельзя подтвердить одной точной цитатой, не пиши его.\n"
         f"Формат: 1-3 предложения, до {max_chars} символов.\n"
         f"{promo_instruction}"
         "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
@@ -6102,7 +6232,8 @@ async def build_tg_event_hook_text(
         "Если подтверждены только формат и общая тема, дай консервативные 1-2 предложения "
         "о них без домысливания программы и активностей.\n\n"
         f"Название: {getattr(event, 'title', '')}\n"
-        f"Текст события:\n{source[:5000]}"
+        f"Организаторские источники (единственный источник фактов):\n{evidence_corpus}\n\n"
+        f"Редакционный черновик (только контекст, не evidence):\n{source[:5000]}"
     )
     try:
         from google_ai import GoogleAIClient, SecretsProvider
@@ -6120,8 +6251,12 @@ async def build_tg_event_hook_text(
         raw, _usage = await client.generate_content_async(
             model=TG_EVENT_REWRITE_MODEL,
             prompt=prompt,
-            generation_config={"temperature": 0.4},
-            max_output_tokens=260 if promo_highlight else 180,
+            generation_config={
+                "temperature": 0.3,
+                "response_mime_type": "application/json",
+                "response_schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+            },
+            max_output_tokens=360 if promo_highlight else 260,
         )
     except Exception:
         logging.warning(
@@ -6130,10 +6265,14 @@ async def build_tg_event_hook_text(
             exc_info=True,
         )
         raw = None
+    grounded = _parse_tg_event_hook_payload(
+        raw,
+        evidence_corpus=evidence_corpus,
+    )
     cleaned = _clean_tg_event_hook_candidate(
         event,
         source,
-        raw,
+        grounded,
         max_chars=max_chars,
     )
     if cleaned:
@@ -6145,10 +6284,11 @@ async def build_tg_event_hook_text(
     return await _build_tg_event_hook_via_4o(
         event,
         source,
+        evidence_corpus,
         prompt,
         db=db,
         max_chars=max_chars,
-        max_output_tokens=260 if promo_highlight else 180,
+        max_output_tokens=360 if promo_highlight else 260,
     )
 
 

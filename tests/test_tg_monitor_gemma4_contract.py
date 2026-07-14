@@ -1088,6 +1088,15 @@ def test_tg_monitor_runner_bootstraps_google_ai_bundle_for_kaggle_notebook() -> 
     assert "tg_monitor.google_ai bootstrap" in source
 
 
+def test_tg_monitor_does_not_promote_sole_donation_link_to_ticket() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "Поддержать" in source
+    assert "Donation/fundraiser/project-support" in source
+    assert "A sole external URL" in source
+    assert "if len(cands) == 1" not in source[source.index("def _pick_link"):source.index("def _more_specific_ticket_link")]
+
+
 def test_tg_monitor_title_prompt_prefers_caption_event_name_over_poster_slogan() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
     master_prompt = Path("docs/llm/prompts.md").read_text(encoding="utf-8")

@@ -565,3 +565,13 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
 ## Отложенное обновление страниц
 
 Telegram Monitoring может обновлять/создавать много событий за один запуск, поэтому обновления month/weekend страниц делаются **отложенно и накопительно** (debounce 15 минут после последнего изменения). Каноническое описание механизма — в `docs/features/smart-event-update/README.md` («Отложенное обновление страниц (debounce)»).
+
+### Source-grounded admission links (2026-07-14)
+
+Telegram Monitor may emit `ticket_link` only when the source labels the URL as registration,
+ticket purchase, booking, or an equivalent attendee-admission action. A sole external URL is
+not evidence of admission. Links labelled donation/support/help/fundraising (including a bank
+recipient/payment page) must remain ordinary source links unless the same source explicitly
+labels that exact URL as attendee payment. The server import repeats this fail-closed check so
+a producer mistake cannot turn organizer donations into “registration”. The generated Kaggle
+notebook must remain synchronized with `telegram_monitor.py` after this contract changes.

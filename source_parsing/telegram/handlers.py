@@ -663,6 +663,45 @@ def _link_is_ticketish(label: str | None, url: str | None) -> bool:
     )
 
 
+def _link_is_explicitly_non_admission(label: str | None, url: str | None) -> bool:
+    text = str(label or "").strip().casefold()
+    value = str(url or "").strip().casefold()
+    if any(
+        marker in text
+        for marker in (
+            "донат",
+            "пожертв",
+            "поддержать",
+            "поддержка проекта",
+            "сбор средств",
+            "donate",
+            "donation",
+            "support the project",
+        )
+    ):
+        return True
+    return any(domain in value for domain in ("boosty.to", "patreon.com"))
+
+
+def _ticket_link_is_explicitly_non_admission(
+    ticket_link: str | None,
+    message_links: list[Any],
+) -> bool:
+    current = _coerce_url(ticket_link)
+    if not current:
+        return False
+    key = current.casefold().rstrip("/")
+    for item in message_links or []:
+        if not isinstance(item, dict):
+            continue
+        url = _coerce_url(item.get("url") or item.get("link") or item.get("href"))
+        if not url or url.casefold().rstrip("/") != key:
+            continue
+        if _link_is_explicitly_non_admission(item.get("text"), url):
+            return True
+    return False
+
+
 def _is_more_specific_same_host_url(current: str | None, candidate: str | None) -> bool:
     cur = _coerce_url(current)
     cand = _coerce_url(candidate)
@@ -713,7 +752,11 @@ def _infer_ticket_link_from_message_links(
         else:
             url = _coerce_url(str(item or ""))
             label = None
-        if url and _link_is_public_ticket_candidate(url):
+        if (
+            url
+            and _link_is_public_ticket_candidate(url)
+            and not _link_is_explicitly_non_admission(label, url)
+        ):
             normalized.append({"url": url, "text": label})
     external = [item for item in normalized if "t.me/" not in str(item.get("url") or "").lower()]
     if current:
@@ -723,14 +766,10 @@ def _infer_ticket_link_from_message_links(
             if _is_more_specific_same_host_url(current, candidate):
                 return candidate
         return None
-    if len(external) == 1:
-        return external[0].get("url")
     ticketish = [item for item in external if _link_is_ticketish(item.get("text"), item.get("url"))]
     if len(ticketish) == 1:
         return ticketish[0].get("url")
     external_urls = [str(item.get("url") or "") for item in external if item.get("url")]
-    if len(external_urls) == 1:
-        return external_urls[0]
     # If there are multiple links, only pick when there is a single strong ticket-domain match.
     strong = [u for u in external_urls if _link_is_ticketish(None, u)]
     if len(strong) == 1:
@@ -4358,8 +4397,19 @@ def _build_candidate(
             location_name = None
             location_address = None
 
+    message_link_items = _extract_message_link_items(message)
+    if ticket_link and _ticket_link_is_explicitly_non_admission(ticket_link, message_link_items):
+        logger.warning(
+            "telegram: dropped donation/support link from ticket_link source=%s message_id=%s title=%r ticket_link=%s",
+            username,
+            message_id,
+            title,
+            ticket_link,
+        )
+        ticket_link = None
+
     refined_ticket_link = _infer_ticket_link_from_message_links(
-        _extract_message_link_items(message),
+        message_link_items,
         current=ticket_link,
     )
     if refined_ticket_link and refined_ticket_link != ticket_link:
@@ -4375,7 +4425,7 @@ def _build_candidate(
     # Extract a booking contact from the message when ticket_link is missing.
     if not ticket_link:
         inferred_from_links = _infer_ticket_link_from_message_links(
-            _extract_message_link_items(message)
+            message_link_items
         )
         if inferred_from_links:
             ticket_link = inferred_from_links
