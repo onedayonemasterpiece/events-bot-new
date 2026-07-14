@@ -4,6 +4,14 @@
 >
 > **Target branch:** `feature/personalization-product-e2e-design`.
 
+> **Review status (2026-07-14):** accepted eligible reviews: **0 / 2**. A
+> `Gemini 3.1 Pro (High)` Antigravity attempt was run against
+> `b90cdaf0d77e67ba097a771f07122930a5a3a4da`, but rejected because its claimed
+> reading ledger did not match the transcript and no single response inspected
+> the mandatory docs, schemas, implementation, migrations and intake. Treat the
+> [attempt record](reviews/product-e2e/supplementary-gemini-pro-audit-attempt-2026-07-14.md)
+> only as supplementary probe material.
+
 ## 1. Eligibility и provenance
 
 Полноценным external consultant review считается только ответ:

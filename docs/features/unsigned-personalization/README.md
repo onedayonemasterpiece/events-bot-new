@@ -31,6 +31,7 @@ Concrete golden-persona panel across adult age/life cohorts and strict real-even
 Long-horizon Supabase/YDB growth, retention, cleanup and ownership acceptance: `docs/features/unsigned-personalization/database-sustainability-e2e.md`.
 External consultant reading order, direct GitHub links, review questions and deliverable: `docs/features/unsigned-personalization/external-consultant-review-pack.md`.
 User-supplied supplementary research intake (provider/model provenance pending; not an eligible review): `docs/features/unsigned-personalization/reviews/product-e2e/supplementary-research-intake-2026-07-14-ru.md`.
+Rejected Gemini Pro audit attempt (transcript/evidence mismatch; supplementary probe only): `docs/features/unsigned-personalization/reviews/product-e2e/supplementary-gemini-pro-audit-attempt-2026-07-14.md`.
 Cross-feature data ownership ADR: `docs/architecture/personalization-data-ownership.md`.
 Site identity/profile linking: `docs/features/site-user-identity/README.md`.
 Durable favorites/calendar: `docs/features/event-favorites-calendar/README.md`.
