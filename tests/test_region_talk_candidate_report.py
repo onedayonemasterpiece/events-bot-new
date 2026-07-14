@@ -6462,6 +6462,99 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(promoted[0]["post_link_status"], "fetched")
         self.assertEqual(promoted[0]["priority_reason"], "terminal_publication_restore_suppressed")
         self.assertEqual(promoted[0]["publication_text_restore_requested"], "")
+        self.assertTrue(promoted[0]["_persist_terminal_restore_suppression"])
+
+    def test_terminal_restore_suppression_closes_every_active_retry_status(self) -> None:
+        mod = load_module()
+        statuses = ["", "pending_fetch", "retry_fetch", "fetch_error", "retry_wait_entity_cache", "bge_ready_rescore"]
+        links = [
+            {
+                "_kind": "post_link_queue_item",
+                "post_link_status": status,
+                "post_url": f"https://t.me/rejected/{index}",
+                "priority_reason": "publication_text_restore_after_active_payload_prune",
+                "publication_text_restore_requested": "true",
+            }
+            for index, status in enumerate(statuses, start=1)
+        ]
+        publications = [
+            {
+                "post_url": f"https://t.me/rejected/{index}",
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "llm_decision": "reject",
+            }
+            for index in range(1, len(statuses) + 1)
+        ]
+        promoted = mod.promote_publication_text_restore_exact_rows(links, [], publications, [])
+        self.assertEqual([row["post_link_status"] for row in promoted], ["fetched"] * len(statuses))
+        self.assertTrue(all(row.get("_persist_terminal_restore_suppression") is True for row in promoted))
+        self.assertEqual(mod.candidate_link_rows_for_fetch(promoted, 20), [])
+
+    def test_candidate_link_loader_persists_terminal_restore_suppression(self) -> None:
+        mod = load_module()
+        link_pk = "post_link_queue_item:postlink_rejected"
+        stored = {
+            "post_link_queue_item": {
+                link_pk: {
+                    "post_link_queue_id": "postlink_rejected",
+                    "post_link_status": "retry_wait_entity_cache",
+                    "post_url": "https://t.me/rejected/9",
+                    "priority_reason": "publication_text_restore_after_active_payload_prune",
+                    "publication_text_restore_requested": "true",
+                    "publication_text_restore_reason": "legacy-bug",
+                },
+            },
+            "publication_candidate_item": {
+                "publication_candidate_item:https://t.me/rejected/9": {
+                    "post_url": "https://t.me/rejected/9",
+                    "publication_status": "text_restore_pending",
+                    "publication_candidate_status": "awaiting_text_restore",
+                    "llm_decision": "reject",
+                },
+            },
+        }
+
+        class Pool:
+            def retry_operation_sync(self, op):
+                return op(object())
+
+        class Driver:
+            def stop(self, timeout=0):
+                return None
+
+        class Ydb:
+            SessionPool = lambda self, _driver: Pool()
+
+        def select(_session, _ydb, _table, kind, limit):
+            return stored.get(kind, {})
+
+        writes: list[tuple[str, str, dict[str, object]]] = []
+
+        def upsert(_session, _ydb, _table, rows, _updated_at, **_kwargs):
+            writes.extend(rows)
+            return len(rows)
+
+        with mock.patch.dict(os.environ, {"REGION_TALK_RUN_ID": "terminal-repair-test"}), \
+             mock.patch.object(mod, "ydb_config_status", return_value={"missing": ""}), \
+             mock.patch.object(mod, "ydb_connect", return_value=(Ydb(), Driver(), {})), \
+             mock.patch.object(mod, "ydb_kv_table_path", return_value="/db/table"), \
+             mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
+             mock.patch.object(mod, "ydb_select_latest_state", return_value={}), \
+             mock.patch.object(mod, "ydb_select_kind_items", side_effect=select), \
+             mock.patch.object(mod, "ydb_upsert_json_many", side_effect=upsert):
+            selected = mod.ydb_candidate_link_rows_from_row_kv(1, kinds=("post_link_queue_item",))
+
+        self.assertEqual(selected, [])
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0][0], link_pk)
+        self.assertEqual(writes[0][1], "post_link_queue_item")
+        payload = writes[0][2]
+        self.assertEqual(payload["post_link_status"], "fetched")
+        self.assertEqual(payload["priority_reason"], "terminal_publication_restore_suppressed")
+        self.assertNotIn("publication_text_restore_requested", payload)
+        self.assertEqual(payload["online_update_stage"], "terminal_publication_restore_suppressed")
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["terminal_restore_suppressions_persisted"], 1)
 
     def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
         mod = load_module()

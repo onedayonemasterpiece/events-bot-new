@@ -11599,7 +11599,7 @@ def promote_publication_text_restore_exact_rows(
             # insufficient when `retry_fetch`/`bge_ready_rescore` and the
             # marker are already durable on the exact-link row.
             if publication_text_restore_requested(row) or "publication_text_restore" in str(row.get("priority_reason") or ""):
-                if str(row.get("post_link_status") or "") in {"pending_fetch", "retry_fetch", "fetch_error", "bge_ready_rescore"}:
+                if str(row.get("post_link_status") or "") in (active_retry_statuses | {"bge_ready_rescore"}):
                     row["post_link_status"] = "fetched"
                 row.update({
                     "publication_text_restore_requested": "",
@@ -11610,6 +11610,11 @@ def promote_publication_text_restore_exact_rows(
                     "next_attempt_after": "",
                     "next_action": "",
                 })
+                # This fetched row is excluded from the exact-fetch result, so
+                # the loader itself must persist the repair. Otherwise the
+                # change exists only in memory and the stale restore marker is
+                # rediscovered on every later CandidateReport run.
+                row["_persist_terminal_restore_suppression"] = True
             out.append(row)
             continue
         publication = pending_by_url.get(url)
@@ -11735,6 +11740,40 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                     list(publication_items.values()),
                     list(candidate_items.values()),
                 )
+                suppression_rows = [
+                    row for row in rows
+                    if row.get("_persist_terminal_restore_suppression") is True
+                    and str(row.get("_pk") or "")
+                ]
+                if suppression_rows:
+                    now_iso = utc_now_iso()
+                    run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
+                    repair_items: list[tuple[str, str, dict[str, Any]]] = []
+                    for row in suppression_rows:
+                        payload = compact_record(
+                            {
+                                **row,
+                                "run_id": run_id,
+                                "updated_at": now_iso,
+                                "last_seen_run_id": run_id,
+                                "online_update_stage": "terminal_publication_restore_suppressed",
+                            },
+                            POST_LINK_QUEUE_STATE_FIELDS,
+                            max_len=900,
+                        )
+                        repair_items.append((str(row["_pk"]), "post_link_queue_item", payload))
+                    ydb_upsert_json_many(
+                        session,
+                        ydb,
+                        table_path,
+                        repair_items,
+                        now_iso,
+                        chunk_size=20,
+                        timeout_seconds=8,
+                    )
+                    _REGION_TALK_TELEGRAM_RUNTIME["terminal_restore_suppressions_persisted"] = len(repair_items)
+                for row in rows:
+                    row.pop("_persist_terminal_restore_suppression", None)
             cached_handles: set[str] = set()
             cache_items = ydb_select_kind_items(
                 session,
@@ -11782,7 +11821,20 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
         limit = getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180))
     limit = max(0, int(limit))
     rows = ydb_candidate_link_rows_from_row_kv(limit, kinds=kinds) if limit > 0 else []
-    status.event("ydb_candidate_links_loaded", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_to_score=min(limit, len(rows)), post_link_queue_mode=",".join(kinds or ()), progress_label=f"YDB candidate links {len(rows)}")
+    terminal_restore_suppressions_persisted = int(
+        _REGION_TALK_TELEGRAM_RUNTIME.pop("terminal_restore_suppressions_persisted", 0) or 0
+    )
+    status.event(
+        "ydb_candidate_links_loaded",
+        phase="fetch",
+        status="running",
+        run_id=run_id,
+        candidate_links=len(rows),
+        posts_to_score=min(limit, len(rows)),
+        post_link_queue_mode=",".join(kinds or ()),
+        terminal_restore_suppressions_persisted=terminal_restore_suppressions_persisted,
+        progress_label=f"YDB candidate links {len(rows)}",
+    )
     posts: list[dict[str, Any]] = []
     source_stats: dict[str, dict[str, Any]] = {}
     entity_cache: dict[str, Any] = {}

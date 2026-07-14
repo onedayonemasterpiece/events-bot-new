@@ -188,7 +188,10 @@ status lagged behind the provider result are covered too: durable
 `llm_decision=accept|reject` is terminal evidence and cannot be reopened. Any
 already-persisted restore marker on that terminal URL is actively cleared and
 its exact link returns to the fetched terminal state, so the historical bug
-cannot keep scheduling the same post. The
+cannot keep scheduling the same post. The queue loader persists this cleanup
+before excluding the fetched row from its returned work batch and reports
+`terminal_restore_suppressions_persisted`; an in-memory-only cleanup is not a
+completed repair. The
 only legacy terminal spelling
 intentionally migrated is
 `no_text_for_gemini + filtered_before_llm`, because that combination was
