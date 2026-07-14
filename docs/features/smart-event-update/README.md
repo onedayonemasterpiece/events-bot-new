@@ -76,7 +76,9 @@ the idempotent worker edits the resolved live/postponed post even when the prior
 `vk_sync` job is already `done`. A no-change replay keeps the older duplicate
 prevention contract and does not requeue a complete managed post. This keeps
 canonical date/time/location/text repairs consistent across VK without turning
-routine source rescans into repeated public edits.
+routine source rescans into repeated public edits. The managed VK content hash
+also includes the canonical ICS URL: adding or removing a calendar projection
+must re-render the calendar line even when the event body itself is unchanged.
 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.

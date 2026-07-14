@@ -83,6 +83,9 @@ Telegram Monitoring run:
    updated that hash first, the following `tg_ics_post` could mistake its older attached document
    for the newly uploaded content and skip it. Telegram projection identity had no independent
    content hash and the update path sent a new message rather than editing the known post.
+9. Managed VK `vk_source_hash` omitted `event.ics_url`. Even after the cleanup dependency cleared
+   the URL and shortlink, `job_sync_vk_source_post` considered the wall projection unchanged and
+   returned before removing its old `Добавить в календарь` line.
 
 ## Contributing Factors
 
@@ -161,6 +164,8 @@ Telegram Monitoring run:
   canonical update removes the only valid time; queue object deletion and delete the old document.
 - [x] Split Telegram calendar content identity into `ics_post_hash` and edit the known document
   in place on schedule changes; fail closed rather than duplicate on an ambiguous edit error.
+- [x] Include the canonical ICS URL in managed VK content identity so adding/removing calendar
+  projection state always edits the known wall post.
 - [ ] Deploy the calendar cleanup correction, remove the stale event `6878` ICS/calendar post and
   verify all public surfaces.
 

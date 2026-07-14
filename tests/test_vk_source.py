@@ -19,6 +19,7 @@ def _expected_vk_source_hash(event, text):
                 str(event.location_address or ""),
                 str(event.city or ""),
                 str(event.ticket_link or ""),
+                str(event.ics_url or ""),
                 json.dumps(list(event.photo_urls or []), ensure_ascii=False),
                 text,
             ]
@@ -1608,6 +1609,57 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
     assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
+
+
+@pytest.mark.asyncio
+async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_removed(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    future_date = (main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat()
+
+    event = main.Event(
+        title="Calendar cleanup",
+        description="Same body",
+        source_text="Same body",
+        date=future_date,
+        time="",
+        location_name="Place",
+        city="Калининград",
+        source_vk_post_url="https://vk.com/wall-1_1",
+        ics_url="https://example.test/old.ics",
+    )
+    event.vk_source_hash = _expected_vk_source_hash(event, "Same body")
+    event.ics_url = None
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    calls = []
+
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None, **kwargs):
+        calls.append((ev.id, text_for_vk, ics_url))
+        return "https://vk.com/wall-1_1"
+
+    monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
+    monkeypatch.setattr(
+        main,
+        "_recover_managed_vk_live_url",
+        lambda *args, **kwargs: main.asyncio.sleep(0, result=False),
+    )
+
+    await main.job_sync_vk_source_post(event_id, db, None)
+
+    assert calls == [(event_id, "Same body", None)]
+    async with db.get_session() as session:
+        updated = await session.get(main.Event, event_id)
+    assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
+    await db.close()
 
 
 @pytest.mark.asyncio
