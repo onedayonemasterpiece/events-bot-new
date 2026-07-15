@@ -1,0 +1,99 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: 732921c1
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: feature/static-typed-intro-prototype-20260715
+global_constraints:
+  - research lab only; do not integrate into the production homepage
+  - numbers and social/comment signals remain explicitly DEMO unless grounded data exists
+  - mobile Telegram pre-work and evidence gates are mandatory
+  - hero remains at or below 50 percent viewport height
+  - no Gemini, personalization backend, remote telemetry, or production data mutation
+verification_owner: /root
+stop_conditions:
+  - approved Telegram human session is unavailable
+  - implementation would require inventing ungrounded production claims
+requirements:
+  - {id: R01, requirement: "Reframe briefing as a queue of narratives and target-action education, not only event counts.", primary_lane: communication_ui}
+  - {id: R02, requirement: "Persist exposure/action state locally and suppress repeated prompts until a documented cooldown or stale-action condition.", primary_lane: communication_ui}
+  - {id: R03, requirement: "Add friendly share, like and dislike educational scenarios.", primary_lane: communication_ui}
+  - {id: R04, requirement: "Add curiosity-led social-proof copy such as frequently forwarded events without coercive dark patterns.", primary_lane: communication_ui}
+  - {id: R05, requirement: "Represent comment-derived anticipated speaker/guest/artist signals only with explicit grounding/demo boundaries.", primary_lane: communication_ui}
+  - {id: R06, requirement: "Remove the mismatched decorative O or derive it from the real SVG logo form.", primary_lane: communication_ui}
+  - {id: R07, requirement: "Support a blinking vertical cursor and optional horizontal underscore cursor.", primary_lane: communication_ui}
+  - {id: R08, requirement: "Persist the user's slower pace selection and make it the current review preference without forcing it globally.", primary_lane: communication_ui}
+lanes:
+  - id: narrative_state_review
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Audit the current lab and propose a concise narrative/action scheduler, cooldown semantics, curiosity copy and grounding rules.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Read-only product/state/copy recommendations mapped to R01-R05 and R08.
+    verification_scope: inspection_only
+    status: spawned
+    agent: /root/narrative_state_review
+  - id: visual_motion_review
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Audit the real wordmark, decorative O, cursor implementation, typography, motion and desktop/mobile controls.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Read-only exact visual/motion recommendations mapped to R06-R08.
+    verification_scope: inspection_only
+    status: spawned
+    agent: /root/visual_motion_review
+  - id: communication_ui
+    role: worker
+    effort: high
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: Implement the curiosity/action iteration and targeted tests after reviewer inputs.
+    depends_on: [narrative_state_review, visual_motion_review]
+    execution_mode: serial_after_dependency
+    branch: agent/static-typed-briefing/curiosity-actions
+    worktree: /home/dev/.codex/worktrees/events-bot-new/typed-briefing-curiosity-actions
+    writable_files:
+      - site/src/pages/lab/briefing/index.astro
+      - site/src/data/briefingLab.ts
+      - tests/playwright/static_briefing_lab.spec.ts
+      - .codex/lanes/static-typed-briefing-curiosity/communication_ui/RESULTS.md
+    forbidden_files:
+      - production pages/components
+      - deploy scripts
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed code/tests with local memory, new scenarios, correct mark and cursor variants.
+    verification_scope: targeted
+    status: planned
+  - id: integration_publish
+    role: merge_reviewer
+    effort: high
+    requirement_ids: []
+    target: Integrate, document, run full lab verification, publish immutable preview and post mobile evidence to Telegram topic 6.
+    depends_on: [communication_ui]
+    execution_mode: serial_after_dependency
+    branch: feature/static-typed-intro-prototype-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files:
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/features/static-site-pages/astro-preview.md
+      - docs/operations/mobile-ui-telegram-review.md
+      - CHANGELOG.md
+      - .codex/lanes/static-typed-briefing-curiosity/**
+      - artifacts/codex/static-typed-briefing-curiosity-20260715/**
+    forbidden_files:
+      - production homepage/listing/event-detail code
+      - production root publication
+    expected_output: New review URL, screenshots/video, Telegram evidence, tests, commit and push.
+    verification_scope: full_local
+    status: planned
