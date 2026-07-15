@@ -11,4 +11,6 @@ Status: in progress.
 - R07 Done: vertical and underscore cursors blink at 780ms, with optional linger and reduced-motion suppression.
 - R08 Done: an explicit pace choice persists locally; query override wins without overwriting it; normal remains the global default.
 
+Telegram topic comment `20` was read before closure and integrated: a historical like/share/dislike no longer satisfies a newly shown education narrative; only a verified action timestamp after that narrative's qualified exposure suppresses its future repetition.
+
 Final strict-build, public URL, mobile evidence IDs and push SHA will be appended after publication.

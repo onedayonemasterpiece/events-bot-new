@@ -224,6 +224,36 @@ test('local queue memory, verified actions, pace preference, real O and cursor v
   await context.close();
 });
 
+test('education is satisfied only by a verified action after that narrative was shown', async ({ browser }) => {
+  const seed = async (page: Page, likeExposure: number, likeSuccess: number) => {
+    const now = Date.now();
+    await page.goto(`${baseUrl}?variant=a`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(({ now, likeExposure, likeSuccess, ids }) => {
+      const exposures = Object.fromEntries(ids.map((id) => [id, [now]]));
+      exposures.like_education = [likeExposure];
+      localStorage.setItem('ke-briefing-memory-v1', JSON.stringify({
+        version: 1,
+        exposures,
+        actionSuccess: { like_event: likeSuccess },
+      }));
+    }, { now, likeExposure, likeSuccess, ids: scenarioIds.filter((id) => id !== 'like_education') });
+  };
+
+  const before = await freshPage(browser, { width: 390, height: 844 });
+  const beforeNow = Date.now();
+  await seed(before.page, beforeNow - 40 * 86400000, beforeNow - 60 * 86400000);
+  await before.page.goto(`${baseUrl}?variant=c&replay=1`, { waitUntil: 'domcontentloaded' });
+  await expect(before.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'like_education');
+  await before.context.close();
+
+  const after = await freshPage(browser, { width: 390, height: 844 });
+  const afterNow = Date.now();
+  await seed(after.page, afterNow - 40 * 86400000, afterNow - 10 * 86400000);
+  await after.page.goto(`${baseUrl}?variant=c&replay=1`, { waitUntil: 'domcontentloaded' });
+  await expect(after.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'neutral_fallback');
+  await after.context.close();
+});
+
 test('no-JS and reduced-motion stay useful and manual', async ({ browser }) => {
   const noJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 320, height: 568 } });
   const noJsPage = await noJs.newPage();

@@ -104,14 +104,14 @@ Lab содержит восемь видимых scenario IDs и universal fallb
 | `anticipated_person` | grounded public-comment signal, currently demo | `В комментариях ждут гостя. Угадаете кого?` | 30 дней |
 | `neutral_fallback` | нет eligible-сцен | `Город не ждёт. Что удивит сегодня?` | не запоминается |
 
-Для education-сцен подтверждённый успех целевого действия подавляет повтор на 90 дней. Обычный клик по CTA не считается успехом.
+Для education-сцен один подтверждённый успех целевого действия **после квалифицированного показа этого нарратива** подавляет повтор на 90 дней. Более старый лайк/share/dislike не считается ответом на новый показ; обычный клик по CTA тоже не считается успехом.
 
 ### Локальная память и пределы
 
 - `ke-briefing-memory-v1` хранит только ограниченные timestamps показов и успешных action kinds; `ke-briefing-lab-prefs-v1` хранит только `slow|normal|fast`.
 - Не хранятся тексты, user/event IDs, авторы комментариев, auth/profile и история просмотров событий.
 - Автоматический exposure пишется только после `≥50%` видимости в течение 250 ms. Query `scenario`, selector, replay и play-all ничего не записывают.
-- Реальный action success синхронизируется из уже верифицированного `ke_event_feedback_log_v1` или event `ke:event-action-success`; briefing-клок не выдаёт намерение за успех.
+- Реальный action success синхронизируется из уже верифицированного `ke_event_feedback_log_v1` или event `ke:event-action-success`; он удовлетворяет нарратив только если его timestamp новее exposure timestamp. Briefing-клок не выдаёт намерение за успех.
 - Кнопка «Сбросить локальную память и темп» удаляет оба ключа.
 - Приоритет темпа: QA query `pace` > сохранённый явный выбор > `normal`. Query-параметр не перезаписывает preference.
 

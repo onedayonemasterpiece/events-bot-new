@@ -185,7 +185,8 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         if (seen.at(-1) && now - seen.at(-1) < Number(item.cooldownDays || 0) * DAY_MS) return false;
         if (item.maxExposuresPerYear && seen.filter((time) => time >= now - 365 * DAY_MS).length >= item.maxExposuresPerYear) return false;
         const success = item.actionKind ? Number(memory.actionSuccess[item.actionKind] || 0) : 0;
-        if (success && item.actionSuccessSuppressDays && now - success < item.actionSuccessSuppressDays * DAY_MS) return false;
+        const lastExposure = Number(seen.at(-1) || 0);
+        if (success > lastExposure && lastExposure && item.actionSuccessSuppressDays && now - success < item.actionSuccessSuppressDays * DAY_MS) return false;
         return true;
       };
       const chooseAutomatic = () => {
