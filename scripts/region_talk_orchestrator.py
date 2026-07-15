@@ -597,11 +597,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('bge_source_terminal_skipped_sample_total')}"
         ),
         (
-            "Медиа — исторических постов / ждут оценки / постов реально оценено / отдельных кадров оценено / "
+            "Медиа — исторических постов / ждут оценки / отложено до полного text/source gate / постов реально оценено / отдельных кадров оценено / "
             "legacy auto-accept / visual-review raw/active/tombstoned / partial albums raw/active / "
             "scoring retry / видео вручную: "
             f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
+            f"{value('image_deferred_text_gate_total')}/"
             f"{value('image_actual_scored_total')}/"
             f"{value('image_actual_frames_scored_total')}/"
             f"{value('image_legacy_auto_accept_total')}/"
@@ -1999,6 +2000,7 @@ def _image_queue_status_metrics(images: list[dict[str, Any]]) -> dict[str, int]:
         "image_not_reviewable_no_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_no_media"),
         "image_not_reviewable_unsupported_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_unsupported_media"),
         "image_rejected_text_gate_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "rejected_text_gate"),
+        "image_deferred_text_gate_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "deferred_text_gate"),
     }
 
 

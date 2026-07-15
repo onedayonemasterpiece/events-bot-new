@@ -5869,6 +5869,138 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotIn(post_url, {r.get("post_url") for r in top})
         self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 1)
 
+    def test_soft_unknown_source_preserves_actual_image_result(self) -> None:
+        mod = load_module()
+        run_now = "2026-07-15T10:30:00+00:00"
+        post_url = "https://t.me/external_unknown/10"
+        previous = {
+            "image_candidate_queue": {
+                post_url: {
+                    "image_queue_id": "imgq_unknown_actual",
+                    "image_queue_order": 1,
+                    "post_url": post_url,
+                    "source_url": "https://t.me/external_unknown",
+                    "source_title": "Travel diary",
+                    "has_media": True,
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "current_stage": "semantic_candidate",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "images_scored_actual_count": 4,
+                    "last_image_diag_run_id": "image-run",
+                    "media_fetch_status": "downloaded",
+                    "overall_media_score": 0.78,
+                }
+            }
+        }
+        rows, _top, _metrics = mod.build_image_candidate_queue(
+            previous, [], [], [], "candidate-run", run_now
+        )
+        row = next(r for r in rows if r.get("post_url") == post_url)
+        self.assertEqual(row["publication_eligibility_decision"], "needs_source_review")
+        self.assertEqual(row["image_queue_status"], "actual_scored")
+        self.assertEqual(row["images_scored_actual_count"], 4)
+        self.assertEqual(row["overall_media_score"], 0.78)
+        self.assertEqual(row["status_changed_this_run"], "false")
+        self.assertEqual(mod.image_queue_rows_for_ydb_write(rows, run_now=run_now), [])
+
+    def test_soft_missing_bge_becomes_deferred_not_terminal_reject(self) -> None:
+        mod = load_module()
+        run_now = "2026-07-15T10:31:00+00:00"
+        post_url = "https://t.me/external_blog/11"
+        previous = {
+            "image_candidate_queue": {
+                post_url: {
+                    "image_queue_id": "imgq_missing_bge",
+                    "image_queue_order": 1,
+                    "post_url": post_url,
+                    "source_url": "https://t.me/external_blog",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "posts_scanned": 10,
+                    "ko_posts_found": 1,
+                    "candidate_posts_found": 1,
+                    "has_media": True,
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "current_stage": "semantic_candidate",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "missing_bge_m3_enrichment",
+                    "image_queue_status": "rejected_publication_eligibility",
+                }
+            }
+        }
+        old = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")
+        try:
+            os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = "1"
+            rows, _top, metrics = mod.build_image_candidate_queue(
+                previous, [], [], [], "candidate-run", run_now
+            )
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", None)
+            else:
+                os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = old
+        row = next(r for r in rows if r.get("post_url") == post_url)
+        self.assertEqual(row["publication_eligibility_decision"], "needs_text_review")
+        self.assertEqual(row["image_queue_status"], "deferred_text_gate")
+        self.assertEqual(row["image_eligibility_status"], "deferred")
+        self.assertEqual(row["status_changed_this_run"], "true")
+        self.assertEqual(row["selected_for_next_image_batch"], "false")
+        self.assertEqual(metrics["image_queue_deferred_text_gate_total"], 1)
+        self.assertEqual(metrics["image_queue_product_eligible_total"], 0)
+        self.assertEqual(mod.image_queue_rows_for_ydb_write(rows, run_now=run_now), [row])
+
+    def test_image_queue_source_join_is_case_insensitive_by_canonical_key(self) -> None:
+        mod = load_module()
+        post_url = "https://t.me/krasivoOrussia/6344"
+        previous = {
+            "unified_source_queue": {
+                "telegram:krasivoorussia": {
+                    "canonical_source_key": "telegram:krasivoorussia",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/krasivoorussia",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger",
+                    "source_quick_class": "candidate_keep",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "posts_scanned": 12,
+                    "ko_posts_found": 2,
+                    "candidate_posts_found": 1,
+                }
+            },
+            "image_candidate_queue": {
+                post_url: {
+                    "image_queue_id": "imgq_mixed_case",
+                    "image_queue_order": 1,
+                    "post_url": post_url,
+                    "source_url": "https://t.me/krasivoOrussia",
+                    "has_media": True,
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "current_stage": "semantic_candidate",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "images_scored_actual_count": 1,
+                }
+            },
+        }
+        rows, _top, _metrics = mod.build_image_candidate_queue(
+            previous, [], [], [], "candidate-run", "2026-07-15T10:32:00+00:00"
+        )
+        row = next(r for r in rows if r.get("post_url") == post_url)
+        self.assertEqual(row["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(row["publication_eligibility_decision"], "accept")
+        self.assertEqual(row["image_queue_status"], "actual_scored")
+
     def test_image_candidate_queue_preserves_prefetched_vk_media_url(self) -> None:
         mod = load_module()
         post_url = "https://vk.com/wall-211445468_273"
@@ -7453,6 +7585,39 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             exclude_keys={"imgq_new"},
         )
         self.assertEqual(selected, [])
+
+    def test_image_candidate_projection_fingerprint_detects_richer_final_verdict(self) -> None:
+        mod = load_module()
+        early = {
+            "image_queue_id": "imgq_same",
+            "post_url": "https://t.me/blog/2",
+            "image_queue_status": "actual_scored",
+            "publication_eligibility_decision": "needs_source_review",
+            "publication_eligibility_reason": "source_verdict_unknown",
+            "images_scored_actual_count": 5,
+            "overall_media_score": 0.8,
+        }
+        same_projection_new_diagnostic = {
+            **early,
+            "images_scored_actual_count": 10,
+            "overall_media_score": 0.91,
+            "last_image_diag_run_id": "newer-image-run",
+        }
+        hard_final = {
+            **same_projection_new_diagnostic,
+            "image_queue_status": "rejected_text_gate",
+            "publication_eligibility_decision": "reject",
+            "publication_eligibility_reason": "vector_reject_not_kaliningrad_oblast",
+            "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+        }
+        self.assertEqual(
+            mod.image_candidate_projection_fingerprint(early),
+            mod.image_candidate_projection_fingerprint(same_projection_new_diagnostic),
+        )
+        self.assertNotEqual(
+            mod.image_candidate_projection_fingerprint(early),
+            mod.image_candidate_projection_fingerprint(hard_final),
+        )
 
     def test_candidate_image_write_preserves_newer_album_diagnostic_evidence(self) -> None:
         mod = load_module()

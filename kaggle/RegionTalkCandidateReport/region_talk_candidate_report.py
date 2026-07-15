@@ -3303,6 +3303,37 @@ def image_queue_row_key(row: dict[str, Any]) -> str:
     return str(row.get("image_queue_id") or row.get("post_url") or "").strip()
 
 
+IMAGE_CANDIDATE_PROJECTION_FIELDS = (
+    "image_queue_status", "previous_image_queue_status", "next_action",
+    "image_product_gate_status", "image_product_gate_reason",
+    "image_eligibility_status", "image_eligibility_reason",
+    "publication_eligibility_decision", "publication_eligibility_gate_version",
+    "publication_eligibility_reason", "source_scope", "source_geo_class",
+    "source_topic_class", "source_quick_class", "source_queue_status",
+    "source_surface_filter_reason", "monitoring_exclusion_reason",
+    "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
+    "external_geo_mentions", "mentioned_external_regions",
+    "mentioned_external_countries", "is_ad_or_promo",
+    "is_multi_region_roundup", "is_multi_topic_digest", "is_digest_or_roundup",
+    "current_stage", "current_lifecycle_status", "vector_gate_status",
+    "text_vector_fusion_status", "external_bge_m3_status", "bge_m3_enrichment_id",
+)
+
+
+def image_candidate_projection_fingerprint(row: dict[str, Any]) -> str:
+    """Fingerprint only CandidateReport-owned image admission fields.
+
+    The image worker can add scores between the early and final handoffs.  Its
+    fields are deliberately excluded so the final handoff is skipped only
+    when CandidateReport's own richer source/text/vector projection is still
+    identical to the early one.
+    """
+    payload = {field: row.get(field) for field in IMAGE_CANDIDATE_PROJECTION_FIELDS}
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
 def image_queue_rows_for_ydb_write(
     rows: list[dict[str, Any]],
     *,
@@ -8495,7 +8526,7 @@ def build_image_candidate_queue(
         )
         transition_origin = (
             str(row.get("previous_image_queue_status") or "")
-            if previous_status == "rejected_text_gate"
+            if previous_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
             else previous_status
         )
         row.update({
@@ -8527,6 +8558,106 @@ def build_image_candidate_queue(
             )
         return row
 
+    def has_actual_diagnostic_evidence(row: dict[str, Any]) -> bool:
+        return bool(
+            str(row.get("image_model_input_type") or "") == "actual_image"
+            or str(row.get("final_visual_status") or "") == "scored_actual_image"
+            or int(_rt_float(row.get("images_scored_actual_count"))) > 0
+            or (
+                bool(str(row.get("last_image_diag_run_id") or ""))
+                and str(row.get("media_fetch_status") or "") == "downloaded"
+            )
+        )
+
+    def defer_image_row(
+        previous: dict[str, Any],
+        current_text: dict[str, Any],
+        reason: str,
+        *,
+        eligibility: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Block publication spend without turning missing evidence into a reject.
+
+        Source review, missing BGE fusion and ambiguous/non-final vector states
+        are absence-of-evidence.  Preserve a real ImageDiagnostic result; if a
+        prior buggy run hid that result behind ``rejected_text_gate``, restore
+        ``actual_scored`` from the durable diagnostic fields.  Rows without an
+        actual score use a non-actionable deferred status until the text/source
+        evidence becomes complete.
+        """
+        row = dict(previous)
+        for field in text_gate_snapshot_fields:
+            if field in current_text and current_text.get(field) not in (None, ""):
+                row[field] = current_text.get(field)
+        previous_status = str(row.get("image_queue_status") or "")
+        transition_origin = (
+            str(row.get("previous_image_queue_status") or "")
+            if previous_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
+            else previous_status
+        )
+        if has_actual_diagnostic_evidence(row) and (
+            previous_status == "actual_scored" or transition_origin == "actual_scored"
+        ):
+            deferred_status = "actual_scored"
+            next_action = "wait_for_source_or_text_gate_without_rescoring_image"
+        elif previous_status in {"not_reviewable_no_media", "not_reviewable_unsupported_media"}:
+            deferred_status = previous_status
+            next_action = str(row.get("next_action") or "skip_unsupported_media")
+        else:
+            deferred_status = "deferred_text_gate"
+            next_action = (
+                "resolve_source_verdict"
+                if str(eligibility.get("decision") or "") == "needs_source_review"
+                else "complete_dual_text_gate"
+            )
+        status_changed = previous_status != deferred_status
+        row.update({
+            "previous_image_queue_status": transition_origin,
+            "image_queue_status": deferred_status,
+            "status_changed_this_run": str(status_changed).lower(),
+            "last_status_changed_at": run_now if status_changed else row.get("last_status_changed_at", ""),
+            "text_region_confirmation_status": "deferred_by_current_text_gate",
+            "image_product_gate_status": "deferred_before_image",
+            "image_product_gate_reason": reason,
+            "image_eligibility_status": "deferred",
+            "image_eligibility_reason": reason,
+            "next_action": next_action,
+            "selected_for_next_image_batch": "false",
+            "queue_item_updated_at": run_now,
+            "last_attempt_run_id": run_id,
+            "last_attempt_at": run_now,
+            "publication_eligibility_decision": eligibility.get("decision"),
+            "publication_eligibility_gate_version": eligibility.get("gate_version"),
+            "publication_eligibility_reason": eligibility.get("primary_reason"),
+            "publication_eligibility_evidence_json": json.dumps(
+                eligibility.get("evidence") or {}, ensure_ascii=False, sort_keys=True
+            ),
+        })
+        return row
+
+    def apply_nonaccept_transition(
+        previous: dict[str, Any],
+        current_text: dict[str, Any],
+        reason: str,
+        eligibility: dict[str, Any],
+    ) -> dict[str, Any]:
+        reason_class = str(reason or "").split(":", 1)[0]
+        # Exact source no-spend evidence is authoritative even when the thin
+        # image row cannot yet prove a positive external-source verdict.
+        # Missing positive evidence stays soft; deterministic local/spam/
+        # compliance/official/topic exclusions do not.
+        hard_source_reason = reason_class in {
+            "local_kaliningrad_source_for_separate_monitoring",
+            "spam_or_commercial_hashtag_source",
+            "compliance_source_deny_no_spend",
+            "source_topic_not_publication_target",
+            "source_quick_class_not_publication_target",
+            "official_or_promo_source_surface",
+        }
+        if str(eligibility.get("decision") or "").startswith("needs_") and not hard_source_reason:
+            return defer_image_row(previous, current_text, reason, eligibility=eligibility)
+        return invalidate_image_row(previous, current_text, reason, eligibility=eligibility)
+
     def rows_from_state_keys(*keys: str) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for key in keys:
@@ -8547,13 +8678,22 @@ def build_image_candidate_queue(
     # overwrite it.
     previous_source_by_id: dict[str, dict[str, Any]] = {}
     previous_source_by_url: dict[str, dict[str, Any]] = {}
+    previous_source_by_key: dict[str, dict[str, Any]] = {}
     for source_row in previous_source_rows:
         source_id = str(source_row.get("source_id") or "")
         source_url = str(source_row.get("source_url") or source_row.get("canonical_url") or source_row.get("normalized_url") or "")
+        source_platform = normalize_source_platform(str(source_row.get("platform") or ""), source_url)
+        source_key = canonical_source_key(
+            source_platform,
+            str(source_row.get("handle") or source_row.get("username_or_handle") or source_url),
+            source_url,
+        )
         if source_id:
             previous_source_by_id.setdefault(source_id, source_row)
         if source_url:
             previous_source_by_url.setdefault(source_url, source_row)
+        if source_key:
+            previous_source_by_key.setdefault(source_key, source_row)
 
     def enrich_image_queue_input(row: dict[str, Any]) -> dict[str, Any]:
         post_url = str(row.get("post_url") or "")
@@ -8570,10 +8710,21 @@ def build_image_candidate_queue(
                     merged[field] = prev_post.get(field)
         source_id = str(merged.get("source_id") or "")
         source_url = str(merged.get("source_url") or "")
+        source_platform = normalize_source_platform(str(merged.get("platform") or ""), source_url)
+        source_key = canonical_source_key(
+            source_platform,
+            str(merged.get("handle") or merged.get("username_or_handle") or source_url),
+            source_url,
+        )
         # URL identity points to the canonical queue ledger even when that row
         # predates source_id persistence. A source-candidate row with the same
         # source_id must not outrank the canonical URL row.
-        source = previous_source_by_url.get(source_url) or previous_source_by_id.get(source_id) or {}
+        source = (
+            previous_source_by_key.get(source_key)
+            or previous_source_by_url.get(source_url)
+            or previous_source_by_id.get(source_id)
+            or {}
+        )
         authoritative_source_fields = [
             "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
             "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
@@ -8626,14 +8777,15 @@ def build_image_candidate_queue(
         if block_reason:
             image_queue_pruned_non_region_previous += 1
             bump_block(block_reason)
-            entries[key] = invalidate_image_row(row, row, block_reason)
+            eligibility = publication_eligibility(row, require_actual_image=False)
+            entries[key] = apply_nonaccept_transition(row, row, block_reason, eligibility)
             continue
         eligibility = publication_eligibility(row, require_actual_image=False)
         if str(eligibility.get("decision") or "") != "accept":
             image_queue_pruned_non_region_previous += 1
             eligibility_reason = str(eligibility.get("primary_reason") or "publication_eligibility_not_accept")
             bump_block(eligibility_reason)
-            entries[key] = invalidate_image_row(row, row, eligibility_reason, eligibility=eligibility)
+            entries[key] = apply_nonaccept_transition(row, row, eligibility_reason, eligibility)
             continue
         row["publication_eligibility_decision"] = eligibility.get("decision")
         row["publication_eligibility_gate_version"] = eligibility.get("gate_version")
@@ -8664,7 +8816,8 @@ def build_image_candidate_queue(
             image_queue_rejected_non_region_inputs += 1
             bump_block(block_reason)
             if key in entries:
-                entries[key] = invalidate_image_row(entries[key], row, block_reason)
+                eligibility = publication_eligibility(row, require_actual_image=False)
+                entries[key] = apply_nonaccept_transition(entries[key], row, block_reason, eligibility)
             return
         if added_from == "media_scoring" and key not in entries and block_reason:
             image_queue_rejected_non_region_inputs += 1
@@ -8679,19 +8832,17 @@ def build_image_candidate_queue(
         if str(eligibility.get("decision") or "") != "accept":
             image_queue_rejected_non_region_inputs += 1
             bump_block(str(eligibility.get("primary_reason") or "publication_eligibility_not_accept"))
+            if key in entries:
+                reason = str(eligibility.get("primary_reason") or "publication_eligibility_not_accept")
+                entries[key] = apply_nonaccept_transition(entries[key], row, reason, eligibility)
             return
         if key not in entries:
             order = max([int(v.get("image_queue_order") or 0) for v in entries.values()] or [0]) + 1
             entries[key] = {"image_queue_id": "imgq_" + stable_hash(key), "image_queue_order": order, "added_at": run_now, "added_from": added_from}
         previous_status = str(entries[key].get("image_queue_status") or "")
-        previous_actual = previous_status == "actual_scored" and (
-            str(entries[key].get("image_model_input_type") or "") == "actual_image"
-            or str(entries[key].get("final_visual_status") or "") == "scored_actual_image"
-            or int(entries[key].get("images_scored_actual_count") or 0) > 0
-            or (
-                bool(entries[key].get("last_image_diag_run_id"))
-                and str(entries[key].get("media_fetch_status") or "") == "downloaded"
-            )
+        previous_actual = has_actual_diagnostic_evidence(entries[key]) and (
+            previous_status == "actual_scored"
+            or str(entries[key].get("previous_image_queue_status") or "") == "actual_scored"
         )
         actual = (
             str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
@@ -8812,7 +8963,11 @@ def build_image_candidate_queue(
     cursor_position = max([prev_cursor] + processed_orders) if entries else 0
     target = getenv_int("REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN", 30)
     ordered = sorted(entries.values(), key=lambda r: (int(r.get("image_queue_order") or 0)))
-    pending_after_cursor = [r for r in ordered if int(r.get("image_queue_order") or 0) > cursor_position and r.get("image_queue_status") != "actual_scored"]
+    pending_after_cursor = [
+        r for r in ordered
+        if int(r.get("image_queue_order") or 0) > cursor_position
+        and str(r.get("image_queue_status") or "") in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}
+    ]
     target_ids = {str(r.get("image_queue_id")) for r in pending_after_cursor[:target]}
     display = sorted(ordered, key=lambda r: (0 if r.get("image_queue_status") == "actual_scored" else 1, int(r.get("image_queue_order") or 0)))
     for idx, row in enumerate(display, start=1):
@@ -8838,10 +8993,15 @@ def build_image_candidate_queue(
         "image_queue_selected_next_batch": len(target_ids),
         "image_queue_actual_scored_total": sum(1 for r in display if r.get("image_queue_status") == "actual_scored"),
         "image_queue_needs_actual_fetch_total": sum(1 for r in display if r.get("image_queue_status") == "needs_actual_image_fetch"),
+        "image_queue_deferred_text_gate_total": sum(1 for r in display if r.get("image_queue_status") == "deferred_text_gate"),
         "image_queue_pruned_non_region_previous": image_queue_pruned_non_region_previous,
         "image_queue_rejected_non_region_inputs": image_queue_rejected_non_region_inputs,
         "image_queue_text_region_confirmed_total": sum(1 for r in display if image_queue_text_region_confirmed(r)),
-        "image_queue_product_eligible_total": sum(1 for r in display if not image_queue_product_gate_reason(r)),
+        "image_queue_product_eligible_total": sum(
+            1 for r in display
+            if not image_queue_product_gate_reason(r)
+            and str(r.get("publication_eligibility_decision") or "") == "accept"
+        ),
         "image_queue_blocked_local_source_before_image_total": image_queue_product_block_reasons.get("local_kaliningrad_source_for_separate_monitoring", 0),
         "image_queue_blocked_spam_source_before_image_total": image_queue_product_block_reasons.get("spam_or_commercial_hashtag_source", 0),
         "image_queue_blocked_official_or_promo_source_before_image_total": image_queue_product_block_reasons.get("official_or_promo_source_surface", 0),
@@ -15567,7 +15727,7 @@ def build_report(
         posts_for_scoring = posts_for_scoring[:posts_scored_count]
         precomputed_embedding_scores = precomputed_embedding_scores[:posts_scored_count]
 
-    early_image_queue_keys_written: set[str] = set()
+    early_image_queue_projection_written: dict[str, str] = {}
     if getenv_bool("REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY", True):
         report_event(
             "early_image_queue_handoff_started",
@@ -15598,8 +15758,8 @@ def build_report(
             run_id=run_id,
             stage="early_image_queue_handoff",
         )
-        early_image_queue_keys_written = {
-            image_queue_row_key(row)
+        early_image_queue_projection_written = {
+            image_queue_row_key(row): image_candidate_projection_fingerprint(row)
             for row in early_image_rows_persisted[:early_image_items_written]
             if image_queue_row_key(row)
         }
@@ -16154,8 +16314,18 @@ def build_report(
         online_image_queue_rows = image_queue_rows_for_ydb_write(
             [r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
             run_now=run_now,
-            exclude_keys=early_image_queue_keys_written,
         )
+        # An early handoff exists only to expose ready media while the richer
+        # candidate/source projection is still being assembled.  Skip the
+        # final duplicate only when that CandidateReport-owned projection is
+        # byte-for-byte equivalent.  A later hard reject or an authoritative
+        # source repair for the same key must still be written; concurrent
+        # ImageDiagnostic fields are preserved by the latest-row merge below.
+        online_image_queue_rows = [
+            row for row in online_image_queue_rows
+            if early_image_queue_projection_written.get(image_queue_row_key(row))
+            != image_candidate_projection_fingerprint(row)
+        ]
         online_image_queue_items_written = write_region_talk_online_queue_items(
             online_image_queue_rows,
             kind="image_queue_item",

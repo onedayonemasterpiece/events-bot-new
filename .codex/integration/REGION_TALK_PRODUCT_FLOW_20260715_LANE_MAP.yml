@@ -74,5 +74,50 @@ lanes:
     forbidden_files: []
     expected_output: clean commit, pushed branch, run IDs, logs, funnel deltas and closure audit
     verification_scope: full_local
+    status: partial
+    effort: high
+    evidence: first supervised live cycle proved fast-check to E5 handoff but exposed an image-ledger regression requiring a blocking audit
+  - id: R07
+    role: planner
+    requirement_ids: [R07]
+    target: identify the exact live YDB image rows rewritten by the 20260715 CandidateReport cycle and classify legitimate versus accidental status changes
+    depends_on: [R06]
+    execution_mode: parallel
+    branch: null
+    worktree: read-only current commit and live YDB
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: affected URL/status/reason cohorts with reproducible read-only queries and no production mutations
+    verification_scope: inspection_only
+    status: merged
+    effort: high
+    evidence: read-only live YDB audit found 60 transitions, 39 hard and 21 soft; 3 actual-scored rows were wrongly hidden
+  - id: R08
+    role: planner
+    requirement_ids: [R08]
+    target: audit CandidateReport early image handoff ownership merge and determine the minimal safe preservation contract
+    depends_on: [R06]
+    execution_mode: parallel
+    branch: null
+    worktree: read-only current commit
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: concrete code path, failing invariant, minimal patch and regression tests
+    verification_scope: inspection_only
+    status: merged
+    effort: high
+    evidence: read-only code audit found nonaccept terminalization, case-sensitive source join and key-only early/final suppression
+  - id: R09
+    role: merge_reviewer
+    requirement_ids: [R09]
+    target: fix image-ledger regression, preserve legitimate source invalidation, validate, run BGE and continue supervised product cycles
+    depends_on: [R07, R08]
+    execution_mode: serial_after_dependency
+    branch: agent/region-talk/R04-live-canary
+    worktree: /home/dev/projects/events-bot-new-region-talk-r04-live
+    writable_files: ['repo files owned by serial integrator only']
+    forbidden_files: []
+    expected_output: tested pushed fix, live evidence, full metric deltas and explicit candidate-output result
+    verification_scope: full_local
     status: spawned
     effort: high

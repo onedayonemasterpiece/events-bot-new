@@ -103,6 +103,22 @@ versioned image decision belong to ImageDiagnostic and cannot be replaced by
 CandidateReport's older start-of-run snapshot.  A hard source/text/compliance
 rejection may still close the queue status while retaining that audit evidence.
 
+The 2026-07-15 live cycle exposed a stricter ownership boundary. An early
+CandidateReport handoff converted `needs_source_review`, missing BGE fusion and
+an ambiguous vector status into `rejected_text_gate` for 21 rows. The scalar
+image evidence survived, but three real `actual_scored` rows disappeared from
+the active funnel. These states are now tri-state: only authoritative
+local/spam/compliance/official evidence or a current hard post/vector reject is
+terminal; missing positive evidence is deferred and cannot enter image/Gemini
+spend. A durable actual-image result remains `actual_scored` while the
+source/text verdict is refreshed, and a previously hidden result is restored
+from its diagnostic evidence. Source joins use the case-insensitive canonical
+source identity, so Telegram handle casing cannot create a false unknown
+source. The final handoff skips an early row only when CandidateReport's own
+source/text/vector projection is unchanged; a richer final hard verdict for
+the same row must still be written, while ImageDiagnostic-owned frame/model
+fields remain protected by the latest-row merge.
+
 ## Principle
 
 Do not run expensive VLM on every image. Use a cascade:

@@ -1327,10 +1327,13 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             {"image_queue_status": "not_reviewable_no_media"},
             {"image_queue_status": "not_reviewable_unsupported_media"},
             {"image_queue_status": "rejected_text_gate"},
+            {"image_queue_status": "deferred_text_gate"},
         ])
         self.assertEqual(metrics["image_not_reviewable_no_media_total"], 1)
         self.assertEqual(metrics["image_not_reviewable_unsupported_media_total"], 1)
         self.assertEqual(metrics["image_rejected_text_gate_total"], 1)
+        self.assertEqual(metrics["image_deferred_text_gate_total"], 1)
+        self.assertEqual(metrics["image_ledger_terminal_rows_total"], 4)
 
     def test_keyword_source_metrics_show_expected_keyword_yield(self) -> None:
         mod = load_module()
