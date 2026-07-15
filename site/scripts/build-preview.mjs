@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 function safeBuildId(value) {
@@ -20,7 +19,7 @@ const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').sli
 const buildId = safeBuildId(process.env.PREVIEW_BUILD_ID || `preview-${stamp}-${gitShortSha()}`);
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
-const tempDir = mkdtempSync(join(tmpdir(), 'kenigevents-preview-dist-'));
+const stagedDistDir = join(siteDir, `.preview-dist-${process.pid}`);
 const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')
   .replace(/\{buildId\}/g, buildId)
   .replace(/\{BUILD_ID\}/g, buildId)
@@ -45,11 +44,10 @@ if (result.status !== 0) {
   process.exit(result.status || 1);
 }
 
-cpSync(distDir, tempDir, { recursive: true });
-rmSync(distDir, { recursive: true, force: true });
+rmSync(stagedDistDir, { recursive: true, force: true });
+renameSync(distDir, stagedDistDir);
 mkdirSync(join(distDir, buildId), { recursive: true });
-cpSync(tempDir, join(distDir, buildId), { recursive: true });
-rmSync(tempDir, { recursive: true, force: true });
+renameSync(stagedDistDir, join(distDir, buildId));
 writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({ buildId, generatedAt: now.toISOString(), basePath: `/${buildId}`, astroAssetBaseUrl: astroAssetBaseUrl || null }, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
 console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);

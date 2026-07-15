@@ -526,6 +526,27 @@ class Database:
                     display_order INTEGER NOT NULL DEFAULT 0,
                     ocr_text TEXT,
                     ocr_title TEXT,
+                    image_text_mode TEXT,
+                    media_role TEXT,
+                    media_role_confidence REAL,
+                    media_semantic_status TEXT NOT NULL DEFAULT 'pending',
+                    media_semantic_reason_code TEXT,
+                    media_semantic_evidence_json JSON,
+                    media_semantic_model TEXT,
+                    media_semantic_prompt_version TEXT,
+                    media_semantic_context_hash TEXT,
+                    media_semantic_classified_at TIMESTAMP,
+                    focal_x REAL,
+                    focal_y REAL,
+                    safe_crop BOOLEAN,
+                    thumbnail_256_url TEXT,
+                    thumbnail_256_path TEXT,
+                    thumbnail_256_width INTEGER,
+                    thumbnail_256_height INTEGER,
+                    thumbnail_512_url TEXT,
+                    thumbnail_512_path TEXT,
+                    thumbnail_512_width INTEGER,
+                    thumbnail_512_height INTEGER,
                     prompt_tokens INTEGER NOT NULL DEFAULT 0,
                     completion_tokens INTEGER NOT NULL DEFAULT 0,
                     total_tokens INTEGER NOT NULL DEFAULT 0,
@@ -559,6 +580,27 @@ class Database:
                 "eventposter",
                 "display_order INTEGER NOT NULL DEFAULT 0",
             )
+            await _add_column(conn, "eventposter", "image_text_mode TEXT")
+            await _add_column(conn, "eventposter", "media_role TEXT")
+            await _add_column(conn, "eventposter", "media_role_confidence REAL")
+            await _add_column(conn, "eventposter", "media_semantic_status TEXT NOT NULL DEFAULT 'pending'")
+            await _add_column(conn, "eventposter", "media_semantic_reason_code TEXT")
+            await _add_column(conn, "eventposter", "media_semantic_evidence_json JSON")
+            await _add_column(conn, "eventposter", "media_semantic_model TEXT")
+            await _add_column(conn, "eventposter", "media_semantic_prompt_version TEXT")
+            await _add_column(conn, "eventposter", "media_semantic_context_hash TEXT")
+            await _add_column(conn, "eventposter", "media_semantic_classified_at TIMESTAMP")
+            await _add_column(conn, "eventposter", "focal_x REAL")
+            await _add_column(conn, "eventposter", "focal_y REAL")
+            await _add_column(conn, "eventposter", "safe_crop BOOLEAN")
+            await _add_column(conn, "eventposter", "thumbnail_256_url TEXT")
+            await _add_column(conn, "eventposter", "thumbnail_256_path TEXT")
+            await _add_column(conn, "eventposter", "thumbnail_256_width INTEGER")
+            await _add_column(conn, "eventposter", "thumbnail_256_height INTEGER")
+            await _add_column(conn, "eventposter", "thumbnail_512_url TEXT")
+            await _add_column(conn, "eventposter", "thumbnail_512_path TEXT")
+            await _add_column(conn, "eventposter", "thumbnail_512_width INTEGER")
+            await _add_column(conn, "eventposter", "thumbnail_512_height INTEGER")
             if not eventposter_had_review_status:
                 await conn.execute(
                     "UPDATE eventposter SET review_status='approved', reviewed_at=COALESCE(reviewed_at, updated_at)"
@@ -577,6 +619,9 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_pixel_sha256 ON eventposter(event_id, pixel_sha256)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_media_semantic ON eventposter(event_id, media_semantic_status, media_role)"
             )
             await conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_eventposter_event_raw_sha256 ON eventposter(event_id, raw_sha256) WHERE raw_sha256 IS NOT NULL AND TRIM(raw_sha256) != ''"

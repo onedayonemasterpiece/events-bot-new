@@ -1,6 +1,6 @@
 # Event Page Product & Design Spec — «Полюбить Калининград Анонсы»
 
-> **Status:** product/UI design for the first static event-page vertical slice; not implemented yet.
+> **Status:** production event-page contract; mobile baseline and desktop continuous Editorial composition implemented.
 > **Brand/page family:** «Полюбить Калининград Анонсы»
 > **Target:** `https://kenigevents.ru/sobytiya/<stable-slug>/`
 > **Publish target:** production Yandex Object Storage bucket/domain `kenigevents.ru`; preview prefixes remain `noindex`.
@@ -197,10 +197,11 @@ Primary CTA is selected by event facts:
 | --- | --- | --- |
 | `ticket_link` + paid/available | `Купить билет` | price range if known |
 | registration link | `Зарегистрироваться` | “может потребоваться регистрация” |
-| free + link | `Бесплатно, зарегистрироваться` | avoid hiding registration requirement |
-| free without link | `Вход свободный` | disabled/no-op button is forbidden; use info badge, not button |
+| free + explicit registration link | `Зарегистрироваться` | admission property must still say `Бесплатно · регистрация` |
+| free without registration requirement | `В календарь` | calendar save is also the service saved-event action; source remains secondary |
 | phone-only booking | `Позвонить` on mobile, `Показать телефон` desktop | plain visible phone fallback |
-| source link only / unknown tickets | `Уточнить у организатора` | honest state, no fake ticket CTA |
+| paid/ticketed, price unknown | `Билеты` | never invent `Узнать цену`, `Узнать условия` or `По билетам` |
+| source link only / unknown tickets | `Источник события` | honest secondary destination, no fake ticket CTA |
 | sold out | `Билеты закончились` as disabled/status | offer related events, not fake CTA |
 | cancelled/postponed | status banner first | no ticket CTA unless new date/source exists |
 
@@ -268,42 +269,49 @@ Personalization on mobile:
 
 ## 7. Desktop layout
 
-Desktop goal: feel like a proper афиша page, not a stretched mobile card.
+Desktop goal: feel like a proper афиша page, not a stretched mobile card. These
+rules apply only at desktop breakpoints; the accepted mobile composition must
+not be reflowed by desktop experiments.
 
-```text
-[Header: brand / nav / search]
+### Desktop production composition
 
-[Main 2-column container]
-  Left / content column:
-    breadcrumbs
-    H1 title
-    poster/media
-    short summary
-    full description
-    other dates
-    related grid below
+- Primary family is continuous Editorial: a strong non-document image occupies
+  the full desktop canvas; its image layer moves upward more slowly than page
+  content (continuous positive parallax) and exits naturally, without a late
+  acceleration jump or permanent pin.
+- One continuous information slab starts with category/date/title and includes
+  medallions, place, short digest, full description and other dates. It scrolls
+  as one honest block; description is not duplicated below the hero.
+- The compact media rail starts in the low-attention top-right image area and
+  stays available. CTA begins at the same lower decision position as the
+  information slab; it joins the upward movement when the slab reaches it,
+  then remains sticky below the fixed header.
+- Rail, CTA and optional poster companion are bounded by the end of the **full
+  reading shell**, not the hero. They release before `Смотрите дальше` with a
+  safe bottom gap, never collide with the graphite continuation block.
+- A dedicated poster companion exists only for a successfully classified
+  `event_identity_poster`. It preserves the exact source ratio inside a thin
+  graphite frame, with no copy, backdrop fields or crop. Other documents
+  (services, schedule, wayfinding, sponsors) stay in the gallery/rail and are
+  never called an афиша.
+- If no strong horizontal/photo hero is available, the split fallback keeps a
+  document/portrait media column and a readable information column. OCR text is
+  never horizontally cropped.
+- The fullscreen efficient portrait viewer is enabled for galleries dominated
+  by vertical images. It fills the viewport with multiple natural-height
+  images; next/previous buttons, keyboard arrows and swipe all advance by a
+  viewport group in both directions. It never silently falls back to a
+  one-image viewer.
+- Related cards use a common bounded media height. Documents/OCR are scaled to
+  full card width and may overflow only vertically (centered, or shifted by a
+  trusted focal Y); source left/right edges are never cut and no side fields are
+  introduced. Ordinary cover is unlocked only by the explicit LLM-authored
+  `event_photo` role. Missing/unknown roles and legacy `visual_only` remain
+  width-fit/no-horizontal-crop until semantic enrichment succeeds.
 
-  Right / sticky decision rail:
-    date/time
-    venue/address
-    price/status
-    primary CTA
-    calendar/share/copy
-    source/updated
-    same venue / weekend mini-module
-
-[Похожие события grid 3-4 cards]
-[Footer]
-```
-
-Desktop rules:
-
-- content max width around 1120–1200px;
-- right rail width 320–380px;
-- sticky rail starts below header, not over footer;
-- filters/search appear in header/list pages, not as clutter inside leaf page;
-- hover is visual affordance only, not strong personalization signal;
-- keyboard navigation and visible focus are required.
+Desktop header uses the shared announcement lockup at `240×88`, menu on the
+right, exact-listing active state only, and no selected item on event details.
+Keyboard navigation and visible focus remain required.
 
 ## 8. Related events and personalization placement
 
