@@ -9,7 +9,10 @@ graphite action dock принят как направление. Следующ�
 отвечает на следующий Android feedback по лайку, подписям, дню недели и OCR gap.
 `accepted-v4` сохраняет принятую дату/время и исправляет переусложнение v3:
 возвращает poster-parallax, убирает ring/check у лайка и чистит ритм между
-информационными поверхностями.
+информационными поверхностями. Проверка владельца показала, что v4 развернул
+OCR-parallax не в ту сторону, а один только gap не устранил оптический разрыв.
+`accepted-v5` поэтому инвертирует движение и вводит единое gradient-продолжение
+для medallions + description вместо ещё одной границы между блоками.
 
 ## Решения после повторного аудита
 
@@ -37,6 +40,7 @@ graphite action dock принят как направление. Следующ�
 | `accepted-v2` | открытый canvas | адаптивный графитовый dock | принятые решения + mobile corrections |
 | `accepted-v3` | открытый canvas | container-aware графитовый dock | feedback по лайку, labels, weekday и OCR gap |
 | `accepted-v4` | открытый canvas | container-aware графитовый dock | owner correction: параллакс, простой active like, vertical rhythm |
+| `accepted-v5` | единая gradient continuation surface + open prose | container-aware графитовый dock | owner correction: reverse parallax и seamless decision→context composition |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -49,7 +53,7 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 21 комбинации в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 24 комбинации в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
@@ -58,6 +62,7 @@ Preview builds:
 - accepted candidate: `preview-20260715t-mobile-ui-accepted-v2`.
 - feedback candidate: `preview-20260715t-mobile-ui-accepted-v3`.
 - owner-correction candidate: `preview-20260715t-mobile-ui-accepted-v4`.
+- reverse/continuation candidate: `preview-20260715t-mobile-ui-accepted-v5`.
 
 ## Accepted v2 corrections
 
@@ -128,6 +133,32 @@ V4:
 
 V4 остаётся изолированным noindex preview; общий production hero-parallax не меняется.
 
+## Accepted v5 corrections
+
+Владелец отклонил направление v4 parallax и отметил на Android screenshot
+«ложный подвал» между rounded decision card и первым medallion. V5 не лечит это
+ещё одним отступом или новой карточкой:
+
+- poster image остаётся `contain`/natural-width без `scale` и `cover`; на старте
+  он находится в `-travel`, а при scroll движется к `0` по формуле
+  `-maxOffset + progress * maxOffset` — то есть в сторону, обратную v4;
+- travel остаётся ограниченным `36–48px`, а clip viewport всегда покрыт image
+  bounds сверху и снизу;
+- crumbs, medallions и open description объединены одним DOM-wrapper
+  `.mobile-event-review__continuation`; для старых вариантов wrapper имеет
+  `display: contents`, поэтому их геометрия не меняется;
+- только v5 делает continuation full-bleed parent surface: `margin-top:-24px`
+  заводит её под rounded decision, компенсирующий top padding возвращает контент
+  в поток, а gradient от тёплого milk/taupe к transparent создаёт плавное
+  продолжение;
+- у continuation нет border, radius и shadow; у decision border прозрачен и
+  shadow отключён, но нижние rounded corners остаются видимы за счёт мягкого
+  тонального контраста parent gradient;
+- отдельная card surface вокруг prose не возвращается; medallions и description
+  воспринимаются содержимым одного родителя.
+
+V5 также остаётся noindex preview и не меняет production mobile event template.
+
 ## Visual QA
 
 - проверены все `4 × 3` cases на ширинах `360`, `390`, `430` и `768px`;
@@ -167,6 +198,23 @@ pages) и `check-preview.mjs` завершились успешно.
 Артефакты: `artifacts/codex/mobile-ui-v4-qa-20260715/`.
 Полный preview build собрал `457` страниц; обновлённый `check-preview.mjs` прошёл.
 
+Для `accepted-v5` проверены `360/390/430/768 × 3` scenarios:
+
+- на телефонах hero и continuation совпадают с viewport, horizontal overflow нет;
+- у OCR/poster на `360/390/430` initial transform равен
+  `-39.6/-42.9/-47.3px`, после scroll `180px` —
+  `-17.4/-20.7/-25.1px`: движение идёт к нулю и визуально вниз;
+- до и после scroll `image.top <= visual.top`, а
+  `image.bottom >= visual.bottom`, поэтому reverse parallax не открывает фон;
+- continuation начинается на `24px` за rounded decision, не имеет
+  border/radius/shadow; на phone medallions идут через `26.1–28px`, details —
+  через `17.6–19.8px` после medallions;
+- weekday/date/time, touch targets `>=52px`, container-aware labels и простой
+  terracotta active-like с reload/toggle-off persistence сохранены.
+
+Артефакты: `artifacts/codex/mobile-ui-v5-qa-20260715/`.
+Полный preview build собрал `460` страниц; обновлённый `check-preview.mjs` прошёл.
+
 ## External consultation
 
 Консультация выполнена через `agy` моделью `Gemini 3.1 Pro (High)`. Gemini
@@ -199,6 +247,15 @@ V3 acceptance review выполнен через `agy` моделью `Gemini 3.
 Pro-модели дал `PASS` для parallax, like и vertical rhythm; P0/P1 не найдены. Raw
 response: `artifacts/codex/mobile-ui-v4-qa-20260715/gemini-v4-acceptance-review.raw.md`.
 
+Для v5 выполнены screenshot diagnosis и финальный gate через `agy` моделью
+`Gemini 3.1 Pro (High)`. Диагноз `false floor` принят: нижняя граница/shadow и
+мертвая молочная полоса заменены overlap + gradient continuation. Совет
+консультанта об общей bordered/shadowed outer card и `object-fit: cover`
+отклонён как противоречащий прямому feedback владельца, open-prose решению и
+OCR no-zoom contract. Финальный review дал `PASS` направлению reverse parallax,
+gap-safety и composition; P0/P1 blockers не найдено. Raw response:
+`artifacts/codex/mobile-ui-v5-qa-20260715/gemini-v5-acceptance-review.raw.md`.
+
 ## Task-channel workflow
 
 Telegram topic, назначенный пользователем каналом задачи/приёмки, не является
@@ -209,7 +266,8 @@ receipt-only сообщения и обещания прислать резул�
 
 ## Acceptance gate
 
-До переноса в основную event page требуется принять либо отклонить v4 simplified
-active-like, сохранённые icons/container-aware labels/date-time, clipped no-zoom
-poster parallax и новый vertical rhythm. Discovery, brand tag и sticky CTA этим решением не
-переутверждаются.
+До переноса в основную event page требуется принять либо отклонить v5 reverse
+clipped no-zoom poster parallax и gradient continuation. Унаследованные
+simplified active-like, icons/container-aware labels/date-time также остаются
+видны в preview, но этой итерацией не переутверждаются. Discovery, brand tag и
+sticky CTA не меняются.

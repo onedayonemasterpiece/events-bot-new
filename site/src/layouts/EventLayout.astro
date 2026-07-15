@@ -4002,6 +4002,7 @@ const HEADER_NAVIGATION = [
               if (!images.length) return;
               const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
               const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"]'));
+              const usesReverseGapSafePosterParallax = usesGapSafePosterParallax && Boolean(visual.closest('[data-mobile-review-variant="accepted-v5"]'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
@@ -4010,7 +4011,7 @@ const HEADER_NAVIGATION = [
                 ? (usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56)
                 : 64;
               const offset = usesGapSafePosterParallax
-                ? -progress * maxOffset
+                ? (usesReverseGapSafePosterParallax ? -maxOffset + progress * maxOffset : -progress * maxOffset)
                 : -maxOffset + progress * maxOffset * 2;
               if (isPosterStage) {
                 if (usesGapSafePosterParallax) visual.style.setProperty('--hero-poster-travel', `${maxOffset.toFixed(1)}px`);

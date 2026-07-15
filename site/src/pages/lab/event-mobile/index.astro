@@ -9,7 +9,7 @@ import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/event-mobile/');
 const title = `Mobile event UI variants | ${SITE_NAME}`;
-const description = 'Noindex mobile review lab: the original 2×2 experiment plus accepted v2–v4 candidates.';
+const description = 'Noindex mobile review lab: the original 2×2 experiment plus accepted v2–v5 candidates.';
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
@@ -19,9 +19,9 @@ const description = 'Noindex mobile review lab: the original 2×2 experiment plu
 
       <section class="section-card">
         <div class="section-card__inner">
-          <p class="eyebrow">mobile only · 2×2 experiment + accepted v2–v4</p>
+          <p class="eyebrow">mobile only · 2×2 experiment + accepted v2–v5</p>
           <h1>Принятые решения и feedback candidate</h1>
-          <p class="lead">Первые четыре варианта сохраняют исходный контролируемый эксперимент. Accepted v2/v3 остаются для сравнения. Accepted v4 учитывает поправку владельца: дата/время сохранены, active like упрощён, OCR-parallax возвращён без zoom и пустого воздуха, а между информационными поверхностями задан явный вертикальный ритм. Бирка, sticky CTA и discovery cards не меняются.</p>
+          <p class="lead">Первые четыре варианта сохраняют исходный контролируемый эксперимент. Accepted v2–v4 остаются для сравнения. Accepted v5 разворачивает OCR-parallax в ожидаемую сторону и заменяет пустую полосу под rounded decision на безрамочное gradient-продолжение с medallions и open prose. Бирка, sticky CTA и discovery cards не меняются.</p>
           <div class="mobile-ui-lab__legend" role="list">
             {MOBILE_EVENT_REVIEW_VARIANTS.map((variant, index) => (
               <article role="listitem">

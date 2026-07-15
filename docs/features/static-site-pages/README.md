@@ -9,10 +9,11 @@
 Mobile event-detail UI вынесен в контролируемый preview lab: четыре исходных
 варианта образуют матрицу `current/open prose × current/grouped actions`,
 `accepted-v2` сохраняет первый исправленный проход, `accepted-v3` — первый
-Android feedback, а `accepted-v4` фиксирует поправку владельца: сохраняет
-принятую weekday/date/time hierarchy, возвращает OCR-parallax без zoom и
-layout gap, упрощает selected-like до терракотовой заливки и белого solid
-heart и вводит явный вертикальный ритм между информационными поверхностями.
+Android feedback, `accepted-v4` — предыдущую поправку владельца, а
+`accepted-v5` исправляет направление gap-safe OCR-parallax и соединяет rounded
+decision с medallions + open prose одной full-bleed безрамочной gradient
+continuation surface. Принятые weekday/date/time hierarchy и простой
+терракотовый selected-like остаются без изменений.
 Бирка, discovery cards и sticky CTA намеренно зафиксированы. Канонический scope
 и acceptance gate:
 [`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).

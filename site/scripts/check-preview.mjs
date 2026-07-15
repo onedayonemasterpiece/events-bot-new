@@ -32,7 +32,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -56,6 +56,7 @@ const mobileReviewCases = {
   acceptedV2: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/photo-paid/index.html'), 'utf8'),
   acceptedV3: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/photo-paid/index.html'), 'utf8'),
   acceptedV4: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/photo-paid/index.html'), 'utf8'),
+  acceptedV5: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -80,6 +81,9 @@ if (!mobileReviewCases.acceptedV3.includes('data-mobile-review-revision="v3"') |
 if (!mobileReviewCases.acceptedV4.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV4.includes('event-hero__meta-line--weekday-panel') || !mobileReviewCases.acceptedV4.includes('event-hero__weekday')) {
   throw new Error('Mobile event accepted v4 must preserve the accepted weekday-first date/time panel');
 }
+if (!mobileReviewCases.acceptedV5.includes('data-mobile-review-variant="accepted-v5"') || !mobileReviewCases.acceptedV5.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV5.includes('event-hero__weekday') || !mobileReviewCases.acceptedV5.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v5 must preserve v4 controls and expose the gradient continuation surface');
+}
 const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
@@ -91,6 +95,10 @@ if (!mobileAcceptedV3OcrOverride.includes('data-hero-mode="poster-stage"') || !m
 const mobileAcceptedV4OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV4OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV4OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v4 must preserve the no-zoom text-poster override');
+}
+const mobileAcceptedV5OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV5OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV5OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v5 must preserve the no-zoom text-poster override');
 }
 
 const desktopV12Pages = {
@@ -491,6 +499,8 @@ if (
   || !/--hero-poster-parallax-y/iu.test(css)
   || !/--hero-poster-travel/iu.test(css)
   || !controlHtml.includes('usesGapSafePosterParallax')
+  || !controlHtml.includes('usesReverseGapSafePosterParallax')
+  || !controlHtml.includes('-maxOffset + progress * maxOffset : -progress * maxOffset')
   || !controlHtml.includes('usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56')
   || !controlHtml.includes(': -maxOffset + progress * maxOffset * 2')
   || controlHtml.includes('--hero-parallax-scale')

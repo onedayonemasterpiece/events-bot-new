@@ -1,5 +1,5 @@
 export type MobileEventReviewVariant = {
-  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4';
+  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4' | 'accepted-v5';
   label: string;
   shortLabel: string;
   note: string;
@@ -78,6 +78,15 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     label: 'Accepted v4 · owner correction',
     shortLabel: 'Accepted v4',
     note: 'Сохраняет принятую дату/время, возвращает OCR-параллакс без zoom и layout gap, упрощает active like и вводит чистый вертикальный ритм между информационными поверхностями.',
+    proseTreatment: 'open',
+    actionsTreatment: 'dock',
+    revision: 'v4',
+  },
+  {
+    slug: 'accepted-v5',
+    label: 'Accepted v5 · gradient continuation',
+    shortLabel: 'Accepted v5',
+    note: 'Инвертирует OCR-parallax в ожидаемую сторону и соединяет rounded decision с medallions + open prose единой безрамочной gradient-continuation surface.',
     proseTreatment: 'open',
     actionsTreatment: 'dock',
     revision: 'v4',

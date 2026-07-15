@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static event mobile UI review v5**: reversed the gap-safe OCR poster parallax to move from `-travel` toward `0`, and replaced the visually detached decision→medallions/prose seam with one full-bleed, borderless gradient continuation surface while preserving rounded decision corners, open prose, date/time hierarchy and the simplified active-like state.
 - **Static event mobile UI review v4**: preserved the accepted weekday/date/time hierarchy, restored a clipped no-zoom OCR poster parallax without transform-created layout air, simplified selected-like feedback to terracotta fill plus a white solid heart, and added explicit spacing between the hero/context and context/prose information surfaces.
 - **Task-channel execution + static event mobile UI review v3**: task/acceptance topics now require a complete feedback→implementation→QA→preview→single-handoff iteration instead of acknowledgement-only terminal turns; the new isolated mobile candidate adds an unmistakable selected-like state, larger secondary icons, container-aware single-label actions, weekday-first date/time hierarchy and removes the no-zoom OCR poster-parallax gap.
 - **Static event mobile UI review v2**: added an accepted-candidate pass that corrects the 12px full-bleed hero offset, strengthens mobile date/time hierarchy, renders the misclassified text poster without photo-cover zoom, and uses a server-deterministic compact action label below 380px.

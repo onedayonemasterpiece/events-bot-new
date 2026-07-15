@@ -73,26 +73,28 @@ const galleryCta = galleryCtaEvent ? {
       </div>
     </article>
 
-    <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
-      <a href={withBase('/__preview/')}>Афиша</a>
-      <span aria-hidden="true">/</span>
-      {event.city && <span>{event.city}</span>}
-      {event.city && <span aria-hidden="true">/</span>}
-      {event.event_type && <span>{event.event_type}</span>}
-    </nav>
+    <div class="mobile-event-review__continuation">
+      <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        {event.city && <span>{event.city}</span>}
+        {event.city && <span aria-hidden="true">/</span>}
+        {event.event_type && <span>{event.event_type}</span>}
+      </nav>
 
-    <div class="mobile-event-review__medallions"><EventTokenMedallions event={event} /></div>
+      <div class="mobile-event-review__medallions"><EventTokenMedallions event={event} /></div>
 
-    <section class="section-card section-card--quiet section-card--event-details mobile-event-review__details" style="margin-top: 1rem;">
-      <div class="section-card__inner mobile-event-review__prose">
-        <h2>Описание</h2>
-        <div class="prose" set:html={event.description_html} />
-        <h2 style="margin-top: 1.2rem;">Коротко</h2>
-        <EventFacts event={event} />
-        {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
-      </div>
-      <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
-    </section>
+      <section class="section-card section-card--quiet section-card--event-details mobile-event-review__details" style="margin-top: 1rem;">
+        <div class="section-card__inner mobile-event-review__prose">
+          <h2>Описание</h2>
+          <div class="prose" set:html={event.description_html} />
+          <h2 style="margin-top: 1.2rem;">Коротко</h2>
+          <EventFacts event={event} />
+          {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
+        </div>
+        <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
+      </section>
+    </div>
 
     <section id="discovery-feed" class="section-card mobile-event-review__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
       <div class="section-card__inner">
@@ -116,6 +118,7 @@ const galleryCta = galleryCtaEvent ? {
 
 <style is:global>
   [data-mobile-event-review] .mobile-event-review__shell { padding-bottom: 1.5rem; }
+  [data-mobile-event-review] .mobile-event-review__continuation { display: contents; }
   [data-mobile-event-review] .mobile-event-review__medallions { margin-top: 0.25rem; }
 
   [data-mobile-event-review][data-mobile-review-revision="v2"] .section-card--impact-hero {
@@ -287,6 +290,38 @@ const galleryCta = galleryCtaEvent ? {
   }
   [data-mobile-event-review][data-mobile-review-revision="v4"] .mobile-event-review__details {
     margin-top: clamp(1.35rem, 5.5vw, 1.65rem) !important;
+  }
+
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .event-hero__decision {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__continuation {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100vw;
+    margin-top: -1.5rem;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    padding: calc(1.5rem + clamp(0.6rem, 2.8vw, 0.75rem)) 0.75rem 0;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(240,225,207,0.88) 0,
+      rgba(250,240,226,0.9) 6rem,
+      rgba(255,249,240,0.86) 16rem,
+      rgba(248,240,229,0) 32rem
+    );
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__medallions {
+    margin-top: 0;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__details {
+    margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
   }
 
   [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__details {
