@@ -67,7 +67,7 @@ const galleryCta = galleryCtaEvent ? {
   data-actions-treatment={variant.actionsTreatment}
   data-mobile-review-revision={variant.revision}
   data-compact-label-action={compactLabelAction}
-  data-mobile-parallax-profile={variant.slug === 'accepted-v7' ? 'photo-velocity-matched' : undefined}
+  data-mobile-parallax-profile={variant.slug === 'accepted-v7' ? 'photo-velocity-matched' : variant.slug === 'accepted-v8' ? 'photo-continuous-crop' : undefined}
 >
   <div class="page-shell page-shell--event-impact mobile-event-review__shell">
     <article class="main-col section-card section-card--hero section-card--impact-hero">
@@ -287,6 +287,9 @@ const galleryCta = galleryCtaEvent ? {
     transform: translate3d(0, var(--hero-poster-parallax-y, 0px), 0);
     will-change: transform;
   }
+  [data-mobile-event-review][data-mobile-parallax-profile="photo-continuous-crop"] .event-hero--poster-stage .event-hero__image {
+    margin-top: calc(-1 * var(--hero-poster-travel, 42px));
+  }
 
   [data-mobile-event-review][data-mobile-review-revision="v4"] .mobile-event-review__medallions {
     margin-top: clamp(0.85rem, 3.8vw, 1.05rem);
@@ -327,11 +330,11 @@ const galleryCta = galleryCtaEvent ? {
     margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
   }
 
-  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"]) .event-hero__decision {
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .event-hero__decision {
     border: 0;
     box-shadow: none;
   }
-  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"]) .mobile-event-review__continuation {
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__continuation {
     --continuation-rise: clamp(28rem, 110vw, 32rem);
     position: relative;
     z-index: 1;
@@ -348,7 +351,7 @@ const galleryCta = galleryCtaEvent ? {
     background: none;
     box-shadow: none;
   }
-  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"]) .mobile-event-review__continuation::before {
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__continuation::before {
     content: "";
     position: absolute;
     z-index: -1;
@@ -367,10 +370,10 @@ const galleryCta = galleryCtaEvent ? {
       rgba(248,240,229,0) calc(var(--continuation-rise) + 44rem)
     );
   }
-  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"]) .mobile-event-review__medallions {
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__medallions {
     margin-top: 0;
   }
-  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"]) .mobile-event-review__details {
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__details {
     margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
   }
 

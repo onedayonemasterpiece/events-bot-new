@@ -20,7 +20,11 @@ OCR-parallax не в ту сторону, а один только gap не ус
 движения выявила, что OCR-постер всё ещё шёл заметно медленнее photo hero:
 его прогресс делился на полную высоту вертикальной афиши. `accepted-v7`
 нормализует скорость относительно обычного mobile photo hero, не добавляя
-масштаб и не меняя безопасный диапазон `-travel → 0`.
+масштаб и не меняя безопасный диапазон `-travel → 0`. Проверка владельца
+показала, что после достижения `0` V7 заметно останавливается ещё до ухода hero.
+`accepted-v8` поэтому продолжает движение через `0` к `+travel` с той же
+скоростью, что photo hero. Для безопасного движения в обе стороны используется
+симметричный crop по `10%` сверху/снизу текущего кадра без масштабирования.
 
 ## Решения после повторного аудита
 
@@ -51,6 +55,7 @@ OCR-parallax не в ту сторону, а один только gap не ус
 | `accepted-v5` | единая gradient continuation surface + open prose | container-aware графитовый dock | owner correction: reverse parallax и seamless decision→context composition |
 | `accepted-v6` | gradient rise из-под photo + open prose | тот же dock + shared calendar state | без paint-edge у скруглений; `Добавлено` одинаково на mobile/desktop |
 | `accepted-v7` | тот же seamless/open surface | тот же dock + shared calendar state | одинаковая воспринимаемая скорость OCR/photo parallax без OCR zoom |
+| `accepted-v8` | тот же seamless/open surface | тот же dock + shared calendar state | непрерывный OCR parallax всё время видимости hero, без остановки на `0` |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -63,7 +68,7 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 30 комбинаций в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 33 комбинации в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
@@ -75,6 +80,7 @@ Preview builds:
 - reverse/continuation candidate: `preview-20260715t-mobile-ui-accepted-v5`.
 - seamless/calendar-state candidate: `preview-20260715t-mobile-ui-accepted-v6`.
 - matched-parallax-velocity candidate: `preview-20260715t-mobile-ui-accepted-v7`.
+- continuous OCR-parallax candidate: `preview-20260715t-mobile-ui-accepted-v8`.
 
 ## Accepted v2 corrections
 
@@ -283,6 +289,23 @@ photo hero при `360/390/430 × 844` и scroll `0/60/120/180px`:
 Артефакты: `artifacts/codex/mobile-ui-v7-parallax-qa-20260715/`.
 Полный Astro build собрал `466` страниц; `check-preview.mjs` прошёл.
 
+Для `accepted-v8` Playwright сравнил V7 OCR, V8 OCR и photo hero при
+`360/390/430 × 844` и scroll `0/60/120/180/240/300px`:
+
+- V7 после `180–240px` достигает `0` и остаётся неподвижным, хотя OCR visual
+  ещё виден; замечание владельца воспроизведено;
+- V8 на каждом шаге продолжает движение примерно на `14.2px`, как photo hero:
+  например, на `390px` значения идут
+  `-39/-24.8/-10.6/3.7/17.9/32.1px` без плато на `0`;
+- clipped visual имеет высоту `288/312/344px`, а расчётный конец движения
+  наступает позже его ухода из viewport, поэтому остановка не видна;
+- OCR остаётся `contain`, `scale=1`, суммарный crop ограничен `20%`, image
+  покрывает visual на всех samples, horizontal overflow отсутствует;
+- при `prefers-reduced-motion:reduce` transform остаётся `0 → 0`.
+
+Артефакты: `artifacts/codex/mobile-ui-v8-parallax-qa-20260715/`.
+Полный Astro build собрал `469` страниц; `check-preview.mjs` прошёл.
+
 ## External consultation
 
 Консультация выполнена через `agy` моделью `Gemini 3.1 Pro (High)`. Gemini
@@ -304,11 +327,17 @@ V3 acceptance review выполнен через `agy` моделью `Gemini 3.
 как отдельный prototype. Raw response:
 `artifacts/codex/mobile-ui-v3-qa-20260715/gemini-3.1-pro-high-review.raw.md`.
 
-V7 motion acceptance review выполнен через `agy` моделью
-`Gemini 3.1 Pro (High)`. Консультант подтвердил одинаковую активную скорость
-V7 OCR/photo, сохранение OCR-safe geometry и отсутствие P0/P1; итоговый verdict
-`PASS`. Raw response:
+V7 motion review через `Gemini 3.1 Pro (High)` проверил только активную скорость
+на первых `120px` и поэтому не заметил последующее плато на `0`; после owner
+feedback этот review не считается финальным acceptance. Raw response сохранён
+для аудита ошибки:
 `artifacts/codex/mobile-ui-v7-parallax-qa-20260715/gemini-review.raw.md`.
+
+V8 acceptance review выполнен той же `Gemini 3.1 Pro (High)`, но уже по всему
+видимому диапазону `0–300px`. Консультант подтвердил, что расчётная остановка
+наступает после ухода clipped visual из viewport, bounded `20%` crop оправдан
+запретом zoom, P0/P1 нет; итоговый verdict `PASS`. Raw response:
+`artifacts/codex/mobile-ui-v8-parallax-qa-20260715/gemini-review.raw.md`.
 
 Поправка v4 также обсуждена с `Gemini 3.1 Pro (High)`. Два первых print-mode
 вызова завершились пустым stdout; после проверки CLI log и точечного

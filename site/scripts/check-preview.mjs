@@ -32,7 +32,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -59,6 +59,7 @@ const mobileReviewCases = {
   acceptedV5: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/photo-paid/index.html'), 'utf8'),
   acceptedV6: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/photo-paid/index.html'), 'utf8'),
   acceptedV7: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v7/photo-paid/index.html'), 'utf8'),
+  acceptedV8: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v8/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -98,6 +99,12 @@ if (!mobileReviewCases.acceptedV7.includes('data-mobile-review-variant="accepted
 if (!mobileReviewCases.acceptedV7.includes('data-calendar-action') || !mobileReviewCases.acceptedV7.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV7.includes('data-calendar-label')) {
   throw new Error('Mobile event accepted v7 must preserve the shared expiring calendar state contract');
 }
+if (!mobileReviewCases.acceptedV8.includes('data-mobile-review-variant="accepted-v8"') || !mobileReviewCases.acceptedV8.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV8.includes('data-mobile-parallax-profile="photo-continuous-crop"') || !mobileReviewCases.acceptedV8.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v8 must preserve v7 surfaces and expose the continuous crop-safe parallax profile');
+}
+if (!mobileReviewCases.acceptedV8.includes('data-calendar-action') || !mobileReviewCases.acceptedV8.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV8.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v8 must preserve the shared expiring calendar state contract');
+}
 const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
@@ -121,6 +128,10 @@ if (!mobileAcceptedV6OcrOverride.includes('data-hero-mode="poster-stage"') || !m
 const mobileAcceptedV7OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v7/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV7OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV7OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v7 must preserve the no-zoom text-poster override');
+}
+const mobileAcceptedV8OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v8/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV8OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV8OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v8 must preserve the no-zoom text-poster override');
 }
 
 const desktopV12Pages = {
@@ -526,9 +537,12 @@ if (
   || !controlHtml.includes('usesGapSafePosterParallax')
   || !controlHtml.includes('usesReverseGapSafePosterParallax')
   || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax')
+  || !controlHtml.includes('usesPhotoContinuousPosterParallax')
   || !controlHtml.includes('referencePhotoVelocity')
   || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax ? matchedPosterProgress : progress')
-  || !controlHtml.includes('usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56')
+  || !controlHtml.includes('continuousPosterProgress * maxOffset * 2')
+  || !controlHtml.includes('const gapSafePosterTravel = Math.min(48, Math.max(36, window.innerWidth * 0.11))')
+  || !controlHtml.includes('const continuousPosterTravel = Math.min(44, Math.max(32, window.innerWidth * 0.10))')
   || !controlHtml.includes(': -maxOffset + progress * maxOffset * 2')
   || controlHtml.includes('--hero-parallax-scale')
 ) throw new Error('Hero parallax must preserve the production constant-scale motion while the v4 OCR lab moves a no-zoom poster inside a travel-clipped viewport without layout gaps');
