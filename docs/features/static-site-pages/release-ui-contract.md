@@ -18,6 +18,14 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - personal page, transport (including the optional gallery slide «Как добраться»), discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
 
+## Preliminary homepage «Городской обзор» candidate
+
+H1 is provisionally routed into release planning but is not yet part of the immutable UI baseline. Its [research contract](typed-briefing-hero-research.md) permits only a staged `Conditional Go`: categories-first control → static editorial briefing → semantic-fragment motion. Before this document can be frozen, the owner must explicitly choose `ship` or `defer` on an immutable preview.
+
+The candidate may ship only if the first useful scene is already in SSG/no-JS HTML, search/categories and at least the beginning of the feed remain visible and independently usable, the briefing stays within its 320/360/390/1366/1440 viewport budgets, and mobile plus `prefers-reduced-motion` are static/manual rather than autoplay. Links have stable hitboxes, motion interruption creates zero CLS, the approved lockup is unchanged, and every number/time/event/popularity/personal claim is backed by a versioned deterministic fact and route token. Client/runtime LLM, invented urgency and a terminal/chat-assistant skin are out of scope.
+
+If H1 is accepted, its branch/SHA, V1/V2 screenshots, accessibility/performance evidence and homepage experiment contract become part of F5 acceptance, and M4 SEO/GEO starts only after the resulting homepage is refrozen. If it is deferred, the standard categories/feed homepage remains the release baseline and H1 does not block F1–F18.
+
 ## Responsive navigation
 
 The release direction is **adaptive consistency**, not pixel-identical mobile/desktop chrome: mobile keeps the stronger brand tag/disclosure pattern, while desktop keeps all primary destinations in a persistent horizontal header and carries only a shallow, restrained version of the tag motif. Labels, order, active state, search/account semantics and accessible names stay invariant across breakpoints and page families.
@@ -70,6 +78,7 @@ The frozen event-detail UI consumes the single medallion slice from draft PR [#3
 - real Android/iOS browser checks for Yandex login, email code/link login, logout, forget-email, calendar and share;
 - mobile menu/footer service-card share and desktop menu/footer copy checks, including D0 text/link fallback and the owner-selected D1/D2 rich clipboard behavior after native Windows/macOS evidence;
 - visual baselines tied to one immutable preview build id;
+- an explicit H1 `ship|defer` record; if `ship`, categories-first/static/motion comparison, 320–1440 viewport captures, no-JS/reduced-motion/keyboard/low-end checks and downstream discovery instrumentation are bound to that same preview;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 
 ## Branch rule

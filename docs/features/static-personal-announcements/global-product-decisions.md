@@ -1,6 +1,6 @@
 # Global product decisions for the static personal announcements release
 
-> Status: release-level product decisions accepted in the planning thread on 2026-07-11 and extended through 2026-07-14; retention and numerical quality thresholds remain to be set.
+> Status: release-level product decisions accepted in the planning thread on 2026-07-11 and extended through 2026-07-15; retention and numerical quality thresholds remain to be set.
 
 ## Working decisions
 
@@ -37,6 +37,7 @@
 31. **Event Comment Feedback reuses Region Talk experience only through an audit-and-skill gate.** Before F14 implementation, exact-SHA audit both divergent branches, classify every pattern as `reuse|adapt|reject|defer`, and create validated `region-talk-ydb-funnel-audit` plus `event-comment-feedback-pipeline` skills. Implementation then starts from current main; Region Talk source frontier, image/publication/writer stages and `DISCOVERY1/2` sessions are explicitly non-transferable.
 32. **Related events are an automatic two-lane release invariant, not a manual build feature.** Every effectful Smart Update create/update first projects current `search_v3`/`related_v1` hashes through the debounced vector lane and then triggers one full-catalog Kaggle related/static build 15 minutes after the last effect. Changed candidate windows require LLM verification; new events may update older anchors. Periodic vector and manifest-drift reconciliation plus scheduled lifecycle rebuild recover missed triggers, while stale/raw vector candidates never appear as verified `Похожие`.
 33. **KenigEvents itself is shareable through one centrally prerendered service card.** The common mobile shell exposes the action under the expanded brand tag and in the footer; the same desktop destinations never invoke native share. Desktop baseline copies text+service URL; a richer one-item `image/png`+`text/html`+`text/plain` clipboard mode is accepted only after the required Windows/macOS browser/target-app matrix and owner choice, because the receiving app controls paste representation. The card uses catalog-derived conservative metrics, WebP/CDN atomic publication and a visible CTA, is never rendered per click, and cannot publish «крупнейшая»/«быстрее других»/reminder claims without their evidence gates. Initial release uses the existing lettering/brand mark; the historical poster-cube concept is a future visual variant, not a V1 dependency.
+34. **«Городской обзор» предварительно входит в release plan как условная фишка главной, а не как уже принятый blocker.** Current decision is `Conditional Go` for an isolated static-first prototype: editorial briefing before categories/feed, immediately useful static scene, semantic-fragment motion only after the static value gate, manual mobile/reduced-motion behavior and no runtime LLM. Before the F5 UI freeze the owner must explicitly `ship|defer` it. If shipped, its complete accessibility/performance/fact-provenance/experiment gates join the RC; if deferred, F1–F18 scope and homepage navigation/feed remain unchanged.
 
 ## Consequences
 
@@ -63,6 +64,7 @@
 - A passing vector-sync run alone does not satisfy F2: the promoted static manifest must match the accepted catalogue/vector/policy hashes, and create/update plus periodic-recovery E2E must prove the changed and reverse-affected related blocks.
 - Service-share metrics are claims, not decoration: their manifest must bind the eligible catalog hash and conservative counting rules. If a valid current metric/card is unavailable, the product degrades to an evergreen no-number card or link-only share rather than serving a known stale overclaim.
 - Clipboard API resolution proves only that representations were written, not that another application pasted or sent them. Production analytics may record copy mode/API/fallback outcome, but cannot read clipboard contents or invent `paste_completed`/`message_sent` telemetry.
+- The homepage briefing cannot become a motion-first banner: categories/search/feed remain independently usable, the static scene exists in SSG/no-JS output, mobile and reduced-motion are manual/static, and personalized or Gemini-authored copy stays out until separate grounded data/writer gates pass. Merely merging the research document does not select the feature for the release.
 
 ## Product decisions still required
 

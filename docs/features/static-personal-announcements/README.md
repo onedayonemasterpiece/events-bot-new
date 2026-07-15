@@ -5,9 +5,9 @@
 
 ## Purpose
 
-This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F18 from becoming an unowned flat checklist.
+This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F18 and explicitly named release candidates from becoming an unowned flat checklist.
 
-All F1–F18 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope.
+All F1–F18 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope. Preliminary homepage candidate H1 is different: its **decision gate** is mandatory before UI freeze, while implementation joins the RC only after an explicit owner `ship` decision.
 
 ## Capability ownership
 
@@ -31,6 +31,14 @@ All F1–F18 are mandatory for the first public release/presentation. Canaries m
 | F16 | Correct image focus/crop | [Image framing](../static-site-pages/image-framing.md) | renderer preview; metadata producer missing |
 | F17 | Admin issue report → ArtKodex repair history | [Event issue reporting](../event-issue-reporting/README.md) | prototype branch; clean port required |
 | F18 | Share KenigEvents itself from the mobile menu/footer with a centrally prerendered service card; evidence-based copy behavior on Windows/macOS desktop | [Service sharing card](../static-site-pages/service-sharing.md), [desktop clipboard research](../static-site-pages/service-sharing-desktop-clipboard-research.md) | release-blocking product/UX contract; desktop D0/D1/D2 matrix, exact Pharmastaff reference, implementation, CDN assets and evidence missing |
+
+## Preliminary homepage release candidate
+
+| ID | Capability | Canonical home | Stage |
+|---|---|---|---|
+| H1 | «Городской обзор»: compact static-first editorial briefing above homepage categories/feed, with optional semantic-fragment motion | [Typed briefing research](../static-site-pages/typed-briefing-hero-research.md) | `Conditional Go`, research-only in `feature/static-typed-intro-prototype-20260715@8045599b`; V1 static and V2 motion prototypes, public preview, tests and owner `ship|defer` decision missing |
+
+H1 is not silently promoted to the mandatory F1–F18 scope by appearing here. Before F5 freezes the homepage, the owner must either accept a tested branch/SHA as a release feature or explicitly defer it. A `ship` decision makes all H1 gates RC blockers; a `defer` decision preserves the ordinary category/feed homepage without holding the presentation.
 
 ## Cross-cutting visual readiness
 
@@ -57,6 +65,7 @@ Current decisions and questions that affect several feature families live in [gl
 
 ## Release sequencing constraints
 
+- H1 «Городской обзор» is evaluated before F5 UI freeze, not added after SEO/GEO: first prove a static V1 against categories-first control, then semantic-fragment V2 with zero-CLS interruption and manual mobile/reduced-motion. No personalized/backend/Gemini writer path is part of that initial decision. If owner selects `ship`, integrate and refreeze the homepage before M4; otherwise record `defer` and retain the normal categories/feed entry.
 - Navigation keeps one cross-device information architecture but adapts its geometry: compact mobile brand-tag disclosure, persistent desktop horizontal navigation with the shallow hybrid tag as the recommended release candidate. The exact immutable preview still needs owner sign-off.
 - F18 adds one shared service-sharing action to that shell: on mobile it appears both under the expanded brand tag and in the footer and shares a centrally prerendered WebP card; desktop never invokes native share. D0 copies text+URL; D1/D2 rich clipboard candidates require the [Windows/macOS matrix](../static-site-pages/service-sharing-desktop-clipboard-research.md) before owner selection. Browser/runtime composition generation, unsupported superlatives and per-user payloads are forbidden; the parent requirements live in the [service-sharing contract](../static-site-pages/service-sharing.md).
 - The gallery slide «Как добраться» is an optional F11 presentation candidate: it may summarize validated transport data after real event media, but cannot replace the accessible full schedule block or weaken the nightly refresh/fail-closed gates.

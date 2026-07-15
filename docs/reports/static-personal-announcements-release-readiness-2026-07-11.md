@@ -8,6 +8,8 @@
 >
 > F18 desktop clarification: **2026-07-14** — Windows/macOS rich clipboard (`image/png` + `text/html` + `text/plain`) remains an evidence-gated candidate; current baseline is text+URL copy until the native browser/target-app matrix and owner decision are complete.
 >
+> Preliminary homepage candidate: **2026-07-15** — «Городской обзор» is added to release planning as H1 with `Conditional Go`; the owner must choose `ship|defer` before F5 UI freeze. Research/consultation exists at `feature/static-typed-intro-prototype-20260715@8045599b`, while implementation/public preview and native usability evidence are absent.
+>
 > Базовая ревизия: `origin/main@323cb1e407c6`
 >
 > Post-audit integration milestone: `origin/main@c6396331` (2026-07-12) contains the transactional Postbox worker, authorized-key preamble fix and live worker evidence; source/fix/docs branches were merged and deleted from `origin`.
@@ -78,6 +80,7 @@
 | **F16** | Correct image focus/crop | **Partial** | Renderer accepts focal/face metadata and keeps OCR-safe contain fallback | Producer currently emits empty focal/face metadata; implement enrichment, confidence/manual override, golden visual corpus |
 | **F17** | Admin issue report → ArtKodex repair/history | **Partial, branch-only** | Admin Edge/UI/history design and branch implementation exist | Merge; unique active/idempotency key; atomic poller claim; real ArtKodex owner; structured repair result; end-to-end repair/rebuild/history |
 | **F18** | Поделиться самим сервисом: mobile menu/footer card, evidence-based Windows/macOS desktop copy | **Designed / release blocker; desktop research open** | Parent contract, official Clipboard API constraints, D0/D1/D2 candidates and Windows/macOS matrix are documented; no native matrix, component, metric manifest, prerendered WebP/clipboard PNG or exact Pharmastaff source/SHA is attached | One shared all-pages component; mobile file/text share; D0 text+URL fallback; D1/D2 single-ClipboardItem tests across Windows Edge/Chrome/Firefox and macOS Safari/Chrome/Firefox plus real targets; owner desktop choice; deterministic WebP/PNG/CDN promotion and honest analytics |
+| **H1** | Preliminary homepage «Городской обзор»: compact editorial briefing before categories/feed, optionally animated by semantic fragments | **Conditional Go / research-only; not yet a release blocker** | Current-main-based branch [`feature/static-typed-intro-prototype-20260715@8045599b`](https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/static-typed-intro-prototype-20260715) contains a 723-line research contract and two-pass Gemini 3.1 Pro High consultation synthesis; raw evidence is ignored/uncommitted | V1 static prototype vs categories-first control; V2 semantic motion only after static value; viewport/feed visibility, no-JS/reduced-motion/manual-mobile, zero-CLS/a11y/perf and grounded-copy gates; immutable preview; owner `ship|defer` before F5 freeze. Only `ship` promotes H1 gates into RC blockers. |
 | **M1** | Event-detail medallion release readiness | **Partial / consolidated draft PR** | Draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38): clean main-based slice with 25 organizer/venue + 11 festival/venue-brand entries; 420-page preview/check and 38/38 browser image load evidence | Produce/accept P0 shortlist; refresh production gap within 48h of RC; provenance/alias/no-false-match/a11y/no-overflow gates; owner mobile/desktop visual sign-off; merge to main |
 | **M1-QA** | Exhaustive static-site medallion visual cleanliness | **Missing / release gate specified** | Lab load/screenshot evidence exists, but there is no SHA-bound Playwright inventory and screenshot verdict for every actual static-site target page/layout | Discover every static-site renderer/surface; capture every actual page at 390/1440 plus breakpoint combinations; zero clipping, dirty/cut shadows, alpha mattes, overlap, overflow, broken/unreadable medallions or uncaptured targets. Telegram medallions are out of scope. |
 | **M2** | No duplicate images inside an event gallery | **Blocked / baseline complete, closure pending** | 2026-07-13 audit found confirmed duplicate gallery refs in `79/266` eligible events and recorded visual review for `158/158` multi-image events; the automatic event-media gate is now in main | Apply/verify production-safe cleanup/status migration, rebuild all public surfaces, repeat the full audit to zero confirmed/unreviewed failures and keep the automatic Smart Update gate healthy through the stability window |
@@ -143,6 +146,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | F11 transport | `origin/integration/event-transport-schedule` (validated refresh merge `4577b334`), draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) | `docs/features/event-transport/README.md` plus renderer/rail/bus child contracts | Refreshed from `main@c6396331` and validated; release UI integration and nightly atomic refresh remain P0-open |
 | F14 comment feedback + Region Talk prior art | `origin/agent/event-comment-feedback-kaggle-runner@7068510c` (752 behind / 10 ahead) and `origin/agent/region-talk/bge-m3-enrichment-test@b4c3c999` (752 behind / 295 ahead) at the 2026-07-13 audit | F14 docs/runner/kernel/tests plus Region Talk compact YDB, queues, orchestrator, vector/session skills and tests | Both are evidence, not merge bases. Formal adoption audit and required reusable skills precede a clean current-main implementation. |
 | F17 admin issue reporting | `origin/feature/event-issue-report-artkodex-20260703` (69 behind / 12 ahead) | `docs/features/event-issue-reporting/README.md`, UI/Edge/migration | Mixed branch; no DB-level double-start guard/poller proof |
+| H1 homepage «Городской обзор» | [`origin/feature/static-typed-intro-prototype-20260715@8045599b`](https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/static-typed-intro-prototype-20260715) (`0` behind / `1` ahead of `origin/main@926dad8a` on 2026-07-15) | `typed-briefing-hero-research.md`; no site code despite the branch name; raw Gemini prompt/output/metadata only in ignored `artifacts/codex/static-typed-intro-consultation-20260715/` | Clean research source, not an implementation or release decision. Import the canonical contract, then build isolated V1/V2 prototypes on a fresh current-main implementation branch; never claim raw local artifacts as RC evidence. |
 
 ### Есть ли отдельная корректная feature branch для каждого требования
 
@@ -163,8 +167,9 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | F16 | Renderer contract находится в main; producer focal/face metadata и его feature branch не найдены. |
 | F17 | Есть side branch, но она mixed/stale и не закрывает idempotent ArtKodex poller/result E2E. |
 | F18 | Canonical parent contract и Windows/macOS desktop clipboard research matrix подготовлены в release-doc branch; отдельной current-main implementation/research branch, native evidence, shared component, renderer/manifest/CDN assets и привязанного Pharmastaff reference пока нет. |
+| H1 | Current-main-based branch `feature/static-typed-intro-prototype-20260715@8045599b` correctly documents a `Conditional Go`, but it contains no Astro component, lab page, manifest, automated test or public preview. The release plan imports the contract without promoting the candidate into mandatory F1–F18 scope. |
 
-Следовательно, документацию нельзя считать полностью и корректно оформленной по всем F1–F18. Корректная цель — один canonical feature home на capability/связную feature family, актуальный status matrix, routes, operations/tests и явная связь с implementation branch; создавать искусственную ветку на каждый ID необязательно.
+Следовательно, документацию нельзя считать полностью и корректно оформленной по всем F1–F18, а наличие H1 research нельзя считать реализацией homepage feature. Корректная цель — один canonical feature home на capability/связную feature family, актуальный status matrix, routes, operations/tests и явная связь с implementation branch; создавать искусственную ветку на каждый ID необязательно.
 
 ## 6. Аудит полноты документации
 
@@ -177,6 +182,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 | Personal email/page | Canonical design v2 подготовлен | Реализация отсутствует; старая branch назначала неверного владельца | Новый main-based feature branch по принятому Supabase control-plane ADR |
 | Email delivery | Средняя, branch-only | Transactional follow и recommendation digest смешиваются концептуально | Разделить transactional/reminder и recommendation marketing streams |
 | UI/share/focus/medallions | Средняя/высокая | Medallion implementation was split across mixed branches; remaining shortlist was not release-routed | Use clean PR #38 only; finish production-backed P0 shortlist, provenance/alias checks and owner visual acceptance inside the frozen UI |
+| Homepage «Городской обзор» H1 | Сильная research specification, нулевая implementation evidence | Branch name says prototype, but commit `8045599b` changes only docs; raw Gemini evidence is ignored/local, and production inclusion is intentionally unresolved | Preserve `Conditional Go`; build V1 static and V2 semantic-motion lab separately, compare downstream discovery and accessibility/performance, then obtain explicit owner `ship|defer` before F5 freeze |
 | Service sharing F18 | Parent contract + desktop test strategy готовы, implementation/native evidence отсутствуют | Точный Pharmastaff source/SHA не найден; нет общего shell component, metric manifest, WebP+clipboard-PNG prerender/CDN promotion или D0/D1/D2 Windows/macOS matrix | Привязать Pharmastaff reference; выполнить native clipboard research; owner выбирает desktop mode; затем один menu/footer component/renderer, claims/catalog hash, fallbacks, real devices и visual sign-off |
 | Transport | Канонический home/route и renderer/rail/bus child contracts консолидированы; draft PR #37 прошёл directory + full preview checks | Coverage уже требования; нет nightly atomic refresh и принятой интеграции в release UI | Сохранить один reusable slice; добавить city/provider/source matrix, ops runbook, automatic last-good refresh и UI acceptance |
 | Comment feedback | Сильная design/probe; Region Talk даёт зрелый prior art по YDB/queues/vectors/Telethon/compaction | Обе implementation/evidence branches сильно расходятся с main; опыт не консолидирован, reusable skills отсутствуют | Mandatory F14-0A Region Talk audit + adoption matrix, F14-0B skills, затем clean-port probe и отдельные storage/export/UI/operations stages |
@@ -208,6 +214,7 @@ Post-audit email evidence on 2026-07-12 (`origin/main@c6396331`):
 - [ ] Не переносить весь dirty checkout; cherry-pick/re-implement только проверяемые feature commits.
 - [ ] Зафиксировать UI release version и data/schema versions.
 - [ ] Зафиксировать adaptive navigation baseline: одинаковые destinations/order/labels/account semantics, mobile tag/disclosure, desktop persistent horizontal row; сравнить plain bar / recommended shallow hybrid / pronounced-tag control and получить owner sign-off на immutable preview.
+- [ ] Before F5 freeze resolve the preliminary H1 homepage candidate: compare categories-first control with a V1 static «Городской обзор» and only then V2 semantic-fragment motion; record owner `ship|defer`. `Defer` leaves mandatory F1–F18 scope unchanged; `ship` adds every H1 acceptance item to the RC and requires the final SEO/GEO audit to run after integration.
 - [ ] Закрыть продуктовые решения из раздела 10.
 
 ### Stage 1 — Стабилизация качества Smart Update и incident burn-down
@@ -341,6 +348,19 @@ Smart Update является владельцем семантического 
 - [ ] Dashboard/artefact считает collection success, duplicate/drop reasons, profile rollup lag, profile-to-feed application, MRR/precision@20, relevant supply, top-20 hide/skip/diversity/fallback guardrails.
 - [ ] Near-cap E2E `PERS-STORAGE-001` доказывает, что nonessential telemetry shed не создаёт retry storm и не блокирует durable user-control/email-safety state.
 
+### Stage 5B — Preliminary homepage «Городской обзор» decision gate
+
+This stage resolves H1 before F5/UI freeze. It is a mandatory **decision**, not an automatic requirement to ship the candidate.
+
+- [ ] Treat [`feature/static-typed-intro-prototype-20260715@8045599b`](https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/static-typed-intro-prototype-20260715) as research only: the commit contains documentation, not a prototype. Raw `artifacts/codex/static-typed-intro-consultation-20260715/` stays ignored and may support review but cannot replace committed tests/preview evidence.
+- [ ] V1 static prototype renders one immediately useful grounded editorial scene in Astro SSG/no-JS HTML before categories and feed, without personalization, Gemini/runtime LLM or remote blocking read. Compare it to categories-first control using real header/category/feed geometry.
+- [ ] Pass fixed layout budgets at `1440×900`, `1366×768`, `390×844`, `360×800`, `320×568`: briefing `<=50svh`, combined header+briefing+categories `<=72svh`, and at least `min(96px,16svh)` of feed visible; no interactive link is truncated or hidden by line clamp.
+- [ ] Only after V1 content/layout value is accepted, V2 may add semantic-fragment entrance. Literal typewriter remains diagnostic only. Mobile and `prefers-reduced-motion` are static/manual; no infinite loop; pointer/focus completes and pauses without breaking first-click link activation; link hitboxes are stable and scene changes produce CLS `0`.
+- [ ] Fact and link tokens are deterministic, versioned and fail closed: counts/time/new-since-visit/popularity/editorial/personal claims carry provenance and `safe_until`; missing/stale data selects a hand-written generic fallback. Client LLM and ungrounded urgency/fake intimacy are forbidden.
+- [ ] Playwright/visual/a11y evidence covers no-JS, reduced motion, keyboard, screen reader announcement model, scroll/visibility/BFCache/resize, corrupted local state, slow/offline, low-end mobile performance and 320–1440 screenshots. Approved lockup is unchanged; decorative wide-«о», if tried, is separate and `aria-hidden`.
+- [ ] Evaluate A categories-first, B static briefing and C semantic motion on downstream `event_detail_reached` / Discovery Transition Rate, time to first category/event action, feed visibility, bounce/misclick, CWV/JS errors and Day 7/14 novelty decay. Hero CTR alone cannot justify shipment; D literal typewriter is diagnostic, not a release candidate.
+- [ ] Owner signs one immutable preview branch/SHA as `ship` or records `defer` with reason. On `ship`, H1 is integrated before F5 freeze and becomes part of Stage 6A/7/evidence/rollback; on `defer`, remove the experimental surface from the RC and continue with the ordinary categories/feed homepage.
+
 ### Stage 6 — Transport, discussion signals, admin repair, media
 
 - [x] Static medallion archaeology is consolidated in clean draft PR #38: 25 organizer/venue + 11 festival/venue-brand entries, 420-page preview/check, 38/38 lazy images loaded, zero browser errors and no 390px overflow.
@@ -375,7 +395,7 @@ Smart Update является владельцем семантического 
 
 ### Stage 6A — Final SEO/GEO optimization after UI/UX freeze
 
-This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptance plus integration of all release-scope features that can change public HTML. No final SEO/GEO audit or optimization task starts against a moving navigation, page-family set, content hierarchy, layout or interaction design.
+This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptance plus integration of all release-scope features that can change public HTML. H1 must already have a recorded `ship|defer`; an accepted H1 is integrated and frozen before this stage, while a deferred H1 is absent from the RC. No final SEO/GEO audit or optimization task starts against a moving navigation, page-family set, content hierarchy, layout or interaction design.
 
 - [ ] Record the immutable `origin/main`-reachable feature-complete UI/UX acceptance SHA, full preview build id and owner sign-off before opening SEO/GEO work; no unresolved release task may still change public page families/navigation/content.
 - [ ] Build the neutral full-site evidence pack from the frozen output: URL/page-shape inventory, rendered HTML crawl, status/canonical/robots/sitemap/redirect map, JSON-LD, link graph, no-JS/mobile screenshots, media/performance/CDN evidence and negative private/preview/personal surfaces.
@@ -395,6 +415,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] Full active/future image-uniqueness ledger is attached to the RC evidence pack and current static/Telegraph/TG/VK surfaces have no confirmed within-event duplicate images.
 - [ ] Engagement reconciliation on the RC snapshot proves the shared function equals distinct TG/VK latest snapshots plus accepted site summaries; all named consumers use it and storage/freshness/last-good evidence is attached.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
+- [ ] H1 decision is bound to the RC: `defer` means no experimental briefing code/manifest/UI ships; `ship` means the accepted static/motion variant, grounded manifest, viewport/feed budgets, accessibility/performance/experiment evidence and rollback all match this SHA.
 - [ ] F18 evidence is bound to this RC SHA: all page families expose both shell placements; mobile shares current WebP/text/service URL or fallback; desktop uses the owner-selected D0/D1/D2 behavior without native share and retains D0 fallback; native Windows/macOS matrix, card/clipboard asset hashes, catalog metrics and CDN rollback follow the release manifest.
 - [ ] Favorites RC evidence covers every page-family menu surface and `/izbrannoe/`: save/repeat/undo, `N>0` badge, lifecycle rows, cross-tab/device, identity merge, logout/account switch, back/cache isolation and degraded Supabase with working ICS.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
@@ -453,6 +474,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 | Mature-persona time to interest | every eligible golden scenario reaches the first relevant event within `<=20` validly inspected cards; production percentile target follows measured canary baseline |
 | Personalization E2E integrity | one correlated run proves localStorage collection, exactly-once accepted DB evidence, expected profile change and application to the next served list |
 | Supabase ecological capacity | verified limit ≈`500 MB`; launch `<60%`, disposable-write shedding from Orange, current control state remains writable through simulated near-cap test |
+| Homepage briefing H1 (only if `ship`) | static/no-JS first scene; CLS `0`; agreed viewport/feed visibility budgets pass; no ungrounded/stale claim; mobile/reduced-motion manual/static; downstream discovery guardrails do not regress versus categories-first control |
 | SEO/GEO release transparency | `100%` intended public URL classes pass status/canonical/robots/sitemap/structured-visible fact parity; `0` leaked private/preview/bearer URLs and `0` unresolved Critical/High findings across the required three-agent final audit |
 
 ## 9. Release evidence pack
@@ -471,6 +493,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] rollback command/result;
 - [ ] for personalization: mapped Gherkin/Playwright results, redacted before/after localStorage, DB assertions/profile snapshot and `cards_to_first_relevant` calculation;
 - [ ] for Supabase capacity: current plan/size, top table+index attribution, retention/compaction result, growth forecast and tested storage-band alerts/kill switch;
+- [ ] for H1: source/research SHA, explicit owner `ship|defer`; if `ship`, categories-first/static/motion comparison, manifest/fact provenance, viewport/no-JS/reduced-motion/a11y/performance results, downstream discovery evidence and disable/remove rollback;
 - [ ] remaining risks, owner and due date.
 
 ## 10. Открытые продуктовые и архитектурные решения
@@ -491,6 +514,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 14. **Retention/ecological budget — требуется понятное product решение:** забывать/анонимизировать ли compact interest profile после `365d` без визита? Короткие technical logs всё равно удаляются раньше; consent/suppression/send-critical evidence живёт по отдельной safety/legal policy.
 15. **Festival release:** owner approves `/festivali/<edition-slug>/`, current/upcoming index plus archive, stable edition-id migration, daily changed-only website monitoring/max stale age and separately labelled public programme-only rows.
 16. **Service sharing — частично решено:** F18 обязательна; mobile menu/footer share one centrally prerendered card and desktop never invokes native share. D0 text+URL remains baseline; final choice among D0, D1 rich HTML-first, D2 PNG-first or two actions is open until the Windows/macOS matrix and owner decision. V1 uses existing lettering/logo and factual catalog-bound copy; poster cubes remain future V2.
+17. **Homepage «Городской обзор» — preliminary Conditional Go:** release planning includes H1, but the owner has not yet selected it for shipment. First build/compare categories-first, V1 static and V2 semantic-motion prototypes without personalization/runtime LLM; then decide `ship|defer` before F5 UI freeze. Open subdecisions: desktop autoplay vs manual-only, first-session generic copy, available grounded facts/freshness SLA and whether the decorative wide-«о» motif is worth a design-system exception.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
@@ -498,7 +522,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 2. **P0 — Smart Update quality stabilization:** G2, регулярные аудиты, incident burn-down, root-cause fixes, closure-grade replay, dashboard/SLO.
 3. **P0 — Supabase ecological capacity:** fresh size/budget, compact schema, retention/compaction, growth forecast, alerts and near-cap fail-safe before remote telemetry/email activation.
 4. **P0 — vector/search/tag integration:** F2/F3, prod `/poisk/`, whole-catalog sync, save-as-tag curation/novelty/static generation и golden review.
-5. **P0 — UI release freeze:** F5 plus clean preview contract, responsive-navigation comparison with the shallow desktop hybrid as default, PR #38 medallion baseline, completed/owner-deferred medallion P0 shortlist and exhaustive SHA-bound Playwright medallion surface inventory/screenshots with zero visual defects, followed by real-device/a11y/owner evidence. UI/UX is refrozen if later feature integration changes it.
+5. **P0 — UI release freeze:** F5 plus clean preview contract, responsive-navigation comparison with the shallow desktop hybrid as default, H1 categories-first/static/semantic-motion prototype comparison and explicit owner `ship|defer`, PR #38 medallion baseline, completed/owner-deferred medallion P0 shortlist and exhaustive SHA-bound Playwright medallion surface inventory/screenshots with zero visual defects, followed by real-device/a11y/owner evidence. If H1 ships it is integrated before freeze; UI/UX is refrozen if any later feature integration changes it.
 6. **P1 — identity/telemetry/favorites/calendar/engagement:** F6/F7/F9/F10/F12 plus M3, включая Yandex/manual-email choice, видимый reminder state after save, migration of `/populyarnoe/`/`/popular_posts`/daily/video/static counters to one compact source+site engagement function and removal of the private Astro popularity formula.
 7. **P1 — email recommendations/reminders/deliverability:** F4/F8 after identity/consent foundation, включая D-1 scheduler/Postbox E2E, using the accepted storage ADR.
 8. **P1 — admin repair loop:** F17 after idempotency/poller contract.
@@ -519,6 +543,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 | G2 | Активные incident families, Smart Update ownership и регулярный audit/incident/root-cause/replay workflow перечислены | **Done (planning only)** |
 | F1–F18 | Каждое исходное требование имеет отдельный статус, evidence class и gate | **Done (planning only)** |
 | F18 service share | Mobile share, D0 baseline, D1/D2 Windows/macOS research matrix, claim policy, metric-bound WebP/clipboard PNG prerender, CDN/fallback/device/owner gates and future cube boundary documented | **Done (planning only; native matrix/implementation/reference evidence missing)** |
+| H1 homepage briefing | Research/consultation branch, canonical contract, Conditional Go boundary, V1/V2 experiment gates and mandatory pre-freeze `ship|defer` decision are routed without falsely making the unimplemented candidate a release blocker | **Done (planning only; implementation/preview/owner decision missing)** |
 | F9 navigation | `Моё избранное`, positive-count badge, complete lifecycle page and privacy/E2E gates documented | **Done (planning only; implementation missing)** |
 | F11 refresh | KPPK/bus provider jobs, combined atomic manifest, provider last-good and single rebuild contract documented | **Done (planning only; implementation missing)** |
 | F14 reuse gate | Region Talk exact-SHA audit/adoption matrix, skill-first sequence, clean-port boundary and non-transferable stages documented | **Done (planning only; audit/skills/implementation missing)** |
