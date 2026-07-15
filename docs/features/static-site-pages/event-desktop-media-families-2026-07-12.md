@@ -679,5 +679,21 @@ Local Chromium acceptance at the Full-HD/125% CSS viewport (`1536×864`) proves
 the first decoded rotation after the idle boundary, activity pause plus resume,
 gallery hard-pause plus fresh-ten-second resume, exact poster source `0`, a
 persistent Кауп medallion, a centered Split rail (`contentCenter - railCenter =
-0px`), and the efficient-viewer title/date/time pair. Public preview evidence is
-recorded with the release handoff.
+0px`), and the efficient-viewer title/date/time pair.
+
+Public acceptance uses
+`preview-20260715t-desktop-v13-idle-gallery`. All three comparison pages, the
+generated JS/CSS and the restored Кауп SVG return HTTP `200`. Public Chromium at
+`1536×864` observes the first automatic hero change after the ten-second idle
+boundary; pointer activity then preserves index `1` through another `9s` and
+rotation resumes at index `2` after the fresh idle window. The OCR companion
+opener requests `sourceIndex=0` / `galleryIndex=1` and the visible fullscreen
+slide is the same OCR source; the medallion count remains `1` before, during and
+after the gallery. The incomplete Split rail exposes seven previews and five
+hidden sources with a measured center delta of `0.008px`; its efficient viewer
+shows `Выставка фэнтези-картин` and
+`6 июня — до 6 июля · 12:00`. Every checked page has zero horizontal
+overflow and the browser console reports zero errors/warnings. Antigravity
+**Gemini 3.1 Pro (High)** completed the final public/source audit with verdict
+**SHIP** and no blocker/high finding; its response and empty stderr remain in
+the same ignored artifact directory.
