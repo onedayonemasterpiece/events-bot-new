@@ -69,7 +69,7 @@ const galleryCta = galleryCtaEvent ? {
   <div class="page-shell page-shell--event-impact mobile-event-review__shell">
     <article class="main-col section-card section-card--hero section-card--impact-hero">
       <div class="section-card__inner section-card__inner--hero">
-        <EventHero event={event} composition={composition} modeOverride={modeOverride} galleryCta={galleryCta} />
+        <EventHero event={event} composition={composition} modeOverride={modeOverride} galleryCta={galleryCta} metaTreatment={variant.revision === 'v3' ? 'weekday-panel' : 'standard'} />
       </div>
     </article>
 
@@ -123,6 +123,11 @@ const galleryCta = galleryCtaEvent ? {
     margin-left: calc(50% - 50vw);
     margin-right: calc(50% - 50vw);
   }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .section-card--impact-hero {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
   [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__meta-line {
     display: flex;
     flex-wrap: wrap;
@@ -148,6 +153,65 @@ const galleryCta = galleryCtaEvent ? {
     line-height: 1.24;
   }
   [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__meta-separator { display: none; }
+
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__meta-line {
+    display: grid;
+    gap: 0.58rem;
+    margin-top: 0.08rem;
+    padding: 0.78rem 0.08rem 0.82rem;
+    border-top: 1px solid rgba(121,48,20,0.22);
+    border-bottom: 1px solid rgba(121,48,20,0.14);
+    border-radius: 0;
+    background: transparent;
+    color: #34271f;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__when {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__weekday {
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.54rem;
+    border-radius: 9px;
+    background: #b54d22;
+    color: #fffaf2;
+    font-size: 0.74rem;
+    font-weight: 950;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__date {
+    color: #7e2d12;
+    font-size: 1.12rem;
+    font-weight: 950;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__time {
+    color: #241c17;
+    font-size: 1.2rem;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__where {
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(121,48,20,0.14);
+    font-size: 0.92rem;
+    font-weight: 820;
+    line-height: 1.22;
+  }
+
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero--poster-stage .event-hero__visual {
+    transform: translateX(-50%) !important;
+    will-change: auto;
+  }
 
   [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__details {
     overflow: visible;
@@ -181,6 +245,8 @@ const galleryCta = galleryCtaEvent ? {
     border-radius: 18px;
     background: #292521;
     box-shadow: 0 14px 28px rgba(41,37,33,0.18);
+    container-type: inline-size;
+    container-name: mobile-action-dock;
   }
   [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .cta-button {
     flex: 1 0 100%;
@@ -213,10 +279,80 @@ const galleryCta = galleryCtaEvent ? {
     color: #fffaf2;
   }
   [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions .icon {
-    width: 1.08rem;
-    height: 1.08rem;
+    width: 1.28rem;
+    height: 1.28rem;
   }
   [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions .feedback-count:empty { display: none; }
+
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+    position: relative;
+    flex-basis: 56px;
+    width: 56px;
+    min-height: 52px;
+    overflow: visible;
+    transition: color 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] {
+    border-color: #ffad87 !important;
+    background: #b54d22 !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px #292521, 0 0 0 5px #ef9b72, 0 10px 22px rgba(181,77,34,0.38) !important;
+    transform: translateY(-1px);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"]::after {
+    content: "✓";
+    position: absolute;
+    top: -0.42rem;
+    right: -0.34rem;
+    width: 1.22rem;
+    height: 1.22rem;
+    display: grid;
+    place-items: center;
+    border: 2px solid #292521;
+    border-radius: 999px;
+    background: #fffaf2;
+    color: #8f3517;
+    font-size: 0.72rem;
+    font-weight: 1000;
+    line-height: 1;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon {
+    transform: scale(1.12);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-outline {
+    display: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-solid {
+    display: block !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+      transition: none;
+    }
+  }
+
+  @container mobile-action-dock (max-width: 400px) {
+    [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__actions > .secondary-button {
+      flex: 0 0 52px;
+      width: 52px;
+      padding-inline: 0.38rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
+      display: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"],
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="share"] .event-hero__actions > .native-share-button {
+      flex: 1 1 0;
+      width: auto;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
+      display: inline;
+    }
+  }
 
   @media (max-width: 379px) {
     [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:not(.feedback-button--like) {

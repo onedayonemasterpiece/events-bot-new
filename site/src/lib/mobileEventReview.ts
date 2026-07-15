@@ -1,11 +1,11 @@
 export type MobileEventReviewVariant = {
-  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2';
+  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3';
   label: string;
   shortLabel: string;
   note: string;
   proseTreatment: 'card' | 'open';
   actionsTreatment: 'current' | 'dock';
-  revision: 'v1' | 'v2';
+  revision: 'v1' | 'v2' | 'v3';
 };
 
 export type MobileEventReviewScenario = {
@@ -63,6 +63,15 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     proseTreatment: 'open',
     actionsTreatment: 'dock',
     revision: 'v2',
+  },
+  {
+    slug: 'accepted-v3',
+    label: 'Accepted v3 · feedback candidate',
+    shortLabel: 'Accepted v3',
+    note: 'V2 без регрессий плюс явный selected-like state, крупнее secondary icons, container-aware labels, weekday-first дата/время и более высокий OCR decision overlap.',
+    proseTreatment: 'open',
+    actionsTreatment: 'dock',
+    revision: 'v3',
   },
 ];
 

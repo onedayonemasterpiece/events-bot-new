@@ -7,10 +7,13 @@
 ## Implementation status
 
 Mobile event-detail UI вынесен в контролируемый preview lab: четыре исходных
-варианта образуют матрицу `current/open prose × current/grouped actions`, а
-`accepted-v2` candidate проверяет исправления full-bleed alignment, date/time
-hierarchy, OCR-safe framing и compact labels. Бирка, discovery cards и sticky
-CTA намеренно зафиксированы. Канонический scope и acceptance gate:
+варианта образуют матрицу `current/open prose × current/grouped actions`,
+`accepted-v2` сохраняет первый исправленный проход, а `accepted-v3` отвечает на
+feedback с реального Android: делает selected-like state безошибочно заметным,
+увеличивает secondary icons, включает container-aware single-label policy,
+добавляет день недели в date/time hierarchy и убирает poster-parallax gap у OCR.
+Бирка, discovery cards и sticky CTA намеренно зафиксированы. Канонический scope
+и acceptance gate:
 [`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).
 
 В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
