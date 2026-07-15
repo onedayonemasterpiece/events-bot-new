@@ -21408,6 +21408,16 @@ async def job_edit_tg_event_premium_emoji(event_id: int, db: Database, bot: Bot 
         ev = await session.get(Event, event_id)
     if not ev:
         return False
+    if (getattr(ev, "tg_event_post_mode", None) or "").strip() == "rich_message":
+        # A stale job may have been enqueued before the post migrated. Never
+        # hand a RichMessage to the legacy Telethon editor: even without a
+        # medallion block its unrelated label normalization would be a second,
+        # competing mutation path.
+        logging.info(
+            "job_edit_tg_event_premium_emoji: skip rich message event_id=%s",
+            event_id,
+        )
+        return False
     post_id = getattr(ev, "tg_event_post_id", None)
     if not post_id:
         logging.info("job_edit_tg_event_premium_emoji: skip no post event_id=%s", event_id)

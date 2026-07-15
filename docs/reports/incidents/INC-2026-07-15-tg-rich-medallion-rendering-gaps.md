@@ -77,8 +77,8 @@ instead of getting a standalone graphical strip.
 - Unit: rendered strip is `1300×330`, contains every selected asset and stays separate from event poster blocks.
 - Unit/session serialization: every approved event image plus the strip becomes a multipart attachment referenced by `tg://photo?id=...`.
 - Unit: RichMessage footer keeps exactly 12 non-collapsing spaces between `Подробнее` and `Max`, remains one row and preserves `Max · Вконтакте` links.
-- Unit: new RichMessages send through the canonical publisher; existing RichMessages edit in place; a legacy-to-rich transition deletes the old post only after successful send.
-- Unit: `rich_message` completion does not enqueue or invoke Premium/custom-emoji medallion placement; legacy editor calls use `medallion_html_block=None`.
+- Unit: new RichMessages send through the canonical publisher; existing RichMessages edit in place; a single-message legacy-to-rich transition deletes the old post only after successful send; legacy media groups remain intact until a complete audited message-id ledger exists.
+- Unit: `rich_message` completion does not enqueue or invoke Premium/custom-emoji medallion placement; legacy editor calls use `medallion_html_block=None`; stale editor jobs skip when the event's current mode is `rich_message`.
 - Regression: mandatory checks from `INC-2026-06-25-outbox-unknown-jobtask-publication-outage.md` remain green for unknown outbox tasks, worker-loop health, Storage upload and ticket-site fanout.
 - Production smoke: `/healthz` ready; no fresh outbox loop crash; a source-grounded canary reaches `done`, has the expected bottom strip/buttons/footer, stores `tg_event_post_mode='rich_message'`, and has no follow-up medallion emoji job.
 - Catch-up: repair/requeue event `6811` and any eligible event whose old hash/mode predates graphical medallions; verify public post and DB mapping.
@@ -104,6 +104,7 @@ instead of getting a standalone graphical strip.
 - Added canonical RichMessage send/edit behavior preserving all approved event images, buttons and footer links.
 - Encoded footer separation as non-collapsing spaces in RichMessage HTML.
 - Removed graphical medallion input from the Premium/custom-emoji editor and suppressed that job for RichMessages.
+- Added a stale-job RichMessage guard before invoking Telethon and a fail-safe legacy-album guard so automatic migration cannot orphan unknown media-group items.
 - Versioned source hashes with medallion slugs, renderer contract and asset digests.
 
 ## Follow-up Actions

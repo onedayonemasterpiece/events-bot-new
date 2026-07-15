@@ -6665,6 +6665,20 @@ async def publish_tg_event_announcement(
         desired_mode = "text"
     existing_id = getattr(event, "tg_event_post_id", None)
     existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
+    if existing_id and existing_mode == "album_caption" and desired_mode == "rich_message":
+        # The legacy schema stores only the first id from a media group. Bot
+        # API cannot enumerate the remaining album items later, so an automatic
+        # replacement could delete the caption item and orphan the other
+        # photos. Keep the existing album shape until an audited migration has
+        # the complete message-id ledger; all newly published matched events
+        # still use RichMessage.
+        logging.warning(
+            "publish_tg_event_announcement preserve legacy album event_id=%s "
+            "post_id=%s; rich migration requires complete media-group ledger",
+            getattr(event, "id", None),
+            existing_id,
+        )
+        desired_mode = "album_caption"
     if (
         (getattr(event, "tg_event_source_hash", None) or "") == source_hash
         and (getattr(event, "tg_event_post_url", None) or "").strip()
@@ -6752,6 +6766,13 @@ async def publish_tg_event_announcement(
                 existing_mode,
                 exc,
             )
+            if existing_mode == "album_caption":
+                # We cannot delete every old media-group item without its full
+                # id ledger. Retrying the edit is safer than publishing a
+                # second complete album beside the first one.
+                raise RuntimeError(
+                    "legacy album caption edit failed; refusing duplicate fallback"
+                ) from exc
 
     sent_url: str | None = None
     sent_id: int | None = None
@@ -6832,7 +6853,7 @@ async def publish_tg_event_announcement(
     if (
         existing_id
         and int(existing_id) != int(sent_id or 0)
-        and existing_mode in {"text", "photo_caption", "album_caption", "rich_message"}
+        and existing_mode in {"text", "photo_caption", "rich_message"}
     ):
         try:
             await bot.delete_message(chat_id=target, message_id=int(existing_id))
