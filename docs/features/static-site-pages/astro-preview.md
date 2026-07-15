@@ -12,9 +12,7 @@ The typed briefing uses its own one-route build and deploy path; it must not use
 
 ```bash
 cd site
-PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run build:lab
-PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run check:lab
-PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run preview:lab
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run lab
 ```
 
 For a reviewed public artifact, choose the strict immutable ID, source the repository `.env` into the current process without copying it into a linked worktree, then run `npm run deploy:lab`. The deploy allowlist is only `lab/briefing/index.html`, `_astro/**`, `lab-manifest.json`, `favicon.svg` and the exact announcement wordmark. The page is `noindex,nofollow,noarchive`; no production route or stable object is modified.

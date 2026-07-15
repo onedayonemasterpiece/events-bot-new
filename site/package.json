@@ -13,6 +13,7 @@
     "build:lab": "node scripts/build-briefing-lab.mjs",
     "check:lab": "node scripts/check-briefing-lab.mjs",
     "preview:lab": "node scripts/preview-briefing-lab.mjs",
+    "lab": "npm run build:lab && npm run check:lab && npm run preview:lab",
     "deploy:lab": "node scripts/deploy-briefing-lab-yc.mjs",
     "check:preview": "node scripts/check-preview.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",

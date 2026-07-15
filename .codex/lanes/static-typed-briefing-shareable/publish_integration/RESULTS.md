@@ -17,7 +17,7 @@ Published and verified a lab-only immutable preview; no production root deployme
 
 | ID | Status | Evidence |
 |---|---|---|
-| R01 | Done | `npm --prefix site run build:lab`; separate one-route `srcDir`/`dist-lab` |
+| R01 | Done | one command `npm --prefix site run lab` builds, checks and serves the separate one-route `srcDir`/`dist-lab` |
 | R02 | Done | verified public URL above and local `preview:lab` |
 | R03 | Done | public A/B/C URLs; legacy names retained |
 | R04 | Done | Playwright exact fixture/category equality and B/C geometry equality |

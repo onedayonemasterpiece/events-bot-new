@@ -147,12 +147,10 @@ The lab uses a separate Astro `srcDir` and output root, so it does not run or pu
 
 ```bash
 cd site
-PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run build:lab
-PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run check:lab
-PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run preview:lab
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run lab
 ```
 
-Local URL: `http://127.0.0.1:4177/<build-id>/lab/briefing/?variant=a`; replace `a` with `b` or `c`, and optionally add one of the documented `scenario` IDs. The build fails closed unless the artifact contains only the lab HTML, hashed Astro CSS, manifest, favicon and exact wordmark asset.
+That single command builds, checks and serves the lab. Local URL: `http://127.0.0.1:4177/<build-id>/lab/briefing/?variant=a`; replace `a` with `b` or `c`, and optionally add one of the documented `scenario` IDs. The build fails closed unless the artifact contains only the lab HTML, hashed Astro CSS, manifest, favicon and exact wordmark asset.
 
 Public publication is a distinct command and accepts only `preview-YYYYMMDDtHHMM-briefing-lab-<sha8>`. It performs recursive copy only into that new prefix, never `sync`, delete, cache purge, root write, stable ICS mutation or production navigation change. Local telemetry remains capped at 24 records in `window.__briefingTelemetry` and can be downloaded from the on-page debug panel; no beacon, XHR, POST, Supabase or analytics transport is created.
 
