@@ -1,0 +1,226 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import ServiceShareAction from '../../../components/ServiceShareAction.astro';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
+
+const canonicalUrl = absoluteUrl('/lab/service-share/');
+const manifestUrl = withBase('/service-share/current/manifest.json');
+---
+
+<EventLayout
+  title={`Service share lab | ${SITE_NAME}`}
+  description="Закрытая noindex-лаборатория системного шеринга и clipboard-режимов карточки KenigEvents."
+  canonicalUrl={canonicalUrl}
+>
+  <main id="main" class="service-share-lab" data-service-share-lab data-manifest-url={manifestUrl}>
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Service share lab</span>
+      </nav>
+      <header class="service-share-lab__header">
+        <p class="eyebrow">F18 · preview only · noindex</p>
+        <h1>Поделиться KenigEvents</h1>
+        <p>Один payload и один controller. На mobile проверяется системное меню, на desktop — D0/D1/D2 clipboard-кандидаты.</p>
+      </header>
+
+      <div class="service-share-lab__grid">
+        <section class="section-card service-share-lab__card-preview" aria-labelledby="service-share-preview-title">
+          <div class="section-card__inner">
+            <h2 id="service-share-preview-title">Текущая карточка</h2>
+            <div class="service-share-lab__preview-frame">
+              <img data-service-share-preview alt="Карточка KenigEvents для отправки" hidden />
+              <p data-service-share-preview-placeholder>Загружается current manifest…</p>
+            </div>
+            <dl class="service-share-lab__version">
+              <div><dt>Manifest</dt><dd><code data-service-share-schema>—</code></dd></div>
+              <div><dt>Asset version</dt><dd><code data-service-share-version>—</code></dd></div>
+              <div><dt>Visual payload</dt><dd><code data-service-share-payload-hash>—</code></dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="section-card" aria-labelledby="service-share-controls-title">
+          <div class="section-card__inner">
+            <h2 id="service-share-controls-title">Desktop modes</h2>
+            <p class="service-share-lab__note">D0 — безопасный default. D1/D2 меняют только порядок representations одного ClipboardItem.</p>
+            <div class="service-share-lab__modes">
+              <article><strong>D0 · text+URL</strong><ServiceShareAction surface="lab" desktopMode="d0" manifestUrl={manifestUrl} /></article>
+              <article><strong>D1 · HTML → PNG → plain</strong><ServiceShareAction surface="lab" desktopMode="d1" manifestUrl={manifestUrl} /></article>
+              <article><strong>D2 · PNG → HTML → plain</strong><ServiceShareAction surface="lab" desktopMode="d2" manifestUrl={manifestUrl} /></article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-card" aria-labelledby="service-share-capabilities-title">
+          <div class="section-card__inner">
+            <h2 id="service-share-capabilities-title">Capabilities</h2>
+            <dl class="service-share-lab__capabilities" data-service-share-capabilities>
+              <div><dt>Secure context</dt><dd data-capability="secure-context">—</dd></div>
+              <div><dt>Document focus</dt><dd data-capability="document-focus">—</dd></div>
+              <div><dt>navigator.share</dt><dd data-capability="navigator-share">—</dd></div>
+              <div><dt>navigator.canShare</dt><dd data-capability="navigator-can-share">—</dd></div>
+              <div><dt>clipboard.write</dt><dd data-capability="clipboard-write">—</dd></div>
+              <div><dt>ClipboardItem</dt><dd data-capability="clipboard-item">—</dd></div>
+              <div><dt>ClipboardItem.supports</dt><dd data-capability="clipboard-item-supports">—</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="section-card" aria-labelledby="service-share-paste-title">
+          <div class="section-card__inner">
+            <h2 id="service-share-paste-title">Controlled paste targets</h2>
+            <p class="service-share-lab__note">Лаборатория не читает существующий clipboard. Данные появляются здесь только после вашего явного paste.</p>
+            <label class="service-share-lab__paste-label">Plain textarea<textarea data-paste-target="plain" rows="4"></textarea></label>
+            <div class="service-share-lab__paste-label"><span>Rich contenteditable</span><div class="service-share-lab__editable" data-paste-target="rich" contenteditable="true" role="textbox" aria-multiline="true"></div></div>
+            <div class="service-share-lab__paste-label"><span>Image-aware target</span><div class="service-share-lab__image-target" data-paste-target="image" contenteditable="true" role="textbox" aria-label="Вставьте изображение"></div></div>
+          </div>
+        </section>
+
+        <section class="section-card service-share-lab__ledger-card" aria-labelledby="service-share-ledger-title">
+          <div class="section-card__inner">
+            <div class="service-share-lab__ledger-head">
+              <div><h2 id="service-share-ledger-title">Test ledger</h2><p class="service-share-lab__note">Только bounded capabilities/result/reason; без содержимого clipboard и полного UA.</p></div>
+              <button type="button" class="secondary-button" data-clear-service-share-ledger>Очистить test ledger</button>
+            </div>
+            <p class="service-share-lab__result" data-service-share-result role="status" aria-live="polite">Ожидает действия</p>
+            <p class="service-share-lab__elapsed">Elapsed: <output data-service-share-elapsed>—</output></p>
+            <ol class="service-share-lab__ledger" data-service-share-ledger></ol>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .service-share-lab { padding-bottom: 2rem; }
+  .service-share-lab__header { max-width: 760px; margin: 1rem 0 1.4rem; }
+  .service-share-lab__header h1, .service-share-lab__header p { margin: .3rem 0; }
+  .service-share-lab__header h1 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1; }
+  .service-share-lab__header p { color: var(--muted); }
+  .service-share-lab__grid { display: grid; gap: 1rem; }
+  .service-share-lab h2 { margin: 0 0 .7rem; }
+  .service-share-lab__note { margin: 0 0 .8rem; color: var(--muted); font-size: .9rem; }
+  .service-share-lab__preview-frame { min-height: 280px; display: grid; place-items: center; overflow: hidden; border-radius: 20px; background: #eee3d4; }
+  .service-share-lab__preview-frame img { width: min(100%, 400px); max-height: 560px; object-fit: contain; }
+  .service-share-lab__preview-frame p { margin: 1rem; color: var(--muted); text-align: center; }
+  .service-share-lab__version, .service-share-lab__capabilities { display: grid; gap: .42rem; margin: .8rem 0 0; }
+  .service-share-lab__version div, .service-share-lab__capabilities div { min-width: 0; display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(0, 1.3fr); gap: .7rem; padding-top: .42rem; border-top: 1px solid var(--line); }
+  .service-share-lab__version dt, .service-share-lab__capabilities dt { color: var(--muted); }
+  .service-share-lab__version dd, .service-share-lab__capabilities dd { min-width: 0; margin: 0; color: var(--text); font-weight: 760; overflow-wrap: anywhere; }
+  .service-share-lab__modes { display: grid; gap: .65rem; }
+  .service-share-lab__modes article { display: grid; gap: .45rem; align-content: start; padding: .75rem; border: 1px solid var(--line); border-radius: 16px; background: #fffdf8; }
+  .service-share-lab__paste-label { display: grid; gap: .35rem; margin-top: .7rem; color: var(--text); font-weight: 760; }
+  .service-share-lab textarea, .service-share-lab__editable, .service-share-lab__image-target { width: 100%; min-height: 7rem; padding: .7rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--text); font: inherit; font-weight: 400; }
+  .service-share-lab__image-target img { width: min(100%, 280px); max-height: 280px; object-fit: contain; }
+  .service-share-lab__ledger-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .7rem; }
+  .service-share-lab__result { margin: .7rem 0 .2rem; color: var(--text); font-weight: 800; }
+  .service-share-lab__elapsed { margin: 0; color: var(--muted); font-size: .86rem; }
+  .service-share-lab__ledger { display: grid; gap: .45rem; margin: .8rem 0 0; padding-left: 1.4rem; }
+  .service-share-lab__ledger li { padding: .45rem .55rem; border-radius: 10px; background: #f7efe3; font: 700 .78rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+  @media (min-width: 900px) {
+    .service-share-lab__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    .service-share-lab__card-preview { grid-row: span 2; }
+    .service-share-lab__ledger-card { grid-column: 1 / -1; }
+    .service-share-lab__modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+</style>
+
+<script>
+  import { loadServiceShareManifest } from '../../../lib/service-share/controller.js';
+
+  const lab = document.querySelector('[data-service-share-lab]');
+  if (lab) {
+    const ledger = [];
+    let attemptStartedAt = 0;
+    let previewObjectUrl = '';
+    const setCapability = (name, value) => {
+      const target = lab.querySelector(`[data-capability="${name}"]`);
+      if (target) target.textContent = value ? 'yes' : 'no';
+    };
+    const updateCapabilities = () => {
+      setCapability('secure-context', window.isSecureContext);
+      setCapability('document-focus', document.hasFocus());
+      setCapability('navigator-share', typeof navigator.share === 'function');
+      setCapability('navigator-can-share', typeof navigator.canShare === 'function');
+      setCapability('clipboard-write', typeof navigator.clipboard?.write === 'function');
+      setCapability('clipboard-item', typeof window.ClipboardItem === 'function');
+      setCapability('clipboard-item-supports', typeof window.ClipboardItem?.supports === 'function');
+    };
+    const renderLedger = () => {
+      const list = lab.querySelector('[data-service-share-ledger]');
+      if (!list) return;
+      list.replaceChildren(...ledger.slice(-30).map((item) => {
+        const li = document.createElement('li');
+        li.textContent = JSON.stringify(item);
+        return li;
+      }));
+    };
+    updateCapabilities();
+    window.addEventListener('focus', updateCapabilities);
+    window.addEventListener('blur', updateCapabilities);
+    window.addEventListener('service-share-telemetry', (event) => {
+      const detail = event.detail || {};
+      if (detail.event_kind === 'service_share_invoked' && detail.result === 'attempted') attemptStartedAt = performance.now();
+      const elapsed = attemptStartedAt ? Math.round(performance.now() - attemptStartedAt) : 0;
+      const bounded = {
+        event_kind: detail.event_kind,
+        surface: detail.surface,
+        transport: detail.transport,
+        mode: detail.mode,
+        result: detail.result,
+        reason: detail.reason,
+        asset_version: detail.asset_version,
+        latency_band: detail.latency_band,
+      };
+      ledger.push(bounded);
+      window.__serviceShareTestLedger = ledger;
+      const result = lab.querySelector('[data-service-share-result]');
+      const elapsedOutput = lab.querySelector('[data-service-share-elapsed]');
+      if (result) result.textContent = `${bounded.event_kind}: ${bounded.result} (${bounded.reason})`;
+      if (elapsedOutput) elapsedOutput.textContent = elapsed ? `${elapsed} ms` : '—';
+      renderLedger();
+    });
+    lab.querySelector('[data-clear-service-share-ledger]')?.addEventListener('click', () => {
+      ledger.length = 0;
+      attemptStartedAt = 0;
+      window.__serviceShareTestLedger = ledger;
+      renderLedger();
+      const result = lab.querySelector('[data-service-share-result]');
+      const elapsed = lab.querySelector('[data-service-share-elapsed]');
+      if (result) result.textContent = 'Test ledger очищен';
+      if (elapsed) elapsed.textContent = '—';
+    });
+    lab.querySelector('[data-paste-target="image"]')?.addEventListener('paste', (event) => {
+      const imageItem = [...(event.clipboardData?.items || [])].find((item) => item.type.startsWith('image/'));
+      if (!imageItem) return;
+      event.preventDefault();
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      previewObjectUrl = URL.createObjectURL(file);
+      const image = document.createElement('img');
+      image.src = previewObjectUrl;
+      image.alt = 'Вставленное тестовое изображение';
+      event.currentTarget.replaceChildren(image);
+    });
+    loadServiceShareManifest(lab.dataset.manifestUrl).then((manifest) => {
+      const preview = lab.querySelector('[data-service-share-preview]');
+      const placeholder = lab.querySelector('[data-service-share-preview-placeholder]');
+      if (preview) {
+        preview.src = manifest.assets.webp.url;
+        preview.hidden = false;
+      }
+      if (placeholder) placeholder.hidden = true;
+      const schema = lab.querySelector('[data-service-share-schema]');
+      const version = lab.querySelector('[data-service-share-version]');
+      const hash = lab.querySelector('[data-service-share-payload-hash]');
+      if (schema) schema.textContent = manifest.schema_version;
+      if (version) version.textContent = manifest.asset_version;
+      if (hash) hash.textContent = manifest.visual_payload_hash;
+    }, (error) => {
+      const placeholder = lab.querySelector('[data-service-share-preview-placeholder]');
+      if (placeholder) placeholder.textContent = `Manifest недоступен: ${String(error?.message || 'error').slice(0, 80)}`;
+    });
+  }
+</script>

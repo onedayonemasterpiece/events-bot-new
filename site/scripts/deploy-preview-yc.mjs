@@ -45,17 +45,6 @@ const awsEnv = {
   AWS_SECRET_ACCESS_KEY: secretKey,
   AWS_DEFAULT_REGION: region,
 };
-function loadPreviewEventsBySlug() {
-  const dataPath = join(siteDir, 'src', 'data', 'preview-events.json');
-  if (!existsSync(dataPath)) return new Map();
-  const parsed = JSON.parse(readFileSync(dataPath, 'utf8'));
-  const out = new Map();
-  for (const event of parsed.events || []) {
-    if (event?.slug && event?.id) out.set(String(event.slug), Number(event.id));
-  }
-  return out;
-}
-
 const target = `s3://${bucket}/${buildId}/`;
 console.log(`Uploading ${sourceDir} -> ${target}`);
 const cp = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
@@ -71,47 +60,66 @@ if (existsSync(astroAssetsDir)) {
     if (put.status !== 0) process.exit(put.status || 1);
   }
 }
+// Service-share versions are content-addressed. Re-upload them with exact MIME
+// and immutable caching; keep only the mutable current pointer uncached.
+const serviceShareVersionsDir = join(sourceDir, 'service-share', 'versions');
+if (existsSync(serviceShareVersionsDir)) {
+  const versionedFiles = spawnSync('find', [serviceShareVersionsDir, '-type', 'f'], { encoding: 'utf8' });
+  for (const file of versionedFiles.stdout.split(/\r?\n/).filter(Boolean)) {
+    const rel = file.slice(sourceDir.length + 1);
+    const extension = file.toLowerCase().split('.').pop();
+    const contentType = extension === 'webp'
+      ? 'image/webp'
+      : extension === 'png'
+        ? 'image/png'
+        : extension === 'json'
+          ? 'application/json; charset=utf-8'
+          : 'application/octet-stream';
+    const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', contentType, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+    if (put.status !== 0) process.exit(put.status || 1);
+  }
+}
+const serviceShareCurrentManifest = join(sourceDir, 'service-share', 'current', 'manifest.json');
+if (existsSync(serviceShareCurrentManifest)) {
+  const rel = serviceShareCurrentManifest.slice(sourceDir.length + 1);
+  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', serviceShareCurrentManifest, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'application/json; charset=utf-8', '--cache-control', 'no-cache, max-age=0', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+  if (put.status !== 0) process.exit(put.status || 1);
+}
 // Ensure calendar endpoints have the right metadata for clients that care about content-type.
-const eventsBySlug = loadPreviewEventsBySlug();
-let stableIcsUploaded = 0;
 const find = spawnSync('find', [sourceDir, '-name', 'event.ics', '-type', 'f'], { encoding: 'utf8' });
 for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
   const rel = file.slice(sourceDir.length + 1);
   const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'inline; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
-  const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(rel);
-  const slugEventId = match ? /-(\d+)$/u.exec(match[1])?.[1] : null;
-  const eventId = match ? (eventsBySlug.get(match[1]) || (slugEventId ? Number(slugEventId) : null)) : null;
-  if (eventId) {
-    const stablePut = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/ics/${eventId}.ics`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="event-${eventId}.ics"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
-    if (stablePut.status !== 0) process.exit(stablePut.status || 1);
-    stableIcsUploaded += 1;
-  }
 }
 const publicBase = (env.KENIGEVENTS_SITE_PUBLIC_BASE_URL || `https://kenigevents.ru`).replace(/\/+$/u, '');
 console.log(`Preview URL: ${publicBase}/${buildId}/__preview/`);
 console.log(`Website endpoint fallback: http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`);
-if (stableIcsUploaded) console.log(`Stable CDN ICS uploaded: ${stableIcsUploaded} -> s3://${bucket}/ics/<event_id>.ics`);
+console.log('Preview-only safety: stable s3://<bucket>/ics/* objects were not modified');
 
 const requirePublicVerify = ['1', 'true', 'yes', 'on'].includes(String(env.KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY || '').toLowerCase());
 const verifyTargets = [
   [`${publicBase}/${buildId}/__preview/`, 'main-domain preview index'],
   [`http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`, 'website-endpoint preview index'],
 ];
-if (stableIcsUploaded) {
-  const firstIcs = find.stdout.split(/\r?\n/).find(Boolean);
-  const match = firstIcs ? /^sobytiya\/([^/]+)\/event\.ics$/u.exec(firstIcs.slice(sourceDir.length + 1)) : null;
-  const eventId = match ? eventsBySlug.get(match[1]) || /-(\d+)$/u.exec(match[1])?.[1] : null;
-  if (eventId && env.PUBLIC_ICS_BASE_URL) {
-    verifyTargets.push([`${String(env.PUBLIC_ICS_BASE_URL).replace(/\/+$/u, '')}/${eventId}.ics`, 'stable ICS CDN sample']);
+if (existsSync(serviceShareCurrentManifest)) {
+  const manifestPublicUrl = `${publicBase}/${buildId}/service-share/current/manifest.json`;
+  verifyTargets.push([manifestPublicUrl, 'F18 current manifest', 'application/json']);
+  const manifest = JSON.parse(readFileSync(serviceShareCurrentManifest, 'utf8'));
+  for (const [kind, expectedType] of [['webp', 'image/webp'], ['png', 'image/png']]) {
+    const value = manifest?.assets?.[kind]?.url;
+    if (!value) continue;
+    verifyTargets.push([new URL(String(value), manifestPublicUrl).href, `F18 ${kind} asset`, expectedType]);
   }
 }
 const publicFailures = [];
-for (const [url, label] of verifyTargets) {
+for (const [url, label, expectedType] of verifyTargets) {
   try {
     const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
     if (!response.ok) {
       publicFailures.push(`${label}: ${response.status} ${response.statusText} at ${url}`);
+    } else if (expectedType && !String(response.headers.get('content-type') || '').toLowerCase().startsWith(expectedType)) {
+      publicFailures.push(`${label}: expected Content-Type ${expectedType}, got ${response.headers.get('content-type') || '(missing)'} at ${url}`);
     }
   } catch (error) {
     publicFailures.push(`${label}: ${error?.message || error} at ${url}`);
