@@ -372,7 +372,7 @@ PREVIEW_BUILD_ID=preview-20260628-event-pages-v48-pgvector-gemma-kaggle PUBLIC_A
 PREVIEW_BUILD_ID=preview-20260628-event-pages-v48-pgvector-gemma-kaggle npm run deploy:preview
 ```
 
-`deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
+`deploy:preview` reads `KENIGEVENTS_SITE_YC_*` from the root `.env` and uploads `site/dist/<build-id>/` to the preview prefix, **but it also mirrors generated calendars into stable `s3://<bucket>/ics/<event_id>.ics` keys**. This is a production side effect, not a preview-only operation. Therefore F18 and any isolation-sensitive test must not run this command until a prefix-only mode exists and its dry-run rejects every key outside `<build-id>/`. The canonical F18 procedure is [service-sharing-preview.md](../../operations/service-sharing-preview.md). Calendar files inside a permitted release still require `text/calendar; charset=utf-8` and an inline filename, but stable ICS publication belongs to a separately approved production gate.
 
 ## Visual review passes
 

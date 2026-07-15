@@ -22,12 +22,15 @@ const required = [
   'robots.txt',
   'favicon.svg',
   'brand/announcements-wordmark-ui.svg',
+  'assets/icons/link-minimalistic-svgrepo.svg',
+  'assets/icons/link-minimalistic-svgrepo.svg.metadata.json',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
+  'lab/service-share/index.html',
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -38,6 +41,87 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+
+const serviceShareFamilyPaths = [
+  '__preview/index.html',
+  'segodnya/index.html',
+  'poisk/index.html',
+  ...(eventsData.events[0] ? [`sobytiya/${eventsData.events[0].slug}/index.html`] : []),
+];
+for (const rel of serviceShareFamilyPaths) {
+  const html = readFileSync(join(root, rel), 'utf8');
+  const actionCount = (html.match(/data-service-share-root(?:\s|>)/gu) || []).length;
+  if (actionCount !== 1) throw new Error(`F18 ${rel} must render exactly one shared service action in the common footer, got ${actionCount}`);
+  const header = html.match(/<header class="site-header"[\s\S]*?<\/header>/u)?.[0] || '';
+  const footer = html.match(/<footer class="site-footer"[\s\S]*?<\/footer>/u)?.[0] || '';
+  if (header.includes('data-service-share-root')) throw new Error(`F18 ${rel} must defer header/mobile-menu placement until V12`);
+  for (const marker of [
+    'data-service-share-surface="footer"',
+    'data-service-share-canonical-url="https://kenigevents.ru/"',
+    'data-service-share-intent="mobile"',
+    'data-service-share-intent="image"',
+    'data-service-share-intent="text"',
+    'Поделиться афишей',
+    'Поделиться',
+    'Скопировать карточку',
+    'Скопировать текст и ссылку',
+    'link-minimalistic-svgrepo.svg',
+    'data-service-share-icon-success',
+    'aria-live="polite"',
+    '<noscript>',
+  ]) {
+    if (!footer.includes(marker)) throw new Error(`F18 ${rel} footer misses marker: ${marker}`);
+  }
+  if (/data-service-share-canonical-url="(?!https:\/\/kenigevents\.ru\/)[^"]+"/u.test(footer)) throw new Error(`F18 ${rel} leaks a non-canonical service URL`);
+}
+
+const serviceShareLabHtml = readFileSync(join(root, 'lab/service-share/index.html'), 'utf8');
+for (const marker of [
+  'noindex,nofollow,noarchive',
+  'data-service-share-lab',
+  'data-service-share-desktop-mode="d0"',
+  'data-service-share-intent="image"',
+  'data-service-share-intent="text"',
+  'data-service-share-preview',
+  'data-service-share-capabilities',
+  'data-capability="secure-context"',
+  'data-capability="document-focus"',
+  'data-capability="navigator-share"',
+  'data-capability="navigator-can-share"',
+  'data-capability="clipboard-write"',
+  'data-capability="clipboard-item"',
+  'data-capability="clipboard-item-supports"',
+  'data-paste-target="plain"',
+  'data-paste-target="rich"',
+  'data-paste-target="image"',
+  'data-clear-service-share-ledger',
+  'data-service-share-elapsed',
+  '/service-share/current/manifest.json',
+]) {
+  if (!serviceShareLabHtml.includes(marker)) throw new Error(`F18 service-share lab misses marker: ${marker}`);
+}
+const serviceShareControllerSource = readFileSync(join(siteDir, 'src/lib/service-share/controller.js'), 'utf8');
+for (const marker of [
+  "SERVICE_SHARE_CANONICAL_URL = 'https://kenigevents.ru/'",
+  "SERVICE_SHARE_DEFAULT_MANIFEST_PATH = '/service-share/current/manifest.json'",
+  "navigator.canShare({ files: [file] })",
+  "await navigator.share(filePayload)",
+  "await navigator.share({ text: manifest.share_text, url: SERVICE_SHARE_CANONICAL_URL })",
+  "navigator.clipboard.writeText(serviceSharePlainText(manifest))",
+  "navigator.clipboard.write([item])",
+  "return new ClipboardItemCtor({ 'image/png': png })",
+  "button.dataset.serviceShareState = state",
+  'Скопированы текст и ссылка',
+  'Карточка скопирована в буфер',
+  'Не удалось скопировать картинку',
+  "reason === 'cancelled'",
+  "event_kind: eventKind",
+]) {
+  if (!serviceShareControllerSource.includes(marker)) throw new Error(`F18 controller misses contract marker: ${marker}`);
+}
+if (/new ClipboardItemCtor\(\{[^}]*text\/(?:plain|html)/su.test(serviceShareControllerSource)) throw new Error('F18 image action must not mix text clipboard representations');
+if (serviceShareControllerSource.includes('location.href;') || serviceShareControllerSource.includes('document.location')) throw new Error('F18 controller must never derive its payload from the current page URL');
+if (serviceShareControllerSource.includes('await prepared.ready')) throw new Error('F18 click path must not await manifest/network preparation and lose transient activation');
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');

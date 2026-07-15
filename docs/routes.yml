@@ -17,6 +17,7 @@ sections:
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
+    service_sharing_preview: docs/operations/service-sharing-preview.md
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
     event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md
@@ -292,6 +293,10 @@ features:
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
+    service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
+    service_sharing_desktop_manual_matrix: docs/features/static-site-pages/service-sharing-desktop-clipboard-manual-matrix.md
+    service_sharing_preview_runbook: docs/operations/service-sharing-preview.md
     image_framing: docs/features/static-site-pages/image-framing.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md
@@ -313,7 +318,10 @@ features:
       production_atomic_promotion: missing
       catalog_freshness: partial_blocked
       release_ui: candidate_signoff_pending
-      sharing: preview_canvas_offline_generator_missing
+      event_sharing: preview_canvas_offline_generator_missing
+      service_sharing: footer_preview_header_menu_deferred_v12
+      service_sharing_desktop_default: d0_native_matrix_pending
+      service_sharing_daily_card: implementation_evidence_pending
       image_framing: renderer_preview_metadata_producer_missing
     entrypoints:
       - main.py
@@ -327,6 +335,9 @@ features:
       - site/src/pages/segodnya/index.astro
       - site/src/pages/vyhodnye/index.astro
       - site/src/pages/sobytiya/[slug].astro
+      - site/src/components/ServiceShareAction.astro
+      - site/src/pages/lab/service-share/index.astro
+      - tests/playwright/service_share_contract.spec.ts
       - site/src/pages/sobytiya/[slug]/event.ics.ts
       - site/src/pages/data/discovery/[eventId].json.ts
       - site/src/pages/lab/hero/index.astro

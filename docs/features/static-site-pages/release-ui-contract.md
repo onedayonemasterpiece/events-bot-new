@@ -17,6 +17,21 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - personal page, transport, discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
 
+## Share the service itself (F18)
+
+F18 is separate from event sharing. The current desktop-focus v11-derived test
+slice intentionally renders one adaptive `ServiceShareAction` only in the common
+footer. Mobile uses system Share; desktop uses clipboard; both consume one
+manifest, canonical `https://kenigevents.ru/` URL, copy source and analytics family.
+
+The full release contract still requires reuse of the same component in the
+navigation shell (under the expanded mobile brand tag). That placement is
+**Deferred until V12** and the footer-only preview must not be described as full
+F18 closure. Desktop D0 «Скопировать ссылку» remains default; D1/D2
+«Скопировать карточку» remain research modes until native Windows/macOS evidence
+and owner decision. Exact behavior, claims, daily card pipeline and gates are in
+[service sharing](service-sharing.md).
+
 ## Acceptance matrix
 
 - 375px mobile, 768px tablet, 1366/1440px desktop;

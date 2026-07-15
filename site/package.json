@@ -12,10 +12,15 @@
     "build:preview": "node scripts/build-preview.mjs",
     "check:preview": "node scripts/check-preview.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
+    "test:service-share": "node --test ../tests/playwright/service_share_controller.test.mjs",
+    "test:service-share:playwright": "NODE_PATH=./node_modules playwright test --config ../tests/playwright/service_share.playwright.config.ts",
     "astro": "astro"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",
     "astro": "^6.0.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
   }
 }

@@ -5015,6 +5015,12 @@ def startup(
                 misfire_grace_time=30,
             )
 
+    # Preview hook is deliberately inert unless
+    # ENABLE_SERVICE_SHARE_CARD_DAILY=1.  Registration lives here so enabling
+    # it cannot result in a configured-but-never-scheduled renderer.
+    from service_share_scheduler import register_service_share_daily_job
+    register_service_share_daily_job(_scheduler)
+
     _scheduler.add_listener(
         _on_event,
         EVENT_JOB_SUBMITTED | EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,

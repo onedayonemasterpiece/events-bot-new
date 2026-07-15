@@ -10,6 +10,7 @@
 
 | Feature file | Назначение | Тип ссылок/данных | Примечание по актуальности |
 |---|---|---|---|
+| `tests/playwright/service_share_contract.spec.ts` | F18 footer-only preview: mobile Web Share fallbacks, desktop D0/D1/D2, lab ledger, one manifest/canonical URL, accessibility and public HTTPS smoke | Local preview + mocked browser APIs + immutable public assets | Mocked Playwright не заменяет native Android/iOS/Windows/macOS; header/menu placement Deferred до V12; public прогон разрешён только после prefix-only deploy без stable ICS writes |
 | [tests/e2e/features/telegram_monitoring.feature](../../tests/e2e/features/telegram_monitoring.feature) | Telegram monitoring + Smart Update (multi-source, facts/log/Telegraph) | Живые TG-посты | Требует периодического обновления контрольных ссылок и очистки данных перед прогоном |
 | [tests/e2e/features/telegram_sources_seed.feature](../../tests/e2e/features/telegram_sources_seed.feature) | Проверка канонических Telegram-источников (seed + список + пагинация) | Локальная БД + UI | Стабильный, но зависит от UI `/tg` и `sources.yml` |
 | [tests/e2e/features/smart_event_update.feature](../../tests/e2e/features/smart_event_update.feature) | Проверка merge/dedup/conflict логики Smart Update | Преимущественно локальные фикстуры + точечные живые проверки | Стабильный, но отдельные live-кейсы нужно периодически ревизовать |
