@@ -4,7 +4,7 @@
 |---|---|---|---|---|---|
 | scenario-auditor | R01, R03, R05 | read-only | merged | findings integrated serially | Event/copy/date audit; stale-event warning drove final two-screen chain. |
 | visual-consultant | R06 | read-only | merged | exact screenshot gate | Four-state `FAIL`, corrective facts, post-fix `LAB PUBLISH PASS`. |
-| ui-integrator | R02, R04, R07 | `integration/typed-briefing-followup-20260715` | merged | implementation commit `1ed2a29c` + grounding correction commit | Full-bleed composition, direct links, cursor state machine, docs/tests. |
+| ui-integrator | R02, R04, R07 | `integration/typed-briefing-followup-20260715` | merged | implementation `1ed2a29c` + grounding correction `53c3021d` | Full-bleed composition, direct links, cursor state machine, docs/tests. |
 | merge-reviewer | R01–R07 closure | read-only | merged | initial blocker then clean re-review | `.codex/lanes/typed-briefing-followup-20260715/REVIEW.md` |
 
 ## Verification

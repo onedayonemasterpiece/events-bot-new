@@ -70,9 +70,10 @@ Route:
 
 Final immutable review build:
 
-- [чистый вход с автоматической цепочкой](https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/?variant=c&scenario=greeting_day&pace=slow&replay=1);
-- [teaser → именованный гость + small desktop media](https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/?variant=c&scenario=anticipated_person&pace=slow&replay=1);
-- [full-viewport wide-media easter egg](https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
+- [conditional storm → future lecture + pending cursor](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=storm_weekend_demo&pace=slow&replay=1);
+- [конкретный forwarding signal](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1);
+- [конкретный Pianissimo](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=festival_demo&pace=slow&replay=1);
+- [full-viewport wide-media easter egg](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
 
 Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
 экрана:
@@ -209,6 +210,24 @@ Follow-up contract:
 solid/accent и не распознал ссылку `24 идеи`; corrective continuation фиксирует
 эти факты. Каноничны выводы про full-bleed seam, bottom anchor и соответствие
 narrative→destination, а не ошибочная первая трактовка CTA.
+
+Финальный immutable prefix
+`preview-20260715t2212-briefing-lab-53c3021d` построен из source
+`53c3021d`: isolated build/check pass, Playwright `14/14` pass. Public captures
+на `320×568`, `390×844`, `1366×768` вернули HTTP 200, точный noindex, нулевые
+console/request errors, `bodyWidth == viewportWidth`, hero `≤42vh`, видимые
+categories/feed и pending cursor. Exact mobile WebM заканчивается на step 2 с
+текстом `Шоу-лекция: Суперспособности.`, terminal state `stopped` и bounded
+cursor retirement. Gemini focused gate честно прошёл через stale-video `FAIL`,
+затем exact corrected-video `LAB PUBLISH PASS`; merge reviewer после grounding
+fix не нашёл blockers. Первый созданный до этого audit prefix
+`preview-20260715t2150-briefing-lab-1ed2a29c` superseded и пользователю не
+отправлялся.
+
+Telegram mobile gate: перед отправкой последний входящий message оставался
+`#82`; final scope/URL, `320×568`, `390×844`, exact WebM и desktop `1366×768`
+доставлены в topic `6` как `#92–96`. Receipts verified повторным чтением; новых
+входящих комментариев после `#96` на момент closure не было.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 
