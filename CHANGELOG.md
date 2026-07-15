@@ -29,7 +29,7 @@
 
 ### Added
 
-- **Static homepage / typed city briefing research**: documented the conditional prototype gate for a compact ≤50svh editorial briefing above categories and feed, including responsive height budgets, 33 grounded scenario families, motion/accessibility state machine, manual/calm/normal/fast pace profiles informed by qualitative video feedback, static manifest and Gemini Lite writer boundaries, experiment metrics, risk register, and a two-pass Gemini 3.1 Pro High consultation.
+- **Static homepage / city-briefing lab research**: replaced the over-broad conditional feature design with a `GO_TO_PROTOTYPE_ONLY` gate and isolated `/lab/briefing/` A/B/C prototype contract; limited V0 to eight deterministic scenarios plus a neutral fallback, made first-event visibility the mobile gate (`12–18svh`/`160px` remain challenger hypotheses), deferred Gemini/personalization/pace systems to backlog, defined bounded local debug telemetry and future destination-confirmed `event_detail_open / eligible_session`, and committed the two-pass Gemini 3.1 Pro High prompts/outputs/checksums/decision trace for auditability.
 
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.
 

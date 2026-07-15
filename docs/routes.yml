@@ -300,6 +300,8 @@ features:
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     typed_briefing_hero_research: docs/features/static-site-pages/typed-briefing-hero-research.md
+    typed_briefing_platform_backlog: docs/backlog/features/static-typed-briefing/README.md
+    typed_briefing_consultation_evidence: docs/reports/static-typed-briefing-consultation-2026-07-15/README.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
