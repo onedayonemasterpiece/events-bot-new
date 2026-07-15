@@ -15782,6 +15782,7 @@ async def seed_event_age_bge_backlog(db: Database) -> str | None:
         "on",
     }:
         return None
+    today = datetime.now(timezone.utc).date().isoformat()
     async with db.get_session() as session:
         owner_id = (
             await session.execute(
@@ -15790,6 +15791,7 @@ async def seed_event_age_bge_backlog(db: Database) -> str | None:
                     Event.lifecycle_status == "active",
                     Event.silent.is_(False),
                     Event.merged_into_event_id.is_(None),
+                    or_(Event.date >= today, Event.end_date >= today),
                     Event.age_restriction.is_(None),
                     or_(
                         Event.age_assessment_status.is_(None),
