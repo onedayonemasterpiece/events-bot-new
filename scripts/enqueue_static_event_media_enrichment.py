@@ -24,6 +24,20 @@ from event_media import MEDIA_ROLE_PROMPT_VERSION, enqueue_event_media_review_jo
 from models import Event, EventPoster
 
 
+def static_event_eligibility(from_date: str):
+    """Match the static export's active/non-silent current-or-ongoing scope."""
+
+    return and_(
+        func.coalesce(Event.silent, False).is_(False),
+        func.coalesce(func.nullif(func.trim(Event.lifecycle_status), ""), "active")
+        == "active",
+        or_(
+            Event.date >= str(from_date),
+            Event.end_date >= str(from_date),
+        ),
+    )
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default="db.sqlite")
@@ -58,7 +72,7 @@ async def main() -> int:
             .where(
                 EventPoster.review_status == "approved",
                 or_(needs_derivative, needs_semantics),
-                or_(Event.end_date >= str(args.from_date), and_(Event.end_date.is_(None), Event.date >= str(args.from_date))),
+                static_event_eligibility(str(args.from_date)),
             )
             .group_by(Event.id)
             .order_by(Event.date.asc(), Event.id.asc())
