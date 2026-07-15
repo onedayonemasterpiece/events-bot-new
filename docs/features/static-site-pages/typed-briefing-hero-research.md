@@ -70,9 +70,9 @@ Route:
 
 Final immutable review build:
 
-- [чистый вход с приветствием](https://kenigevents.ru/preview-20260715t1729-briefing-lab-3d11a474/lab/briefing/?variant=c&scenario=greeting_day&pace=slow&replay=1);
-- [teaser → именованный гость + small desktop media](https://kenigevents.ru/preview-20260715t1729-briefing-lab-3d11a474/lab/briefing/?variant=c&scenario=anticipated_person&pace=slow&replay=1);
-- [wide-media easter egg](https://kenigevents.ru/preview-20260715t1729-briefing-lab-3d11a474/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
+- [чистый вход с автоматической цепочкой](https://kenigevents.ru/preview-20260715t1853-briefing-lab-d6bf2e1e/lab/briefing/?variant=c&scenario=greeting_day&pace=slow&replay=1);
+- [teaser → именованный гость + small desktop media](https://kenigevents.ru/preview-20260715t1853-briefing-lab-d6bf2e1e/lab/briefing/?variant=c&scenario=anticipated_person&pace=slow&replay=1);
+- [full-viewport wide-media easter egg](https://kenigevents.ru/preview-20260715t1853-briefing-lab-d6bf2e1e/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
 
 Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
 экрана:
@@ -106,7 +106,8 @@ scene намеренно говорит `Допустим` и маркирует
 границы описаны в
 [platform backlog](../../backlog/features/static-typed-briefing/README.md).
 
-Техническая приёмка final build: isolated build/check pass; Playwright
+Техническая приёмка immutable build
+`preview-20260715t1853-briefing-lab-d6bf2e1e` (`source d6bf2e1e`): isolated build/check pass; Playwright
 `10/10` pass; geometry покрывает `17 scenes including fallback × B/C × 4
 viewports = 136`; mobile media хранит только `data-src` и не делает image
 request; desktop small/wide media, bounded exit, static/reduced-motion state и
@@ -114,12 +115,14 @@ request; desktop small/wide media, bounded exit, static/reduced-motion state и
 HTTP 200, 1–3 строки, `bodyWidth == viewportWidth`, закрытый LAB-dock и нулевые
 page errors на `320×568`, `390×844`, `1440×900`.
 
-Mobile review gate ведётся в Telegram topic `6`: прежние URL/screenshots/motion
+Mobile review gate выполнен в Telegram topic `6`: прежние URL/screenshots/motion
 были доставлены как `#51–54`; пользовательские сообщения `#55–57` отвергли
 public meta/pause/pace, отсутствие automatic continuation и desktop
 frame-inside-frame. Комментарии и аннотированный screenshot были прочитаны до
-правки; receipt `#58` подтвердил Gemini gate и scope коррекции. Новые финальные
-mobile artifacts должны быть добавлены в этот же topic после immutable publish.
+правки; receipt `#58` подтвердил Gemini gate и scope коррекции. Immutable URL
+доставлен как `#66`, `320×568`/`390×844` phase/terminal screenshots — `#67–69`,
+desktop wide acceptance — `#70`, slow-chain WebM — `#71`; все send receipts
+верифицированы, повторное чтение не обнаружило новых входящих комментариев.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 
