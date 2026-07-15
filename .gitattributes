@@ -1,2 +1,3 @@
 * text=auto eol=lf
 *.py text eol=lf
+docs/reports/static-typed-briefing-consultation-2026-07-15/*.md whitespace=-trailing-space
