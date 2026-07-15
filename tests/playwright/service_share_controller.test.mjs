@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   SERVICE_SHARE_CANONICAL_URL,
   coarseServiceSharePlatform,
+  createImageClipboardItem,
   createRichClipboardItem,
   escapeServiceShareHtml,
   latencyBand,
@@ -73,23 +74,24 @@ test('builds escaped minimal HTML with no executable/user-controlled markup', ()
   assert.equal(escapeServiceShareHtml('"<&\''), '&quot;&lt;&amp;&#39;');
 });
 
-test('creates exactly one ClipboardItem with deterministic D1 and D2 representation order', async () => {
+test('creates exactly one image-only ClipboardItem for the desktop card intent', async () => {
   class FakeClipboardItem {
     constructor(representations) {
       this.representations = representations;
       this.types = Object.keys(representations);
     }
   }
-  const manifest = validateServiceShareManifest(manifestPayload, 'https://kenigevents.ru/manifest.json');
   const png = Promise.resolve(new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }));
-  const d1 = createRichClipboardItem(manifest, 'd1', png, FakeClipboardItem);
-  const d2 = createRichClipboardItem(manifest, 'd2', png, FakeClipboardItem);
-  assert.deepEqual(d1.types, ['text/html', 'image/png', 'text/plain']);
-  assert.deepEqual(d2.types, ['image/png', 'text/html', 'text/plain']);
-  assert.equal((await d1.representations['image/png']).type, 'image/png');
-  assert.equal(d1.representations['text/plain'].type, 'text/plain');
-  assert.equal(d1.representations['text/html'].type, 'text/html');
-  assert.throws(() => createRichClipboardItem(manifest, 'd0', png, FakeClipboardItem), /clipboard_item_unavailable/u);
+  const item = createImageClipboardItem(png, FakeClipboardItem);
+  assert.deepEqual(item.types, ['image/png']);
+  assert.equal((await item.representations['image/png']).type, 'image/png');
+  assert.equal('text/plain' in item.representations, false);
+  assert.equal('text/html' in item.representations, false);
+
+  const manifest = validateServiceShareManifest(manifestPayload, 'https://kenigevents.ru/manifest.json');
+  const compatibilityItem = createRichClipboardItem(manifest, 'd1', png, FakeClipboardItem);
+  assert.deepEqual(compatibilityItem.types, ['image/png']);
+  assert.throws(() => createImageClipboardItem(png, null), /clipboard_item_unavailable/u);
 });
 
 test('bounds platform and latency telemetry values', () => {

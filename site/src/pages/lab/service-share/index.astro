@@ -9,7 +9,7 @@ const manifestUrl = withBase('/service-share/current/manifest.json');
 
 <EventLayout
   title={`Service share lab | ${SITE_NAME}`}
-  description="Закрытая noindex-лаборатория системного шеринга и clipboard-режимов карточки KenigEvents."
+  description="Закрытая noindex-лаборатория системного шеринга и двух явных clipboard-действий KenigEvents."
   canonicalUrl={canonicalUrl}
 >
   <main id="main" class="service-share-lab" data-service-share-lab data-manifest-url={manifestUrl}>
@@ -20,7 +20,7 @@ const manifestUrl = withBase('/service-share/current/manifest.json');
       <header class="service-share-lab__header">
         <p class="eyebrow">F18 · preview only · noindex</p>
         <h1>Поделиться KenigEvents</h1>
-        <p>Один payload и один controller. На mobile проверяется системное меню, на desktop — D0/D1/D2 clipboard-кандидаты.</p>
+        <p>На mobile проверяется системное меню. На desktop намерения разделены: отдельно изображение, отдельно текст с канонической ссылкой.</p>
       </header>
 
       <div class="service-share-lab__grid">
@@ -41,12 +41,10 @@ const manifestUrl = withBase('/service-share/current/manifest.json');
 
         <section class="section-card" aria-labelledby="service-share-controls-title">
           <div class="section-card__inner">
-            <h2 id="service-share-controls-title">Desktop modes</h2>
-            <p class="service-share-lab__note">D0 — безопасный default. D1/D2 меняют только порядок representations одного ClipboardItem.</p>
-            <div class="service-share-lab__modes">
-              <article><strong>D0 · text+URL</strong><ServiceShareAction surface="lab" desktopMode="d0" manifestUrl={manifestUrl} /></article>
-              <article><strong>D1 · HTML → PNG → plain</strong><ServiceShareAction surface="lab" desktopMode="d1" manifestUrl={manifestUrl} /></article>
-              <article><strong>D2 · PNG → HTML → plain</strong><ServiceShareAction surface="lab" desktopMode="d2" manifestUrl={manifestUrl} /></article>
+            <h2 id="service-share-controls-title">Явные действия</h2>
+            <p class="service-share-lab__note">«Скопировать карточку» пишет только image/png. «Скопировать текст и ссылку» использует только writeText. Одно действие никогда не подменяет другое.</p>
+            <div class="service-share-lab__actions">
+              <ServiceShareAction surface="lab" manifestUrl={manifestUrl} />
             </div>
           </div>
         </section>
@@ -108,8 +106,7 @@ const manifestUrl = withBase('/service-share/current/manifest.json');
   .service-share-lab__version div, .service-share-lab__capabilities div { min-width: 0; display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(0, 1.3fr); gap: .7rem; padding-top: .42rem; border-top: 1px solid var(--line); }
   .service-share-lab__version dt, .service-share-lab__capabilities dt { color: var(--muted); }
   .service-share-lab__version dd, .service-share-lab__capabilities dd { min-width: 0; margin: 0; color: var(--text); font-weight: 760; overflow-wrap: anywhere; }
-  .service-share-lab__modes { display: grid; gap: .65rem; }
-  .service-share-lab__modes article { display: grid; gap: .45rem; align-content: start; padding: .75rem; border: 1px solid var(--line); border-radius: 16px; background: #fffdf8; }
+  .service-share-lab__actions { padding-block: .25rem; }
   .service-share-lab__paste-label { display: grid; gap: .35rem; margin-top: .7rem; color: var(--text); font-weight: 760; }
   .service-share-lab textarea, .service-share-lab__editable, .service-share-lab__image-target { width: 100%; min-height: 7rem; padding: .7rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--text); font: inherit; font-weight: 400; }
   .service-share-lab__image-target img { width: min(100%, 280px); max-height: 280px; object-fit: contain; }
@@ -122,7 +119,6 @@ const manifestUrl = withBase('/service-share/current/manifest.json');
     .service-share-lab__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
     .service-share-lab__card-preview { grid-row: span 2; }
     .service-share-lab__ledger-card { grid-column: 1 / -1; }
-    .service-share-lab__modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
 </style>
 

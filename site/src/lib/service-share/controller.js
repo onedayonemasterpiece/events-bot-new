@@ -111,19 +111,21 @@ export function serviceShareHtml(manifest) {
   return `<article><img src="${imageUrl}" alt=""><h2>KenigEvents</h2><p>${copy}</p><p><a href="${SERVICE_SHARE_CANONICAL_URL}">kenigevents.ru</a></p></article>`;
 }
 
-export function createRichClipboardItem(manifest, mode, pngPromise, ClipboardItemCtor = globalThis.ClipboardItem) {
-  const safeMode = normalizedMode(mode);
-  if (safeMode === 'd0' || typeof ClipboardItemCtor !== 'function') throw new Error('clipboard_item_unavailable');
-  const html = new Blob([serviceShareHtml(manifest)], { type: 'text/html' });
-  const plain = new Blob([serviceSharePlainText(manifest)], { type: 'text/plain' });
+export function createImageClipboardItem(pngPromise, ClipboardItemCtor = globalThis.ClipboardItem) {
+  if (typeof ClipboardItemCtor !== 'function') throw new Error('clipboard_item_unavailable');
   const png = Promise.resolve(pngPromise).then((blob) => {
     if (!(blob instanceof Blob) || blob.type !== 'image/png') throw new Error('png_invalid');
     return blob;
   });
-  const representations = safeMode === 'd1'
-    ? { 'text/html': html, 'image/png': png, 'text/plain': plain }
-    : { 'image/png': png, 'text/html': html, 'text/plain': plain };
-  return new ClipboardItemCtor(representations);
+  // This action intentionally has one representation. Adding text/plain or
+  // text/html makes messenger paste behavior ambiguous and mixes user intents.
+  return new ClipboardItemCtor({ 'image/png': png });
+}
+
+// Compatibility export for consumers of the preview-only D1/D2 helper. The
+// legacy mode argument is ignored; the clipboard contract is image-only.
+export function createRichClipboardItem(_manifest, _mode, pngPromise, ClipboardItemCtor = globalThis.ClipboardItem) {
+  return createImageClipboardItem(pngPromise, ClipboardItemCtor);
 }
 
 export function coarseServiceSharePlatform(navigatorLike = globalThis.navigator) {
@@ -237,7 +239,7 @@ function telemetry(root, eventKind, detail = {}, startedAt = performance.now()) 
     event_kind: eventKind,
     surface: safeSurface(root.dataset.serviceShareSurface),
     transport: detail.transport === 'system_share' ? 'system_share' : 'clipboard',
-    mode: ['mobile_file', 'mobile_text', 'd0', 'd1', 'd2'].includes(detail.mode) ? detail.mode : 'd0',
+    mode: ['mobile_file', 'mobile_text', 'desktop_image', 'desktop_text', 'd0', 'd1', 'd2'].includes(detail.mode) ? detail.mode : 'desktop_text',
     platform: coarseServiceSharePlatform(),
     capabilities: capabilities(),
     result: safeText(detail.result, 'unknown').slice(0, 40),
@@ -249,14 +251,15 @@ function telemetry(root, eventKind, detail = {}, startedAt = performance.now()) 
   return payload;
 }
 
-function status(root, message, busy = false) {
-  const button = root.querySelector('[data-service-share-button]');
+function status(root, message) {
   const live = root.querySelector('[data-service-share-status]');
-  if (button) {
-    button.disabled = busy;
-    button.setAttribute('aria-busy', busy ? 'true' : 'false');
-  }
   if (live) live.textContent = message;
+}
+
+function setButtonBusy(button, busy) {
+  if (!button) return;
+  button.disabled = busy;
+  button.setAttribute('aria-busy', busy ? 'true' : 'false');
 }
 
 function showFallback(root) {
@@ -266,42 +269,54 @@ function showFallback(root) {
   fallback.focus({ preventScroll: true });
 }
 
-async function copyText(root, manifest, mode, startedAt, attemptedReason = 'direct') {
-  telemetry(root, 'service_copy_attempted', { transport: 'clipboard', mode: 'd0', result: 'attempted', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
+async function copyText(root, manifest, startedAt, options = {}) {
+  const mode = options.mode || 'desktop_text';
+  const attemptedReason = options.attemptedReason || 'direct';
+  telemetry(root, 'service_copy_attempted', { transport: 'clipboard', mode, result: 'attempted', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
   try {
     if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('clipboard_unavailable');
     await navigator.clipboard.writeText(serviceSharePlainText(manifest));
-    status(root, 'Скопированы текст и ссылка');
-    telemetry(root, 'service_link_copied', { transport: 'clipboard', mode: 'd0', result: 'api_resolved', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
-    telemetry(root, 'service_copy_result', { transport: 'clipboard', mode: 'd0', result: 'api_resolved', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
+    status(root, options.successMessage || 'Текст и ссылка скопированы');
+    telemetry(root, 'service_link_copied', { transport: 'clipboard', mode, result: 'api_resolved', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
+    telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'api_resolved', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
     return true;
   } catch (error) {
     showFallback(root);
-    status(root, 'Не удалось скопировать. Ссылка доступна ниже');
-    telemetry(root, 'service_copy_result', { transport: 'clipboard', mode: normalizedMode(mode), result: 'fallback_link', reason: errorReason(error), assetVersion: manifest.asset_version }, startedAt);
+    status(root, options.errorMessage || 'Не удалось скопировать ссылку');
+    telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'fallback_link', reason: errorReason(error), assetVersion: manifest.asset_version }, startedAt);
     return false;
   }
 }
 
-async function richCopy(root, manifest, mode, pngPromise, startedAt) {
+async function imageCopy(root, manifest, pngPromise, startedAt) {
+  const mode = 'desktop_image';
   telemetry(root, 'service_copy_attempted', { transport: 'clipboard', mode, result: 'attempted', reason: 'direct', assetVersion: manifest.asset_version }, startedAt);
   try {
     if (!globalThis.isSecureContext) throw new Error('secure_context_unavailable');
     if (!document.hasFocus?.()) throw new DOMException('Document is not focused', 'NotAllowedError');
     if (typeof navigator.clipboard?.write !== 'function' || typeof globalThis.ClipboardItem !== 'function') throw new Error('clipboard_unavailable');
-    const item = createRichClipboardItem(manifest, mode, pngPromise, globalThis.ClipboardItem);
+    const item = createImageClipboardItem(pngPromise, globalThis.ClipboardItem);
     await navigator.clipboard.write([item]);
-    status(root, 'Карточка скопирована. При вставке приложение выберет поддерживаемый формат');
+    status(root, 'Карточка скопирована в буфер');
     telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'api_resolved', reason: 'none', assetVersion: manifest.asset_version }, startedAt);
     return true;
   } catch (error) {
-    return copyText(root, manifest, mode, startedAt, errorReason(error));
+    // Do not turn the image intent into text: the adjacent text button remains
+    // available and keeps the result of this action deterministic.
+    status(root, 'Не удалось скопировать картинку');
+    telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'api_rejected', reason: errorReason(error), assetVersion: manifest.asset_version }, startedAt);
+    return false;
   }
 }
 
 async function mobileShare(root, prepared, startedAt) {
   const manifest = prepared.manifest;
-  if (typeof navigator.share !== 'function') return copyText(root, manifest, 'd0', startedAt, 'share_unavailable');
+  if (typeof navigator.share !== 'function') return copyText(root, manifest, startedAt, {
+    mode: 'mobile_text',
+    attemptedReason: 'share_unavailable',
+    successMessage: 'Скопированы текст и ссылка',
+    errorMessage: 'Не удалось скопировать. Ссылка доступна ниже',
+  });
   try {
     const webpBlob = prepared.webpBlob;
     if (webpBlob && typeof globalThis.File === 'function' && typeof navigator.canShare === 'function') {
@@ -327,7 +342,12 @@ async function mobileShare(root, prepared, startedAt) {
       return false;
     }
     telemetry(root, 'share_error', { transport: 'system_share', mode: prepared.webpBlob ? 'mobile_file' : 'mobile_text', result: 'fallback_text', reason, assetVersion: manifest.asset_version }, startedAt);
-    return copyText(root, manifest, 'd0', startedAt, reason);
+    return copyText(root, manifest, startedAt, {
+      mode: 'mobile_text',
+      attemptedReason: reason,
+      successMessage: 'Скопированы текст и ссылка',
+      errorMessage: 'Не удалось скопировать. Ссылка доступна ниже',
+    });
   }
 }
 
@@ -355,45 +375,46 @@ function prepare(root) {
   return prepared;
 }
 
-async function invoke(root) {
+async function invoke(root, button) {
   const startedAt = performance.now();
   const prepared = prepare(root);
-  status(root, '', true);
+  const isMobile = matchMedia('(max-width: 767px)').matches;
+  const intent = isMobile ? 'mobile' : button?.dataset.serviceShareIntent;
+  const mode = isMobile ? 'mobile_text' : intent === 'image' ? 'desktop_image' : 'desktop_text';
+  status(root, '');
+  setButtonBusy(button, true);
   telemetry(root, 'service_share_invoked', {
-    transport: matchMedia('(max-width: 767px)').matches ? 'system_share' : 'clipboard',
-    mode: matchMedia('(max-width: 767px)').matches ? 'mobile_text' : normalizedMode(root.dataset.serviceShareDesktopMode),
+    transport: isMobile ? 'system_share' : 'clipboard',
+    mode,
     result: 'attempted',
     reason: 'none',
     assetVersion: prepared.manifest.asset_version,
   }, startedAt);
   try {
-    const isMobile = matchMedia('(max-width: 767px)').matches;
     if (isMobile) {
       // Never wait for a network fetch in the activation path. A verified,
       // prefetched file is used only when it is already available.
       await mobileShare(root, prepared, startedAt);
       return;
     }
-    const mode = normalizedMode(root.dataset.serviceShareDesktopMode);
-    // Clipboard APIs, like Web Share, are transient-activation-sensitive. Do
-    // not wait for manifest/network preparation after the click. D0 can use
-    // the centrally frozen evergreen copy immediately; D1/D2 degrade to D0
-    // unless the manifest and PNG Promise already exist.
-    if (!prepared.manifestReady) {
-      await copyText(root, prepared.manifest, mode, startedAt, 'manifest_not_ready');
-    } else if (mode === 'd0') {
-      await copyText(root, prepared.manifest, mode, startedAt);
-    } else if (!prepared.pngPromise) {
-      await copyText(root, prepared.manifest, mode, startedAt, 'asset_not_ready');
+    if (intent === 'image') {
+      if (!prepared.manifestReady || !prepared.pngPromise) {
+        status(root, 'Не удалось скопировать картинку');
+        telemetry(root, 'service_copy_result', {
+          transport: 'clipboard',
+          mode: 'desktop_image',
+          result: 'api_rejected',
+          reason: prepared.manifestReady ? 'asset_not_ready' : 'manifest_not_ready',
+          assetVersion: prepared.manifest.asset_version,
+        }, startedAt);
+      } else {
+        await imageCopy(root, prepared.manifest, prepared.pngPromise, startedAt);
+      }
     } else {
-      await richCopy(root, prepared.manifest, mode, prepared.pngPromise, startedAt);
+      await copyText(root, prepared.manifest, startedAt, { mode: 'desktop_text' });
     }
   } finally {
-    const button = root.querySelector('[data-service-share-button]');
-    if (button) {
-      button.disabled = false;
-      button.setAttribute('aria-busy', 'false');
-    }
+    setButtonBusy(button, false);
   }
 }
 
@@ -403,22 +424,24 @@ export function hydrateServiceShareActions(scope = document) {
     if (root.dataset.serviceShareHydrated === 'true') return;
     root.dataset.serviceShareHydrated = 'true';
     prepare(root);
-    const button = root.querySelector('[data-service-share-button]');
+    const buttons = [...root.querySelectorAll('[data-service-share-button]')];
     let opened = false;
     const markOpened = () => {
       if (opened) return;
       opened = true;
       telemetry(root, 'service_share_opened', {
         transport: matchMedia('(max-width: 767px)').matches ? 'system_share' : 'clipboard',
-        mode: matchMedia('(max-width: 767px)').matches ? 'mobile_text' : normalizedMode(root.dataset.serviceShareDesktopMode),
+        mode: matchMedia('(max-width: 767px)').matches ? 'mobile_text' : 'desktop_text',
         result: 'visible',
         reason: 'none',
         assetVersion: root.__serviceSharePrepared?.manifest?.asset_version,
       });
     };
-    button?.addEventListener('focus', markOpened, { once: true });
-    button?.addEventListener('pointerenter', markOpened, { once: true });
-    button?.addEventListener('click', () => void invoke(root));
+    buttons.forEach((button) => {
+      button.addEventListener('focus', markOpened, { once: true });
+      button.addEventListener('pointerenter', markOpened, { once: true });
+      button.addEventListener('click', () => void invoke(root, button));
+    });
   });
   return roots.length;
 }

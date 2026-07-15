@@ -21,7 +21,7 @@ const manifest = {
 type MockOptions = {
   canShare?: boolean;
   share?: 'resolve' | 'abort' | 'reject' | 'unavailable';
-  clipboardWrite?: 'resolve' | 'reject';
+  clipboardWrite?: 'resolve' | 'reject' | 'pending';
   clipboardText?: 'resolve' | 'reject' | 'unavailable';
 };
 
@@ -76,6 +76,9 @@ async function installBrowserMocks(page: Page, options: MockOptions = {}) {
     const clipboard: any = {
       write: async (items: FakeClipboardItem[]) => {
         if (settings.clipboardWrite === 'reject') throw new DOMException('Blocked', 'DataError');
+        if (settings.clipboardWrite === 'pending') {
+          await new Promise<void>((resolve) => { state.resolveClipboardWrite = resolve; });
+        }
         const captured = [];
         for (const item of items) {
           const representations = [];
@@ -122,7 +125,7 @@ test.describe('F18 mobile footer transport', () => {
     await expect(page.locator('.site-header [data-service-share-root]')).toHaveCount(0);
     await expect(root).toHaveAttribute('data-service-share-canonical-url', CANONICAL_URL);
     await expect(root).toHaveAttribute('data-service-share-ready', 'file');
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).focus();
+    await root.getByRole('button', { name: 'Поделиться афишей KenigEvents' }).focus();
     await page.keyboard.press('Enter');
     await expect.poll(() => page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(1);
     const call = await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls[0]);
@@ -137,7 +140,7 @@ test.describe('F18 mobile footer transport', () => {
     await open(page, '/segodnya/', { canShare: false });
     const root = footerRoot(page);
     await expect(root).toHaveAttribute('data-service-share-ready', 'file');
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
+    await root.getByRole('button', { name: 'Поделиться афишей KenigEvents' }).click();
     await expect.poll(() => page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(1);
     const call = await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls[0]);
     expect(call.files).toEqual([]);
@@ -148,7 +151,7 @@ test.describe('F18 mobile footer transport', () => {
     await open(page, '/poisk/', { share: 'reject' });
     const root = footerRoot(page);
     await expect(root).toHaveAttribute('data-service-share-ready', 'file');
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
+    await root.getByRole('button', { name: 'Поделиться афишей KenigEvents' }).click();
     await expect(root.locator('[aria-live="polite"]')).toHaveText('Скопированы текст и ссылка');
     const copied = await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls[0]);
     expect(copied).toContain(CANONICAL_URL);
@@ -159,7 +162,7 @@ test.describe('F18 mobile footer transport', () => {
     await open(page, '/__preview/', { share: 'abort' });
     const root = footerRoot(page);
     await expect(root).toHaveAttribute('data-service-share-ready', 'file');
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
+    await root.getByRole('button', { name: 'Поделиться афишей KenigEvents' }).click();
     await expect(root.locator('[aria-live="polite"]')).toHaveText('Отменено');
     expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls.length)).toBe(0);
   });
@@ -167,60 +170,97 @@ test.describe('F18 mobile footer transport', () => {
   test('clipboard denial reveals an ordinary canonical link', async ({ page }) => {
     await open(page, '/__preview/', { share: 'unavailable', clipboardText: 'reject' });
     const root = footerRoot(page);
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
+    await root.getByRole('button', { name: 'Поделиться афишей KenigEvents' }).click();
     await expect(root.locator('[data-service-share-fallback]')).toBeVisible();
     await expect(root.locator('[data-service-share-fallback]')).toHaveAttribute('href', CANONICAL_URL);
     await expect(root.locator('[aria-live="polite"]')).toContainText('Ссылка доступна ниже');
   });
 });
 
-test.describe('F18 desktop footer and clipboard candidates', () => {
+test.describe('F18 desktop footer with explicit clipboard intents', () => {
   test.use({ viewport: { width: 1366, height: 768 } });
 
-  test('D0 is default and never calls navigator.share', async ({ page }) => {
+  test('renders a quiet utility row with two equal desktop actions', async ({ page }) => {
     await open(page, '/__preview/');
     const root = footerRoot(page);
     await expect(root).toHaveAttribute('data-service-share-desktop-mode', 'd0');
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
-    await expect(root.locator('[aria-live="polite"]')).toHaveText('Скопированы текст и ссылка');
-    expect(await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(0);
-    expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls[0])).toContain(CANONICAL_URL);
+    await expect(root).toContainText('Поделиться афишей');
+    await expect(root).not.toContainText('Понравилась афиша?');
+    await expect(root.getByRole('button', { name: 'Скопировать карточку KenigEvents' })).toBeVisible();
+    await expect(root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' })).toBeVisible();
+    await expect(root.getByRole('button', { name: 'Поделиться афишей KenigEvents' })).toBeHidden();
+    const styles = await root.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return {
+        backgroundImage: computed.backgroundImage,
+        boxShadow: computed.boxShadow,
+        borderTopWidth: computed.borderTopWidth,
+        borderRadius: computed.borderRadius,
+      };
+    });
+    expect(styles).toEqual({ backgroundImage: 'none', boxShadow: 'none', borderTopWidth: '0px', borderRadius: '0px' });
   });
 
-  for (const [mode, types] of [
-    ['d1', ['text/html', 'image/png', 'text/plain']],
-    ['d2', ['image/png', 'text/html', 'text/plain']],
-  ] as const) {
-    test(`${mode.toUpperCase()} writes one ClipboardItem in the contracted order`, async ({ page }) => {
-      await open(page, '/lab/service-share/');
-      const root = page.locator(`[data-service-share-root][data-service-share-surface="lab"][data-service-share-desktop-mode="${mode}"]`);
-      await expect(root).toHaveAttribute('data-service-share-ready', 'file');
-      await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
-      await expect(root.locator('[aria-live="polite"]')).toHaveText('Карточка скопирована. При вставке приложение выберет поддерживаемый формат');
-      const writes = await page.evaluate(() => (window as any).__serviceShareMocks.clipboardWrites);
-      expect(writes).toHaveLength(1);
-      expect(writes[0]).toHaveLength(1);
-      expect(writes[0][0].types).toEqual(types);
-      const png = writes[0][0].representations.find((item: any) => item.type === 'image/png');
-      expect(png.blobType).toBe('image/png');
-      expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-      const plain = writes[0][0].representations.find((item: any) => item.type === 'text/plain');
-      expect(plain.text).toContain(CANONICAL_URL);
-      const html = writes[0][0].representations.find((item: any) => item.type === 'text/html').text;
-      expect(html).toContain(`<a href="${CANONICAL_URL}">`);
-      expect(html).not.toMatch(/<script|javascript:|onerror=/iu);
-      expect(html).not.toContain('/lab/service-share/');
-      expect(await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(0);
-    });
-  }
+  test('text action writes only plain text and canonical URL', async ({ page }) => {
+    await open(page, '/__preview/');
+    const root = footerRoot(page);
+    await root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' }).click();
+    await expect(root.locator('[aria-live="polite"]')).toHaveText('Текст и ссылка скопированы');
+    expect(await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(0);
+    expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls[0])).toContain(CANONICAL_URL);
+    expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardWrites.length)).toBe(0);
+  });
 
-  test('rich ClipboardItem failure immediately degrades to D0', async ({ page }) => {
-    await open(page, '/lab/service-share/', { clipboardWrite: 'reject' });
-    const root = page.locator('[data-service-share-root][data-service-share-surface="lab"][data-service-share-desktop-mode="d1"]');
+  test('card action writes one ClipboardItem containing image/png only', async ({ page }) => {
+    await open(page, '/lab/service-share/');
+    const root = page.locator('[data-service-share-root][data-service-share-surface="lab"]');
     await expect(root).toHaveAttribute('data-service-share-ready', 'file');
-    await root.getByRole('button', { name: 'Поделиться KenigEvents' }).click();
-    await expect(root.locator('[aria-live="polite"]')).toHaveText('Скопированы текст и ссылка');
-    expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls)).toHaveLength(1);
+    await root.getByRole('button', { name: 'Скопировать карточку KenigEvents' }).click();
+    await expect(root.locator('[aria-live="polite"]')).toHaveText('Карточка скопирована в буфер');
+    const writes = await page.evaluate(() => (window as any).__serviceShareMocks.clipboardWrites);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toHaveLength(1);
+    expect(writes[0][0].types).toEqual(['image/png']);
+    expect(writes[0][0].representations).toHaveLength(1);
+    expect(writes[0][0].representations[0].blobType).toBe('image/png');
+    expect(writes[0][0].representations[0].signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls.length)).toBe(0);
+    expect(await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(0);
+  });
+
+  test('image failure stays an image error and never falls back to text', async ({ page }) => {
+    await open(page, '/lab/service-share/', { clipboardWrite: 'reject' });
+    const root = page.locator('[data-service-share-root][data-service-share-surface="lab"]');
+    await expect(root).toHaveAttribute('data-service-share-ready', 'file');
+    await root.getByRole('button', { name: 'Скопировать карточку KenigEvents' }).click();
+    await expect(root.locator('[aria-live="polite"]')).toHaveText('Не удалось скопировать картинку');
+    expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls)).toHaveLength(0);
+    await expect(root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' })).toBeEnabled();
+  });
+
+  test('busy state is scoped to the invoked desktop button', async ({ page }) => {
+    await open(page, '/__preview/', { clipboardWrite: 'pending' });
+    const root = footerRoot(page);
+    const imageButton = root.getByRole('button', { name: 'Скопировать карточку KenigEvents' });
+    const textButton = root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' });
+    const clickPromise = imageButton.click();
+    await expect(imageButton).toHaveAttribute('aria-busy', 'true');
+    expect(await imageButton.isDisabled()).toBe(true);
+    expect(await textButton.isEnabled()).toBe(true);
+    expect(await textButton.getAttribute('aria-busy')).toBe('false');
+    await page.evaluate(() => (window as any).__serviceShareMocks.resolveClipboardWrite());
+    await clickPromise;
+    await expect(imageButton).toBeEnabled();
+    await expect(imageButton).toHaveAttribute('aria-busy', 'false');
+  });
+
+  test('desktop controls wrap safely at 200% zoom', async ({ page }) => {
+    await open(page, '/__preview/');
+    await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
+    const root = footerRoot(page);
+    await expect(root.getByRole('button', { name: 'Скопировать карточку KenigEvents' })).toBeVisible();
+    await expect(root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
   test('lab exposes bounded capabilities, controlled paste targets and ledger clear', async ({ page }) => {
@@ -231,7 +271,7 @@ test.describe('F18 desktop footer and clipboard candidates', () => {
     await expect(page.locator('[data-paste-target="plain"]')).toBeVisible();
     await expect(page.locator('[data-paste-target="rich"]')).toBeVisible();
     await expect(page.locator('[data-paste-target="image"]')).toBeVisible();
-    await footerRoot(page).getByRole('button', { name: 'Поделиться KenigEvents' }).click();
+    await footerRoot(page).getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' }).click();
     await expect(page.locator('[data-service-share-ledger] li')).not.toHaveCount(0);
     await page.locator('[data-clear-service-share-ledger]').click();
     await expect(page.locator('[data-service-share-ledger] li')).toHaveCount(0);
