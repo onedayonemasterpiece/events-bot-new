@@ -38,6 +38,11 @@ python kaggle/execute_event_age_bge_assessment.py \
 
 Canonical private kernel ref: `zigomaro/event-age-bge-assessment-shadow`.
 
+The launcher checks both states: Kaggle kernel `COMPLETE` and the downloaded
+worker report. A bounded `partial` report is returned as a non-zero launcher
+result with `events_done/events_total`; it must be followed by a remainder
+batch and must not be presented as a completed calibration.
+
 Outputs: `event_age_bge_result.json`, `event_age_bge_event_vectors.npz`, optional
 cold-start prototype vectors, and a partial checkpoint under `/kaggle/working`.
 

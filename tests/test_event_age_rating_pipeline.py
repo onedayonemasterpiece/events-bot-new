@@ -27,6 +27,15 @@ def load_bge_worker():
     return module
 
 
+def load_bge_launcher():
+    path = ROOT / "kaggle" / "execute_event_age_bge_assessment.py"
+    spec = importlib.util.spec_from_file_location("execute_event_age_bge_assessment", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_static_exporter():
     path = ROOT / "site" / "scripts" / "export-production-preview-data.py"
     spec = importlib.util.spec_from_file_location("event_preview_export", path)
@@ -160,6 +169,21 @@ def test_bge_dependency_probe_repairs_incompatible_preinstalled_package(monkeypa
     assert len(commands) == 1
     assert "--upgrade" in commands[0]
     assert "FlagEmbedding==1.4.0" in commands[0]
+
+
+def test_manual_launcher_exposes_partial_worker_report(tmp_path):
+    worker_report_summary = load_bge_launcher().worker_report_summary
+    report = tmp_path / "event_age_bge_result.json"
+    report.write_text(
+        json.dumps({"status": "partial", "events_total": 718, "events_done": 704}),
+        encoding="utf-8",
+    )
+
+    assert worker_report_summary([str(report)]) == {
+        "status": "partial",
+        "events_total": 718,
+        "events_done": 704,
+    }
 
 
 def test_bge_classifier_gate_is_automatic_and_hash_bound(tmp_path, monkeypatch):

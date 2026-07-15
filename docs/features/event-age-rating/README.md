@@ -201,6 +201,32 @@ kernel оставлен для следующих hash-bound batch runs.
 Ignored evidence:
 `artifacts/codex/event-age-rating-auto-calibration-2026-07-15/event-age-bge-canary-20260715t1128z/`.
 
+### Полный calibration run 2026-07-15
+
+Повторный CPU-прогон закрыл весь свежий snapshot: `704 + 14 = 718/718`
+событий, `718` уникальных input hash, один model/encoder/prototype contract и
+ноль незамаскированных age tokens. Follow-up из 14 строк потребовался после
+runtime guard основного batch. Manual launcher теперь различает внешний Kaggle
+`COMPLETE` и внутренний worker `partial`, поэтому такой результат больше нельзя
+выдать за завершённый batch.
+
+Классификатор quality gate **не прошёл** и не активирован:
+
+- grouped source-candidate test: accepted coverage `75.2%`, exact `71.4%`,
+  within-one `92.3%`, severe-under `2.2%`;
+- Gemini Pro scope review на calibration/test: `72 accept`, `19 reject`,
+  `103 ambiguous`; на принятом test exact `36%`, class support недостаточен;
+- дополнительный deterministic class-stratified test: exact `68.1%`,
+  within-one `86.7%`.
+
+Таким образом полный run завершил калибровочную проверку, но доказал, что
+текущие source-token labels слишком шумные, а BGE head недостаточно точен.
+Production остаётся `shadow/declared_only`; numeric default и classifier bundle
+не создаются.
+
+Ignored evidence:
+`artifacts/codex/event-age-rating-full-calibration-2026-07-15-v3/`.
+
 ## Public projection
 
 `STATIC_EVENT_AGE_POLICY`:
@@ -255,10 +281,11 @@ missing-assessable 183, missing-insufficient 2, очевидные unrelated-con
 candidates 18; `projection_lost=99`. Группы false-positive/projection являются
 пересекающимися контрольными срезами.
 
-Full snapshot dry-run: 6 485 rows, 0 writes и 0 LLM calls. Candidate groups:
-717 consistent, 230 conflict, 618 poster-only, 17 description-only,
-3 023 missing-assessable, 1 880 insufficient. Полные обезличенные отчёты и
-snapshot находятся в ignored `artifacts/codex/event-age-rating-audit-2026-07-15/`.
+Обновлённый full snapshot dry-run: 6 487 rows, 0 writes и 0 LLM calls.
+Candidate groups: 718 consistent, 230 conflict, 618 poster-only,
+17 description-only, 3 024 missing-assessable, 1 880 insufficient. Полные
+обезличенные отчёты и snapshot находятся в ignored
+`artifacts/codex/event-age-rating-audit-2026-07-15/`.
 
 ## Backfill и эксплуатация
 

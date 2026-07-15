@@ -29,6 +29,23 @@ def load_env(path: Path) -> None:
             os.environ[key.strip()] = value.strip().strip('"').strip("'")
 
 
+def worker_report_summary(files: list[str]) -> dict[str, object]:
+    """Expose the worker terminal state instead of only Kaggle's outer state."""
+
+    paths = [Path(value) for value in files if Path(value).name == "event_age_bge_result.json"]
+    if len(paths) != 1:
+        return {"status": "missing", "events_total": None, "events_done": None}
+    try:
+        payload = json.loads(paths[0].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"status": "invalid", "events_total": None, "events_done": None}
+    return {
+        "status": str(payload.get("status") or "missing"),
+        "events_total": payload.get("events_total"),
+        "events_done": payload.get("events_done"),
+    }
+
+
 async def amain() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env")
@@ -72,8 +89,22 @@ async def amain() -> int:
         )
     finally:
         await db.close()
-    print(json.dumps({"run_id": run_id, "status": status, "files": files, "duration": duration}))
-    return 0 if status == "complete" else 1
+    worker = worker_report_summary(files)
+    print(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "status": status,
+                "worker": worker,
+                "files": files,
+                "duration": duration,
+            }
+        )
+    )
+    # Kaggle marks a kernel COMPLETE even when the bounded worker deliberately
+    # exports a partial checkpoint. A manual/calibration launcher must not
+    # report that as a completed event batch.
+    return 0 if status == "complete" and worker["status"] == "complete" else 1
 
 
 if __name__ == "__main__":
