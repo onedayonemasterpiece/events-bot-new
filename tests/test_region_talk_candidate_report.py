@@ -5834,6 +5834,79 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotIn("text_excerpt", payload)
         self.assertNotIn("short_summary", payload)
 
+    def test_online_post_payload_assigns_first_seen_to_brand_new_post(self) -> None:
+        mod = load_module()
+        payload = mod._online_post_payload(
+            {
+                "post_id": "new-post",
+                "platform_post_key": "tg:source:42",
+                "post_url": "https://t.me/source/42",
+                "text": "Калининград",
+            },
+            run_id="first-run",
+            stage="telegram_history_fetch",
+        )
+        self.assertEqual(payload["first_seen_run_id"], "first-run")
+        self.assertEqual(payload["last_seen_run_id"], "first-run")
+
+    def test_online_post_payload_preserves_loaded_first_seen_lineage(self) -> None:
+        mod = load_module()
+        mod.remember_processed_post_lineage({
+            "processed_posts": {
+                "legacy-fetch-id": {
+                    "post_id": "legacy-fetch-id",
+                    "platform_post_key": "telegram:@Source:42",
+                    "post_url": "https://t.me/Source/42",
+                    "first_seen_run_id": "old-run",
+                    "last_seen_run_id": "previous-run",
+                }
+            }
+        })
+        fetched = mod._online_post_payload(
+            {
+                "post_id": "new-fetch-path-id",
+                "post_url": "https://t.me/source/42?single=1",
+                "text": "Калининград",
+            },
+            run_id="current-run",
+            stage="exact_post_fetch",
+        )
+        rescored = mod._online_post_payload(
+            {
+                **fetched,
+                "current_stage": "semantic_candidate",
+            },
+            run_id="current-run",
+            stage="post_scored",
+        )
+        self.assertEqual(fetched["first_seen_run_id"], "old-run")
+        self.assertEqual(rescored["first_seen_run_id"], "old-run")
+        self.assertEqual(rescored["last_seen_run_id"], "current-run")
+
+    def test_loaded_legacy_post_without_first_seen_is_not_reported_as_new(self) -> None:
+        mod = load_module()
+        mod.remember_processed_post_lineage({
+            "run_id": "checkpoint-run",
+            "processed_posts": {
+                "tg:source:77": {
+                    "platform_post_key": "tg:source:77",
+                    "post_url": "https://t.me/source/77",
+                    "run_id": "historical-observation-run",
+                }
+            },
+        })
+        payload = mod._online_post_payload(
+            {
+                "platform_post_key": "tg:source:77",
+                "post_url": "https://t.me/source/77",
+                "text": "Калининград",
+            },
+            run_id="current-run",
+            stage="telegram_history_fetch",
+        )
+        self.assertEqual(payload["first_seen_run_id"], "historical-observation-run")
+        self.assertNotEqual(payload["first_seen_run_id"], "current-run")
+
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
         posts = [

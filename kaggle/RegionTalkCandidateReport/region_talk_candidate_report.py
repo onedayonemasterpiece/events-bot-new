@@ -3139,10 +3139,23 @@ def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, st
 def _online_post_payload(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> dict[str, Any]:
     now = utc_now_iso()
     text = str(row.get("text") or row.get("text_excerpt") or "")
+    post_key = durable_processed_post_key(row)
+    lineage_cache = _REGION_TALK_TELEGRAM_RUNTIME.setdefault("processed_post_lineage_by_key", {})
+    previous_lineage = dict(lineage_cache.get(post_key) or {}) if post_key else {}
+    # Fetched rows are persisted before the more expensive vector/scoring pass.
+    # Own first-seen lineage here so every acquisition path (including rows
+    # skipped as unchanged later in the run) gets honest new-vs-repeat state.
+    first_seen_run_id = str(
+        previous_lineage.get("first_seen_run_id")
+        or previous_lineage.get("last_seen_run_id")
+        or row.get("first_seen_run_id")
+        or run_id
+    )
     payload = {
         **row,
         "run_id": run_id,
         "updated_at": now,
+        "first_seen_run_id": first_seen_run_id,
         "last_seen_run_id": run_id,
         "online_update_stage": stage,
         "post_observation_status": status or row.get("current_stage") or "fetched",
@@ -3170,7 +3183,13 @@ def _online_post_payload(row: dict[str, Any], *, run_id: str, stage: str, status
     })
     payload.pop("text", None)
     payload.pop("raw", None)
-    return compact_record(payload, POST_LIVE_STATE_FIELDS, max_len=900)
+    compact = compact_record(payload, POST_LIVE_STATE_FIELDS, max_len=900)
+    if post_key:
+        lineage_cache[post_key] = {
+            "first_seen_run_id": first_seen_run_id,
+            "last_seen_run_id": run_id,
+        }
+    return compact
 
 
 def write_region_talk_online_post_item(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> None:
@@ -3815,6 +3834,44 @@ def remember_post_link_lifecycle(state: dict[str, Any]) -> None:
         if post_url:
             cache[post_url] = item
     _REGION_TALK_TELEGRAM_RUNTIME["post_link_lifecycle_by_id"] = cache
+
+
+def remember_processed_post_lineage(state: dict[str, Any]) -> None:
+    """Prime durable first-seen lineage before any online fetch writes.
+
+    CandidateReport writes a fetched observation to YDB before scoring it.
+    Without this cache that early write had no ``first_seen_run_id`` and the
+    final compact snapshot deliberately did not rewrite the row.  Re-key all
+    compatible post collections and preserve the oldest loaded first-seen id.
+    """
+    cache: dict[str, dict[str, str]] = {}
+    for collection_name in ("processed_posts", "posts", "post_live", "post_live_posts"):
+        rows = state.get(collection_name) if isinstance(state.get(collection_name), dict) else {}
+        for original_key, row in rows.items():
+            if not isinstance(row, dict):
+                continue
+            post_key = durable_processed_post_key(row) or str(original_key or "")
+            if not post_key:
+                continue
+            previous = cache.get(post_key) or {}
+            # A loaded row is definitionally not new in the upcoming run even
+            # when it predates the first-seen field. Preserve the best prior
+            # run provenance rather than misclassifying every legacy rescan as
+            # a newly acquired post on the first rollout of this contract.
+            first_seen = str(
+                previous.get("first_seen_run_id")
+                or row.get("first_seen_run_id")
+                or row.get("run_id")
+                or row.get("last_seen_run_id")
+                or state.get("run_id")
+                or "legacy_pre_lineage"
+            )
+            last_seen = str(row.get("last_seen_run_id") or previous.get("last_seen_run_id") or "")
+            cache[post_key] = {
+                "first_seen_run_id": first_seen,
+                "last_seen_run_id": last_seen,
+            }
+    _REGION_TALK_TELEGRAM_RUNTIME["processed_post_lineage_by_key"] = cache
 
 
 def build_e5_text_vector_enrichment_rows(
@@ -4932,15 +4989,18 @@ def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, 
         ydb_state, ydb_meta = load_region_talk_ydb_state()
         if ydb_state or ydb_meta.get("ydb_read_status") == "empty":
             remember_post_link_lifecycle(ydb_state)
+            remember_processed_post_lineage(ydb_state)
             return ydb_state, ydb_meta
         if getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
             raise RuntimeError("REGION_TALK_REQUIRE_YDB_STATE=1 but YDB state is unavailable: " + str(ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status")))
         fallback_state, fallback_meta = load_region_talk_json_state(output_dir)
         fallback_meta.update({**ydb_meta, "state_backend": "json_fallback", "state_fallback_used": "true", "state_fallback_reason": ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status") or "ydb_unavailable", "previous_state_loaded": fallback_meta.get("previous_state_loaded", "false"), "previous_state_hash": fallback_meta.get("previous_state_hash", "")})
         remember_post_link_lifecycle(fallback_state)
+        remember_processed_post_lineage(fallback_state)
         return fallback_state, fallback_meta
     state, meta = load_region_talk_json_state(output_dir)
     remember_post_link_lifecycle(state)
+    remember_processed_post_lineage(state)
     return state, meta
 
 

@@ -1097,6 +1097,16 @@ real exact-fetch and BGE-rescore work. This prevents local-source cleanup from
 inflating the product backlog or triggering an unnecessary BGE run.
 
 The compact processed-post online projection includes `first_seen_run_id`.
+The acquisition-side online writer owns this lineage before vector scoring: it
+primes a fetch-path-independent cache from the loaded durable
+`processed_post_item` rows, assigns the current run only to genuinely unseen
+post identities, and preserves that first run through repeated fetch/scoring
+writes. This is required because unchanged or runtime-deferred posts may never
+reach the later scoring-state rebuild, while the final compact snapshot
+intentionally does not overwrite authoritative row-level post state.
+Legacy rows that predate the field inherit their prior durable observation run
+(or an explicit legacy marker), so their first post-fix rescan is not counted
+as a newly acquired post.
 Latest-run KO conversion is joined back to the authoritative
 `processed_post_item` identities touched by that CandidateReport run. Routine
 candidate/image/publication reconciliation may refresh a downstream row's
