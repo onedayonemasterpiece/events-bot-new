@@ -17,6 +17,7 @@ effects and are not silently deduplicated.
 - Preview3D: `kaggle/Preview3D/preview_3d.ipynb`
 - TelegramMonitor: `kaggle/TelegramMonitor/telegram_monitor.ipynb`, `telegram_monitor.py`
 - GuideExcursionsMonitor: `kaggle/GuideExcursionsMonitor/guide_excursions_monitor.ipynb`, `guide_excursions_monitor.py`
+- ServiceShareStill research renderer: `kaggle/ServiceShareStill/service_share_still.py`
 - parser/probe kernels: `ParseDomIskusstv`, `ParsePhilharmonia`, `ParsePyramida`, `ParseQtickets`,
   `ParseTheatres`, `TheatresAfisha`, `UniversalFestivalParser`, `TelegraphCacheProbe`,
   `LollipopCanary`, `GemmaKey2Probe`, `E2ETests`, `AfishaThumb`, `LimeglowCutoutProbe`,
@@ -82,6 +83,12 @@ networking is degraded.
 - Plain script kernels without built-in status calls get the same baseline
   `kernel_started`, `alive`, terminal `report_written`, and resource
   acquire/release behavior through a temporary `runpy` wrapper.
+- The research-only `ServiceShareStill` script kernel uses the same shipped
+  `kaggle_run.json` / `kaggle_status_client.py` contract and adds business
+  progress for Blender samples, composite and image QA. Its local launcher
+  polls Kaggle kernel logs plus the redacted JSONL artifact without enabling a
+  production callback/ledger; production server launchers must still create a
+  signed status config through the canonical framework.
 
 ## Events And Heartbeat
 

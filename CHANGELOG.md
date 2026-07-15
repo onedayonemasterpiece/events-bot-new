@@ -25,6 +25,7 @@
 
 ### Added
 
+- **Service-share still / Kaggle research renderer**: added truthful per-event date/title face textures, reproducible popular/promoted/stable-random `3/2/3` selection, the agreed edge-attached «Анонсы» brand composition, and a private artifact-only Blender Kaggle pipeline with T4 GPU debug gate, exact-bundle CPU final gate, business progress polling, redacted JSONL evidence and output QA; production DB, callbacks and public channels remain untouched.
 - **Telegram Monitoring / КЛДскоп**: добавлен официальный `@kldscope_news` с `high` trust, source default и канонической площадкой `КЛДскоп, Земельная 12, 1 этаж, кабинет 3, Калининград`; официальные формулировки и склонения имени канонизируются через reference/alias layer.
 - **Site identity / post-release VK message linking**: specified a six-digit, short-lived VK direct-message challenge that links the authenticated site subject to the verified sender VK ID in the isolated YDB personal-data contour, transiently intersects public friends only against double-opted-in linked users, persists no full friend list/message body, and requires an honest personal-data policy, separate VK-link consent and user agreement before canary activation.
 

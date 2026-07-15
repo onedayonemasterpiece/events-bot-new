@@ -13,3 +13,4 @@
 - Gemma 4 migration repo-wide status: `gemma-4-migration-status-2026-04-22.md`
 - Static personal announcements public-release readiness audit/checklist (2026-07-11): `static-personal-announcements-release-readiness-2026-07-11.md`
 - Static personal announcements feature-branch refresh decisions (2026-07-11): `static-personal-announcements-branch-refresh-2026-07-11.md`
+- Service-share still: dated event faces, audited `3/2/3` selection and Kaggle GPU→CPU research render (2026-07-15): `service-share-still-kaggle-research-2026-07-15.md`
