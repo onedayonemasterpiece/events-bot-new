@@ -9,7 +9,7 @@ import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/event-mobile/');
 const title = `Mobile event UI variants | ${SITE_NAME}`;
-const description = 'Noindex mobile review lab: the original 2×2 experiment plus an accepted v2 candidate with full-bleed, date/time and OCR framing corrections.';
+const description = 'Noindex mobile review lab: the original 2×2 experiment plus accepted v2 and feedback-driven v3 candidates.';
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
@@ -19,9 +19,9 @@ const description = 'Noindex mobile review lab: the original 2×2 experiment plu
 
       <section class="section-card">
         <div class="section-card__inner">
-          <p class="eyebrow">mobile only · 2×2 experiment + accepted v2</p>
-          <h1>Принятые решения и исправленный candidate</h1>
-          <p class="lead">Первые четыре варианта сохраняют исходный контролируемый эксперимент. Accepted v2 добавляет только подтверждённые телефонными скриншотами исправления: full-bleed alignment, усиленную дату/время, OCR-safe framing и детерминированную compact-label policy. Бирка, sticky CTA и discovery cards не меняются.</p>
+          <p class="eyebrow">mobile only · 2×2 experiment + accepted v2/v3</p>
+          <h1>Принятые решения и feedback candidate</h1>
+          <p class="lead">Первые четыре варианта сохраняют исходный контролируемый эксперимент. Accepted v2 хранит первый исправленный проход. Accepted v3 отвечает на реальный Android feedback: выбранный лайк становится безошибочно заметным, secondary icons крупнее, подписи зависят от ширины dock, дата получает день недели, а OCR decision block поднимается выше. Бирка, sticky CTA и discovery cards не меняются.</p>
           <div class="mobile-ui-lab__legend" role="list">
             {MOBILE_EVENT_REVIEW_VARIANTS.map((variant, index) => (
               <article role="listitem">

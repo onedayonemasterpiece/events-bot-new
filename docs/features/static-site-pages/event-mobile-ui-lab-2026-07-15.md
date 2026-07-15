@@ -5,7 +5,8 @@
 Решение владельца после проверки на реальном Android: **open prose принят**,
 graphite action dock принят как направление. Следующий `accepted-v2` candidate
 исправляет три обнаруженных на телефонных скриншотах дефекта, не переписывая
-исходную матрицу 2×2.
+исходную матрицу 2×2. `accepted-v3` сохраняет v2 как точку сравнения и отдельно
+отвечает на следующий Android feedback по лайку, подписям, дню недели и OCR gap.
 
 ## Решения после повторного аудита
 
@@ -31,6 +32,7 @@ graphite action dock принят как направление. Следующ�
 | `action-dock` | текущая card | графитовый dock | только группировку действий |
 | `open-prose-action-dock` | открытый canvas | графитовый dock | совместный результат |
 | `accepted-v2` | открытый canvas | адаптивный графитовый dock | принятые решения + mobile corrections |
+| `accepted-v3` | открытый canvas | container-aware графитовый dock | feedback по лайку, labels, weekday и OCR gap |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -43,13 +45,14 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 12 комбинаций в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 18 комбинаций в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
 
 - original matrix: `preview-20260715t-mobile-ui-variants-v1`;
 - accepted candidate: `preview-20260715t-mobile-ui-accepted-v2`.
+- feedback candidate: `preview-20260715t-mobile-ui-accepted-v3`.
 
 ## Accepted v2 corrections
 
@@ -70,6 +73,36 @@ Preview builds:
 чётные event id показывают calendar, нечётные — share; если calendar отсутствует,
 label получает share. На `390px+` видны обе подписи.
 
+## Accepted v3 corrections
+
+Следующий телефонный feedback показал, что v2 исправил геометрию, но не закрыл
+четыре interaction/visual дефекта:
+
+1. выбранный лайк почти не отличался от обычного состояния;
+2. viewport breakpoint `<380px` не описывал фактическую внутреннюю ширину dock
+   на Android, поэтому обе подписи могли оставаться видимыми;
+3. усиление одной терракотовой строки date/time оставалось визуально слабым и не
+   показывало день недели;
+4. poster-parallax сдвигал весь OCR visual через transform, не меняя его layout
+   box, и создавал пустую полосу перед decision block.
+
+V3 сохраняет open prose и no-zoom `poster-stage`, но:
+
+- делает active like терракотовым solid-control с контрастным ring, solid-heart,
+  отдельным check badge и `aria-pressed="true"`; состояние различается не только
+  цветом;
+- увеличивает secondary icons с `1.08rem` до `1.28rem`, оставляя touch targets
+  не меньше `52px` в v3 dock;
+- использует CSS container query по фактической внутренней ширине action dock:
+  до `400px` виден ровно один label, остальные действия остаются icon controls с
+  полным `aria-label`; на более широком контейнере возвращаются обе подписи;
+- разделяет метаданные на weekday chip, дату, табличное время и отдельную строку
+  места на плоской divider-surface вместо ещё одной вложенной beige card;
+- отключает translate-parallax у v3 `poster-stage`, сохраняя intrinsic ratio,
+  `object-fit: contain`, нижний OCR-текст и стандартный decision overlap.
+
+V3 — новый изолированный noindex preview, а не production promotion.
+
 ## Visual QA
 
 - проверены все `4 × 3` cases на ширинах `360`, `390`, `430` и `768px`;
@@ -79,6 +112,23 @@ label получает share. На `390px+` видны обе подписи.
 - фото и OCR poster продолжают использовать исходные разные композиции;
 - у текущего mobile hero сохранён существующий `12px` full-bleed overhang — это
   общий control invariant, а не эффект какого-либо варианта.
+
+Для `accepted-v3` отдельно проверены `3` real-event scenarios на ширинах `360`,
+`390`, `430` и `768px`:
+
+- на phone нет horizontal overflow, hero rect совпадает с viewport;
+- все secondary targets не меньше `52px`;
+- на `360–430px` container query оставляет ровно одну доступную подпись, на
+  широком dock показывает все существующие labels;
+- у `5761` и `5878` на phone `object-fit: contain`, image и visual заканчиваются
+  на одной координате, decision block перекрывает media без transform-gap;
+- weekday присутствует во всех трёх сценариях;
+- like меняет `aria-pressed`, count, opaque fill, border и outline→solid heart,
+  сохраняется после reload и корректно снимается повторным tap.
+
+Машиночитаемые metrics и `13` screenshots сохранены в локальном artifact
+`artifacts/codex/mobile-ui-v3-qa-20260715/`. Полный Astro preview build (`454`
+pages) и `check-preview.mjs` завершились успешно.
 
 ## External consultation
 
@@ -95,9 +145,23 @@ contain-oriented OCR policy и детерминированную server-rendere
 Первый расширенный вызов истёк по времени; успешный узкий повтор сохранён в
 `artifacts/codex/mobile-ui-telegram-review-20260715/gemini-3.1-pro-high-screenshot-audit-retry.raw.md`.
 
+V3 acceptance review выполнен через `agy` моделью `Gemini 3.1 Pro (High)` по
+реальным 390px screenshots. Все четыре feedback-пункта получили `PASS`, P0/P1
+визуальных регрессий не найдено; reviewer признал v3 готовым к отправке владельцу
+как отдельный prototype. Raw response:
+`artifacts/codex/mobile-ui-v3-qa-20260715/gemini-3.1-pro-high-review.raw.md`.
+
+## Task-channel workflow
+
+Telegram topic, назначенный пользователем каналом задачи/приёмки, не является
+progress-log. Actionable feedback запускает полную итерацию
+`feedback → implementation → QA → preview publish → один acceptance handoff`;
+receipt-only сообщения и обещания прислать результат в следующем запуске
+запрещены проектным `AGENTS.md`.
+
 ## Acceptance gate
 
-До переноса в основную event page требуется принять либо отклонить три v2 детали:
-усиленную date/time строку, OCR-safe override при ошибочной fixture classification
-и event-parity compact-label policy. Discovery, brand tag и sticky CTA этим
+До переноса в основную event page требуется принять либо отклонить v3 active-like
+state, размер icons, container-aware single-label policy, weekday-first date/time
+panel и отключение poster parallax. Discovery, brand tag и sticky CTA этим
 решением не переутверждаются.
