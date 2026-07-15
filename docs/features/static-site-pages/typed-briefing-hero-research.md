@@ -22,7 +22,7 @@ minimal isolated prototype: approved
 production implementation: not approved
 Gemini Lite: deferred
 personalization overlay: deferred
-extended 33-scenario platform: deferred
+extended scenario platform: deferred
 ```
 
 Качественный отзыв о слишком быстрых видеоанонсах подтверждает общий риск фиксированного темпа и потери «что, где, когда», но относится к другому media format. Он не доказывает desirability текстового briefing и не определяет его оптимальную высоту или скорость.
@@ -98,7 +98,7 @@ Variants:
 
 ## Минимальная очередь нарративов
 
-Lab содержит восемь видимых scenario IDs и universal fallback. Это не восемь вариантов одной счётной фразы, а смешанная очередь: ориентиры, обучение целевым действиям и социальные крючки любопытства. Все доступны в selector; ранее спроектированные 33 family остаются backlog.
+Lab содержит восемь видимых scenario IDs и universal fallback. Это не восемь вариантов одной счётной фразы, а смешанная очередь: ориентиры, обучение целевым действиям и социальные крючки любопытства. Все доступны в selector; расширенная библиотека остаётся backlog.
 
 | ID | Family / eligibility | Копирайт в lab | Cooldown |
 |---|---|---|---|
@@ -126,6 +126,8 @@ Lab содержит восемь видимых scenario IDs и universal fallb
 ### Grounding social/comment сигналов
 
 Production-фраза «часто пересылают» допустима только из ограниченного метрикой окна успешных share-действий, а не кликов по кнопке. «В комментариях ждут гостя» требует публичных комментариев, нескольких уникальных авторов, явного ожидания, высокой confidence связи person/entity с этим событием и expiry. Имена авторов и цитаты в briefing не переносятся. Текущий lab не имеет этого data contract, поэтому оба сигнала явно `DEMO-СИГНАЛ`.
+
+В [platform backlog](../../backlog/features/static-typed-briefing/README.md) добавлены восемь future-gated families: редкое событие, благотворительное событие, обучение умному поиску, приезжий артист из другого региона России, зарубежный артист, открывающийся/идущий фестиваль, необычный формат и самое комментируемое в ограниченном окне публичных источников. Ни одна из этих families не включена в текущие восемь lab-сцен.
 
 ### Minimal manifest shape
 
@@ -203,7 +205,7 @@ The earlier full static build failed because the host filesystem was at `99–10
 - complete useful text exists in DOM; screen readers do not receive per-character updates;
 - 4–5 semantic fragments appear with deterministic ease-out, not one whole-card wipe and not slow literal typing;
 - first fragment is visible immediately; total formation is about `0.9–1.5s` depending on `Медленнее / Обычно / Быстрее`;
-- terracotta cursor имеет два scenario-driven вида — вертикальный bar и горизонтальный underscore; в части сцен он остаётся мигать после завершения; при reduced/static он скрыт;
+- terracotta cursor имеет два scenario-driven вида — вертикальный bar и горизонтальный underscore; lab пока содержит blinking linger в части сцен, но user-review зафиксировал ложное ожидание продолжения; production-candidate обязан убирать курсор не позднее `600 ms` после последнего фрагмента, если следующая смена не запланирована и не обозначена явно; при reduced/static он скрыт;
 - `Повторить` intentionally replays in lab without reload, while ordinary session reload shows `Уже показано · можно повторить`;
 - `Показать все 8` plays each representative scenario once and stops; mobile remains manual unless the user explicitly starts the deck;
 - Previous, Pause/Continue and Next remain visible; progress is textual `N из 8`;
@@ -329,7 +331,7 @@ A public experiment still needs baseline eligible sessions/open rate, unit of ra
 7. B/C retain identical scenario copy; C exposes distinct fragment states, finite play-all and three discrete pace controls without remote requests or CLS.
 8. Eligible session, impression, completion/interruption, first-event visibility and source-side event activation are distinguishable in the local lab sink; no activation is mislabeled as destination `event_detail_open`.
 
-P1/P2 platform checks, the full 33-scenario platform, personalization, Gemini writer boundaries and the extended risk register are preserved only in the [post-validation backlog](../../backlog/features/static-typed-briefing/README.md).
+P1/P2 platform checks, the extended scenario platform, personalization, Gemini writer boundaries and the extended risk register are preserved only in the [post-validation backlog](../../backlog/features/static-typed-briefing/README.md).
 
 ## Consultation provenance
 

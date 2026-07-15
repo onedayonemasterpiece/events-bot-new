@@ -5,7 +5,7 @@
 > **Decision:** deferred until a minimal static briefing proves user and metric value.
 > **Superseding MVP gate:** [`typed-briefing-hero-research.md`](../../../features/static-site-pages/typed-briefing-hero-research.md).
 
-This file preserves the earlier 33-family scenario library, pace profiles, personalization/manifest ideas, Gemini Lite writer boundary and extended risk/checklist work as future research. It must not be read as approved MVP scope. Where this appendix conflicts with the minimal gate, the minimal gate wins.
+This file preserves and extends the post-validation scenario library, pace profiles, personalization/manifest ideas, Gemini Lite writer boundary and extended risk/checklist work as future research. It must not be read as approved MVP scope. Where this appendix conflicts with the minimal gate, the minimal gate wins.
 
 ## Короткий вывод
 
@@ -298,6 +298,18 @@ Slider можно исследовать только если дискретн�
 
 `cubic-bezier(0.16, 1, 0.3, 1)` допустим для entrance. Character typing допустим лишь для необязательного status label длиной до 24 символов и не входит в V0/V1.
 
+### Cursor completion semantics
+
+Мигающий курсор — не просто декор. Он обещает пользователю, что текст ещё вводится или скоро сменится. Поэтому:
+
+- vertical bar и underscore мигают только в `entering_next`, пока появляются смысловые фрагменты;
+- в `reading`, `manual`, `paused_user` и `exhausted` курсор исчезает не позднее чем через `600 ms` после последнего фрагмента;
+- оставлять его мигать можно только когда уже запланирован auto-advance и рядом есть явный status/progress, но такой режим не является baseline;
+- в static/no-JS/reduced-motion cursor не мигает;
+- usability gate отдельно проверяет, не создаёт ли underscore ложного ожидания следующей фразы.
+
+Постоянный blinking linger из research lab не переносится в production contract.
+
 ### State machine
 
 | State | Вход | Видимое состояние | Таймер | Следующие состояния |
@@ -354,6 +366,8 @@ Copy не содержит raw URL/HTML. Допустимы:
 {{link:route:weekend|события выходных}}
 {{link:route:exhibitions|выставки}}
 {{link:route:popular|популярное}}
+{{link:route:date:YYYY-MM-DD|афиша на дату}}
+{{link:route:search:q_all|умный поиск}}
 {{link:route:search:q_family|семейные события}}
 {{link:organizer:O42|Название организатора}}
 ```
@@ -368,6 +382,8 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 - explicit preference можно назвать выбранной; inferred preference — только осторожное предположение;
 - golden personas используются для eval coverage, но не присваиваются человеку как пользовательский label;
 - «популярно» только при документированном aggregated popularity signal;
+- «редкое» только при явном editorial flag или версионированном bounded frequency baseline; не подменять редкостью дефицит билетов;
+- «самое комментируемое в сети» недопустимо без полного охвата; допустима ограниченная формула «в обсуждениях, которые мы видим» с окном, threshold и provenance;
 - «выбор редакции» только при human editorial flag;
 - viewed downrank, не hide; dismissed hard-exclude на ограниченный TTL;
 - не использовать «лучшее», «обязательно понравится», «специально для вас»;
@@ -403,6 +419,14 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 | `verified_popular` | documented aggregate window + minimum sample/privacy threshold | later/diversity; 1/session | name metric window; no «все идут» | 1) «Чаще всего сегодня открывают {{link:event:event_id|event_title}}.» 2) «В {{link:route:popular|популярном сейчас}} — события, которые чаще смотрят за последние сутки.» |
 | `human_editorial` | explicit editor flag + review timestamp | scene 1/2; 1/day | call it editorial | 1) «Выбор редакции на сегодня — {{link:event:event_id|event_title}}.» 2) «Редакция отметила {{link:event:event_id|event_title}} среди событий выходных.» |
 | `newly_added` | `created_at` in current manifest window; active/public | later; 1/session | «добавлено», not «new premiere» | 1) «Недавно добавили {{link:event:event_id|event_title}}.» 2) «В свежих анонсах {{count}} событий. {{link:route:search:q_new|Открыть новые}}.» |
+| `rare_event` | active event has human `rare_format` flag or passes a versioned low-frequency format/occurrence baseline with provenance | later/manual; once/event/30d | можно «редко встречается в афише»; нельзя подразумевать дефицит билетов или уникальность без baseline | 1) «Такой формат редко появляется в афише: {{link:event:event_id|event_title}}.» 2) «Необычный для городской афиши формат — {{link:event:event_id|event_title}}.» |
+| `charity_event` | explicit canonical charity/benefit-purpose fact, beneficiary/donation mechanics grounded; active event | later/manual; once/event/14d | называть благотворительным только по source fact; не обещать, куда пойдут средства, если это не указано | 1) «В афише есть благотворительное событие — {{link:event:event_id|event_title}}.» 2) «Можно сходить и поддержать важное: {{link:event:event_id|event_title}}.» |
+| `smart_search_education` | `/poisk/` is enabled; for an action CTA the current user can actually authenticate/use it | education; until one successful search after exposure, then suppress 90d; max 3/year | объяснять natural-language input и простой путь; не заявлять безошибочность, «лучший» или «понимает всё» | 1) «Опишите обычными словами, куда хочется. {{link:route:search:q_all|Умный поиск}} соберёт варианты.» 2) ««Джаз вечером» или «с ребёнком в выходные» — {{link:route:search:q_all|поиску этого достаточно}}.» |
+| `visiting_artist_ru` | named participant identity and event are source-grounded; home city/region is in Russia and outside Kaliningrad Oblast; arrival/current participation is not inferred from a repost | later/manual; once/person/event/30d | «приезжает в Калининград», а не «из России»; не подменять артистом ведущего/запись | 1) «В Калининград приезжает {{person_name}} из {{home_city}}. {{link:event:event_id|Вот событие}}.» 2) «Гость из {{home_city}} — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
+| `visiting_artist_international` | named participant/event/country are source-grounded; home country is not Russia; participation remains active and inside expiry window | later/manual; once/person/event/30d | можно «зарубежный артист» или country; нельзя выводить nationality из имени или места публикации | 1) «В Калининграде выступит {{person_name}} из {{country_name}}. {{link:event:event_id|Узнать подробности}}.» 2) «Зарубежный гость на ближайшей неделе — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
+| `festival_window` | canonical festival entity with grounded start/end; starts within next 7 local calendar days or `start_date <= today <= end_date` | scene 1/2; once/festival/7d | чётко различать «откроется» и «продолжается»; не называть фестивалем одно событие | 1) «На этой неделе откроется {{festival_name}}. {{link:event:event_id|Начать с программы}}.» 2) «{{festival_name}} уже идёт. {{link:event:event_id|Что ещё можно успеть}}?» |
+| `unusual_format` | controlled public-format taxonomy or explicit editorial flag; examples include `public_talk`, `open_air_cinema`; candidate is active | later/diversity; once/format/14d | называть точный формат; не объявлять его необычным только по LLM-фразе | 1) «Формат на эту неделю — {{format_name}}: {{link:event:event_id|event_title}}.» 2) «Кино под открытым небом или паблик-ток? Сегодня есть {{link:event:event_id|такой вариант}}.» |
+| `most_discussed_visible_sources` | bounded public-comment count over allowlisted sources, deduped, current window, minimum authors/count and event identity confidence | later/diversity; once/event/window | называть окно/охват; не заявлять «во всей сети», не выводить sentiment или quality из count | 1) «В обсуждениях, которые мы видим, чаще всего комментируют {{link:event:event_id|event_title}}.» 2) «Это событие собрало больше всего комментариев в нашем окне источников. {{link:event:event_id|Что обсуждают}}?» |
 | `serendipity` | safe event outside top positive facets; not negative/dismissed | last/manual; 1/session | transparent exploration, not personalization | 1) «Если хочется выйти за привычный выбор: {{link:event:event_id|event_title}}.» 2) «Неожиданный маршрут по афише — {{link:route:search:q_diverse|другая тема}}.» |
 | `sparse_catalog` | eligible pool below threshold | scene 1; until pool recovers | honest, no apology drama | 1) «В ближайшие дни событий немного. Один из вариантов — {{link:event:event_id|event_title}}.» 2) «Афиша сейчас компактная. {{link:route:search:q_all|Посмотреть всё доступное}}.» |
 | `stale_manifest` | age beyond time-sensitive TTL but cached data still safe | scene 1 static | disclose timestamp; no “today/now” | 1) «Показываем сохранённую афишу, обновлённую {{updated_at}}.» 2) «Новые данные пока не загрузились. Можно открыть {{link:route:search:q_all|сохранённую афишу}}.» |
@@ -755,6 +779,7 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 - [ ] `focusin` pauses until explicit resume.
 - [ ] Autoplay does not resume when the component leaves viewport or tab hides.
 - [ ] Links have stable hitboxes from first frame.
+- [ ] Bar/underscore cursor disappears after the last fragment unless a visible, actually scheduled next transition justifies continued blinking.
 - [ ] `Самостоятельно` has no auto timer; calm/normal/fast affect reading hold, not fact availability.
 - [ ] Pace control is keyboard/screen-reader operable and persists only an explicit bounded enum.
 - [ ] Reduced motion overrides autoplay without erasing the saved preference.

@@ -42,3 +42,5 @@ Automation skill: `.codex/skills/telegram-mobile-ui-review/SKILL.md`.
 ## Текущий briefing lab
 
 Для typed-briefing mobile review создан topic `Typed briefing hero · mobile`, topic id `6`: <https://t.me/c/4337049383/6>. Комментарий `20` уточнил post-exposure action semantics и был обработан до closure. В topic отправлены текущий review URL, `320×568`, два `390×844` curiosity/action-экрана и WebM motion evidence; delivery IDs `27–31` верифицированы чтением треда, новых входящих после них не было.
+
+Для future prototype конкретных date listings создан topic `Date listings · mobile`, topic id `33`: <https://t.me/c/4337049383/33>. Первичная requirements-card о deep-linkable дате, раскрытии следующей секции после подзаголовка и no-JS/SEO/history/mobile gates доставлена с message id `34`; визуальных артефактов пока нет, потому что это этап спецификации, а не UI-прототип.

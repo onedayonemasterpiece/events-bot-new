@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static briefing/date discovery requirements**: expanded the future briefing library with rare, charity, smart-search, visiting-artist, festival, unusual-format and bounded most-discussed scenarios; rejected a blinking cursor after completed text unless a real next transition is pending; and specified deep-linkable concrete-date listings with bounded adjacent-date reveal, no-JS navigation, history/scroll restoration and SEO/a11y gates.
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
 - **Fly volume availability (INC-2026-07-15)**: provisioned production `/data` from 1 GiB to 2 GiB after the free-space readiness floor made `/healthz` critical, and added bounded `80%` automatic growth in 1 GiB increments up to 3 GiB while retaining the existing log, snapshot and disk-hygiene contracts.
 - **Static event pages / production desktop integration**: promoted the continuous Editorial desktop event composition with a full reading-shell boundary, delayed/sticky CTA and media rail, strict full-ratio poster companion, grouped multi-portrait viewer navigation, graphite continuation cards, and width-fit/vertical-only document normalization while leaving the established mobile event composition unchanged.

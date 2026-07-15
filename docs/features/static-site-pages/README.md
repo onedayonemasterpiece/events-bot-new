@@ -391,6 +391,23 @@ Operational rule:
 
 Date listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) should be indexable in production: they answer real date-intent queries and provide internal links to canonical event pages. The SEO risk is not the listings themselves, but mass outbound links from every card to ticket/social/source services. Therefore listing cards should not show direct external ticket/source CTAs. They keep internal event links and optional same-origin `.ics`; the external ticket/registration/source action lives on the event detail page, where context, JSON-LD and `rel="noopener noreferrer nofollow"` can be controlled. Do **not** solve outbound-link concerns by `noindex` for production listing pages. Preview builds remain `noindex,nofollow` only because they are preview prefixes.
 
+### Arbitrary date pages and adjacent-date continuation
+
+Product requirement: кроме rolling-маршрутов `Сегодня` / `Завтра` нужна deep-linkable страница афиши на любую конкретную дату. Целевой route family для prototype: `/afisha/YYYY-MM-DD/`. Окончательное соотношение canonical между `/segodnya/`, `/zavtra/` и их concrete-date эквивалентами должно быть выбрано до production rollout, чтобы не создать дубли.
+
+Required browsing behavior:
+
+1. Direct open `/afisha/YYYY-MM-DD/` сразу показывает заголовок и события запрошенной даты в готовом HTML; Europe/Kaliningrad определяет day boundary.
+2. Следующий датированный блок готовится заранее и по мере прокрутки становится видимым только **после явного `<h2>`-подзаголовка с новой датой**. Смена даты не может быть незаметной.
+3. Preload не обязан держать duplicate crawlable cards в обычном hidden DOM. Предпочтителен заранее собранный bounded `<template>`/same-origin static chunk, который материализуется перед reveal; точная форма выбирается после SEO/a11y prototype.
+4. Когда заголовок следующей даты становится основным в viewport, history/URL обновляются без сброса scroll. Back/forward возвращают дату, фильтры и позицию, а direct URL открывает ту же секцию.
+5. Без JavaScript доступны обычные crawlable links `Предыдущая дата` / `Следующая дата`; auto-continuation является enhancement, а не единственный способ навигации.
+6. Пустая дата имеет явное состояние «На эту дату событий пока нет» и переход к следующей дате; пропуск календарного дня не должен выглядеть как ошибка даты.
+7. Auto-continuation ограничен bounded window (первая гипотеза: не более двух соседних дат в DOM); затем показывается явное `Показать следующую дату`. Бесконечное разрастание DOM не допускается.
+8. Одна occurrence не дублируется между секциями. Long-running event попадает в дату по явному listing eligibility contract, а multi-date series — по отдельным occurrence IDs.
+
+Mobile prototype gate: `320×568`, `375×667`, `390×844`; no horizontal overflow, date heading and first event of the revealed section are readable, controls are `≥44px`, focus/screen-reader order follows visual date order, and revealing the next section creates no layout jump that loses the user's reading position. Telegram review topic: `Date listings · mobile`, topic `33`, <https://t.me/c/4337049383/33>.
+
 ## SEO/GEO contract
 
 Для каждой event page:
