@@ -112,7 +112,7 @@ lanes:
       - CHANGELOG.md
     expected_output: Artifact prompt, exact screenshots, full model response, model/status/time evidence, and concise handoff.
     verification_scope: inspection_only
-    status: completed
+    status: merged
   - id: ui-integrator
     role: worker
     effort: extra-high
@@ -131,11 +131,11 @@ lanes:
       - docs/features/static-personal-announcements/**
       - docs/operations/mobile-ui-telegram-review.md
       - CHANGELOG.md
-      - .codex/integration/INTEGRATION_REPORT.md
+      - .codex/integration/typed-briefing-artist-unusual-20260715-INTEGRATION_REPORT.md
     forbidden_files: []
     expected_output: Corrected prototype, tests, preview, Telegram evidence, documentation, changelog, and closure audit.
     verification_scope: full_local
-    status: in_progress
+    status: merged
   - id: merge-reviewer
     role: merge_reviewer
     effort: high
@@ -153,4 +153,4 @@ lanes:
       - CHANGELOG.md
     expected_output: Independent closure audit with explicit Done/Partial/Missing/Blocked status per requirement.
     verification_scope: full_local
-    status: planned
+    status: merged
