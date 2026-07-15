@@ -5829,6 +5829,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["vector_gate_status"], "vector_reject_not_kaliningrad_oblast")
         self.assertEqual(row["text_region_confirmation_status"], "invalidated_by_current_text_gate")
         self.assertEqual(row["next_action"], "skip_text_rejected")
+        self.assertEqual(
+            mod.image_queue_rows_for_ydb_write(queue, run_now="2026-07-15T06:00:00+00:00"),
+            [row],
+        )
         self.assertNotIn(post_url, {r.get("post_url") for r in top})
         self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 1)
 
@@ -6902,6 +6906,31 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(matches[0]["candidate_memory_id"], "cmem_" + mod.stable_hash("tg:travel:10"))
         self.assertEqual(matches[0]["post_id"], "exact_fetch_post_id")
 
+    def test_candidate_memory_does_not_turn_legacy_nonregion_posts_into_durable_audit_rows(self) -> None:
+        mod = load_module()
+        previous = {
+            "posts": {
+                f"legacy-{index}": {
+                    "post_id": f"legacy-{index}",
+                    "post_url": f"https://t.me/legacy/{index}",
+                    "current_stage": "needs_image_review",
+                    "kaliningrad_oblast_only_scope": False,
+                    "first_seen_run_id": "legacy-run",
+                }
+                for index in range(3)
+            }
+        }
+
+        memory, _not_refetched, deltas = mod.build_candidate_memory(
+            previous, [], [], "run-current", "2026-07-15T06:00:00+00:00"
+        )
+
+        self.assertEqual(memory, [])
+        self.assertEqual(
+            sum(1 for row in deltas if row.get("delta_bucket") == "excluded_by_hard_region_gate"),
+            3,
+        )
+
     def test_candidate_launcher_defaults_to_live_ydb_backend(self) -> None:
         mod = load_runner_module()
         old_backend = os.environ.pop("REGION_TALK_STATE_BACKEND", None)
@@ -7271,6 +7300,15 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 "added_at": "2026-07-12T07:00:00+00:00",
                 "image_queue_status": "needs_actual_image_fetch",
                 "status_changed_this_run": "true",
+                "last_status_changed_at": run_now,
+            },
+            {
+                "image_queue_id": "imgq_stale_true_marker",
+                "post_url": "https://t.me/blog/4",
+                "added_at": "2026-07-11T07:00:00+00:00",
+                "image_queue_status": "actual_scored",
+                "status_changed_this_run": "true",
+                "last_status_changed_at": "2026-07-13T07:30:00+00:00",
             },
         ]
         selected = mod.image_queue_rows_for_ydb_write(rows, run_now=run_now)

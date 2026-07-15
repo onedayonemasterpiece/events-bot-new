@@ -136,7 +136,15 @@ diagnostics stay attached for audit, but the row is no longer actionable. The
 publication finalizer also treats current candidate-memory source/text/vector
 fields as authoritative over the image-admission snapshot, so a stale
 `actual_scored` row cannot bypass a newer rejection between asynchronous
-notebook writes.
+notebook writes. Changed-only image handoff is scoped by the current transition
+timestamp: a persisted historical `status_changed_this_run=true` marker must
+not consume the bounded YDB write batch on a later run. The early/final handoff
+also excludes only rows that were actually persisted, not every row selected
+before the writer cap. Audit tombstones are created only for already-durable
+candidate-memory entities; compatibility imports of old processed posts that
+never had a candidate row stay out of the durable candidate ledger. This keeps
+the invalidation monotonic without turning thousands of old rejects into a new
+operational/storage backlog.
 
 ### Kaggle static/offline discipline
 

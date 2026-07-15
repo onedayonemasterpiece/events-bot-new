@@ -3331,7 +3331,16 @@ def image_queue_rows_for_ydb_write(
         if not key or key in excluded:
             continue
         is_new = str(row.get("added_at") or "") == str(run_now or "")
-        status_changed = str(row.get("status_changed_this_run") or "").strip().lower() == "true"
+        # ``status_changed_this_run`` is a persisted ledger field.  Historical
+        # rows can therefore still contain ``true`` on the next CandidateReport
+        # run.  Treat it as a current transition only when its transition
+        # timestamp is this build's ``run_now``; otherwise a stale marker can
+        # fill the bounded online-write batch and displace the one hard reject
+        # that actually changed now.
+        status_changed = (
+            str(row.get("status_changed_this_run") or "").strip().lower() == "true"
+            and str(row.get("last_status_changed_at") or "") == str(run_now or "")
+        )
         if is_new or status_changed:
             selected.append(row)
     return selected
@@ -6791,6 +6800,12 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
         previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
     )
     memory: dict[str, dict[str, Any]] = {str(k): dict(v) for k, v in previous_memory.items() if isinstance(v, dict)}
+    # Only rows that were already durable candidate-memory entities need an
+    # audit-only tombstone when a refreshed text gate rejects them.  The legacy
+    # processed-post bootstrap below is only a compatibility import; retaining
+    # every old non-region bootstrap as a new audit row inflated live memory
+    # from 811 to 2,322 rows in one run and created no product value.
+    durable_memory_ids = set(memory)
     # Exact-link and source-history fetches historically derived different
     # post_id values for the same public URL. Candidate memory is a product
     # entity, so reuse the oldest durable memory id for that URL instead of
@@ -7013,6 +7028,13 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             continue
         vector_region_accept = str(rec.get("vector_gate_status") or "") == "vector_accept_candidate" and str(rec.get("vector_content_type") or "") in {"visit_impression_candidate", "route_useful_candidate", "single_location_photo_card"}
         if (str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"} and not vector_region_accept) or (str(rec.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"} and not vector_region_accept):
+            if mid not in durable_memory_ids:
+                # Preserve the historical diagnostic sheet entry, but do not
+                # manufacture a durable candidate-memory tombstone for a
+                # legacy post that never had a candidate row of its own.
+                region_excluded.append({**rec, "candidate_memory_id": mid})
+                memory.pop(mid, None)
+                continue
             already_terminal = (
                 str(rec.get("current_stage") or "") == "dropped_text_gate"
                 and str(rec.get("current_lifecycle_status") or "") in {
@@ -8449,6 +8471,11 @@ def build_image_candidate_queue(
             if field in current_text and current_text.get(field) not in (None, ""):
                 row[field] = current_text.get(field)
         previous_status = str(row.get("image_queue_status") or "")
+        already_invalidated_this_run = (
+            previous_status == "rejected_text_gate"
+            and str(row.get("status_changed_this_run") or "").lower() == "true"
+            and str(row.get("last_status_changed_at") or "") == str(run_now or "")
+        )
         transition_origin = (
             str(row.get("previous_image_queue_status") or "")
             if previous_status == "rejected_text_gate"
@@ -8457,7 +8484,9 @@ def build_image_candidate_queue(
         row.update({
             "previous_image_queue_status": transition_origin,
             "image_queue_status": "rejected_text_gate",
-            "status_changed_this_run": str(previous_status != "rejected_text_gate").lower(),
+            "status_changed_this_run": str(
+                previous_status != "rejected_text_gate" or already_invalidated_this_run
+            ).lower(),
             "last_status_changed_at": run_now,
             "status_color_hint": "red_no_ko",
             "row_fill_color": "red_no_ko",
@@ -15334,8 +15363,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             [r for r in early_image_queue_rows if isinstance(r, dict) and not r.get("_sheet_note")],
             run_now=run_now,
         )
+        max_online_rows = getenv_int("REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS", 0)
+        early_image_rows_persisted = (
+            early_image_rows_to_write[:max_online_rows]
+            if max_online_rows > 0
+            else early_image_rows_to_write
+        )
         early_image_items_written = write_region_talk_online_queue_items(
-            early_image_rows_to_write,
+            early_image_rows_persisted,
             kind="image_queue_item",
             id_fields=["image_queue_id", "post_url"],
             fields=IMAGE_QUEUE_STATE_FIELDS,
@@ -15343,7 +15378,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             stage="early_image_queue_handoff",
         )
         early_image_queue_keys_written = {
-            image_queue_row_key(row) for row in early_image_rows_to_write if image_queue_row_key(row)
+            image_queue_row_key(row)
+            for row in early_image_rows_persisted[:early_image_items_written]
+            if image_queue_row_key(row)
         }
         write_region_talk_live_cursor("image", {
             "run_id": run_id,
@@ -15351,11 +15388,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "phase": "early_image_queue_handoff",
             "status": "running",
             "cursor_position": early_image_queue_metrics.get("image_queue_cursor_position", 0),
-            "total": len(early_image_rows_to_write),
-            "needs_actual_fetch_total": sum(1 for r in early_image_rows_to_write if r.get("image_queue_status") == "needs_actual_image_fetch"),
-            "in_progress_total": sum(1 for r in early_image_rows_to_write if r.get("image_queue_status") == "image_analysis_in_progress"),
-            "actual_scored_total": sum(1 for r in early_image_rows_to_write if r.get("image_queue_status") == "actual_scored"),
-            "progress_label": f"early image queue {len(early_image_rows_to_write)}",
+            "total": len(early_image_rows_persisted),
+            "needs_actual_fetch_total": sum(1 for r in early_image_rows_persisted if r.get("image_queue_status") == "needs_actual_image_fetch"),
+            "in_progress_total": sum(1 for r in early_image_rows_persisted if r.get("image_queue_status") == "image_analysis_in_progress"),
+            "actual_scored_total": sum(1 for r in early_image_rows_persisted if r.get("image_queue_status") == "actual_scored"),
+            "progress_label": f"early image queue {len(early_image_rows_persisted)}",
         })
         report_event(
             "early_image_queue_handoff_done",
