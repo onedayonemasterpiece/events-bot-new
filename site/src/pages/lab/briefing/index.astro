@@ -579,6 +579,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
     .briefing-stage[data-media-mode="small"] .briefing-stage__message h1 { max-width: 68%; }
   }
   @media (max-width: 759px) {
+    html:has([data-briefing-lab]) .site-nav { display: none; }
     [data-briefing-scenario-id="local_keska"] .briefing-stage__message h1 { max-width: 100%; font-size: 1.4rem; }
     [data-briefing-scenario-id="anticipated_person_named"] .briefing-stage__message h1 { max-width: 100%; }
   }

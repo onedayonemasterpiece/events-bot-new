@@ -343,6 +343,7 @@ test('selected media is desktop-only, wide media exits, and reduced motion stays
 
   const mobile = await freshPage(browser, { width: 390, height: 844 });
   await open(mobile.page, 'b', 'anticipated_person_named');
+  await expect(mobile.page.locator('.site-nav')).toBeHidden();
   await expect(mobile.page.locator('[data-media-image]')).toHaveAttribute('data-src', /https:\/\//u);
   await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
   await mobile.context.close();
