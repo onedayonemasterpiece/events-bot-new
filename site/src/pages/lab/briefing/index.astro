@@ -44,6 +44,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         <div class="lab-review-bar__actions">
           <button type="button" data-replay>↻ <span>Повторить</span></button>
           <button type="button" data-play-all>▶ <span>Показать все 8</span></button>
+          <button type="button" data-reset-briefing-memory title="Сбросить память показов и сохранённый темп">Сбросить память</button>
           <details data-review-guide>
             <summary>Что оценивать</summary>
             <div class="review-guide__content">
@@ -62,10 +63,12 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       </section>
 
       <section class="briefing-stage" aria-label="Городской обзор" data-briefing-slot>
-        <div class="briefing-stage__brand-o" aria-hidden="true">о</div>
+        <svg class="briefing-stage__brand-o" viewBox="2571 410 1600 1104" aria-hidden="true" focusable="false">
+          <use href="/brand/announcements-wordmark-ui.svg#announcements-wordmark-ui"></use>
+        </svg>
         <div class="briefing-stage__meta">
           <span>КАЛИНИНГРАД · ГОРОДСКОЙ ОБЗОР</span>
-          <span class="briefing-stage__demo">DEMO-ДАННЫЕ</span>
+          <span class="briefing-stage__demo" data-demo-label>DEMO-ДАННЫЕ</span>
           <span data-progress>1 из 8</span>
         </div>
         <div class="briefing-stage__message" data-briefing data-motion="complete" aria-live="off">
@@ -130,9 +133,65 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const params = new URLSearchParams(location.search);
       const aliases = { a: 'control', b: 'static', c: 'reveal', control: 'control', static: 'static', reveal: 'reveal' };
       const variant = aliases[String(params.get('variant') || 'c').toLowerCase()] || 'reveal';
-      const requested = byId.get(params.get('scenario')) || byId.get('today_count');
+      const MEMORY_KEY = 'ke-briefing-memory-v1';
+      const PREFS_KEY = 'ke-briefing-lab-prefs-v1';
+      const ACTIONS = new Set(['share_event', 'like_event', 'not_interested']);
+      const DAY_MS = 86400000;
+      const safeRead = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (_) { return fallback; } };
+      const safeWrite = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; } };
+      const asTime = (value) => { const time = new Date(value).getTime(); return Number.isFinite(time) ? time : 0; };
+      const cleanMemory = (value) => {
+        const exposures = {};
+        const source = value && typeof value.exposures === 'object' ? value.exposures : {};
+        deck.forEach((item) => {
+          const times = Array.isArray(source[item.id]) ? source[item.id].map(asTime).filter(Boolean).sort((a, b) => a - b).slice(-6) : [];
+          if (times.length) exposures[item.id] = times;
+        });
+        const actionSuccess = {};
+        const sourceActions = value && typeof value.actionSuccess === 'object' ? value.actionSuccess : {};
+        ACTIONS.forEach((action) => { const time = asTime(sourceActions[action]); if (time) actionSuccess[action] = time; });
+        return { version: 1, exposures, actionSuccess };
+      };
+      let memory = cleanMemory(safeRead(MEMORY_KEY, {}));
+      let prefs = safeRead(PREFS_KEY, {});
+      if (!prefs || prefs.version !== 1 || !['slow', 'normal', 'fast'].includes(prefs.pace)) prefs = { version: 1 };
+      const rememberActionSuccess = (action, timestamp = Date.now()) => {
+        if (!ACTIONS.has(action)) return;
+        const time = asTime(timestamp) || Date.now();
+        if (time <= Number(memory.actionSuccess[action] || 0)) return;
+        memory.actionSuccess[action] = time; safeWrite(MEMORY_KEY, memory);
+      };
+      const feedbackLog = safeRead('ke_event_feedback_log_v1', []);
+      if (Array.isArray(feedbackLog)) feedbackLog.slice(-240).forEach((entry) => {
+        if (!entry || typeof entry !== 'object') return;
+        const action = ACTIONS.has(entry.event_kind) ? entry.event_kind : (ACTIONS.has(entry.action) ? entry.action : '');
+        if (action) rememberActionSuccess(action, entry.ts || entry.timestamp);
+      });
+      const eligible = (item, now = Date.now()) => {
+        if (item.demoSignal && asTime(item.demoValidUntil) <= now) return false;
+        const seen = memory.exposures[item.id] || [];
+        if (seen.at(-1) && now - seen.at(-1) < Number(item.cooldownDays || 0) * DAY_MS) return false;
+        if (item.maxExposuresPerYear && seen.filter((time) => time >= now - 365 * DAY_MS).length >= item.maxExposuresPerYear) return false;
+        const success = item.actionKind ? Number(memory.actionSuccess[item.actionKind] || 0) : 0;
+        if (success && item.actionSuccessSuppressDays && now - success < item.actionSuccessSuppressDays * DAY_MS) return false;
+        return true;
+      };
+      const chooseAutomatic = () => {
+        const choices = deck.filter((item) => eligible(item));
+        if (!choices.length) return byId.get('neutral_fallback');
+        return choices.sort((a, b) => {
+          const aSeen = memory.exposures[a.id] || [], bSeen = memory.exposures[b.id] || [];
+          if (!aSeen.length && bSeen.length) return -1;
+          if (aSeen.length && !bSeen.length) return 1;
+          return (aSeen.at(-1) || 0) - (bSeen.at(-1) || 0);
+        })[0];
+      };
+      const explicitScenario = params.has('scenario');
+      const requested = explicitScenario ? (byId.get(params.get('scenario')) || byId.get('neutral_fallback')) : chooseAutomatic();
       let current = Math.max(0, deck.findIndex((item) => item.id === requested.id));
       let currentScenario = requested;
+      let automaticExposureCandidate = !explicitScenario && requested.id !== 'neutral_fallback';
+      let exposureTimer = 0;
       let fragmentTimers = [];
       let advanceTimer = 0;
       let running = false;
@@ -141,7 +200,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       let hoverPaused = false;
       let focusPaused = false;
       let completedDeckIndexes = new Set();
-      let pace = ['slow', 'normal', 'fast'].includes(params.get('pace')) ? params.get('pace') : 'normal';
+      let pace = ['slow', 'normal', 'fast'].includes(params.get('pace')) ? params.get('pace') : (['slow', 'normal', 'fast'].includes(prefs.pace) ? prefs.pace : 'normal');
       const reduced = matchMedia('(prefers-reduced-motion: reduce)');
       const day = new Date().toISOString().slice(0, 10);
       const revealKey = `ke-briefing-showcase-v2:${day}`;
@@ -196,6 +255,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         return node;
       };
       const renderMessage = () => {
+        clearTimeout(exposureTimer); exposureTimer = 0;
         message.replaceChildren();
         currentScenario.fragments.forEach((fragment, index) => {
           message.append(makeFragment(fragment, index));
@@ -205,6 +265,10 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         const cta = lab.querySelector('[data-scenario-cta]');
         cta.textContent = `${currentScenario.ctaLabel} ↗`;
         cta.href = currentScenario.ctaHref;
+        briefing.dataset.cursor = ['bar', 'underscore'].includes(params.get('cursor')) ? params.get('cursor') : currentScenario.cursor;
+        briefing.dataset.cursorLinger = 'false';
+        const demo = lab.querySelector('[data-demo-label]');
+        if (demo) demo.textContent = currentScenario.demoSignal ? 'DEMO-SIGNAL · НЕ ПРОД-ДАННЫЕ' : 'DEMO-ДАННЫЕ';
         updateProgress(); setUrl();
       };
       const showAllFragments = () => {
@@ -228,6 +292,9 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const complete = (reason = 'manual_complete', { remember = true } = {}) => {
         fragmentTimers.forEach(clearTimeout); fragmentTimers = [];
         running = false; showAllFragments(); briefing.dataset.motion = 'complete';
+        const linger = variant === 'reveal' && !reduced.matches && Boolean(currentScenario.cursorLinger);
+        briefing.dataset.cursorLinger = String(linger);
+        if (linger) fragments().at(-1)?.classList.add('is-active');
         if (remember && variant === 'reveal') rememberReveal();
         updateStatus(reason === 'session_complete' ? 'Уже показано · можно повторить' : (explicitPaused || hoverPaused || focusPaused ? 'На паузе' : 'Готово'));
         emit('briefing_complete', { completion_reason: reason });
@@ -268,12 +335,13 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const move = (step) => {
         clearMotionTimers(); deckPlaying = false; completedDeckIndexes.clear();
         current = (current + step + deck.length) % deck.length;
-        currentScenario = deck[current]; startReveal({ force: true, reason: step > 0 ? 'next' : 'previous' });
+        currentScenario = deck[current]; automaticExposureCandidate = false; startReveal({ force: true, reason: step > 0 ? 'next' : 'previous' });
       };
 
       lab.dataset.briefingVariant = variant;
       lab.querySelectorAll('[data-variant-switch]').forEach((node) => node.setAttribute('aria-current', node.dataset.variantSwitch === variant ? 'page' : 'false'));
-      if (variant === 'control') stage.hidden = true;
+      if (variant === 'control') { stage.hidden = true; automaticExposureCandidate = false; }
+      lab.querySelectorAll('[data-pace]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.pace === pace)));
       renderMessage();
       if (variant === 'reveal') startReveal({ force: params.get('replay') === '1', reason: 'initial' });
       else complete(variant === 'control' ? 'control' : 'static', { remember: false });
@@ -281,11 +349,11 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       lab.querySelector('[data-scenario-select]')?.addEventListener('change', (event) => {
         const next = byId.get(event.target.value) || byId.get('neutral_fallback');
         currentScenario = next; current = Math.max(0, deck.findIndex((item) => item.id === next.id));
-        deckPlaying = false; completedDeckIndexes.clear(); startReveal({ force: true, reason: 'scenario_select' });
+        automaticExposureCandidate = false; deckPlaying = false; completedDeckIndexes.clear(); startReveal({ force: true, reason: 'scenario_select' });
       });
-      lab.querySelector('[data-replay]')?.addEventListener('click', () => startReveal({ force: true, reason: 'manual_replay' }));
+      lab.querySelector('[data-replay]')?.addEventListener('click', () => { automaticExposureCandidate = false; startReveal({ force: true, reason: 'manual_replay' }); });
       lab.querySelector('[data-play-all]')?.addEventListener('click', () => {
-        deckPlaying = true; completedDeckIndexes.clear(); current = 0; currentScenario = deck[0]; startReveal({ force: true, reason: 'play_all' });
+        automaticExposureCandidate = false; deckPlaying = true; completedDeckIndexes.clear(); current = 0; currentScenario = deck[0]; startReveal({ force: true, reason: 'play_all' });
       });
       lab.querySelector('[data-previous]')?.addEventListener('click', () => move(-1));
       lab.querySelector('[data-next]')?.addEventListener('click', () => move(1));
@@ -294,9 +362,13 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         hoverPaused = false; focusPaused = false; pause('manual', true);
       });
       lab.querySelectorAll('[data-pace]').forEach((button) => button.addEventListener('click', () => {
-        pace = button.dataset.pace; lab.querySelectorAll('[data-pace]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        pace = button.dataset.pace; prefs = { version: 1, pace }; safeWrite(PREFS_KEY, prefs); lab.querySelectorAll('[data-pace]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
         setUrl(); startReveal({ force: true, reason: 'pace_change' });
       }));
+      lab.querySelector('[data-reset-briefing-memory]')?.addEventListener('click', () => {
+        try { localStorage.removeItem(MEMORY_KEY); localStorage.removeItem(PREFS_KEY); } catch (_) {}
+        memory = cleanMemory({}); prefs = { version: 1 }; updateStatus('Память показов сброшена');
+      });
 
       stage.addEventListener('pointerdown', (event) => {
         if (event.target.closest('button, select, summary')) return;
@@ -312,13 +384,18 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       }, { capture: true });
       document.addEventListener('visibilitychange', () => { if (document.hidden) pause('visibility_hidden'); });
       window.addEventListener('pageshow', (event) => { if (event.persisted) pause('bfcache'); });
-      new IntersectionObserver((entries) => { if ((entries.at(-1)?.intersectionRatio || 0) < .5 && (running || deckPlaying)) pause('out_of_view'); }, { threshold: [.5] }).observe(stage);
+      window.addEventListener('ke:event-action-success', (event) => { const detail = event.detail || {}; rememberActionSuccess(detail.action || detail.event_kind, detail.ts || detail.timestamp || Date.now()); });
+      new IntersectionObserver((entries) => {
+        const ratio = entries.at(-1)?.intersectionRatio || 0; clearTimeout(exposureTimer); exposureTimer = 0;
+        if (ratio >= .5 && automaticExposureCandidate && variant !== 'control') { const id = currentScenario.id; exposureTimer = setTimeout(() => { if (!automaticExposureCandidate || currentScenario.id !== id) return; const seen = memory.exposures[id] || []; memory.exposures[id] = [...seen, Date.now()].slice(-6); safeWrite(MEMORY_KEY, memory); automaticExposureCandidate = false; }, 250); }
+        if (ratio < .5 && (running || deckPlaying)) pause('out_of_view');
+      }, { threshold: [0, .5, 1] }).observe(stage);
       reduced.addEventListener?.('change', () => reduced.matches ? complete('reduced_motion') : undefined);
       lab.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
       });
-      window.__briefingLab = { replay: () => startReveal({ force: true }), next: () => move(1), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, deckPlaying, paused: explicitPaused || hoverPaused || focusPaused, pace }) };
+      window.__briefingLab = { replay: () => { automaticExposureCandidate = false; startReveal({ force: true }); }, next: () => move(1), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, deckPlaying, paused: explicitPaused || hoverPaused || focusPaused, pace, memory: cleanMemory(memory) }) };
     })();
   </script>
 </EventLayout>
@@ -327,7 +404,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   .lab-review-bar { min-height: 72px; display: grid; gap: .5rem; align-items: center; margin: .2rem 0 .55rem; padding: .45rem 0; border-block: 1px solid rgba(121,48,20,.18); }
   .lab-review-bar__primary, .lab-review-bar__actions, .lab-variants { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
   .lab-review-bar__label { color: var(--primary-strong); font: 800 .68rem/1.1 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
-  .lab-variants a, .lab-review-bar button, .lab-review-bar summary, .lab-scenario-select select { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: .35rem .65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: 800 .75rem/1.1 inherit; text-decoration: none; cursor: pointer; }
+  .lab-variants a, .lab-review-bar button, .lab-review-bar summary, .lab-scenario-select select { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: .35rem .65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: 800 .75rem/1.1 inherit; text-decoration: none; cursor: pointer; }
   .lab-variants a[aria-current="page"] { background: var(--text); color: #fff; border-color: var(--text); }
   .lab-scenario-select { display: flex; align-items: center; gap: .35rem; color: var(--muted); font-size: .72rem; font-weight: 800; }
   .lab-scenario-select select { max-width: 150px; }
@@ -337,7 +414,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   .review-guide__content ol { margin: .5rem 0; padding-left: 1.25rem; }
   .review-guide__content p { margin: .5rem 0; color: var(--muted); }
   .briefing-stage { position: relative; height: min(42svh, 250px); min-height: 220px; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; gap: .35rem; padding: .65rem 0 .55rem; border-bottom: 2px solid var(--text); background: linear-gradient(100deg, rgba(165,72,33,.07), transparent 58%); isolation: isolate; }
-  .briefing-stage__brand-o { position: absolute; z-index: -1; right: 2%; top: -34%; color: rgba(165,72,33,.08); font-size: min(42svh, 19rem); font-weight: 900; line-height: 1; transform: scaleX(1.7); transform-origin: right center; }
+  .briefing-stage__brand-o { position: absolute; z-index: -1; right: 0; top: -28%; width: min(48vw, 28rem); height: 118%; color: rgba(165,72,33,.08); overflow: hidden; }
   .briefing-stage__meta { display: flex; align-items: center; gap: .45rem; color: var(--muted); font: 800 .61rem/1.1 ui-monospace, monospace; letter-spacing: .065em; }
   .briefing-stage__meta [data-progress] { margin-left: auto; color: var(--text); }
   .briefing-stage__demo { padding: .18rem .32rem; background: rgba(165,72,33,.12); color: var(--primary-strong); }
@@ -348,10 +425,12 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   .briefing-fragment--accent { color: var(--primary); }
   [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment { opacity: 0; transform: translateY(.28em); filter: blur(1px); transition: opacity 300ms cubic-bezier(.16,1,.3,1), transform 340ms cubic-bezier(.16,1,.3,1), filter 250ms ease-out; }
   [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-visible { opacity: 1; transform: none; filter: none; }
-  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-active::after { content: ""; display: inline-block; width: .11em; height: .78em; margin-left: .08em; background: var(--primary); animation: briefing-cursor 440ms step-end infinite; vertical-align: -.03em; }
+  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-active::after { content: ""; display: inline-block; width: .11em; height: .78em; margin-left: .08em; background: var(--primary); animation: briefing-cursor 780ms step-end infinite; vertical-align: -.03em; }
+  [data-briefing-variant="reveal"] [data-motion="complete"][data-cursor-linger="true"] .briefing-fragment.is-active::after { content: ""; display: inline-block; width: .11em; height: .78em; margin-left: .08em; background: var(--primary); animation: briefing-cursor 780ms step-end infinite; vertical-align: -.03em; }
+  [data-briefing][data-cursor="underscore"] .briefing-fragment.is-active::after { width: .62em !important; height: .09em !important; vertical-align: -.12em !important; }
   .briefing-stage__cta { display: inline-flex; margin-top: .28rem; color: var(--primary-strong); font-size: .78rem; font-weight: 900; text-underline-offset: .2em; }
   .briefing-stage__controls { display: flex; align-items: center; gap: .35rem; min-width: 0; }
-  .briefing-stage__controls button { min-width: 44px; min-height: 38px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,248,.9); color: var(--text); font: 850 .72rem/1 inherit; cursor: pointer; }
+  .briefing-stage__controls button { min-width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,248,.9); color: var(--text); font: 850 .72rem/1 inherit; cursor: pointer; }
   .briefing-stage__status { color: var(--muted); font-size: .68rem; font-weight: 750; white-space: nowrap; }
   .pace-control { display: flex; margin-left: auto; gap: .2rem; }
   .pace-control button { min-width: 30px; width: 30px; padding: 0; font-size: 0; }

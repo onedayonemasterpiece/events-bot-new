@@ -18,7 +18,7 @@ const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const buildId = manifest.buildId as string;
 const port = 4187;
 const baseUrl = `http://127.0.0.1:${port}/${buildId}/lab/briefing/`;
-const scenarioIds = ['today_count', 'tomorrow_count', 'weekend_count', 'exhibitions_count', 'free_count', 'tonight_count', 'newly_added_count', 'catalog_generic'];
+const scenarioIds = ['today_count', 'tomorrow_count', 'weekend_count', 'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person'];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
 let server: ChildProcess;
 
@@ -98,10 +98,10 @@ test('all eight scenarios are discoverable; Replay, session state, Play all and 
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running');
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
 
-  await page.locator('[data-scenario-select]').selectOption('newly_added_count');
-  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'newly_added_count');
+  await page.locator('[data-scenario-select]').selectOption('share_education');
+  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'share_education');
   await expect(page).toHaveURL(/scenario=newly_added_count/u);
-  await expect(page.locator('[data-message]')).toContainText('11 событий');
+  await expect(page.locator('[data-message]')).toContainText('то самое');
 
   await page.locator('[data-play-all]').click();
   await expect.poll(async () => (await labState(page)).scenario, { timeout: 6000 }).toBe('tomorrow_count');

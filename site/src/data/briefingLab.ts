@@ -5,88 +5,106 @@ export type BriefingLabFragment = {
   href?: string;
 };
 
+export type BriefingLabScenarioFamily = 'count' | 'education' | 'signal';
+export type BriefingLabCursor = 'bar' | 'underscore';
+export type BriefingLabAction = 'share_event' | 'like_event' | 'not_interested';
+
 export type BriefingLabScenario = {
   id: string;
   label: string;
+  family: BriefingLabScenarioFamily;
   fragments: readonly BriefingLabFragment[];
   ctaLabel: string;
   ctaHref: string;
+  cooldownDays: number;
+  maxExposuresPerYear?: number;
+  actionKind?: BriefingLabAction;
+  actionSuccessSuppressDays?: number;
+  demoSignal?: boolean;
+  demoValidUntil?: string;
+  cursor: BriefingLabCursor;
+  cursorLinger?: boolean;
 };
 
-// Fixed, deliberately labelled DEMO fixtures. Counts are not production claims.
-// The order is the single coherent play-all narrative used by the lab.
+// Fixed lab fixtures, not production claims. The deck deliberately mixes useful
+// counts, action education and curiosity-led DEMO signals.
 export const briefingLabScenarios = [
   {
-    id: 'today_count', label: 'Сегодня',
+    id: 'today_count', label: 'Сегодня', family: 'count', cooldownDays: 1, cursor: 'bar',
     fragments: [
       { text: 'Сегодня —' }, { text: '18 идей.', accent: true, breakAfter: true, href: '/segodnya/' },
-      { text: 'Выберите' }, { text: 'свой ритм.' },
+      { text: 'Какая' }, { text: 'зацепит вас?' },
     ],
-    ctaLabel: 'Открыть сегодня', ctaHref: '/segodnya/',
+    ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/',
   },
   {
-    id: 'tomorrow_count', label: 'Завтра',
+    id: 'tomorrow_count', label: 'Завтра', family: 'count', cooldownDays: 1, cursor: 'underscore',
     fragments: [
-      { text: 'Завтра —' }, { text: '12 идей.', accent: true, breakAfter: true, href: '/zavtra/' },
-      { text: 'План' }, { text: 'уже здесь.' },
+      { text: 'Завтра —' }, { text: '12 поводов', accent: true, breakAfter: true, href: '/zavtra/' },
+      { text: 'выйти' }, { text: 'из дома.' },
     ],
-    ctaLabel: 'Посмотреть завтра', ctaHref: '/zavtra/',
+    ctaLabel: 'Заглянуть в завтра', ctaHref: '/zavtra/',
   },
   {
-    id: 'weekend_count', label: 'Выходные',
+    id: 'weekend_count', label: 'Выходные', family: 'count', cooldownDays: 1, cursor: 'bar', cursorLinger: true,
     fragments: [
       { text: '24 идеи', accent: true, href: '/vyhodnye/' }, { text: 'на выходные.', breakAfter: true },
-      { text: 'От музея' }, { text: 'до сцены.' },
+      { text: 'С чего' }, { text: 'начнём?' },
     ],
     ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/',
   },
   {
-    id: 'exhibitions_count', label: 'Выставки',
+    id: 'share_education', label: 'Как поделиться', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
+    actionKind: 'share_event', actionSuccessSuppressDays: 90, cursor: 'underscore', cursorLinger: true,
     fragments: [
-      { text: 'Сейчас —' }, { text: '7 выставок.', accent: true, breakAfter: true, href: '/vystavki/' },
-      { text: 'Начните' }, { text: 'с центра.' },
+      { text: 'Нашли' }, { text: 'то самое?', accent: true, breakAfter: true },
+      { text: 'Поделитесь' }, { text: 'своей находкой.' },
     ],
-    ctaLabel: 'Выбрать выставку', ctaHref: '/vystavki/',
+    ctaLabel: 'Посмотреть события', ctaHref: '/segodnya/',
   },
   {
-    id: 'free_count', label: 'Бесплатно',
+    id: 'like_education', label: 'Зачем ставить лайк', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
+    actionKind: 'like_event', actionSuccessSuppressDays: 90, cursor: 'bar',
     fragments: [
-      { text: '6 событий', accent: true, href: '/segodnya/' }, { text: 'без билета.', breakAfter: true },
-      { text: 'Выберите' }, { text: 'своё.' },
+      { text: 'Нравится событие?' }, { text: 'Отметьте.', accent: true, breakAfter: true },
+      { text: 'Так похожее' }, { text: 'найдётся быстрее.' },
     ],
-    ctaLabel: 'Найти бесплатное', ctaHref: '/segodnya/',
+    ctaLabel: 'Найти любимое', ctaHref: '/segodnya/',
   },
   {
-    id: 'tonight_count', label: 'Вечером',
+    id: 'not_interested_education', label: 'Не моё', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
+    actionKind: 'not_interested', actionSuccessSuppressDays: 90, cursor: 'underscore',
     fragments: [
-      { text: 'Вечером —' }, { text: '9 событий.', accent: true, breakAfter: true, href: '/segodnya/' },
-      { text: 'Город' }, { text: 'не спит.' },
+      { text: 'Не ваше?' }, { text: 'Это тоже ответ.', accent: true, breakAfter: true },
+      { text: 'Нажмите' }, { text: '«Не интересно».' },
     ],
-    ctaLabel: 'Выбрать план на вечер', ctaHref: '/segodnya/',
+    ctaLabel: 'Продолжить выбор', ctaHref: '/segodnya/',
   },
   {
-    id: 'newly_added_count', label: 'Новое',
+    id: 'frequently_forwarded', label: 'Часто пересылают', family: 'signal', cooldownDays: 14,
+    demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'bar', cursorLinger: true,
     fragments: [
-      { text: 'Новых —' }, { text: '11 событий.', accent: true, breakAfter: true, href: '/populyarnoe/' },
-      { text: 'Смотрите' }, { text: 'новое.' },
+      { text: 'Это событие' }, { text: 'часто пересылают.', accent: true, breakAfter: true },
+      { text: 'Возможно,' }, { text: 'там есть что-то для вас.' },
     ],
-    ctaLabel: 'Открыть новое', ctaHref: '/populyarnoe/',
+    ctaLabel: 'Узнать, что там', ctaHref: '/populyarnoe/',
   },
   {
-    id: 'catalog_generic', label: 'Каталог',
+    id: 'anticipated_person', label: 'Кого особенно ждут', family: 'signal', cooldownDays: 30,
+    demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'underscore', cursorLinger: true,
     fragments: [
-      { text: 'С чего' }, { text: 'начать?', accent: true, breakAfter: true, href: '/segodnya/' },
-      { text: 'Выберите' }, { text: 'дату или формат.' },
+      { text: 'В комментариях' }, { text: 'особенно ждут', accent: true, breakAfter: true },
+      { text: 'одного из гостей.' }, { text: 'Угадаете кого?' },
     ],
-    ctaLabel: 'Открыть афишу', ctaHref: '/segodnya/',
+    ctaLabel: 'Открыть обсуждаемое', ctaHref: '/populyarnoe/',
   },
 ] as const satisfies readonly BriefingLabScenario[];
 
 export const briefingLabFallback = {
-  id: 'neutral_fallback', label: 'Нейтральный fallback',
+  id: 'neutral_fallback', label: 'Нейтральный fallback', family: 'count', cooldownDays: 1, cursor: 'bar',
   fragments: [
     { text: 'Город' }, { text: 'продолжается.', accent: true, breakAfter: true },
-    { text: 'Найдите' }, { text: 'свой план.' },
+    { text: 'Что удивит' }, { text: 'вас сегодня?' },
   ],
   ctaLabel: 'Открыть афишу', ctaHref: '/segodnya/',
 } as const satisfies BriefingLabScenario;
