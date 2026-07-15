@@ -177,4 +177,3 @@ python3 scripts/convert_artist_registry_xlsx.py \
   visit-role precision;
 - публичный дайджест запускается только после размеченного eval и precision
   gate, описанного в продуктовом контракте.
-
