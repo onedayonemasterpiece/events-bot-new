@@ -1,0 +1,133 @@
+{
+  "schema_version": "event-age-bge-prototypes-v3",
+  "rubric_version": "ru-436fz-engineering-rubric-v1",
+  "purpose": "retrieval_evidence_only",
+  "prototypes": [
+    {
+      "id": "age0-calm-cultural",
+      "label": "0+",
+      "rubric_code": "age0_non_harmful",
+      "kind": "content_anchor",
+      "text": "Спокойная семейная культурная программа: доброжелательная выставка, музыка, творчество и знакомство с искусством в понятной детям форме."
+    },
+    {
+      "id": "age0-family-music",
+      "label": "0+",
+      "rubric_code": "age0_family_context",
+      "kind": "content_anchor",
+      "text": "Семейный концерт с добрыми песнями, музыкальными играми, танцами и участием детей и родителей в праздничной атмосфере."
+    },
+    {
+      "id": "age6-brief-fear",
+      "label": "6+",
+      "rubric_code": "age6_brief_non_naturalistic",
+      "kind": "content_anchor",
+      "text": "Приключенческий детский спектакль: герой ненадолго попадает в опасность, пугается, получает помощь друзей, а история заканчивается благополучно."
+    },
+    {
+      "id": "age6-fairy-tale",
+      "label": "6+",
+      "rubric_code": "age6_fairy_tale_context",
+      "kind": "content_anchor",
+      "text": "Детская сказка с условными злодеями, волшебными испытаниями и недолгими тревожными сценами; герои преодолевают страх и добро побеждает."
+    },
+    {
+      "id": "age12-violence-consequences",
+      "label": "12+",
+      "rubric_code": "age12_non_naturalistic_violence",
+      "kind": "content_anchor",
+      "text": "Детективная или историческая постановка с эпизодом драки, преступления и расследования; события показаны без подробных ран, с последствиями и осуждением жестокости."
+    },
+    {
+      "id": "age12-death-history",
+      "label": "12+",
+      "rubric_code": "age12_death_historical_context",
+      "kind": "content_anchor",
+      "text": "Историческая лекция или драма о войне, смерти, болезни либо катастрофе в образовательном контексте, без подробного изображения страданий."
+    },
+    {
+      "id": "age16-intense-violence",
+      "label": "16+",
+      "rubric_code": "age16_intense_content",
+      "kind": "content_anchor",
+      "text": "Мрачный хоррор или криминальная драма с эмоционально тяжёлыми сценами нападения, преследования, крови, преступления и сильного страха."
+    },
+    {
+      "id": "age16-adult-drama",
+      "label": "16+",
+      "rubric_code": "age16_adult_drama",
+      "kind": "content_anchor",
+      "text": "Психологическая театральная драма о тяжёлых отношениях, измене, зависимости, преступлении и взрослом кризисе с эротическими намёками."
+    },
+    {
+      "id": "age18-explicit-sex",
+      "label": "18+",
+      "rubric_code": "age18_explicit_sexual_content",
+      "kind": "content_anchor",
+      "text": "Программа построена вокруг откровенных сексуальных сцен, детального изображения половых отношений или порнографического содержания."
+    },
+    {
+      "id": "age18-drugs-cruelty",
+      "label": "18+",
+      "rubric_code": "age18_prohibited_or_naturalistic",
+      "kind": "content_anchor",
+      "text": "Натуралистичный показ пыток, тяжёлых ран, самоубийства или употребления наркотиков; опасные действия изображены подробно и реалистично."
+    },
+    {
+      "id": "neutral-art-exhibition",
+      "label": null,
+      "rubric_code": "neutral_context_needs_classifier",
+      "kind": "neutral_context_anchor",
+      "text": "Выставка живописи и графики: пейзажи, акварель, работы художников и учеников, экскурсия по экспозиции и рассказ о техниках искусства."
+    },
+    {
+      "id": "neutral-eco-volunteer",
+      "label": null,
+      "rubric_code": "neutral_context_needs_classifier",
+      "kind": "neutral_context_anchor",
+      "text": "Экологическая волонтёрская акция: уборка берега, сбор мусора, помощь природе, участникам выдают перчатки и мешки."
+    },
+    {
+      "id": "neutral-creative-workshop",
+      "label": null,
+      "rubric_code": "neutral_context_needs_classifier",
+      "kind": "neutral_context_anchor",
+      "text": "Творческий мастер-класс по коллажу, рисованию или рукоделию: бумага, клей, ножницы, композиция и работа с материалами."
+    },
+    {
+      "id": "neutral-lecture-quiz",
+      "label": null,
+      "rubric_code": "neutral_context_needs_classifier",
+      "kind": "neutral_context_anchor",
+      "text": "Познавательная лекция, встреча с автором, музейная экскурсия или интеллектуальная викторина с вопросами и обсуждением."
+    },
+    {
+      "id": "neutral-classical-concert",
+      "label": null,
+      "rubric_code": "neutral_context_needs_classifier",
+      "kind": "neutral_context_anchor",
+      "text": "Концерт классической, хоровой, оперной или джазовой музыки с программой произведений и представлением исполнителей."
+    },
+    {
+      "id": "trap-entry-age",
+      "label": null,
+      "rubric_code": "scope_entry_constraint",
+      "kind": "negative_scope_anchor",
+      "text": "Правило входа: дети допускаются только в сопровождении взрослого. Это условие посещения, не характеристика содержания."
+    },
+    {
+      "id": "trap-time-anniversary",
+      "label": null,
+      "rubric_code": "scope_unrelated_number",
+      "kind": "negative_scope_anchor",
+      "text": "Время начала и работы кассы, юбилей организации и возраст исполнителя — посторонние числа, не характеристика события."
+    },
+    {
+      "id": "trap-program-parts",
+      "label": null,
+      "rubric_code": "scope_program_parts",
+      "kind": "negative_scope_anchor",
+      "text": "Возраст указан у отдельного фильма или пункта программы; общая характеристика составного фестиваля отсутствует."
+    }
+  ]
+}

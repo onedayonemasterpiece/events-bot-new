@@ -21,6 +21,15 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from sqlalchemy import and_, delete, or_, select
 
 from db import Database
+from event_age_rating import (
+    AGE_DECISION_JSON_SCHEMA,
+    AgeRatingDecision,
+    age_input_hash,
+    apply_age_decision,
+    decision_from_semantic_payload,
+    declared_structured_decision,
+    reconcile_age_decision,
+)
 from location_reference import (
     find_known_venue_in_text,
     normalise_event_location_from_reference,
@@ -550,6 +559,11 @@ class EventCandidate:
     ticket_price_min: int | None = None
     ticket_price_max: int | None = None
     ticket_status: str | None = None
+    # Only source-native structured fields may set ``age_restriction`` directly.
+    # Text/OCR mentions are decided by the semantic payload bundled into an
+    # existing Smart Update call, never by a new regex-only path.
+    age_restriction: str | None = None
+    age_restriction_is_structured: bool = False
     event_type: str | None = None
     emoji: str | None = None
     is_free: bool | None = None
@@ -569,6 +583,8 @@ class EventCandidate:
     trust_level: str | None = None
     metrics: dict[str, Any] | None = None
     links_payload: Any | None = None
+    # Ephemeral result piggybacked on an already-paid facts/create call.
+    age_semantic_decision: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -583,6 +599,80 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+
+def _candidate_age_corpora(candidate: EventCandidate) -> list[str]:
+    corpora = [candidate.source_text or "", candidate.raw_excerpt or ""]
+    for poster in candidate.posters or []:
+        corpora.extend([poster.ocr_text or "", poster.ocr_title or ""])
+    return [text for text in corpora if str(text or "").strip()]
+
+
+def _candidate_age_input_hash(candidate: EventCandidate) -> str:
+    return age_input_hash(
+        source_type=candidate.source_type,
+        source_url=candidate.source_url,
+        source_text=candidate.source_text,
+        raw_excerpt=candidate.raw_excerpt,
+        poster_ocr=[
+            text
+            for poster in candidate.posters or []
+            for text in (poster.ocr_text, poster.ocr_title)
+            if str(text or "").strip()
+        ],
+    )
+
+
+def _candidate_age_decision(
+    candidate: EventCandidate,
+    *,
+    semantic_payload: Any | None = None,
+) -> AgeRatingDecision | None:
+    input_hash = _candidate_age_input_hash(candidate)
+    if candidate.age_restriction_is_structured:
+        return declared_structured_decision(
+            candidate.age_restriction,
+            source_url=candidate.source_url,
+            source_type=candidate.source_type,
+            input_hash=input_hash,
+        )
+    if semantic_payload is None:
+        return None
+    if SMART_UPDATE_EVENT_AGE_LLM_MODE != "piggyback_only":
+        return None
+    return decision_from_semantic_payload(
+        semantic_payload,
+        source_url=candidate.source_url,
+        source_corpora=_candidate_age_corpora(candidate),
+        input_hash=input_hash,
+    )
+
+
+SMART_UPDATE_EVENT_AGE_LLM_MODE = (
+    os.getenv("SMART_UPDATE_EVENT_AGE_LLM_MODE") or "piggyback_only"
+).strip().lower()
+if SMART_UPDATE_EVENT_AGE_LLM_MODE not in {"off", "piggyback_only"}:
+    SMART_UPDATE_EVENT_AGE_LLM_MODE = "off"
+
+_AGE_DECISION_PROMPT_RULE_TEXT = """
+Верни также `age_decision` в ЭТОМ ЖЕ JSON-вызове (не отдельным запросом).
+- `declared`: только если официальный/организаторский/билетный текст или event-scoped OCR явно задаёт
+  0+/6+/12+/16+/18+ именно для всего текущего события/сеанса. Дай точную evidence_quote.
+- Не путай рейтинг с временем `до 18:00`, юбилеем/возрастом артиста, возрастом участника конкурса,
+  условием входа/сопровождения, отдельным номером/частью фестивальной программы или другой афишей.
+- При разных значениях, которые нельзя надёжно привязать к одному scope, status=`conflict`, value=null.
+- Если declared нет, assessed допустим только по содержательным материалам всего произведения/программы:
+  учитывай насилие/страх/смерть, противоправное поведение, наркотики/алкоголь/табак, сексуальный контент,
+  лексику, натуралистичность/длительность, осуждение/оправдание и образовательный/исторический контекст.
+  Название, категория или отдельное слово недостаточны. При нехватке данных status=`insufficient_evidence`, value=null.
+- Для assessed provenance=`llm_assessed`; это внутренняя рекомендация, не официальная маркировка.
+- confidence не является разрешением публиковать assessed; она нужна только для калибровки на golden set.
+""".strip()
+AGE_DECISION_PROMPT_RULE = (
+    _AGE_DECISION_PROMPT_RULE_TEXT
+    if SMART_UPDATE_EVENT_AGE_LLM_MODE == "piggyback_only"
+    else "Возрастной semantic pass выключен; не делай отдельный запрос для возраста."
+)
 
 
 MATCH_RESPONSE_FORMAT = {
@@ -616,6 +706,7 @@ MERGE_RESPONSE_FORMAT = {
                 "ticket_price_min": {"type": ["integer", "null"]},
                 "ticket_price_max": {"type": ["integer", "null"]},
                 "ticket_status": {"type": ["string", "null"]},
+                "age_decision": AGE_DECISION_JSON_SCHEMA,
                 "added_facts": {
                     "type": "array",
                     "items": {
@@ -814,6 +905,7 @@ CREATE_BUNDLE_RESPONSE_FORMAT = {
                 "search_digest": {"type": ["string", "null"]},
                 "short_description": {"type": ["string", "null"]},
                 "facts": {"type": "array", "items": {"type": "string"}},
+                "age_decision": AGE_DECISION_JSON_SCHEMA,
             },
             "required": ["description", "facts"],
             "additionalProperties": False,
@@ -2487,6 +2579,7 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
             "people_org_facts": {"type": "array", "items": grounded_fact},
             "logistics_facts": {"type": "array", "items": grounded_fact},
             "uncertain_or_drop": {"type": "array", "items": {"type": "string"}},
+            "age_decision": AGE_DECISION_JSON_SCHEMA,
         },
         "required": [
             "public_core_facts",
@@ -2871,6 +2964,7 @@ async def _llm_g4_split_create_bundle(
         "short_description": None,
         "facts": list(facts_text_clean),
         "_split_create": True,
+        "age_decision": candidate.age_semantic_decision,
     }
     if isinstance(writer, dict):
         bundle["description"] = writer.get("description")
@@ -8237,6 +8331,9 @@ async def _llm_extract_candidate_facts(
         "city": candidate.city,
         "ticket_link": candidate.ticket_link,
         "ticket_status": candidate.ticket_status,
+        "structured_age_restriction": (
+            candidate.age_restriction if candidate.age_restriction_is_structured else None
+        ),
         "source_type": candidate.source_type,
         "source_url": candidate.source_url,
         "text": _clip(
@@ -8246,7 +8343,22 @@ async def _llm_extract_candidate_facts(
             7000 if SMART_UPDATE_G4_SPLIT_CREATE else 2800,
         ),
         "raw_excerpt": _clip(_strip_promo_lines(candidate.raw_excerpt) or candidate.raw_excerpt, 800),
-        "poster_texts": [_clip(p.ocr_text, 700) for p in candidate.posters if (p.ocr_text or "").strip()][:3],
+        # Poster OCR is first-class evidence for age marks.  Keep both the
+        # short OCR title and body, and do not silently throw away poster 4+;
+        # the bounded per-poster/per-request limits still protect the LLM
+        # budget without adding another model call.
+        "poster_texts": [
+            _clip(
+                "\n".join(
+                    value.strip()
+                    for value in (p.ocr_title or "", p.ocr_text or "")
+                    if value.strip()
+                ),
+                1200,
+            )
+            for p in candidate.posters
+            if (p.ocr_title or "").strip() or (p.ocr_text or "").strip()
+        ][:8],
     }
     if SMART_UPDATE_G4_SPLIT_CREATE:
         schema = _g4_rich_facts_schema()
@@ -8304,6 +8416,7 @@ async def _llm_extract_candidate_facts(
             "- Не используй хэштеги. Не включай CTA в public sections.\n"
             f"- {SMART_UPDATE_FACTS_PRESERVE_COMPACT_PROGRAM_LISTS_RULE}\n"
             f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
+            f"{AGE_DECISION_PROMPT_RULE}\n\n"
             f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
         )
         data = await _ask_gemma_json(prompt, schema, max_tokens=1400, label="rich_facts_extract")
@@ -8312,6 +8425,7 @@ async def _llm_extract_candidate_facts(
             "type": "object",
             "properties": {
                 "facts": {"type": "array", "items": {"type": "string"}},
+                "age_decision": AGE_DECISION_JSON_SCHEMA,
             },
             "required": ["facts"],
             "additionalProperties": False,
@@ -8346,11 +8460,14 @@ async def _llm_extract_candidate_facts(
             "  `Цитата (Имя Фамилия): ...`.\n"
             "- Избегай дублирования: если мысль повторяется, оставь один факт.\n\n"
             f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
+            f"{AGE_DECISION_PROMPT_RULE}\n\n"
             f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
         )
         data = await _ask_gemma_json(prompt, schema, max_tokens=500, label="facts_extract")
     raw_facts = []
     if isinstance(data, dict):
+        age_payload = data.get("age_decision")
+        candidate.age_semantic_decision = age_payload if isinstance(age_payload, dict) else None
         if SMART_UPDATE_G4_SPLIT_CREATE:
             source_corpus = "\n\n".join(
                 str(value or "").strip()
@@ -10052,6 +10169,9 @@ async def _llm_create_description_facts_and_digest(
         "festival": candidate.festival,
         "source_type": candidate.source_type,
         "source_url": candidate.source_url,
+        "structured_age_restriction": (
+            candidate.age_restriction if candidate.age_restriction_is_structured else None
+        ),
         "source_text": _clip(clean_source_text, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
         "raw_excerpt": _clip(clean_raw_excerpt or "", 1200),
         "poster_texts": [_clip(p.ocr_text, 700) for p in candidate.posters if (p.ocr_text or "").strip()][
@@ -10143,6 +10263,7 @@ async def _llm_create_description_facts_and_digest(
         "- Без многоточий и обрывов фраз.\n"
         "- Не указывай дату/время/адрес/город/цены/ссылки.\n\n"
         "- Не обращайся к читателю и не используй промо/CTA-формулы.\n\n"
+        f"{AGE_DECISION_PROMPT_RULE}\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
     max_tokens = SMART_UPDATE_REWRITE_MAX_TOKENS
@@ -10531,6 +10652,9 @@ async def _llm_match_or_create_bundle(
             "city": candidate.city,
             "ticket_link": candidate.ticket_link,
             "ticket_status": candidate.ticket_status,
+            "structured_age_restriction": (
+                candidate.age_restriction if candidate.age_restriction_is_structured else None
+            ),
             "is_free": bool(candidate.is_free),
             "event_type": normalized_event_type or candidate.event_type,
             "festival": candidate.festival,
@@ -10616,6 +10740,7 @@ async def _llm_match_or_create_bundle(
         "- Ровно 1 законченное предложение на 12–16 слов.\n"
         "- Без многоточий и обрывов фраз.\n"
         "- Не указывай дату/время/адрес/город/цены/ссылки.\n\n"
+        f"{AGE_DECISION_PROMPT_RULE}\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
 
@@ -10985,6 +11110,9 @@ async def _llm_merge_event(
             "ticket_price_min": event.ticket_price_min,
             "ticket_price_max": event.ticket_price_max,
             "ticket_status": getattr(event, "ticket_status", None),
+            "age_restriction": getattr(event, "age_restriction", None),
+            "age_restriction_status": getattr(event, "age_restriction_status", None),
+            "age_assessment": getattr(event, "age_assessment", None),
             "source_texts": [
                 _clip(t, 1200)
                 for t in (getattr(event, "source_texts", None) or [])
@@ -11004,6 +11132,9 @@ async def _llm_merge_event(
             "ticket_price_min": candidate.ticket_price_min,
             "ticket_price_max": candidate.ticket_price_max,
             "ticket_status": candidate.ticket_status,
+            "structured_age_restriction": (
+                candidate.age_restriction if candidate.age_restriction_is_structured else None
+            ),
             "source_url": candidate.source_url,
             "quote_candidates": _extract_quote_candidates(
                 _strip_promo_lines(candidate.source_text) or candidate.source_text,
@@ -11098,6 +11229,7 @@ async def _llm_merge_event(
         "evidence_quote — точная непрерывная цитата из candidate.text/raw_excerpt/poster_texts, "
         "которая прямо подтверждает ВЕСЬ fact. Если такой цитаты нет, не возвращай факт. "
         "Не выводи цель, формат, пользу, регулярность или продолжение серии только из названия/тематики. "
+        f"\n\n{AGE_DECISION_PROMPT_RULE}"
         "\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -15986,6 +16118,7 @@ async def _smart_event_update_impl(
         bundled_desc: str | None = None
         bundled_title: str | None = None
         bundled_short: str | None = None
+        bundled_age_payload: Any | None = None
         try:
             if llm_create_bundle is not None:
                 bundled = llm_create_bundle
@@ -16026,6 +16159,7 @@ async def _smart_event_update_impl(
                     reason=f"create_bundle_grounding:{bundle_grounding_result}",
                 )
         if isinstance(bundled, dict):
+            bundled_age_payload = bundled.get("age_decision")
             bundled_title_raw = bundled.get("title")
             if isinstance(bundled_title_raw, str) and bundled_title_raw.strip():
                 # Non-semantic cleanup: some models return JSON-ish `\"...\"` fragments.
@@ -16628,6 +16762,12 @@ async def _smart_event_update_impl(
                 [p for p in candidate.posters if (p.supabase_url or p.catbox_url)]
             ),
         )
+        create_age_decision = _candidate_age_decision(
+            candidate,
+            semantic_payload=bundled_age_payload,
+        )
+        if create_age_decision is not None:
+            apply_age_decision(new_event, create_age_decision)
         if candidate.source_url and _is_vk_wall_url(candidate.source_url):
             new_event.source_vk_post_url = candidate.source_url
 
@@ -16922,6 +17062,12 @@ async def _smart_event_update_impl(
         if not event_db:
             return SmartUpdateResult(status="error", reason="event_missing")
         before_description = event_db.description or ""
+        structured_age_decision = _candidate_age_decision(candidate)
+        if structured_age_decision is not None:
+            structured_age_decision = reconcile_age_decision(event_db, structured_age_decision)
+            if apply_age_decision(event_db, structured_age_decision):
+                updated_fields = True
+                updated_keys.append("age_restriction")
         # Self-heal legacy snapshot leaks (e.g. "Текст до Smart Update ...") that were
         # accidentally merged into the public description in older versions.
         cleaned_leak = _drop_legacy_leak_from_description(before_description)
@@ -17203,6 +17349,16 @@ async def _smart_event_update_impl(
                     candidate_trust_level=candidate.trust_level,
                 )
                 if merge_data:
+                    semantic_age_decision = _candidate_age_decision(
+                        candidate,
+                        semantic_payload=merge_data.get("age_decision"),
+                    )
+                    if semantic_age_decision is not None and not candidate.age_restriction_is_structured:
+                        semantic_age_decision = reconcile_age_decision(event_db, semantic_age_decision)
+                        if apply_age_decision(event_db, semantic_age_decision):
+                            updated_fields = True
+                            if "age_restriction" not in updated_keys:
+                                updated_keys.append("age_restriction")
                     merge_digest_from_llm = _clean_search_digest(merge_data.get("search_digest"))
                     deterministic_skipped_conflicts = list(skipped_conflicts)
                     added_facts = _flatten_source_grounded_fact_items(

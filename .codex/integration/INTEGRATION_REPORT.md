@@ -50,3 +50,28 @@ Mode: read-only parallel discovery, then one serial production integrator
 - Durable hash-bound semantic quality decisions before every public projection and automatic vector-sidecar lag alert remain P1 follow-ups; Fly SQLite remains canonical.
 - Full source adjudication of the fail-closed LLM candidate queue is intentionally not converted into automatic destructive repair.
 - External Opus acceptance review was not completed because the available lane reached quota; no lower-class response was presented as consultant review. This did not block incident tests, source verification or release gates.
+
+---
+
+# Integration Report — INC-2026-07-15 Telegram graphical medallions
+
+Base: `origin/main@553ae2bb06b43503bd639547a688245ccbc0cb82`
+
+Integration branch: `integration/tg-rich-medallions-20260715`
+
+| Lane | Requirement IDs | Branch | Status | Head / integration | Evidence |
+|---|---|---|---|---|---|
+| tg-publisher | R02, R03 | `agent/tg-rich-medallions/publisher` | merged | `574d05e880025f62218958ec5027a77f267cd069` → `14e25b43` | RichMessage renderer/publisher, footer gap, tests/docs/incident |
+| tg-reviewer | R02, R03 | read-only | accepted after fixes | integration working tree | caught legacy-album orphan/duplicate paths and stale emoji job; final verdict deploy-safe |
+| serial integrator | R01–R03 | `integration/tg-rich-medallions-20260715` | ready for release | pending final commit | guarded legacy albums, added stale-job skip, focused tests and baseline comparison |
+
+## Validation before release
+
+- Focused RichMessage/medallion/footer/album/stale-job suite: `10 passed`.
+- Premium editor and outbox related suites: `31 passed`.
+- `INC-2026-06-25` core regression selection: `4 passed`.
+- Full `tests/test_tg_event_publish.py`: `86 passed, 8 failed`; the same eight time-relative June-2026 failures reproduce on untouched `origin/main` (`77 passed, 8 failed`) and are unrelated to this change.
+- `python -m py_compile main.py main_part2.py tg_graphic_medallions.py tests/test_tg_event_publish.py`: passed.
+- `git diff --check`: passed.
+
+Production deployment and incident closure evidence are recorded in the incident record after the `origin/main` release.

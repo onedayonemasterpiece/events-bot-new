@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-15-tg-rich-medallion-rendering-gaps.md`
+  - Scope: canonical `@kldevents` RichMessage publishing, manifest-backed graphical medallion strips, footer spacing and retirement of custom-emoji medallion placement.
+  - Must not regress: event `6811` semantics resolve KОНБ + KGD80 + Znanie; every approved event image is preserved above one standalone bottom strip; `Подробнее` and `Max` retain a 12-space non-collapsing one-row gap; RichMessages never enqueue or receive legacy emoji medallions.
 - `INC-2026-07-15-fly-volume-critical.md`
   - Scope: Fly `/data` capacity, SQLite/runtime evidence retention, `/healthz` readiness and `/webhook` routing during deploys.
   - Must not regress: production must retain bounded runtime evidence without crossing the disk-critical readiness floor; every deploy must verify free space, SQLite integrity, `/healthz`, Fly checks and fresh disk-full/proxy logs; volume auto-extension stays bounded and cannot replace retention or DB/media hygiene.
@@ -61,7 +64,7 @@
   - Must not regress: ordinary venue medallion aliases must match only actual location fields, not event descriptions/search digests/festival labels; curated program medallions such as KGD80 remain explicit exceptions.
 - `INC-2026-07-05-tg-afisha-edit-spacing-premium-medallions.md`
   - Scope: Telegram event publishing due ordering/spacing for new posts versus existing-message edits, plus Premium/custom-emoji medallion enrichment timing.
-  - Must not regress: existing Telegram post edits must not consume the scarce new-post spacing lane while no-post events wait; canonical `tg_event_publish` posts must run Premium/medallion editor evidence as part of publication, not as an untracked delayed gap.
+  - Must not regress: existing Telegram post edits must not consume the scarce new-post spacing lane while no-post events wait. Its old medallion-editor requirement is superseded by `INC-2026-07-15-tg-rich-medallion-rendering-gaps`: RichMessages are complete with a graphical strip and must not enqueue custom-emoji medallions.
 - `INC-2026-07-05-guide-visual-digest-phone-link.md`
   - Scope: Guide excursions `visual_schedule` Telegram caption generation and phone-only booking contacts.
   - Must not regress: Telegram visual digest captions must send phone contacts as explicit `phone_number` entities while preserving existing title/source links and leaving VK digest phone text plain.

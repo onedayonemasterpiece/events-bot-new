@@ -1,0 +1,140 @@
+[
+  {
+    "id": "structured-0",
+    "kind": "structured",
+    "input": "0+",
+    "expected": "0+"
+  },
+  {
+    "id": "structured-6",
+    "kind": "structured",
+    "input": "6+",
+    "expected": "6+"
+  },
+  {
+    "id": "structured-12",
+    "kind": "structured",
+    "input": "12+",
+    "expected": "12+"
+  },
+  {
+    "id": "structured-16",
+    "kind": "structured",
+    "input": "16+",
+    "expected": "16+"
+  },
+  {
+    "id": "structured-18",
+    "kind": "structured",
+    "input": "18+",
+    "expected": "18+"
+  },
+  {
+    "id": "text-declared",
+    "kind": "semantic",
+    "text": "Возрастное ограничение: 12+.",
+    "expected_status": "declared",
+    "expected": "12+"
+  },
+  {
+    "id": "poster-only",
+    "kind": "semantic",
+    "poster_ocr": "Спектакль 6+",
+    "expected_status": "declared",
+    "expected": "6+"
+  },
+  {
+    "id": "assessable-no-declared",
+    "kind": "assessment",
+    "text": "Полная официальная аннотация произведения с описанием тем и сцен.",
+    "expected_status": "needs_calibration"
+  },
+  {
+    "id": "insufficient",
+    "kind": "assessment",
+    "text": "Концерт",
+    "expected_status": "insufficient_evidence"
+  },
+  {
+    "id": "conflict",
+    "kind": "semantic",
+    "text": "На странице 12+, на билете 16+.",
+    "expected_status": "conflict",
+    "expected": null
+  },
+  {
+    "id": "festival-program",
+    "kind": "negative",
+    "text": "Фестиваль; фильм A — 6+, фильм B — 18+.",
+    "expected_status": "conflict"
+  },
+  {
+    "id": "entry-not-rating",
+    "kind": "negative",
+    "text": "В бар после 18 лет, программа имеет маркировку 12+.",
+    "expected": "12+"
+  },
+  {
+    "id": "false-numbers",
+    "kind": "negative",
+    "text": "До 18:00. Театру 18 лет. Артисту 16 лет. Адрес: дом 12.",
+    "expected": null
+  },
+  {
+    "id": "session-scoped",
+    "kind": "negative",
+    "text": "Сеанс 12:00 — 6+, сеанс 19:00 — 16+.",
+    "expected_status": "conflict",
+    "note": "must resolve occurrence before assignment"
+  },
+  {
+    "id": "adult-accompaniment",
+    "kind": "negative",
+    "text": "Дети до 12 лет допускаются только со взрослым. Маркировка программы не указана.",
+    "expected": null
+  },
+  {
+    "id": "artist-age",
+    "kind": "negative",
+    "text": "16-летний артист выступит до 18:00.",
+    "expected": null
+  },
+  {
+    "id": "anniversary",
+    "kind": "negative",
+    "text": "Театру 18 лет, адрес: дом 12.",
+    "expected": null
+  },
+  {
+    "id": "rating-update",
+    "kind": "replay",
+    "before": "6+",
+    "after": "12+",
+    "expected_status": "conflict",
+    "note": "new conflicting source must not silently overwrite"
+  },
+  {
+    "id": "merge-same-rating",
+    "kind": "merge",
+    "left": "12+",
+    "right": "12+",
+    "expected": "12+"
+  },
+  {
+    "id": "merge-conflict",
+    "kind": "merge",
+    "left": "12+",
+    "right": "16+",
+    "expected_status": "conflict"
+  },
+  {
+    "id": "split-preserves-scope",
+    "kind": "split",
+    "parent": null,
+    "children": [
+      "6+",
+      "18+"
+    ],
+    "expected_parent": null
+  }
+]

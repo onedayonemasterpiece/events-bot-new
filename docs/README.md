@@ -16,11 +16,12 @@
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event-media automatic gate: `docs/features/event-media/README.md`
+- Event age rating (declared/assessed, Smart Update, CPU BGE, backfill): `docs/features/event-age-rating/README.md`
+- Event age-rating release coverage on every event-bearing public surface: `docs/features/static-site-pages/event-age-rating.md`
 - Event image duplicate release audit (SHA-256 → visual review): `docs/operations/event-image-duplicate-audit.md`
 - Medallion visual QA (all actual static-site Playwright targets; Telegram excluded): `docs/features/static-site-pages/medallion-visual-qa.md`
 - Final SEO/GEO and AI-search transparency gate (last pre-RC stage, after feature-complete UI/UX freeze): `docs/features/static-site-pages/seo-geo-release-optimization.md`
 - Preliminary homepage feature candidate «Городской обзор» (typed/semantic editorial briefing): `docs/features/static-site-pages/typed-briefing-hero-research.md`
-- Event age-rating release coverage on every event-bearing public surface: `docs/features/static-site-pages/event-age-rating.md`
 - Share KenigEvents itself (mobile prerendered card / evidence-gated desktop copy): `docs/features/static-site-pages/service-sharing.md`
   - Windows/macOS desktop clipboard analytics and test matrix: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`

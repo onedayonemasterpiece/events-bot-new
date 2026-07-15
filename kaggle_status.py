@@ -332,6 +332,14 @@ def _status_dataset_title(safe_prefix: str, safe_run: str) -> str:
     return title[:50].rstrip("- ")
 
 
+def _status_run_slug(run_id: str, *, max_len: int = 18) -> str:
+    """Keep status dataset slugs readable without losing run uniqueness."""
+    digest = hashlib.sha256((run_id or "").encode("utf-8")).hexdigest()[:8]
+    head_len = max(1, max_len - len(digest) - 1)
+    head = _slugify(run_id, max_len=head_len)
+    return f"{head}-{digest}"[:max_len].rstrip("-")
+
+
 def _is_dataset_exists_error(exc: Exception) -> bool:
     status_code = getattr(getattr(exc, "response", None), "status_code", None)
     if status_code == 409:
@@ -360,7 +368,7 @@ def create_kaggle_status_dataset(
     if not config:
         return None
     safe_prefix = _slugify(slug_prefix, max_len=36)
-    safe_run = _slugify(run_id, max_len=18)
+    safe_run = _status_run_slug(run_id, max_len=18)
     slug = f"{username}/{safe_prefix}-{safe_run}"[:80].rstrip("-")
     title = _status_dataset_title(safe_prefix, safe_run)
     import tempfile

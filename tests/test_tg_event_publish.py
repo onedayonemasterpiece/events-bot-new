@@ -1,7 +1,11 @@
 from types import SimpleNamespace
 import json
+import io
 
 import pytest
+from PIL import Image
+from aiogram import Bot
+from aiogram.client.session.aiohttp import AiohttpSession
 
 import main
 from models import EventSource, PromoActivity, PromoCampaign, PromoTarget
@@ -13,6 +17,7 @@ class DummyTgBot:
         self.messages = []
         self.photos = []
         self.media_groups = []
+        self.rich_messages = []
         self.deleted = []
         self.reply_markup_edits = []
         self._next_id = 100
@@ -45,6 +50,14 @@ class DummyTgBot:
                 )
             )
         return sent
+
+    async def send_rich_message(self, chat_id, rich_message, **kwargs):
+        self.rich_messages.append((chat_id, rich_message, kwargs))
+        self._next_id += 1
+        return SimpleNamespace(
+            message_id=self._next_id,
+            chat=SimpleNamespace(id=-1001234567890),
+        )
 
     async def edit_message_text(self, **_kwargs):
         raise AssertionError("edit should not be called in first publish")
@@ -80,7 +93,9 @@ def _event(**kwargs) -> main.Event:
         "description": "",
         "date": "2026-06-20",
         "time": "19:00",
-        "location_name": "Дом искусств",
+        # Keep the default fixture outside the curated medallion catalog; tests
+        # that exercise RichMessage medallions opt into a concrete identity.
+        "location_name": "Концертный зал",
         "location_address": "Ленинский проспект 155",
         "city": "Калининград",
         "source_text": "source",
@@ -1394,12 +1409,101 @@ async def test_tg_event_publish_does_not_keep_text_mode_when_media_exists(monkey
 
 
 @pytest.mark.asyncio
-async def test_tg_event_publish_deletes_old_album_when_mode_changes(monkeypatch):
+async def test_tg_event_publish_preserves_legacy_album_without_complete_id_ledger(monkeypatch):
     long_text = " ".join(["Описание события."] * 20)
     event = _event(
-        photo_urls=["https://img.example/0.jpg"],
+        location_name="Калининградская областная научная библиотека",
+        photo_urls=[
+            "https://img.example/0.jpg",
+            "https://img.example/1.jpg",
+        ],
         tg_event_post_id=77,
         tg_event_post_mode="album_caption",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+        tg_event_source_hash="old",
+    )
+
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
+        return "Что делает этот вечер особенным? Камерный формат."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
+
+    class AlbumEditBot(DummyTgBot):
+        def __init__(self):
+            super().__init__()
+            self.caption_edits = []
+
+        async def edit_message_caption(self, **kwargs):
+            self.caption_edits.append(kwargs)
+            return True
+
+    bot = AlbumEditBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        long_text,
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/77"
+    assert post_id == 77
+    assert mode == "album_caption"
+    assert source_hash and source_hash != "old"
+    assert len(bot.caption_edits) == 1
+    assert bot.caption_edits[0]["message_id"] == 77
+    assert materialize_calls == []
+    assert bot.rich_messages == []
+    assert bot.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_legacy_album_edit_failure_retries_without_duplicate(monkeypatch):
+    event = _event(
+        location_name="Калининградская областная научная библиотека",
+        photo_urls=[
+            "https://img.example/0.jpg",
+            "https://img.example/1.jpg",
+        ],
+        tg_event_post_id=77,
+        tg_event_post_mode="album_caption",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+        tg_event_source_hash="old",
+    )
+
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
+        return "Что делает этот вечер особенным? Камерный формат."
+
+    class FailingAlbumEditBot(DummyTgBot):
+        async def edit_message_caption(self, **kwargs):
+            raise RuntimeError("telegram edit failed")
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
+    bot = FailingAlbumEditBot()
+
+    with pytest.raises(RuntimeError, match="refusing duplicate fallback"):
+        await main.publish_tg_event_announcement(
+            event,
+            "Описание события.",
+            None,
+            bot,
+        )
+
+    assert materialize_calls == []
+    assert bot.media_groups == []
+    assert bot.rich_messages == []
+    assert bot.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_migrates_single_photo_to_rich_after_success(monkeypatch):
+    event = _event(
+        location_name="Калининградская областная научная библиотека",
+        photo_urls=["https://img.example/0.jpg"],
+        tg_event_post_id=77,
+        tg_event_post_mode="photo_caption",
         tg_event_post_url="https://t.me/c/1234567890/77",
         tg_event_source_hash="old",
     )
@@ -1413,16 +1517,16 @@ async def test_tg_event_publish_deletes_old_album_when_mode_changes(monkeypatch)
 
     url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
         event,
-        long_text,
+        "Описание события.",
         None,
         bot,
     )
 
     assert url == "https://t.me/c/1234567890/101"
     assert post_id == 101
-    assert mode == "photo_caption"
+    assert mode == "rich_message"
     assert source_hash and source_hash != "old"
-    assert len(bot.photos) == 1
+    assert len(bot.rich_messages) == 1
     assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 77}]
 
 
@@ -1740,7 +1844,7 @@ async def test_live_managed_vk_item_recovery_fails_closed_when_ambiguous(monkeyp
         "_vk_wall_get_actors",
         lambda owner_id: [SimpleNamespace(kind="user", token="user-token", label="user")],
     )
-    expected = "Камерный концерт\n\n\U0001f4c5 20 июня 19:00\n\U0001f4cd Дом искусств"
+    expected = "Камерный концерт\n\n\U0001f4c5 20 июня 19:00\n\U0001f4cd Концертный зал"
 
     async def fake_vk_api(method, params, *args, **kwargs):
         assert method == "wall.get"
@@ -2562,7 +2666,7 @@ def test_tg_medallions_do_not_add_festival_badge_as_location_match(monkeypatch):
 
     assert slugs == ["yantar-hall"]
 
-def test_tg_event_album_footer_uses_compact_social_gap():
+def test_tg_event_album_footer_keeps_deliberate_social_gap():
     event = _event()
 
     text = main.build_tg_event_announcement(
@@ -2571,8 +2675,262 @@ def test_tg_event_album_footer_uses_compact_social_gap():
         include_calendar_link=True,
     )
 
-    assert '<a href="https://telegra.ph/event">🔎 Подробнее</a>        <a href="https://max.ru/channel_kenigevents">Max</a>' in text
-    assert '<a href="https://telegra.ph/event">🔎 Подробнее</a>            <a href="https://max.ru/channel_kenigevents">Max</a>' not in text
+    assert '<a href="https://telegra.ph/event">🔎 Подробнее</a>            <a href="https://max.ru/channel_kenigevents">Max</a>' in text
+
+
+def test_tg_graphic_medallions_resolve_konb_kgd80_and_znanie_for_event_6811():
+    event = _event(
+        id=6811,
+        title="Встреча в библиотеке",
+        location_name="Калининградская областная научная библиотека",
+        location_address="проспект Мира 9",
+        festival="80 историй о главном",
+        pushkin_card=False,
+    )
+
+    medallions = main.resolve_event_graphic_medallions(event)
+
+    assert [item["slug"] for item in medallions] == [
+        "konb",
+        "kgd80-80-stories",
+        "znanie-russia",
+    ]
+    strip = main.render_event_graphic_medallion_strip(medallions)
+    with Image.open(io.BytesIO(strip)) as rendered:
+        assert rendered.size == (1300, 330)
+
+
+def test_tg_graphic_medallions_do_not_duplicate_explicit_znanie_for_kgd80():
+    event = _event(
+        title="Лекторий Российского общества Знание",
+        location_name="Калининградская областная научная библиотека",
+        festival="80 историй о главном",
+        tg_source_author="Российское общество Знание",
+    )
+
+    slugs = [item["slug"] for item in main.resolve_event_graphic_medallions(event)]
+
+    assert slugs.count("znanie-russia") == 1
+    assert slugs == ["konb", "kgd80-80-stories", "znanie-russia"]
+
+
+def test_tg_rich_message_footer_uses_non_collapsing_semantic_gap():
+    event = _event()
+    ordinary = main.build_tg_event_announcement(event, "Описание.", include_medallions=False)
+
+    rich_html = main.build_tg_event_rich_message_html(ordinary, event_media_count=1)
+
+    assert rich_html.count("&nbsp;") == main.TG_EVENT_SOCIAL_LINK_GAP_SPACES
+    assert 'tg://photo?id=medallions' in rich_html
+    assert rich_html.index('tg://photo?id=medallions') < rich_html.index("🔎 Подробнее")
+
+
+def test_aiogram_serializes_extra_rich_media_as_multipart_attachments():
+    rich_message = main.build_tg_event_input_rich_message(
+        "<b>Событие</b>\n\n🔎 Подробнее            Max · Вконтакте",
+        [
+            main.types.BufferedInputFile(b"poster-one", filename="one.jpg"),
+            main.types.BufferedInputFile(b"poster-two", filename="two.jpg"),
+        ],
+        b"medallion-strip",
+    )
+    bot = Bot("123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+    session = AiohttpSession()
+    files = {}
+
+    serialized = session.prepare_value(rich_message, bot=bot, files=files)
+    payload = json.loads(serialized)
+
+    assert [item["id"] for item in payload["media"]] == [
+        "event-0",
+        "event-1",
+        "medallions",
+    ]
+    references = [item["media"]["media"] for item in payload["media"]]
+    assert all(reference.startswith("attach://") for reference in references)
+    assert {reference.removeprefix("attach://") for reference in references} == set(files)
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_sends_graphical_medallions_as_rich_message(monkeypatch):
+    event = _event(
+        id=6811,
+        title="Встреча в библиотеке",
+        location_name="Калининградская областная научная библиотека",
+        festival="80 историй о главном",
+        photo_urls=[
+            "https://img.example/poster.jpg",
+            "https://img.example/program.jpg",
+        ],
+        pushkin_card=False,
+    )
+    materialize_calls = _patch_media_materializer(monkeypatch)
+    scheduled = []
+
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
+        assert event_arg is event
+        assert source_text == "Описание."
+        return "Описание."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    monkeypatch.setattr(
+        main,
+        "_schedule_tg_premium_emoji_editor",
+        lambda *args, **kwargs: scheduled.append((args, kwargs)),
+    )
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        "Описание.",
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "rich_message"
+    assert source_hash
+    assert materialize_calls == [
+        ("https://img.example/poster.jpg", 0),
+        ("https://img.example/program.jpg", 1),
+    ]
+    assert len(bot.rich_messages) == 1
+    rich_message = bot.rich_messages[0][1]
+    assert '<tg-emoji' not in rich_message.html
+    assert rich_message.html.count("&nbsp;") == 12
+    assert [item["id"] for item in rich_message.media] == [
+        "event-0",
+        "event-1",
+        "medallions",
+    ]
+    assert not bot.photos
+    assert not bot.media_groups
+    assert scheduled == []
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_edits_existing_rich_message_in_place(monkeypatch):
+    event = _event(
+        id=6811,
+        location_name="Калининградская областная научная библиотека",
+        festival="80 историй о главном",
+        photo_urls=["https://img.example/poster.jpg"],
+        tg_event_post_id=77,
+        tg_event_post_mode="rich_message",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+        tg_event_source_hash="old",
+    )
+
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
+        return "Обновлённое описание."
+
+    class RichEditBot(DummyTgBot):
+        def __init__(self):
+            super().__init__()
+            self.rich_edits = []
+
+        async def edit_message_text(self, **kwargs):
+            self.rich_edits.append(kwargs)
+            return True
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    _patch_media_materializer(monkeypatch)
+    bot = RichEditBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        "source",
+        None,
+        bot,
+    )
+
+    assert (url, post_id, mode) == (
+        "https://t.me/c/1234567890/77",
+        77,
+        "rich_message",
+    )
+    assert source_hash and source_hash != "old"
+    assert len(bot.rich_edits) == 1
+    assert bot.rich_edits[0]["message_id"] == 77
+    assert bot.rich_edits[0]["text"] is None
+    assert bot.rich_edits[0]["rich_message"].media[-1]["id"] == "medallions"
+    assert bot.rich_messages == []
+    assert bot.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_job_does_not_enqueue_premium_editor_for_rich_message(
+    tmp_path,
+    monkeypatch,
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event = _event(
+        id=None,
+        date="2027-07-19",
+        time="18:30",
+        location_name="Калининградская областная научная библиотека",
+        festival="80 историй о главном",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    async def fake_publish(*args, **kwargs):
+        return "https://t.me/kldevents/3000", 3000, "rich_message", "rich-hash"
+
+    premium_enqueues = []
+
+    async def fake_enqueue(*args, **kwargs):
+        premium_enqueues.append((args, kwargs))
+        return "unexpected"
+
+    monkeypatch.setattr(main, "publish_tg_event_announcement", fake_publish)
+    monkeypatch.setattr(main, "enqueue_tg_event_premium_emoji_edit_job", fake_enqueue)
+
+    assert await main.job_publish_tg_event_post(event_id, db, bot=object()) is True
+    assert premium_enqueues == []
+    async with db.get_session() as session:
+        stored = await session.get(main.Event, event_id)
+    assert stored.tg_event_post_mode == "rich_message"
+    assert stored.tg_event_post_id == 3000
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_stale_premium_editor_job_skips_current_rich_message(tmp_path, monkeypatch):
+    import tg_premium_emojis
+
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event = _event(
+        id=None,
+        date="2027-07-19",
+        tg_event_post_id=3000,
+        tg_event_post_mode="rich_message",
+        tg_event_post_url="https://t.me/kldevents/3000",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    calls = []
+
+    async def fake_edit(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("legacy editor must not touch RichMessage")
+
+    monkeypatch.setattr(tg_premium_emojis, "edit_messages_with_env", fake_edit)
+    monkeypatch.setattr(tg_premium_emojis, "premium_emoji_editor_enabled", lambda: True)
+
+    assert await main.job_edit_tg_event_premium_emoji(event_id, db, bot=None) is False
+    assert calls == []
+    await db.close()
 
 
 def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):

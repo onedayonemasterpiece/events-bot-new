@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** release-candidate medallion slice consolidated from the freshest source-faithful branch state into `integration/static-site-medallions-release-20260712` from `origin/main@c6396331`; draft PR [#38](https://github.com/onedayonemasterpiece/events-bot-new/pull/38), not yet in `origin/main`. Content baseline `fa367ea3` contains 25 organizer/venue entries and 11 festival/venue-brand entries. SVG is primary only for official or safely source-faithful vector marks; raster-only sources are WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb`, `act-opus`, `kantata-festival` and other documented raster exceptions remain WebP-first until trustworthy SVG sources exist.
+> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
 > **Workflow skill:** project-specific medallion archaeology/sourcing/rendering workflow is codified in `.codex/skills/static-event-medallions/SKILL.md`.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Medallion visual QA](medallion-visual-qa.md), [Anonymous Personalization](../unsigned-personalization/README.md).
@@ -188,7 +188,9 @@ Asset inventory:
 
 - runtime optimized assets: `site/public/assets/organizers/`; primary organizer assets are SVG except explicit raster exceptions;
 - source originals + provenance README: `site/src/assets/organizers/source/`;
-- browser-facing organizer manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`; festival/venue-brand logo manifest: `site/src/data/festivalMedallions.json` with runtime assets in `site/public/assets/festivals/`.
+- browser-facing organizer/venue manifest: `site/src/data/organizerMedallions.json`;
+- the current festival manifest and runtime tree: `site/src/data/festivalMedallions.json` and `site/public/assets/festivals/`;
+- asset/provenance inventory is canonical in `site/src/assets/organizers/source/README.md` and `site/src/assets/festivals/source/README.md` rather than duplicated here.
 
 2026-07-02 SVG pass:
 
@@ -290,30 +292,26 @@ Asset pipeline:
 4. Render the composite so the black circle is the **same visual diameter** as organizer medallion circles; do not enlarge the Pushkin circle relative to other circles. The original `Пушкинская карта` wordmark starts over the lower part of the circle and may protrude to the right. Do **not** add a separate pill/label with duplicated text.
 5. Provide a fallback `ПК` purple-ring medallion if the asset fails visual QA.
 
-## Telegram custom-emoji medallions
+## Telegram graphical medallion projection
 
-The static-site medallion manifest is also used as the source semantics for Telegram custom-emoji medallions in `tg_event_publish` promo posts. Telegram rendering is deliberately configured separately from the static site because each ordinary visual medallion consumes a 4×4 grid of custom emoji documents.
+The same curated organizer/festival/source/program assets are projected into
+ordinary `@kldevents` event publications by the canonical Telegram publisher;
+the transport contract lives in
+[`docs/features/tg-publishing/README.md`](../tg-publishing/README.md).
 
-Runtime contract:
+- Telegram uses a deterministic local Pillow render on an opaque brand-graphite
+  `1300×330` strip, with visual marks up to `260px`.
+- The strip is a standalone bottom image block inside Telegram RichMessage; it
+  is not a caption mosaic and does not use custom emoji.
+- `organizerMedallions.json`, optional `festivalMedallions.json`, local source
+  marks and the Pushkin composite remain the asset/source-of-truth inventory.
+- KGD80 festival policy resolves two distinct partner marks (`80 историй` and
+  `Знание`), so a KОНБ KGD80 event resolves all three identities.
+- The old `TG_MEDALLION_CUSTOM_EMOJI_*` grid remains legacy-only data. Normal
+  event publication and repair paths must not enqueue or pass a medallion block
+  to the Premium/custom-emoji editor.
 
-- custom emoji pack capacity is 200 stickers; one ordinary 4×4 medallion consumes 16 stickers, while the KGD80+Znanie composite consumes 28 stickers as a 7×4 unit;
-- production reads `TG_MEDALLION_CUSTOM_EMOJI_JSON` or `TG_MEDALLION_CUSTOM_EMOJI_PATH`; if no mapping is present, posts are rendered without medallions;
-- `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
-- no more than two visual medallion units are rendered for one Telegram event; item-level dimensions are allowed so a 7×4 composite still counts as one unit;
-- in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
-- the delayed Premium Telethon editor is also persisted as a `tg_premium_emoji_edit` outbox job after each `tg_event_publish` send/edit; the in-memory delayed task may complete first, but the durable row recovers deploy/restart losses and is throttled by `TG_PREMIUM_EMOJI_JOB_INTERVAL_SECONDS`;
-- no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
-- album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;
-- when a Telegram medallion block is present, the `Подробнее` footer follows directly after the final braille separator line (`⠀\n🔎 Подробнее`); when no medallion block is present, the post keeps the ordinary blank line before the footer;
-- `Пушкинская карта` is mandatory when `event.pushkin_card=true`;
-- events of «80 историй о главном» use the curated `kgd80-znanie` composite when present: `80 историй` is drawn on top and `Знание` is shifted behind it with a one-cell overlap, making the pair seven cells wide instead of two separate 4×4 medallions;
-- standalone `znanie-russia` remains available for non-KGD80 events, while standalone KGD80 is intentionally not kept in the Telegram pack/config; `world-ocean-museum` is also omitted from the one Telegram pack to leave capacity for the wider 7×4 KGD80+Znanie composite;
-- because `kgd80-znanie` occupies only one visual slot, a matching venue/location medallion can be rendered as the second slot for KGD80 events without reintroducing the broken three-wide mobile layout;
-- ordinary Telegram venue/location medallions match aliases only against `location_name`, `location_address` and `city`; descriptions, search digests, film/program text and festival labels must not add venue medallions;
-- Telegram alias matching is token/phrase-bounded, not raw substring matching: short acronyms such as `ММО` must appear as standalone tokens or an explicit full alias/venue/source signal, so ordinary words like `программой`, `Эммой` or `фильмом` do not attach the Музей Мирового океана medallion;
-- disabled while on design/partner review: `rostec-arena`, `signal`, `locostandup`, `ruin-keepers`, `meow-afisha`, `kaliningrad-art-museum`.
-
-The accepted Telegram mosaic calibration from July 2026 is 4×4 with a mobile source row step of `84.5px` and a `400×353.5` source canvas. Wider composites use the same row step and 100px columns (for example, `kgd80-znanie` is `700×353.5` before slicing into 7×4 cells). Earlier `79–80px` experiments render as vertically stretched ovals on current Telegram mobile clients.
+No OpenAI image generation/editing is used by the Telegram projection.
 
 
 ## Static export data contract

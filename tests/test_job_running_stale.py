@@ -98,6 +98,56 @@ async def test_running_stale_marked_and_replaced(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_running_age_batch_uses_long_runtime_and_gets_one_deferred_followup(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "age-bge-running.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        ev = Event(
+            title="Age batch owner",
+            description="d",
+            date="2026-09-05",
+            time="10:00",
+            location_name="x",
+            source_text="s",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.event_age_bge_assessment,
+                status=JobStatus.running,
+                coalesce_key="event_age_bge_assessment:prod",
+                updated_at=datetime.now(timezone.utc) - timedelta(minutes=15),
+                next_run_at=datetime.now(timezone.utc) - timedelta(minutes=15),
+            )
+        )
+        await session.commit()
+    monkeypatch.setenv("EVENT_AGE_BGE_DEBOUNCE_SECONDS", "1500")
+    action = await main.enqueue_job(
+        db,
+        ev.id,
+        JobTask.event_age_bge_assessment,
+        coalesce_key="event_age_bge_assessment:prod",
+    )
+    assert action == "merged"
+    async with db.get_session() as session:
+        jobs = (await session.execute(select(JobOutbox))).scalars().all()
+        assert len(jobs) == 2
+        assert sum(job.status == JobStatus.running for job in jobs) == 1
+        followup = next(job for job in jobs if job.status == JobStatus.pending)
+        assert followup.coalesce_key == "event_age_bge_assessment:prod"
+        due = followup.next_run_at
+        if due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        assert due > datetime.now(timezone.utc) + timedelta(minutes=24)
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_running_telegraph_build_has_llm_runtime_budget(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

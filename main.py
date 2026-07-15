@@ -14273,7 +14273,10 @@ async def enqueue_job(
                 )
             if job.status == JobStatus.running:
                 age = (now - job.updated_at).total_seconds()
-                if age > 600:
+                stale_after = 600
+                if "JOB_MAX_RUNTIME" in globals():
+                    stale_after = int(JOB_MAX_RUNTIME.get(task, stale_after))
+                if age > stale_after:
                     job.status = JobStatus.error
                     job.last_error = "stale"
                     job.next_run_at = now
@@ -14349,17 +14352,40 @@ async def enqueue_job(
                 # Instead, ensure a single deferred *coalesced* follow-up exists and push its
                 # next_run_at further on every change (15 minutes after the last update).
                 if (
-                    task in {JobTask.month_pages, JobTask.weekend_pages, JobTask.event_vector_sync}
-                    and (job.event_id != event_id or task == JobTask.event_vector_sync)
+                    task
+                    in {
+                        JobTask.month_pages,
+                        JobTask.weekend_pages,
+                        JobTask.event_vector_sync,
+                        JobTask.event_age_bge_assessment,
+                    }
+                    and (
+                        job.event_id != event_id
+                        or task
+                        in {
+                            JobTask.event_vector_sync,
+                            JobTask.event_age_bge_assessment,
+                        }
+                    )
                     and job.coalesce_key
                 ):
                     deferred_time = next_run_at
                     if not deferred_time or deferred_time <= now:
-                        deferred_time = datetime.now(timezone.utc) + (
-                            timedelta(seconds=90)
-                            if task == JobTask.event_vector_sync
-                            else timedelta(minutes=15)
-                        )
+                        if task == JobTask.event_vector_sync:
+                            delay = timedelta(seconds=90)
+                        elif task == JobTask.event_age_bge_assessment:
+                            delay = timedelta(
+                                seconds=max(
+                                    60,
+                                    int(
+                                        os.getenv("EVENT_AGE_BGE_DEBOUNCE_SECONDS")
+                                        or "1500"
+                                    ),
+                                )
+                            )
+                        else:
+                            delay = timedelta(minutes=15)
+                        deferred_time = datetime.now(timezone.utc) + delay
 
                     existing_followup = (
                         await session.execute(
@@ -15720,10 +15746,78 @@ async def schedule_event_update_tasks(
             coalesce_key="event_vector_sync:prod",
             next_run_at=vector_sync_at,
         )
+    if (
+        (os.getenv("ENABLE_EVENT_AGE_BGE_ASSESSMENT") or "").strip().lower()
+        in {"1", "true", "yes", "on"}
+        and not getattr(ev, "age_restriction", None)
+        and getattr(ev, "age_restriction_status", None) != "conflict"
+    ):
+        age_bge_at = datetime.now(timezone.utc) + timedelta(
+            seconds=max(
+                60,
+                int((os.getenv("EVENT_AGE_BGE_DEBOUNCE_SECONDS") or "1500").strip() or "1500"),
+            )
+        )
+        results[JobTask.event_age_bge_assessment] = await enqueue_job(
+            db,
+            eid,
+            JobTask.event_age_bge_assessment,
+            payload={"reason": "smart_update", "owner_event_id": eid},
+            coalesce_key="event_age_bge_assessment:prod",
+            next_run_at=age_bge_at,
+        )
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:
         await _drain_nav_tasks(db, eid)
     return results
+
+
+async def seed_event_age_bge_backlog(db: Database) -> str | None:
+    """Seed one durable global batch for pre-existing unprocessed events."""
+
+    if (os.getenv("ENABLE_EVENT_AGE_BGE_ASSESSMENT") or "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return None
+    today = datetime.now(timezone.utc).date().isoformat()
+    async with db.get_session() as session:
+        owner_id = (
+            await session.execute(
+                select(Event.id)
+                .where(
+                    Event.lifecycle_status == "active",
+                    Event.silent.is_(False),
+                    Event.merged_into_event_id.is_(None),
+                    or_(Event.date >= today, Event.end_date >= today),
+                    Event.age_restriction.is_(None),
+                    or_(
+                        Event.age_assessment_status.is_(None),
+                        Event.age_assessment_status == "not_scheduled",
+                    ),
+                )
+                .order_by(Event.id.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if owner_id is None:
+        return None
+    due_at = datetime.now(timezone.utc) + timedelta(
+        seconds=max(
+            60,
+            int((os.getenv("EVENT_AGE_BGE_DEBOUNCE_SECONDS") or "1500").strip() or "1500"),
+        )
+    )
+    return await enqueue_job(
+        db,
+        int(owner_id),
+        JobTask.event_age_bge_assessment,
+        payload={"reason": "startup_backlog", "owner_event_id": int(owner_id)},
+        coalesce_key="event_age_bge_assessment:prod",
+        next_run_at=due_at,
+    )
 
 
 NAV_TASKS = {
@@ -17315,6 +17409,7 @@ TASK_LABELS = {
     "week_pages": "VK (неделя)",
     "weekend_pages": "VK (выходные)",
     "festival_pages": "VK (фестиваль)",
+    "event_age_bge_assessment": "Возрастная оценка BGE (Kaggle CPU)",
     "fest_nav:update_all": "Навигация",
 }
 
@@ -17339,6 +17434,7 @@ JOB_TTL: dict[JobTask, int] = {
     JobTask.weekend_pages: 3600,
     JobTask.event_vector_sync: 10800,
     JobTask.static_site_build: 7200,
+    JobTask.event_age_bge_assessment: 10800,
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
@@ -17353,6 +17449,7 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.weekend_pages: 180,
     JobTask.event_vector_sync: 7200,
     JobTask.static_site_build: 5400,
+    JobTask.event_age_bge_assessment: 4200,
 }
 
 DEFAULT_JOB_TTL = 3600
@@ -17365,6 +17462,7 @@ EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
     JobTask.tg_premium_emoji_edit,
     JobTask.ics_publish,
     JobTask.tg_ics_post,
+    JobTask.event_age_bge_assessment,
 }
 DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
@@ -17683,6 +17781,7 @@ async def _run_due_jobs_once_locked(
         JobTask.festival_pages: 1,
         JobTask.event_vector_sync: 2,
         JobTask.static_site_build: 3,
+        JobTask.event_age_bge_assessment: 4,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
     tg_event_post_id: dict[int, int | None] = {}
@@ -21299,7 +21398,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             source_hash=source_hash,
         )
         logline("TG", event_id, "event done", url=url)
-    if post_id:
+    if post_id and mode != "rich_message":
         await enqueue_tg_event_premium_emoji_edit_job(db, event_id, int(post_id))
     return True
 
@@ -21308,6 +21407,16 @@ async def job_edit_tg_event_premium_emoji(event_id: int, db: Database, bot: Bot 
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
     if not ev:
+        return False
+    if (getattr(ev, "tg_event_post_mode", None) or "").strip() == "rich_message":
+        # A stale job may have been enqueued before the post migrated. Never
+        # hand a RichMessage to the legacy Telethon editor: even without a
+        # medallion block its unrelated label normalization would be a second,
+        # competing mutation path.
+        logging.info(
+            "job_edit_tg_event_premium_emoji: skip rich message event_id=%s",
+            event_id,
+        )
         return False
     post_id = getattr(ev, "tg_event_post_id", None)
     if not post_id:
@@ -21322,11 +21431,13 @@ async def job_edit_tg_event_premium_emoji(event_id: int, db: Database, bot: Bot 
 
         if not premium_emoji_editor_enabled():
             return False
-        medallion_block = event_medallion_html_block(ev)
         results = await edit_messages_with_env(
             [(target, int(post_id))],
             delay_seconds=0,
-            medallion_html_block=medallion_block or None,
+            # Graphical medallions are part of the RichMessage media payload.
+            # The legacy custom-emoji editor may still normalize unrelated
+            # labels on old posts, but it must never place medallions again.
+            medallion_html_block=None,
         )
         logging.info(
             "tg_premium_emoji.edit_done context=tg_event_publish_durable results=%s",
@@ -21854,8 +21965,56 @@ async def job_event_media_review(
     return bool(rehydrated or cdn_updated or projection_changed)
 
 
+async def job_event_age_bge_assessment(
+    event_id: int,
+    db: Database,
+    bot: Bot | None,
+) -> bool:
+    """Run one global, missing-only CPU BGE batch after the quiet period."""
+
+    from event_age_bge_service import run_event_age_bge_batch
+
+    report = await run_event_age_bge_batch(db)
+    logging.info(
+        "event_age_bge: batch owner_event_id=%s report=%s",
+        event_id,
+        json.dumps(report, ensure_ascii=False, sort_keys=True),
+    )
+    event_count = int(report.get("event_count") or 0)
+    batch_limit = max(1, int(os.getenv("EVENT_AGE_BGE_BATCH_LIMIT") or "64"))
+    selection = report.get("selection") if isinstance(report.get("selection"), dict) else {}
+    ocr_pending = int(selection.get("ocr_pending") or 0)
+    if report.get("status") == "partial" or event_count >= batch_limit or ocr_pending:
+        followup_delay = (
+            max(300, int(os.getenv("EVENT_AGE_BGE_OCR_RECHECK_SECONDS") or "1800"))
+            if ocr_pending
+            else max(
+                60,
+                int(os.getenv("EVENT_AGE_BGE_REMAINDER_DELAY_SECONDS") or "120"),
+            )
+        )
+        await enqueue_job(
+            db,
+            event_id,
+            JobTask.event_age_bge_assessment,
+            payload={
+                "reason": "ocr_recheck" if ocr_pending else "batch_remainder",
+                "owner_event_id": event_id,
+            },
+            coalesce_key="event_age_bge_assessment:prod",
+            next_run_at=datetime.now(timezone.utc)
+            + timedelta(seconds=followup_delay),
+        )
+    imported = report.get("import") if isinstance(report.get("import"), dict) else {}
+    return bool(
+        int(imported.get("applied") or 0)
+        or int(imported.get("terminal_unrateable") or 0)
+    )
+
+
 JOB_HANDLERS = {
     "event_media_review": job_event_media_review,
+    "event_age_bge_assessment": job_event_age_bge_assessment,
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
     "tg_event_publish": job_publish_tg_event_post,

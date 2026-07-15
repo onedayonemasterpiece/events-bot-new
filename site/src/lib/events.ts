@@ -341,6 +341,8 @@ export function eventFeatureSummary(event: PreviewEvent): EventFeatureSummary {
     city: event.city,
     location_name: event.venue_name,
     date: event.start_date,
+    age_restriction: event.age_restriction,
+    age_restriction_status: event.age_restriction_status,
   };
 }
 
@@ -430,6 +432,10 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     shares_count: event.shares_count ?? 0,
     calendar_href: eventCalendarHref(event),
     calendar_eligible: isCalendarEligible(event),
+    age_restriction: event.age_restriction,
+    age_restriction_status: event.age_restriction_status,
+    age_recommendation: event.age_recommendation,
+    age_recommendation_label: event.age_recommendation_label,
   };
 }
 
@@ -581,6 +587,10 @@ export interface DiscoveryEventPayloadItem {
   shares_count: number;
   calendar_href: string;
   calendar_eligible: boolean;
+  age_restriction: PreviewEvent['age_restriction'];
+  age_restriction_status: PreviewEvent['age_restriction_status'];
+  age_recommendation: PreviewEvent['age_recommendation'];
+  age_recommendation_label: string | null;
 }
 
 export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayloadItem {
@@ -608,6 +618,10 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     shares_count: event.shares_count ?? 0,
     calendar_href: eventCalendarHref(event),
     calendar_eligible: isCalendarEligible(event),
+    age_restriction: event.age_restriction,
+    age_restriction_status: event.age_restriction_status,
+    age_recommendation: event.age_recommendation,
+    age_recommendation_label: event.age_recommendation_label,
   };
 }
 

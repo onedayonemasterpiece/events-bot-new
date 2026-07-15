@@ -50,9 +50,41 @@ def test_create_kaggle_status_dataset_uses_kaggle_valid_title():
         config={"run_id": "status-smoke-20260613223955"},
     )
 
-    assert dataset == "zigomaro/status-parsetheatres-status-smoke-20260"
+    assert dataset.startswith("zigomaro/status-parsetheatres-status-sm-")
+    assert len(dataset.rsplit("-", 1)[-1]) == 8
     assert titles
     assert 6 <= len(titles[0]) <= 50
+
+
+def test_create_kaggle_status_dataset_keeps_long_run_ids_unique():
+    datasets: list[str] = []
+
+    class FakeClient:
+        def create_dataset(self, folder):  # noqa: ANN001
+            metadata = json.loads((Path(folder) / "dataset-metadata.json").read_text(encoding="utf-8"))
+            datasets.append(metadata["id"])
+
+        def dataset_status(self, dataset):  # noqa: ANN001,ARG002
+            return "ready"
+
+        def dataset_list_files(self, dataset, page_size=50):  # noqa: ANN001,ARG002
+            return [{"name": "kaggle_run.json"}, {"name": "kaggle_status_client.py"}]
+
+    for run_id in (
+        "event-age-bge-20260715T181855Z",
+        "event-age-bge-20260715T183407Z",
+    ):
+        create_kaggle_status_dataset(
+            FakeClient(),
+            username="zigomaro",
+            slug_prefix="status-EventAgeBgeAssessment",
+            run_id=run_id,
+            config={"run_id": run_id},
+        )
+
+    assert len(datasets) == 2
+    assert datasets[0] != datasets[1]
+    assert all(len(dataset) <= 80 for dataset in datasets)
 
 
 def test_create_kaggle_status_dataset_does_not_version_after_validation_error():

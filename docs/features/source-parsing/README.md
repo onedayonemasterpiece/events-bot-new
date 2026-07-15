@@ -63,9 +63,16 @@ gate; this surface must not assign `Event.photo_urls` directly. See
 
 - если такого parser-источника **нет**, запускается Smart Update и источник сайта добавляется в `event_source` (это не “Пропущено”);
 - если parser-источник этого сайта **уже есть**, выполняется лёгкий путь (ticket/link update) без лишнего LLM-мерджа;
+- тот же лёгкий путь отдельно reconciles source-native `age_restriction`, чтобы
+  оптимизация билетов/медиа не оставляла канонический возраст устаревшим;
 - `⏭️ Пропущено` в отчёте используется только для реальных skip-статусов Smart Update (например `skipped_nochange`), а не для успешного merge.
 
 Это снижает лишнюю нагрузку на LLM и делает отчёт `/parse` честным для E2E-проверок.
+
+Structured возраст Qtickets/Pyramida/Дом искусств/филармонии передаётся в
+`EventCandidate` и хранится в `Event.age_restriction`; text/OCR маркировка
+остаётся semantic-решением Smart Update. Общий контракт:
+`docs/features/event-age-rating/README.md`.
 
 ### Очередь обновления month/weekend страниц
 
