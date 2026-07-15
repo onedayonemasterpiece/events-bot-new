@@ -46,6 +46,20 @@ No gradient, inset tile, outline, texture or decorative lettering animation is
 part of the approved identity. A contextual mobile shadow is allowed because
 the handle overlays photography; the desktop tag remains shadowless.
 
+## Desktop event-media cards
+
+- Media framing is role-driven, not inferred from OCR words or aspect ratio.
+- Only classified `event_photo` may use `cover` plus trusted focal metadata.
+- `event_identity_poster`, utility documents and unknown roles retain every
+  source pixel. In desktop `Смотрите дальше` they render at full card width and
+  intrinsic aspect ratio with no crop and no artificial side fields.
+- A three-card row is normalized by equal **outer** card bottoms: the light
+  content body grows below shorter media. Internal image/body boundaries may
+  differ; cutting poster text to align them is forbidden.
+- Static and hydrated cards export intrinsic `width`/`height` to reserve layout
+  before decode. These desktop rules must stay inside the desktop breakpoint
+  and must not reflow the accepted mobile cards.
+
 ## Governance
 
 1. Change brand geometry only in the shared runtime assets/components.

@@ -302,12 +302,16 @@ not be reflowed by desktop experiments.
   images; next/previous buttons, keyboard arrows and swipe all advance by a
   viewport group in both directions. It never silently falls back to a
   one-image viewer.
-- Related cards use a common bounded media height. Documents/OCR are scaled to
-  full card width and may overflow only vertically (centered, or shifted by a
-  trusted focal Y); source left/right edges are never cut and no side fields are
-  introduced. Ordinary cover is unlocked only by the explicit LLM-authored
-  `event_photo` role. Missing/unknown roles and legacy `visual_only` remain
-  width-fit/no-horizontal-crop until semantic enrichment succeeds.
+- Related cards keep three stable desktop columns and one common **outer bottom
+  edge**, but do not force one internal media height. Documents/OCR are scaled
+  to full card width at their exact intrinsic aspect ratio with zero crop in
+  either axis and no side fields; the light content body absorbs spare row
+  height. A differing image/body boundary inside the row is intentional
+  editorial rhythm, not a reason to cut poster text. Ordinary cover is unlocked
+  only by the explicit LLM-authored `event_photo` role. Missing/unknown roles
+  and legacy `visual_only` fail closed to full-frame document rendering until
+  semantic enrichment succeeds. Exported `width`/`height` reserve the frame and
+  prevent CLS before the image decodes.
 
 Desktop header uses the shared announcement lockup at `240×88`, menu on the
 right, exact-listing active state only, and no selected item on event details.

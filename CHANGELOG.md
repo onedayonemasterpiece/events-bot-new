@@ -4,7 +4,7 @@
 
 ### Changed
 - **Fly volume availability (INC-2026-07-15)**: provisioned production `/data` from 1 GiB to 2 GiB after the free-space readiness floor made `/healthz` critical, and added bounded `80%` automatic growth in 1 GiB increments up to 3 GiB while retaining the existing log, snapshot and disk-hygiene contracts.
-- **Static event pages / production desktop integration**: promoted the continuous Editorial desktop event composition with a full reading-shell boundary, delayed/sticky CTA and media rail, strict full-ratio poster companion, grouped multi-portrait viewer navigation, graphite continuation cards, and width-fit/vertical-only document normalization while leaving the established mobile event composition unchanged.
+- **Static event pages / production desktop integration**: promoted the continuous Editorial desktop event composition with a full reading-shell boundary, delayed/sticky CTA and media rail, strict full-ratio poster companion, grouped multi-portrait viewer navigation, graphite continuation cards, and full-frame intrinsic-ratio document cards with equal outer row bottoms while leaving the established mobile event composition unchanged.
 - **Static preview staging**: replace the cross-filesystem temporary preview copy with same-filesystem atomic renames, preventing long builds from duplicating the complete output tree under `/tmp` and exhausting the builder disk.
 - **Static site identity / shared announcement lockup**: adopted the agreed `240×88` desktop and `128×96` mobile `AnnouncementsLockup`, right-aligned desktop menu, exact-listing-only active state and the transparent terracotta wide-«о» favicon; event details no longer select a listing item.
 - **Site identity / VK 152-FZ storage correction**: moved the post-release VK challenge, verified identity, purpose consent and eligible friend-edge source of truth from Supabase to an isolated Managed Service for YDB personal-data contour in `ru-central1`; Supabase/YDB analytics receive no stable VK/friend subject, and the docs now distinguish Russian data-localization infrastructure from complete legal/organizational compliance.
@@ -28,6 +28,8 @@
 - CherryFlash guide-excursion promo now uses the agreed `true3d-v4-approved-2026-07-11` Blender renderer from `scripts/render_cherryflash_guide_true3d_v4.py` inside production `render_cherryflash_full.py`, preserving month-text dates such as `10 июля 16:00` and the approved SVG icon/avatar/CTA composition instead of a reimplemented approximation.
 
 ### Added
+
+- **Static site / production root release**: added an indexable root production build/check contract plus immutable Yandex Object Storage staging, public hash verification, ordered asset/support/HTML promotion, protected stable `/ics/`, current/previous release manifests and explicit rollback without broad bucket deletion.
 
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.
 

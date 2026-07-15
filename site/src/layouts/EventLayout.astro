@@ -2007,8 +2007,7 @@ const HEADER_NAVIGATION = [
           border-color: rgba(255,255,255,0.12);
           background: #fffaf2;
         }
-        #discovery-feed .event-card__media-shell--cover,
-        #discovery-feed .event-card__media-shell--document {
+        #discovery-feed .event-card__media-shell--cover {
           position: relative;
           width: 100%;
           aspect-ratio: 1 / 1.04;
@@ -2022,17 +2021,29 @@ const HEADER_NAVIGATION = [
           height: 100%;
           object-fit: cover;
         }
+        /*
+         * Poster/document contract: normalization must never remove text.
+         * The row keeps equal outer card bottoms and the body absorbs spare
+         * height; the internal image/body boundary may remain editorially live.
+         */
+        #discovery-feed .event-card__media-shell--document {
+          position: relative;
+          width: 100%;
+          aspect-ratio: auto;
+          overflow: visible;
+          background: #fffaf2;
+        }
         #discovery-feed .event-card__media-shell--document .event-card__media {
-          position: absolute;
+          position: relative;
           z-index: 2;
-          left: 0;
-          top: 50%;
+          inset: auto;
+          display: block;
           width: 100%;
           max-width: none;
           height: auto;
+          max-height: none;
           min-height: 0;
-          object-fit: initial;
-          transform: translateY(calc(-50% + var(--card-focal-offset, 0%)));
+          transform: none;
           background: transparent;
         }
         #discovery-feed .event-card--split-actions .event-card__body,
@@ -2820,6 +2831,8 @@ const HEADER_NAVIGATION = [
               image_alt: display.image_alt || candidate?.image_alt || `Афиша события «${display.title || candidate?.title || 'событие'}»`,
               image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
               image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+              image_width: Number.isFinite(Number(display.image_width || candidate?.image_width)) && Number(display.image_width || candidate?.image_width) > 0 ? Number(display.image_width || candidate?.image_width) : null,
+              image_height: Number.isFinite(Number(display.image_height || candidate?.image_height)) && Number(display.image_height || candidate?.image_height) > 0 ? Number(display.image_height || candidate?.image_height) : null,
               focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
               display_date: display.display_date || candidate?.date || '',
               display_date_time: display.display_date_time || display.display_date || candidate?.date || '',
@@ -3110,6 +3123,8 @@ const HEADER_NAVIGATION = [
             image_alt: display.image_alt || `Афиша события «${title}»`,
             image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
             image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+            image_width: Number.isFinite(Number(display.image_width || candidate?.image_width)) && Number(display.image_width || candidate?.image_width) > 0 ? Number(display.image_width || candidate?.image_width) : null,
+            image_height: Number.isFinite(Number(display.image_height || candidate?.image_height)) && Number(display.image_height || candidate?.image_height) > 0 ? Number(display.image_height || candidate?.image_height) : null,
             focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
             display_date: display.display_date || formatDateForUi(candidate?.date || ''),
             display_time: display.display_time || null,
@@ -3154,8 +3169,11 @@ const HEADER_NAVIGATION = [
             ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span>В календарь</span></a>`
             : '';
           const imageFallback = `<span class="event-card__image-fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
+          const intrinsicSize = data.image_width && data.image_height
+            ? ` width="${escapeHtml(data.image_width)}" height="${escapeHtml(data.image_height)}"`
+            : '';
           const image = data.image_url
-            ? `<span class="event-card__media-shell ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async" onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
+            ? `<span class="event-card__media-shell ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async"${intrinsicSize} onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
             : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
           const overlayFeedback = cardVariant === 'overlay-controls'
             ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`

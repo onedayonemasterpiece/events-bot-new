@@ -144,6 +144,9 @@ export interface DiscoveryDisplayPayload {
   image_alt: string;
   image_text_mode: PreviewEvent['image_text_mode'];
   image_media_role?: EventImageMediaRole;
+  /** Intrinsic primary-image size keeps document cards stable before decode. */
+  image_width?: number | null;
+  image_height?: number | null;
   focal_y?: number | null;
   display_date: string;
   display_time: string | null;

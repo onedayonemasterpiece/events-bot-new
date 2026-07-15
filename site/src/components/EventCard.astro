@@ -32,7 +32,8 @@ function normalizeObjectPosition(value: string | null | undefined) {
 // and horizontal cover would then destroy text along its left/right edges.
 const imageMediaRole = event.image_media_role || 'unknown_document';
 const documentMedia = imageMediaRole !== 'event_photo';
-const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
+const resolvedImageUrl = eventImageUrl(event.image_url);
+const primaryImageAsset = event.image_assets?.find((asset) => (eventImageUrl(asset.src) || asset.src) === resolvedImageUrl) || event.image_assets?.[0];
 const mediaShellClass = ['event-card__media-shell', documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover'].join(' ');
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
 const cardObjectPosition = !documentMedia ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
