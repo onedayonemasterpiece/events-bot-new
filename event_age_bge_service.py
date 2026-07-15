@@ -188,6 +188,7 @@ async def collect_event_age_bge_inputs(
     """Select only active, non-declared, missing/stale assessment rows."""
 
     now = now or datetime.now(timezone.utc)
+    today = now.date().isoformat()
     policy_version = current_assessment_policy_version()
     stats = {"selected": 0, "current": 0, "ocr_pending": 0, "conflict": 0}
     async with db.get_session() as session:
@@ -197,6 +198,7 @@ async def collect_event_age_bge_inputs(
                 Event.lifecycle_status == "active",
                 Event.silent.is_(False),
                 Event.merged_into_event_id.is_(None),
+                or_(Event.date >= today, Event.end_date >= today),
                 Event.age_restriction.is_(None),
                 or_(Event.age_restriction_status.is_(None), Event.age_restriction_status != "conflict"),
             )

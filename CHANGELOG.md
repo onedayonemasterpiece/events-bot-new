@@ -50,6 +50,7 @@
 
 ### Fixed
 
+- **Event age-rating production scope**: restrict startup backlog and every CPU assessment selector to current/future events, so historical rows that still carry `lifecycle_status=active` cannot consume an unbounded sequence of Kaggle batches.
 - **Event age-rating calibration closure**: make the manual Kaggle launcher expose partial reports, complete all 718 masked CPU vectors, continue iterative calibration over 531 scope-clean official labels, and pass the untouched grouped OOF gate with a raw-matrix TF-IDF safety cascade (51.4% coverage, 96.0% exact, 99.3% within-one, 0 severe-under); hash/logit self-test mismatch still fails closed.
 - **Event age-rating Kaggle CPU runtime**: probe the concrete BGE-M3 model symbol and upgrade an incompatible preinstalled FlagEmbedding 1.3.x to the pinned Transformers-5-compatible 1.4.0 before loading the encoder.
 - **Parser age preservation**: carry Qtickets/Pyramida/Dom Iskusstv/Philharmonia structured restrictions through `EventCandidate`, reconcile them on the repeated-source fast path, preserve Universal Festival program ratings, and stop the Dom Iskusstv kernel from treating the first arbitrary `N+` in page HTML as the event rating.

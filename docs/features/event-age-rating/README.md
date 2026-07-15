@@ -116,6 +116,8 @@ window, а не создаёт Kaggle run на событие. При старт
 проверяет:
 
 - active, non-silent, canonical event;
+- событие ещё не закончилось (`date` или `end_date` не раньше текущего дня),
+  поэтому historical `lifecycle_status=active` строки не расходуют Kaggle CPU;
 - нет declared rating и unresolved conflict;
 - assessment отсутствует либо corpus hash устарел;
 - обязательный OCR уже готов либо его двухчасовое окно завершилось явным

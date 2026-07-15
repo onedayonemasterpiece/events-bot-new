@@ -100,6 +100,13 @@ async def test_selector_is_missing_only_and_terminal_report_is_idempotent(tmp_pa
     now = datetime(2026, 7, 15, 12, tzinfo=timezone.utc)
     async with db.get_session() as session:
         missing = make_event(id=None, added_at=now - timedelta(hours=3))
+        past = make_event(
+            id=None,
+            title="Прошедшее",
+            date="2026-07-01",
+            end_date="2026-07-02",
+            added_at=now - timedelta(days=20),
+        )
         declared = make_event(
             id=None,
             title="Объявленный",
@@ -107,6 +114,7 @@ async def test_selector_is_missing_only_and_terminal_report_is_idempotent(tmp_pa
             age_restriction_status="declared",
         )
         session.add(missing)
+        session.add(past)
         session.add(declared)
         await session.commit()
         missing_id = int(missing.id or 0)
@@ -306,7 +314,8 @@ async def test_startup_seed_catches_preexisting_not_scheduled_event(tmp_path, mo
     async with db.get_session() as session:
         terminal = make_event(id=None, title="terminal", age_assessment_status="insufficient_evidence")
         missing = make_event(id=None, title="missing")
-        session.add_all([terminal, missing])
+        past = make_event(id=None, title="past", date="2026-06-01", end_date="2026-06-02")
+        session.add_all([terminal, missing, past])
         await session.commit()
         missing_id = int(missing.id or 0)
     calls: list[tuple] = []
