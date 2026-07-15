@@ -25,11 +25,13 @@ test.describe('isolated static briefing lab', () => {
     const briefingBox = await page.locator('[data-briefing-slot]').boundingBox();
     const titleBox = await page.locator('[data-first-event-title]').boundingBox();
     const decisionBox = await page.locator('[data-first-event-decision]').boundingBox();
+    const briefingFits = await page.locator('[data-briefing]').evaluate((element) => element.scrollHeight <= element.clientHeight + 1);
     expect(briefingBox).not.toBeNull();
     expect(titleBox).not.toBeNull();
     expect(titleBox!.y).toBeLessThan(568);
     expect(decisionBox).not.toBeNull();
     expect(Math.min(decisionBox!.y + decisionBox!.height, 568) - decisionBox!.y).toBeGreaterThanOrEqual(70);
+    expect(briefingFits).toBeTruthy();
     await expect(page.locator('[data-briefing-categories]')).toBeVisible();
     await expect(page.locator('[data-briefing-event-id]')).toHaveCount(3);
     await context.close();

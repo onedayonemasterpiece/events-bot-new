@@ -1,0 +1,120 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: 81829363e3a15a4c66cf53d0cf178b3a9fad6f20
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: feature/static-typed-intro-prototype-20260715
+global_constraints:
+  - research/lab only; no production route changes or deploy
+  - no Gemini Lite, runtime API, personalization overlay, or wordmark animation
+  - preserve approved static-site design system and useful no-JS HTML
+verification_owner: /root
+stop_conditions:
+  - production or deploy mutation would be required
+  - lab cannot preserve first-event visibility at 320x568
+  - changes collide with unrelated work
+requirements:
+  - id: R01
+    requirement: Mark research only, no production effect/user/metric validation; decision GO_TO_PROTOTYPE_ONLY.
+    primary_lane: docs_integration
+  - id: R02
+    requirement: Exclude Gemini Lite and personalization from MVP.
+    primary_lane: docs_integration
+  - id: R03
+    requirement: Limit initial inventory to at most 8 deterministic scenarios plus one neutral fallback and one copy each.
+    primary_lane: lab_ui
+  - id: R04
+    requirement: Create isolated /lab/briefing/ with A no briefing, B static briefing, C one short reveal.
+    primary_lane: lab_ui
+  - id: R05
+    requirement: First event card/title visible initially; evaluate 12-18svh and 160px only as challenger hypotheses.
+    primary_lane: lab_ui
+  - id: R06
+    requirement: Scope only to home/general listing lab; no event detail, production routes, deploy.
+    primary_lane: lab_ui
+  - id: R07
+    requirement: Add bounded telemetry contract for briefing and downstream discovery events.
+    primary_lane: telemetry_review
+  - id: R08
+    requirement: Primary metric event_detail_open / eligible_session.
+    primary_lane: telemetry_review
+  - id: R09
+    requirement: Split acceptance into 8 P0 blockers and P1/P2 appendix.
+    primary_lane: docs_integration
+  - id: R10
+    requirement: Commit consultation provenance with prompts, model/version, input SHA, output hashes, decision trace and durable artifact location.
+    primary_lane: docs_integration
+lanes:
+  - id: lab_ui
+    role: worker
+    effort: high
+    requirement_ids: [R03, R04, R05, R06]
+    target: Isolated Astro lab implementation and targeted contract test.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-typed-briefing/ui
+    worktree: /home/dev/.codex/worktrees/events-bot-new/typed-briefing-ui
+    writable_files:
+      - site/src/pages/lab/briefing/index.astro
+      - site/src/data/briefingLab.ts
+      - site/scripts/check-preview.mjs
+      - tests/playwright/static_briefing_lab.spec.ts
+      - .codex/lanes/static-typed-briefing/lab_ui/RESULTS.md
+    forbidden_files:
+      - docs/**
+      - CHANGELOG.md
+      - production routes outside /lab/briefing/
+      - deploy/publisher files
+    expected_output: One committed UI/test commit plus RESULTS.md.
+    verification_scope: targeted
+    status: completed
+  - id: telemetry_review
+    role: reviewer
+    effort: high
+    requirement_ids: [R07, R08]
+    target: Read-only telemetry/metric contract critique grounded in current site code.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Message with event payload, denominator and test recommendations.
+    verification_scope: inspection_only
+    status: completed
+  - id: audit_docs_review
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Read-only external-audit traceability and provenance review.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Accepted/rejected/conditional finding matrix and missing evidence.
+    verification_scope: inspection_only
+    status: completed
+  - id: docs_integration
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R01, R02, R09, R10]
+    target: Canonical research status, minimal-MVP split, provenance and changelog.
+    depends_on: [lab_ui, telemetry_review, audit_docs_review]
+    execution_mode: serial_after_dependency
+    branch: feature/static-typed-intro-prototype-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files:
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/backlog/features/static-typed-briefing/README.md
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - docs/features/static-site-pages/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/lanes/static-typed-briefing/**
+      - .codex/integration/static-typed-briefing/INTEGRATION_REPORT.md
+    forbidden_files:
+      - production runtime/deploy files
+    expected_output: Integrated commit and closure audit.
+    verification_scope: full_local
+    status: completed

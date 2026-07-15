@@ -1,6 +1,6 @@
 # Городской обзор на главной: минимальный prototype gate
 
-> **Status:** desk-research synthesis complete; isolated lab prototype pending integration.
+> **Status:** desk-research synthesis complete; isolated lab prototype implemented on the feature branch.
 > **Implementation:** `/lab/briefing/` only; no production homepage integration.
 > **Production effect:** none.
 > **Decision:** `GO_TO_PROTOTYPE_ONLY`.
@@ -136,6 +136,8 @@ CLS after first render: 0
 ```
 
 `12–18svh` and `160px` are test inputs, not acceptance mandates: at `320×568` they may be too short for useful copy. The measured lab with the real header, categories and first card determines whether either budget is viable; the first-event outcome remains the hard gate.
+
+The first visual QA confirmed that the original `15svh` challenger clipped useful briefing copy. The accepted lab correction uses `114px` (`≈20.1svh` at the measured `320×568` viewport), keeps the full copy visible and still leaves the entire first decision region visible (`322–414px`). This is prototype evidence about layout, not a production token.
 
 Control viewports: `320×568`, `360×800`, `390×844`, `1366×768`, `1440×900`. The approved header/lockup is never shrunk to make the lab pass.
 

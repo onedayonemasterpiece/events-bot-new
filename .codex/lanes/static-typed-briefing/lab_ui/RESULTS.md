@@ -1,5 +1,7 @@
 # Lane lab_ui Results
 
+> **Integration correction:** the worker's `85.19px` geometry probe established first-card visibility but did not detect that useful briefing copy was visually clipped. Integrator screenshot QA added a content-fit assertion and raised the isolated lab block to `114px` at `320×568`; the final evidence is in `../RESULTS.md`.
+
 ## Status
 committed
 

@@ -138,7 +138,7 @@ const withLabBase = (path: string) => `${basePath}${path.startsWith('/') ? path 
         padding: 6px 0 56px;
       }
       .briefing-slot {
-        height: clamp(84px, 15svh, 150px);
+        height: clamp(114px, 20svh, 150px);
         margin-bottom: 10px;
       }
       html.js[data-briefing-variant="control"] .briefing-slot { display: none; }
@@ -147,8 +147,8 @@ const withLabBase = (path: string) => `${basePath}${path.startsWith('/') ? path 
         height: 100%;
         overflow: hidden;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas: "headline marker" "support action";
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "headline" "support" "action";
         align-content: center;
         column-gap: 12px;
         row-gap: 5px;
@@ -179,6 +179,7 @@ const withLabBase = (path: string) => `${basePath}${path.startsWith('/') ? path 
         text-wrap: balance;
       }
       .briefing__marker {
+        display: none;
         grid-area: marker;
         align-self: start;
         color: var(--brand-strong);
@@ -375,7 +376,14 @@ const withLabBase = (path: string) => `${basePath}${path.startsWith('/') ? path 
         .lab-bar h1 { font-size: 16px; }
         .variant-tabs { min-height: 58px; }
         .briefing-slot { height: clamp(136px, 20svh, 210px); margin-bottom: 16px; }
-        .briefing { padding: 22px 26px; border-radius: 24px; row-gap: 10px; }
+        .briefing {
+          padding: 22px 26px;
+          border-radius: 24px;
+          row-gap: 10px;
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-areas: "headline marker" "support action";
+        }
+        .briefing__marker { display: inline; }
         .briefing__headline { font-size: clamp(28px, 4vw, 42px); }
         .briefing__support, .briefing__action { font-size: 15px; }
         .briefing__marker { font-size: 11px; }
