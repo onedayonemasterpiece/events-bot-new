@@ -1,6 +1,6 @@
 mode: worktree_worker
 repo: events-bot-new
-base_ref: 732921c1
+base_ref: 3cdb5a32
 base_branch: feature/static-typed-intro-prototype-20260715
 integration_branch: feature/static-typed-intro-prototype-20260715
 global_constraints:
@@ -36,7 +36,7 @@ lanes:
     forbidden_files: ['**']
     expected_output: Read-only product/state/copy recommendations mapped to R01-R05 and R08.
     verification_scope: inspection_only
-    status: spawned
+    status: completed
     agent: /root/narrative_state_review
   - id: visual_motion_review
     role: reviewer
@@ -51,7 +51,7 @@ lanes:
     forbidden_files: ['**']
     expected_output: Read-only exact visual/motion recommendations mapped to R06-R08.
     verification_scope: inspection_only
-    status: spawned
+    status: completed
     agent: /root/visual_motion_review
   - id: communication_ui
     role: worker
@@ -74,7 +74,8 @@ lanes:
       - CHANGELOG.md
     expected_output: Committed code/tests with local memory, new scenarios, correct mark and cursor variants.
     verification_scope: targeted
-    status: planned
+    status: committed_and_merged
+    agent: /root/communication_ui
   - id: integration_publish
     role: merge_reviewer
     effort: high
@@ -96,4 +97,4 @@ lanes:
       - production root publication
     expected_output: New review URL, screenshots/video, Telegram evidence, tests, commit and push.
     verification_scope: full_local
-    status: planned
+    status: in_progress

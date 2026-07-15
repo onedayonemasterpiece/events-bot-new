@@ -57,35 +57,35 @@ export const briefingLabScenarios = [
     id: 'share_education', label: 'Как поделиться', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
     actionKind: 'share_event', actionSuccessSuppressDays: 90, cursor: 'underscore', cursorLinger: true,
     fragments: [
-      { text: 'Нашли' }, { text: 'то самое?', accent: true, breakAfter: true },
-      { text: 'Поделитесь' }, { text: 'своей находкой.' },
+      { text: 'Есть' }, { text: 'с кем пойти?', accent: true, breakAfter: true },
+      { text: 'Нажмите' }, { text: '«Поделиться».' },
     ],
-    ctaLabel: 'Посмотреть события', ctaHref: '/segodnya/',
+    ctaLabel: 'Показать в ленте', ctaHref: '#events',
   },
   {
     id: 'like_education', label: 'Зачем ставить лайк', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
     actionKind: 'like_event', actionSuccessSuppressDays: 90, cursor: 'bar',
     fragments: [
-      { text: 'Нравится событие?' }, { text: 'Отметьте.', accent: true, breakAfter: true },
-      { text: 'Так похожее' }, { text: 'найдётся быстрее.' },
+      { text: 'Событие' }, { text: 'понравилось?', accent: true, breakAfter: true },
+      { text: 'Отметьте' }, { text: 'сердцем.' },
     ],
-    ctaLabel: 'Найти любимое', ctaHref: '/segodnya/',
+    ctaLabel: 'Показать в ленте', ctaHref: '#events',
   },
   {
     id: 'not_interested_education', label: 'Не моё', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
     actionKind: 'not_interested', actionSuccessSuppressDays: 90, cursor: 'underscore',
     fragments: [
-      { text: 'Не ваше?' }, { text: 'Это тоже ответ.', accent: true, breakAfter: true },
+      { text: 'Не ваше?', accent: true, breakAfter: true },
       { text: 'Нажмите' }, { text: '«Не интересно».' },
     ],
-    ctaLabel: 'Продолжить выбор', ctaHref: '/segodnya/',
+    ctaLabel: 'Показать в ленте', ctaHref: '#events',
   },
   {
     id: 'frequently_forwarded', label: 'Часто пересылают', family: 'signal', cooldownDays: 14,
     demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'bar', cursorLinger: true,
     fragments: [
       { text: 'Это событие' }, { text: 'часто пересылают.', accent: true, breakAfter: true },
-      { text: 'Возможно,' }, { text: 'там есть что-то для вас.' },
+      { text: 'Что в нём' }, { text: 'нашли?' },
     ],
     ctaLabel: 'Узнать, что там', ctaHref: '/populyarnoe/',
   },
@@ -93,8 +93,8 @@ export const briefingLabScenarios = [
     id: 'anticipated_person', label: 'Кого особенно ждут', family: 'signal', cooldownDays: 30,
     demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'underscore', cursorLinger: true,
     fragments: [
-      { text: 'В комментариях' }, { text: 'особенно ждут', accent: true, breakAfter: true },
-      { text: 'одного из гостей.' }, { text: 'Угадаете кого?' },
+      { text: 'В комментариях' }, { text: 'ждут гостя.', accent: true, breakAfter: true },
+      { text: 'Угадаете' }, { text: 'кого?' },
     ],
     ctaLabel: 'Открыть обсуждаемое', ctaHref: '/populyarnoe/',
   },
@@ -103,8 +103,8 @@ export const briefingLabScenarios = [
 export const briefingLabFallback = {
   id: 'neutral_fallback', label: 'Нейтральный fallback', family: 'count', cooldownDays: 1, cursor: 'bar',
   fragments: [
-    { text: 'Город' }, { text: 'продолжается.', accent: true, breakAfter: true },
-    { text: 'Что удивит' }, { text: 'вас сегодня?' },
+    { text: 'Город' }, { text: 'не ждёт.', accent: true, breakAfter: true },
+    { text: 'Что удивит' }, { text: 'сегодня?' },
   ],
   ctaLabel: 'Открыть афишу', ctaHref: '/segodnya/',
 } as const satisfies BriefingLabScenario;

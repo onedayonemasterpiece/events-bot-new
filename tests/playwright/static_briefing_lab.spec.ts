@@ -100,8 +100,8 @@ test('all eight scenarios are discoverable; Replay, session state, Play all and 
 
   await page.locator('[data-scenario-select]').selectOption('share_education');
   await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'share_education');
-  await expect(page).toHaveURL(/scenario=newly_added_count/u);
-  await expect(page.locator('[data-message]')).toContainText('то самое');
+  await expect(page).toHaveURL(/scenario=share_education/u);
+  await expect(page.locator('[data-message]')).toContainText('Поделиться');
 
   await page.locator('[data-play-all]').click();
   await expect.poll(async () => (await labState(page)).scenario, { timeout: 6000 }).toBe('tomorrow_count');
@@ -159,7 +159,7 @@ test('hover/focus/pointer finish the sentence; inline link is stable and pace co
   const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
   await open(page, 'c', 'today_count', '&replay=1&pace=slow');
   await page.waitForTimeout(100);
-  await page.locator('[data-briefing-slot]').hover();
+  await page.locator('[data-briefing]').hover();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 200 });
   expect((await labState(page)).paused).toBeTruthy();
 
@@ -177,6 +177,50 @@ test('hover/focus/pointer finish the sentence; inline link is stable and pace co
 
   const href = await page.locator('a[data-reveal-fragment]').first().getAttribute('href');
   expect(href).toBe('/segodnya/');
+  await context.close();
+});
+
+test('local queue memory, verified actions, pace preference, real O and cursor variants are deterministic', async ({ browser }) => {
+  const { context, page } = await freshPage(browser, { width: 390, height: 844 });
+  await page.goto(`${baseUrl}?variant=c&replay=1`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'today_count');
+  await expect(page).not.toHaveURL(/scenario=/u);
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ke-briefing-memory-v1') || '{}').exposures?.today_count?.length)).toBe(1);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'tomorrow_count');
+  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-ready', 'true');
+  await expect(page).not.toHaveURL(/scenario=/u);
+
+  await page.locator('[data-pace-select]').selectOption('slow');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ke-briefing-lab-prefs-v1') || '{}').pace)).toBe('slow');
+  await page.goto(`${baseUrl}?variant=c`, { waitUntil: 'domcontentloaded' });
+  expect((await labState(page)).pace).toBe('slow');
+  await expect(page.locator('[data-pace="slow"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.goto(`${baseUrl}?variant=c&scenario=today_count&pace=fast&replay=1`, { waitUntil: 'domcontentloaded' });
+  expect((await labState(page)).pace).toBe('fast');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ke-briefing-lab-prefs-v1') || '{}').pace)).toBe('slow');
+
+  expect(await page.evaluate(() => (window as any).__briefingLab.getState().memory.actionSuccess.share_event)).toBeUndefined();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ke:event-action-success', { detail: { action: 'share' } })));
+  expect(await page.evaluate(() => Boolean((window as any).__briefingLab.getState().memory.actionSuccess.share_event))).toBeTruthy();
+  expect(await page.evaluate(() => (window as any).__briefingLab.getState().memory.actionSuccess.like_event)).toBeUndefined();
+
+  const wordmarkHref = await page.locator('.briefing-stage__brand-o use').getAttribute('href');
+  expect(wordmarkHref).toContain('/brand/announcements-wordmark-ui.svg#announcements-wordmark-ui');
+  await page.locator('[data-scenario-select]').selectOption('share_education');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor', 'underscore');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(page.locator('[data-briefing][data-cursor-linger="true"] .briefing-fragment.is-active')).toHaveCount(1);
+  expect(await page.evaluate(() => (window as any).__briefingLab.getState().memory.exposures.share_education)).toBeUndefined();
+  await page.locator('[data-scenario-select]').selectOption('anticipated_person');
+  await expect(page.locator('[data-demo-label]')).toContainText('DEMO-СИГНАЛ');
+
+  await page.locator('[data-review-guide] summary').click();
+  await page.locator('[data-reset-briefing-memory]').click();
+  expect(await page.evaluate(() => localStorage.getItem('ke-briefing-memory-v1'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('ke-briefing-lab-prefs-v1'))).toBeNull();
   await context.close();
 });
 
