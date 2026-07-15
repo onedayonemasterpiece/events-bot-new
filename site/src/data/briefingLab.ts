@@ -1,25 +1,94 @@
+export type BriefingLabFragment = {
+  text: string;
+  accent?: boolean;
+  breakAfter?: boolean;
+  href?: string;
+};
+
 export type BriefingLabScenario = {
   id: string;
   label: string;
-  headline: string;
-  supportingText: string;
+  fragments: readonly BriefingLabFragment[];
   ctaLabel: string;
+  ctaHref: string;
 };
 
-// Fixed editorial fixtures only: no profile, API, runtime LLM, or generated copy.
+// Fixed, deliberately labelled DEMO fixtures. Counts are not production claims.
+// The order is the single coherent play-all narrative used by the lab.
 export const briefingLabScenarios = [
-  { id: 'today_count', label: 'Сегодня', headline: 'Сегодня — события на любой план', supportingText: 'Выберите концерт, выставку или встречу.', ctaLabel: 'Смотреть сегодня' },
-  { id: 'tomorrow_count', label: 'Завтра', headline: 'Завтра в городе есть из чего выбрать', supportingText: 'Соберите план заранее и сохраните интересное.', ctaLabel: 'Смотреть завтра' },
-  { id: 'weekend_count', label: 'Выходные', headline: 'Идеи для ближайших выходных', supportingText: 'Прогулки, спектакли и музыка — в одной подборке.', ctaLabel: 'Открыть выходные' },
-  { id: 'exhibitions_count', label: 'Выставки', headline: 'Выставки, которые можно увидеть сейчас', supportingText: 'Выберите музей, галерею или небольшое пространство.', ctaLabel: 'Смотреть выставки' },
-  { id: 'free_count', label: 'Бесплатно', headline: 'Куда пойти без билета', supportingText: 'Собрали события со свободным входом.', ctaLabel: 'Смотреть сегодня' },
-  { id: 'tonight_count', label: 'Вечером', headline: 'Планы на сегодняшний вечер', supportingText: 'Концерты, спектакли и встречи после рабочего дня.', ctaLabel: 'Смотреть сегодня' },
-  { id: 'newly_added_count', label: 'Новое', headline: 'В афише появились новые события', supportingText: 'Посмотрите свежие пополнения общего городского каталога.', ctaLabel: 'Открыть афишу' },
-  { id: 'catalog_generic', label: 'Каталог', headline: 'События города — в одной афише', supportingText: 'Начните с даты или подходящего формата.', ctaLabel: 'Открыть афишу' },
+  {
+    id: 'today_count', label: 'Сегодня',
+    fragments: [
+      { text: 'Сегодня —' }, { text: '18 идей.', accent: true, breakAfter: true, href: '/segodnya/' },
+      { text: 'Выберите' }, { text: 'свой ритм.' },
+    ],
+    ctaLabel: 'Открыть сегодня', ctaHref: '/segodnya/',
+  },
+  {
+    id: 'tomorrow_count', label: 'Завтра',
+    fragments: [
+      { text: 'Завтра —' }, { text: '12 идей.', accent: true, breakAfter: true, href: '/zavtra/' },
+      { text: 'План' }, { text: 'уже здесь.' },
+    ],
+    ctaLabel: 'Посмотреть завтра', ctaHref: '/zavtra/',
+  },
+  {
+    id: 'weekend_count', label: 'Выходные',
+    fragments: [
+      { text: '24 идеи', accent: true, href: '/vyhodnye/' }, { text: 'на выходные.', breakAfter: true },
+      { text: 'От музея' }, { text: 'до сцены.' },
+    ],
+    ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/',
+  },
+  {
+    id: 'exhibitions_count', label: 'Выставки',
+    fragments: [
+      { text: 'Сейчас —' }, { text: '7 выставок.', accent: true, breakAfter: true, href: '/vystavki/' },
+      { text: 'Начните' }, { text: 'с центра.' },
+    ],
+    ctaLabel: 'Выбрать выставку', ctaHref: '/vystavki/',
+  },
+  {
+    id: 'free_count', label: 'Бесплатно',
+    fragments: [
+      { text: '6 событий', accent: true, href: '/segodnya/' }, { text: 'без билета.', breakAfter: true },
+      { text: 'Выберите' }, { text: 'своё.' },
+    ],
+    ctaLabel: 'Найти бесплатное', ctaHref: '/segodnya/',
+  },
+  {
+    id: 'tonight_count', label: 'Вечером',
+    fragments: [
+      { text: 'Вечером —' }, { text: '9 событий.', accent: true, breakAfter: true, href: '/segodnya/' },
+      { text: 'Город' }, { text: 'не спит.' },
+    ],
+    ctaLabel: 'Выбрать план на вечер', ctaHref: '/segodnya/',
+  },
+  {
+    id: 'newly_added_count', label: 'Новое',
+    fragments: [
+      { text: 'Новых —' }, { text: '11 событий.', accent: true, breakAfter: true, href: '/populyarnoe/' },
+      { text: 'Смотрите' }, { text: 'новое.' },
+    ],
+    ctaLabel: 'Открыть новое', ctaHref: '/populyarnoe/',
+  },
+  {
+    id: 'catalog_generic', label: 'Каталог',
+    fragments: [
+      { text: 'С чего' }, { text: 'начать?', accent: true, breakAfter: true, href: '/segodnya/' },
+      { text: 'Выберите' }, { text: 'дату или формат.' },
+    ],
+    ctaLabel: 'Открыть афишу', ctaHref: '/segodnya/',
+  },
 ] as const satisfies readonly BriefingLabScenario[];
 
 export const briefingLabFallback = {
-  id: 'neutral_fallback', label: 'Нейтральный fallback', headline: 'Найдите событие для своего дня', supportingText: 'Афиша Калининграда и области — без лишнего шума.', ctaLabel: 'Смотреть афишу',
+  id: 'neutral_fallback', label: 'Нейтральный fallback',
+  fragments: [
+    { text: 'Город' }, { text: 'продолжается.', accent: true, breakAfter: true },
+    { text: 'Найдите' }, { text: 'свой план.' },
+  ],
+  ctaLabel: 'Открыть афишу', ctaHref: '/segodnya/',
 } as const satisfies BriefingLabScenario;
 
 export const briefingLabCategories = [

@@ -18,225 +18,383 @@ const events = briefingLabFixtureIds.map((id) => byId.get(id)!);
 if (events.some((event) => event.id === briefingLabExcludedFixtureId)) throw new Error('Forbidden fixture 6045 leaked into briefing lab');
 const scenarios = [...briefingLabScenarios, briefingLabFallback];
 const scenario = defaultBriefingLabScenario;
-const title = `Editorial briefing lab | ${SITE_NAME}`;
-const description = 'Изолированный research-only прототип A/B/C на продуктовой оболочке листинга.';
+const title = `Живой городской обзор — lab | ${SITE_NAME}`;
+const description = 'Изолированный прототип короткой типографической коммуникации: сценарии, ссылки, пауза и повтор.';
 const canonicalUrl = absoluteUrl('/lab/briefing/');
 ---
 <EventLayout {title} {description} {canonicalUrl} structuredData={[]}>
   <main id="main" data-briefing-lab data-briefing-variant="static" data-briefing-scenario-id={scenario.id} data-fixture-ids={briefingLabFixtureIds.join(',')}>
     <div class="page-shell" data-lab-page-shell>
-      <section class="briefing-lab-slot" aria-label="Городской обзор" data-briefing-slot>
-        <div class="briefing-lab-card" data-briefing data-motion="complete">
-          <div class="briefing-lab-copy">
-            <h1 data-scenario-headline>{scenario.headline}</h1>
-            <p data-scenario-support>{scenario.supportingText}</p>
-            <a href="#events" data-scenario-cta>{scenario.ctaLabel} →</a>
+      <section class="lab-review-bar" aria-label="Управление прототипом" data-lab-review-bar>
+        <div class="lab-review-bar__primary">
+          <span class="lab-review-bar__label">LAB · что смотреть</span>
+          <div class="lab-variants" role="group" aria-label="Вариант прототипа">
+            <a href="?variant=a" data-variant-switch="control">A</a>
+            <a href="?variant=b" data-variant-switch="static">B</a>
+            <a href="?variant=c&replay=1" data-variant-switch="reveal">C · анимация</a>
           </div>
-          <span class="briefing-lab-marker" aria-hidden="true">Городской обзор</span>
+          <label class="lab-scenario-select">
+            <span>Сценарий</span>
+            <select data-scenario-select>
+              {briefingLabScenarios.map((item, index) => <option value={item.id}>{index + 1}. {item.label}</option>)}
+              <option value={briefingLabFallback.id}>Fallback</option>
+            </select>
+          </label>
+        </div>
+        <div class="lab-review-bar__actions">
+          <button type="button" data-replay>↻ <span>Повторить</span></button>
+          <button type="button" data-play-all>▶ <span>Показать все 8</span></button>
+          <details data-review-guide>
+            <summary>Что оценивать</summary>
+            <div class="review-guide__content">
+              <strong>Смотрите только на коммуникацию:</strong>
+              <ol>
+                <li>заметны ли сильная типографика и смысл сообщения;</li>
+                <li>видна ли поэтапная «печать», но не приходится ли её ждать;</li>
+                <li>понятны ли пауза, повтор и смена сценария;</li>
+                <li>стабильны ли ссылки и доступны ли категории сразу под обзором.</li>
+              </ol>
+              <p>Лента ниже — только масштабный контекст. Дизайн карточек сейчас не оцениваем.</p>
+              <button type="button" data-export-telemetry>Скачать локальный журнал</button>
+            </div>
+          </details>
         </div>
       </section>
 
-      <nav class="source-links briefing-lab-categories" aria-label="Категории событий" data-briefing-categories>
+      <section class="briefing-stage" aria-label="Городской обзор" data-briefing-slot>
+        <div class="briefing-stage__brand-o" aria-hidden="true">о</div>
+        <div class="briefing-stage__meta">
+          <span>КАЛИНИНГРАД · ГОРОДСКОЙ ОБЗОР</span>
+          <span class="briefing-stage__demo">DEMO-ДАННЫЕ</span>
+          <span data-progress>1 из 8</span>
+        </div>
+        <div class="briefing-stage__message" data-briefing data-motion="complete" aria-live="off">
+          <h1 data-message>
+            {scenario.fragments.map((fragment, index) => (
+              <>
+                {fragment.href ? (
+                  <a href={fragment.href} class:list={['briefing-fragment', { 'briefing-fragment--accent': fragment.accent }]} data-reveal-fragment data-fragment-index={index}>{fragment.text}</a>
+                ) : (
+                  <span class:list={['briefing-fragment', { 'briefing-fragment--accent': fragment.accent }]} data-reveal-fragment data-fragment-index={index}>{fragment.text}</span>
+                )}
+                {fragment.breakAfter ? <br /> : ' '}
+              </>
+            ))}
+          </h1>
+          <a href={scenario.ctaHref} class="briefing-stage__cta" data-scenario-cta>{scenario.ctaLabel} <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="briefing-stage__controls" aria-label="Управление рассказом">
+          <button type="button" aria-label="Предыдущий сценарий" data-previous>←</button>
+          <button type="button" data-pause><span data-pause-label>Пауза</span></button>
+          <button type="button" aria-label="Следующий сценарий" data-next>→</button>
+          <span class="briefing-stage__status" data-playback-status>Готово</span>
+          <div class="pace-control" role="group" aria-label="Темп показа">
+            <button type="button" data-pace="slow">Медленнее</button>
+            <button type="button" data-pace="normal" aria-pressed="true">Обычно</button>
+            <button type="button" data-pace="fast">Быстрее</button>
+          </div>
+        </div>
+      </section>
+
+      <nav class="briefing-categories" aria-label="Быстрый переход к категориям" data-briefing-categories>
         {briefingLabCategories.map((category) => <a href={category.href} data-category-route={category.href}>{category.label}</a>)}
       </nav>
 
-      <section id="events" class="briefing-lab-events" aria-labelledby="briefing-events-title">
-        <h2 id="briefing-events-title">События</h2>
+      <section id="events" class="briefing-context-feed" aria-labelledby="briefing-events-title">
+        <div class="briefing-context-feed__heading">
+          <h2 id="briefing-events-title">Дальше начинается лента</h2>
+          <span>Черновой контекст · карточки не оцениваем</span>
+        </div>
         <div class="listing-stack" data-briefing-feed>
-          {events.map((event, index) => (
-            <div data-briefing-event-id={event.id} data-first-event-wrapper={index === 0 ? '' : undefined}>
-              <EventListItem event={event} />
-            </div>
+          {events.map((event) => (
+            <div data-briefing-event-id={event.id}><EventListItem event={event} /></div>
           ))}
         </div>
-      </section>
-
-      <section class="briefing-lab-tools" aria-labelledby="briefing-lab-tools-title" data-lab-tools>
-        <p class="eyebrow">Research only · no production effect</p>
-        <h2 id="briefing-lab-tools-title">Параметры lab</h2>
-        <div class="source-links" role="group" aria-label="Вариант briefing">
-          <a href="?variant=a" data-variant-switch="control">A · Без briefing</a>
-          <a href="?variant=b" data-variant-switch="static">B · Статичный</a>
-          <a href="?variant=c" data-variant-switch="reveal">C · Reveal ≤ 1200 мс</a>
-        </div>
-        <label class="briefing-lab-scenario">
-          <span>Сценарий</span>
-          <select data-scenario-select>
-            {scenarios.map((item) => <option value={item.id}>{item.id} · {item.label}</option>)}
-          </select>
-        </label>
-        <details data-briefing-debug>
-          <summary>Локальный журнал (до 24 событий)</summary>
-          <button type="button" class="secondary-button" data-export-telemetry>Скачать JSON</button>
-          <pre data-briefing-debug-output>Событий пока нет.</pre>
-        </details>
       </section>
     </div>
   </main>
 
   <script type="application/json" id="briefing-lab-scenarios" set:html={JSON.stringify(scenarios)} />
-  <noscript><style>.briefing-lab-tools { display: none; }</style></noscript>
+  <noscript><style>.lab-review-bar, .briefing-stage__controls { display: none !important; }</style></noscript>
   <script is:inline>
     (() => {
       const lab = document.querySelector('[data-briefing-lab]');
+      const stage = lab?.querySelector('[data-briefing-slot]');
       const briefing = lab?.querySelector('[data-briefing]');
-      const slot = lab?.querySelector('[data-briefing-slot]');
-      if (!lab || !briefing || !slot) return;
-      const scenarios = JSON.parse(document.querySelector('#briefing-lab-scenarios')?.textContent || '[]');
-      const scenarioById = new Map(scenarios.map((item) => [item.id, item]));
-      const params = new URLSearchParams(location.search);
-      const variantAliases = { a: 'control', b: 'static', c: 'reveal', control: 'control', static: 'static', reveal: 'reveal' };
-      const requestedVariant = String(params.get('variant') || 'static').toLowerCase();
-      const variant = variantAliases[requestedVariant] || 'static';
-      const requestedScenario = params.get('scenario');
-      const scenario = requestedScenario ? (scenarioById.get(requestedScenario) || scenarioById.get('neutral_fallback')) : scenarioById.get('today_count');
-      lab.dataset.briefingVariant = variant;
-      lab.dataset.briefingScenarioId = scenario.id;
-      lab.querySelector('[data-scenario-headline]').textContent = scenario.headline;
-      lab.querySelector('[data-scenario-support]').textContent = scenario.supportingText;
-      lab.querySelector('[data-scenario-cta]').textContent = `${scenario.ctaLabel} →`;
-      const select = lab.querySelector('[data-scenario-select]');
-      if (select) select.value = scenario.id;
+      const message = lab?.querySelector('[data-message]');
+      if (!lab || !stage || !briefing || !message) return;
 
-      // Keep production cards visually exact while disabling shared personalization and navigation in the lab.
-      const fixtureIds = String(lab.dataset.fixtureIds || '').split(',');
-      const cards = [...lab.querySelectorAll('.listing-item')];
-      cards.forEach((card, index) => {
+      const allScenarios = JSON.parse(document.querySelector('#briefing-lab-scenarios')?.textContent || '[]');
+      const deck = allScenarios.filter((item) => item.id !== 'neutral_fallback');
+      const byId = new Map(allScenarios.map((item) => [item.id, item]));
+      const params = new URLSearchParams(location.search);
+      const aliases = { a: 'control', b: 'static', c: 'reveal', control: 'control', static: 'static', reveal: 'reveal' };
+      const variant = aliases[String(params.get('variant') || 'c').toLowerCase()] || 'reveal';
+      const requested = byId.get(params.get('scenario')) || byId.get('today_count');
+      let current = Math.max(0, deck.findIndex((item) => item.id === requested.id));
+      let currentScenario = requested;
+      let fragmentTimers = [];
+      let advanceTimer = 0;
+      let running = false;
+      let deckPlaying = params.get('autoplay') === '1';
+      let explicitPaused = false;
+      let hoverPaused = false;
+      let focusPaused = false;
+      let completedDeckIndexes = new Set();
+      let pace = ['slow', 'normal', 'fast'].includes(params.get('pace')) ? params.get('pace') : 'normal';
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+      const day = new Date().toISOString().slice(0, 10);
+      const revealKey = `ke-briefing-showcase-v2:${day}`;
+      const telemetry = [];
+      window.__briefingTelemetry = telemetry;
+
+      // Preserve the production card geometry as context without enabling shared
+      // listing prefetch/personalization behavior inside this isolated lab.
+      [...lab.querySelectorAll('.listing-item')].forEach((card) => {
         card.removeAttribute('data-listing-item');
         card.removeAttribute('data-card-href');
-        card.dataset.labFixtureId = fixtureIds[index] || '';
         card.querySelectorAll('a').forEach((link) => link.removeAttribute('data-prefetch'));
       });
 
-      const telemetry = [];
-      window.__briefingTelemetry = telemetry;
-      const emitted = new Set();
-      const day = new Date().toISOString().slice(0, 10);
-      const updateDebug = () => {
-        const output = lab.querySelector('[data-briefing-debug-output]');
-        if (output) output.textContent = telemetry.length ? JSON.stringify(telemetry, null, 2) : 'Событий пока нет.';
-      };
       const emit = (eventKind, payload = {}) => {
-        telemetry.push({ event_kind: eventKind, variant: lab.dataset.briefingVariant, scenario_id: lab.dataset.briefingScenarioId, elapsed_ms: Math.round(performance.now()), ...payload });
+        telemetry.push({ event_kind: eventKind, variant, scenario_id: currentScenario.id, elapsed_ms: Math.round(performance.now()), ...payload });
         if (telemetry.length > 24) telemetry.splice(0, telemetry.length - 24);
-        updateDebug();
       };
-      const emitOnce = (eventKind, payload = {}, scope = eventKind) => {
-        const key = `ke-briefing-lab:${day}:${lab.dataset.briefingVariant}:${lab.dataset.briefingScenarioId}:${scope}`;
-        try { if (emitted.has(key) || sessionStorage.getItem(key) === '1') return false; } catch (_) { if (emitted.has(key)) return false; }
-        emitted.add(key);
-        try { sessionStorage.setItem(key, '1'); } catch (_) {}
-        emit(eventKind, payload);
-        return true;
+      const clearMotionTimers = () => {
+        fragmentTimers.forEach(clearTimeout); fragmentTimers = [];
+        clearTimeout(advanceTimer); advanceTimer = 0;
       };
-      emitOnce('eligible_session', { assignment_source: params.has('variant') ? 'qa_query' : 'lab_default' });
-
-      let timer = 0;
-      let active = false;
-      let impressionEmitted = false;
-      let completionPendingReason = '';
-      const revealKey = `ke-briefing-lab-reveal:${new Date().toISOString().slice(0, 10)}`;
-      const complete = (reason) => {
-        clearTimeout(timer); active = false; briefing.dataset.motion = 'complete';
-        if (variant === 'reveal') { try { sessionStorage.setItem(revealKey, 'complete'); } catch (_) {} }
-        if (impressionEmitted) emitOnce('briefing_complete', { completion_reason: reason });
-        else completionPendingReason = reason;
+      const fragments = () => [...message.querySelectorAll('[data-reveal-fragment]')];
+      const updateStatus = (text) => { const node = lab.querySelector('[data-playback-status]'); if (node) node.textContent = text; };
+      const updatePause = () => {
+        const paused = explicitPaused || hoverPaused || focusPaused;
+        const label = lab.querySelector('[data-pause-label]');
+        if (label) label.textContent = paused ? 'Продолжить' : 'Пауза';
+        lab.querySelector('[data-pause]')?.setAttribute('aria-pressed', String(paused));
       };
-      const start = () => {
-        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return complete('reduced_motion');
-        try { if (sessionStorage.getItem(revealKey) === 'complete') return complete('bfcache_or_session'); } catch (_) {}
-        active = true; briefing.dataset.motion = 'ready';
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (!active) return; briefing.dataset.motion = 'running'; timer = setTimeout(() => complete('natural'), 1000);
-        }));
+      const updateProgress = () => {
+        const pos = deck.findIndex((item) => item.id === currentScenario.id);
+        lab.querySelector('[data-progress]').textContent = pos >= 0 ? `${pos + 1} из ${deck.length}` : 'Fallback';
+        const select = lab.querySelector('[data-scenario-select]'); if (select) select.value = currentScenario.id;
+        lab.dataset.briefingScenarioId = currentScenario.id;
       };
-      if (variant === 'control') slot.hidden = true;
-      else if (variant === 'reveal') start();
-      const interrupt = (reason) => { if (!active) return; emit('briefing_interrupt', { interrupt_reason: reason }); complete('interrupt'); };
-      document.addEventListener('pointerdown', () => interrupt('pointerdown'), { capture: true });
-      document.addEventListener('focusin', () => interrupt('focusin'), { capture: true });
-      window.addEventListener('scroll', () => interrupt('scroll'), { passive: true });
-      window.addEventListener('pageshow', (event) => { if (event.persisted && variant === 'reveal') { active = false; briefing.dataset.motion = 'complete'; } });
-      matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', (event) => { if (event.matches) complete('reduced_motion'); });
-
-      const qualified = {
-        briefing: { ratio: 0, threshold: .5, timer: 0 },
-        firstEvent: { ratio: 0, threshold: .9, timer: 0 },
+      const setUrl = () => {
+        const url = new URL(location.href);
+        url.searchParams.set('variant', variant === 'control' ? 'a' : variant === 'static' ? 'b' : 'c');
+        url.searchParams.set('scenario', currentScenario.id);
+        url.searchParams.set('pace', pace);
+        url.searchParams.delete('replay');
+        history.replaceState({}, '', url);
       };
-      const scheduleQualified = (kind) => {
-        const state = qualified[kind];
-        clearTimeout(state.timer); state.timer = 0;
-        if (document.visibilityState !== 'visible' || state.ratio < state.threshold) return;
-        state.timer = setTimeout(() => {
-          state.timer = 0;
-          if (document.visibilityState !== 'visible' || state.ratio < state.threshold) return;
-          if (kind === 'briefing' && variant !== 'control') {
-            impressionEmitted = emitOnce('briefing_impression', { visible_ratio: state.ratio, visible_ms: 250 }) || impressionEmitted;
-            if (variant === 'static') complete('static');
-            else if (completionPendingReason) { const reason = completionPendingReason; completionPendingReason = ''; emitOnce('briefing_complete', { completion_reason: reason }); }
-          } else if (kind === 'firstEvent') {
-            emitOnce('first_event_visible', { event_id: fixtureIds[0], visible_ratio: state.ratio, visible_ms: 250 });
+      const makeFragment = (fragment, index) => {
+        const node = document.createElement(fragment.href ? 'a' : 'span');
+        node.textContent = fragment.text;
+        node.className = `briefing-fragment${fragment.accent ? ' briefing-fragment--accent' : ''}`;
+        node.dataset.revealFragment = '';
+        node.dataset.fragmentIndex = String(index);
+        if (fragment.href) node.href = fragment.href;
+        return node;
+      };
+      const renderMessage = () => {
+        message.replaceChildren();
+        currentScenario.fragments.forEach((fragment, index) => {
+          message.append(makeFragment(fragment, index));
+          if (fragment.breakAfter) message.append(document.createElement('br'));
+          else message.append(document.createTextNode(' '));
+        });
+        const cta = lab.querySelector('[data-scenario-cta]');
+        cta.textContent = `${currentScenario.ctaLabel} ↗`;
+        cta.href = currentScenario.ctaHref;
+        updateProgress(); setUrl();
+      };
+      const showAllFragments = () => {
+        fragments().forEach((node) => { node.classList.add('is-visible'); node.classList.remove('is-active'); });
+      };
+      const rememberReveal = () => { try { sessionStorage.setItem(revealKey, 'complete'); } catch (_) {} };
+      const scheduleAdvance = () => {
+        clearTimeout(advanceTimer);
+        if (!deckPlaying || explicitPaused || hoverPaused || focusPaused || reduced.matches) return;
+        const hold = { slow: 5200, normal: 3600, fast: 2400 }[pace];
+        advanceTimer = setTimeout(() => {
+          completedDeckIndexes.add(current);
+          if (completedDeckIndexes.size >= deck.length) {
+            deckPlaying = false; updateStatus('Все 8 показаны'); emit('deck_complete'); return;
           }
-        }, 250);
+          current = (current + 1) % deck.length;
+          while (completedDeckIndexes.has(current)) current = (current + 1) % deck.length;
+          currentScenario = deck[current]; renderMessage(); startReveal({ force: true, reason: 'deck_next' });
+        }, hold);
       };
-      const observe = (element, kind) => {
-        if (!element || !('IntersectionObserver' in window)) return;
-        new IntersectionObserver((entries) => {
-          qualified[kind].ratio = entries.at(-1)?.intersectionRatio || 0;
-          scheduleQualified(kind);
-        }, { threshold: [0, .5, .9, 1] }).observe(element);
+      const complete = (reason = 'manual_complete', { remember = true } = {}) => {
+        fragmentTimers.forEach(clearTimeout); fragmentTimers = [];
+        running = false; showAllFragments(); briefing.dataset.motion = 'complete';
+        if (remember && variant === 'reveal') rememberReveal();
+        updateStatus(reason === 'session_complete' ? 'Уже показано · можно повторить' : (explicitPaused || hoverPaused || focusPaused ? 'На паузе' : 'Готово'));
+        emit('briefing_complete', { completion_reason: reason });
+        scheduleAdvance();
       };
-      observe(briefing, 'briefing');
-      observe(cards[0], 'firstEvent');
-      document.addEventListener('visibilitychange', () => {
-        Object.values(qualified).forEach((state) => { clearTimeout(state.timer); state.timer = 0; });
-        if (document.visibilityState === 'visible') { scheduleQualified('briefing'); scheduleQualified('firstEvent'); }
-      });
+      const startReveal = ({ force = false, reason = 'replay' } = {}) => {
+        clearMotionTimers(); renderMessage();
+        if (variant !== 'reveal' || reduced.matches) { briefing.dataset.motion = 'complete'; showAllFragments(); updateStatus(reduced.matches ? 'Без анимации' : 'Статичный вариант'); return; }
+        if (!force) {
+          try { if (sessionStorage.getItem(revealKey) === 'complete' && params.get('replay') !== '1') return complete('session_complete', { remember: false }); } catch (_) {}
+        }
+        explicitPaused = false; hoverPaused = false; focusPaused = false; updatePause();
+        const items = fragments();
+        items.forEach((node) => node.classList.remove('is-visible', 'is-active'));
+        briefing.dataset.motion = 'running'; running = true; updateStatus('Печатаем обзор…'); emit('briefing_start', { reason, pace });
+        const stagger = { slow: 280, normal: 210, fast: 145 }[pace];
+        items.forEach((node, index) => {
+          const timer = setTimeout(() => {
+            items.forEach((item) => item.classList.remove('is-active'));
+            node.classList.add('is-visible', 'is-active');
+            emit('briefing_fragment', { fragment_index: index });
+          }, index === 0 ? 0 : index * stagger);
+          fragmentTimers.push(timer);
+        });
+        fragmentTimers.push(setTimeout(() => complete('natural'), Math.max(1, items.length - 1) * stagger + 360));
+      };
+      const pause = (reason, explicit = true) => {
+        if (running) complete(reason, { remember: true });
+        clearTimeout(advanceTimer);
+        if (reason === 'hover') hoverPaused = true;
+        else if (reason === 'focus') focusPaused = true;
+        else if (explicit) explicitPaused = true;
+        updatePause(); updateStatus('На паузе'); emit('briefing_pause', { reason });
+      };
+      const resume = (reason = 'manual') => {
+        explicitPaused = false; hoverPaused = false; focusPaused = false; updatePause(); updateStatus('Продолжаем'); emit('briefing_resume', { reason }); scheduleAdvance();
+      };
+      const move = (step) => {
+        clearMotionTimers(); deckPlaying = false; completedDeckIndexes.clear();
+        current = (current + step + deck.length) % deck.length;
+        currentScenario = deck[current]; startReveal({ force: true, reason: step > 0 ? 'next' : 'previous' });
+      };
+
+      lab.dataset.briefingVariant = variant;
+      lab.querySelectorAll('[data-variant-switch]').forEach((node) => node.setAttribute('aria-current', node.dataset.variantSwitch === variant ? 'page' : 'false'));
+      if (variant === 'control') stage.hidden = true;
+      renderMessage();
+      if (variant === 'reveal') startReveal({ force: params.get('replay') === '1', reason: 'initial' });
+      else complete(variant === 'control' ? 'control' : 'static', { remember: false });
 
       lab.querySelector('[data-scenario-select]')?.addEventListener('change', (event) => {
-        const url = new URL(location.href); url.searchParams.set('scenario', event.target.value); location.href = url.href;
+        const next = byId.get(event.target.value) || byId.get('neutral_fallback');
+        currentScenario = next; current = Math.max(0, deck.findIndex((item) => item.id === next.id));
+        deckPlaying = false; completedDeckIndexes.clear(); startReveal({ force: true, reason: 'scenario_select' });
       });
-      cards.forEach((card) => card.addEventListener('click', (event) => {
-        const link = event.target.closest('a');
-        if (!link && event.target !== card) return;
-        event.preventDefault(); emit('event_detail_activate', { event_id: card.dataset.labFixtureId, href: link?.getAttribute('href') || '' });
+      lab.querySelector('[data-replay]')?.addEventListener('click', () => startReveal({ force: true, reason: 'manual_replay' }));
+      lab.querySelector('[data-play-all]')?.addEventListener('click', () => {
+        deckPlaying = true; completedDeckIndexes.clear(); current = 0; currentScenario = deck[0]; startReveal({ force: true, reason: 'play_all' });
+      });
+      lab.querySelector('[data-previous]')?.addEventListener('click', () => move(-1));
+      lab.querySelector('[data-next]')?.addEventListener('click', () => move(1));
+      lab.querySelector('[data-pause]')?.addEventListener('click', () => {
+        if (explicitPaused) return resume();
+        hoverPaused = false; focusPaused = false; pause('manual', true);
+      });
+      lab.querySelectorAll('[data-pace]').forEach((button) => button.addEventListener('click', () => {
+        pace = button.dataset.pace; lab.querySelectorAll('[data-pace]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        setUrl(); startReveal({ force: true, reason: 'pace_change' });
       }));
+
+      stage.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button, select, summary')) return;
+        if (event.target.closest('a')) { if (running) pause('link_pointer', true); return; }
+        (explicitPaused || hoverPaused || focusPaused) ? resume('blank_tap') : pause('blank_tap');
+      });
+      stage.addEventListener('mouseenter', () => { if (running || deckPlaying) pause('hover', false); });
+      stage.addEventListener('mouseleave', () => { if (!hoverPaused || explicitPaused || focusPaused) return; setTimeout(() => { if (hoverPaused && !explicitPaused && !focusPaused) resume('hover_leave'); }, 750); });
+      stage.addEventListener('focusin', () => pause('focus', false));
+      lab.addEventListener('click', (event) => {
+        const link = event.target.closest('.briefing-fragment[href], [data-scenario-cta]');
+        if (link) emit('briefing_link_activate', { href: link.getAttribute('href') });
+      }, { capture: true });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) pause('visibility_hidden'); });
+      window.addEventListener('pageshow', (event) => { if (event.persisted) pause('bfcache'); });
+      new IntersectionObserver((entries) => { if ((entries.at(-1)?.intersectionRatio || 0) < .5 && (running || deckPlaying)) pause('out_of_view'); }, { threshold: [.5] }).observe(stage);
+      reduced.addEventListener?.('change', () => reduced.matches ? complete('reduced_motion') : undefined);
       lab.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
-        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${lab.dataset.briefingVariant}-${lab.dataset.briefingScenarioId}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
       });
+      window.__briefingLab = { replay: () => startReveal({ force: true }), next: () => move(1), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, deckPlaying, paused: explicitPaused || hoverPaused || focusPaused, pace }) };
     })();
   </script>
 </EventLayout>
 
-<style>
-  .briefing-lab-slot { height: 150px; margin: 0 0 0.65rem; }
-  .briefing-lab-card { height: 100%; overflow: hidden; display: grid; align-content: center; padding: 0.72rem 0.82rem; border: 1px solid rgba(121,48,20,.16); border-radius: 22px; background: linear-gradient(115deg, rgba(165,72,33,.1), transparent 60%), var(--surface); box-shadow: var(--shadow); }
-  .briefing-lab-copy { min-width: 0; display: grid; gap: .27rem; }
-  .briefing-lab-copy h1 { max-width: none; margin: 0; font-size: clamp(1.2rem, 6vw, 1.48rem); line-height: 1.02; }
-  .briefing-lab-copy p { margin: 0; color: var(--muted); font-size: .77rem; font-weight: 650; line-height: 1.22; }
-  .briefing-lab-copy a { width: fit-content; color: var(--primary-strong); font-size: .78rem; font-weight: 900; }
-  .briefing-lab-marker { display: none; }
-  [data-briefing-variant="reveal"] [data-motion="ready"] .briefing-lab-copy,
-  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-lab-copy { opacity: 0; transform: translateY(6px); clip-path: inset(0 100% 0 0); }
-  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-lab-copy { opacity: 1; transform: none; clip-path: inset(0); transition: opacity 260ms ease-out, transform 420ms cubic-bezier(.2,.75,.2,1), clip-path 960ms cubic-bezier(.2,.75,.2,1); }
-  .briefing-lab-categories { flex-wrap: nowrap; margin: 0 0 .7rem; overflow-x: auto; scrollbar-width: none; }
-  .briefing-lab-categories::-webkit-scrollbar { display: none; }
-  .briefing-lab-categories a { flex: 0 0 auto; }
-  .briefing-lab-events h2 { margin: 0 0 .55rem; font-size: 1.15rem; }
-  .briefing-lab-tools { margin-top: 1.25rem; padding: 1rem; border: 1px dashed rgba(121,48,20,.26); border-radius: 20px; background: rgba(255,253,248,.72); }
-  .briefing-lab-tools h2 { font-size: 1.25rem; }
-  .briefing-lab-scenario { display: grid; gap: .35rem; margin-top: 1rem; font-weight: 850; }
-  .briefing-lab-scenario select { width: 100%; min-height: 46px; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; }
-  [data-briefing-debug] { margin-top: 1rem; }
-  [data-briefing-debug] summary { min-height: 44px; cursor: pointer; font-weight: 850; }
-  [data-briefing-debug] pre { max-height: 260px; overflow: auto; padding: .7rem; background: #221a14; color: #fffdf8; font: .72rem/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+<style is:global>
+  .lab-review-bar { min-height: 72px; display: grid; gap: .5rem; align-items: center; margin: .2rem 0 .55rem; padding: .45rem 0; border-block: 1px solid rgba(121,48,20,.18); }
+  .lab-review-bar__primary, .lab-review-bar__actions, .lab-variants { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+  .lab-review-bar__label { color: var(--primary-strong); font: 800 .68rem/1.1 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .lab-variants a, .lab-review-bar button, .lab-review-bar summary, .lab-scenario-select select { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: .35rem .65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: 800 .75rem/1.1 inherit; text-decoration: none; cursor: pointer; }
+  .lab-variants a[aria-current="page"] { background: var(--text); color: #fff; border-color: var(--text); }
+  .lab-scenario-select { display: flex; align-items: center; gap: .35rem; color: var(--muted); font-size: .72rem; font-weight: 800; }
+  .lab-scenario-select select { max-width: 150px; }
+  .lab-review-bar details { position: relative; }
+  .lab-review-bar summary { list-style: none; }
+  .review-guide__content { position: absolute; z-index: 20; top: calc(100% + .45rem); right: 0; width: min(420px, calc(100vw - 24px)); padding: 1rem; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); font-size: .84rem; line-height: 1.45; }
+  .review-guide__content ol { margin: .5rem 0; padding-left: 1.25rem; }
+  .review-guide__content p { margin: .5rem 0; color: var(--muted); }
+  .briefing-stage { position: relative; height: min(42svh, 250px); min-height: 220px; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; gap: .35rem; padding: .65rem 0 .55rem; border-bottom: 2px solid var(--text); background: linear-gradient(100deg, rgba(165,72,33,.07), transparent 58%); isolation: isolate; }
+  .briefing-stage__brand-o { position: absolute; z-index: -1; right: 2%; top: -34%; color: rgba(165,72,33,.08); font-size: min(42svh, 19rem); font-weight: 900; line-height: 1; transform: scaleX(1.7); transform-origin: right center; }
+  .briefing-stage__meta { display: flex; align-items: center; gap: .45rem; color: var(--muted); font: 800 .61rem/1.1 ui-monospace, monospace; letter-spacing: .065em; }
+  .briefing-stage__meta [data-progress] { margin-left: auto; color: var(--text); }
+  .briefing-stage__demo { padding: .18rem .32rem; background: rgba(165,72,33,.12); color: var(--primary-strong); }
+  .briefing-stage__message { align-self: center; min-width: 0; }
+  .briefing-stage__message h1 { max-width: 20ch; min-height: 2.05em; margin: 0; padding-bottom: .12em; font-size: clamp(1.72rem, 8.5vw, 2.12rem); font-weight: 820; line-height: 1; letter-spacing: -.045em; text-wrap: wrap; }
+  .briefing-fragment { position: relative; display: inline; color: inherit; text-decoration: none; }
+  a.briefing-fragment { text-decoration: underline; text-decoration-thickness: .075em; text-underline-offset: .12em; }
+  .briefing-fragment--accent { color: var(--primary); }
+  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment { opacity: 0; transform: translateY(.28em); filter: blur(1px); transition: opacity 300ms cubic-bezier(.16,1,.3,1), transform 340ms cubic-bezier(.16,1,.3,1), filter 250ms ease-out; }
+  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-visible { opacity: 1; transform: none; filter: none; }
+  [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-active::after { content: ""; display: inline-block; width: .11em; height: .78em; margin-left: .08em; background: var(--primary); animation: briefing-cursor 440ms step-end infinite; vertical-align: -.03em; }
+  .briefing-stage__cta { display: inline-flex; margin-top: .28rem; color: var(--primary-strong); font-size: .78rem; font-weight: 900; text-underline-offset: .2em; }
+  .briefing-stage__controls { display: flex; align-items: center; gap: .35rem; min-width: 0; }
+  .briefing-stage__controls button { min-width: 44px; min-height: 38px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,248,.9); color: var(--text); font: 850 .72rem/1 inherit; cursor: pointer; }
+  .briefing-stage__status { color: var(--muted); font-size: .68rem; font-weight: 750; white-space: nowrap; }
+  .pace-control { display: flex; margin-left: auto; gap: .2rem; }
+  .pace-control button { min-width: 30px; width: 30px; padding: 0; font-size: 0; }
+  .pace-control button::after { font-size: .72rem; }
+  .pace-control button[data-pace="slow"]::after { content: "−"; }
+  .pace-control button[data-pace="normal"]::after { content: "1×"; }
+  .pace-control button[data-pace="fast"]::after { content: "+"; }
+  .pace-control button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+  .briefing-categories { display: flex; flex-wrap: wrap; gap: .42rem; margin: .62rem 0 .72rem; }
+  .briefing-categories a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: .45rem .72rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font-size: .78rem; font-weight: 850; text-decoration: none; }
+  .briefing-context-feed__heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .75rem; margin: 0 0 .5rem; }
+  .briefing-context-feed__heading h2 { margin: 0; font-size: 1rem; }
+  .briefing-context-feed__heading span { color: var(--muted); font-size: .7rem; font-weight: 700; }
+  @keyframes briefing-cursor { 50% { opacity: 0; } }
   @media (min-width: 760px) {
-    .briefing-lab-slot { height: 190px; margin-bottom: 1rem; }
-    .briefing-lab-card { grid-template-columns: minmax(0,1fr) auto; gap: 1rem; padding: 1.35rem 1.55rem; border-radius: 28px; }
-    .briefing-lab-copy h1 { font-size: clamp(2rem, 4vw, 2.65rem); }
-    .briefing-lab-copy p, .briefing-lab-copy a { font-size: .95rem; }
-    .briefing-lab-marker { display: block; color: var(--primary-strong); font-size: .72rem; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+    .lab-review-bar { min-height: 58px; grid-template-columns: minmax(0,1fr) auto; }
+    .lab-review-bar__actions { justify-content: flex-end; }
+    .lab-variants a, .lab-review-bar button, .lab-review-bar summary, .lab-scenario-select select { min-height: 40px; }
+    .briefing-stage { height: min(34svh, 306px); min-height: 270px; padding: .8rem 0 .7rem; }
+    .briefing-stage__message h1 { max-width: 24ch; min-height: 2em; font-size: clamp(3rem, 5vw, 4.5rem); line-height: .98; }
+    .briefing-stage__cta { font-size: 1rem; }
+    .briefing-stage__controls button { min-height: 44px; }
+    .pace-control button { width: auto; min-width: 44px; padding-inline: .65rem; font-size: .7rem; }
+    .pace-control button::after { display: none; }
+    .briefing-categories { flex-wrap: nowrap; }
+    .briefing-categories a { padding-inline: 1rem; }
   }
-  @media (prefers-reduced-motion: reduce) { .briefing-lab-copy { opacity: 1 !important; transform: none !important; clip-path: none !important; transition: none !important; } }
+  @media (max-width: 380px) {
+    .lab-review-bar { grid-template-columns: 1fr; }
+    .lab-review-bar__label, .lab-scenario-select > span { display: none; }
+    .lab-review-bar__primary { display: grid; grid-template-columns: auto minmax(0,1fr); flex-wrap: nowrap; }
+    .lab-variants { flex-wrap: nowrap; }
+    .lab-variants a { padding-inline: .55rem; }
+    .lab-scenario-select select { width: 100%; max-width: none; }
+    .lab-review-bar__actions { flex-wrap: nowrap; }
+    .lab-review-bar__actions [data-play-all] span, .lab-review-bar__actions [data-replay] span { display: none; }
+    .briefing-stage__message h1 { font-size: clamp(1.68rem, 8.45vw, 1.9rem); }
+    .briefing-stage__status { display: none; }
+    .briefing-categories { gap: .3rem; }
+    .briefing-categories a { padding-inline: .58rem; font-size: .73rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .briefing-fragment { opacity: 1 !important; transform: none !important; filter: none !important; transition: none !important; }
+    .briefing-fragment::after { display: none !important; animation: none !important; }
+  }
 </style>

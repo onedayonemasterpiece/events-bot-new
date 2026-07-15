@@ -1,0 +1,93 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: 2a2cb743c93cbba1e8b71dad4c48f9ac8e1e25e6
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: feature/static-typed-intro-prototype-20260715
+global_constraints:
+  - replace the invalid shell-centric demo with a communication-first lab; no production integration
+  - keep exactly the existing eight scenario IDs plus fallback; no Gemini or personalization
+  - hero itself must stay at or below 50 percent viewport height
+  - categories must be visibly reachable immediately after the hero
+  - feed is spatial context only and must be labeled not-a-design-subject
+  - publish only a new immutable noindex preview prefix; never overwrite the previous evidence
+verification_owner: /root
+requirements:
+  - {id: R01, requirement: "Variant C visibly animates semantic text fragments and exposes an intentional Replay action.", primary_lane: integration_publish}
+  - {id: R02, requirement: "All eight existing scenarios are visible and directly selectable; a play-all demonstration is available.", primary_lane: integration_publish}
+  - {id: R03, requirement: "Each scenario communicates in friendly strong typography over one to three lines, with cursor/accent and usable links.", primary_lane: integration_publish}
+  - {id: R04, requirement: "Hero is <=50vh and the category actions are visible directly below it on mobile and desktop.", primary_lane: integration_publish}
+  - {id: R05, requirement: "Feed remains only neutral spatial context; page tells reviewers exactly what to assess.", primary_lane: integration_publish}
+  - {id: R06, requirement: "Build, test, screenshot and publish a corrected immutable lab; explain disk impact and supersede the prior preview.", primary_lane: integration_publish}
+lanes:
+  - id: intent_review
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Produce a concise acceptance critique mapping original strong-typography, type/reveal, pause and scenario intent to a corrected lab.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Read-only visual/product acceptance recommendations.
+    verification_scope: inspection_only
+    status: completed
+  - id: usability_review
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Define what a reviewer should see/do in the first ten seconds and identify replay/session/category visibility traps.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Read-only moderated-review checklist.
+    verification_scope: inspection_only
+    status: completed
+  - id: communication_ui
+    role: worker
+    effort: high
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: Implement the communication-first lab redesign and targeted Playwright tests.
+    depends_on: [intent_review, usability_review]
+    execution_mode: serial_after_dependency
+    branch: agent/static-typed-briefing/communication-correction
+    worktree: /home/dev/.codex/worktrees/events-bot-new/typed-briefing-communication-correction
+    writable_files:
+      - site/src/pages/lab/briefing/index.astro
+      - site/src/data/briefingLab.ts
+      - tests/playwright/static_briefing_lab.spec.ts
+      - .codex/lanes/static-typed-briefing-correction/communication_ui/RESULTS.md
+    forbidden_files:
+      - production pages/components
+      - deploy scripts
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Clean committed UI/test lane with visible replay/scenarios/categories and viewport evidence.
+    verification_scope: targeted
+    status: superseded
+    superseded_reason: worker produced data draft only; integrator resumed serially after two interrupted no-write attempts
+  - id: integration_publish
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R06]
+    target: Integrate, document corrected intent, build/test/screenshot and publish only a new versioned preview.
+    depends_on: [communication_ui]
+    execution_mode: serial_after_dependency
+    branch: feature/static-typed-intro-prototype-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files:
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/features/static-site-pages/astro-preview.md
+      - CHANGELOG.md
+      - .codex/lanes/static-typed-briefing-correction/**
+      - artifacts/codex/static-typed-briefing-correction-20260715/**
+    forbidden_files:
+      - production homepage/listing/event-detail code
+      - production root publication
+    expected_output: Corrected URL, screenshots, explicit viewing guide, tests, commit and push.
+    verification_scope: full_local
+    status: in_progress
