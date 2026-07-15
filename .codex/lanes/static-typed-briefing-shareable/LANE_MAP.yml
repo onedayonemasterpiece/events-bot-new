@@ -111,4 +111,7 @@ lanes:
       - production root publication
     expected_output: Public preview URL or explicit reproducible-local fallback, screenshots, test report, commit and push.
     verification_scope: full_local
-    status: in_progress
+    status: completed
+    published_build_id: preview-20260715t1241-briefing-lab-0e94a440
+    published_source_sha: 0e94a440adbbfb08ec3f56d0096ee32100b7d12d
+    results: .codex/lanes/static-typed-briefing-shareable/publish_integration/RESULTS.md

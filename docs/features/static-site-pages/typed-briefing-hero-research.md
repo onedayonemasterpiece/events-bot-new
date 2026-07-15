@@ -156,6 +156,18 @@ Local URL: `http://127.0.0.1:4177/<build-id>/lab/briefing/?variant=a`; replace `
 
 Public publication is a distinct command and accepts only `preview-YYYYMMDDtHHMM-briefing-lab-<sha8>`. It performs recursive copy only into that new prefix, never `sync`, delete, cache purge, root write, stable ICS mutation or production navigation change. Local telemetry remains capped at 24 records in `window.__briefingTelemetry` and can be downloaded from the on-page debug panel; no beacon, XHR, POST, Supabase or analytics transport is created.
 
+### Published lab evidence — 2026-07-15
+
+Immutable preview built from `0e94a440`:
+
+- [A · control](https://kenigevents.ru/preview-20260715t1241-briefing-lab-0e94a440/lab/briefing/?variant=a)
+- [B · static](https://kenigevents.ru/preview-20260715t1241-briefing-lab-0e94a440/lab/briefing/?variant=b)
+- [C · reveal](https://kenigevents.ru/preview-20260715t1241-briefing-lab-0e94a440/lab/briefing/?variant=c)
+
+Acceptance: one-route build and five-file allowlist passed; local Playwright passed `3/3`; all eight scenarios plus fallback passed B/C overflow and production-geometry checks at the four required viewports; the public A/B/C × viewport screenshot matrix returned `12/12` HTTP 200 with exact noindex and zero POST/XHR/fetch/beacon/Supabase/analytics/telemetry requests. Evidence is stored locally under `artifacts/codex/static-typed-briefing-shareable-20260715/` and intentionally not committed.
+
+The visual result also preserves the negative finding: at `320×568` the title/decision region is visible, but the unshrunk production card extends below the viewport. This prototype is therefore shareable for moderated research, not accepted for homepage rollout.
+
 ### ENOSPC boundary
 
 The earlier full static build failed because the host filesystem was at `99–100%` capacity with only hundreds (and during tests tens) of MiB free; inode usage was about `16%`, so this was block-space exhaustion rather than inode exhaustion or a lab defect. The isolated one-route lab build succeeds under that constraint. This does **not** prove the ordinary full-catalog production build: that gate remains unproven on this host until space is reclaimed and the full build is rerun.

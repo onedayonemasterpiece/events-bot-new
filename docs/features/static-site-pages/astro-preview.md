@@ -19,6 +19,8 @@ PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run preview:l
 
 For a reviewed public artifact, choose the strict immutable ID, source the repository `.env` into the current process without copying it into a linked worktree, then run `npm run deploy:lab`. The deploy allowlist is only `lab/briefing/index.html`, `_astro/**`, `lab-manifest.json`, `favicon.svg` and the exact announcement wordmark. The page is `noindex,nofollow,noarchive`; no production route or stable object is modified.
 
+Verified 2026-07-15 artifact: <https://kenigevents.ru/preview-20260715t1241-briefing-lab-0e94a440/lab/briefing/?variant=a> (`b` and `c` use the same URL with the variant value replaced). It was uploaded as exactly five allowlisted objects; public CDN and website-endpoint checks passed.
+
 ## Public URLs
 
 Required URLs for the current preview:
