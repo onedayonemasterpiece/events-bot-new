@@ -94,3 +94,14 @@
   the share row at `44px` both before and after success and confirmed the green
   check plus the SVG Repo mask. Its inspected screenshot was sent to Telegram
   Saved Messages as message `32272`.
+- Prefix-only deployment passed dry-run safety and public verification at
+  `https://kenigevents.ru/preview-20260715t1025z-f18-share-feedback/__preview/`.
+  Public Playwright passed 13 contracts in the full batch; the final no-JS
+  contract encountered one transient truncated-download error and then passed
+  alone, leaving all `14/14` contracts verified. Real public Chromium clipboard
+  readback returned the exact canonical text for the text action and one
+  `image/png` type for the card action; the share row remained exactly
+  `44px → 44px`. The public SVG bytes match the tracked source SHA-256
+  `7fa7fe1e3e0f4caa10df283907944a07776af1ce6fa69dec2ea9afba6a2dfa7a`.
+  Visually inspected public normal/success footer captures were delivered to
+  Telegram Saved Messages as messages `32273` and `32274`.
