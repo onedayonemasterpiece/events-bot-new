@@ -66,6 +66,18 @@ Route:
 /lab/briefing/
 ```
 
+### Исправленный публичный артефакт — что смотреть
+
+Основной вход в коммуникационную механику (вариант C с принудительным повтором):
+
+<https://kenigevents.ru/preview-20260715t1407-briefing-lab-9c8c9a62/lab/briefing/?variant=c&scenario=today_count&replay=1>
+
+На странице оцениваются только: сильная типографика в 1–3 строки, последовательное проявление смысловых фрагментов и курсора, управление `Повторить` / `Показать все 8` / `Пауза` / назад / дальше / темп, восемь доступных сценариев и непосредственный переход в категории под hero. Блок ниже подписи `Дальше начинается лента` оставлен только для масштаба страницы и **не является предметом этой дизайн-приёмки**.
+
+Ссылки для сравнения: [A — без briefing](https://kenigevents.ru/preview-20260715t1407-briefing-lab-9c8c9a62/lab/briefing/?variant=a), [B — статический briefing](https://kenigevents.ru/preview-20260715t1407-briefing-lab-9c8c9a62/lab/briefing/?variant=b&scenario=today_count). Все числа прямо помечены как `DEMO-ДАННЫЕ`.
+
+Исправленный isolated build прошёл 6 Playwright-проверок и геометрическую матрицу `9 scenarios × 2 briefing variants × 4 viewports = 72` render combinations. Публичная проверка A/B/C на `320×568`, `375×667`, `390×844` и `1440×900` не обнаружила горизонтального overflow, внешней телеметрии или ошибок загрузки. Старый prefix `preview-20260715t1241-briefing-lab-0e94a440` не использовать для concept review.
+
 Variants:
 
 | Variant | Contract | Purpose |

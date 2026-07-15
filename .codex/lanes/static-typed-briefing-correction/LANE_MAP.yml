@@ -73,7 +73,7 @@ lanes:
   - id: integration_publish
     role: merge_reviewer
     effort: high
-    requirement_ids: [R06]
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
     target: Integrate, document corrected intent, build/test/screenshot and publish only a new versioned preview.
     depends_on: [communication_ui]
     execution_mode: serial_after_dependency
@@ -90,4 +90,6 @@ lanes:
       - production root publication
     expected_output: Corrected URL, screenshots, explicit viewing guide, tests, commit and push.
     verification_scope: full_local
-    status: in_progress
+    status: completed
+    result: .codex/lanes/static-typed-briefing-correction/integration_publish/RESULTS.md
+    published_build_id: preview-20260715t1407-briefing-lab-9c8c9a62

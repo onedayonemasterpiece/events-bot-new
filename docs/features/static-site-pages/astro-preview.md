@@ -17,7 +17,9 @@ PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run lab
 
 For a reviewed public artifact, choose the strict immutable ID, source the repository `.env` into the current process without copying it into a linked worktree, then run `npm run deploy:lab`. The deploy allowlist is only `lab/briefing/index.html`, `_astro/**`, `lab-manifest.json`, `favicon.svg` and the exact announcement wordmark. The page is `noindex,nofollow,noarchive`; no production route or stable object is modified.
 
-Superseded 2026-07-15 shell-centric artifact (technical regression evidence only, not for concept review): <https://kenigevents.ru/preview-20260715t1241-briefing-lab-0e94a440/lab/briefing/?variant=a>. The corrected communication-first showcase uses a new immutable prefix recorded after publication.
+Corrected 2026-07-15 communication-first showcase: <https://kenigevents.ru/preview-20260715t1407-briefing-lab-9c8c9a62/lab/briefing/?variant=c&scenario=today_count&replay=1>. Use `Повторить` for one scene or `Показать все 8` for the finite scenario deck. The matching static comparison is <https://kenigevents.ru/preview-20260715t1407-briefing-lab-9c8c9a62/lab/briefing/?variant=b&scenario=today_count>; all values are labeled demo data.
+
+Superseded 2026-07-15 shell-centric artifact (technical regression evidence only, not for concept review): <https://kenigevents.ru/preview-20260715t1241-briefing-lab-0e94a440/lab/briefing/?variant=a>. It does not represent the requested animation/scenario review.
 
 ## Public URLs
 
