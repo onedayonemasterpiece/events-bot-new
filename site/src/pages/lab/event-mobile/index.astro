@@ -1,0 +1,85 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import {
+  MOBILE_EVENT_REVIEW_SCENARIOS,
+  MOBILE_EVENT_REVIEW_VARIANTS,
+  mobileEventReviewPath,
+} from '../../../lib/mobileEventReview';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
+
+const canonicalUrl = absoluteUrl('/lab/event-mobile/');
+const title = `Mobile event UI variants | ${SITE_NAME}`;
+const description = 'Noindex 2×2 mobile review lab: current/open prose and current/grouped secondary actions on photo, free-like and OCR-poster event scenarios.';
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main" class="mobile-ui-lab">
+    <div class="page-shell mobile-ui-lab__shell">
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Mobile event UI lab</span></nav>
+
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">mobile only · 2×2 controlled experiment</p>
+          <h1>Текст и secondary actions — отдельно и вместе</h1>
+          <p class="lead">Бирка, hero media policy, декоративная терракотовая линия, sticky CTA и discovery cards во всех вариантах одинаковы. Меняются только два независимых параметра: внешний description card и группировка secondary actions.</p>
+          <div class="mobile-ui-lab__legend" role="list">
+            {MOBILE_EVENT_REVIEW_VARIANTS.map((variant, index) => (
+              <article role="listitem">
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <div><strong>{variant.label}</strong><p>{variant.note}</p></div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {MOBILE_EVENT_REVIEW_SCENARIOS.map((scenario) => (
+        <section class="mobile-ui-lab__scenario" aria-labelledby={`scenario-${scenario.slug}`}>
+          <header>
+            <p class="eyebrow">real event #{scenario.eventId}</p>
+            <h2 id={`scenario-${scenario.slug}`}>{scenario.label}</h2>
+            <p class="lead">{scenario.note}</p>
+          </header>
+          <div class="mobile-ui-lab__grid">
+            {MOBILE_EVENT_REVIEW_VARIANTS.map((variant) => (
+              <article class="mobile-ui-lab__case">
+                <div class="mobile-ui-lab__case-head">
+                  <div><strong>{variant.shortLabel}</strong><span>{variant.proseTreatment} prose · {variant.actionsTreatment} actions</span></div>
+                  <a href={withBase(mobileEventReviewPath(variant.slug, scenario.slug))}>Открыть отдельно</a>
+                </div>
+                <div class="hero-phone-frame" aria-label={`${variant.label}: ${scenario.label}`}>
+                  <iframe loading="lazy" src={withBase(mobileEventReviewPath(variant.slug, scenario.slug))} title={`${variant.label}: ${scenario.label}`}></iframe>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .mobile-ui-lab { color:#241c17; background:#f8f0e5; }
+  .mobile-ui-lab__shell { display:grid; gap:clamp(2rem,5vw,4rem); padding-bottom:5rem; }
+  .mobile-ui-lab h1 { max-width:18ch; font-size:clamp(2.35rem,6vw,5.8rem); line-height:.92; }
+  .mobile-ui-lab__legend { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; margin-top:1.5rem; }
+  .mobile-ui-lab__legend article { display:grid; grid-template-columns:2.2rem minmax(0,1fr); gap:.65rem; padding:1rem; border:1px solid rgba(121,48,20,.14); border-radius:18px; background:#fffaf2; }
+  .mobile-ui-lab__legend article>span { color:#b54d22; font-weight:900; }
+  .mobile-ui-lab__legend strong { display:block; }
+  .mobile-ui-lab__legend p { margin:.35rem 0 0; color:#6f6157; line-height:1.45; }
+  .mobile-ui-lab__scenario { display:grid; gap:1rem; }
+  .mobile-ui-lab__scenario>header { max-width:66ch; }
+  .mobile-ui-lab__scenario h2 { margin:0; font-size:clamp(2rem,4vw,4rem); }
+  .mobile-ui-lab__grid { display:grid; grid-template-columns:repeat(2,minmax(390px,1fr)); gap:1rem; overflow-x:auto; padding-bottom:.5rem; }
+  .mobile-ui-lab__case { min-width:0; padding:1rem; border-radius:24px; background:#292521; color:#fffaf2; }
+  .mobile-ui-lab__case-head { min-height:68px; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+  .mobile-ui-lab__case-head strong, .mobile-ui-lab__case-head span { display:block; }
+  .mobile-ui-lab__case-head span { margin-top:.25rem; color:#d7c9bc; font-size:.82rem; }
+  .mobile-ui-lab__case-head a { min-height:44px; display:inline-flex; align-items:center; color:#fffaf2; font-size:.84rem; font-weight:850; }
+  .mobile-ui-lab__case .hero-phone-frame { width:390px; max-width:100%; margin:0 auto; }
+  @media (max-width:840px) {
+    .mobile-ui-lab__legend { grid-template-columns:1fr; }
+    .mobile-ui-lab__grid { grid-template-columns:390px; }
+  }
+</style>

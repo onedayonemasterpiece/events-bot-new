@@ -34,6 +34,7 @@
 - CherryFlash guide-excursion promo now uses the agreed `true3d-v4-approved-2026-07-11` Blender renderer from `scripts/render_cherryflash_guide_true3d_v4.py` inside production `render_cherryflash_full.py`, preserving month-text dates such as `10 июля 16:00` and the approved SVG icon/avatar/CTA composition instead of a reimplemented approximation.
 
 ### Added
+- **Static event mobile UI review lab**: added a noindex 2×2 prototype matrix for current/open editorial prose and current/grouped secondary actions across photo, free-like and OCR-poster events, while explicitly preserving the fixed brand tag, media policy, discovery polarity and sticky CTA.
 
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.
 

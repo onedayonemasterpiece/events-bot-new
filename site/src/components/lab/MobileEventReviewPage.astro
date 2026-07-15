@@ -1,0 +1,195 @@
+---
+import EventCard from '../EventCard.astro';
+import EventFacts from '../EventFacts.astro';
+import EventHero, { type HeroComposition } from '../EventHero.astro';
+import EventTokenMedallions from '../EventTokenMedallions.astro';
+import Icon from '../Icon.astro';
+import type { PreviewEvent } from '../../lib/types';
+import type { MobileEventReviewVariant } from '../../lib/mobileEventReview';
+import {
+  displayDateTime,
+  displayUpdatedAtKaliningrad,
+  eventActionHref,
+  eventCalendarHref,
+  eventHref,
+  eventTicketActionLabel,
+  isCalendarEligible,
+  isTelephoneUrl,
+  withBase,
+} from '../../lib/events';
+import { eventImageUrl } from '../../lib/assets';
+
+interface Props {
+  event: PreviewEvent;
+  related: PreviewEvent[];
+  variant: MobileEventReviewVariant;
+  composition: HeroComposition;
+}
+
+const { event, related, variant, composition } = Astro.props;
+const ctaHref = eventActionHref(event);
+const ctaLabel = eventTicketActionLabel(event);
+const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
+const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
+const stickyIsTelephone = isTelephoneUrl(stickyHref);
+const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
+const sourceCount = Number(event.source_engagement_sources_count || 0);
+const sourceCountLabel = sourceCount > 0
+  ? `${sourceCount} ${sourceCount % 10 === 1 && sourceCount % 100 !== 11 ? 'источник' : [2, 3, 4].includes(sourceCount % 10) && ![12, 13, 14].includes(sourceCount % 100) ? 'источника' : 'источников'}`
+  : null;
+const descriptionMeta = [sourceCountLabel, updatedAtLabel ? `обновлено: ${updatedAtLabel} (Калининград)` : null].filter(Boolean);
+const galleryCtaEvent = related[0];
+const galleryCta = galleryCtaEvent ? {
+  title: galleryCtaEvent.title,
+  href: eventHref(galleryCtaEvent),
+  label: 'Смотреть похожее',
+  image_url: eventImageUrl(galleryCtaEvent.image_url),
+  meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
+} : undefined;
+---
+
+<main
+  id="main"
+  class="mobile-event-review"
+  data-mobile-event-review
+  data-mobile-review-variant={variant.slug}
+  data-prose-treatment={variant.proseTreatment}
+  data-actions-treatment={variant.actionsTreatment}
+>
+  <div class="page-shell page-shell--event-impact mobile-event-review__shell">
+    <article class="main-col section-card section-card--hero section-card--impact-hero">
+      <div class="section-card__inner section-card__inner--hero">
+        <EventHero event={event} composition={composition} galleryCta={galleryCta} />
+      </div>
+    </article>
+
+    <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
+      <a href={withBase('/__preview/')}>Афиша</a>
+      <span aria-hidden="true">/</span>
+      {event.city && <span>{event.city}</span>}
+      {event.city && <span aria-hidden="true">/</span>}
+      {event.event_type && <span>{event.event_type}</span>}
+    </nav>
+
+    <div class="mobile-event-review__medallions"><EventTokenMedallions event={event} /></div>
+
+    <section class="section-card section-card--quiet section-card--event-details mobile-event-review__details" style="margin-top: 1rem;">
+      <div class="section-card__inner mobile-event-review__prose">
+        <h2>Описание</h2>
+        <div class="prose" set:html={event.description_html} />
+        <h2 style="margin-top: 1.2rem;">Коротко</h2>
+        <EventFacts event={event} />
+        {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
+      </div>
+      <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
+    </section>
+
+    <section id="discovery-feed" class="section-card mobile-event-review__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
+      <div class="section-card__inner">
+        <h2>Смотрите дальше</h2>
+        <div class="cards-grid cards-grid--immersive" data-feed-card-variant="split-actions">
+          {related.map((candidate) => <EventCard event={candidate} variant="split-actions" />)}
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+{stickyHref && (
+  <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
+    <div class="mobile-sticky-cta__inner">
+      <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{displayDateTime(event)}</span></div>
+      <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span>{stickyLabel}</span></a>
+    </div>
+  </div>
+)}
+
+<style is:global>
+  [data-mobile-event-review] .mobile-event-review__shell { padding-bottom: 1.5rem; }
+  [data-mobile-event-review] .mobile-event-review__medallions { margin-top: 0.25rem; }
+
+  [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__details {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__prose {
+    width: min(100%, 66ch);
+    margin-inline: auto;
+    padding-inline: 0.25rem;
+    padding-top: 1.15rem;
+    padding-bottom: 0.35rem;
+  }
+  [data-mobile-event-review][data-prose-treatment="open"] .event-source-gate--section {
+    width: min(100%, 66ch);
+    margin: 0.85rem auto 0;
+    border: 1px solid rgba(121,48,20,0.12);
+    border-radius: 16px;
+    background: rgba(255,253,248,0.52);
+  }
+
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.42rem;
+    padding: 0.48rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    background: #292521;
+    box-shadow: 0 14px 28px rgba(41,37,33,0.18);
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .cta-button {
+    flex: 1 0 100%;
+    width: 100%;
+    min-height: 52px;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button {
+    flex: 1 1 7.15rem;
+    width: auto;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0.55rem 0.48rem;
+    border-color: rgba(255,255,255,0.1);
+    border-radius: 13px;
+    background: rgba(255,255,255,0.08);
+    color: #fffaf2;
+    box-shadow: none;
+    font-size: 0.84rem;
+    line-height: 1.05;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:hover {
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.13);
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+    flex: 0 0 52px;
+    padding-inline: 0.42rem;
+    color: #fffaf2;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions .icon {
+    width: 1.08rem;
+    height: 1.08rem;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions .feedback-count:empty { display: none; }
+
+  @media (max-width: 379px) {
+    [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:not(.feedback-button--like) {
+      flex-basis: 5.9rem;
+      padding-inline: 0.34rem;
+      font-size: 0.79rem;
+    }
+  }
+  @media (min-width: 760px) and (max-width: 1023px) {
+    [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__prose,
+    [data-mobile-event-review][data-prose-treatment="open"] .event-source-gate--section {
+      width: min(100%, 66ch);
+    }
+  }
+</style>
