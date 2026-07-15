@@ -81,4 +81,5 @@ render/
 # Static site local build outputs
 site/node_modules/
 site/dist/
+site/dist-lab/
 site/.astro/

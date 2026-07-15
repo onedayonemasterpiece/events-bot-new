@@ -10,6 +10,9 @@
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
     "build:preview": "node scripts/build-preview.mjs",
+    "build:lab": "node scripts/build-briefing-lab.mjs",
+    "check:lab": "node scripts/check-briefing-lab.mjs",
+    "preview:lab": "node scripts/preview-briefing-lab.mjs",
     "check:preview": "node scripts/check-preview.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
     "astro": "astro"
