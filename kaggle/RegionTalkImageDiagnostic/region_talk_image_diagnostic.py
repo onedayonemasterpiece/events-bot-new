@@ -573,6 +573,34 @@ def _row_has_unsupported_media_evidence(row: dict, previous_status: str) -> bool
     )
 
 
+def _restore_hidden_diagnostic_evidence(row: dict) -> None:
+    """Repair fields erased by the former non-accept→terminal transition.
+
+    The buggy transition zeroed only the summary counter and replaced two
+    status labels; album/frame evidence remained in adjacent durable fields.
+    Reconstruct only facts supported by those retained fields.
+    """
+    if str(row.get("image_model_input_type") or "").strip() != "actual_image":
+        return
+    counts = []
+    for field in ("images_scored_actual_count", "actual_image_count", "frame_scores_available_count"):
+        try:
+            counts.append(max(0, int(row.get(field) or 0)))
+        except (TypeError, ValueError):
+            continue
+    scored_count = max(counts or [0])
+    if scored_count > 0:
+        row["images_scored_actual_count"] = scored_count
+        if str(row.get("final_visual_status") or "") == "blocked_publication_eligibility":
+            row["final_visual_status"] = "scored_actual_image"
+    if str(row.get("media_acquisition_status") or "") == "blocked_publication_eligibility":
+        acquisition = str(row.get("image_acquisition_status") or "").strip().lower()
+        if acquisition == "complete":
+            row["media_acquisition_status"] = "actual_album_downloaded_and_scored"
+        elif acquisition:
+            row["media_acquisition_status"] = "partial_album_requires_retry_or_review"
+
+
 def _legacy_actual_image_accept_attestation(row: dict) -> bool:
     current_decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
     current_gate = str(row.get("publication_eligibility_gate_version") or "").strip()
@@ -593,6 +621,7 @@ def _legacy_actual_image_accept_attestation(row: dict) -> bool:
 def mark_publication_eligibility_blocked(row: dict, reason: str) -> dict:
     previous_status = str(row.get("image_queue_status") or "")
     legacy_actual_accept = _legacy_actual_image_accept_attestation(row)
+    _restore_hidden_diagnostic_evidence(row)
     apply_publication_eligibility_audit(row, reason=reason)
     if _publication_eligibility_refreshable(reason):
         # Missing/stale producer attestation is a CandidateReport refresh, not

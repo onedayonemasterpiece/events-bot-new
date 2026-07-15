@@ -866,9 +866,13 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             row = {
                 "image_queue_status": "rejected_publication_eligibility",
                 "image_model_input_type": "actual_image",
-                "images_scored_actual_count": 3,
+                "images_scored_actual_count": 0,
+                "actual_image_count": 3,
+                "frame_scores_available_count": 3,
                 "overall_media_score": 0.71,
-                "final_visual_status": "scored_actual_image",
+                "final_visual_status": "blocked_publication_eligibility",
+                "media_acquisition_status": "blocked_publication_eligibility",
+                "image_acquisition_status": "complete",
                 "publication_eligibility_decision": "needs_source_review",
                 "publication_eligibility_gate_version": "publication-gate-test-v1",
             }
@@ -881,6 +885,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertEqual(row["images_scored_actual_count"], 3)
             self.assertEqual(row["overall_media_score"], 0.71)
             self.assertEqual(row["final_visual_status"], "scored_actual_image")
+            self.assertEqual(row["media_acquisition_status"], "actual_album_downloaded_and_scored")
             self.assertEqual(row["image_eligibility_status"], "deferred_soft_gate")
             self.assertEqual(row["next_action"], "wait_for_source_or_text_gate_without_rescoring_image")
 
@@ -926,10 +931,13 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             row = {
                 "image_queue_status": "actual_scored",
                 "image_model_input_type": "actual_image",
-                "images_scored_actual_count": 4,
+                "images_scored_actual_count": 0,
+                "actual_image_count": 4,
+                "frame_scores_available_count": 4,
                 "overall_media_score": 0.81,
-                "final_visual_status": "scored_actual_image",
-                "media_acquisition_status": "actual_album_downloaded_and_scored",
+                "final_visual_status": "blocked_publication_eligibility",
+                "media_acquisition_status": "blocked_publication_eligibility",
+                "image_acquisition_status": "complete",
                 "publication_eligibility_decision": "reject",
                 "publication_eligibility_gate_version": "publication-gate-test-v1",
                 "publication_eligibility_reason": "source_local",
