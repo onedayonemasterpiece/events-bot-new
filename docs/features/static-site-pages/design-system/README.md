@@ -49,10 +49,12 @@ the handle overlays photography; the desktop tag remains shadowless.
 ## Desktop event-media cards
 
 - Media framing is role-driven, not inferred from OCR words or aspect ratio.
-- Only classified `event_photo` may use `cover` plus trusted focal metadata.
+- Only classified `event_photo` may use `cover`, automatic fullscreen pan or
+  trusted focal metadata; legacy `visual_only` is not a semantic photo role.
 - `event_identity_poster`, utility documents and unknown roles retain every
   source pixel. In desktop `Смотрите дальше` they render at full card width and
-  intrinsic aspect ratio with no crop and no artificial side fields.
+  intrinsic aspect ratio with no crop, rounded-ancestor clipping or artificial
+  side fields.
 - A three-card row is normalized by equal **outer** card bottoms: the light
   content body grows below shorter media. Internal image/body boundaries may
   differ; cutting poster text to align them is forbidden.

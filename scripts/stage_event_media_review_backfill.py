@@ -15,9 +15,17 @@ import argparse
 import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from static_site_public_projection import public_occurrence_gate_reason
 
 
 BACKUP_PREFIX = "codex_backup_event_media_review_stage_20260713"
@@ -84,11 +92,15 @@ def _eligible_ids(con: sqlite3.Connection, current_date: str) -> list[int]:
     if "moderation_status" in columns:
         clauses.append("LOWER(COALESCE(NULLIF(TRIM(moderation_status),''),'accepted')) NOT IN ('rejected','quarantine')")
     if "identity_status" in columns:
-        clauses.append("COALESCE(NULLIF(TRIM(identity_status),''),'canonical')='canonical'")
+        clauses.append("LOWER(TRIM(identity_status))='canonical'")
     if "merged_into_event_id" in columns:
         clauses.append("merged_into_event_id IS NULL")
-    query = "SELECT id FROM event WHERE " + " AND ".join(clauses) + " ORDER BY id"
-    return [int(row[0]) for row in con.execute(query, {"today": current_date}).fetchall()]
+    query = "SELECT * FROM event WHERE " + " AND ".join(clauses) + " ORDER BY id"
+    return [
+        int(row["id"])
+        for row in con.execute(query, {"today": current_date}).fetchall()
+        if public_occurrence_gate_reason(row, current_date) is None
+    ]
 
 
 def stage(con: sqlite3.Connection, *, current_date: str, apply: bool) -> dict[str, Any]:

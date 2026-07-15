@@ -681,7 +681,7 @@ const HEADER_NAVIGATION = [
         border-radius: 0;
         background: #060504;
       }
-      .hero-gallery__image[data-image-text-mode="visual_only"] {
+      .hero-gallery__image[data-media-role="event_photo"] {
         width: 100%;
         height: 100%;
         max-height: none;
@@ -691,10 +691,10 @@ const HEADER_NAVIGATION = [
       }
       .hero-gallery__viewport,
       .hero-gallery__track { touch-action: none; }
-      .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
+      .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-media-role="event_photo"] {
         animation: gallery-pan-forward 17.9s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
-      .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
+      .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-media-role="event_photo"] {
         animation: gallery-pan-backward 17.9s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
       @keyframes gallery-pan-forward {
@@ -2007,6 +2007,12 @@ const HEADER_NAVIGATION = [
           border-color: rgba(255,255,255,0.12);
           background: #fffaf2;
         }
+        /* A complete poster/document frame also includes its source corners.
+         * Do not clip them through the generic rounded media-link ancestor. */
+        #discovery-feed .event-card--split-actions .event-card__media-link--document {
+          border-radius: 0;
+          overflow: visible;
+        }
         #discovery-feed .event-card__media-shell--cover {
           position: relative;
           width: 100%;
@@ -3148,6 +3154,7 @@ const HEADER_NAVIGATION = [
           const cardVariant = variant === 'split-actions' ? 'split-actions' : 'overlay-controls';
           const documentMedia = data.image_media_role !== 'event_photo';
           const mediaClass = documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover';
+          const mediaLinkClass = documentMedia ? 'event-card__media-link--document' : 'event-card__media-link--cover';
           const likes = Number(data.likes_count || 0);
           const shares = Number(data.shares_count || 0);
           const likeCount = formatCount(likes);
@@ -3182,7 +3189,7 @@ const HEADER_NAVIGATION = [
             ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${negativeButton}${calendarButton}</div><div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${likeButton}</div>`
             : '';
           return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
-            <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
+            <a class="event-card__media-link ${mediaLinkClass}" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
             ${overlayFeedback}
             <div class="event-card__body"><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a><div class="event-card__meta-row">${typeTag ? `<span class="event-card__tag">${escapeHtml(typeTag)}</span>` : ''}<span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
             ${splitUtility}
@@ -4169,7 +4176,7 @@ const HEADER_NAVIGATION = [
 
           const activeSlideIsVisualPhoto = (gallery) => {
             const slide = activeSlide(gallery);
-            const image = slide?.querySelector('.hero-gallery__image[data-image-text-mode="visual_only"]');
+            const image = slide?.querySelector('.hero-gallery__image[data-media-role="event_photo"]');
             return Boolean(image && slide?.dataset.gallerySlideKind === 'image');
           };
 

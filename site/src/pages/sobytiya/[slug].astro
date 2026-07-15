@@ -54,8 +54,11 @@ const sourceCountLabel = sourceCount > 0
   ? `${sourceCount} ${sourceCount % 10 === 1 && sourceCount % 100 !== 11 ? 'источник' : [2, 3, 4].includes(sourceCount % 10) && ![12, 13, 14].includes(sourceCount % 100) ? 'источника' : 'источников'}`
   : null;
 const descriptionMeta = [sourceCountLabel, updatedAtLabel ? `обновлено: ${updatedAtLabel} (Калининград)` : null].filter(Boolean);
+const primaryAssetForComposition = event.image_assets?.find((asset) => (eventImageUrl(asset.src) || asset.src) === eventImageUrl(event.image_url)) || event.image_assets?.[0];
+const primaryImageMediaRole = event.image_media_role || primaryAssetForComposition?.media_role;
+const primaryIsPhoto = primaryImageMediaRole === 'event_photo';
 const fallbackHeroComposition: HeroComposition = event.image_url
-  ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
+  ? (primaryIsPhoto ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
 const heroComposition = HERO_COMPOSITION_BY_EVENT_ID[event.id] || fallbackHeroComposition;
 const galleryCtaEvent = discoveryFeed[0];
@@ -100,7 +103,6 @@ const galleryImageAssets = (() => {
 })();
 const identityPoster = galleryImageAssets.find((asset) => asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
 const identityPosterIndex = identityPoster ? galleryImageAssets.findIndex((asset) => asset.src === identityPoster.src) : -1;
-const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_media_role || (event.image_text_mode === 'visual_only' ? 'unknown_visual' : 'unknown_document'));
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
   <main id="main">

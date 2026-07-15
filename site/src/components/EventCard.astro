@@ -35,6 +35,7 @@ const documentMedia = imageMediaRole !== 'event_photo';
 const resolvedImageUrl = eventImageUrl(event.image_url);
 const primaryImageAsset = event.image_assets?.find((asset) => (eventImageUrl(asset.src) || asset.src) === resolvedImageUrl) || event.image_assets?.[0];
 const mediaShellClass = ['event-card__media-shell', documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover'].join(' ');
+const mediaLinkClass = ['event-card__media-link', documentMedia ? 'event-card__media-link--document' : 'event-card__media-link--cover'].join(' ');
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
 const cardObjectPosition = !documentMedia ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
 const focalY = event.focal_point ? Math.max(0, Math.min(1, event.focal_point.y)) : 0.5;
@@ -53,7 +54,7 @@ const otherTimeLabels = getOtherDates(event)
   .filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
 ---
 <article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
-  <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+  <a class={mediaLinkClass} href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
       <span class={mediaShellClass} data-media-role={imageMediaRole} style={documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : undefined}>
         <span class="event-card__image-fallback" aria-hidden="true">
