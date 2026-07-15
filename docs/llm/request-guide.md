@@ -102,6 +102,17 @@ Documented exceptions (rare, guardrail-only):
   code may keep same-title/date/time citywide candidates visible in the LLM
   duplicate shortlist even when extracted venues differ. It is recall-only and
   must not merge ambiguous citywide vs venue-specific events without LLM.
+- Planned post-release Event Comment Feedback exception (inactive until its
+  30-day acceptance gate): source-native answers from an API-proven source owner
+  may be routed by both BGE-M3 and multilingual E5 through a closed practical-fact
+  taxonomy and parsed into narrow literal typed slots without an LLM. This is not
+  open-ended semantic extraction: both models must agree on family, speech act and
+  polarity against question/uncertainty/negation hard negatives; authority and
+  event/series scope come from platform metadata; every value is reconstructable
+  from an exact evidence span; ambiguity fails closed. The exception initially
+  permits only the modular static «Важно знать» block and excludes main-description
+  rewrites, JSON-LD, date/time/place/cancellation repair and ordinary-user claims.
+  Canonical gates: `docs/features/event-comment-feedback/probe-plan.md`.
 
 Requests are sent as HTTP `POST` to the URL stored in the environment variable
 `FOUR_O_URL` (defaults to `https://api.openai.com/v1/chat/completions`). The

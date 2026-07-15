@@ -7,7 +7,7 @@
 
 This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F18 and explicitly named release candidates from becoming an unowned flat checklist.
 
-All F1–F18 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope. Cross-cutting M1–M6 gates are mandatory where their status says so, including M5 all-surface age-rating coverage and M6 card-level linked-occurrence date/time choices. Preliminary homepage candidate H1 is different: its **decision gate** is mandatory before UI freeze, while implementation joins the RC only after an explicit owner `ship` decision.
+F1–F13 and F15–F18 are mandatory for the first public release/presentation. F14 verified comment facts/medallion is an explicit separate post-release release and must not leak a partial collector/UI into the first RC. Cross-cutting M1–M6 gates are mandatory where their status says so, including M5 all-surface age-rating coverage and M6 card-level linked-occurrence date/time choices. Preliminary homepage candidate H1 is different: its **decision gate** is mandatory before UI freeze, while implementation joins the RC only after an explicit owner `ship` decision.
 
 ## Capability ownership
 
@@ -26,7 +26,7 @@ All F1–F18 are mandatory for the first public release/presentation. Canaries m
 | F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md), [optional «Как добраться» gallery card](../event-transport/gallery-how-to-get-there-card.md) | preliminary rail+bus slice validated in refreshed draft PR #37; KPPK/bus provider jobs, combined atomic promotion, optional gallery prototype and release-UI integration pending |
 | F12 | Calendar action backed by favorite state, with visible D-1 email-reminder status | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save/reminder UX design |
 | F13 | Catalog freshness vs canonical bot DB | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production blocked |
-| F14 | Comment-derived discussion signals | [Event comment feedback](../event-comment-feedback/README.md), [Region Talk reuse/skills gate](../event-comment-feedback/region-talk-reuse-audit.md) | docs/stale probe evidence; formal Region Talk audit, reusable skills and production path missing |
+| F14 | Verified comment decision facts + «Активно обсуждают» | [Event comment feedback](../event-comment-feedback/README.md), [research/minimal implementation plan](../event-comment-feedback/probe-plan.md) | explicit post-release scope; live canary complete, 30-day shadow/typed ledger/static block/medallion missing |
 | F15 | Share with generated image | [Event sharing](../static-site-pages/event-sharing.md) | preview canvas; durable assets missing |
 | F16 | Correct image focus/crop | [Image framing](../static-site-pages/image-framing.md) | renderer preview; metadata producer missing |
 | F17 | Admin issue report → ArtKodex repair history | [Event issue reporting](../event-issue-reporting/README.md) | prototype branch; clean port required |
@@ -38,7 +38,7 @@ All F1–F18 are mandatory for the first public release/presentation. Canaries m
 |---|---|---|---|
 | H1 | «Городской обзор»: compact static-first editorial briefing above homepage categories/feed, with optional semantic-fragment motion | [Typed briefing research](../static-site-pages/typed-briefing-hero-research.md) | `Conditional Go`, research-only in `feature/static-typed-intro-prototype-20260715@8045599b`; V1 static and V2 motion prototypes, public preview, tests and owner `ship|defer` decision missing |
 
-H1 is not silently promoted to the mandatory F1–F18 scope by appearing here. Before F5 freezes the homepage, the owner must either accept a tested branch/SHA as a release feature or explicitly defer it. A `ship` decision makes all H1 gates RC blockers; a `defer` decision preserves the ordinary category/feed homepage without holding the presentation.
+H1 is not silently promoted to the mandatory presentation scope by appearing here. Before F5 freezes the homepage, the owner must either accept a tested branch/SHA as a release feature or explicitly defer it. A `ship` decision makes all H1 gates RC blockers; a `defer` decision preserves the ordinary category/feed homepage without holding the presentation.
 
 ## Cross-cutting release readiness
 
@@ -85,11 +85,12 @@ Current decisions and questions that affect several feature families live in [gl
 - Personalization remote writes remain release-gated by the [Supabase 500 MB storage/compaction contract](../../operations/personalization-storage-budget.md): compact current state, bounded evidence, Green-band launch and fail-safe shedding of disposable telemetry.
 - `Моё избранное` is a site-wide destination: after state restore its badge shows the distinct durable saved-event count only when greater than zero, and `/izbrannoe/` opens the complete lifecycle-aware saved list without embedding private data into CDN HTML.
 - KPPK rail and bus refresh may run in separate provider Kaggle notebooks, but they share one versioned schema, server-side validation/fan-in, provider last-good policy and exactly one coalesced rebuild for a changed combined manifest.
-- F14 implementation is skill-first: before porting its stale probe or writing YDB/Astro code, audit Region Talk at exact SHAs, classify patterns as `reuse|adapt|reject|defer`, consolidate only proven main-compatible contracts, and ship validated `region-talk-ydb-funnel-audit` plus `event-comment-feedback-pipeline` project skills. Region Talk source-discovery/image/publication behavior and session lanes do not transfer.
+- F14 is a separate post-release release: after the Region Talk clean-port audit, run the 30-day daily authority/Q-A BGE+E5 shadow, then ship the typed YDB ledger and deterministic «Важно знать» before any Smart Update prose; calibrate «Активно обсуждают» independently and keep it out of ranking initially. Region Talk source-discovery/image/publication behavior and session lanes do not transfer.
 
 ## Separate post-release releases
 
-- [Static festival section](../festivals/static-site-release.md): queue/root-cause cleanup, permanent website monitoring, a distinct festival card, stable event↔edition relations and festival index/detail pages through the standard static promotion pipeline. It is explicitly outside the first F1–F18 presentation GO scope and has its own UI freeze/RC/SEO-GEO evidence.
+- [Verified comment facts and «Активно обсуждают»](../event-comment-feedback/probe-plan.md): 30-day authority/Q-A BGE+E5 shadow, typed literal fact ledger, deterministic «Важно знать», optional verified-snapshot Smart Update shadow and independently calibrated medallion through its own RC/canary/rollback.
+- [Static festival section](../festivals/static-site-release.md): queue/root-cause cleanup, permanent website monitoring, a distinct festival card, stable event↔edition relations and festival index/detail pages through the standard static promotion pipeline. It is explicitly outside the first presentation GO scope and has its own UI freeze/RC/SEO-GEO evidence.
 - [Operations control dashboard](../../backlog/features/operations-control-dashboard/README.md): protected read-only control centre for ingestion, video, promo, transport, static publishing, image dedup and other critical deliveries. A compact operator readiness scorecard remains a first-release reliability prerequisite; the polished web dashboard is an important later release.
 
 ## Documentation completion rule

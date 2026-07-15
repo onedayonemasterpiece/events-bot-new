@@ -17,6 +17,7 @@
 - Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
 - Operations control dashboard (post-release protected admin status for ingestion/video/promo/transport/static/image quality): `docs/backlog/features/operations-control-dashboard/README.md`
 - Post-event attendance feedback for recurring events (green/yellow/red email rating, reply or public-review link): `docs/backlog/features/post-event-attendance-feedback/README.md`
+- Event Comment Feedback post-release (verified decision facts → deterministic «Важно знать»; separately calibrated «Активно обсуждают» medallion): `docs/features/event-comment-feedback/probe-plan.md`
 
 ## Implemented (для ориентира)
 

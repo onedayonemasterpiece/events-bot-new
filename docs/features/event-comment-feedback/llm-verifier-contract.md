@@ -1,6 +1,6 @@
 # LLM verifier contract — event-comment-feedback
 
-Status: draft. The verifier is optional and group-level. It validates whether already selected phrase groups are safe to publish; it does **not** discover comments or generate public copy.
+Status: **deferred broad-carousel design only**. PFR-1–PFR-4 do not use this verifier: comment fact extraction is BGE/E5 + deterministic literal slots, and the initial medallion is deterministic. If the broad phrase carousel is revived later, the verifier remains optional and group-level; it does **not** discover comments or generate public copy.
 
 ## Forbidden
 

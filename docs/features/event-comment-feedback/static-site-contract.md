@@ -1,6 +1,62 @@
 # Static-site contract — event-comment-feedback
 
-Status: draft. The public site consumes only static JSON/HTML artifacts.
+Status: draft. The public site consumes only static JSON/HTML artifacts. The PFR-2 typed-fact block and PFR-4 medallion below are the minimal post-release target; the existing phrase-carousel contract is retained as deferred design evidence.
+
+
+## Minimal post-release public contract
+
+Use a separate compact build-time manifest, for example `site/src/data/comment-facts.json`, rather than changing every `PreviewEvent` or exposing comment state to the browser at runtime.
+
+```json
+{
+  "schema_version": "event-comment-facts-v1",
+  "generated_at": "2026-07-15T22:02:47Z",
+  "events": {
+    "6651": {
+      "event_id": 6651,
+      "fact_set_hash": "sha256:...",
+      "updated_at": "2026-07-15T22:02:47Z",
+      "important_facts": [
+        {
+          "fact_type": "duration",
+          "public_text": "Организатор уточнил: продолжительность спектакля — около одного часа.",
+          "valid_until": null
+        }
+      ],
+      "discussion_medallion": {
+        "status": "hidden",
+        "label": "Активно обсуждают",
+        "tooltip": "За последние 7 дней событие активно обсуждали в открытых источниках",
+        "valid_until": null
+      }
+    }
+  }
+}
+```
+
+Public allowlist:
+
+- event id, fact-set hash, timestamps;
+- allowlisted `fact_type`, deterministic `public_text`, optional `valid_until`;
+- medallion `status=shown|hidden`, fixed label/tooltip and expiry.
+
+Forbidden even in public JSON:
+
+- raw/evidence comment text, comment/post URLs, names, ids, phone numbers;
+- authority/model scores, internal confidence, author counts below the approved privacy floor;
+- Smart Update/debug/provider payloads.
+
+Rendering rules:
+
+- show at most 1–3 facts under **«Важно знать»**; hide on missing/stale/invalid state;
+- PFR-2 does not change the main description, JSON-LD, OG description, critical fields or public source count;
+- render **«Активно обсуждают»** only when the separate rolling gate says `shown`; it is not a fact and does not affect ranking initially;
+- changed `fact_set_hash` or medallion state schedules one checked static rebuild; unchanged state is a no-op;
+- no-JS HTML contains the accepted block/medallion, and browser views never call YDB/TG/VK/embedding providers.
+
+## Deferred phrase-carousel contract
+
+Everything below this heading describes the earlier broad **«Что видно по обсуждению»** carousel. It is not part of PFR-1–PFR-4 and may be implemented only after separate product approval.
 
 ## Manifest placement decision
 
