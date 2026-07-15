@@ -63,6 +63,14 @@ requirements:
     conflict_risk: low
     lane: visual-consultant
     done_when: Exact-state screenshots receive explicit FAIL/PASS findings for canvas continuity, vertical rhythm, typography, affordance and branding, followed by a post-fix gate.
+  - id: R07
+    requirement: Restore the horizontal cursor as a live pending-transition signal after a scene completes, and remove it only when no timed continuation remains or after a short terminal blink sequence.
+    area: motion state machine
+    likely_files: [site/src/pages/lab/briefing/index.astro, tests/playwright/static_briefing_lab.spec.ts]
+    dependencies: [R01]
+    conflict_risk: high
+    lane: ui-integrator
+    done_when: Reveal uses the scenario cursor while fragments appear; completed scenes with a scheduled next scene show a blinking underscore until transition; terminal/reduced/static states do not leave an endless cursor.
 lanes:
   - id: scenario-auditor
     role: planner
@@ -77,7 +85,7 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: File-level scenario findings, exact copy proposals, schema implications, and regression risks.
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: visual-consultant
     role: planner
     effort: extra-high
@@ -91,11 +99,11 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Exact screenshots, prompt/response, model/status/time evidence, and actionable critique.
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: ui-integrator
     role: worker
     effort: extra-high
-    requirement_ids: [R02, R04]
+    requirement_ids: [R02, R04, R07]
     target: Serially integrate all R01-R06 corrections after both read-only audits.
     depends_on: [scenario-auditor, visual-consultant]
     execution_mode: serial_after_dependency
@@ -114,7 +122,7 @@ lanes:
     forbidden_files: []
     expected_output: Corrected scenarios/composition/interactions, tests, immutable preview, Telegram evidence, documentation, changelog and closure audit.
     verification_scope: full_local
-    status: planned
+    status: committed
   - id: merge-reviewer
     role: merge_reviewer
     effort: high
@@ -128,4 +136,4 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Done/Partial/Missing/Blocked audit for R01-R06 and publish recommendation.
     verification_scope: full_local
-    status: planned
+    status: spawned
