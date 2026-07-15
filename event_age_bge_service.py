@@ -415,7 +415,7 @@ async def run_event_age_bge_batch(db: Database) -> dict[str, Any]:
                     "model_revision": revision,
                     "batch_limit": limit,
                     "batch_size": max(1, int(os.getenv("EVENT_AGE_BGE_BATCH_SIZE") or "4")),
-                    "max_length": max(512, int(os.getenv("EVENT_AGE_BGE_MAX_LENGTH") or "4096")),
+                    "max_length": max(512, int(os.getenv("EVENT_AGE_BGE_MAX_LENGTH") or "768")),
                     "top_k": max(1, int(os.getenv("EVENT_AGE_BGE_TOP_K") or "8")),
                     "max_runtime_seconds": max(
                         300, int(os.getenv("EVENT_AGE_BGE_MAX_RUNTIME_SECONDS") or "2400")

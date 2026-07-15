@@ -132,6 +132,13 @@ stale по общему 10-минутному порогу. Перед импо�
 value, corpus hash, pinned model/encoder/head hashes. Поэтому поздний официальный
 рейтинг или изменившийся текст не перезаписываются устаревшим Kaggle result.
 
+Fallback assessment получает тот же leakage contract, что и calibration:
+оставшиеся literal `0+/6+/12+/16+/18+` и формулировки «от/старше N лет»
+маскируются непосредственно в worker перед BGE/TF-IDF. Явный source rating
+обрабатывает declared stage; unresolved/unrelated token не может подсказать
+fallback правильный класс. Production encoder ограничен `max_length=768`:
+OCR расположен первым, а CPU batch не зависает на 4096-token последовательностях.
+
 ### OCR как обязательная часть corpus
 
 В Smart Update уже существующий facts-call получает `ocr_title + ocr_text` до

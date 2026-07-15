@@ -50,6 +50,7 @@
 
 ### Fixed
 
+- **Event age-rating fallback leakage/runtime**: mask any unresolved literal age marks before production BGE/TF-IDF inference exactly as in calibration, and cap the default CPU encoder length at 768 tokens with OCR-first ordering instead of allowing 4096-token batches to stall.
 - **Event age-rating production scope**: restrict startup backlog and every CPU assessment selector to current/future events, so historical rows that still carry `lifecycle_status=active` cannot consume an unbounded sequence of Kaggle batches.
 - **Event age-rating calibration closure**: make the manual Kaggle launcher expose partial reports, complete all 718 masked CPU vectors, continue iterative calibration over 531 scope-clean official labels, and pass the untouched grouped OOF gate with a raw-matrix TF-IDF safety cascade (51.4% coverage, 96.0% exact, 99.3% within-one, 0 severe-under); hash/logit self-test mismatch still fails closed.
 - **Event age-rating Kaggle CPU runtime**: probe the concrete BGE-M3 model symbol and upgrade an incompatible preinstalled FlagEmbedding 1.3.x to the pinned Transformers-5-compatible 1.4.0 before loading the encoder.
