@@ -274,6 +274,34 @@ Worker elapsed `162.108 s`, launcher `214.315 s`. Временный input datas
 Ignored evidence:
 `artifacts/codex/event-age-rating-full-calibration-2026-07-15-v3/`.
 
+### Production rollout и полный current/future sweep 2026-07-15
+
+В production загружен private approved artifact, включён CPU worker и сохранён
+public default `declared_only`. Grounded source review вернул 52 актуальным
+событиям declared rating. Затем missing-only selector полностью обработал
+оставшиеся 239 событий тремя валидными batch (`64 + 128 + 60`); stale/invalid
+imports — 0, declared значения не перезаписаны.
+
+Финальный срез 291 current/future canonical event:
+
+- declared numeric: `52`;
+- high-confidence BGE assessed numeric: `18`;
+- `insufficient_evidence`: `99`;
+- `ocr_unavailable`: `122`;
+- pending/not_scheduled без declared: `0`.
+
+Итого terminal completeness `291/291`, но literal numeric fill только `70/291`
+(`24.05%`), а BGE acceptance на реальном missing-only хвосте — `18/239`
+(`7.53%`). Это подтверждает production distribution shift относительно
+official-label OOF coverage `51.41%` и является дополнительным доказательством,
+что high-confidence gate нельзя выдавать за завершённый no-missing pipeline.
+После rollout: SQLite `quick_check=ok`, `/healthz ready=true`.
+
+Во время rollout обнаружена коллизия status-dataset slug у двух длинных run id.
+Исправление добавляет hash полного run id; следующие datasets
+`...-event-age-c41280c3` и `...-event-age-2cbf1c27` получили независимые callback
+configs и правильные ledger rows.
+
 ## Public projection
 
 `STATIC_EVENT_AGE_POLICY`:

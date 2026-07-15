@@ -133,3 +133,10 @@ independent gate и либо допускает severe under-rating, либо т
 детские события. Это quality blocker, а не основание подменить `NULL` ложной
 точностью. Полный brief/ответ: ignored artifacts
 `gemini-iteration-4-brief.md` и `gemini-iteration-4-review.raw.md`.
+
+Полный production sweep после консультации обработал `291/291` current/future
+events до terminal outcome: 52 declared, 18 assessed, 99
+`insufficient_evidence`, 122 `ocr_unavailable`, 0 nonterminal. Literal numeric
+fill составил `70/291 = 24.05%`; среди 239 событий без declared BGE принял
+`18/239 = 7.53%`. Поэтому итоговый `FAIL` для no-missing подтверждён не только
+OOF, но и полным live срезом; половинчатый результат не маркируется завершённым.
