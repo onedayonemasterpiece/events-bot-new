@@ -779,6 +779,17 @@ def image_row_needs_contract_rescore(row: dict) -> bool:
         score = 0.0
     return score < legacy_publication_media_threshold()
 
+
+def image_row_needs_acquisition_repair(row: dict) -> bool:
+    """Return true when a review row is unresolved only because input is partial."""
+    if str(row.get("image_queue_status") or "") != "needs_visual_review":
+        return False
+    if str(row.get("image_quality_terminality") or "") != "nonterminal":
+        return False
+    acquisition = str(row.get("image_acquisition_status") or "").strip().lower()
+    reason = str(row.get("image_quality_reason") or "").strip().lower()
+    return acquisition in {"partial", "versioned_album_rescore_required"} or reason == "incomplete_album_never_terminal_quality_reject"
+
 def ydb_upsert_image_rows(batch, *, stage: str):
     if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
@@ -937,7 +948,14 @@ def ydb_rows_for_diagnostic(limit_n: int):
         ):
             continue
         if status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
-            continue
+            if image_row_needs_acquisition_repair(r):
+                r["previous_image_queue_status"] = status
+                r["image_queue_status"] = "needs_actual_image_fetch"
+                r["media_acquisition_status"] = "needs_actual_image_fetch"
+                r["actual_image_retry_reason"] = "partial_album_requires_acquisition_repair"
+                status = "needs_actual_image_fetch"
+            else:
+                continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
             r["image_queue_status"] = "needs_visual_review"
             r["media_acquisition_status"] = "media_fetch_exhausted_requires_nonterminal_review"

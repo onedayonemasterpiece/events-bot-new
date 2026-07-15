@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Fixed Region Talk VK album acquisition on Kaggle and in the server-side media prefetcher to prefer service read tokens over IP-bound user tokens, preventing `wall.getById` error 5 from leaving albums partially scored.
+- Fixed Region Talk VK album acquisition on Kaggle and in the server-side media prefetcher to prefer service read tokens over IP-bound user tokens, and reopen nonterminal incomplete-album rows for bounded acquisition repair instead of leaving them permanently stuck after `wall.getById` error 5.
 
 - Fixed Region Talk CandidateReport product heartbeats so newly-created candidate-memory rows still waiting for BGE, actual media, or a downstream policy refresh are no longer reported as operator-reviewable candidates.
 - Fixed Region Talk BGE scheduling after a live parallel cycle exposed fresh E5 rows waiting behind hundreds of stale semantic-bank refreshes: every BGE CPU batch now drains missing E5→BGE pairs before maintenance rescores, retains the exact/fast-check versus FIFO reserve within each population, and reports missing versus stale work separately in the product scorecard.

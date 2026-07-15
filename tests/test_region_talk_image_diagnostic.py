@@ -472,6 +472,36 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_partial_album_visual_review_is_reopened_for_acquisition_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_id": "partial-vk-album",
+                "image_queue_order": 1,
+                "image_queue_status": "needs_visual_review",
+                "post_url": "https://vk.com/wall-1_2",
+                "kaliningrad_oblast_only_scope": "true",
+                "kaliningrad_mention_role": "main_subject",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "image_quality_decision": "needs_visual_review",
+                "image_quality_terminality": "nonterminal",
+                "image_quality_reason": "incomplete_album_never_terminal_quality_reject",
+                "image_acquisition_status": "partial",
+                "media_fetch_attempt_count": 1,
+            }
+            writes = []
+            mod.ydb_select_image_queue = lambda _limit: [row]
+            mod.ydb_upsert_image_rows = lambda batch, *, stage: writes.append((stage, batch))
+
+            leased, total = mod.ydb_rows_for_diagnostic(10)
+
+            self.assertEqual(total, 1)
+            self.assertEqual(len(leased), 1)
+            self.assertEqual(leased[0]["image_queue_status"], "image_analysis_in_progress")
+            self.assertEqual(leased[0]["actual_image_retry_reason"], "partial_album_requires_acquisition_repair")
+            self.assertTrue(any(stage == "leased_for_image_analysis" for stage, _batch in writes))
+
     def test_image_queue_scan_is_not_limited_to_five_batches(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
