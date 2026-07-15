@@ -58,6 +58,15 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 
 ## Jobs
 
+- **Social metrics batch** — один лёгкий interval-job, включаемый
+  `ENABLE_SOCIAL_METRICS_BATCH=1`, каждые
+  `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES` (default `30`) собирает все due
+  публикации пакетами. VK запросы идут по издателю чанками до 100 ID; Telegram
+  остаётся выключен, пока не заданы отдельные `SOCIAL_METRICS_TG_*` credentials.
+  Job не создаёт расписание на каждый пост и после простоя сам подбирает свежую
+  допустимую точку `1h|6h|24h|72h`. Каноника данных и флагов:
+  `docs/features/post-metrics/README.md`.
+
 - **Postbox transactional outbox worker** – every
   `EMAIL_OUTBOX_WORKER_INTERVAL_SECONDS` (default `60`) claims only eligible
   transactional Postbox rows from the personalization Supabase control plane.

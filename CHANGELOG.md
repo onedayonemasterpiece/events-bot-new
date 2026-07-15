@@ -35,6 +35,12 @@
 
 ### Added
 
+- **Static popular feed / batch social metrics**: added one feature-gated
+  platform-batched collector for own and already-known VK/Telegram publications,
+  four compact `1h/6h/24h/72h` snapshots, postponed-to-live VK resolution,
+  dedicated-session-only Telegram transport, and explainable popular-feed reason
+  badges without per-publication scheduler jobs.
+
 - **Event age-rating data path**: added declared/assessed canonical fields and migration, parser/Universal Festival preservation, declared-only static/vector projections, a hash-guarded resumable backfill, golden evaluator, and a CPU-only Kaggle BGE dual-head shadow worker using the existing status/heartbeat framework.
 - **Event age-rating automatic calibration**: added leakage-masked source-declared corpus building, Kaggle event-vector export, deterministic dual-head fitting and an automatic fail-closed evaluation manifest; AI-consensus silver is training-only and no human approval is required.
 
@@ -52,6 +58,11 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+
+- **Static popular feed / Telegram metric export**: query Telegram `forwards`
+  separately from VK `reposts` instead of selecting the nonexistent Telegram
+  `reposts` column, so Telegram engagement no longer disappears from the static
+  build.
 
 - **Telegram medallion completeness and footer semantics (INC-2026-07-15)**: resolve event `6811` as KОНБ + KGD80 + Znanie without duplicate partner marks, preserve the intentional 12-space `Подробнее` → `Max` gap as non-collapsing RichMessage HTML, and prevent RichMessage posts from enqueueing/receiving legacy emoji medallions.
 - **Event age-rating fallback leakage/runtime**: mask any unresolved literal age marks before production BGE/TF-IDF inference exactly as in calibration, and cap the default CPU encoder length at 768 tokens with OCR-first ordering instead of allowing 4096-token batches to stall.

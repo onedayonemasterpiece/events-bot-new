@@ -22,8 +22,45 @@
 
 Снапшоты метрик хранятся отдельно для Telegram и VK:
 
-- `telegram_post_metric` (ключ `(source_id, message_id, age_day)`): `views`, `likes`, `comments` (если у поста есть открытый discussion/replies count), `reactions_json`;
+- `telegram_post_metric` (ключ `(source_id, message_id, age_day)`): `views`, `likes`, `comments` (если у поста есть открытый discussion/replies count), `forwards`, `reactions_json`;
 - `vk_post_metric` (ключ `(group_id, post_id, age_day)`): `views`, `likes`, `comments`, `reposts`.
+
+Для статической страницы `/populyarnoe/` дополнительно используется компактная
+`social_metric_snapshot` с четырьмя возрастными точками `1h`, `6h`, `24h`,
+`72h`. Она не заменяет legacy-таблицы: суточные строки продолжают питать
+операторские отчёты и медианные baseline, а часовые точки нужны только для
+честной оценки динамики.
+
+## Пакетный сбор для статического «Популярного»
+
+Канонический runner: `social_metrics_batch.py::run_social_metrics_batch`.
+
+- Один interval-job загружает все актуальные публикации и определяет due-бакеты
+  по `post_ts`; отдельные APScheduler jobs на каждый пост не создаются.
+- Запросы группируются по платформе и издателю. VK `wall.getById` вызывается
+  чанками максимум по 100 ID, после чего весь чанк записывается одной SQLite
+  транзакцией.
+- Перед VK-сбором unresolved собственные `source_vk_post_url` пакетно
+  разрешаются в live wall ID; результат сохраняется в `event_publication`.
+- При пропущенном окне один поздний counter не копируется в несколько прошлых
+  точек: самый свежий due-бакет сохраняется, более ранние получают
+  `skipped_late`.
+- Отсутствующее поле API хранится как `NULL`; подтверждённый ноль — как `0`.
+  Сетевые ошибки получают `status=error` и повторяются следующим batch-run.
+- Telegram collector по умолчанию выключен. Он принимает только отдельные
+  `SOCIAL_METRICS_TG_*` credentials и никогда не заимствует
+  `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_AUTH_BUNDLE_S22` или `TELEGRAM_SESSION`.
+
+Флаги запуска:
+
+- `ENABLE_SOCIAL_METRICS_BATCH=1` — зарегистрировать единый interval-job;
+- `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES=30`;
+- `SOCIAL_METRICS_VK_ENABLED=1`;
+- `SOCIAL_METRICS_TG_ENABLED=0` до выдачи отдельной role-scoped сессии.
+
+Static exporter добавляет к событию объяснимые reason codes:
+`fast_growth`, `frequently_shared`, `discussed`, `multi_source`. Лента остаётся
+единой и ограниченной 20 событиями; сложные главы и ML-скоринг в MVP не входят.
 
 `age_day` означает “сколько суток прошло с публикации”:
 
@@ -81,7 +118,9 @@ ENV (общие для TG/VK):
 - Telegram Monitoring (`/tg`):
   - `🔥 Популярные посты` в конце импорта;
   - маркеры добавляются в `Smart Update (детали событий)` перед названием события;
-  - если Telethon отдаёт `message.replies.replies`, счётчик комментариев сохраняется вместе с `views/likes`.
+  - если Telethon отдаёт `message.replies.replies`, счётчик комментариев сохраняется вместе с `views/likes`;
+  - batch collector также сохраняет Telegram `forwards`, когда включена его
+    отдельная production-сессия.
   - `/tg` → «📋 Список источников»: показывает per-channel медианы `views/likes` за окно `POST_POPULARITY_HORIZON_DAYS` и покрытие в сутках (`days/N`), чтобы оператор мог сравнить свежий пост с бейзлайном.
 - VK Auto Queue (`/vk_auto_import`):
   - маркеры добавляются перед названием события в унифицированном Smart Update отчёте.

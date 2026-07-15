@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import math
 import logging
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -205,6 +206,7 @@ async def cleanup_post_metrics(
     cutoff = now_ts - keep_days * 86400
     deleted_tg = 0
     deleted_vk = 0
+    deleted_social = 0
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -224,8 +226,21 @@ async def cleanup_post_metrics(
             (int(cutoff), int(cutoff)),
         )
         deleted_vk = int(getattr(cur2, "rowcount", 0) or 0)
+        cur3 = await conn.execute(
+            """
+            DELETE FROM social_metric_snapshot
+            WHERE (post_ts IS NOT NULL AND post_ts < ?)
+               OR (post_ts IS NULL AND collected_ts < ?)
+            """,
+            (int(cutoff), int(cutoff)),
+        )
+        deleted_social = int(getattr(cur3, "rowcount", 0) or 0)
         await conn.commit()
-    return {"telegram_post_metric": deleted_tg, "vk_post_metric": deleted_vk}
+    return {
+        "telegram_post_metric": deleted_tg,
+        "vk_post_metric": deleted_vk,
+        "social_metric_snapshot": deleted_social,
+    }
 
 
 async def upsert_telegram_post_metric(
@@ -239,6 +254,7 @@ async def upsert_telegram_post_metric(
     views: int | None,
     likes: int | None,
     comments: int | None = None,
+    forwards: int | None = None,
     reactions: dict[str, Any] | None = None,
     collected_ts: int | None = None,
 ) -> None:
@@ -247,9 +263,9 @@ async def upsert_telegram_post_metric(
         await conn.execute(
             """
             INSERT INTO telegram_post_metric(
-                source_id, message_id, age_day, source_url, message_ts, collected_ts, views, likes, comments, reactions_json
+                source_id, message_id, age_day, source_url, message_ts, collected_ts, views, likes, comments, forwards, reactions_json
             )
-            VALUES(?,?,?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(source_id, message_id, age_day) DO UPDATE SET
                 collected_ts=excluded.collected_ts,
                 source_url=COALESCE(excluded.source_url, telegram_post_metric.source_url),
@@ -257,6 +273,7 @@ async def upsert_telegram_post_metric(
                 views=MAX(COALESCE(telegram_post_metric.views, -1), COALESCE(excluded.views, -1)),
                 likes=MAX(COALESCE(telegram_post_metric.likes, -1), COALESCE(excluded.likes, -1)),
                 comments=MAX(COALESCE(telegram_post_metric.comments, -1), COALESCE(excluded.comments, -1)),
+                forwards=MAX(COALESCE(telegram_post_metric.forwards, -1), COALESCE(excluded.forwards, -1)),
                 reactions_json=COALESCE(excluded.reactions_json, telegram_post_metric.reactions_json)
             """,
             (
@@ -269,7 +286,10 @@ async def upsert_telegram_post_metric(
                 int(views) if isinstance(views, int) else None,
                 int(likes) if isinstance(likes, int) else None,
                 int(comments) if isinstance(comments, int) else None,
-                reactions if isinstance(reactions, dict) else None,
+                int(forwards) if isinstance(forwards, int) else None,
+                json.dumps(reactions, ensure_ascii=False, sort_keys=True)
+                if isinstance(reactions, dict)
+                else None,
             ),
         )
         await conn.commit()

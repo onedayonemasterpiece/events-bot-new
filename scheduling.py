@@ -793,6 +793,13 @@ def _env_enabled(key: str, *, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_int(key: str, default: int) -> int:
+    try:
+        return int((os.getenv(key) or str(default)).strip())
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def _first_env(*keys: str, default: str | None = None) -> str | None:
     for key in keys:
         raw = os.getenv(key)
@@ -4964,6 +4971,10 @@ def startup(
             from source_parsing.post_metrics import cleanup_post_metrics
         except Exception:
             cleanup_post_metrics = None  # type: ignore[assignment]
+        try:
+            from social_metrics_batch import run_social_metrics_batch
+        except Exception:
+            run_social_metrics_batch = None  # type: ignore[assignment]
 
         _register_job(
             "db_optimize",
@@ -5013,6 +5024,30 @@ def startup(
                 max_instances=1,
                 coalesce=True,
                 misfire_grace_time=30,
+            )
+        if (
+            run_social_metrics_batch is not None
+            and _env_enabled("ENABLE_SOCIAL_METRICS_BATCH", default=False)
+        ):
+            _register_job(
+                "social_metrics_batch",
+                _job_wrapper(
+                    "social_metrics_batch",
+                    _run_maintenance,
+                    notify_skip=_notify_admin_skip,
+                ),
+                "interval",
+                id="social_metrics_batch",
+                minutes=max(5, _env_int("SOCIAL_METRICS_BATCH_INTERVAL_MINUTES", 30)),
+                args=[
+                    partial(run_social_metrics_batch, db),
+                    "social_metrics_batch",
+                    240.0,
+                ],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
 
     _scheduler.add_listener(
