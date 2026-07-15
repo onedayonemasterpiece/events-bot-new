@@ -1,0 +1,246 @@
+# F18: поделиться сервисом KenigEvents
+
+> Статус: **footer-only preview vertical slice**. Implementation branch создаётся
+> от актуального `origin/main`; desktop-focus v11 используется только как принятый
+> визуальный reference. Текущая итерация проверяет одну адаптивную action в общем footer. Размещение
+> под мобильной бренд-биркой и в desktop navigation shell явно **Deferred до V12**.
+> Это отклонение от полного F18, поэтому текущий этап нельзя объявлять закрытием
+> F18 или production rollout.
+
+## Назначение и граница
+
+F18 помогает рассказать о самом сервисе «Полюбить Калининград Анонсы», а не о
+конкретном событии. Канонический payload всегда содержит:
+
+- одну централизованно подготовленную карточку сервиса;
+- короткий продуктовый текст;
+- ровно один canonical URL: `https://kenigevents.ru/`.
+
+F18 не использует URL текущего события, preview URL, personal-secret URL, query,
+email, профиль или session data. Карточка сервиса не становится event media и не
+попадает в gallery, hero, `Event.image[]` или event-share payload. Шеринг события
+остаётся отдельным контрактом в [event-sharing.md](event-sharing.md).
+
+## Текущий продуктовый copy contract
+
+Существующий footer title «Полюбить Калининград Анонсы» уже даёт контекст
+сервиса, поэтому не нужен второй конкурирующий заголовок, а сама action остаётся
+короткой:
+
+| Состояние | Видимый label |
+|---|---|
+| mobile `<768px` | **«Поделиться»** |
+| desktop D0 | **«Скопировать ссылку»** |
+| desktop D1/D2 в lab | **«Скопировать карточку»** |
+
+Accessible name для всех режимов: **«Поделиться KenigEvents»**. Минимальная зона
+нажатия — `44×44 px`; обязательны native button semantics, keyboard activation,
+`focus-visible` и отдельный `aria-live` status.
+
+Не используются как основной label:
+
+- «Поделиться сайтом» — описывает технический объект, а не продукт;
+- «Поделиться сайтом с другом» — длиннее и необоснованно исключает группу/канал;
+- «Скопировать ссылку» на mobile — не соответствует system-share transport;
+- «Скопировать карточку» как desktop default — не принято без native matrix.
+
+Один allowlisted textual payload формируется из manifest, а не из текущей страницы:
+
+```text
+title: Полюбить Калининград Анонсы
+text: События Калининграда и области. Найдите своё событие быстрее.
+proof: {events_floor}+ актуальных событий       # только при валидной метрике
+url: https://kenigevents.ru/
+```
+
+`proof` можно опустить целиком, но нельзя подставлять stale/unverified число. D0
+соединяет разрешённые строки и canonical URL; mobile передаёт `text` и `url`
+отдельными Web Share fields, не дублируя event/preview URL.
+
+Точный success copy:
+
+- D0: **«Скопированы текст и ссылка»**;
+- D1/D2: **«Карточка скопирована. При вставке приложение выберет поддерживаемый формат»**.
+
+После Web Share нельзя писать «отправлено» или «поделились»: API не доказывает
+доставку. `AbortError` означает отмену пользователем, а не поломку.
+
+## Компонент и placements
+
+Один `ServiceShareAction` и один browser controller обслуживают один manifest и
+payload. В footer на каждом breakpoint видна только одна action; Share и Copy не
+показываются одновременно.
+
+Текущий preview scope:
+
+1. **Done target:** общий footer на preview index, listing, search, event detail и
+   закрытых lab-страницах;
+2. **Deferred до V12:** action внутри раскрытого mobile menu под бренд-биркой;
+3. **Deferred до V12:** отдельное место в desktop navigation shell, если оно
+   останется нужно после product review footer.
+
+Полный F18 по-прежнему требует две placements одного компонента: navigation shell
+и footer. Footer-only preview — намеренно неполный срез, а не изменение этого
+целевого инварианта.
+
+## Mobile transport
+
+На mobile breakpoint controller:
+
+1. заранее, после critical content, начинает готовить versioned WebP asset;
+2. в момент клика проверяет `navigator.share`;
+3. если WebP уже готов, создаёт `File` и проверяет `navigator.canShare({files})`;
+4. вызывает `navigator.share()` с WebP file, коротким text и canonical URL;
+5. если файл ещё не готов или file share не поддержан, немедленно использует
+   system share с text+URL, не теряя transient user activation;
+6. если Web Share отсутствует или завершается рабочей ошибкой, пробует clipboard
+   text+URL;
+7. если clipboard запрещён, показывает обычную selectable HTTPS-ссылку.
+
+Долгий `await fetch()` до `navigator.share()` запрещён. `AbortError` записывается
+как `share_cancelled` без аварийного fallback.
+
+Планировочный контракт ссылался на проверенный Pharmastaff organization-card
+share flow, но точные repository/branch/SHA в доступной истории не были найдены.
+До заявления о parity implementation PR обязан приложить точную ссылку/SHA и
+сопоставить preloaded-file, transient activation, `canShare`, cancel/error и
+fallback checks. Отсутствие ссылки не разрешает ослабить эти проверки.
+
+## Desktop transport
+
+На desktop `navigator.share()` не вызывается никогда.
+
+- **D0, default:** `navigator.clipboard.writeText(short_text + canonical_url)`;
+  при ошибке — selectable link.
+- **D1, lab only:** один `ClipboardItem` с representations в порядке
+  `text/html → image/png → text/plain`.
+- **D2, lab only:** один `ClipboardItem` с representations в порядке
+  `image/png → text/html → text/plain`.
+
+Для D1/D2 PNG является настоящим PNG; HTML — минимальный escaped allowlisted
+fragment с immutable HTTPS image, текстом и canonical link; plain text обязательно
+содержит canonical URL. Promise representation создаётся внутри `ClipboardItem`
+до произвольного `await`, совместимо с Safari. Любая ошибка приводит в D0.
+
+Preview config: `PUBLIC_SERVICE_SHARE_DESKTOP_MODE=d0|d1|d2`, default — `d0`.
+D1/D2 не могут стать production default автоматически.
+
+Подробный gate: [desktop clipboard research](service-sharing-desktop-clipboard-research.md).
+
+## Ежедневная динамическая карточка с кубами
+
+### Источник данных и claims
+
+Новая версия создаётся не чаще и не реже одного принятого финального результата
+на календарный день `Europe/Kaliningrad`. Вход — тот же accepted catalog snapshot,
+из которого собирается static site. Eligible set содержит distinct canonical
+active current/future events; cancelled, postponed, inactive, `silent`, review-only,
+duplicates и отдельные occurrence-дубли исключаются.
+
+Manifest фиксирует формулу, `measured_at`, local date, catalog hash и:
+
+- `eligible_event_count`;
+- консервативный `events_floor`, никогда не превышающий eligible count;
+- distinct normalized `city_count` и список городов evidence-only;
+- claim/copy/template versions.
+
+Фразы «самая большая база», «крупнейшая», «быстрее других» и неподтверждённое
+напоминание запрещены. При невалидной метрике pipeline использует evergreen copy
+без числа либо fail-closed result, но не вчерашнее заведомо ложное число.
+
+### События на кубах
+
+Целевая воспроизводимая смесь — `3 popular + 2 promoted + 3 stable-random`:
+
+- popular ранжируются текущим составным сигналом сайта;
+- promoted поступают только из активного read-only promo resolver для surface
+  `service_share_card`;
+- stable-random выбираются дневным hash seed и меняются между днями.
+
+Каждая строка проходит current/future, image/media-role и source-safety preflight.
+Недостающие promo rows не заменяются скрыто случайными: underfill/reason отражается
+в result, а финальный render принимается только по явно разрешённой политике.
+Название и дата будущего события наносятся на его грань после crop/contain.
+
+### Композиция и Kaggle
+
+Сохраняется утверждённый cube concept: бесшовная циклорама, fixed brand/product
+иерархия, связная цепь кубов и обязательный hero cube, выходящий за right+bottom
+границы. Дневной deterministic seed выбирает одну из проверенных families:
+`soft_s_curve`, `diagonal_ribbon`, `ascending_arc`, с ограниченным jitter.
+
+Production-like render выполняется так:
+
+1. Kaggle GPU debug gate (`512`, low samples) проверяет scene/typography/geometry;
+2. только accepted GPU result разрешает Kaggle CPU final (`1024×1024`, high samples);
+3. GPU и CPU обязаны совпадать по bundle SHA, local date, catalog hash, selection
+   hash, family request/resolved family и seed;
+4. kernel публикует внутренние heartbeat/progress/status events и terminal report;
+5. scheduler не принимает opaque `FAILED/ERROR` без kernel log/status evidence.
+
+Projection gates запрещают safe-zone intrusion, разрыв цепочки, слишком маленькие
+дальние кубы и hero без требуемого screen exit. Финальный master конвертируется
+централизованно, не в browser click.
+
+### Asset/manifest contract
+
+Один visual payload даёт:
+
+- лёгкий WebP для mobile Web Share;
+- настоящий PNG для desktop Clipboard;
+- versioned JSON manifest.
+
+Manifest хранит schema/copy/template/asset versions, local date, catalog/selection/
+visual payload hashes, immutable URLs, MIME, dimensions, byte size и SHA-256 для
+обоих assets, metrics, event IDs/buckets, composition family/seed и Kaggle run/status
+evidence. WebP и PNG обязаны иметь один `visual_payload_hash`.
+
+URL content-addressed, CORS-readable и immutable. Mobile WebP target budget —
+`<=350 KiB`; фактические PNG size, cold fetch и clipboard-write latency измеряются
+до desktop decision. Logo, CTA, домен, metric и event dates проходят visual/OCR
+QA на master и thumbnail width `360px`. PNG — только clipboard representation,
+не page/LCP image. Browser не создаёт карточку canvas-ом и не обращается к
+per-click rendering backend.
+
+## Preview analytics boundary
+
+До принятия production ingest разрешён только bounded in-memory test ledger или
+`CustomEvent`:
+
+- `service_share_opened`, `service_share_invoked`;
+- `service_link_copied`, `service_copy_attempted`, `service_copy_result`;
+- `share_file_unsupported`, `share_cancelled`, `share_error`.
+
+Поля: `surface=footer|lab`, `transport=system_share|clipboard`,
+`mode=mobile_file|mobile_text|d0|d1|d2`, coarse platform, capability flags,
+allowlisted reason, asset version и latency band. Запрещены clipboard contents,
+full UA, profile/email/session, event/personal URL, `paste_completed` и
+`message_sent`.
+
+## Acceptance текущего preview slice
+
+- [ ] footer использует один общий component/controller на preview index, listing,
+  search, event detail и lab;
+- [ ] mobile и desktop используют один canonical URL, manifest и copy source;
+- [ ] mobile file/text/clipboard/link fallbacks и `AbortError` проверены Playwright;
+- [ ] desktop D0 default, D1/D2 lab payload/order/security/fallbacks проверены;
+- [ ] `/lab/service-share/` существует, закрыт от навигации и `noindex`;
+- [ ] daily selector/metrics/composition и GPU→CPU contract дают validated manifest;
+- [ ] local build/check/Playwright и public HTTPS preview проверки зелёные;
+- [ ] preview publish не меняет stable ICS, production/current pointer или assets;
+- [ ] implementation SHA, preview URL, manifest SHA и screenshots записаны;
+- [ ] no-JS/clipboard-denied state оставляет обычную selectable canonical link;
+- [ ] native matrix честно остаётся Pending, если реальные устройства не проверены.
+
+## Что остаётся до полного F18
+
+- [ ] V12: разместить тот же component под mobile tag/navigation shell;
+- [ ] приложить точный Pharmastaff repository/branch/SHA либо явно оставить parity gate Pending;
+- [ ] проверить обе placements на всех public HTML families;
+- [ ] выполнить реальные Android/iOS file-share проверки в Telegram/VK/MAX;
+- [ ] выполнить Windows/macOS D0/D1/D2 matrix и owner decision;
+- [ ] выбрать production desktop mode и подписать copy/asset SHA;
+- [ ] доставить код в `origin/main`, включить schedule/publisher и доказать rollback.
+
+Пока эти пункты не закрыты, формулировка результата только **«footer-only test
+implementation ready»**, не «F18 готова» и не «готово к production».

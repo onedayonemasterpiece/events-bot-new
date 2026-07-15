@@ -189,6 +189,9 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
+- Service sharing / F18 footer preview: `docs/features/static-site-pages/service-sharing.md`.
+- Desktop clipboard research and Pending native matrix: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md`.
+- Safe preview-only publication runbook: `docs/operations/service-sharing-preview.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
 - Event transport: `docs/features/event-transport/README.md`.
 - Event comment feedback: `docs/features/event-comment-feedback/README.md`.
