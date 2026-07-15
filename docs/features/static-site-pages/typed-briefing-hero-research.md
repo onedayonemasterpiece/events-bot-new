@@ -29,6 +29,7 @@
 4. [канонический design system](design-system/README.md) и [brand lockups](design-system/brand-lockups.md);
 5. [anonymous personalization requirements](../unsigned-personalization/requirements.md) и [event-detail personalization contract](../unsigned-personalization/event-detail-related.md);
 6. свежую критическую консультацию через Antigravity/agy, модель **`Gemini 3.1 Pro (High)`**, запуски 2026-07-15 08:18–08:22 UTC, оба `status=0`.
+7. качественный пользовательский отзыв о видеоанонсах: фиксированный темп не дал успеть увидеть и понять «что, где, когда», тогда как стабильный календарный формат оказался понятнее. Это один сигнал о классе проблемы, а не количественное доказательство оптимальной скорости.
 
 Raw prompt, Part I и исправляющий Part II сохранены в игнорируемом каталоге:
 
@@ -229,6 +230,57 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 
 **Пользователь читает готовый текст; motion сообщает о смене контекста.** Движение не является способом доставки букв.
 
+### Что добавляет отзыв о темпе видеоанонса
+
+Отзыв подтверждает не только риск «слишком быстро». Он показывает три разных сбоя, которые нельзя лечить одним замедлением:
+
+1. **Темп:** следующий фрагмент появляется раньше, чем человек завершил чтение.
+2. **Плотность:** за короткое время показано слишком много равнозначных фактов.
+3. **Ориентация:** «что, где, когда» не остаются одновременно видимыми и сравнимыми.
+
+Поэтому text briefing уже выигрывает у видео структурно: готовый текст можно просканировать, он остаётся неподвижным, ссылка не исчезает, а ручные `Назад`/`Дальше` снимают зависимость от авторского темпа. Настройка скорости полезна как дополнительный контроль, но не заменяет ясный copy contract.
+
+Для event-specific сцены вводится отдельный eligibility gate: одновременно должны быть подтверждены **что** (canonical title), **когда** (date/time or honest date-only) и **где** (grounded venue/location). Все три факта остаются видимыми одновременно: под linked title рендерится детерминированная строка `{{date_time}} · {{location}}`, которая входит в общий лимит 1–3 строк и не пишется LLM. Если один из трёх фактов ненадёжен или композиция не помещается, обзор показывает безопасную category/date scene, а не неполный единичный анонс. В одной сцене не перечисляется серия событий, которую невозможно сопоставить по этим трём признакам.
+
+### Решение по настройке темпа
+
+Для первого motion-прототипа принимается **дискретный выбор, а не ползунок**:
+
+```text
+Темп:  [Самостоятельно] [Спокойно] [Обычно] [Быстро]
+```
+
+- `Самостоятельно` — без auto-advance; пользователь нажимает `Дальше`. Это default на mobile и при reduced motion.
+- `Спокойно` — увеличенная неподвижная фаза чтения.
+- `Обычно` — baseline для desktop-эксперимента.
+- `Быстро` — более короткая фаза чтения, но без ускорения до «мелькания».
+
+На desktop это один компактный `Темп` control в строке управления; раскрытая форма — native select или `radiogroup` с видимыми text labels. На mobile control не занимает первый экран: manual mode уже решает задачу, а включение auto-показа может появиться позже в secondary settings.
+
+Ползунок в V2 не рекомендуется:
+
+- у него нет понятной пользовательской единицы измерения;
+- трудно предсказать, что именно станет быстрее — появление текста или время чтения;
+- он занимает больше места и требует более точной моторики;
+- непрерывные значения усложняют accessibility, аналитику и тестирование без доказанной пользы.
+
+Slider можно исследовать только если дискретных профилей объективно недостаточно.
+
+### Pace profiles
+
+Темп меняет главным образом **reading hold**, а не скорость появления букв. Entrance остаётся коротким и предсказуемым; иначе режим `Спокойно` парадоксально заставит ждать, пока фраза вообще станет доступна.
+
+| Profile | Auto-advance | Reading hold hypothesis | Entrance multiplier | Default |
+|---|---|---|---|---|
+| `manual` | off | none | `1.0`; manual scene fully visible or ≤150 ms fade | mobile, reduced motion |
+| `calm` | desktop only | `clamp(8s, 6.5s + 0.25s × word_count, 13s)` | max `1.15` | explicit choice |
+| `normal` | desktop only | `clamp(5s, 3.5s + 0.20s × word_count, 9s)` | `1.0` | experiment baseline |
+| `fast` | desktop only | `clamp(3.5s, 2s + 0.15s × word_count, 6s)` | min `0.85` | explicit choice |
+
+Это стартовые hypotheses для usability test, не норматив скорости чтения. Ни один профиль не отменяет pause-on-interaction, максимум auto-scenes и статичную фазу.
+
+Выбор пользователя хранится только после explicit action как bounded enum `manual|calm|normal|fast`, синхронизируется между вкладками и не выводится из косвенного поведения. `prefers-reduced-motion` принудительно включает manual на текущем устройстве, но не стирает ранее выбранное значение.
+
 ### Рекомендуемые параметры для Variant C
 
 | Уровень | Desktop | Mobile | Reduced motion |
@@ -276,6 +328,7 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 ### Controls и accessibility
 
 - visible buttons: `Назад`, `Дальше`, `Пауза` / `Продолжить`;
+- pace control uses visible text labels and a native select or `radiogroup`; a slider is outside V2 scope;
 - visible progress: `1 из 3`, не dots-only;
 - минимум `44×44px`, visible focus ring;
 - для auto mode region may use carousel semantics; в manual/static mode обычный `section` проще и надёжнее;
@@ -563,7 +616,8 @@ Cache key includes writer prompt version, model ID, scenario ID, locale, normali
 |---|---|
 | A categories-first | fastest control; no briefing value |
 | B static briefing | grounded summary improves event-detail discovery without motion cost |
-| C semantic motion | adds attention/return signal without degrading downstream discovery |
+| C1 semantic motion, manual default | lets the user own reading pace while preserving kinetic scene changes |
+| C2 semantic motion, normal auto default + pace control | tests whether bounded autoplay adds value beyond manual navigation |
 | D literal typewriter | diagnostic: expected to raise wait/misclick and novelty fatigue |
 
 Personalized vs generic content should be a separate factor or later experiment; otherwise copy relevance and motion cannot be disentangled.
@@ -586,6 +640,7 @@ Personalized vs generic content should be a separate factor or later experiment;
 - immediate exit / bounce proxy under one common definition;
 - scroll depth and first-feed visibility;
 - pause/continue/next/back use;
+- pace-control discovery, selected profile, later profile changes and return to manual mode;
 - misclick/rage-click proxy;
 - auto-scene exposure vs actual read opportunity;
 - CLS, INP, LCP, long tasks and JS errors;
@@ -606,6 +661,8 @@ briefing_pause
 briefing_resume
 briefing_next
 briefing_previous
+briefing_pace_control_open
+briefing_pace_change
 briefing_link_activate
 briefing_fallback
 briefing_error
@@ -625,6 +682,8 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 5. «Объясните, почему система показала эту рекомендацию».
 6. «Найдите категории и первую карточку, не дожидаясь анимации».
 7. Screen reader + keyboard: прочитать текущую сцену, перейти по ссылке, сменить сцену.
+8. «Сделайте обзор медленнее, затем быстрее; объясните, что именно изменилось».
+9. «Назовите по одной event-specific сцене: что произойдёт, где и когда».
 
 ## 9. Риски
 
@@ -655,6 +714,9 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 | Wide-«о» mutates approved logo | high | high | separate motif, design-system review | visual gate |
 | Repetition fatigue | high | low | cooldowns, Day 7/14 analysis, max scenes | rollout |
 | Analytics rewards hero only | medium | high | discovery-level primary metric | experiment |
+| Continuous slider creates false precision | medium | high | discrete named profiles first | prototype |
+| Slow mode delays initial readability | high | high | pace changes hold, not initial content availability | prototype |
+| Event scene lacks “what/where/when” | high | high | fact-completeness eligibility gate | content gate |
 
 ## 10. Prototype acceptance checklist
 
@@ -668,6 +730,7 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 ### Content/data
 
 - [ ] Every claim has fact ID, provenance and safe-until.
+- [ ] Every event-specific scene visibly renders grounded “what, where, when”; otherwise a route/category fallback is used.
 - [ ] Every link token resolves to an existing route/entity.
 - [ ] Explicit and inferred preferences use different language.
 - [ ] Viewed is downranked; dismissed is excluded.
@@ -690,6 +753,9 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 - [ ] `focusin` pauses until explicit resume.
 - [ ] Autoplay does not resume when the component leaves viewport or tab hides.
 - [ ] Links have stable hitboxes from first frame.
+- [ ] `Самостоятельно` has no auto timer; calm/normal/fast affect reading hold, not fact availability.
+- [ ] Pace control is keyboard/screen-reader operable and persists only an explicit bounded enum.
+- [ ] Reduced motion overrides autoplay without erasing the saved preference.
 - [ ] Controls are labeled, keyboard reachable and at least 44×44px.
 - [ ] Auto changes do not create screen-reader live-region spam.
 - [ ] CLS is 0 during scene changes.
@@ -719,5 +785,6 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 5. Is the separate wide-«о» transition motif worth a design-system exception, or should V1 stay purely typographic?
 6. Which analytics consent state permits experiment events?
 7. What first-session generic copy wins editorial approval before any generated variants are considered?
+8. Should desktop default to `Самостоятельно` or `Обычно`, and does a pace control earn its first-screen cost?
 
 До ответов на эти вопросы корректный следующий шаг — **V1 static content prototype**, а не data-connected personalized motion.
