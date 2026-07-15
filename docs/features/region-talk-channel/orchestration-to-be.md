@@ -1102,6 +1102,14 @@ Latest-run KO conversion is joined back to the authoritative
 candidate/image/publication reconciliation may refresh a downstream row's
 `run_id`, but it must not make an old post look like a newly processed KO,
 media or publication success in the per-run scorecard.
+
+Publication source attestation uses `region_talk_source_fingerprint_v3`.
+Material source decisions (local/external/spam/compliance/topic and surface
+filter reasons) invalidate an accepted row, while monotonic scan/KO/candidate
+counters do not. This lets CandidateReport continue scanning a confirmed
+external source in parallel without making a just-accepted Gemini row
+undeliverable before the notifier runs. Existing v2 rows are refreshed by the
+finalizer without another Gemini call before delivery.
 Without it, a run that really acquired new posts was reported as zero new and
 all work appeared to be a rescan, undermining the data-driven controller.
 

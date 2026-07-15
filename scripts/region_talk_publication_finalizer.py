@@ -45,7 +45,7 @@ import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
 PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v4"
 PUBLICATION_ELIGIBILITY_EVIDENCE_STORAGE_MAX_CHARS = 700
-AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
+AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
 SOURCE_ONBOARDING_EVIDENCE_VERSION = "region_talk_source_onboarding_evidence_v1"
 SOURCE_ONBOARDING_PROFILE_PROMPT_VERSION = "region_talk_source_onboarding_profile_v1"
 SOURCE_ONBOARDING_WRITER_PROMPT_VERSION = "region_talk_source_onboarding_writer_v1"
@@ -390,11 +390,6 @@ def authoritative_source_index(
 def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
     if not isinstance(source, dict) or not source:
         return ""
-    def count(name: str) -> int:
-        try:
-            return int(float(source.get(name) or 0))
-        except (TypeError, ValueError):
-            return 0
     payload = {
         "version": AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
         "canonical_source_key": canonical_source_key_for_row(source),
@@ -406,9 +401,6 @@ def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
         "monitoring_exclusion_reason": source.get("monitoring_exclusion_reason") or "",
         "source_surface_filter_version": source.get("source_surface_filter_version") or "",
         "source_surface_filter_reason": source.get("source_surface_filter_reason") or "",
-        "posts_scanned": count("posts_scanned"),
-        "ko_posts_found": count("ko_posts_found"),
-        "candidate_posts_found": count("candidate_posts_found"),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
