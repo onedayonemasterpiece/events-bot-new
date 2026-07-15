@@ -24,6 +24,7 @@ const required = [
   'brand/announcements-wordmark-ui.svg',
   'preview-build.json',
   'lab/hero/index.html',
+  'lab/briefing/index.html',
   'lab/hero/review/index.html',
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
@@ -38,6 +39,25 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+const briefingLabHtml = readFileSync(join(root, 'lab/briefing/index.html'), 'utf8');
+const briefingLabVisibleHtml = briefingLabHtml.replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<style[\s\S]*?<\/style>/giu, '');
+if (!briefingLabHtml.includes('data-briefing-variant="static"') || !briefingLabHtml.includes('data-briefing-scenario-id="today_count"')) throw new Error('Briefing lab misses stable variant/scenario hooks');
+if ((briefingLabHtml.match(/data-variant-switch=/gu) || []).length !== 3) throw new Error('Briefing lab must expose exactly A/B/C variants');
+if (!briefingLabHtml.includes('data-variant-switch="control"') || !briefingLabHtml.includes('data-variant-switch="static"') || !briefingLabHtml.includes('data-variant-switch="reveal"')) throw new Error('Briefing lab variants must be control/static/reveal');
+if ((briefingLabVisibleHtml.match(/data-scenario-id=/gu) || []).length !== 9 || !briefingLabVisibleHtml.includes('data-scenario-id="neutral_fallback"')) throw new Error('Briefing lab must contain eight deterministic scenarios plus one neutral fallback');
+for (const scenarioId of ['today_count', 'tomorrow_count', 'weekend_count', 'exhibitions_count', 'free_count', 'tonight_count', 'newly_added_count', 'catalog_generic', 'neutral_fallback']) {
+  if (!briefingLabVisibleHtml.includes(`data-scenario-id="${scenarioId}"`)) throw new Error(`Briefing lab misses canonical scenario ${scenarioId}`);
+}
+if (!briefingLabVisibleHtml.includes('Сегодня — события на любой план') || !briefingLabVisibleHtml.includes('data-first-event-title')) throw new Error('Briefing lab no-JS HTML must contain full useful briefing and the first event title');
+if (!briefingLabVisibleHtml.includes('data-briefing-categories') || (briefingLabVisibleHtml.match(/data-briefing-event-id=/gu) || []).length !== 3 || !briefingLabVisibleHtml.includes('data-first-event-decision')) throw new Error('Briefing lab must keep a deterministic category row and three-card local feed under every variant');
+if (briefingLabHtml.includes('6045') || briefingLabHtml.includes('/poisk/')) throw new Error('Briefing lab must not reuse incident/production fixtures or search CTAs');
+if (!/prefers-reduced-motion:\s*reduce/u.test(briefingLabHtml) || !/transition:\s*none\s*!important/u.test(briefingLabHtml)) throw new Error('Briefing lab must disable reveal for reduced motion');
+if (!briefingLabHtml.includes("['pointerdown', 'pointerdown']") || !briefingLabHtml.includes("['focusin', 'focusin']") || !briefingLabHtml.includes("interrupt('scroll')") || !briefingLabHtml.includes("interrupt('visibility_hidden')")) throw new Error('Briefing lab reveal must be interruptible by pointer, focus, scroll and hidden visibility');
+if (!briefingLabHtml.includes('event.persisted') || !briefingLabHtml.includes("completeReveal('static')")) throw new Error('Briefing lab must not replay on BFCache restore');
+if (!briefingLabHtml.includes("window.setTimeout(() => completeReveal('natural'), 1000)")) throw new Error('Briefing lab reveal must complete within 1200ms');
+if (/<script[^>]+src=/iu.test(briefingLabHtml) || /\bfetch\s*\(/u.test(briefingLabHtml)) throw new Error('Briefing lab must not add script or runtime API network requests');
+if (!briefingLabHtml.includes('window.__briefingTelemetry') || !briefingLabHtml.includes("emit('event_detail_activate'") || briefingLabHtml.includes("emit('event_detail_open'")) throw new Error('Briefing lab local debug sink contract is missing or overclaims event_detail_open');
+if (!briefingLabHtml.includes("threshold: 0.5") || !briefingLabHtml.includes("threshold: 0.9") || !briefingLabHtml.includes('visible_ms: 250') || !briefingLabHtml.includes("document.visibilityState !== 'visible'")) throw new Error('Briefing lab local telemetry must enforce 250ms visibility thresholds and exclude hidden time');
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');

@@ -1,0 +1,649 @@
+---
+import {
+  briefingLabFallback,
+  briefingLabCategories,
+  briefingLabEvents,
+  briefingLabScenarios,
+  defaultBriefingLabScenario,
+} from '../../../data/briefingLab';
+
+const scenario = defaultBriefingLabScenario;
+const scenarioInventory = [...briefingLabScenarios, briefingLabFallback];
+const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/u, '');
+const withLabBase = (path: string) => `${basePath}${path.startsWith('/') ? path : `/${path}`}` || '/';
+---
+<!doctype html>
+<html lang="ru" data-briefing-variant="static" data-briefing-scenario-id={scenario.id}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>Editorial briefing lab · KenigEvents</title>
+    <meta name="description" content="Изолированный прототип: без briefing, статический editorial briefing и один короткий reveal." />
+    <meta name="theme-color" content="#fbf7ef" />
+    <script is:inline>
+      document.documentElement.classList.add('js');
+      try {
+        const requested = new URLSearchParams(location.search).get('variant');
+        if (['control', 'static', 'reveal'].includes(requested)) {
+          document.documentElement.dataset.briefingVariant = requested;
+          document.documentElement.dataset.briefingAssignmentSource = 'qa_query';
+        }
+      } catch (_) {}
+    </script>
+    <style is:inline>
+      :root {
+        --paper: #fbf7ef;
+        --surface: #fffdf8;
+        --ink: #221a14;
+        --muted: #675d55;
+        --line: #dfd1bf;
+        --brand: #98401f;
+        --brand-strong: #783016;
+        --teal: #0f766e;
+        --teal-soft: #dcefeb;
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html { min-width: 320px; background: var(--paper); }
+      body {
+        min-width: 320px;
+        min-height: 100svh;
+        margin: 0;
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 8% 0%, rgba(152, 64, 31, 0.1), transparent 28rem),
+          var(--paper);
+        color: var(--ink);
+        font-size: 16px;
+        line-height: 1.45;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-underline-offset: 0.18em; }
+      button, a { touch-action: manipulation; }
+      button:focus-visible, a:focus-visible, summary:focus-visible {
+        outline: 3px solid rgba(15, 118, 110, 0.62);
+        outline-offset: 3px;
+      }
+      .skip-link {
+        position: fixed;
+        z-index: 10;
+        top: 6px;
+        left: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--ink);
+        color: white;
+        transform: translateY(-160%);
+      }
+      .skip-link:focus { transform: translateY(0); }
+      .lab-bar {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px max(14px, calc((100vw - 980px) / 2));
+        border-bottom: 1px solid rgba(120, 48, 22, 0.14);
+        background: rgba(255, 253, 248, 0.94);
+      }
+      .lab-bar h1 {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+      }
+      .lab-bar p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+      }
+      .variant-tabs {
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: min(980px, calc(100% - 28px));
+        margin: 0 auto;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .variant-tabs::-webkit-scrollbar { display: none; }
+      .variant-tab {
+        flex: 0 0 auto;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 253, 248, 0.76);
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .variant-tab[aria-selected="true"] {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: white;
+      }
+      main {
+        width: min(980px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 6px 0 56px;
+      }
+      .briefing-slot {
+        height: clamp(84px, 15svh, 150px);
+        margin-bottom: 10px;
+      }
+      html.js[data-briefing-variant="control"] .briefing-slot { display: none; }
+      .briefing {
+        position: relative;
+        height: 100%;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "headline marker" "support action";
+        align-content: center;
+        column-gap: 12px;
+        row-gap: 5px;
+        padding: 10px 12px;
+        border: 1px solid rgba(120, 48, 22, 0.18);
+        border-radius: 18px;
+        background:
+          linear-gradient(115deg, rgba(152, 64, 31, 0.09), transparent 58%),
+          var(--surface);
+        box-shadow: 0 10px 28px rgba(72, 45, 25, 0.08);
+        contain: layout paint;
+      }
+      .briefing::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: var(--brand);
+      }
+      .briefing__headline {
+        grid-area: headline;
+        min-width: 0;
+        margin: 0;
+        font-size: clamp(18px, 5.6vw, 23px);
+        font-weight: 900;
+        line-height: 1.03;
+        letter-spacing: -0.035em;
+        text-wrap: balance;
+      }
+      .briefing__marker {
+        grid-area: marker;
+        align-self: start;
+        color: var(--brand-strong);
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .briefing__support {
+        grid-area: support;
+        min-width: 0;
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 570;
+        line-height: 1.24;
+      }
+      .briefing__action {
+        grid-area: action;
+        align-self: end;
+        color: var(--brand-strong);
+        font-size: 12px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+      .briefing__copy {
+        display: contents;
+      }
+      html.js[data-briefing-variant="reveal"] .briefing[data-motion="ready"] .briefing__copy,
+      html.js[data-briefing-variant="reveal"] .briefing[data-motion="ready"] .briefing__marker {
+        opacity: 0;
+        transform: translateY(7px);
+        clip-path: inset(0 100% 0 0);
+      }
+      html.js[data-briefing-variant="reveal"] .briefing[data-motion="running"] .briefing__copy,
+      html.js[data-briefing-variant="reveal"] .briefing[data-motion="running"] .briefing__marker {
+        opacity: 1;
+        transform: translateY(0);
+        clip-path: inset(0 0 0 0);
+        transition:
+          opacity 260ms ease-out,
+          transform 420ms cubic-bezier(.2,.75,.2,1),
+          clip-path 960ms cubic-bezier(.2,.75,.2,1);
+      }
+      .events-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 2px 7px;
+      }
+      .events-heading h2 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+      }
+      .events-heading span { color: var(--muted); font-size: 11px; }
+      .category-row {
+        display: flex;
+        gap: 7px;
+        margin: 0 0 9px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .category-row::-webkit-scrollbar { display: none; }
+      .category-chip {
+        flex: 0 0 auto;
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 253, 248, 0.76);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+      }
+      .category-chip:first-child { border-color: var(--teal); background: var(--teal-soft); color: #0b5d57; }
+      .event-feed { display: grid; gap: 9px; }
+      .event-preview {
+        position: relative;
+        min-height: 138px;
+        overflow: hidden;
+        display: grid;
+        align-content: start;
+        gap: 7px;
+        padding: 14px 72px 14px 14px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: 0 10px 30px rgba(72, 45, 25, 0.07);
+      }
+      .event-preview::after {
+        content: "";
+        position: absolute;
+        inset: 0 0 0 auto;
+        width: 56px;
+        background:
+          radial-gradient(circle at 50% 28%, rgba(255,255,255,0.65) 0 5px, transparent 6px),
+          linear-gradient(165deg, var(--teal), #164e63);
+      }
+      .event-preview__eyebrow {
+        margin: 0;
+        color: var(--teal);
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .event-preview__title {
+        width: fit-content;
+        max-width: 100%;
+        font-size: clamp(18px, 5.8vw, 25px);
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+        text-decoration-thickness: 0.06em;
+      }
+      .event-preview__meta {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.3;
+      }
+      .event-preview__action {
+        width: fit-content;
+        color: var(--brand-strong);
+        font-size: 12px;
+        font-weight: 850;
+      }
+      .inventory {
+        margin-top: 18px;
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+        color: var(--muted);
+      }
+      .inventory summary {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        width: fit-content;
+        cursor: pointer;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 850;
+      }
+      .inventory-list {
+        display: grid;
+        gap: 8px;
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .inventory-list li {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 253, 248, 0.7);
+        font-size: 12px;
+      }
+      .inventory-list strong { display: block; color: var(--ink); font-size: 13px; }
+      .inventory-note { margin: 10px 0 0; font-size: 12px; }
+      .debug-log {
+        margin-top: 12px;
+        padding-top: 4px;
+        color: var(--muted);
+      }
+      .debug-log summary {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        width: fit-content;
+        cursor: pointer;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .debug-log pre {
+        max-height: 220px;
+        overflow: auto;
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+        white-space: pre-wrap;
+      }
+      @media (min-width: 700px) {
+        .lab-bar { min-height: 50px; }
+        .lab-bar h1 { font-size: 16px; }
+        .variant-tabs { min-height: 58px; }
+        .briefing-slot { height: clamp(136px, 20svh, 210px); margin-bottom: 16px; }
+        .briefing { padding: 22px 26px; border-radius: 24px; row-gap: 10px; }
+        .briefing__headline { font-size: clamp(28px, 4vw, 42px); }
+        .briefing__support, .briefing__action { font-size: 15px; }
+        .briefing__marker { font-size: 11px; }
+        .events-heading { margin-bottom: 10px; }
+        .events-heading h2 { font-size: 20px; }
+        .event-preview { min-height: 174px; padding: 22px 112px 22px 22px; }
+        .event-preview::after { width: 84px; }
+        .event-preview__title { font-size: 28px; }
+        .event-preview__meta, .event-preview__action { font-size: 14px; }
+        .inventory-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          scroll-behavior: auto !important;
+          animation: none !important;
+          transition: none !important;
+        }
+        .briefing__copy, .briefing__marker {
+          opacity: 1 !important;
+          transform: none !important;
+          clip-path: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#events">К событиям</a>
+    <header class="lab-bar">
+      <div>
+        <p>Research only · no production effect</p>
+        <h1>Editorial briefing lab</h1>
+      </div>
+      <p aria-label="Только главная и общая выдача">Home / listing</p>
+    </header>
+
+    <nav class="variant-tabs" role="tablist" aria-label="Вариант briefing">
+      <button class="variant-tab" type="button" role="tab" data-variant-switch="control" aria-selected="false">A · Без briefing</button>
+      <button class="variant-tab" type="button" role="tab" data-variant-switch="static" aria-selected="true">B · Статичный</button>
+      <button class="variant-tab" type="button" role="tab" data-variant-switch="reveal" aria-selected="false">C · Reveal ≤ 1200 мс</button>
+    </nav>
+
+    <main>
+      <section class="briefing-slot" aria-label="Городской обзор" data-briefing-slot data-briefing-scenario-id={scenario.id}>
+        <div class="briefing" data-briefing data-briefing-scenario-id={scenario.id} data-motion="complete">
+          <div class="briefing__copy">
+            <h2 class="briefing__headline">{scenario.headline}</h2>
+            <p class="briefing__support">{scenario.supportingText}</p>
+            <a class="briefing__action" href={withLabBase(scenario.ctaHref)}>{scenario.ctaLabel} →</a>
+          </div>
+          <span class="briefing__marker" aria-hidden="true">Городской обзор</span>
+        </div>
+      </section>
+
+      <nav class="category-row" aria-label="Категории событий" data-briefing-categories>
+        {briefingLabCategories.map((category) => <span class="category-chip">{category}</span>)}
+      </nav>
+
+      <section id="events" aria-labelledby="events-title" data-first-event-section>
+        <div class="events-heading">
+          <h2 id="events-title">События сегодня</h2>
+          <span>Сразу после обзора</span>
+        </div>
+        <div class="event-feed" data-briefing-feed>
+          {briefingLabEvents.map((event, index) => (
+            <article class="event-preview" data-first-event-card={index === 0 ? '' : undefined} data-briefing-event-id={event.id} id={event.id}>
+              <div data-first-event-decision={index === 0 ? '' : undefined}>
+                <p class="event-preview__eyebrow">{event.category}</p>
+                <a class="event-preview__title" href={event.href} data-first-event-title={index === 0 ? '' : undefined}>{event.title}</a>
+                <p class="event-preview__meta">{event.meta} · {event.admission}</p>
+              </div>
+              <a class="event-preview__action" href={event.href}>Подробнее →</a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <details class="inventory">
+        <summary>Контентный инвентарь: 8 сценариев + fallback</summary>
+        <ul class="inventory-list" data-scenario-inventory>
+          {scenarioInventory.map((item) => (
+            <li data-scenario-id={item.id}>
+              <strong>{item.label}: {item.headline}</strong>
+              <span>{item.supportingText} · {item.ctaLabel}</span>
+            </li>
+          ))}
+        </ul>
+        <p class="inventory-note">Одна фиксированная редакционная формулировка на сценарий. Без Gemini, API и персонализации.</p>
+      </details>
+      <details class="debug-log" data-briefing-debug>
+        <summary>Локальный журнал прототипа (память вкладки, до 24 записей)</summary>
+        <pre data-briefing-debug-output>Событий пока нет.</pre>
+      </details>
+    </main>
+
+    <noscript>
+      <style>.variant-tabs { display: none; }</style>
+    </noscript>
+    <script is:inline>
+      (() => {
+        const root = document.documentElement;
+        const briefing = document.querySelector('[data-briefing]');
+        const briefingSlot = document.querySelector('[data-briefing-slot]');
+        const firstEventDecision = document.querySelector('[data-first-event-decision]');
+        const eventLinks = [...document.querySelectorAll('[data-briefing-feed] a[href]')];
+        const debugOutput = document.querySelector('[data-briefing-debug-output]');
+        const tabs = [...document.querySelectorAll('[data-variant-switch]')];
+        if (!briefing || !tabs.length) return;
+
+        const validVariants = new Set(['control', 'static', 'reveal']);
+        const day = new Date().toISOString().slice(0, 10);
+        const revealKey = `ke-briefing-lab-reveal:${day}`;
+        const telemetry = [];
+        window.__briefingTelemetry = telemetry;
+        const emitted = new Set();
+        let completionTimer = 0;
+        let activeReveal = false;
+        const observed = {
+          briefing: { ratio: 0, threshold: 0.5, timer: 0 },
+          firstEvent: { ratio: 0, threshold: 0.9, timer: 0 },
+        };
+
+        const storageHas = (key) => {
+          try { return sessionStorage.getItem(key) === '1'; } catch (_) { return false; }
+        };
+        const storageMark = (key) => {
+          try { sessionStorage.setItem(key, '1'); } catch (_) {}
+        };
+
+        const emit = (eventKind, payload = {}, onceScope = '') => {
+          const memoryKey = onceScope ? `${eventKind}:${onceScope}` : '';
+          const sessionKey = memoryKey ? `ke-briefing-lab:${day}:${root.dataset.briefingScenarioId}:${memoryKey}` : '';
+          if (memoryKey && (emitted.has(memoryKey) || storageHas(sessionKey))) return false;
+          if (memoryKey) {
+            emitted.add(memoryKey);
+            storageMark(sessionKey);
+          }
+          telemetry.push({
+            event_kind: eventKind,
+            variant: root.dataset.briefingVariant,
+            scenario_id: root.dataset.briefingScenarioId,
+            assignment_source: root.dataset.briefingAssignmentSource || 'lab_default',
+            elapsed_ms: Math.round(performance.now()),
+            ...payload,
+          });
+          if (telemetry.length > 24) telemetry.splice(0, telemetry.length - 24);
+          if (debugOutput) debugOutput.textContent = telemetry.map((item) => JSON.stringify(item)).join('\n');
+          window.dispatchEvent(new CustomEvent('briefing-lab-event', { detail: telemetry.at(-1) }));
+          return true;
+        };
+
+        const motionReduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const wasRevealed = () => {
+          try { return sessionStorage.getItem(revealKey) === 'complete'; } catch (_) { return false; }
+        };
+        const rememberReveal = () => {
+          try { sessionStorage.setItem(revealKey, 'complete'); } catch (_) {}
+        };
+        const completeReveal = (reason = 'natural') => {
+          window.clearTimeout(completionTimer);
+          briefing.dataset.motion = 'complete';
+          rememberReveal();
+          if (activeReveal) emit('briefing_complete', { completion_reason: reason }, 'reveal');
+          activeReveal = false;
+        };
+        const beginReveal = () => {
+          activeReveal = true;
+          if (motionReduced()) {
+            completeReveal('reduced_motion');
+            return;
+          }
+          if (wasRevealed()) {
+            completeReveal('static');
+            return;
+          }
+          briefing.dataset.motion = 'ready';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (root.dataset.briefingVariant !== 'reveal') return;
+            briefing.dataset.motion = 'running';
+            completionTimer = window.setTimeout(() => completeReveal('natural'), 1000);
+          }));
+        };
+        const setVariant = (variant, updateUrl = true) => {
+          const next = validVariants.has(variant) ? variant : 'static';
+          root.dataset.briefingVariant = next;
+          briefingSlot?.setAttribute('data-briefing-variant', next);
+          tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.variantSwitch === next)));
+          window.clearTimeout(completionTimer);
+          activeReveal = false;
+          briefing.dataset.motion = 'complete';
+          if (updateUrl) {
+            const url = new URL(location.href);
+            url.searchParams.set('variant', next);
+            history.replaceState(history.state, '', url);
+          }
+          if (next === 'reveal') beginReveal();
+        };
+
+        tabs.forEach((tab) => tab.addEventListener('click', () => setVariant(tab.dataset.variantSwitch)));
+        const interrupt = (reason) => {
+          if (!activeReveal) return;
+          emit('briefing_interrupt', { interrupt_reason: reason }, 'reveal');
+          completeReveal('interrupt');
+        };
+        [['pointerdown', 'pointerdown'], ['focusin', 'focusin']].forEach(([eventName, reason]) => {
+          document.addEventListener(eventName, () => {
+            if (briefing.dataset.motion === 'running' || briefing.dataset.motion === 'ready') interrupt(reason);
+          }, { capture: true });
+        });
+        window.addEventListener('scroll', () => {
+          if (briefing.dataset.motion === 'running' || briefing.dataset.motion === 'ready') interrupt('scroll');
+        }, { passive: true });
+        document.addEventListener('visibilitychange', () => {
+          Object.values(observed).forEach((state) => {
+            window.clearTimeout(state.timer);
+            state.timer = 0;
+          });
+          if (document.visibilityState === 'hidden' && (briefing.dataset.motion === 'running' || briefing.dataset.motion === 'ready')) interrupt('visibility_hidden');
+          if (document.visibilityState === 'visible') {
+            scheduleVisible('briefing');
+            scheduleVisible('firstEvent');
+          }
+        });
+        window.addEventListener('pageshow', (event) => {
+          if (event.persisted && root.dataset.briefingVariant === 'reveal') completeReveal('static');
+        });
+        window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', (event) => {
+          if (event.matches && activeReveal) completeReveal('reduced_motion');
+        });
+
+        function scheduleVisible(kind) {
+          const state = observed[kind];
+          window.clearTimeout(state.timer);
+          state.timer = 0;
+          if (document.visibilityState !== 'visible' || state.ratio < state.threshold) return;
+          const variantAtStart = root.dataset.briefingVariant;
+          if (kind === 'briefing' && variantAtStart === 'control') return;
+          state.timer = window.setTimeout(() => {
+            state.timer = 0;
+            if (document.visibilityState !== 'visible' || state.ratio < state.threshold) return;
+            if (kind === 'briefing' && root.dataset.briefingVariant === variantAtStart) {
+              const impressed = emit('briefing_impression', { visible_ratio: state.ratio, visible_ms: 250 }, variantAtStart);
+              if (impressed && variantAtStart === 'static') emit('briefing_complete', { completion_reason: 'static' }, 'static');
+            }
+            if (kind === 'firstEvent') {
+              emit('first_event_visible', { event_id: 'lab-concert-01', visible_ratio: state.ratio, visible_ms: 250 }, 'experiment');
+            }
+          }, 250);
+        }
+
+        const observeVisibility = (element, kind) => {
+          if (!element || !('IntersectionObserver' in window)) return;
+          const observer = new IntersectionObserver((entries) => {
+            const entry = entries.at(-1);
+            observed[kind].ratio = entry?.intersectionRatio || 0;
+            scheduleVisible(kind);
+          }, { threshold: [0, 0.5, 0.9, 1] });
+          observer.observe(element);
+        };
+
+        emit('eligible_session', {}, 'experiment');
+        observeVisibility(briefing, 'briefing');
+        observeVisibility(firstEventDecision, 'firstEvent');
+        eventLinks.forEach((link) => link.addEventListener('click', () => {
+          emit('event_detail_activate', { href: link.getAttribute('href') || '', event_id: link.closest('[data-briefing-event-id]')?.dataset.briefingEventId || '' });
+        }));
+
+        setVariant(root.dataset.briefingVariant, false);
+      })();
+    </script>
+  </body>
+</html>
