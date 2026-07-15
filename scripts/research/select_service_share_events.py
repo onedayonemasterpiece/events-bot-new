@@ -151,14 +151,18 @@ def select(
     for index, row in enumerate(ordered):
         row["slot_index"] = index
     actual = dict(Counter(row["selection_group"] for row in ordered))
+    promo_status = {"requested": promoted_count, "selected": len(groups["promoted"]),
+                    "underfilled": bool(promo_missing), "missing": promo_missing,
+                    "fallback_mislabeled_as_promo": False,
+                    "reason": "active_explicit_promo_targets_with_approved_posters_exhausted" if promo_missing else None}
     return {
         "schema_version": "service_share_selection_v2", "generated_at": datetime.now(TZ).isoformat(),
         "local_date": local_date, "timezone": str(TZ), "eligible_count": len(eligible),
         "requested_mix": {"popular": popular_count, "promoted": promoted_count, "random": random_count},
         "actual_mix": {name: actual.get(name, 0) for name in ("popular", "promoted", "random")},
-        "promo_status": {"requested": promoted_count, "selected": len(groups["promoted"]),
-                         "underfilled": bool(promo_missing), "missing": promo_missing,
-                         "fallback_mislabeled_as_promo": False},
+        "promo_status": promo_status,
+        "promo_shortfall": ({key: promo_status[key] for key in ("requested", "selected", "missing", "reason")}
+                            if promo_missing else None),
         "events": ordered,
     }
 

@@ -34,7 +34,7 @@
 
 ## Validation
 
-- Focused renderer/data/status/scheduler tests: `16 passed`.
+- Focused renderer/data/status/scheduler tests: `17 passed`.
 - Existing scheduling tests: `36 passed, 1 failed`; the remaining
   `tests/test_scheduler_limits.py::test_scheduler_offsets_and_limits` expects
   every pre-existing job to use a 30-second grace period, but the existing
@@ -45,11 +45,14 @@
 - `git diff --check` passed.
 - Read-only production snapshot preparation (no Kaggle/public mutation) against
   `prod-20260715.sqlite` produced: 284 eligible events, 15 normalized places,
-  84 additions in the exact trailing 168-hour window, 60 events with approved +
-  semantically classified public posters, and 8 downloadable dated faces.
-  Active explicit promo festival inventory had no eligible approved/classified
-  future poster, so the result correctly recorded promo underfill and selected
-  four popular + four stable-random faces without mislabelling.
+  84 additions in the exact trailing 168-hour window, 279 events with approved
+  managed public posters, and 8 downloadable dated faces. The accepted public
+  projection intentionally does not add an unrelated semantic-classifier gate.
+  The only unique current/future event under active explicit event/festival
+  targets was event `6811`. The result therefore records requested mix `3/2/3`,
+  actual mix `4/1/3`, and `promo_shortfall` reason
+  `active_explicit_promo_targets_with_approved_posters_exhausted`; no duplicate
+  event and no random/popular face is mislabelled as promoted.
 
 ## Deliberately not done in this lane
 

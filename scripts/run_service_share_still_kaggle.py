@@ -348,6 +348,7 @@ def main() -> int:
                 "selection_mix": face_manifest["selection"].get("actual_mix") or face_manifest["selection"]["requested_mix"],
                 "selection_requested_mix": face_manifest["selection"]["requested_mix"],
                 "promo_status": face_manifest["selection"].get("promo_status"),
+                "promo_shortfall": face_manifest["selection"].get("promo_shortfall"),
                 "composition_date": args.composition_date,
                 "composition_family": args.composition_family,
                 "composition_seed": args.composition_seed,

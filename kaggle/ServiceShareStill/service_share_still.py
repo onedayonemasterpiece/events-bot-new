@@ -226,6 +226,7 @@ def main() -> int:
         "selection_mix": config["selection_mix"],
         "selection_requested_mix": config.get("selection_requested_mix"),
         "promo_status": config.get("promo_status"),
+        "promo_shortfall": config.get("promo_shortfall"),
         "catalog_hash": config.get("catalog_hash"),
         "measured_at": config.get("measured_at"),
         "composition_date": config["composition_date"],

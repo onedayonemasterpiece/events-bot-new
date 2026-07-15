@@ -11,7 +11,7 @@ from PIL import Image
 from db import Database
 from service_share_card import (
     CANONICAL_URL, MANIFEST_SCHEMA_VERSION, build_catalog_snapshot,
-    export_asset_bundle, load_active_promo_candidates,
+    export_asset_bundle, load_active_promo_candidates, load_catalog_snapshot,
 )
 from service_share_scheduler import register_service_share_daily_job
 from scripts.research.select_service_share_events import select
@@ -60,8 +60,11 @@ def test_selection_reserves_promo_and_never_mislabels_underfill():
     assert result["events"][1]["event_id"] == 1
     assert result["events"][1]["selection_group"] == "promoted"
     assert result["promo_status"] == {"requested": 2, "selected": 1, "underfilled": True, "missing": 1,
-                                      "fallback_mislabeled_as_promo": False}
+                                      "fallback_mislabeled_as_promo": False,
+                                      "reason": "active_explicit_promo_targets_with_approved_posters_exhausted"}
     assert result["actual_mix"]["promoted"] == 1
+    assert result["promo_shortfall"] == {"requested": 2, "selected": 1, "missing": 1,
+                                           "reason": "active_explicit_promo_targets_with_approved_posters_exhausted"}
     assert len(result["events"]) == 8 == len({row["event_id"] for row in result["events"]})
     assert [row["slot_index"] for row in result["events"]] == list(range(8))
     tomorrow = select(events, local_date="2026-07-16", promo_candidates=[{"event_id": 1}])
@@ -133,3 +136,33 @@ def test_promo_resolver_uses_explicit_targets_and_ignores_all(tmp_path: Path):
     rows = asyncio.run(run())
     assert [row["event_id"] for row in rows] == [1]
     assert rows[0]["provenance"] == "exact_surface_activity"
+
+
+def test_snapshot_accepts_approved_managed_poster_without_semantic_classifier_gate(tmp_path: Path):
+    async def run():
+        db = Database(str(tmp_path / "catalog.sqlite"))
+        async with db.raw_conn() as conn:
+            await conn.executescript("""
+            CREATE TABLE event(
+              id INTEGER PRIMARY KEY, title TEXT, date TEXT, end_date TEXT, time TEXT,
+              city TEXT, festival TEXT, photo_urls TEXT, added_at TEXT,
+              identity_status TEXT, merged_into_event_id INT, silent INT, lifecycle_status TEXT
+            );
+            CREATE TABLE eventposter(
+              id INTEGER PRIMARY KEY, event_id INT, thumbnail_512_url TEXT,
+              supabase_url TEXT, thumbnail_256_url TEXT, duplicate_of_id INT,
+              review_status TEXT, media_semantic_status TEXT, display_order INT,
+              safe_crop INT, image_text_mode TEXT
+            );
+            INSERT INTO event VALUES(1,'Будущее событие','2026-07-20',NULL,'19:00',
+              'Калининград',NULL,'[]','2026-07-14T12:00:00Z','canonical',NULL,0,'active');
+            INSERT INTO eventposter VALUES(1,1,'https://static.test/512.webp',
+              'https://static.test/full.webp',NULL,NULL,'approved','error',0,1,NULL);
+            """)
+            await conn.commit()
+        snapshot = await load_catalog_snapshot(db, measured_at=datetime(2026, 7, 15, tzinfo=timezone.utc))
+        await db.close()
+        return snapshot
+    snapshot = asyncio.run(run())
+    assert snapshot["eligible_event_count"] == 1
+    assert snapshot["events"][0]["image_url"] == "https://static.test/full.webp"

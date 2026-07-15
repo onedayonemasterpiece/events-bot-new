@@ -160,7 +160,6 @@ async def load_catalog_snapshot(db: Database, *, measured_at: datetime | None = 
                      WHERE ep.event_id=e.id
                        AND ep.duplicate_of_id IS NULL
                        AND ep.review_status='approved'
-                       AND ep.media_semantic_status='classified'
                      ORDER BY ep.display_order, ep.id LIMIT 1) AS poster_url,
                    (SELECT ep.safe_crop FROM eventposter ep
                      WHERE ep.event_id=e.id AND ep.duplicate_of_id IS NULL
@@ -342,6 +341,7 @@ def export_asset_bundle(
             "groups": [row["selection_group"] for row in selection["events"]],
             "actual_mix": selection.get("actual_mix"),
             "promo_status": selection.get("promo_status"),
+            "promo_shortfall": selection.get("promo_shortfall"),
         },
         "composition": composition,
         "bundle_sha256": bundle_sha256,
