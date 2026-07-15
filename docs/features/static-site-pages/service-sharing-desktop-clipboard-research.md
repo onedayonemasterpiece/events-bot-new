@@ -1,13 +1,32 @@
 # F18 desktop clipboard research: Windows and macOS
 
-> Статус: **обязательная аналитика и cross-platform test plan; product behavior «Скопировать карточку» ещё не принято**. До завершения матрицы безопасный desktop baseline F18 остаётся «Скопировать ссылку».
+> Статус: **предварительный native Windows test выполнен owner на PR #44 и уже привёл к доработкам; формальная Windows evidence matrix, macOS и полный повтор на финальном RC остаются обязательными**. До финальной cross-platform acceptance безопасный fallback F18 остаётся копированием текста+ссылки.
+
+## Предварительный Windows test — 2026-07-15
+
+Owner подтвердил реальную native-проверку desktop copy/paste на Windows по
+предварительной сборке PR #44. Результат не остался аналитикой: после фактической
+вставки реализация была переработана с неоднозначного multi-representation
+clipboard в две явные операции:
+
+1. `Скопировать карточку` записывает image-only PNG;
+2. `Скопировать текст и ссылку` записывает frozen text + canonical service URL.
+
+Таким образом, Windows path для текущего preview считается **предварительно
+протестированным**, а не отсутствующим. При этом это не закрывает release matrix:
+в канонической evidence-таблице PR пока должны быть зафиксированы exact Windows
+OS/browser/target versions, повторяемость и redacted screenshots; macOS ещё не
+подтверждён; после интеграции header/mobile-menu и остальных release-фич вся
+Windows/macOS/mobile матрица повторяется на точном финальном RC SHA. Ранний тест
+может обосновывать текущую доработку, но не переносится автоматически как evidence
+для изменившейся финальной сборки.
 
 ## Место в единой F18
 
 Это не отдельная desktop-фича и не третья точка входа. F18 реализуется как **один адаптивный service-sharing component** в двух общих placements — под раскрытой бренд-биркой/в навигационном shell и в footer:
 
 - на mobile та же action вызывает системный Web Share с централизованно подготовленной карточкой, текстом и canonical URL, затем использует mobile fallbacks;
-- на desktop та же action в тех же placements не вызывает native share, а записывает принятый D0/D1/D2 payload в clipboard;
+- на desktop те же placements не вызывают native share; текущий preview разделяет image-only PNG и text+URL на две явные clipboard actions, а D0/D1/D2 остаются историей исследования;
 - смысл действия, service URL, версия карточки, copy/claim gates, доступное имя и семейство аналитики общие; меняется только platform transport;
 - mobile и desktop не получают расходящиеся компоненты, manifests или независимо редактируемый текст, и в одном breakpoint не показываются две конкурирующие кнопки «поделиться»/«скопировать».
 
@@ -101,19 +120,23 @@ https://kenigevents.ru/
 
 - только HTTPS/top-level focused document;
 - `navigator.clipboard.write()` вызывается из непосредственного click/keyboard activation;
-- Safari-compatible PNG Promise создаётся внутри `ClipboardItem`, без предварительного `await`, способного потерять activation;
+- для выбранной image-only action создаётся один `ClipboardItem` только с настоящим `image/png`; Safari-compatible PNG Promise используется внутри него без предварительного `await`, способного потерять activation;
 - CDN/same-origin fetch обязан вернуть `200 image/png`, CORS-readable body и корректные bytes; opaque `no-cors` response запрещён;
-- использовать ровно один `ClipboardItem` с несколькими representations;
-- `NotAllowedError`, `DataError`, unsupported constructor/type, unfocused document, asset/CORS/timeout failure и iframe policy дают честный D0 fallback;
-- success copy не называется «отправлено» или «вставлено»: допустимый текст — **«Карточка скопирована. При вставке приложение выберет поддерживаемый формат»**;
-- при D0 — **«Скопированы текст и ссылка»**;
-- рядом/в success state должен оставаться явный **«Скопировать текст и ссылку»** fallback, если D1/D2 будет принят.
+- text+URL action использует отдельный `writeText()` intent; image action не должна скрытно подменяться текстовой после клика;
+- ровно один multi-representation `ClipboardItem` требуется только если legacy D1/D2 снова предлагается;
+- `NotAllowedError`, `DataError`, unsupported constructor/type, unfocused document, asset/CORS/timeout failure и iframe policy дают честный error state, при этом отдельная text+URL action остаётся доступной;
+- success copy не называется «отправлено» или «вставлено»; image и text actions подтверждают только запись соответствующего payload в clipboard;
+- для text+URL допустимо **«Скопированы текст и ссылка»**.
 
-## Test harness до product decision
+## Research harness и финальный RC harness
 
-Нужна отдельная research branch и top-level HTTPS test page, не подключённая к production navigation. Она содержит:
+PR #44 уже использовал отдельную top-level HTTPS lab page для сравнения D0/D1/D2,
+после чего native Windows test привёл к отказу от неоднозначного rich item в пользу
+двух явных intents. Lab/evidence сохраняют историю сравнения, но финальный RC
+harness в первую очередь проверяет фактически выбранные операции:
 
-- D0/D1/D2 buttons;
+- `copy_text_link` и `copy_image_png` buttons; D1/D2 возвращаются в обязательную
+  матрицу только если multi-representation behavior снова предлагается в RC;
 - один и тот же immutable test PNG/text/HTML payload;
 - capability panel: secure context, focus, `navigator.clipboard.write`, `ClipboardItem`, optional `ClipboardItem.supports`, browser UA/version recorded only in the test evidence;
 - redacted result/error and timing;
@@ -122,11 +145,10 @@ https://kenigevents.ru/
 
 Playwright проверяет собственный payload и fallbacks, но **не заменяет native OS/application tests**:
 
-- click/keyboard activation вызывает один `clipboard.write([oneItem])`;
-- item содержит ожидаемые three MIME representations и точные bytes/copy/URL;
-- HTML escaping/security negative cases;
-- D1/D2 ordering;
-- asset error, CORS, timeout, API absence and `NotAllowedError` → D0;
+- image click/keyboard activation вызывает один `clipboard.write([pngItem])`, а text action — отдельный `writeText(exactCopyAndUrl)`;
+- PNG item содержит только ожидаемый `image/png`; текстовая action — точные copy/URL;
+- asset/CORS/timeout/API absence/`NotAllowedError` показывают честный failure без скрытой смены intent;
+- HTML escaping, three-representation payload и D1/D2 ordering проверяются только если rich candidate возвращён;
 - обе F18 desktop placements используют один controller;
 - success/error объявляются через `aria-live` и не требуют мыши.
 
@@ -152,7 +174,7 @@ Paste targets:
 6. MAX web/desktop, если фактически доступен;
 7. один установленный rich native editor (Word/Outlook либо documented substitute).
 
-Основной cross-app прогон выполняется для Edge и Chrome; Firefox обязан пройти controlled targets, Notepad, Telegram и минимум один web composer. Для каждого target проверить D0/D1/D2 через `Ctrl+V` и записать фактический результат.
+Основной cross-app прогон выполняется для Edge и Chrome; Firefox обязан пройти controlled targets, Notepad, Telegram и минимум один web composer. Для каждого target проверить фактические RC actions `copy_text_link` и `copy_image_png` через `Ctrl+V` и записать результат. D1/D2 повторяются только если снова входят в shipping candidate.
 
 ## Обязательная macOS matrix
 
@@ -175,7 +197,7 @@ Paste targets:
 7. MAX web/desktop, если фактически доступен;
 8. Pages/Mail либо documented installed rich editor.
 
-Основной cross-app прогон выполняется для Safari и Chrome; Firefox проходит controlled targets, TextEdit, Telegram и минимум один web composer. Для каждого target проверить D0/D1/D2 через `⌘V`.
+Основной cross-app прогон выполняется для Safari и Chrome; Firefox проходит controlled targets, TextEdit, Telegram и минимум один web composer. Для каждого target проверить фактические RC actions `copy_text_link` и `copy_image_png` через `⌘V`; D1/D2 — только если возвращены в shipping candidate.
 
 ## Result taxonomy и evidence
 
@@ -195,7 +217,7 @@ Paste targets:
 Дополнительно записываются:
 
 - OS/browser/target app exact versions;
-- source mode D0/D1/D2 and type order;
+- source mode `copy_text_link|copy_image_png` либо legacy research D0/D1/D2 и type order;
 - API resolution/error and elapsed time;
 - screenshot/screen recording after paste, без личных чатов/данных;
 - виден ли домен/CTA;
@@ -216,11 +238,16 @@ Artifacts не коммитятся. В репозиторий попадает 
 - [ ] PNG-only результат сохраняет домен/CTA внутри изображения;
 - [ ] нет утверждения, что API знает о фактической вставке/отправке;
 - [ ] измерены PNG size/fetch/write latency и отказ при cold cache;
-- [ ] D1 и D2 сравнены одной и той же матрицей;
-- [ ] owner выбирает один вариант: `D0 copy-link`, `D1 rich HTML-first`, `D2 PNG-first` либо две явные desktop actions;
+- [x] preliminary Windows test выбрал для preview две явные desktop actions вместо неоднозначного multi-representation item;
+- [ ] exact Windows evidence внесено в redacted matrix и тот же выбранный behavior повторён на финальном RC;
+- [ ] D1 и D2 сравниваются одной матрицей только если один из них возвращается в shipping candidate;
+- [ ] owner финально подтверждает выбранный RC вариант: `D0 copy-link`, `D1 rich HTML-first`, `D2 PNG-first` либо две явные desktop actions;
 - [ ] выбранные label, success copy, fallback и supported-browser policy перенесены в основной F18 contract и frozen UI.
 
-До этого gate нельзя менять релизное обещание с «Скопировать ссылку» на «Скопировать карточку» и нельзя считать attachment-анализ из одного браузера доказательством Windows/macOS compatibility.
+До этого gate preliminary Windows result нельзя переносить на macOS или на
+изменившийся финальный RC. Текущий preview вправе показывать две честно разделённые
+actions, но release promise фиксируется только после повторной проверки фактически
+shipping behavior на обеих desktop OS.
 
 ## Production analytics boundary после возможного запуска
 

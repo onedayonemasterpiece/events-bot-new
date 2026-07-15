@@ -1,6 +1,6 @@
 # Карточка «Поделиться сервисом»
 
-> Статус: **F18 — обязательный блокер первого публичного релиза; предварительный footer-only vertical slice находится в открытом PR #44 (`421d6bca`), но mobile-menu/header placement, native device matrix, merge в `main` и production activation ещё не закрыты**.
+> Статус: **F18 — обязательный блокер первого публичного релиза; предварительный footer-only vertical slice находится в открытом PR #44 (`421d6bca`) и прошёл owner-confirmed native Windows test с последующими доработками, но mobile-menu/header placement, macOS и полный RC retest, merge в `main` и production activation ещё не закрыты**.
 
 ## Назначение и граница фичи
 
@@ -27,13 +27,18 @@
 - финальный branch evidence сообщает controller `5/5`, renderer `23/23`, local
   Playwright `14/14`, public Playwright `14/14`, Chromium clipboard readback и
   сохранение высоты action row `44px → 44px` после success feedback;
+- owner выполнил native Windows copy/paste test; его результат привёл к разделению
+  неоднозначного rich clipboard на image-only card action и отдельную text+URL
+  action. Это предварительное platform evidence для текущего preview, а не замена
+  полному повтору на финальном RC;
 - последний опубликованный preview:
   `https://kenigevents.ru/preview-20260715t1025z-f18-share-feedback/__preview/`.
 
 Это **Partial**, а не закрытие F18. По прямому решению owner шапка не менялась:
 placement под раскрытой мобильной биркой и любое изменение desktop navigation
 shell отложены на следующую UI-итерацию. Также отсутствуют полная native
-Android/iOS share-sheet проверка, Windows/macOS browser/target matrix, точная
+Android/iOS share-sheet проверка, формализованная Windows evidence matrix, macOS
+browser/target matrix и общий cross-platform retest финальной сборки, точная
 Pharmastaff source/SHA привязка, merge в `origin/main`, production schedule/publisher
 activation и final owner sign-off. До их закрытия PR/preview не являются
 production release truth.
@@ -51,8 +56,8 @@ production release truth.
 
 - **mobile (`<768px`)**: вызывается native Web Share с заранее подготовленным файлом карточки, коротким plain-text сообщением и URL сервиса;
 - если mobile browser/target не принимает файл, используется native share только текста+URL, затем clipboard fallback; обычная навигация никогда не блокируется;
-- **desktop (`>=768px`)**: native share намеренно не вызывается; безопасный release baseline называется **«Скопировать ссылку»**, копирует короткий текст+URL и показывает доступное подтверждение;
-- desktop-кандидат **«Скопировать карточку»** может записывать один `ClipboardItem` с настоящим `image/png`, `text/html` и `text/plain`, но не становится release contract до фактической [Windows/macOS clipboard matrix](service-sharing-desktop-clipboard-research.md): target app само выбирает representation, поэтому нельзя обещать единое сообщение «изображение + подпись + ссылка»;
+- **desktop (`>=768px`)**: native share намеренно не вызывается; безопасная обязательная action **«Скопировать текст и ссылку»** копирует exact short copy+URL, а предварительно проверенная Windows-сборка рядом предлагает отдельную **«Скопировать карточку»**, записывающую image-only PNG;
+- прежние D1/D2 candidates с одним `ClipboardItem` из `image/png`+`text/html`+`text/plain` сохранены только как research history и не входят в текущий shipping candidate; если их вернуть, они снова требуют полной [Windows/macOS clipboard matrix](service-sharing-desktop-clipboard-research.md), потому что target app само выбирает representation;
 - если Clipboard API недоступен, показывается выделяемая ссылка с обычным `<a>` fallback;
 - breakpoint, accessible name, focus/keyboard semantics и analytics reason должны быть едиными для обеих точек входа, без двух расходящихся реализаций.
 
@@ -153,10 +158,11 @@ Web Share не позволяет честно утверждать фактич
 - [ ] mobile Playwright на `390×844`: действие видно под раскрытой биркой и в footer; оба используют один current manifest/URL;
 - [ ] при `canShare(files)=true` в `navigator.share` передаются WebP file, короткий text и canonical service URL; payload не содержит текущий event/personal secret URL;
 - [ ] file-unsupported, API rejection/cancel, offline/CDN failure и Clipboard denial дают проверяемый fallback без broken UI;
-- [ ] desktop `1366/1440`: обе точки не вызывают native share; D0 «Скопировать ссылку» всегда копирует текст+service URL либо показывает selectable fallback и объявляет результат через `aria-live`;
-- [ ] до решения о «Скопировать карточку» выполнена полная [Windows/macOS desktop clipboard research matrix](service-sharing-desktop-clipboard-research.md): Edge/Chrome/Firefox на Windows, Safari/Chrome/Firefox на macOS, controlled targets и реальные Telegram/VK/MAX/rich/plain applications;
-- [ ] D1 `text/html`-first и D2 `image/png`-first проверены как один `ClipboardItem` с тремя representations; ни один target-specific результат не обобщается без evidence, `empty_paste` после success запрещён;
-- [ ] owner по matrix выбирает D0, D1, D2 либо две явные desktop actions и фиксирует label/success/fallback; до этого основной контракт остаётся «Скопировать ссылку»;
+- [ ] desktop `1366/1440`: обе точки не вызывают native share; обязательная text action `Скопировать текст и ссылку` копирует exact copy+service URL либо показывает selectable fallback, а image action не подменяет свой intent скрытым text fallback; результат объявляется через `aria-live`;
+- [ ] на финальном RC выполнена полная [Windows/macOS desktop clipboard matrix](service-sharing-desktop-clipboard-research.md) фактически shipping двух действий: Edge/Chrome/Firefox на Windows, Safari/Chrome/Firefox на macOS, controlled targets и реальные Telegram/VK/MAX/rich/plain applications; legacy D1/D2 повторяются только если возвращены в candidate;
+- [x] preliminary PR #44 Windows native test выполнен owner и привёл к двум явным desktop intents; он засчитывается как evidence для итерации, но не заменяет заполненную matrix и повтор на финальном RC SHA;
+- [ ] если D1 `text/html`-first или D2 `image/png`-first возвращаются в RC, они проверены как один `ClipboardItem` с тремя representations; иначе release test не обязан повторять отвергнутый rich-item вариант;
+- [ ] owner по финальной matrix подтверждает две явные desktop actions либо выбирает D0/D1/D2 и фиксирует label/success/fallback; text+URL остаётся обязательной безопасной операцией;
 - [ ] real Android/iOS checks подтверждают Telegram, VK и MAX для file-share, text+URL fallback и возврата в браузер;
 - [ ] rendered card проходит screenshot/OCR/readability QA на исходном размере и thumbnail width 360 px; CTA и домен видимы, текст не обрезан;
 - [ ] metrics manifest совпадает с accepted catalog hash; displayed floor никогда не превышает eligible count; city count воспроизводим;
