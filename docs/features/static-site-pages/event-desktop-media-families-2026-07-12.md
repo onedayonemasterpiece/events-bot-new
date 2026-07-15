@@ -618,3 +618,18 @@ cause, recommended the `24px` floating inset and
 and selected independent CDN WebP derivatives over sprites. The prompt and raw
 response remain in ignored
 `artifacts/codex/static-desktop-v12-20260715/`.
+
+Public acceptance for
+`preview-20260715t-desktop-v12-header-media` returns `200` for all three
+comparison pages and their generated JS/CSS. Chromium at `1536×864` and
+`1920×1080` measures the header bottom and hero top at exactly `57px`, the tag
+at `x=46.08px` and `x=48px` respectively, and zero horizontal overflow. The
+Garage remains inactive at `9.02s`, becomes decoded/ready at `10.96s`, changes
+the hero at `11.67s`, and a rail interaction immediately opts out with the
+selected image unchanged after another five seconds. All 62 fixture derivative
+URLs return immutable WebP `200`; the live rails select their `256/512`
+variants instead of the fullscreen sources. At scroll `700`, Split docks its
+CTA at `69px` without a text leak. At scroll `600`, the OCR companion hero moves
+from `57px` to `-333px` (the intended `0.65×` net viewport speed) while the CTA
+docks at `82px` and the poster board follows at `333.92px`. A fresh `390×844`
+load keeps the desktop laboratory root `display:none`.
