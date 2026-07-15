@@ -18,7 +18,7 @@ const visit = (dir) => readdirSync(dir).forEach((name) => {
   else files.push(path.relative(buildRoot, target).split(path.sep).join('/'));
 });
 visit(buildRoot);
-const allowed = (name) => name === 'lab/briefing/index.html' || name === 'lab-manifest.json' || name === 'favicon.svg' || name === 'brand/announcements-wordmark-ui.svg' || name.startsWith('_astro/');
+const allowed = (name) => name === 'lab/briefing/index.html' || name === 'lab-manifest.json' || name === 'favicon.svg' || name === 'brand/announcements-wide-o-ui.svg' || name.startsWith('_astro/');
 const rejected = files.filter((name) => !allowed(name));
 if (rejected.length) throw new Error(`Unexpected lab artifacts:\n${rejected.join('\n')}`);
 for (const forbidden of ['sobytiya/', 'ics/', '__preview/', 'sitemap', 'robots']) {
@@ -38,7 +38,7 @@ for (const route of ['segodnya', 'zavtra', 'vyhodnye', 'vystavki', 'populyarnoe'
   if (html.includes(`href="/${buildId}/${route}/`)) throw new Error(`Production navigation was incorrectly versioned: ${route}`);
 }
 if (html.includes(`"/${buildId}/sobytiya/`)) throw new Error('Production event links were incorrectly versioned');
-for (const asset of [`/${buildId}/_astro/`, `/${buildId}/favicon.svg`, `/${buildId}/brand/announcements-wordmark-ui.svg`]) {
+for (const asset of [`/${buildId}/_astro/`, `/${buildId}/favicon.svg`, `/${buildId}/brand/announcements-wide-o-ui.svg`]) {
   if (!html.includes(asset)) throw new Error(`Versioned lab asset URL missing: ${asset}`);
 }
 console.log(`Briefing lab allowlist OK (${files.length} files): ${buildId}`);

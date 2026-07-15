@@ -18,7 +18,11 @@ const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const buildId = manifest.buildId as string;
 const port = 4187;
 const baseUrl = `http://127.0.0.1:${port}/${buildId}/lab/briefing/`;
-const scenarioIds = ['today_count', 'tomorrow_count', 'weekend_count', 'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person'];
+const scenarioIds = [
+  'today_count', 'tomorrow_count', 'weekend_count', 'greeting_day', 'local_keska', 'smart_search_education',
+  'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person',
+  'anticipated_person_named', 'rare_event', 'weather_water_demo', 'festival_demo', 'unusual_format_demo',
+];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
 let server: ChildProcess;
 
@@ -38,6 +42,9 @@ async function visibleFragments(page: Page) {
 }
 async function labState(page: Page) {
   return page.evaluate(() => (window as any).__briefingLab.getState());
+}
+async function openDock(page: Page) {
+  await page.locator('[data-lab-dock] > details').evaluate((node: HTMLDetailsElement) => { node.open = true; });
 }
 
 async function freshPage(browser: Browser, viewport = { width: 390, height: 844 }, reducedMotion: 'reduce' | 'no-preference' = 'no-preference') {
@@ -61,6 +68,7 @@ test('C has observable semantic-fragment states and B is immediately static', as
   await open(page, 'c', 'today_count', '&replay=1&pace=slow');
   const total = await page.locator('[data-reveal-fragment]').count();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await openDock(page);
   await page.locator('[data-replay]').click();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running');
   const first = await visibleFragments(page);
@@ -83,17 +91,22 @@ test('C has observable semantic-fragment states and B is immediately static', as
   await staticRun.context.close();
 });
 
-test('all eight scenarios are discoverable; Replay, session state, Play all and Pause are explicit', async ({ browser }) => {
+test('expanded scenario deck is discoverable; Replay, session state, Play all and Pause are explicit', async ({ browser }) => {
   const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
   await open(page, 'c', 'today_count', '&replay=1&pace=fast');
+  await openDock(page);
   const options = await page.locator('[data-scenario-select] option').evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
-  expect(options.slice(0, 8)).toEqual(scenarioIds);
-  expect(new Set(options).size).toBe(9); // eight scenarios + the explicit fallback
+  expect(options.slice(0, scenarioIds.length)).toEqual(scenarioIds);
+  expect(new Set(options).size).toBe(scenarioIds.length + 1); // deck + the explicit fallback
+  await expect(page.locator('[data-play-all]')).toContainText(`Показать все ${scenarioIds.length}`);
 
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openDock(page);
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete');
   await expect(page.locator('[data-playback-status]')).toContainText('Уже показано');
+  await page.locator('[data-pace="slow"]').click();
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await page.locator('[data-replay]').click();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running');
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
@@ -104,7 +117,7 @@ test('all eight scenarios are discoverable; Replay, session state, Play all and 
   await expect(page.locator('[data-message]')).toContainText('Поделиться');
 
   await page.locator('[data-play-all]').click();
-  await expect.poll(async () => (await labState(page)).scenario, { timeout: 6000 }).toBe('tomorrow_count');
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 8500 }).toBe('tomorrow_count');
   await page.locator('[data-pause]').click();
   const paused = await labState(page);
   expect(paused.paused).toBeTruthy();
@@ -158,6 +171,7 @@ test('hero, categories and contextual feed geometry hold across every scenario a
 test('hover/focus/pointer finish the sentence; inline link is stable and pace controls work', async ({ browser }) => {
   const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
   await open(page, 'c', 'today_count', '&replay=1&pace=slow');
+  await openDock(page);
   await page.waitForTimeout(100);
   await page.locator('[data-briefing]').hover();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 200 });
@@ -180,7 +194,7 @@ test('hover/focus/pointer finish the sentence; inline link is stable and pace co
   await context.close();
 });
 
-test('local queue memory, verified actions, pace preference, real O and cursor variants are deterministic', async ({ browser }) => {
+test('local queue memory, verified actions, pace preference, exact O and non-lingering cursor are deterministic', async ({ browser }) => {
   const { context, page } = await freshPage(browser, { width: 390, height: 844 });
   await page.goto(`${baseUrl}?variant=c&replay=1`, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'today_count');
@@ -207,12 +221,14 @@ test('local queue memory, verified actions, pace preference, real O and cursor v
   expect(await page.evaluate(() => Boolean((window as any).__briefingLab.getState().memory.actionSuccess.share_event))).toBeTruthy();
   expect(await page.evaluate(() => (window as any).__briefingLab.getState().memory.actionSuccess.like_event)).toBeUndefined();
 
-  const wordmarkHref = await page.locator('.briefing-stage__brand-o use').getAttribute('href');
-  expect(wordmarkHref).toContain('/brand/announcements-wordmark-ui.svg#announcements-wordmark-ui');
+  const wideOSrc = await page.locator('img.briefing-stage__brand-o').getAttribute('src');
+  expect(wideOSrc).toContain('/brand/announcements-wide-o-ui.svg');
+  expect(await page.locator('.briefing-stage__brand-o use').count()).toBe(0);
+  await openDock(page);
   await page.locator('[data-scenario-select]').selectOption('share_education');
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor', 'underscore');
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
-  await expect(page.locator('[data-briefing][data-cursor-linger="true"] .briefing-fragment.is-active')).toHaveCount(1);
+  await expect(page.locator('[data-briefing][data-motion="complete"] .briefing-fragment.is-active')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__briefingLab.getState().memory.exposures.share_education)).toBeUndefined();
   await page.locator('[data-scenario-select]').selectOption('anticipated_person');
   await expect(page.locator('[data-demo-label]')).toContainText('DEMO-СИГНАЛ');
@@ -282,6 +298,7 @@ test('lab remains noindex and performs no remote telemetry', async ({ page }) =>
   });
   page.on('request', (request) => requests.push({ method: request.method(), type: request.resourceType(), url: request.url() }));
   await open(page, 'c', 'today_count', '&replay=1');
+  await openDock(page);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex,nofollow,noarchive');
   await page.locator('[data-replay]').click();
   await page.locator('[data-review-guide] summary').click();
@@ -293,4 +310,56 @@ test('lab remains noindex and performs no remote telemetry', async ({ page }) =>
   expect(forbidden).toEqual([]);
   expect(beacons).toEqual([]);
   expect(await page.evaluate(() => (window as any).__briefingTelemetry.length)).toBeLessThanOrEqual(24);
+});
+
+test('page is homepage-like, public Next follows a chain and named guest is explicit and linked', async ({ browser }) => {
+  const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
+  await open(page, 'b', 'anticipated_person');
+  await expect(page.locator('[data-lab-review-bar]')).toHaveCount(0);
+  await expect(page.locator('[data-lab-dock] > details')).not.toHaveAttribute('open', '');
+  const publicNext = page.locator('[data-public-next]');
+  await expect(publicNext).toHaveText('Показать следующее');
+  expect((await publicNext.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await publicNext.click();
+  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'anticipated_person_named');
+  await expect(page.locator('[data-message]')).toContainText('Татьяна Куртукова');
+  const namedLink = page.locator('a[data-reveal-fragment]', { hasText: 'Татьяна Куртукова' });
+  await expect(namedLink).toHaveAttribute('href', /sobytiya\/kontsert-tatyany-kurtukovoy-matushka-zemlya-svetlogorsk-6020\//u);
+  await expect(page.locator('[data-progress]')).toContainText(`из ${scenarioIds.length}`);
+  await context.close();
+});
+
+test('selected media is desktop-only, wide media exits, and reduced motion stays static', async ({ browser }) => {
+  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#b56b45"/></svg>';
+  const desktop = await freshPage(browser, { width: 1440, height: 900 });
+  await desktop.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(desktop.page, 'c', 'anticipated_person_named', '&replay=1&pace=fast');
+  const desktopImage = desktop.page.locator('[data-media-image]');
+  await expect(desktopImage).toHaveAttribute('data-src', /https:\/\//u);
+  await expect(desktopImage).toHaveAttribute('src', /https:\/\//u);
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'small');
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await desktop.context.close();
+
+  const mobile = await freshPage(browser, { width: 390, height: 844 });
+  await open(mobile.page, 'b', 'anticipated_person_named');
+  await expect(mobile.page.locator('[data-media-image]')).toHaveAttribute('data-src', /https:\/\//u);
+  await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
+  await mobile.context.close();
+
+  const wide = await freshPage(browser, { width: 1440, height: 900 });
+  await wide.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(wide.page, 'c', 'rare_event', '&replay=1&pace=fast');
+  await expect(wide.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 5000 });
+  await wide.context.close();
+
+  const reduced = await freshPage(browser, { width: 1440, height: 900 }, 'reduce');
+  await reduced.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(reduced.page, 'c', 'rare_event', '&replay=1');
+  await expect(reduced.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await reduced.page.waitForTimeout(4300);
+  await expect(reduced.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
+  await reduced.context.close();
 });
