@@ -543,3 +543,78 @@ Antigravity **Gemini 3.1 Pro (High)** reviewed the v11 interaction plan before i
 The generated preview and source-contract check pass for `preview-20260714t-desktop-focus-v11`. Public HTTP returns `200` for the overview, arrival, low-resolution and related-hybrid pages plus their generated JS/CSS. Public Chromium at `1536×864` verifies zero horizontal overflow; arrival moves from `hold` (CTA top `497.47px`, board top `749.39px`) to `docked` (CTA top `97.00px`, board top `348.92px`), and the poster pane/image rectangles are identical. The low-resolution rail exposes six real previews before `+5`; source `3` opens at visible source `3`, the viewer contains all 12 distinct mixed-orientation images and zero nested single-image openers, and navigation ends on the one-event recommendation. Related rows share exact media tops/bottoms; document losses of `10.69%` use centered cover while `21.58%` falls back to ambient contain. A fresh `390×844` load keeps the desktop root `display:none` with a zero rectangle and no desktop motion state.
 
 After publication, Antigravity **Gemini 3.1 Pro (High)** returned **SHIP** with no blocker/high/medium finding. It accepted A–E (arrival, low-resolution rail, efficient viewer, related normalization and overall product hierarchy), explicitly confirmed the no-single-image decision, and judged the terminal card a coherent adaptation of the previous mobile pattern. Final prompt, response, empty stderr and provenance (`status=0`) remain in ignored `artifacts/codex/desktop-event-focus-v11-20260714/gemini/`.
+
+## Desktop v12: one header coordinate system and efficient media rails
+
+V12 remains a **desktop-only noindex laboratory**. The mobile event page and
+its mobile header/drawer are not changed.
+
+### Header and floating geometry
+
+The approved desktop header is `56px` high plus its `1px` lower border. The
+event laboratory therefore owns one measured token,
+`--desktop-header-height:57px`, and updates it from the actual `.site-header`
+rectangle after hydration/resizes. All desktop media/sticky/parallax math uses
+that same value. The removed legacy `73px` baseline had moved Continuous
+Editorial media by `5.6px` at scroll zero and exposed the grey strip reported at
+both Full HD and Full HD/125%. Floating rail/CTA stacks use a separate
+`24px` comfort inset (`top:81px` for the current header), not a second invented
+header height. Split CTA uses `header + 12px`; its paper safety strip now reaches
+the real header edge and cannot expose description text above the CTA.
+
+The `240×88` desktop brand tag is decoupled from the `1440px` content max-width
+and uses `clamp(24px,3vw,48px)` on both sides of the header. This places it at
+approximately `x=46px` in the `1536px` CSS viewport and `x=48px` at native
+Full HD instead of drifting to `x=240px`.
+
+### Delayed Editorial autorotation
+
+The Garage comparison keeps manual fullscreen rail clicks and enables only a
+quiet hero-photo rotation:
+
+- preload starts after `window.load`; all eligible full hero candidates must
+  decode before rotation is marked ready;
+- the first change cannot occur before the page has been open for `10s`;
+- eligible images must be both `visual_only` and semantically classified as
+  `event_photo`; OCR and every document/information role are excluded;
+- every eligible full-size source must decode successfully (bounded by a
+  `15s` preload timeout); one failed/timed-out candidate disables rotation for
+  the page instead of rotating into an incomplete set or waiting forever;
+- subsequent changes use a `4.5s` interval and a `600ms` cross-fade;
+- hover/focus over the hero or rail, a hidden tab, a scrolled-away hero and
+  `prefers-reduced-motion` pause/disable motion;
+- direct rail pointer/keyboard interaction permanently opts that page session
+  out, so autoplay never fights an explicit choice.
+
+### Thumbnail delivery contract
+
+Rails no longer intentionally request fullscreen sources. `GalleryImage`
+propagates the existing `EventImageAsset.thumbnail_sources`, renders the
+smallest derivative as `src`, publishes `256/512` WebP `srcset`, realistic
+desktop `sizes`, and retains the full CDN URL only in the gallery/autorotation
+dataset. Garage thumbnails are eager with low fetch priority; Split and
+companion-board thumbnails are lazy. The noindex fixtures use deterministic
+content-addressed `/p/thumb/v1/...` derivatives so network acceptance exercises
+the same contract.
+
+Sprite/contact sheets are rejected as the default: independently cached
+derivatives avoid decoding invisible cells, support variable aspect-aware
+subsets and preserve source-index navigation under HTTP/2/3. A sprite is only a
+future measured experiment if it beats separate derivatives on both transferred
+and decoded bytes.
+
+### OCR companion motion
+
+`editorial-ocr-companion-arrival` now uses the same `0.35` Continuous
+Editorial background transform (net viewport speed about `0.65×`) as Garage.
+The CTA and strict poster companion remain in their existing sticky arrival
+state machine and are not transformed with the ambient hero. The previous
+pinned implementation remains available in git history for comparison.
+
+Antigravity **Gemini 3.1 Pro (High)** reviewed the public v11 geometry and local
+source before implementation. It independently confirmed the `73→57px` root
+cause, recommended the `24px` floating inset and
+`clamp(24px,3vw,48px)` brand gutter, required delayed decoded-only rotation,
+and selected independent CDN WebP derivatives over sprites. The prompt and raw
+response remain in ignored
+`artifacts/codex/static-desktop-v12-20260715/`.

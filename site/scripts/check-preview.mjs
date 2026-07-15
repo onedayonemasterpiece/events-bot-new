@@ -28,6 +28,9 @@ const required = [
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
+  'lab/event-desktop/examples/editorial-photo-continuous/index.html',
+  'lab/event-desktop/examples/split-low-resolution/index.html',
+  'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -37,6 +40,33 @@ const required = [
 for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
+}
+
+const desktopV12Pages = {
+  garage: readFileSync(join(root, 'lab/event-desktop/examples/editorial-photo-continuous/index.html'), 'utf8'),
+  split: readFileSync(join(root, 'lab/event-desktop/examples/split-low-resolution/index.html'), 'utf8'),
+  companion: readFileSync(join(root, 'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html'), 'utf8'),
+};
+if (!desktopV12Pages.garage.includes('data-auto-rotate="true"') || !desktopV12Pages.garage.includes('data-rotation-eligible="true"')) {
+  throw new Error('Desktop v12 Garage fixture must expose delayed autorotation with eligible event-photo candidates');
+}
+if (!desktopV12Pages.garage.includes('data-clean-hero-thumb') || !desktopV12Pages.garage.includes('data-src=')) {
+  throw new Error('Desktop v12 Garage fixture must keep thumbnail rail sources separate from fullscreen hero sources');
+}
+for (const [name, html] of Object.entries(desktopV12Pages)) {
+  if (!html.includes('/p/thumb/v1/') || !html.includes(' 512w')) {
+    throw new Error(`Desktop v12 ${name} fixture must use responsive immutable thumbnail derivatives`);
+  }
+}
+if (!desktopV12Pages.garage.includes('data-editorial-motion="continuous"') || !desktopV12Pages.companion.includes('data-editorial-motion="continuous"')) {
+  throw new Error('Desktop v12 Garage and OCR companion fixtures must share continuous editorial motion');
+}
+const desktopV12Script = readdirSync(join(root, '_astro'))
+  .find((name) => name.startsWith('DesktopEventCleanPage.astro_astro_type_script_') && name.endsWith('.js'));
+if (!desktopV12Script) throw new Error('Desktop v12 behavior bundle is missing');
+const desktopV12ScriptSource = readFileSync(join(root, '_astro', desktopV12Script), 'utf8');
+for (const marker of ['preload-failed', 'manual-rail-interaction', 'autoRotateReady']) {
+  if (!desktopV12ScriptSource.includes(marker)) throw new Error(`Desktop v12 behavior bundle misses ${marker} guard`);
 }
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {

@@ -3,7 +3,7 @@ import Icon from '../Icon.astro';
 import EventCard from '../EventCard.astro';
 import EventTokenMedallions from '../EventTokenMedallions.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
-import type { EventImageAsset, EventImageMediaRole, PreviewEvent } from '../../lib/types';
+import type { EventImageAsset, EventImageDerivative, EventImageMediaRole, PreviewEvent } from '../../lib/types';
 import {
   displayDate,
   displayDateTime,
@@ -56,6 +56,7 @@ type GalleryImage = {
   position?: string;
   sourceIndex?: number;
   media_role: EventImageMediaRole;
+  thumbnail_sources?: EventImageDerivative[];
 };
 
 const {
@@ -143,6 +144,7 @@ const galleryImages = (() => {
       height: dimensions?.height || asset?.height,
       position: asset?.recommended_object_position,
       sourceIndex,
+      thumbnail_sources: asset?.thumbnail_sources,
     });
   };
   if (preferredAsset) add(preferredAsset, event.image_text_mode, heroImageIndex);
@@ -183,6 +185,11 @@ const railAspectBucket = (image: GalleryImage) => {
   return 'square';
 };
 const railAspectValue = (image: GalleryImage) => Math.min(2.2, Math.max(.38, image.width && image.height ? image.width / image.height : 1));
+const railThumbnailSources = (image: GalleryImage) => [...(image.thumbnail_sources || [])].sort((left, right) => left.width - right.width);
+const railThumbnail = (image: GalleryImage) => railThumbnailSources(image)[0]?.src || image.src;
+const railThumbnailSrcset = (image: GalleryImage) => railThumbnailSources(image).map((item) => `${item.src} ${item.width}w`).join(', ');
+const railThumbnailWidth = (image: GalleryImage) => railThumbnailSources(image)[0]?.width || image.width || 160;
+const railThumbnailHeight = (image: GalleryImage) => railThumbnailSources(image)[0]?.height || image.height || 100;
 const usesLongFlow = true;
 
 const dateLabel = displayDate(event);
@@ -260,7 +267,7 @@ const descriptionHtml = (event.description_html || '')
                       data-hero-gallery-index={galleryIndex}
                       aria-label={splitPortraitViewer ? `Открыть быстрый просмотр с изображения ${galleryIndex + 1}` : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`}
                     >
-                      <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="lazy" decoding="async" />
+                      <img src={railThumbnail(image)} srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 196px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
                       {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
                     </button>
                   ))}
@@ -298,7 +305,15 @@ const descriptionHtml = (event.description_html || '')
                   <button
                     type="button"
                     class:list={[index === 0 && 'is-current']}
+                    data-clean-hero-thumb
                     data-responsive-rail-item
+                    data-src={image.src}
+                    data-alt={image.alt}
+                    data-width={image.width}
+                    data-height={image.height}
+                    data-position={image.position || '50% 50%'}
+                    data-mode={image.image_text_mode}
+                    data-rotation-eligible={image.image_text_mode === 'visual_only' && image.media_role === 'event_photo' ? 'true' : 'false'}
                     data-image-text-mode={image.image_text_mode}
                     data-media-role={image.media_role}
                     data-source-index={image.sourceIndex}
@@ -306,7 +321,7 @@ const descriptionHtml = (event.description_html || '')
                     data-hero-gallery-index={galleryIndex}
                     aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} в полноэкранной галерее`}
                   >
-                    <img src={image.src} alt="" width={image.width || 160} height={image.height || 100} loading="eager" decoding="async" />
+                    <img src={railThumbnail(image)} srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 96px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="eager" decoding="async" fetchpriority="low" />
                     {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
                   </button>
                 ))}
@@ -359,7 +374,7 @@ const descriptionHtml = (event.description_html || '')
                 <div class="desktop-editorial-companion-board__previews">
                   {companionPreviewCandidates.map(({ image, galleryIndex }) => (
                     <button type="button" style={`--preview-ratio:${railAspectValue(image).toFixed(4)};`} data-companion-preview-item data-preview-aspect={railAspectBucket(image)} data-media-role={image.media_role} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} на весь экран`}>
-                      <img src={image.src} alt="" width={image.width || 160} height={image.height || 120} loading="lazy" decoding="async" />
+                      <img src={railThumbnail(image)} srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 172px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
                     </button>
                   ))}
                   <button type="button" class="desktop-editorial-companion-board__more" data-companion-preview-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
@@ -535,13 +550,26 @@ const descriptionHtml = (event.description_html || '')
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
       const thumbButtons = Array.from(cleanRoot.querySelectorAll<HTMLButtonElement>('[data-clean-hero-thumb]'));
+      const rotationButtons = thumbButtons.filter((button) => button.dataset.rotationEligible === 'true' && Boolean(button.dataset.src));
       const rotationToggle = cleanRoot.querySelector<HTMLButtonElement>('[data-hero-rotation-toggle]');
+      const siteHeader = document.querySelector<HTMLElement>('.site-header');
       let frame = 0;
       let imageRequest = 0;
-      let rotationEnabled = cleanRoot.dataset.autoRotate === 'true';
+      let rotationEnabled = cleanRoot.dataset.autoRotate === 'true' && rotationButtons.length > 1 && !reducedMotion.matches;
+      let rotationReady = false;
+      let rotationInterval = 0;
       let mediaHovered = false;
+      let mediaFocused = false;
+      const pageOpenedAt = window.performance.now();
 
       const clamp = (value:number, min=0, max=1) => Math.max(min, Math.min(max, value));
+      const desktopHeaderHeight = () => {
+        const measured = siteHeader?.getBoundingClientRect().height || 0;
+        const token = Number.parseFloat(getComputedStyle(cleanRoot).getPropertyValue('--desktop-header-height')) || 57;
+        return Math.max(1, measured || token);
+      };
+      const syncDesktopHeaderToken = () => cleanRoot.style.setProperty('--desktop-header-height', `${desktopHeaderHeight().toFixed(2)}px`);
+      syncDesktopHeaderToken();
       const responsiveRails = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-responsive-rail]'));
       const layoutResponsiveRail = (rail:HTMLElement) => {
         const allItems = Array.from(rail.querySelectorAll<HTMLButtonElement>('[data-responsive-rail-item]'));
@@ -748,7 +776,7 @@ const descriptionHtml = (event.description_html || '')
           if (!editorialContent) return;
           editorialAction.style.removeProperty('transform');
           companionBoard?.style.removeProperty('transform');
-          const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || 96;
+          const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || desktopHeaderHeight() + 24;
           const holdTop = editorialAction.getBoundingClientRect().top;
           const dockTop = stickyTop + 1;
           editorialSideGeometry = { holdTop, dockTop, maxTravel:Math.max(0, holdTop - dockTop), stickyTop };
@@ -758,7 +786,7 @@ const descriptionHtml = (event.description_html || '')
         if (!editorialRail || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
         editorialAction.style.removeProperty('transform');
         const holdTop = editorialAction.getBoundingClientRect().top;
-        const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || 97;
+        const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || desktopHeaderHeight() + 24;
         const dockTop = editorialRail.getBoundingClientRect().bottom + 12;
         editorialSideGeometry = { holdTop, dockTop, maxTravel:Math.max(0, holdTop - dockTop), stickyTop };
         updateEditorialSideMotion();
@@ -902,10 +930,22 @@ const descriptionHtml = (event.description_html || '')
       });
 
       const markRotation = () => {
-        if (!rotationToggle) return;
-        rotationToggle.setAttribute('aria-pressed', rotationEnabled ? 'true' : 'false');
-        rotationToggle.setAttribute('aria-label', rotationEnabled ? 'Остановить автоматическую смену фотографий' : 'Включить автоматическую смену фотографий');
-        rotationToggle.textContent = rotationEnabled ? 'Авто' : 'Пауза';
+        cleanRoot.dataset.autoRotateReady = rotationReady ? 'true' : 'false';
+        cleanRoot.dataset.autoRotateActive = rotationEnabled && rotationReady ? 'true' : 'false';
+        if (rotationToggle) {
+          rotationToggle.setAttribute('aria-pressed', rotationEnabled ? 'true' : 'false');
+          rotationToggle.setAttribute('aria-label', rotationEnabled ? 'Остановить автоматическую смену фотографий' : 'Включить автоматическую смену фотографий');
+          rotationToggle.textContent = rotationEnabled ? 'Авто' : 'Пауза';
+        }
+      };
+
+      const disableRotation = (reason:string) => {
+        rotationEnabled = false;
+        rotationReady = false;
+        if (rotationInterval) window.clearInterval(rotationInterval);
+        rotationInterval = 0;
+        cleanRoot.dataset.autoRotateOptOut = reason;
+        markRotation();
       };
 
       const selectHero = async (index:number, source:'manual'|'auto'='manual') => {
@@ -923,11 +963,46 @@ const descriptionHtml = (event.description_html || '')
         probe.src = src;
         try { await probe.decode(); } catch {}
         if (token !== imageRequest) return;
-        heroImage.src = src;
-        heroImage.alt = button.dataset.alt || heroImage.alt;
-        heroImage.width = Number(button.dataset.width || probe.naturalWidth || heroImage.width);
-        heroImage.height = Number(button.dataset.height || probe.naturalHeight || heroImage.height);
-        heroImage.style.objectPosition = button.dataset.position || '50% 50%';
+        const nextAlt = button.dataset.alt || heroImage.alt;
+        const nextWidth = Number(button.dataset.width || probe.naturalWidth || heroImage.width);
+        const nextHeight = Number(button.dataset.height || probe.naturalHeight || heroImage.height);
+        const nextPosition = button.dataset.position || '50% 50%';
+        if (source === 'auto' && !reducedMotion.matches && heroImage.parentElement) {
+          const incoming = heroImage.cloneNode(false) as HTMLImageElement;
+          incoming.removeAttribute('data-clean-hero-image');
+          incoming.classList.add('desktop-prototype__media-image--incoming');
+          incoming.src = src;
+          incoming.alt = '';
+          incoming.width = nextWidth;
+          incoming.height = nextHeight;
+          incoming.style.objectPosition = nextPosition;
+          incoming.style.opacity = '0';
+          incoming.setAttribute('aria-hidden', 'true');
+          heroImage.parentElement.append(incoming);
+          const outgoingAnimation = heroImage.animate([{ opacity:1 }, { opacity:0 }], { duration:600, easing:'ease-in-out', fill:'forwards' });
+          const incomingAnimation = incoming.animate([{ opacity:0 }, { opacity:1 }], { duration:600, easing:'ease-in-out', fill:'forwards' });
+          try { await Promise.all([outgoingAnimation.finished, incomingAnimation.finished]); } catch {}
+          if (token !== imageRequest) {
+            outgoingAnimation.cancel();
+            incomingAnimation.cancel();
+            incoming.remove();
+            return;
+          }
+          heroImage.src = src;
+          heroImage.alt = nextAlt;
+          heroImage.width = nextWidth;
+          heroImage.height = nextHeight;
+          heroImage.style.objectPosition = nextPosition;
+          outgoingAnimation.cancel();
+          incomingAnimation.cancel();
+          incoming.remove();
+        } else {
+          heroImage.src = src;
+          heroImage.alt = nextAlt;
+          heroImage.width = nextWidth;
+          heroImage.height = nextHeight;
+          heroImage.style.objectPosition = nextPosition;
+        }
         cleanRoot.dataset.selectedMediaPolicy = button.dataset.mode || 'unknown';
         thumbButtons.forEach((item, itemIndex) => {
           const current = itemIndex === next;
@@ -958,17 +1033,59 @@ const descriptionHtml = (event.description_html || '')
         rotationEnabled = !rotationEnabled;
         markRotation();
       });
-      mediaFrame?.addEventListener('pointerenter', () => { mediaHovered = true; });
-      mediaFrame?.addEventListener('pointerleave', () => { mediaHovered = false; });
+      const rotationInteractionSurfaces = [mediaFrame, editorialRail].filter((surface):surface is HTMLElement => Boolean(surface));
+      rotationInteractionSurfaces.forEach((surface) => {
+        surface.addEventListener('pointerenter', () => { mediaHovered = true; });
+        surface.addEventListener('pointerleave', () => { mediaHovered = rotationInteractionSurfaces.some((item) => item.matches(':hover')); });
+        surface.addEventListener('focusin', () => { mediaFocused = true; });
+        surface.addEventListener('focusout', () => window.setTimeout(() => { mediaFocused = rotationInteractionSurfaces.some((item) => item.contains(document.activeElement)); }, 0));
+      });
+      thumbButtons.forEach((button) => {
+        button.addEventListener('pointerdown', () => disableRotation('manual-rail-interaction'), { once:true });
+        button.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') disableRotation('manual-rail-interaction');
+        }, { once:true });
+      });
       markRotation();
 
-      window.setInterval(() => {
-        if (!rotationEnabled || reducedMotion.matches || mediaHovered || document.visibilityState !== 'visible' || window.scrollY > 4 || !mediaFrame || !thumbButtons.length) return;
+      const rotateNext = () => {
+        if (!rotationEnabled || !rotationReady || reducedMotion.matches || mediaHovered || mediaFocused || document.visibilityState !== 'visible' || window.scrollY > 4 || !mediaFrame || !rotationButtons.length) return;
         const rect = mediaFrame.getBoundingClientRect();
         if (rect.bottom <= 0 || rect.top >= window.innerHeight) return;
-        const current = Number(cleanRoot.dataset.activeHeroIndex || '0');
-        void selectHero((current + 1) % thumbButtons.length, 'auto');
-      }, 8500);
+        const activeThumb = thumbButtons[Number(cleanRoot.dataset.activeHeroIndex || '0')];
+        const current = Math.max(0, rotationButtons.indexOf(activeThumb));
+        const nextButton = rotationButtons[(current + 1) % rotationButtons.length];
+        const nextIndex = thumbButtons.indexOf(nextButton);
+        if (nextIndex >= 0) void selectHero(nextIndex, 'auto');
+      };
+
+      const preloadRotationCandidates = async () => {
+        if (!rotationEnabled || reducedMotion.matches) return;
+        if (document.readyState !== 'complete') await new Promise<void>((resolve) => window.addEventListener('load', () => resolve(), { once:true }));
+        const probes = rotationButtons.map(async (button) => {
+          const src = button.dataset.src;
+          if (!src) return false;
+          const probe = new Image();
+          probe.decoding = 'async';
+          probe.src = src;
+          const decoded = probe.decode().then(() => probe.complete && probe.naturalWidth > 0).catch(() => false);
+          const timed = new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 15_000));
+          return Promise.race([decoded, timed]);
+        });
+        const decoded = await Promise.all(probes);
+        if (!rotationEnabled || decoded.some((ready) => !ready)) {
+          if (rotationEnabled) disableRotation('preload-failed');
+          return;
+        }
+        const remainingDelay = Math.max(0, 10_000 - (window.performance.now() - pageOpenedAt));
+        if (remainingDelay > 0) await new Promise<void>((resolve) => window.setTimeout(resolve, remainingDelay));
+        if (!rotationEnabled || reducedMotion.matches) return;
+        rotationReady = true;
+        markRotation();
+        rotateNext();
+        rotationInterval = window.setInterval(rotateNext, 4_500);
+      };
+      window.setTimeout(() => { void preloadRotationCandidates(); }, 0);
 
       let layoutFrame = 0;
       const layoutScrollMedia = () => {
@@ -1031,9 +1148,10 @@ const descriptionHtml = (event.description_html || '')
           const stage = media.closest<HTMLElement>('.desktop-prototype__stage');
           if (stage && cleanRoot.dataset.desktopFamily === 'editorial') {
             const rect = stage.getBoundingClientRect();
-            const stageTravel = Math.max(0, 73 - rect.top);
+            const headerHeight = desktopHeaderHeight();
+            const stageTravel = Math.max(0, headerHeight - rect.top);
             const motion = cleanRoot.dataset.editorialMotion || 'pinned';
-            const scrollRange = Math.max(1, stage.offsetHeight - viewport + 73);
+            const scrollRange = Math.max(1, stage.offsetHeight - viewport + headerHeight);
             if (motion === 'continuous') {
               const maxShift = Math.max(0, stage.offsetHeight - media.offsetHeight);
               const shift = Math.min(maxShift, stageTravel * .35);
@@ -1068,7 +1186,7 @@ const descriptionHtml = (event.description_html || '')
           const viewportHeight = viewport.clientHeight;
           const overflow = Math.max(0, track.scrollHeight - viewportHeight);
           const scrollRange = Math.max(1, stage.offsetHeight - viewportHeight);
-          const progress = clamp((73 - stageRect.top) / scrollRange);
+          const progress = clamp((desktopHeaderHeight() - stageRect.top) / scrollRange);
           const speed = clamp(Number(track.dataset.slowMediaSpeed || '.5'), .2, .7);
           const travel = Math.min(overflow, scrollRange * speed);
           track.style.transform = `translate3d(0,${(-travel * progress).toFixed(2)}px,0)`;
@@ -1085,10 +1203,14 @@ const descriptionHtml = (event.description_html || '')
       scheduleLayout();
       window.addEventListener('scroll', scheduleMotion, { passive:true });
       window.addEventListener('resize', () => {
+        syncDesktopHeaderToken();
         scheduleLayout();
         scheduleEditorialSideLayout();
       }, { passive:true });
-      reducedMotion.addEventListener?.('change', scheduleMotion);
+      reducedMotion.addEventListener?.('change', () => {
+        if (reducedMotion.matches) disableRotation('reduced-motion');
+        scheduleMotion();
+      });
       new ResizeObserver(scheduleLayout).observe(cleanRoot);
 
       const updateOcrFrame = () => {
@@ -1233,7 +1355,7 @@ const descriptionHtml = (event.description_html || '')
 </main>
 
 <style>
-  .desktop-clean-event { --clean-ink:#241c17; --clean-paper:#fffaf2; --clean-accent:#b54d22; display:none; padding-top:0; color:var(--clean-ink); background:#f8f0e5; }
+  .desktop-clean-event { --clean-ink:#241c17; --clean-paper:#fffaf2; --clean-accent:#b54d22; --desktop-header-height:57px; --desktop-rail-inset:24px; --desktop-floating-top:calc(var(--desktop-header-height) + var(--desktop-rail-inset)); display:none; padding-top:0; color:var(--clean-ink); background:#f8f0e5; }
   .desktop-prototype { display:grid; }
   .desktop-prototype__canvas { overflow:clip; background:var(--clean-paper); }
   .desktop-prototype__stage { --stage-height:clamp(560px,calc(100svh - 88px),800px); position:relative; min-height:var(--stage-height); height:var(--stage-height); overflow:hidden; background:#eadfce; }
@@ -1332,7 +1454,7 @@ const descriptionHtml = (event.description_html || '')
   .desktop-clean-travel__route i { height:2px; background:rgba(255,255,255,.45); }
   .desktop-clean-travel__route b { display:flex; align-items:center; gap:.45rem; white-space:nowrap; }
   .desktop-clean-travel__route svg { width:1.4rem; height:1.4rem; fill:currentColor; }
-  .desktop-clean-related { scroll-margin-top:74px; padding-block:clamp(4rem,7vw,7rem); background:#24211f; color:#fffaf2; }
+  .desktop-clean-related { scroll-margin-top:calc(var(--desktop-header-height) + 1rem); padding-block:clamp(4rem,7vw,7rem); background:#24211f; color:#fffaf2; }
   .desktop-clean-related header { margin-bottom:2rem; }
   .desktop-clean-related .eyebrow { color:#dd8a61; }
   .desktop-clean-related__grid { align-items:stretch; }
@@ -1347,14 +1469,14 @@ const descriptionHtml = (event.description_html || '')
     /* Editorial photo v3: sticky media/action layer; the white event slab remains normal document flow. */
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__canvas { overflow:visible; }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__stage { height:auto; min-height:calc(var(--stage-height) + clamp(260px,34svh,390px)); overflow:visible; background:#eadfce; }
-    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__media { position:sticky; inset:auto; top:73px; z-index:1; width:100%; height:var(--stage-height); }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__media { position:sticky; inset:auto; top:var(--desktop-header-height); z-index:1; width:100%; height:var(--stage-height); }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__info { position:relative; left:auto; bottom:auto; z-index:5; width:min(64%,820px); min-height:0; margin:calc(var(--stage-height) * -.26) 0 0 3%; padding:clamp(1.3rem,2.5vw,2.2rem); background:var(--clean-paper); box-shadow:0 -12px 42px rgba(47,33,23,.13); }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__action--media { position:absolute; right:3%; bottom:3%; width:min(28%,330px); border-radius:22px; }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__action--flow { display:none; }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-prototype__media-rail { right:calc(3% + min(28vw,330px) + 1rem); bottom:1rem; }
 
     /* Editorial OCR v3: the uncropped poster owns the complete stage height and stays flush left. */
-    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__stage { --stage-height:calc(100svh - 73px); grid-template-columns:clamp(420px,calc(var(--stage-height) * var(--image-ratio)),calc(100vw - 320px)) minmax(320px,1fr); grid-template-rows:minmax(0,1fr) auto; padding:0; overflow:hidden; }
+    .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__stage { --stage-height:calc(100svh - var(--desktop-header-height)); grid-template-columns:clamp(420px,calc(var(--stage-height) * var(--image-ratio)),calc(100vw - 320px)) minmax(320px,1fr); grid-template-rows:minmax(0,1fr) auto; padding:0; overflow:hidden; }
     .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__media { grid-column:1; grid-row:1/span 2; height:var(--stage-height); align-self:stretch; }
     .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__media-image { object-fit:contain; object-position:left top !important; }
     .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__info { grid-column:2; grid-row:1; margin:0; padding:clamp(1.2rem,2.4vw,2.7rem); box-shadow:none; }
@@ -1377,7 +1499,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-prototype,
     .desktop-clean-event--reading .desktop-prototype__canvas,
     .desktop-clean-event--reading .desktop-prototype__stage { display:contents; }
-    .desktop-clean-event--reading .desktop-prototype__media { grid-column:1; grid-row:1/span 5; position:sticky; top:73px; z-index:2; height:calc(100svh - 73px); align-self:start; }
+    .desktop-clean-event--reading .desktop-prototype__media { grid-column:1; grid-row:1/span 5; position:sticky; top:var(--desktop-header-height); z-index:2; height:calc(100svh - var(--desktop-header-height)); align-self:start; }
     .desktop-clean-event--reading .desktop-prototype__info { grid-column:2; grid-row:1; padding:clamp(1.5rem,3.2vw,4rem) clamp(1.5rem,3.6vw,4.5rem) 1.2rem; background:var(--clean-paper); }
     .desktop-clean-event--reading .desktop-prototype__info h1 { max-width:15ch; }
     .desktop-clean-event--reading .desktop-prototype__action--flow { grid-column:2; grid-row:2; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(2rem,4vw,4rem); border-radius:24px; }
@@ -1453,13 +1575,13 @@ const descriptionHtml = (event.description_html || '')
     /* Editorial: one continuous slab plus one bounded sticky right stack. */
     .desktop-clean-event--editorial .desktop-prototype__canvas { overflow:visible; }
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(336px,28vw,480px); display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
-    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; position:sticky; inset:auto; top:var(--desktop-header-height); z-index:1; width:100%; height:calc(100svh - var(--desktop-header-height)); align-self:start; }
     .desktop-clean-event--editorial .desktop-prototype__media-image { width:100%; height:100%; margin:0; transform:none; object-position:var(--image-position); }
     .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { height:calc(100% + 160px) !important; margin-top:-80px !important; object-fit:cover; transform:translate3d(0,var(--desktop-parallax-y,0),0) scale(1.02) !important; }
     .desktop-clean-event--editorial:not([data-selected-media-policy="visual_only"]) .desktop-prototype__media-image { object-fit:contain; background:#181411; }
     .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100% - 5vw)); min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
     .desktop-clean-event--editorial .desktop-prototype__content-flow .desktop-prototype__info { position:relative; inset:auto; width:auto; min-height:0; margin:0; padding:clamp(1.5rem,3vw,3rem); background:transparent; box-shadow:none; }
-    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; justify-items:end; gap:.8rem; max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 2rem; overflow:auto; scrollbar-width:thin; }
+    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:var(--desktop-floating-top); z-index:8; display:grid; justify-items:end; gap:.8rem; max-height:calc(100svh - var(--desktop-floating-top) - var(--desktop-rail-inset)); margin:clamp(430px,67svh,720px) 1rem 2rem; overflow:auto; scrollbar-width:thin; }
     .desktop-clean-event--editorial .desktop-prototype__media-rail { position:static; width:100%; display:flex; flex-wrap:nowrap; justify-content:flex-end; gap:.35rem; padding:.45rem; overflow:hidden; border-radius:16px; background:rgba(31,27,24,.9); }
     .desktop-clean-event--editorial .desktop-prototype__media-rail button { position:relative; flex:1 1 0; width:auto; min-width:44px; max-width:68px; height:48px; }
     .desktop-clean-event--editorial .desktop-prototype__media-rail button span { position:absolute; inset:auto .25rem .2rem; padding:.12rem .3rem; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:.62rem; font-weight:850; }
@@ -1484,7 +1606,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-prototype__stage { display:grid; }
     .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__media,
     .desktop-clean-event--reading .desktop-prototype__media,
-    .desktop-clean-event--bento .desktop-prototype__media { grid-column:1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:2; width:100%; min-width:0; height:calc(100svh - 73px); align-self:start; overflow:hidden; background:#181411; }
+    .desktop-clean-event--bento .desktop-prototype__media { grid-column:1; grid-row:1; position:sticky; inset:auto; top:var(--desktop-header-height); z-index:2; width:100%; min-width:0; height:calc(100svh - var(--desktop-header-height)); align-self:start; overflow:hidden; background:#181411; }
     .desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__content-flow,
     .desktop-clean-event--reading .desktop-prototype__content-flow,
     .desktop-clean-event--bento .desktop-prototype__content-flow { grid-column:2; grid-row:1; width:auto; min-width:0; margin:0; box-shadow:-12px 0 36px rgba(47,33,23,.08); }
@@ -1497,7 +1619,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action-row),
     .desktop-clean-event--reading :global(.desktop-prototype__action-row),
     .desktop-clean-event--bento :global(.desktop-prototype__action-row) { grid-column:auto; }
-    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline) { position:sticky; top:calc(73px + .75rem); z-index:12; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
+    .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline) { position:sticky; top:calc(var(--desktop-header-height) + .75rem); z-index:12; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
     .desktop-clean-event--split.desktop-clean-event--ocr :global(.desktop-prototype__action--inline::before) { content:""; position:absolute; left:0; right:0; bottom:100%; height:.85rem; background:var(--clean-paper); pointer-events:none; }
 
     .desktop-poster-track,
@@ -1511,14 +1633,14 @@ const descriptionHtml = (event.description_html || '')
 
     .desktop-media-strip { display:grid; gap:clamp(14px,1.4vh,24px); padding-bottom:1px; background:#181411; }
     .desktop-media-strip__item { width:100%; height:clamp(330px,56svh,620px); display:block; padding:0; overflow:hidden; border:0; background:#181411; cursor:zoom-in; }
-    .desktop-media-strip__item:first-child { height:calc(100svh - 73px); }
+    .desktop-media-strip__item:first-child { height:calc(100svh - var(--desktop-header-height)); }
     .desktop-media-strip__item img { width:100%; height:100%; display:block; object-fit:cover; }
     .desktop-media-strip__item[data-image-text-mode="ocr_text"] img,
     .desktop-media-strip__item[data-image-text-mode="unknown"] img { object-fit:contain; }
 
     .desktop-bento-track { display:grid; gap:clamp(14px,1.4vh,24px); padding-bottom:1px; background:#181411; }
-    .desktop-bento-main { width:100%; min-height:calc(100svh - 73px); display:block; padding:0; overflow:hidden; border:0; background:#181411; cursor:zoom-in; }
-    .desktop-bento-main img { width:100%; height:auto; min-height:calc(100svh - 73px); display:block; object-fit:cover; object-position:center center; }
+    .desktop-bento-main { width:100%; min-height:calc(100svh - var(--desktop-header-height)); display:block; padding:0; overflow:hidden; border:0; background:#181411; cursor:zoom-in; }
+    .desktop-bento-main img { width:100%; height:auto; min-height:calc(100svh - var(--desktop-header-height)); display:block; object-fit:cover; object-position:center center; }
     .desktop-bento-main[data-image-text-mode="ocr_text"] img,
     .desktop-bento-main[data-image-text-mode="unknown"] img { object-position:center top; }
     .desktop-bento-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-auto-rows:var(--bento-cell,180px); grid-auto-flow:row dense; gap:clamp(10px,1vw,16px); padding:0 clamp(10px,1vw,16px) clamp(10px,1vw,16px); }
@@ -1586,8 +1708,8 @@ const descriptionHtml = (event.description_html || '')
 
     /* Editorial owns a real horizontal visual; the cream slab remains one continuous reading surface. */
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(420px,32vw,560px); position:relative; display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
-    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; inset:auto; z-index:1; width:100%; height:calc(100svh - 73px); align-self:start; overflow:hidden; will-change:transform; }
-    .desktop-clean-event--editorial[data-editorial-motion="pinned"] .desktop-prototype--editorial .desktop-prototype__media { position:sticky; top:73px; transform:none; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; inset:auto; z-index:1; width:100%; height:calc(100svh - var(--desktop-header-height)); align-self:start; overflow:hidden; will-change:transform; }
+    .desktop-clean-event--editorial[data-editorial-motion="pinned"] .desktop-prototype--editorial .desktop-prototype__media { position:sticky; top:var(--desktop-header-height); transform:none; }
     .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; height:calc(100vw / var(--image-ratio)); overflow:visible; transform:translate3d(0,0,0); }
     .desktop-clean-event--editorial .desktop-prototype__media-opener { position:absolute; inset:0; }
     .desktop-clean-event--editorial .desktop-prototype__media-image,
@@ -1595,7 +1717,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { position:absolute; inset:0 0 auto; width:100%; height:calc(100vw / var(--image-ratio)) !important; min-height:0; margin:0 !important; object-fit:cover !important; object-position:top center !important; background:#d9cbb8; transform:translate3d(0,var(--desktop-parallax-y,0),0) !important; transition:none; will-change:transform; }
     .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { inset:0; height:100% !important; object-fit:contain !important; transform:none !important; }
     .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100vw - var(--editorial-side) - 6vw)); min-width:0; min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
-    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:97px; z-index:8; display:grid; justify-items:stretch; gap:.8rem; width:calc(100% - 1rem); max-height:calc(100svh - 121px); margin:clamp(430px,67svh,720px) 1rem 3rem 0; overflow:auto; scrollbar-width:thin; }
+    .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:var(--desktop-floating-top); z-index:8; display:grid; justify-items:stretch; gap:.8rem; width:calc(100% - 1rem); max-height:calc(100svh - var(--desktop-floating-top) - var(--desktop-rail-inset)); margin:clamp(430px,67svh,720px) 1rem 3rem 0; overflow:auto; scrollbar-width:thin; }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side { margin-top:clamp(390px,57svh,620px); }
     .desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side { margin-top:clamp(250px,34svh,420px); }
     .desktop-clean-event--editorial .desktop-editorial-side :global(.desktop-prototype__action) { order:2; width:100%; }
@@ -1613,10 +1735,10 @@ const descriptionHtml = (event.description_html || '')
     /* Split/Fallback: exact half-canvas media, natural poster track and one bounded sticky CTA. */
     .desktop-clean-event--split .desktop-prototype__canvas { overflow:visible; }
     .desktop-clean-event--split .desktop-prototype--split .desktop-prototype__stage { display:grid; grid-template-columns:minmax(0,50%) minmax(0,50%); grid-template-rows:auto; align-items:start; width:100%; height:auto; min-height:var(--scroll-stage-min-height,var(--stage-height)); overflow:visible; background:var(--clean-paper); }
-    .desktop-clean-event--split .desktop-prototype__media { grid-column:1; grid-row:1; position:sticky; inset:auto; top:73px; z-index:2; width:100%; min-width:0; height:calc(100svh - 73px); align-self:start; overflow:hidden; background:#1d1916; }
+    .desktop-clean-event--split .desktop-prototype__media { grid-column:1; grid-row:1; position:sticky; inset:auto; top:var(--desktop-header-height); z-index:2; width:100%; min-width:0; height:calc(100svh - var(--desktop-header-height)); align-self:start; overflow:hidden; background:#1d1916; }
     .desktop-clean-event--split .desktop-prototype__content-flow { grid-column:2; grid-row:1; display:block; width:auto; min-width:0; margin:0; padding-bottom:64px; background:var(--clean-paper); box-shadow:-12px 0 36px rgba(47,33,23,.08); }
     .desktop-clean-event--split .desktop-prototype__info { grid-column:auto; grid-row:auto; padding:clamp(1.5rem,3.2vw,4rem) clamp(1.5rem,3.6vw,4.5rem) 1.5rem; }
-    .desktop-clean-event--split :global(.desktop-prototype__action--inline) { position:sticky; top:calc(73px + .75rem); z-index:12; display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
+    .desktop-clean-event--split :global(.desktop-prototype__action--inline) { position:sticky; top:calc(var(--desktop-header-height) + .75rem); z-index:12; display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
     .desktop-clean-event--split :global(.desktop-prototype__action--inline::before) { content:""; position:absolute; left:0; right:0; bottom:100%; height:.85rem; background:var(--clean-paper); pointer-events:none; }
     .desktop-clean-event--split :global(.desktop-prototype__action-row) { grid-column:auto; }
     .desktop-clean-event--split .desktop-poster-track { position:relative; width:100%; height:auto; min-height:0; display:grid; align-content:start; transform:translate3d(0,0,0); will-change:transform; }
@@ -1631,7 +1753,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-prototype__media-rail--poster button span { position:absolute; inset:auto .25rem .2rem; padding:.12rem .3rem; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:.62rem; font-weight:850; }
     .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more { display:grid; place-content:center; gap:.05rem; border:1px solid rgba(255,255,255,.2); background:#fffaf2; color:#241c17; line-height:1; }
     .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more span { position:static; padding:0; background:transparent; color:#6f6157; font-size:.58rem; }
-    .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-poster-track { height:calc(100svh - 73px); grid-template-rows:minmax(0,1fr) auto; }
+    .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-poster-track { height:calc(100svh - var(--desktop-header-height)); grid-template-rows:minmax(0,1fr) auto; }
     .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-prototype__media--poster-scroll .desktop-prototype__media-opener { height:100%; min-height:0; overflow:hidden; }
     .desktop-clean-event--split[data-split-media-fit="viewport-cover"] .desktop-prototype__media--poster-scroll .desktop-prototype__media-image { position:absolute; inset:0; height:100% !important; object-fit:cover !important; object-position:center center !important; }
   }
@@ -1648,7 +1770,7 @@ const descriptionHtml = (event.description_html || '')
   /* Desktop focus v9: responsive rail, bottom-safe Editorial crop and laconic media companions. */
   @media (min-width:1024px) {
     .desktop-clean-event--editorial[data-editorial-crop="bottom-safe"][data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media {
-      height:max(calc(100svh - 73px),calc(80vw / var(--image-ratio)));
+      height:max(calc(100svh - var(--desktop-header-height)),calc(80vw / var(--image-ratio)));
       overflow:hidden;
     }
     .desktop-clean-event--editorial[data-editorial-crop="bottom-safe"][data-editorial-motion="continuous"] .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image {
@@ -1912,7 +2034,7 @@ const descriptionHtml = (event.description_html || '')
     }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side {
       position:sticky;
-      top:96px;
+      top:var(--desktop-floating-top);
       margin-top:23px;
       grid-template-rows:auto auto;
       align-content:start;
@@ -1972,7 +2094,7 @@ const descriptionHtml = (event.description_html || '')
 
     .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] {
       position:sticky;
-      top:96px;
+      top:var(--desktop-floating-top);
       align-self:start;
       align-content:start;
       grid-template-rows:auto auto;

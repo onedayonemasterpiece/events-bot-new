@@ -1550,6 +1550,12 @@ const HEADER_NAVIGATION = [
       .feedback-report__list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
       .feedback-report__list li { padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
 
+      @media (min-width: 1024px) {
+        .site-header__inner {
+          width: calc(100% - 2 * clamp(24px, 3vw, 48px));
+          max-width: none;
+        }
+      }
       @media (min-width: 760px) {
         .facts-quick { grid-template-columns: repeat(2, 1fr); }
         .event-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1rem; }
