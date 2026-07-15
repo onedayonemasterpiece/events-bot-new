@@ -1,0 +1,62 @@
+---
+import type { EventImageAsset } from '../lib/types';
+import { eventImageUrl } from '../lib/assets';
+
+interface Props {
+  assets: EventImageAsset[];
+  galleryId: string;
+  eventTitle: string;
+  maxVisible?: number;
+}
+
+const { assets, galleryId, eventTitle, maxVisible = 6 } = Astro.props;
+const visibleLimit = Math.max(2, maxVisible);
+const visibleAssets = assets.slice(0, visibleLimit);
+const hiddenCount = Math.max(0, assets.length - visibleAssets.length);
+
+const thumbnail = (asset: EventImageAsset) => {
+  const derivatives = [...(asset.thumbnail_sources || [])].sort((left, right) => left.width - right.width);
+  return derivatives[0]?.src || eventImageUrl(asset.src) || asset.src;
+};
+const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
+  .slice()
+  .sort((left, right) => left.width - right.width)
+  .map((item) => `${item.src} ${item.width}w`)
+  .join(', ');
+---
+
+{assets.length > 1 && (
+  <nav class="event-media-rail" data-event-media-rail aria-label={`Фотографии события «${eventTitle}»`} style={`--rail-count:${visibleAssets.length + (hiddenCount > 0 ? 1 : 0)}`}>
+    {visibleAssets.map((asset, index) => (
+      <button
+        type="button"
+        class="event-media-rail__item"
+        data-hero-gallery-open={galleryId}
+        data-hero-gallery-index={index}
+        aria-label={`Открыть изображение ${index + 1} события «${eventTitle}»`}
+      >
+        <img
+          src={thumbnail(asset)}
+          srcset={srcset(asset) || undefined}
+          sizes="(min-width: 1024px) 92px, 1px"
+          width={asset.thumbnail_sources?.[0]?.width || asset.width}
+          height={asset.thumbnail_sources?.[0]?.height || asset.height}
+          alt=""
+          loading="eager"
+          decoding="async"
+        />
+      </button>
+    ))}
+    {hiddenCount > 0 && (
+      <button
+        type="button"
+        class="event-media-rail__more"
+        data-hero-gallery-open={galleryId}
+        data-hero-gallery-index={visibleAssets.length}
+        aria-label={`Открыть ещё ${hiddenCount} фото события «${eventTitle}»`}
+      >
+        <strong>+{hiddenCount}</strong><span>фото</span>
+      </button>
+    )}
+  </nav>
+)}

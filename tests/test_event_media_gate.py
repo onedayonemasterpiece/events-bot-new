@@ -109,7 +109,7 @@ async def test_cdn_retry_preserves_unique_raw_sha_survivor(
     monkeypatch.setattr(event_media, "_download_url", download)
     monkeypatch.setattr(
         "yandex_storage.upload_yandex_public_bytes",
-        lambda _data, *, object_path, content_type: (
+        lambda _data, *, object_path, content_type, **_kwargs: (
             f"https://static.kenigevents.ru/{object_path}"
         ),
     )

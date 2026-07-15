@@ -1,0 +1,130 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/static-site-production-20260714
+global_constraints:
+  - Preserve current production mobile event composition and interactions unless replacing only the agreed mobile lockup asset.
+  - Import only 8a1bbc59^..d9ccc527 from the stale header branch; never merge that branch wholesale.
+  - Use LLM-first semantic media classification; deterministic logic is validation/routing only.
+  - Production release must end reachable from origin/main and from a clean deployable checkout.
+  - Gemini consultation and final gate must use Gemini 3.1 Pro class.
+verification_owner: L06
+stop_conditions:
+  - Header range contains unrelated production mutations that cannot be separated safely.
+  - Production static-site release path cannot be reproduced from origin/main.
+lanes:
+  - id: L01
+    role: planner
+    requirement_ids: []
+    target: Map git ancestry and a minimal cherry-pick/import plan for header range and desktop v11 without stale-branch regressions.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-production-integration-20260714
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Commit/file dependency map, conflict forecast, and minimal import recommendation.
+    verification_scope: inspection_only
+    effort: high
+    status: merged
+  - id: L02
+    role: planner
+    requirement_ids: []
+    target: Map production event-detail/header/rendering architecture and safe promotion points from desktop lab.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-production-integration-20260714
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Production DOM/style/hydration path, mobile coupling risks, and promotion plan.
+    verification_scope: inspection_only
+    effort: high
+    status: merged
+  - id: L03
+    role: planner
+    requirement_ids: []
+    target: Map current image derivative, thumbnail, CDN and gallery delivery capabilities; evaluate multi-request versus sprite mechanics with measurable constraints.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-production-integration-20260714
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Existing derivative contracts, gaps, performance hypotheses, and implementation recommendation.
+    verification_scope: inspection_only
+    effort: high
+    status: merged
+  - id: L04
+    role: planner
+    requirement_ids: []
+    target: Map LLM-first image semantic-role pipeline and strict event_identity_poster promotion contract.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-production-integration-20260714
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Prompt/schema/data-flow map and concrete code/docs changes for a fail-closed poster role.
+    verification_scope: inspection_only
+    effort: high
+    status: merged
+  - id: L05
+    role: worker
+    requirement_ids: [R01,R02,R03,R04,R05,R06,R07,R08,R09,R10]
+    target: Implement the complete coupled production static-site integration after mapper and Gemini review.
+    depends_on: [L01,L02,L03,L04]
+    execution_mode: serial_after_dependency
+    branch: integration/static-site-production-20260714
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-production-integration-20260714
+    writable_files:
+      - site/**
+      - models.py
+      - db.py
+      - event_media.py
+      - media_dedup.py
+      - yandex_storage.py
+      - tests/test_event_media_gate.py
+      - tests/test_static_site_public_gate.py
+      - kaggle/StaticSiteBuilder/**
+      - scripts/**
+      - docs/features/static-site-pages/**
+      - docs/llm/**
+      - docs/operations/**
+      - CHANGELOG.md
+      - .codex/lanes/static-site-production-integration-20260714/**
+    forbidden_files:
+      - supabase/**
+      - source_parsing/**
+      - smart_event_update.py
+      - kaggle/TelegramMonitor/**
+    expected_output: Production-ready static-site implementation, docs, tests, preview and clean committed branch.
+    verification_scope: full_local
+    effort: high
+    status: committed
+  - id: L06
+    role: reviewer
+    requirement_ids: []
+    target: Audit every requirement, mobile regression boundary, build/public evidence and main/release reachability.
+    depends_on: [L05]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-production-integration-20260714
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Requirement-by-requirement closure verdict and release blockers.
+    verification_scope: full_local
+    effort: high
+    status: merged
+
+# R01 selectively import the agreed header range 8a1bbc59^..d9ccc527 without merging the stale branch.
+# R02 ship 240x88 desktop and 128x96 mobile shared AnnouncementsLockup, right menu, exact-listing active state, no active item on event details.
+# R03 ship the accepted transparent #98401f wide-o favicon geometry and reject old/empty variants.
+# R04 release arrival CTA/poster stack only at a safe boundary derived from the full information-flow end.
+# R05 promote continuous Editorial parallax as the primary desktop family and condition media navigation placement on a strict strong OCR poster role.
+# R06 implement/document an LLM-first fail-closed event_identity_poster classification pipeline; attendee/service documents must never be labeled poster.
+# R07 make efficient-viewer previous navigation symmetric with grouped next navigation and replace “Фото события” with the event title.
+# R08 make small preview delivery fast; use prepared derivatives and adopt a sprite only if measured/Gemini-reviewed evidence beats independent cached thumbnails.
+# R09 remove related-card side fields via explicit width-fit plus vertical overflow clipping/focal offset; never crop source left/right edges.
+# R10 integrate into production event/static layouts, preserve mobile behavior except agreed lockup, document, test, publish and return the release to main.

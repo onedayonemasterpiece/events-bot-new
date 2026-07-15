@@ -21,7 +21,7 @@ const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
 const sections = dayparts
   .map((section) => ({ ...section, events: events.filter((event) => eventDaypart(event) === section.key) }));
 ---
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="tomorrow">
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">

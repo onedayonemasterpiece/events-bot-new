@@ -39,6 +39,17 @@ UNAVAILABLE = "unavailable"
 PUBLIC_EVENT_POSTER_STATUSES = (APPROVED,)
 PAIR_POLICY_VERSION = "event-media-pair-v1"
 PAIR_PROMPT_VERSION = "event-media-vision-v1"
+MEDIA_ROLE_PROMPT_VERSION = "event-media-role-v1"
+MEDIA_ROLES = {
+    "event_identity_poster",
+    "event_photo",
+    "attendee_information",
+    "program_or_schedule",
+    "wayfinding",
+    "sponsor_or_brand",
+    "unknown_document",
+    "unknown_visual",
+}
 
 _REVIEW_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -63,6 +74,63 @@ _REVIEW_SCHEMA: dict[str, Any] = {
         "semantic_conflict",
         "canonical_side",
         "reason_code",
+    ],
+    "additionalProperties": False,
+}
+
+_MEDIA_ROLE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "media_role": {"type": "string", "enum": sorted(MEDIA_ROLES)},
+        "image_text_mode": {
+            "type": "string",
+            "enum": ["ocr_text", "visual_only", "unknown"],
+        },
+        "primary_purpose": {"type": "string"},
+        "confidence": {"type": "number"},
+        "reason_code": {"type": "string"},
+        "poster_contract": {
+            "type": "object",
+            "properties": {
+                "primary_event_promotion": {"type": "boolean"},
+                "event_identity_grounded": {"type": "boolean"},
+                "not_utility_document": {"type": "boolean"},
+            },
+            "required": [
+                "primary_event_promotion",
+                "event_identity_grounded",
+                "not_utility_document",
+            ],
+            "additionalProperties": False,
+        },
+        "focal_point": {
+            "anyOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "properties": {"x": {"type": "number"}, "y": {"type": "number"}},
+                    "required": ["x", "y"],
+                    "additionalProperties": False,
+                },
+            ]
+        },
+        "safe_crop": {"type": "boolean"},
+        "evidence": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": 6,
+        },
+    },
+    "required": [
+        "media_role",
+        "image_text_mode",
+        "primary_purpose",
+        "confidence",
+        "reason_code",
+        "poster_contract",
+        "focal_point",
+        "safe_crop",
+        "evidence",
     ],
     "additionalProperties": False,
 }
@@ -487,7 +555,11 @@ async def materialize_event_media_candidate_to_cdn(
     host-canonicalized without downloading or copying the object.
     """
 
-    from media_dedup import build_supabase_poster_object_path, prepare_image_for_supabase
+    from media_dedup import (
+        build_event_thumbnail_object_path,
+        build_supabase_poster_object_path,
+        prepare_image_for_supabase,
+    )
     from yandex_storage import (
         canonicalize_yandex_public_url,
         parse_yandex_storage_url,
@@ -505,12 +577,20 @@ async def materialize_event_media_candidate_to_cdn(
         if canonical and parsed and is_event_media_cdn_url(canonical):
             candidate.supabase_url = canonical
             candidate.supabase_path = parsed[1]
-            return True
+            if not hasattr(candidate, "thumbnail_256_url") or (
+                str(getattr(candidate, "thumbnail_256_url", None) or "").strip()
+                and str(getattr(candidate, "thumbnail_512_url", None) or "").strip()
+            ):
+                return True
         if is_event_media_cdn_url(url):
             candidate.supabase_url = url
             if parsed:
                 candidate.supabase_path = parsed[1]
-            return True
+            if not hasattr(candidate, "thumbnail_256_url") or (
+                str(getattr(candidate, "thumbnail_256_url", None) or "").strip()
+                and str(getattr(candidate, "thumbnail_512_url", None) or "").strip()
+            ):
+                return True
 
     if not urls:
         return False
@@ -561,6 +641,38 @@ async def materialize_event_media_candidate_to_cdn(
         return False
     candidate.supabase_url = hosted
     candidate.supabase_path = object_path
+    if hasattr(candidate, "width"):
+        candidate.width = int(prepared.width or 0) or getattr(candidate, "width", None)
+        candidate.height = int(prepared.height or 0) or getattr(candidate, "height", None)
+        candidate.mime_type = "image/webp"
+    for thumb in prepared.thumbnails:
+        thumb_path = build_event_thumbnail_object_path(
+            prepared.encoded_sha256,
+            longest_edge=thumb.longest_edge,
+        )
+        thumb_url = await asyncio.to_thread(
+            upload_yandex_public_bytes,
+            thumb.webp_bytes,
+            object_path=thumb_path,
+            content_type="image/webp",
+            cache_control="public, max-age=31536000, immutable",
+        )
+        thumb_url = canonicalize_yandex_public_url(thumb_url)
+        if not thumb_url:
+            logger.warning(
+                "event_media.thumbnail_upload_failed path=%s edge=%s",
+                thumb_path,
+                thumb.longest_edge,
+            )
+            continue
+        for attr, value in (
+            (f"thumbnail_{thumb.longest_edge}_url", thumb_url),
+            (f"thumbnail_{thumb.longest_edge}_path", thumb_path),
+            (f"thumbnail_{thumb.longest_edge}_width", thumb.width),
+            (f"thumbnail_{thumb.longest_edge}_height", thumb.height),
+        ):
+            if hasattr(candidate, attr):
+                setattr(candidate, attr, value)
     if not str(getattr(candidate, "catbox_url", None) or "").strip():
         candidate.catbox_url = downloaded.source_url
     digest = hashlib.sha256(downloaded.data).hexdigest()
@@ -614,7 +726,14 @@ async def materialize_event_posters_to_cdn(session: Any, event_id: int) -> tuple
     updated = 0
     failed = 0
     for row in rows:
-        before = (row.supabase_url, row.supabase_path, row.raw_sha256, row.phash)
+        before = (
+            row.supabase_url,
+            row.supabase_path,
+            row.raw_sha256,
+            row.phash,
+            row.thumbnail_256_url,
+            row.thumbnail_512_url,
+        )
         ok = await materialize_event_media_candidate_to_cdn(row, session=session)
         if not ok:
             row.review_status = PENDING_REVIEW
@@ -626,7 +745,14 @@ async def materialize_event_posters_to_cdn(session: Any, event_id: int) -> tuple
             continue
         if row.review_reason == "cdn_mirror_pending":
             row.review_reason = "awaiting_automated_pair_review"
-        after = (row.supabase_url, row.supabase_path, row.raw_sha256, row.phash)
+        after = (
+            row.supabase_url,
+            row.supabase_path,
+            row.raw_sha256,
+            row.phash,
+            row.thumbnail_256_url,
+            row.thumbnail_512_url,
+        )
         if before != after:
             row.updated_at = datetime.now(timezone.utc)
             session.add(row)
@@ -839,6 +965,216 @@ async def _call_reviewer(
     return _validated_decision(_parse_json_object(raw)), 1
 
 
+def _validated_media_role(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    role = str(value.get("media_role") or "").strip()
+    text_mode = str(value.get("image_text_mode") or "").strip()
+    contract = value.get("poster_contract")
+    if role not in MEDIA_ROLES or text_mode not in {"ocr_text", "visual_only", "unknown"}:
+        return None
+    if not isinstance(contract, dict):
+        return None
+    required_contract = {
+        "primary_event_promotion": bool(contract.get("primary_event_promotion")),
+        "event_identity_grounded": bool(contract.get("event_identity_grounded")),
+        "not_utility_document": bool(contract.get("not_utility_document")),
+    }
+    try:
+        confidence = max(0.0, min(1.0, float(value.get("confidence"))))
+    except Exception:
+        return None
+    # Fail closed: a poster label requires all three LLM predicates and a
+    # configured confidence floor. Deterministic code validates consistency;
+    # it never promotes another role into a poster.
+    if role == "event_identity_poster" and (
+        not all(required_contract.values())
+        or confidence < _env_float("EVENT_MEDIA_ROLE_POSTER_CONFIDENCE", 0.88)
+    ):
+        return None
+    focal = value.get("focal_point")
+    if focal is not None:
+        if not isinstance(focal, dict):
+            return None
+        try:
+            focal = {
+                "x": max(0.0, min(1.0, float(focal.get("x")))),
+                "y": max(0.0, min(1.0, float(focal.get("y")))),
+            }
+        except Exception:
+            return None
+    evidence = [str(item)[:240] for item in list(value.get("evidence") or [])[:6]]
+    return {
+        "media_role": role,
+        "image_text_mode": text_mode,
+        "primary_purpose": str(value.get("primary_purpose") or "")[:160],
+        "confidence": confidence,
+        "reason_code": str(value.get("reason_code") or "unspecified")[:120],
+        "poster_contract": required_contract,
+        "focal_point": focal,
+        "safe_crop": bool(value.get("safe_crop", False)),
+        "evidence": evidence,
+    }
+
+
+def _media_role_prompt(event: Event, poster: EventPoster) -> str:
+    evidence = {
+        "event": _event_context(event),
+        "image_observation": {
+            "ocr_title": str(poster.ocr_title or "")[:500],
+            "ocr_text": str(poster.ocr_text or "")[:3000],
+            "width": poster.width,
+            "height": poster.height,
+        },
+    }
+    return (
+        "Классифицируй основное назначение ОДНОГО изображения относительно конкретного события. "
+        "event_identity_poster допустим только если изображение прежде всего идентифицирует или рекламирует "
+        "именно это событие, event identity подтверждена визуально/текстом и изображение не является служебным "
+        "документом. Карточки услуг, цен, правил, условий посещения, расписания, программы, карты, парковки, "
+        "спонсорские плашки и общая реклама площадки НЕ являются афишей, даже если содержат название/логотип "
+        "события. Фотография события/артиста/места — event_photo. При недостатке контекста выбери unknown_document "
+        "для текстового документа или unknown_visual для нетекстового визуала. Не делай вывод по порядку, имени "
+        "файла, OCR-факту или соотношению сторон. focal_point описывает главный визуальный объект в 0..1; safe_crop "
+        "разрешай только если умеренный crop не разрушит лица, текст или event identity. Верни только JSON по schema.\n"
+        + json.dumps(evidence, ensure_ascii=False, sort_keys=True)
+    )
+
+
+async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) -> bool:
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+        poster = await session.get(EventPoster, int(poster_id))
+        if event is None or poster is None:
+            return False
+        context_hash = _context_hash(event)
+        if (
+            poster.media_semantic_status == "classified"
+            and poster.media_semantic_prompt_version == MEDIA_ROLE_PROMPT_VERSION
+            and poster.media_semantic_context_hash == context_hash
+        ):
+            return False
+        media = await _download_poster(poster)
+        model = (os.getenv("EVENT_MEDIA_ROLE_MODEL") or "gemini-3.1-flash-lite").strip()
+        if not await _claim_feature_budget(
+            session,
+            "semantic_role",
+            _env_int("EVENT_MEDIA_ROLE_DAILY_CALLS", 150, lo=0, hi=5000),
+        ):
+            poster.media_semantic_status = "pending"
+            poster.media_semantic_reason_code = "daily_budget_exhausted"
+            session.add(poster)
+            await enqueue_event_media_review_job(
+                session,
+                int(event_id),
+                next_run_at=_next_utc_day(),
+                force_followup=True,
+            )
+            await session.commit()
+            return False
+        await session.commit()
+
+    decision: dict[str, Any] | None = None
+    error: str | None = None
+    try:
+        from google_ai import GoogleAIClient, SecretsProvider
+        from main import get_supabase_client
+
+        client = GoogleAIClient(
+            supabase_client=get_supabase_client(),
+            secrets_provider=SecretsProvider(),
+            consumer="event_media_role",
+            account_name="event-media-role",
+            default_env_var_name=(os.getenv("EVENT_MEDIA_ROLE_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+            reserve_overflow_key_envs=[],
+        )
+        client.allow_reserve_fallback = False
+        client.allow_local_limiter_fallback = False
+        client.allow_local_limiter_on_reserve_error = False
+        client.fallback_models = []
+        client.max_retries = 1
+        client.provider_timeout_seconds = float(
+            _env_int("EVENT_MEDIA_ROLE_PROVIDER_TIMEOUT_SEC", 45, lo=10, hi=120)
+        )
+        raw, _usage = await client.generate_content_async(
+            model=model,
+            prompt=[
+                _media_role_prompt(event, poster),
+                {"inline_data": {"mime_type": media.mime_type, "data": media.data}},
+            ],
+            generation_config={
+                "temperature": 0,
+                "response_mime_type": "application/json",
+                "response_json_schema": _MEDIA_ROLE_SCHEMA,
+            },
+            max_output_tokens=_env_int("EVENT_MEDIA_ROLE_MAX_OUTPUT_TOKENS", 512, lo=256, hi=1024),
+        )
+        decision = _validated_media_role(_parse_json_object(raw))
+        if decision is None:
+            error = "invalid_or_low_confidence_media_role"
+    except Exception as exc:
+        error = f"{type(exc).__name__}:{exc}"[:500]
+
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+        poster = await session.get(EventPoster, int(poster_id))
+        if event is None or poster is None:
+            return False
+        poster.media_semantic_model = model
+        poster.media_semantic_prompt_version = MEDIA_ROLE_PROMPT_VERSION
+        poster.media_semantic_context_hash = _context_hash(event)
+        poster.media_semantic_classified_at = datetime.now(timezone.utc)
+        if decision is None:
+            poster.media_role = None
+            poster.media_role_confidence = None
+            poster.media_semantic_status = "error"
+            poster.media_semantic_reason_code = error or "invalid_response"
+            poster.media_semantic_evidence_json = None
+            poster.focal_x = None
+            poster.focal_y = None
+            poster.safe_crop = False
+        else:
+            poster.image_text_mode = decision["image_text_mode"]
+            poster.media_role = decision["media_role"]
+            poster.media_role_confidence = float(decision["confidence"])
+            poster.media_semantic_status = "classified"
+            poster.media_semantic_reason_code = decision["reason_code"]
+            poster.media_semantic_evidence_json = decision
+            focal = decision.get("focal_point")
+            poster.focal_x = focal.get("x") if focal else None
+            poster.focal_y = focal.get("y") if focal else None
+            poster.safe_crop = bool(decision.get("safe_crop", False))
+        poster.updated_at = datetime.now(timezone.utc)
+        session.add(poster)
+        remaining = (
+            await session.execute(
+                select(EventPoster.id)
+                .where(
+                    EventPoster.event_id == int(event_id),
+                    EventPoster.review_status == APPROVED,
+                    or_(
+                        EventPoster.media_semantic_status.is_(None),
+                        EventPoster.media_semantic_status.in_(("pending", "stale")),
+                        EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
+                        EventPoster.media_semantic_prompt_version.is_(None),
+                        EventPoster.media_semantic_context_hash != _context_hash(event),
+                        EventPoster.media_semantic_context_hash.is_(None),
+                    ),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if remaining is not None:
+            await enqueue_event_media_review_job(
+                session,
+                int(event_id),
+                next_run_at=datetime.now(timezone.utc) + timedelta(seconds=2),
+                force_followup=True,
+            )
+        await session.commit()
+    return decision is not None
+
+
 async def _reconcile_pending_posters(session: Any, event_id: int) -> int:
     pending = (
         await session.execute(
@@ -964,7 +1300,32 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         ).scalar_one_or_none()
         if review is None:
             projection_changed = await sync_event_gallery_projection(session, int(event_id))
+            context_hash = _context_hash(event)
+            role_candidate_id = (
+                await session.execute(
+                    select(EventPoster.id)
+                    .where(
+                        EventPoster.event_id == int(event_id),
+                        EventPoster.review_status == APPROVED,
+                        or_(
+                            EventPoster.media_semantic_status.is_(None),
+                            EventPoster.media_semantic_status.in_(("pending", "stale")),
+                            EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
+                            EventPoster.media_semantic_prompt_version.is_(None),
+                            EventPoster.media_semantic_context_hash != context_hash,
+                            EventPoster.media_semantic_context_hash.is_(None),
+                        ),
+                    )
+                    .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
             await session.commit()
+            if role_candidate_id is not None:
+                classified = await _classify_event_poster_role(
+                    int(event_id), int(role_candidate_id), db
+                )
+                return bool(projection_changed or classified)
             return projection_changed
         left = await session.get(EventPoster, int(review.left_poster_id))
         right = await session.get(EventPoster, int(review.right_poster_id))

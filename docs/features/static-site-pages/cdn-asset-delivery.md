@@ -97,6 +97,7 @@ The deploy script uploads preview files with default short cache and then re-upl
 | `/<build_id>/event.ics` | `public, max-age=300` + `text/calendar` metadata | build-scoped fallback |
 | `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target |
 | `/p/**` | object metadata, intended immutable for content-addressed keys | mirrored from legacy media bucket; safe for `PUBLIC_ASSET_BASE_URL` |
+| `/p/thumb/v1/**` | `public, max-age=31536000, immutable` | content-addressed 256/512 WebP derivatives used by rails/cards through `srcset` |
 
 ## Acceptance gates
 
@@ -115,6 +116,14 @@ For every new release/canary with `PUBLIC_ASSET_BASE_URL=https://static.kenigeve
 3. `og:image` and JSON-LD `Event.image[]` use stable CDN URLs;
 4. cache headers are immutable for hashed media;
 5. no private/user/session data can be served from the CDN.
+
+Thumbnail rails must not request every full-resolution gallery original. Media
+materialization emits independent 256/512 derivatives and the HTML provides
+real `srcset`/`sizes`, so the browser chooses one cached object for the rendered
+slot. Do not replace this with a single sprite/contact sheet unless a measured
+experiment demonstrates lower transferred **and decoded** bytes on the real
+gallery distribution; the current production decision is independent immutable
+objects because the rail may show a variable subset and opens images by index.
 
 ## Current/new media write policy
 
