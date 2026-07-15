@@ -36,7 +36,7 @@ const related = preferredRelatedIds
 const canonicalUrl = absoluteUrl(mobileEventReviewPath(variant.slug, scenario.slug));
 const title = `${variant.shortLabel} · ${event.title} | ${SITE_NAME}`;
 const description = `${variant.note} ${scenario.note}`;
-const hasAcceptedMediaCorrections = variant.revision === 'v2' || variant.revision === 'v3';
+const hasAcceptedMediaCorrections = variant.revision === 'v2' || variant.revision === 'v3' || variant.revision === 'v4';
 const composition = hasAcceptedMediaCorrections ? (scenario.v2Composition || scenario.composition) : scenario.composition;
 const modeOverride = hasAcceptedMediaCorrections ? scenario.v2ModeOverride : undefined;
 ---

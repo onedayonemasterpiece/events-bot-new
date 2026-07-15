@@ -7,6 +7,9 @@ graphite action dock принят как направление. Следующ�
 исправляет три обнаруженных на телефонных скриншотах дефекта, не переписывая
 исходную матрицу 2×2. `accepted-v3` сохраняет v2 как точку сравнения и отдельно
 отвечает на следующий Android feedback по лайку, подписям, дню недели и OCR gap.
+`accepted-v4` сохраняет принятую дату/время и исправляет переусложнение v3:
+возвращает poster-parallax, убирает ring/check у лайка и чистит ритм между
+информационными поверхностями.
 
 ## Решения после повторного аудита
 
@@ -33,6 +36,7 @@ graphite action dock принят как направление. Следующ�
 | `open-prose-action-dock` | открытый canvas | графитовый dock | совместный результат |
 | `accepted-v2` | открытый canvas | адаптивный графитовый dock | принятые решения + mobile corrections |
 | `accepted-v3` | открытый canvas | container-aware графитовый dock | feedback по лайку, labels, weekday и OCR gap |
+| `accepted-v4` | открытый canvas | container-aware графитовый dock | owner correction: параллакс, простой active like, vertical rhythm |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -45,7 +49,7 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 18 комбинаций в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 21 комбинации в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
@@ -53,6 +57,7 @@ Preview builds:
 - original matrix: `preview-20260715t-mobile-ui-variants-v1`;
 - accepted candidate: `preview-20260715t-mobile-ui-accepted-v2`.
 - feedback candidate: `preview-20260715t-mobile-ui-accepted-v3`.
+- owner-correction candidate: `preview-20260715t-mobile-ui-accepted-v4`.
 
 ## Accepted v2 corrections
 
@@ -103,6 +108,26 @@ V3 сохраняет open prose и no-zoom `poster-stage`, но:
 
 V3 — новый изолированный noindex preview, а не production promotion.
 
+## Accepted v4 corrections
+
+Владелец принял новую date/time hierarchy, но отклонил два излишних решения v3:
+отмену poster-parallax и ring + check badge у active like. Дополнительно он указал на
+грязный переход между первой context surface и основным prose/info block.
+
+V4:
+
+- не меняет weekday/date/time и container-aware labels;
+- показывает active like только плотной терракотовой заливкой и белым
+  solid heart; внешний ring, check badge, lift и shadow отсутствуют;
+- оставляет poster image в `contain`/natural-width без `scale` и `cover`, но двигает
+  image внутри клиппируемого visual viewport на `39.6–47.3px` для ширин
+  `360–430px`; negative bottom margin резервирует этот travel в layout, поэтому ни в одной
+  scroll-position не открывается пустая полоса;
+- задаёт не менее `12px` между hero decision и context/medallion surface и не менее
+  `18px` между context surface и основным description block.
+
+V4 остаётся изолированным noindex preview; общий production hero-parallax не меняется.
+
 ## Visual QA
 
 - проверены все `4 × 3` cases на ширинах `360`, `390`, `430` и `768px`;
@@ -130,6 +155,18 @@ V3 — новый изолированный noindex preview, а не production
 `artifacts/codex/mobile-ui-v3-qa-20260715/`. Полный Astro preview build (`454`
 pages) и `check-preview.mjs` завершились успешно.
 
+Для `accepted-v4` повторена та же матрица `360/390/430/768 × 3`:
+
+- horizontal overflow и hero viewport offset отсутствуют;
+- poster остаётся `contain`, image transform фактически меняется после
+  scroll, а image bounds покрывают visual viewport до и после сдвига;
+- вертикальные gaps не падают ниже `12px` и `18px`;
+- active like имеет opaque terracotta fill, transparent border, white solid heart, без
+  pseudo-element badge и box-shadow; tap/reload/toggle-off persistence пройден.
+
+Артефакты: `artifacts/codex/mobile-ui-v4-qa-20260715/`.
+Полный preview build собрал `457` страниц; обновлённый `check-preview.mjs` прошёл.
+
 ## External consultation
 
 Консультация выполнена через `agy` моделью `Gemini 3.1 Pro (High)`. Gemini
@@ -151,6 +188,17 @@ V3 acceptance review выполнен через `agy` моделью `Gemini 3.
 как отдельный prototype. Raw response:
 `artifacts/codex/mobile-ui-v3-qa-20260715/gemini-3.1-pro-high-review.raw.md`.
 
+Поправка v4 также обсуждена с `Gemini 3.1 Pro (High)`. Два первых print-mode
+вызова завершились пустым stdout; после проверки CLI log и точечного
+исследования известного silent-empty print-mode поведения успешный узкий повтор
+выдал ответ. Консультант верно рекомендовал двигать image внутри
+клиппируемого container и убрать ring/check, но ошибочно прочитал `360–430`
+как диапазон gap, а не ширину viewport. Эта часть совета отклонена; реальные gaps
+зафиксированы QA на `≥12px` и `≥18px`.
+После уточнения фактической геометрии финальный узкий gate-review той же
+Pro-модели дал `PASS` для parallax, like и vertical rhythm; P0/P1 не найдены. Raw
+response: `artifacts/codex/mobile-ui-v4-qa-20260715/gemini-v4-acceptance-review.raw.md`.
+
 ## Task-channel workflow
 
 Telegram topic, назначенный пользователем каналом задачи/приёмки, не является
@@ -161,7 +209,7 @@ receipt-only сообщения и обещания прислать резул�
 
 ## Acceptance gate
 
-До переноса в основную event page требуется принять либо отклонить v3 active-like
-state, размер icons, container-aware single-label policy, weekday-first date/time
-panel и отключение poster parallax. Discovery, brand tag и sticky CTA этим
-решением не переутверждаются.
+До переноса в основную event page требуется принять либо отклонить v4 simplified
+active-like, сохранённые icons/container-aware labels/date-time, clipped no-zoom
+poster parallax и новый vertical rhythm. Discovery, brand tag и sticky CTA этим решением не
+переутверждаются.
