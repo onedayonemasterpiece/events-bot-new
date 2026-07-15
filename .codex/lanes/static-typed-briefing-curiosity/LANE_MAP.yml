@@ -97,4 +97,4 @@ lanes:
       - production root publication
     expected_output: New review URL, screenshots/video, Telegram evidence, tests, commit and push.
     verification_scope: full_local
-    status: in_progress
+    status: completed

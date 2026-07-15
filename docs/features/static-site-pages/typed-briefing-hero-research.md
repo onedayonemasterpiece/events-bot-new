@@ -1,6 +1,6 @@
 # Городской обзор на главной: минимальный prototype gate
 
-> **Status:** communication-first lab expanded into a curiosity/action narrative queue; a new immutable review build is pending publication below.
+> **Status:** communication-first lab expanded into a curiosity/action narrative queue; immutable review build published and verified below.
 > **Implementation:** dedicated one-route build for `/lab/briefing/`; no production homepage integration.
 > **Production effect:** none; the lab is not linked from production navigation and is published only under an immutable preview prefix.
 > **Decision:** `GO_TO_PROTOTYPE_ONLY`.
@@ -68,13 +68,21 @@ Route:
 
 ### Текущая curiosity/action-итерация — что смотреть
 
-Новый immutable URL будет записан здесь сразу после strict build/deploy. Основная review-ссылка принудит выбранный в текущем ревью темп `pace=slow`, но не делает его глобальным default.
+Основной immutable review URL начинает с curiosity-сцены и принудит выбранный в текущем ревью темп `pace=slow`, но не делает его глобальным default:
+
+<https://kenigevents.ru/preview-20260715t1526-briefing-lab-07143d5e/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1>
+
+Автоматическая локальная очередь без QA-фиксации сценария:
+
+<https://kenigevents.ru/preview-20260715t1526-briefing-lab-07143d5e/lab/briefing/?variant=c&pace=slow&replay=1>
 
 Приёмка начинается с любопытства и социального сигнала, затем в selector проверяются три обучающих сценария. URL без `scenario` показывает автоматическую локальную очередь: после квалифицированного показа reload выберет следующий eligible-нарратив. URL с `scenario` — ручной QA bypass и не меняет память показов.
 
 На странице оцениваются только: сильная типографика в 1–3 строки, любопытство без манипуляции, поэтапная «печать», вертикальный/горизонтальный курсор, обучающие share/like/«Не интересно» сцены, контроли и быстрый переход в категории. Блок ниже `Дальше начинается лента` — только масштабный контекст, не предмет приёмки.
 
 Все числа помечены `DEMO-ДАННЫЕ`, а социальные/комментарные сцены — `DEMO-СИГНАЛ`. Они не выдаются за production-факты.
+
+Strict build/check и `8/8` Playwright-проверок прошли, включая матрицу `9 scenarios × 2 briefing variants × 4 viewports = 72` и отдельный post-exposure action contract. Public acceptance на `320×568`, `390×844` и `1440×900` подтвердила HTTP 200, noindex, `≤50vh`, категории/начало feed в initial viewport, нулевой horizontal overflow, нулевые page errors и нулевые non-GET requests.
 
 Предыдущий communication-first prefix `preview-20260715t1407-briefing-lab-9c8c9a62` остаётся regression evidence и больше не является текущим concept-review target.
 

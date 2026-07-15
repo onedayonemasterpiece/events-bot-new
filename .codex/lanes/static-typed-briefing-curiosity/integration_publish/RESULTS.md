@@ -1,6 +1,6 @@
 # Integration and publication results
 
-Status: in progress.
+Status: complete.
 
 - R01 Done: the finite deck is a mixed narrative/action/signal queue rather than eight count variants.
 - R02 Done: bounded local exposure/action memory, cooldowns, automatic qualified exposure and manual-QA bypass are implemented.
@@ -13,4 +13,10 @@ Status: in progress.
 
 Telegram topic comment `20` was read before closure and integrated: a historical like/share/dislike no longer satisfies a newly shown education narrative; only a verified action timestamp after that narrative's qualified exposure suppresses its future repetition.
 
-Final strict-build, public URL, mobile evidence IDs and push SHA will be appended after publication.
+Final evidence:
+
+- strict build `preview-20260715t1526-briefing-lab-07143d5e`; allowlist passed;
+- Playwright `8/8`, including 72 geometry renders and post-exposure action semantics;
+- public URL `https://kenigevents.ru/preview-20260715t1526-briefing-lab-07143d5e/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1`;
+- public mobile/desktop acceptance: four pages HTTP 200, no overflow/page errors/non-GET requests;
+- Telegram topic 6 delivery IDs `27–31`, verified; final re-inspection found no newer incoming comment.

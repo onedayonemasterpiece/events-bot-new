@@ -41,4 +41,4 @@ Automation skill: `.codex/skills/telegram-mobile-ui-review/SKILL.md`.
 
 ## Текущий briefing lab
 
-Для typed-briefing mobile review создан topic `Typed briefing hero · mobile`, topic id `6`: <https://t.me/c/4337049383/6>. В него отправлены review URL, `320×568` motion phase, `390×844` completed view и WebM motion evidence; delivery IDs `11–14` проверены чтением треда.
+Для typed-briefing mobile review создан topic `Typed briefing hero · mobile`, topic id `6`: <https://t.me/c/4337049383/6>. Комментарий `20` уточнил post-exposure action semantics и был обработан до closure. В topic отправлены текущий review URL, `320×568`, два `390×844` curiosity/action-экрана и WebM motion evidence; delivery IDs `27–31` верифицированы чтением треда, новых входящих после них не было.
