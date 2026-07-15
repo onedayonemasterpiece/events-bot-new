@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Kaggle run status isolation**: preserve a hash of the complete run id in every status-dataset slug, preventing concurrent/retried runs with the same long prefix from versioning one shared callback config and corrupting each other's ledger heartbeats.
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
 - **Event age-rating semantics and LLM budget**: piggyback a strict evidence-grounded age decision on existing Smart Update facts/create/merge calls with zero additional requests per event, keep automatic assessments internal by default, and fail unresolved source conflicts closed instead of choosing a numeric maximum.
 - **Event age-rating CPU batches**: coalesce missing/stale events for 25 minutes into one Kaggle CPU BGE run, put approved poster OCR title/body ahead of prose, persist terminal assessment/OCR states, reject stale or ungated imports, and replace manual classifier approval with hash-bound automatic official-holdout quality gates.
