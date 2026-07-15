@@ -1150,6 +1150,27 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             [],
         )
         self.assertEqual(terminal_reject["publication_source_evidence_backlog_total"], 0)
+        self.assertEqual(terminal_reject["finalizer_pending_url_total"], 0)
+
+        terminal_review_with_changed_source = mod._publication_handoff_metrics(
+            [images[1]],
+            [{
+                "post_url": "https://t.me/b/2",
+                "canonical_source_key": "telegram:b",
+                "publication_candidate_status": "llm_needs_review",
+                "publication_status": "gemini_needs_review",
+                "authoritative_source_fingerprint": "old-source-fingerprint",
+            }],
+            [{
+                "canonical_source_key": "telegram:b",
+                "source_url": "https://t.me/b",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_queue_status": "processed_found_ko_candidate",
+                "posts_scanned": 25,
+            }],
+        )
+        self.assertEqual(terminal_review_with_changed_source["finalizer_pending_url_total"], 0)
 
         local_source = {
             "canonical_source_key": "telegram:kenig01",

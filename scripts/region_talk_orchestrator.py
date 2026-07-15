@@ -2154,6 +2154,17 @@ def _publication_handoff_metrics(
             # CandidateReport, not the finalizer, owns the next operation: a
             # governed exact Telethon refetch from post_link_queue_item.
             return False
+        llm_terminal_non_candidate = (
+            candidate_status in {"llm_rejected", "llm_needs_review"}
+            or publication_status in {"gemini_reject", "gemini_needs_review"}
+        )
+        # A source-counter/fingerprint refresh cannot change Gemini's existing
+        # content verdict. Reverification of a durable LLM terminal row is an
+        # explicit operator action (`--reverify-existing`), never orchestrator
+        # backlog. This also keeps restored image evidence from resurrecting
+        # old rejected/review rows and spending the shared budget again.
+        if llm_terminal_non_candidate:
+            return False
         gate_version = str(row.get("publication_eligibility_gate_version") or "")
         terminal_non_candidate = (
             candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"}

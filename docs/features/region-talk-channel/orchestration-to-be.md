@@ -1100,6 +1100,13 @@ The compact processed-post online projection includes `first_seen_run_id`.
 Without it, a run that really acquired new posts was reported as zero new and
 all work appeared to be a rescan, undermining the data-driven controller.
 
+Durable `gemini_reject`/`gemini_needs_review` rows never re-enter automatic
+finalizer backlog merely because source counters or the authoritative source
+fingerprint changed. Those changes do not alter the existing content verdict;
+only an explicit operator `--reverify-existing` run may spend Gemini on them
+again. Eligibility tombstones remain refreshable when their underlying source
+classification or gate contract materially changes.
+
 If the latest Candidate heartbeat stops in `state_write_started` or
 `report_write_started`, this is reported as a late-tail failure. It does not
 justify replacing high-yield exact/fast-check work with deeper generic history.
