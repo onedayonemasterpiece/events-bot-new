@@ -1,0 +1,43 @@
+---
+import EventLayout from '../../../../../layouts/EventLayout.astro';
+import MobileEventReviewPage from '../../../../../components/lab/MobileEventReviewPage.astro';
+import type { HeroComposition } from '../../../../../components/EventHero.astro';
+import {
+  MOBILE_EVENT_REVIEW_CASES,
+  mobileEventReviewPath,
+  type MobileEventReviewScenario,
+  type MobileEventReviewVariant,
+} from '../../../../../lib/mobileEventReview';
+import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../../../lib/events';
+import { eventImageUrl } from '../../../../../lib/assets';
+
+interface Props {
+  variant: MobileEventReviewVariant;
+  scenario: MobileEventReviewScenario;
+}
+
+export function getStaticPaths() {
+  return MOBILE_EVENT_REVIEW_CASES.map(({ variant, scenario }) => ({
+    params: { variant: variant.slug, scenario: scenario.slug },
+    props: { variant, scenario },
+  }));
+}
+
+const { variant, scenario } = Astro.props;
+const events = getEvents();
+const event = events.find((item) => item.id === scenario.eventId);
+if (!event) return Astro.redirect(withBase('/lab/event-mobile/'));
+const preferredRelatedIds = [5658, 6472, 4671, 5259, 5783, 5761, 5382, 5703, 6510, 5370, 5878];
+const eventById = new Map(events.map((item) => [item.id, item]));
+const related = preferredRelatedIds
+  .map((id) => eventById.get(id))
+  .filter((item): item is NonNullable<typeof item> => Boolean(item && item.id !== event.id))
+  .slice(0, 6);
+const canonicalUrl = absoluteUrl(mobileEventReviewPath(variant.slug, scenario.slug));
+const title = `${variant.shortLabel} · ${event.title} | ${SITE_NAME}`;
+const description = `${variant.note} ${scenario.note}`;
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={eventImageUrl(event.image_url)} structuredData={[]} heroChrome="immersive">
+  <MobileEventReviewPage event={event} related={related} variant={variant} composition={scenario.composition as HeroComposition} />
+</EventLayout>

@@ -31,6 +31,12 @@ const required = [
   'lab/event-desktop/examples/editorial-photo-continuous/index.html',
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
+  'lab/event-mobile/index.html',
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock'].flatMap((variant) =>
+    ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
+      `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
+    ),
+  ),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -40,6 +46,27 @@ const required = [
 for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
+}
+
+const mobileReviewCases = {
+  control: readFileSync(join(root, 'lab/event-mobile/examples/control/photo-paid/index.html'), 'utf8'),
+  openProse: readFileSync(join(root, 'lab/event-mobile/examples/open-prose/photo-paid/index.html'), 'utf8'),
+  actionDock: readFileSync(join(root, 'lab/event-mobile/examples/action-dock/photo-paid/index.html'), 'utf8'),
+  combined: readFileSync(join(root, 'lab/event-mobile/examples/open-prose-action-dock/photo-paid/index.html'), 'utf8'),
+};
+for (const [name, html] of Object.entries(mobileReviewCases)) {
+  if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
+    throw new Error(`Mobile event review ${name} misses its variant marker`);
+  }
+}
+if (!mobileReviewCases.control.includes('data-prose-treatment="card"') || !mobileReviewCases.control.includes('data-actions-treatment="current"')) {
+  throw new Error('Mobile event control must preserve current prose and actions');
+}
+if (!mobileReviewCases.openProse.includes('data-prose-treatment="open"') || !mobileReviewCases.actionDock.includes('data-actions-treatment="dock"')) {
+  throw new Error('Mobile event single-factor variants must isolate open prose and grouped actions');
+}
+if (!mobileReviewCases.combined.includes('data-prose-treatment="open"') || !mobileReviewCases.combined.includes('data-actions-treatment="dock"')) {
+  throw new Error('Mobile event combined variant must enable both treatments');
 }
 
 const desktopV12Pages = {
