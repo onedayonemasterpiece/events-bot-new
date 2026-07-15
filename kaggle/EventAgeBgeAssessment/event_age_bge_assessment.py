@@ -23,6 +23,17 @@ MODEL_ID = "BAAI/bge-m3"
 ENCODER_CONTRACT = "bge_m3_cpu_dense_retrieval_v1"
 OUTPUT_DIR = Path(os.getenv("EVENT_AGE_BGE_OUTPUT_DIR", "/kaggle/working"))
 STATE: dict[str, Any] = {"phase": "bootstrap", "events_done": 0, "events_total": 0, "bge_batches_done": 0}
+AGE_TOKEN = re.compile(
+    r"(?iu)(?<!\d)(?:0|6|12|16|18)\s*\+|"
+    r"\b(?:старше|от)\s+(?:0|6|12|16|18)\s*(?:лет|года?)?\b|"
+    r"\b(?:возраст(?:ное)?\s+ограничение|ценз)\s*[:—-]?\s*(?:0|6|12|16|18)\b"
+)
+
+
+def mask_assessment_age_tokens(text: str) -> str:
+    """Remove declared-age hints before fallback assessment."""
+
+    return AGE_TOKEN.sub("[AGE_MARK_REMOVED]", str(text))
 
 
 def getenv_int(name: str, default: int, *, minimum: int = 1) -> int:
@@ -583,7 +594,7 @@ def main() -> int:
             STATE["phase"] = "partial"
             break
         batch = events[offset : offset + batch_size]
-        texts = [str(item.get("text") or "").strip() for item in batch]
+        texts = [mask_assessment_age_tokens(str(item.get("text") or "").strip()) for item in batch]
         vectors = encode_dense(model, texts, batch_size=batch_size, max_length=max_length)
         vector_chunks.append(vectors)
         vector_event_ids.extend(int(item.get("event_id") or 0) for item in batch)

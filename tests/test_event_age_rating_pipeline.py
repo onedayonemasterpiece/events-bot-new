@@ -173,6 +173,18 @@ def test_bge_dependency_probe_repairs_incompatible_preinstalled_package(monkeypa
     assert "FlagEmbedding==1.4.0" in commands[0]
 
 
+def test_bge_fallback_masks_declared_age_tokens_with_calibration_contract():
+    worker = load_bge_worker()
+    masked = worker.mask_assessment_age_tokens(
+        "Возрастное ограничение: 18+. Вход от 16 лет; афиша соседнего события 6+."
+    )
+
+    assert "18+" not in masked
+    assert "от 16 лет" not in masked
+    assert "6+" not in masked
+    assert masked.count("[AGE_MARK_REMOVED]") == 3
+
+
 def test_manual_launcher_exposes_partial_worker_report(tmp_path):
     worker_report_summary = load_bge_launcher().worker_report_summary
     report = tmp_path / "event_age_bge_result.json"
