@@ -11,7 +11,7 @@ import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
 import type { EventImageAsset } from '../../lib/types';
-import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, siteHomeHref, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -29,7 +29,7 @@ export function getStaticPaths() {
 
 const event = getEventBySlug(Astro.params.slug ?? '');
 if (!event) {
-  return Astro.redirect(withBase('/__preview/'));
+  return Astro.redirect(siteHomeHref());
 }
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
 const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
@@ -54,8 +54,11 @@ const sourceCountLabel = sourceCount > 0
   ? `${sourceCount} ${sourceCount % 10 === 1 && sourceCount % 100 !== 11 ? 'источник' : [2, 3, 4].includes(sourceCount % 10) && ![12, 13, 14].includes(sourceCount % 100) ? 'источника' : 'источников'}`
   : null;
 const descriptionMeta = [sourceCountLabel, updatedAtLabel ? `обновлено: ${updatedAtLabel} (Калининград)` : null].filter(Boolean);
+const primaryAssetForComposition = event.image_assets?.find((asset) => (eventImageUrl(asset.src) || asset.src) === eventImageUrl(event.image_url)) || event.image_assets?.[0];
+const primaryImageMediaRole = event.image_media_role || primaryAssetForComposition?.media_role;
+const primaryIsPhoto = primaryImageMediaRole === 'event_photo';
 const fallbackHeroComposition: HeroComposition = event.image_url
-  ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
+  ? (primaryIsPhoto ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
 const heroComposition = HERO_COMPOSITION_BY_EVENT_ID[event.id] || fallbackHeroComposition;
 const galleryCtaEvent = discoveryFeed[0];
@@ -100,7 +103,6 @@ const galleryImageAssets = (() => {
 })();
 const identityPoster = galleryImageAssets.find((asset) => asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
 const identityPosterIndex = identityPoster ? galleryImageAssets.findIndex((asset) => asset.src === identityPoster.src) : -1;
-const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_media_role || (event.image_text_mode === 'visual_only' ? 'unknown_visual' : 'unknown_document'));
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
   <main id="main">
@@ -133,9 +135,9 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
       </div>
 
       <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
-        {event.city && <a href={withBase(`/__preview/?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
+        {event.city && <a href={siteHomeHref(`?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
         {event.city && <span aria-hidden="true">/</span>}
         {event.event_type && <span>{event.event_type}</span>}
       </nav>

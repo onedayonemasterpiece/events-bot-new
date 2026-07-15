@@ -74,8 +74,8 @@ if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-
 if (!controlHtml.includes('data-card-href=')) throw new Error('Event cards must expose full-card navigation href');
 if (!/<div class="event-card__body">\s*<a class="event-card__title"[\s\S]*?<div class="event-card__meta-row">/u.test(controlVisibleHtml)) throw new Error('Event cards must show title before time/status meta for mobile feed scanning');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
-if (!controlHtml.includes('event-card__media-shell--document')) throw new Error('Text/document cards must use the width-fit, vertical-overflow-only media contract');
-if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 4:5 cover media shell');
+if (!controlHtml.includes('event-card__media-shell--document')) throw new Error('Text/document cards must use the full-width, complete-frame media contract');
+if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Explicit event photos must keep the editorial cover media shell');
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/event-card__media-shell--document[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('Document cards must scale to full width instead of contain-with-side-fields');
@@ -383,9 +383,11 @@ const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWit
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
-if (/event-card__media-shell--document[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Document card media must not use contain over a fixed frame');
+if (/#discovery-feed \.event-card__media-shell--document\{[^}]*(?:aspect-ratio:\s*1|overflow:\s*hidden)/iu.test(css)) throw new Error('Related document/poster cards must not use a fixed or clipping frame');
+if (!/#discovery-feed \.event-card--split-actions \.event-card__media-link--document\{[^}]*border-radius:\s*0[^}]*overflow:\s*visible/iu.test(css)) throw new Error('Related document/poster media links must not clip source corners through a rounded ancestor');
 if (!/#discovery-feed\{[^}]*width:\s*100vw[^}]*margin-inline:\s*calc\(50%\s*-\s*50vw\)[^}]*box-sizing:\s*border-box/iu.test(css)) throw new Error('Desktop related-event surface must be true full-bleed without creating horizontal document overflow');
-if (!/#discovery-feed \.event-card__media-shell--document \.event-card__media\{[^}]*left:\s*0[^}]*width:\s*100%[^}]*height:\s*auto/iu.test(css)) throw new Error('Related document/poster cards must preserve the complete source width and clip only vertical overflow');
+if (!/#discovery-feed \.event-card__media-shell--document \.event-card__media\{[^}]*position:\s*relative[^}]*width:\s*100%[^}]*height:\s*auto[^}]*max-height:\s*none[^}]*transform:\s*none/iu.test(css)) throw new Error('Related document/poster cards must preserve the complete intrinsic frame at full card width without crop');
+if (/#discovery-feed \.event-card__media-shell--document \.event-card__media\{[^}]*(?:object-fit:\s*cover|object-position:|clip-path:|transform:\s*(?!none))/iu.test(css)) throw new Error('Related document/poster cards must not crop, pan or transform the source frame');
 if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
@@ -407,7 +409,7 @@ if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !/--hero-poster-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = isPosterStage ? 56 : 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps and OCR posters must move as one full-width visual without gray internal gaps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*height:\s*100%[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, full-height, controlled and preserve OCR/text images with the base contain mode');
-if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
+if (!/hero-gallery__image\[data-media-role=["']?event_photo["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop only explicit event photos with cover, one-way forward pan and reverse pan for manual back gestures');
 if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');
 if (!/hero-gallery__topbar\{[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__brand\{[^}]*pointer-events:\s*auto/iu.test(css)) throw new Error('Fullscreen gallery brand tag must be top-flush and clickable');
 if (!/hero-gallery__event-title\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/iu.test(css) || !controlHtml.includes('hero-gallery__event-title')) throw new Error('Fullscreen gallery must keep the event title in the fixed top bar');
@@ -462,8 +464,10 @@ const badHtmlPatterns = [
 for (const event of eventsData.events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
   const visibleHtml = stripGeneratedCode(html);
-  const heroExpected = event.image_url ? (event.image_text_mode === 'visual_only' ? 'data-hero-mode="photo-cover"' : 'data-hero-mode="poster-stage"') : 'data-hero-mode="fallback-art"';
-  if (!html.includes(heroExpected)) throw new Error(`Event ${event.id} hero mode mismatch for ${event.image_text_mode}`);
+  const primaryAsset = (event.image_assets || []).find((asset) => asset.src === event.image_url) || (event.image_assets || [])[0];
+  const primaryMediaRole = event.image_media_role || primaryAsset?.media_role;
+  const heroExpected = event.image_url ? (primaryMediaRole === 'event_photo' ? 'data-hero-mode="photo-cover"' : 'data-hero-mode="poster-stage"') : 'data-hero-mode="fallback-art"';
+  if (!html.includes(heroExpected)) throw new Error(`Event ${event.id} hero mode mismatch for media role ${primaryMediaRole || 'unknown'}`);
   if (!html.includes('data-hero-composition=')) throw new Error(`Event ${event.id} hero misses composition marker`);
   if (!html.includes(`data-hero-image-text-mode="${event.image_text_mode}"`)) throw new Error(`Event ${event.id} hero misses image_text_mode marker`);
   if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(html)) throw new Error(`Event ${event.id} renders zero reaction counter`);

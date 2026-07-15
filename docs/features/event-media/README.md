@@ -139,12 +139,18 @@ Static event-detail использует эту роль только для к�
 `program_or_schedule` и другие документы остаются обычными gallery assets и
 никогда не получают подпись/маркер «Афиша». Фото может стать desktop hero;
 строгая афиша показывается целиком в отдельном блоке без серых полей и без crop.
-На карточках и в related-feed `cover` разрешает только явная классифицированная
-роль `event_photo`. `unknown_document`, `unknown_visual`, отсутствующая роль и
-legacy `image_text_mode=visual_only` сохраняют полную ширину исходника: они не
-могут горизонтально обрезать потенциальную афишу. После масштабирования до
-ширины нормализованной карточки допускается только вертикальное переполнение с
-центром или доверенным focal Y.
+Во всех статических поверхностях — hero, fullscreen gallery, карточках и
+related-feed — `cover`, focal crop и автоматический pan разрешает только явная
+классифицированная роль `event_photo`. `unknown_document`, `unknown_visual`,
+отсутствующая роль и legacy `image_text_mode=visual_only` сохраняют полный
+исходный кадр. На desktop related-feed документ занимает всю ширину карточки с
+естественным aspect ratio:
+не допускается ни горизонтальный, ни вертикальный crop. Общая нижняя граница
+ряда выравнивается растяжением светлого content-body, а не удалением пикселей
+афиши. Не допускается и декоративный crop скруглённым ancestor-контейнером:
+document media-link не скрывает overflow и не отрезает углы исходника.
+Intrinsic `width`/`height` обязательно экспортируются для резервирования места
+до decode; crop/focal metadata применяется только к `event_photo`.
 
 Идемпотентный operational backfill по умолчанию только показывает план:
 
@@ -154,10 +160,19 @@ python scripts/enqueue_static_event_media_enrichment.py --db /data/db.sqlite
 python scripts/enqueue_static_event_media_enrichment.py --db /data/db.sqlite --apply
 ```
 
-Backfill использует тот же верхнеуровневый eligibility contract, что и static
-export: только `lifecycle_status=active`, `silent=0` и события, которые ещё не
-закончились на `--from-date`. Отменённые, postponed, merged и silent rows не
-получают derivative/LLM jobs и не могут быть случайно возвращены в public fanout.
+Backfill использует общий fail-closed eligibility contract со static export:
+`identity_status=canonical`, пустой `merged_into_event_id`,
+`lifecycle_status=active`, `silent=0`, строгие ISO-даты, узкий structural
+prompt/code/prose-leak guard и событие, которое ещё не закончилось на
+`--from-date`. `--current-datetime` дополнительно включает тот же локальный
+same-day time cutoff, что production export. Лимит применяется после строгой
+проверки, поэтому отбракованные строки не занимают бюджет кандидатов.
+Отменённые, postponed, merged, elapsed, неканонические и silent rows не получают
+derivative/LLM jobs и не могут быть случайно возвращены в public fanout.
+Тот же gate повторяется непосредственно в `event_media_review` до rehydrate,
+CDN materialization/download и LLM review: уже поставленная задача безопасно
+завершается как `nochange`, если событие успело стать непубличным. Legacy staging
+backfill использует этот же scalar contract.
 
 Повторное выполнение не переотправляет rows с актуальной версией/input hash;
 `--retry-errors` разрешён только для контролируемого повторного прогона.

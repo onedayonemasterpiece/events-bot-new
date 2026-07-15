@@ -10,8 +10,13 @@
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
     "build:preview": "node scripts/build-preview.mjs",
+    "build:production": "node scripts/build-production.mjs",
     "check:preview": "node scripts/check-preview.mjs",
+    "check:production": "node scripts/check-production.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
+    "deploy:production": "node scripts/deploy-production-yc.mjs publish",
+    "plan:production": "node scripts/deploy-production-yc.mjs plan",
+    "rollback:production": "node scripts/deploy-production-yc.mjs rollback",
     "astro": "astro"
   },
   "dependencies": {

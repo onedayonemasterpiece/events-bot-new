@@ -119,6 +119,17 @@ def test_public_projection_gate_is_safe_for_old_schema_rows() -> None:
     assert [row["id"] for row in rows] == [10]
 
 
+def test_public_projection_gate_uses_shared_prompt_leak_contract() -> None:
+    exporter = _load_exporter_module()
+    con = _connect_with_public_gate_columns()
+    _insert_event(con, 1)
+    _insert_event(con, 2, title="// attendee-facing event_type=lecture message_date=2026-07-01")
+
+    rows = exporter.fetch_rows(con, limit=20, current_date="2026-07-01", include_ids=[1, 2])
+
+    assert [row["id"] for row in rows] == [1]
+
+
 def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
     exporter = _load_exporter_module()
     exporter.SKIP_IMAGE_PROBES = True

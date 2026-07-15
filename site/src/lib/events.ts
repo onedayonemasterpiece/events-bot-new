@@ -14,6 +14,8 @@ import type {
 export const SITE_NAME = 'Полюбить Калининград Анонсы';
 export const SITE_ORIGIN = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 export const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/u, '');
+export const SITE_MODE = import.meta.env.PUBLIC_SITE_MODE === 'production' ? 'production' : 'preview';
+export const IS_PRODUCTION = SITE_MODE === 'production';
 export const PREVIEW_BUILD_ID = import.meta.env.PUBLIC_PREVIEW_BUILD_ID || 'local';
 export const ICS_BASE_URL = (
   import.meta.env.PUBLIC_ICS_BASE_URL ||
@@ -156,6 +158,10 @@ export function withBase(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`;
   if (!BASE_PATH) return normalized;
   return `${BASE_PATH}${normalized}`;
+}
+
+export function siteHomeHref(query = ''): string {
+  return withBase(`${IS_PRODUCTION ? '/' : '/__preview/'}${query}`);
 }
 
 export function absoluteUrl(path: string): string {
@@ -407,8 +413,15 @@ function eligibleRelatedCandidate(current: PreviewEvent, candidate: PreviewEvent
   return isFutureStartingEvent(candidate);
 }
 
+function primaryImageAsset(event: PreviewEvent) {
+  const primaryUrl = eventImageUrl(event.image_url);
+  return event.image_assets?.find((asset) => (eventImageUrl(asset.src) || asset.src) === primaryUrl)
+    || event.image_assets?.[0];
+}
+
 function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload {
   const likesCount = event.likes_count || 0;
+  const imageAsset = primaryImageAsset(event);
   return {
     href: eventHref(event),
     absolute_url: eventAbsoluteUrl(event),
@@ -417,6 +430,8 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
     image_media_role: event.image_media_role,
+    image_width: imageAsset?.width ?? null,
+    image_height: imageAsset?.height ?? null,
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
@@ -568,6 +583,8 @@ export interface DiscoveryEventPayloadItem {
   image_alt: string;
   image_text_mode: PreviewEvent['image_text_mode'];
   image_media_role?: PreviewEvent['image_media_role'];
+  image_width?: number | null;
+  image_height?: number | null;
   focal_y?: number | null;
   display_date: string;
   display_time: string | null;
@@ -585,6 +602,7 @@ export interface DiscoveryEventPayloadItem {
 
 export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayloadItem {
   const likesCount = event.likes_count || 0;
+  const imageAsset = primaryImageAsset(event);
   return {
     id: event.id,
     title: event.title,
@@ -595,6 +613,8 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
     image_media_role: event.image_media_role,
+    image_width: imageAsset?.width ?? null,
+    image_height: imageAsset?.height ?? null,
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,

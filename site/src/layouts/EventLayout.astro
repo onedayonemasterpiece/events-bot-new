@@ -1,7 +1,7 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
-import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { getCurrentDate, IS_PRODUCTION, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular';
 
@@ -19,7 +19,7 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
-const robots = 'noindex,nofollow,noarchive';
+const robots = IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive';
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
@@ -681,7 +681,7 @@ const HEADER_NAVIGATION = [
         border-radius: 0;
         background: #060504;
       }
-      .hero-gallery__image[data-image-text-mode="visual_only"] {
+      .hero-gallery__image[data-media-role="event_photo"] {
         width: 100%;
         height: 100%;
         max-height: none;
@@ -691,10 +691,10 @@ const HEADER_NAVIGATION = [
       }
       .hero-gallery__viewport,
       .hero-gallery__track { touch-action: none; }
-      .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
+      .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-media-role="event_photo"] {
         animation: gallery-pan-forward 17.9s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
-      .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
+      .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-media-role="event_photo"] {
         animation: gallery-pan-backward 17.9s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
       @keyframes gallery-pan-forward {
@@ -2007,8 +2007,13 @@ const HEADER_NAVIGATION = [
           border-color: rgba(255,255,255,0.12);
           background: #fffaf2;
         }
-        #discovery-feed .event-card__media-shell--cover,
-        #discovery-feed .event-card__media-shell--document {
+        /* A complete poster/document frame also includes its source corners.
+         * Do not clip them through the generic rounded media-link ancestor. */
+        #discovery-feed .event-card--split-actions .event-card__media-link--document {
+          border-radius: 0;
+          overflow: visible;
+        }
+        #discovery-feed .event-card__media-shell--cover {
           position: relative;
           width: 100%;
           aspect-ratio: 1 / 1.04;
@@ -2022,17 +2027,29 @@ const HEADER_NAVIGATION = [
           height: 100%;
           object-fit: cover;
         }
+        /*
+         * Poster/document contract: normalization must never remove text.
+         * The row keeps equal outer card bottoms and the body absorbs spare
+         * height; the internal image/body boundary may remain editorially live.
+         */
+        #discovery-feed .event-card__media-shell--document {
+          position: relative;
+          width: 100%;
+          aspect-ratio: auto;
+          overflow: visible;
+          background: #fffaf2;
+        }
         #discovery-feed .event-card__media-shell--document .event-card__media {
-          position: absolute;
+          position: relative;
           z-index: 2;
-          left: 0;
-          top: 50%;
+          inset: auto;
+          display: block;
           width: 100%;
           max-width: none;
           height: auto;
+          max-height: none;
           min-height: 0;
-          object-fit: initial;
-          transform: translateY(calc(-50% + var(--card-focal-offset, 0%)));
+          transform: none;
           background: transparent;
         }
         #discovery-feed .event-card--split-actions .event-card__body,
@@ -2114,7 +2131,7 @@ const HEADER_NAVIGATION = [
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
-        <a class="site-header__brand-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+        <a class="site-header__brand-tag" href={siteHomeHref()} aria-label="Полюбить Калининград Анонсы — на главную">
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
@@ -2131,7 +2148,7 @@ const HEADER_NAVIGATION = [
                 <a href={withBase('/populyarnoe/')}>Популярное</a>
                 <a href={withBase('/poisk/')}>Поиск</a>
                 <a href={withBase('/partners/')}>Инфопартнёры</a>
-                <a href={withBase('/__preview/')}>Все анонсы</a>
+                <a href={siteHomeHref()}>Все анонсы</a>
               </div>
             </nav>
           </div>
@@ -2156,7 +2173,7 @@ const HEADER_NAVIGATION = [
             <a href={withBase('/populyarnoe/')}>Популярное</a>
             <a href={withBase('/poisk/')}>Поиск</a>
             <a href={withBase('/partners/')}>Инфопартнёры</a>
-            <a href={withBase('/__preview/')}>Все анонсы</a>
+            <a href={siteHomeHref()}>Все анонсы</a>
             <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
           </nav>
         </div>
@@ -2180,7 +2197,7 @@ const HEADER_NAVIGATION = [
           <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
           <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
         </div>
-        <p class="site-footer__note">Preview · noindex · {SITE_ORIGIN}</p>
+        <p class="site-footer__note">{IS_PRODUCTION ? SITE_ORIGIN : <>Preview · noindex · {SITE_ORIGIN}</>}</p>
       </div>
     </footer>
 
@@ -2820,6 +2837,8 @@ const HEADER_NAVIGATION = [
               image_alt: display.image_alt || candidate?.image_alt || `Афиша события «${display.title || candidate?.title || 'событие'}»`,
               image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
               image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+              image_width: Number.isFinite(Number(display.image_width || candidate?.image_width)) && Number(display.image_width || candidate?.image_width) > 0 ? Number(display.image_width || candidate?.image_width) : null,
+              image_height: Number.isFinite(Number(display.image_height || candidate?.image_height)) && Number(display.image_height || candidate?.image_height) > 0 ? Number(display.image_height || candidate?.image_height) : null,
               focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
               display_date: display.display_date || candidate?.date || '',
               display_date_time: display.display_date_time || display.display_date || candidate?.date || '',
@@ -3110,6 +3129,8 @@ const HEADER_NAVIGATION = [
             image_alt: display.image_alt || `Афиша события «${title}»`,
             image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
             image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+            image_width: Number.isFinite(Number(display.image_width || candidate?.image_width)) && Number(display.image_width || candidate?.image_width) > 0 ? Number(display.image_width || candidate?.image_width) : null,
+            image_height: Number.isFinite(Number(display.image_height || candidate?.image_height)) && Number(display.image_height || candidate?.image_height) > 0 ? Number(display.image_height || candidate?.image_height) : null,
             focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
             display_date: display.display_date || formatDateForUi(candidate?.date || ''),
             display_time: display.display_time || null,
@@ -3133,6 +3154,7 @@ const HEADER_NAVIGATION = [
           const cardVariant = variant === 'split-actions' ? 'split-actions' : 'overlay-controls';
           const documentMedia = data.image_media_role !== 'event_photo';
           const mediaClass = documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover';
+          const mediaLinkClass = documentMedia ? 'event-card__media-link--document' : 'event-card__media-link--cover';
           const likes = Number(data.likes_count || 0);
           const shares = Number(data.shares_count || 0);
           const likeCount = formatCount(likes);
@@ -3154,8 +3176,11 @@ const HEADER_NAVIGATION = [
             ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span>В календарь</span></a>`
             : '';
           const imageFallback = `<span class="event-card__image-fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
+          const intrinsicSize = data.image_width && data.image_height
+            ? ` width="${escapeHtml(data.image_width)}" height="${escapeHtml(data.image_height)}"`
+            : '';
           const image = data.image_url
-            ? `<span class="event-card__media-shell ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async" onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
+            ? `<span class="event-card__media-shell ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async"${intrinsicSize} onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
             : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
           const overlayFeedback = cardVariant === 'overlay-controls'
             ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`
@@ -3164,7 +3189,7 @@ const HEADER_NAVIGATION = [
             ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${negativeButton}${calendarButton}</div><div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${likeButton}</div>`
             : '';
           return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
-            <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
+            <a class="event-card__media-link ${mediaLinkClass}" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
             ${overlayFeedback}
             <div class="event-card__body"><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a><div class="event-card__meta-row">${typeTag ? `<span class="event-card__tag">${escapeHtml(typeTag)}</span>` : ''}<span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
             ${splitUtility}
@@ -4151,7 +4176,7 @@ const HEADER_NAVIGATION = [
 
           const activeSlideIsVisualPhoto = (gallery) => {
             const slide = activeSlide(gallery);
-            const image = slide?.querySelector('.hero-gallery__image[data-image-text-mode="visual_only"]');
+            const image = slide?.querySelector('.hero-gallery__image[data-media-role="event_photo"]');
             return Boolean(image && slide?.dataset.gallerySlideKind === 'image');
           };
 

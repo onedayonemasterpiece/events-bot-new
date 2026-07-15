@@ -1,6 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
 
 const canonicalUrl = absoluteUrl('/partnerstvo/');
 const title = `Информационное партнёрство | ${SITE_NAME}`;
@@ -13,7 +13,7 @@ const scheduleJson = 'https://static.kenigevents.ru/reference/transport/lastochk
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Партнёрство</span>
       </nav>

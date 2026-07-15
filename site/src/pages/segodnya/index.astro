@@ -4,7 +4,7 @@ import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro'
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, eventDaypart, getCurrentDate, getTodayContinuingEvents, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, eventDaypart, getCurrentDate, getTodayContinuingEvents, getTodayPrimaryEvents, IS_PRODUCTION, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
 import type { EventDaypart } from '../../lib/events';
 
 const currentDate = getCurrentDate();
@@ -13,10 +13,12 @@ const continuingSectionEvents = getTodayContinuingEvents();
 const displayedEventsCount = events.length;
 const foundLabel = continuingSectionEvents.length
   ? `Сегодня: ${events.length} · отдельно выставки и долгие форматы: ${continuingSectionEvents.length}`
-  : (displayedEventsCount ? `Найдено: ${displayedEventsCount}` : 'На сегодня в fixture нет событий');
+  : (displayedEventsCount ? `Найдено: ${displayedEventsCount}` : (IS_PRODUCTION ? 'На сегодня событий не найдено' : 'На сегодня в fixture нет событий'));
 const canonicalUrl = absoluteUrl('/segodnya/');
 const title = `События сегодня в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ${currentDate}: быстрые события сегодня отдельно от выставок и долгих форматов.`;
+const description = IS_PRODUCTION
+  ? `Афиша событий на ${currentDate}: события сегодня отдельно от выставок и долгих форматов.`
+  : `Статический preview-листинг событий на ${currentDate}: быстрые события сегодня отдельно от выставок и долгих форматов.`;
 const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
   { key: 'morning', label: 'Утро', note: '06:00–11:59' },
   { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
@@ -30,7 +32,7 @@ const sections = dayparts
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Сегодня</span>
       </nav>
@@ -43,7 +45,7 @@ const sections = dayparts
             <a href={withBase('/zavtra/')}>Смотреть завтра</a>
             <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
             <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
+            <a href={siteHomeHref()}>{IS_PRODUCTION ? 'Все анонсы' : 'Все тестовые страницы'}</a>
           </div>
         </div>
       </section>

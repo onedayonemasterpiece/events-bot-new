@@ -1,7 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
-import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
 
 const canonicalUrl = absoluteUrl('/poisk/');
 const title = `Умный поиск событий | ${SITE_NAME}`;
@@ -17,7 +17,7 @@ const seedSearchTags = [
   <main id="main">
     <div class="page-shell page-shell--search">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Поиск</span>
       </nav>

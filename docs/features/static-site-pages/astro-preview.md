@@ -1,6 +1,6 @@
 # Astro SSG preview — event pages
 
-> **Status:** implemented preview vertical slice, production rollout pending.  
+> **Status:** implemented preview vertical slice and production-root build/check/promotion tooling; first production promotion is still an explicit operator gate.
 > **Build ID:** current full-catalog review target `preview-20260702t1536-merged-vector-medallions` (399 active/future events from the 2026-07-02 production snapshot through event id `6613`, merged vector-identity gate + medallion SVG branches, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, smart-search UI). Historical same-day target: `preview-20260702t0755-fresh-ui-fixes`; historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
 > **Preview index target:** <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are part of the deploy verification gate; current preview HTML/CSS/JS, partner logos, medallion assets and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are publicly testable after `npm --prefix site run deploy:preview`.
 
@@ -373,6 +373,120 @@ PREVIEW_BUILD_ID=preview-20260628-event-pages-v48-pgvector-gemma-kaggle npm run 
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
+
+## Production-root build and promotion
+
+Production is a separate, fail-closed mode. Do not publish a preview artifact at
+the bucket root and do not run a broad `aws s3 sync --delete`: versioned preview
+prefixes, release history, old hashed `_astro` assets and stable `/ics` objects
+share the same bucket and must survive a root rollout.
+
+Build from a clean commit with an explicit unique build id:
+
+```bash
+git fetch origin --prune
+git status --short --branch
+cd site
+npm ci
+
+export PRODUCTION_BUILD_ID="production-$(date -u +%Y%m%dt%H%M%Sz)-$(git rev-parse --short=8 HEAD)"
+PUBLIC_SITE_ORIGIN=https://kenigevents.ru \
+PUBLIC_ASTRO_ASSET_BASE_URL=https://static.kenigevents.ru \
+PUBLIC_ICS_BASE_URL=https://static.kenigevents.ru/ics \
+npm run build:production
+
+# build:production already runs this gate; rerun explicitly when accepting an artifact.
+PRODUCTION_BUILD_ID="$PRODUCTION_BUILD_ID" npm run check:production
+npm run plan:production
+```
+
+`build:production` sets `PUBLIC_SITE_MODE=production` and `SITE_BASE_PATH=/`
+internally. It refuses a dirty tracked worktree, emits root canonicals and an
+indexable root listing, removes `__preview/` and `lab/` from the artifact, writes
+production `robots.txt`/`sitemap.xml`, and creates:
+
+- `dist/production-build.json` (`static_production_build_v1`);
+- `dist/static-release-manifest.json` (`static_release_manifest_v1`) with the
+  full Git SHA, build id, SHA-256/size/content metadata for every managed root
+  file, the exact managed-root key set and stable ICS source/target mappings.
+
+`PRODUCTION_ALLOW_DIRTY=1` exists only to exercise a local build while editing.
+Such an artifact records `git_dirty=true`; the publisher always rejects it.
+
+The production checker is the publication gate. It verifies every manifest
+hash, the exact artifact inventory, root/indexable canonicals, absence of
+preview/noindex leakage, production robots, a root-only sitemap with no
+`__preview`, `lab` or test partnership URL, all event/listing/search URLs, and
+the rule that top-level `ics/` is outside the managed deletion set.
+
+### Publish gate
+
+`deploy-production-yc.mjs` loads the same root `.env` format as the preview
+publisher. Required secrets remain `KENIGEVENTS_SITE_YC_BUCKET`,
+`KENIGEVENTS_SITE_YC_ACCESS_KEY_ID` and
+`KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY`; endpoint/region keep the existing
+`KENIGEVENTS_SITE_YC_ENDPOINT` / `KENIGEVENTS_SITE_YC_REGION` overrides.
+
+After reviewing `npm run plan:production`, publish only with a build-id-specific
+confirmation:
+
+```bash
+cd site
+export PRODUCTION_BUILD_ID=production-YYYYMMDDtHHMMSSz-0123abcd
+export KENIGEVENTS_SITE_PRODUCTION_CONFIRM="publish:${PRODUCTION_BUILD_ID}"
+npm run deploy:production
+```
+
+Optional public-origin verification overrides are
+`KENIGEVENTS_SITE_STAGE_PUBLIC_BASE_URL` and
+`KENIGEVENTS_SITE_ROOT_PUBLIC_BASE_URL`; both default to the bucket website
+endpoint so verification checks origin bytes rather than a stale CDN cache.
+
+Promotion protocol:
+
+1. rerun the full production artifact check and reject dirty/wrong-mode/wrong-
+   schema metadata;
+2. require that `_static/releases/<build-id>/static-release-manifest.json` does
+   not already exist, then upload every file under the unique
+   `_static/releases/<build-id>/root/` staging prefix;
+3. seal the immutable release by uploading its versioned manifest and fetch
+   every staged file over public HTTP, comparing size and SHA-256;
+4. copy `_astro` immutable assets first, then supporting files, HTML, and root
+   `index.html` last; old hashed `_astro` objects are retained so cached old HTML
+   remains valid during and after rollout;
+5. update `ics/<event_id>.ics` individually from manifest mappings with calendar
+   metadata; absent IDs are never deleted wholesale;
+6. verify every promoted root object over public HTTP;
+7. delete only stale keys named by the prior release manifest, with hard guards
+   for preview prefixes, `_static/releases/`, `ics/`, QA paths and old `_astro`;
+8. retain release manifests and rotate
+   `_static/releases/current.json` to `_static/releases/previous.json` before
+   writing the new `static_release_pointer_v1` current pointer.
+
+The publisher never invokes `aws s3 sync --delete`. A failed staged/public hash
+check stops before root promotion; release pointers change only after root byte
+verification and guarded stale-key cleanup.
+
+### Rollback
+
+Choose an already staged immutable release id (normally from
+`_static/releases/previous.json`) and require a rollback-specific confirmation:
+
+```bash
+cd site
+export PRODUCTION_ROLLBACK_RELEASE_ID=production-YYYYMMDDtHHMMSSz-deadbeef
+export KENIGEVENTS_SITE_PRODUCTION_CONFIRM="rollback:${PRODUCTION_ROLLBACK_RELEASE_ID}"
+npm run rollback:production
+
+# Equivalent explicit CLI path:
+# npm run rollback:production -- --release-id "$PRODUCTION_ROLLBACK_RELEASE_ID"
+```
+
+Rollback revalidates the target release manifest, verifies its staged public
+bytes, applies the same asset-before-HTML order and protected stale-key policy,
+updates stable ICS files without wholesale deletion, verifies root bytes, then
+rotates current/previous pointers. It does not rebuild or mutate the immutable
+release prefix.
 
 ## Visual review passes
 

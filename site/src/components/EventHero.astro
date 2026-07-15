@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, withBase } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
@@ -38,7 +38,13 @@ const HeadingTag = headingTag;
 const primaryImageUrl = eventImageUrl(event.image_url);
 const primaryImageAsset = event.image_assets?.find((asset) => eventImageUrl(asset.src) === primaryImageUrl) || event.image_assets?.[0];
 const galleryCtaImageUrl = eventImageUrl(galleryCta?.image_url);
-const derivedMode: HeroMode = primaryImageUrl ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
+// `visual_only` is a legacy OCR observation, not an event-relative semantic
+// role. It cannot prove that an image is safe to crop. Cover/parallax is
+// unlocked only by the explicit LLM-authored `event_photo` role; missing,
+// pending and unknown roles fail closed to the complete-frame poster stage.
+const primaryImageMediaRole = event.image_media_role || primaryImageAsset?.media_role;
+const primaryIsEventPhoto = primaryImageMediaRole === 'event_photo';
+const derivedMode: HeroMode = primaryImageUrl ? (primaryIsEventPhoto ? 'photo-cover' : 'poster-stage') : 'fallback-art';
 const heroMode = modeOverride || derivedMode;
 const derivedComposition: HeroComposition = heroMode === 'fallback-art'
   ? 'compact-ticketing'
@@ -121,7 +127,7 @@ const galleryImages = (() => {
       image_text_mode: event.image_text_mode,
       recommended_object_position: heroObjectPosition || undefined,
       recommended_hero_fit: heroMode === 'photo-cover' ? 'cover' : 'contain',
-      media_role: event.image_media_role,
+      media_role: primaryImageMediaRole,
       width: primaryImageAsset?.width,
       height: primaryImageAsset?.height,
     });
@@ -207,7 +213,7 @@ const showTicketCta = Boolean(ctaHref);
   <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-efficient-portrait-viewer={efficientPortraitViewer ? 'true' : undefined} data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
-      <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы">
+      <a class="hero-gallery__brand" href={siteHomeHref()} aria-label="Перейти к афише Полюбить Калининград Анонсы">
         <span>Полюбить Калининград</span>
         <strong>Анонсы</strong>
       </a>
@@ -232,7 +238,7 @@ const showTicketCta = Boolean(ctaHref);
               loading="lazy"
               decoding="async"
               data-image-text-mode={image.image_text_mode}
-              data-media-role={image.media_role}
+              data-media-role={image.media_role || 'unknown_document'}
               data-event-id={event.id}
               data-event-title={event.title}
               width={image.width}

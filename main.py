@@ -21821,6 +21821,25 @@ async def job_event_media_review(
         event = await session.get(Event, int(event_id))
         if event is None:
             return False
+        # Jobs can remain queued while an event is merged, cancelled or ages
+        # out of the public static projection.  Re-check the same fail-closed
+        # contract at execution time so stale work cannot download/materialize
+        # media or spend an LLM review call for a non-public row.
+        from static_site_public_projection import public_occurrence_gate_reason
+
+        now_local = datetime.now(LOCAL_TZ)
+        public_gate_reason = public_occurrence_gate_reason(
+            event,
+            now_local.date().isoformat(),
+            now_local.strftime("%H:%M"),
+        )
+        if public_gate_reason:
+            logging.info(
+                "event_media_review skipped by public projection gate event_id=%s reason=%s",
+                event_id,
+                public_gate_reason,
+            )
+            return False
         rehydrated = await _rehydrate_missing_event_source_posters_for_telegraph(
             session,
             event,

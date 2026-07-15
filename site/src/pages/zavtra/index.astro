@@ -4,14 +4,16 @@ import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro'
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, eventDaypart, getTomorrowDate, getTomorrowEvents, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, eventDaypart, getTomorrowDate, getTomorrowEvents, IS_PRODUCTION, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
 import type { EventDaypart } from '../../lib/events';
 
 const events = getTomorrowEvents();
 const tomorrowDate = getTomorrowDate();
 const canonicalUrl = absoluteUrl('/zavtra/');
 const title = `События завтра в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на завтра ${tomorrowDate}: афиша по утру, дню, вечеру и ночи.`;
+const description = IS_PRODUCTION
+  ? `Афиша событий на завтра ${tomorrowDate}: события утром, днём, вечером и ночью.`
+  : `Статический preview-листинг событий на завтра ${tomorrowDate}: афиша по утру, дню, вечеру и ночи.`;
 const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
   { key: 'morning', label: 'Утро', note: '06:00–11:59' },
   { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
@@ -25,7 +27,7 @@ const sections = dayparts
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Завтра</span>
       </nav>
@@ -37,7 +39,7 @@ const sections = dayparts
           <div class="source-links">
             <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
             <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
-            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
+            <a href={siteHomeHref()}>{IS_PRODUCTION ? 'Все анонсы' : 'Все тестовые страницы'}</a>
           </div>
         </div>
       </section>
@@ -47,7 +49,7 @@ const sections = dayparts
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <ListingPersonalFilter total={events.length} label="завтра" />
-          <h2>{events.length ? `Найдено: ${events.length}` : 'На завтра в fixture нет событий'}</h2>
+          <h2>{events.length ? `Найдено: ${events.length}` : (IS_PRODUCTION ? 'На завтра событий не найдено' : 'На завтра в fixture нет событий')}</h2>
           {sections.length ? (
             <div class="listing-dayparts">
               {sections.map((section) => (

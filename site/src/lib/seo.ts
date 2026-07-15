@@ -1,5 +1,5 @@
 import type { PreviewEvent } from './types';
-import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
+import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, siteHomeHref, SITE_NAME, SITE_ORIGIN } from './events';
 import { eventImageUrl } from './assets';
 
 const KALININGRAD_TZ_OFFSET = '+02:00';
@@ -106,8 +106,8 @@ export function buildEventJsonLd(event: PreviewEvent) {
 
 export function buildBreadcrumbJsonLd(event: PreviewEvent) {
   const items = [
-    { name: SITE_NAME, item: new URL(withBase('/__preview/'), `${SITE_ORIGIN}/`).toString() },
-    event.city ? { name: event.city, item: new URL(withBase(`/__preview/?city=${encodeURIComponent(event.city)}`), `${SITE_ORIGIN}/`).toString() } : undefined,
+    { name: SITE_NAME, item: new URL(siteHomeHref(), `${SITE_ORIGIN}/`).toString() },
+    event.city ? { name: event.city, item: new URL(siteHomeHref(`?city=${encodeURIComponent(event.city)}`), `${SITE_ORIGIN}/`).toString() } : undefined,
     { name: event.title, item: eventAbsoluteUrl(event) },
   ].filter(Boolean) as Array<{ name: string; item: string }>;
 

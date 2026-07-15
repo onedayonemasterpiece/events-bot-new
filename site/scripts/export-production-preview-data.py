@@ -32,6 +32,14 @@ for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_
     if (_candidate / "google_ai").exists() and str(_candidate) not in sys.path:
         sys.path.insert(0, str(_candidate))
 
+from static_site_public_projection import (
+    normalize_date as shared_normalize_date,
+    public_projection_gate_reason as shared_public_projection_gate_reason,
+    status_value_blocks_public_projection as shared_status_value_blocks_public_projection,
+    text_value_blocks_public_projection as shared_text_value_blocks_public_projection,
+    title_looks_prompt_leak as shared_title_looks_prompt_leak,
+)
+
 CURRENT_DATE_DEFAULT = "2026-06-28"
 CONTROL_EVENT_IDS = [
     5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698,
@@ -209,20 +217,7 @@ def title_looks_prompt_leak(title: str) -> bool:
     titles. Rows caught here must be fixed at the source/Smart Update layer,
     but a preview export must not publish raw prompt-control text as an event.
     """
-    text = clean_text(title).lower()
-    if not text:
-        return False
-    prompt_tokens = [
-        "attendee-facing",
-        "event_type=",
-        "message_date",
-        "as-of",
-        "rather than",
-        "ordered_event_ids",
-    ]
-    if text.startswith("//") and any(token in text for token in prompt_tokens):
-        return True
-    return sum(1 for token in prompt_tokens if token in text) >= 3
+    return shared_title_looks_prompt_leak(title)
 
 
 def row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
@@ -268,14 +263,7 @@ def slugify(value: str, fallback: str = "event") -> str:
 
 
 def normalize_date(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not re.fullmatch(r"20\d\d-\d\d-\d\d", text):
-        return None
-    try:
-        date.fromisoformat(text)
-    except ValueError:
-        return None
-    return text
+    return shared_normalize_date(value)
 
 
 PUBLIC_REVIEW_STATUS_MARKERS = {
@@ -328,52 +316,16 @@ def row_has_key(row: sqlite3.Row, key: str) -> bool:
 
 
 def status_value_blocks_public_projection(value: Any) -> bool:
-    status = clean_text(value).lower().replace("-", "_")
-    if not status:
-        return False
-    return (
-        status in PUBLIC_REVIEW_STATUS_MARKERS
-        or status.endswith("_review")
-        or status.startswith("review")
-        or "quarantine" in status
-        or status.startswith("rejected")
-    )
+    return shared_status_value_blocks_public_projection(value)
 
 
 def text_value_blocks_public_projection(field: str, value: Any) -> bool:
-    text = clean_text(value)
-    if not text:
-        return False
-    if PROMPT_OR_CODE_LEAK_RE.search(text):
-        return True
-    if field in {"location_name", "location_address", "city"}:
-        lowered = text.lower()
-        if LOCATION_PROSE_START_RE.search(lowered):
-            return True
-        if len(text) >= 28 and LOCATION_PROSE_VERB_RE.search(lowered):
-            return True
-        if len(text) >= 70 and re.search(r"[!?…]|[.]\s", text):
-            return True
-    return False
+    return shared_text_value_blocks_public_projection(field, value)
 
 
 def public_projection_gate_reason(row: sqlite3.Row) -> str | None:
     """Return why an event row must not enter public static-site projection."""
-    if row_has_key(row, "identity_status") and clean_text(row_get(row, "identity_status")).lower() != "canonical":
-        return "identity_status:not_canonical"
-    if row_has_key(row, "merged_into_event_id") and clean_text(row_get(row, "merged_into_event_id")) not in {"", "0", "none", "null"}:
-        return "merged_into_event_id"
-    for field in PUBLIC_STATUS_COLUMNS:
-        if row_has_key(row, field) and status_value_blocks_public_projection(row_get(row, field)):
-            return f"{field}:blocked_status"
-    if not normalize_date(row_get(row, "date")):
-        return "date:invalid_iso"
-    if row_has_key(row, "end_date") and clean_text(row_get(row, "end_date")) and not normalize_date(row_get(row, "end_date")):
-        return "end_date:invalid_iso"
-    for field in PUBLIC_TEXT_FIELDS:
-        if row_has_key(row, field) and text_value_blocks_public_projection(field, row_get(row, field)):
-            return f"{field}:leakage"
-    return None
+    return shared_public_projection_gate_reason(row)
 
 
 def split_time(value: Any) -> tuple[str | None, str | None, str | None]:

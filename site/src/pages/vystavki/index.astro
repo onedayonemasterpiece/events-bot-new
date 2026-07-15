@@ -3,7 +3,7 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getCurrentDate, getOngoingExhibitionEvents, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, getCurrentDate, getOngoingExhibitionEvents, IS_PRODUCTION, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
 
 const currentDate = getCurrentDate();
 const events = getOngoingExhibitionEvents();
@@ -15,7 +15,7 @@ const description = `Отдельная static-страница выставок
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Выставки</span>
       </nav>
@@ -35,7 +35,7 @@ const description = `Отдельная static-страница выставок
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <ListingPersonalFilter total={events.length} label="выставки" />
-          <h2>{events.length ? `Найдено: ${events.length}` : 'Сейчас выставки в fixture не найдены'}</h2>
+          <h2>{events.length ? `Найдено: ${events.length}` : (IS_PRODUCTION ? 'Сейчас выставки не найдены' : 'Сейчас выставки в fixture не найдены')}</h2>
           <div class="listing-stack">
             {events.map((event) => <EventListItem event={event} />)}
           </div>
