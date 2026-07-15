@@ -49,6 +49,8 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+
+- **Event age-rating Kaggle CPU runtime**: probe the concrete BGE-M3 model symbol and upgrade an incompatible preinstalled FlagEmbedding 1.3.x to the pinned Transformers-5-compatible 1.4.0 before loading the encoder.
 - **Parser age preservation**: carry Qtickets/Pyramida/Dom Iskusstv/Philharmonia structured restrictions through `EventCandidate`, reconcile them on the repeated-source fast path, preserve Universal Festival program ratings, and stop the Dom Iskusstv kernel from treating the first arbitrary `N+` in page HTML as the event rating.
 - **Static media enrichment scope**: restrict the operational derivative/LLM backfill to active, non-silent current-or-ongoing events, preventing cancelled, postponed and incident-tombstoned rows from consuming media budgets or re-entering public fanout; align the documented poster confidence environment name with runtime.
 - **Static event cards / poster framing and ticket copy**: removed horizontal document crop and side fields from desktop related cards, preserved source width while bounding height through vertical overflow only, and replaced invented `По билетам`/`Открыть условия` copy with `Билеты`/`Источник события` while making calendar the primary action for free no-registration events.

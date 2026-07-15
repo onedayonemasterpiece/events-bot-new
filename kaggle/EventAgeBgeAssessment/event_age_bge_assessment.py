@@ -98,7 +98,11 @@ def load_status_client():
 
 def ensure_dependencies() -> None:
     try:
-        import FlagEmbedding  # noqa: F401
+        # Import the exact runtime symbol, not only the package root.  Kaggle
+        # may preinstall FlagEmbedding 1.3.x next to Transformers 5: the root
+        # import succeeds, while BGEM3FlagModel fails later because that release
+        # is not Transformers-5 compatible.
+        from FlagEmbedding import BGEM3FlagModel  # noqa: F401
         import huggingface_hub  # noqa: F401
     except Exception:
         subprocess.check_call(
@@ -108,7 +112,8 @@ def ensure_dependencies() -> None:
                 "pip",
                 "install",
                 "-q",
-                "FlagEmbedding==1.3.5",
+                "--upgrade",
+                "FlagEmbedding==1.4.0",
                 "huggingface-hub>=0.34,<2.0",
             ]
         )

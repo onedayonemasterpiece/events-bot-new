@@ -101,6 +101,11 @@ internal candidate, а безопасный публичный режим ост
 - phase/progress/alive heartbeat и bounded runtime, как в Telegram Monitoring и
   CherryFlash.
 
+Runtime-проверка импортирует именно `BGEM3FlagModel`, а не только корневой
+пакет: если Kaggle предоставляет несовместимый с Transformers 5
+`FlagEmbedding 1.3.x`, worker обновляет его до закреплённого
+`FlagEmbedding==1.4.0` до загрузки модели.
+
 ### Запуск batch
 
 После каждого Smart Update события без declared rating один глобальный

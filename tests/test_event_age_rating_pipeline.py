@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -145,6 +146,20 @@ def test_bge_dual_heads_require_agreement_and_artifact_cutoffs():
     bundle["weights_b"] = np.asarray([[0, 0, 0, 6, 0], [0, 0, 0, 6, 0]], dtype="float32")
     rejected = classify_with_dual_heads(np.asarray([[1, 0]], dtype="float32"), bundle, gate)[0]
     assert rejected["status"] == "insufficient_evidence"
+
+
+def test_bge_dependency_probe_repairs_incompatible_preinstalled_package(monkeypatch):
+    worker = load_bge_worker()
+    incompatible = types.ModuleType("FlagEmbedding")
+    monkeypatch.setitem(sys.modules, "FlagEmbedding", incompatible)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(worker.subprocess, "check_call", lambda command: commands.append(command))
+
+    worker.ensure_dependencies()
+
+    assert len(commands) == 1
+    assert "--upgrade" in commands[0]
+    assert "FlagEmbedding==1.4.0" in commands[0]
 
 
 def test_bge_classifier_gate_is_automatic_and_hash_bound(tmp_path, monkeypatch):

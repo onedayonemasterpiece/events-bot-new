@@ -25,6 +25,9 @@ The Kaggle kernel has `enable_gpu=false`. A pinned
 `EVENT_AGE_BGE_MODEL_REVISION` is mandatory. A cold shadow run computes and
 exports prototype vectors. Missing, mismatched, or automatically rejected
 classifier artifacts produce terminal abstentions rather than numeric guesses.
+The bootstrap probes the actual `BGEM3FlagModel` symbol and upgrades to the
+Transformers-5-compatible `FlagEmbedding==1.4.0` when Kaggle exposes an older,
+incompatible preinstalled package.
 
 Manual canary through the standard status ledger/heartbeat path:
 
