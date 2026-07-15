@@ -16214,7 +16214,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "sources_with_candidate_memory_post_per_1000":round(1000 * len({r.get("source_id") for r in candidate_memory_rows}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
         "sources_with_actual_image_candidate_per_1000":round(1000 * len({r.get("source_id") for r in new_posts if r.get("image_model_input_type") == "actual_image"}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
         "sources_with_publication_ready_candidate_per_1000":round(1000 * len({r.get("source_id") for r in candidate_memory_rows if str(r.get("image_publication_ready") or "") == "true"}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
-        "current_run_reviewable_candidates":sum(1 for r in candidate_memory_rows if r.get("first_candidate_run_id") == run_id),
+        # Candidate memory is intentionally wider than the operator review
+        # queue: it also retains rows waiting for actual media, dual-vector
+        # completion, or a later policy refresh.  Counting every newly-created
+        # memory row here overstated product output in the live heartbeat.
+        "current_run_reviewable_candidates":len(reviewable_rows),
         "final_candidates":len(candidates),
         "favorites":len(favorites),
         "image_fetch_retry_needed":sum(1 for r in new_posts if r.get("current_stage") == "image_fetch_retry_needed"),

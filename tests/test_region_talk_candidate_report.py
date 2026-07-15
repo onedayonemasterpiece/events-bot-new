@@ -3834,6 +3834,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["llm_limit_source"], "supabase_google_ai")
         self.assertEqual(payload["summary"]["image_model_calls"], 1)
         self.assertEqual(payload["summary"]["text_vector_rows_scored"], 1)
+        self.assertEqual(payload["summary"]["candidate_memory_new_this_run"], 1)
+        self.assertEqual(payload["summary"]["current_run_reviewable_candidates"], 0)
         self.assertTrue(payload["sheets"]["09_image_quality"])
 
     def test_llm_error_has_retry_sheet(self) -> None:

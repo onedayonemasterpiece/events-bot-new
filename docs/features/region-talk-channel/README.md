@@ -217,6 +217,11 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
   statuses, and both source/candidate handoffs have explicit row caps. Telethon
   network operations are guarded by per-call timeouts and cached-entity-only
   mode can defer username cache misses instead of burning FloodWait.
+- Product-heartbeat contract: `current_run_reviewable_candidates` counts only
+  current-run rows whose lifecycle stage is actually ready for operator
+  review. Newly-created candidate-memory rows still waiting for BGE, actual
+  media acquisition or a policy refresh remain visible through
+  `candidate_memory_new_this_run`, but are not called reviewable output.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
   persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,
