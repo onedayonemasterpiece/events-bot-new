@@ -47,12 +47,13 @@ Smart Update call. Source-native values вообще не используют L
 запускается отдельным bounded batch и не пишет declared value. Публичный default
 — `declared_only`.
 
-## Решение второй консультации: no-human / OCR / no-missing
+## Решение второй консультации: no-human / OCR / terminal completeness
 
 Gemini поддержал следующую безопасную интерпретацию требований:
 
-- «нет отсутствующего рейтинга» означает terminal state для каждого события,
-  но не выдуманный numeric default при недостатке evidence;
+- на том этапе «нет отсутствующего рейтинга» было интерпретировано как terminal
+  state для каждого события, но не выдуманный numeric default при недостатке
+  evidence;
 - OCR — readiness dependency и first-class часть corpus, а не необязательное
   дополнение после text inference;
 - один durable coalesced outbox job запускает missing-only batch после quiet
@@ -65,6 +66,9 @@ Gemini поддержал следующую безопасную интерпр
 Интегратор принял эти пункты. Отдельный предложенный консультантом outbox не
 создавался: существующий `JobOutbox` уже даёт durable coalescing/retry и
 уменьшает число новых сущностей.
+
+Эта интерпретация **не является ответом на более позднее буквальное уточнение
+владельца о 100% numeric fill rate**. Оно отдельно проверено в итерации 4 ниже.
 
 ## Canary follow-up
 
@@ -102,3 +106,30 @@ abstentions.
 `declared_only`. Предложенную human audit queue интегратор отклонил как
 противоречащую явному no-human контракту. Полный brief/ответ: ignored artifacts
 `gemini-iteration-3-brief.md` и `gemini-iteration-3-review.raw.md`.
+
+## Итерация 4: буквальный no-missing gate
+
+После production batch стало видно, что terminal completeness нельзя выдавать
+за numeric completeness: из первых 64 строк classifier принял 5, 46 завершил
+абстенцией, ещё 13 были защищены поздно появившимся declared value. По прямому
+уточнению владельца это неудовлетворительный результат.
+
+Проверен forced-prediction режим на том же untouched grouped OOF seed:
+
+- raw prediction для всех 531: coverage `100%`, exact `73.82%`, within-one
+  `93.22%`, under `9.60%`, severe-under `0.188%` (1 событие);
+- `+1` для всех rejected: exact `63.65%`, within-one `86.82%`, under `1.88%`,
+  severe-under `0`, но child severe-over `43.52%`;
+- dev-only ordinal/category guardrail sweeps не достигли одновременно
+  `exact >= 72%`, `within-one >= 95%`, `under <= 10%`, `severe-under = 0` при
+  100% coverage.
+
+Gemini 3.1 Pro High дал текущему 51% numeric design буквальный вердикт `FAIL`.
+Рекомендован каскад declared → estimate внутри уже существующего Smart Update
+call → high-confidence BGE → conservative terminal prior, с раздельным
+provenance и неизменным public `declared_only`. Первые три ступени уже есть.
+Четвёртая намеренно не включена: простое forced/default значение не прошло
+independent gate и либо допускает severe under-rating, либо тяжело завышает
+детские события. Это quality blocker, а не основание подменить `NULL` ложной
+точностью. Полный brief/ответ: ignored artifacts
+`gemini-iteration-4-brief.md` и `gemini-iteration-4-review.raw.md`.
