@@ -351,6 +351,68 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(rows[0]["media_review_mode"], "operator_video_review")
         self.assertEqual(rows[0]["manual_media_review_required"], "true")
 
+    def test_read_live_rows_prefers_current_memory_text_reject_over_stale_image_snapshot(self) -> None:
+        mod = self.mod
+        source = external_source("kseniacalm")
+        post_url = "https://t.me/kseniacalm/3678"
+        kinds = {
+            "image_queue_item": {
+                "image:stale": {
+                    "post_url": post_url,
+                    "source_url": "https://t.me/kseniacalm",
+                    "source_title": "KSENIA CALM",
+                    "platform": "telegram",
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "kaliningrad_oblast_only_scope": True,
+                    "overall_media_score": 0.8,
+                },
+            },
+            "candidate_memory_item": {
+                "memory:current": {
+                    "post_url": post_url,
+                    "text_excerpt": "Любить светлый диван букле",
+                    "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "kaliningrad_oblast_only_scope": False,
+                    "current_stage": "dropped_text_gate",
+                    "current_lifecycle_status": "vector_reject_not_kaliningrad_oblast",
+                    "processing_policy_version": "region_talk_post_processing_v3_ambiguous_place_context",
+                },
+            },
+            "publication_candidate_item": {},
+            "source_queue_item": {"source:kseniacalm": source},
+            "source_status_item": {},
+            "online_source_item": {},
+            "source_onboarding_profile_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return Pool()
+
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-15T06:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
+
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["vector_gate_status"], "vector_reject_not_kaliningrad_oblast")
+        self.assertFalse(row["kaliningrad_oblast_only_scope"])
+        verdict = mod.rt.publication_eligibility(row, row["_authoritative_source"])
+        self.assertFalse(verdict["eligible"])
+        self.assertEqual(verdict["primary_reason"], "vector_reject_not_kaliningrad_oblast")
+
     def test_source_onboarding_evidence_is_compact_deduplicated_and_traceable(self) -> None:
         mod = self.mod
         source = external_source("travelcase")

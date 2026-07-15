@@ -5770,13 +5770,67 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         urls = {r.get("post_url") for r in queue}
         self.assertIn("https://t.me/good/1", urls)
         self.assertIn("https://t.me/ko/1", urls)
-        self.assertNotIn("https://t.me/bad/1", urls)
+        self.assertIn("https://t.me/bad/1", urls)
+        invalidated = next(r for r in queue if r.get("post_url") == "https://t.me/bad/1")
+        self.assertEqual(invalidated["image_queue_status"], "rejected_text_gate")
+        self.assertEqual(invalidated["next_action"], "skip_text_rejected")
+        self.assertEqual(invalidated["status_changed_this_run"], "true")
         self.assertNotIn("https://t.me/buryatia/1", urls)
         self.assertNotIn("https://t.me/roundup/1", urls)
         self.assertNotIn("https://t.me/mediaonly/1", urls)
         self.assertEqual(metrics["image_queue_pruned_non_region_previous"], 1)
         self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 3)
-        self.assertEqual(metrics["image_queue_text_region_confirmed_total"], len(queue))
+        self.assertEqual(metrics["image_queue_text_region_confirmed_total"], 2)
+
+    def test_current_text_reject_invalidates_stale_actual_scored_image_row(self) -> None:
+        mod = load_module()
+        post_url = "https://t.me/kseniacalm/3678"
+        previous = {"image_candidate_queue": {
+            post_url: {
+                "image_queue_id": "imgq_stale_actual",
+                "image_queue_order": 1,
+                "post_url": post_url,
+                "source_url": "https://t.me/kseniacalm",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_topic_class": "travel_blogger",
+                "has_media": True,
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "current_stage": "semantic_candidate",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+                "images_scored_actual_count": 2,
+                "image_quality_decision": "needs_visual_review",
+            }
+        }}
+        refreshed = {
+            "post_url": post_url,
+            "source_url": "https://t.me/kseniacalm",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "has_media": True,
+            "kaliningrad_oblast_only_scope": False,
+            "current_stage": "dropped_text_gate",
+            "current_lifecycle_status": "vector_reject_not_kaliningrad_oblast",
+            "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "processing_policy_version": "region_talk_post_processing_v3_ambiguous_place_context",
+        }
+        queue, top, metrics = mod.build_image_candidate_queue(
+            previous, [refreshed], [refreshed], [], "run-policy-refresh", "2026-07-15T06:00:00+00:00"
+        )
+        row = next(r for r in queue if r.get("post_url") == post_url)
+        self.assertEqual(row["image_queue_status"], "rejected_text_gate")
+        self.assertEqual(row["previous_image_queue_status"], "actual_scored")
+        self.assertEqual(row["vector_gate_status"], "vector_reject_not_kaliningrad_oblast")
+        self.assertEqual(row["text_region_confirmation_status"], "invalidated_by_current_text_gate")
+        self.assertEqual(row["next_action"], "skip_text_rejected")
+        self.assertNotIn(post_url, {r.get("post_url") for r in top})
+        self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 1)
 
     def test_image_candidate_queue_preserves_prefetched_vk_media_url(self) -> None:
         mod = load_module()
@@ -6749,6 +6803,63 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(matches[0]["candidate_memory_id"], "cmem_original")
         self.assertEqual(matches[0]["post_id"], "exact_fetch_post_id")
         self.assertIn("Личный рассказ", matches[0]["full_text"])
+
+    def test_candidate_memory_durably_downgrades_same_url_after_current_text_reject(self) -> None:
+        mod = load_module()
+        post_url = "https://t.me/kseniacalm/3678"
+        previous = {
+            "candidate_memory": {
+                "cmem_original": {
+                    "candidate_memory_id": "cmem_original",
+                    "post_id": "history_post_id",
+                    "post_url": post_url,
+                    "first_seen_run_id": "run-1",
+                    "last_refetched_run_id": "run-1",
+                    "current_stage": "image_fetch_retry_needed",
+                    "current_lifecycle_status": "image_fetch_retry_needed",
+                    "kaliningrad_oblast_only_scope": True,
+                    "matched_place_names": "Светлый",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "vector_content_type": "visit_impression_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "full_text": "Любить светлый диван букле",
+                }
+            }
+        }
+        current = [{
+            "post_id": "exact_fetch_post_id",
+            "post_url": post_url,
+            "platform_post_key": "tg:kseniacalm:3678",
+            "source_id": "src-kseniacalm",
+            "source_title": "KSENIA CALM",
+            "text": "Любить светлый диван букле",
+            "text_hash": "current-hash",
+            "kaliningrad_oblast_only_scope": False,
+            "matched_place_names": "Светлый",
+            "current_stage": "dropped_text_gate",
+            "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "drop_gate": "ambiguous_place_context_safety_gate",
+            "processing_policy_version": "region_talk_post_processing_v3_ambiguous_place_context",
+        }]
+
+        memory, _not_refetched, deltas = mod.build_candidate_memory(
+            previous, current, [], "run-2", "2026-07-15T06:00:00+00:00"
+        )
+
+        self.assertEqual(len(memory), 1)
+        row = memory[0]
+        self.assertEqual(row["candidate_memory_id"], "cmem_original")
+        self.assertEqual(row["post_id"], "exact_fetch_post_id")
+        self.assertEqual(row["current_stage"], "dropped_text_gate")
+        self.assertEqual(row["current_lifecycle_status"], "vector_reject_not_kaliningrad_oblast")
+        self.assertEqual(row["vector_gate_status"], "vector_reject_not_kaliningrad_oblast")
+        self.assertFalse(row["kaliningrad_oblast_only_scope"])
+        self.assertEqual(row["candidate_memory_text_gate_reason"], "ambiguous_place_context_safety_gate")
+        self.assertEqual(row["candidate_memory_text_gate_changed_this_run"], "true")
+        self.assertEqual(row["full_text"], "")
+        self.assertIn(row, mod.candidate_memory_rows_for_ydb_write(memory, run_id="run-2"))
+        self.assertTrue(any(delta["delta_bucket"] == "excluded_by_hard_region_gate" for delta in deltas))
 
     def test_candidate_memory_reuses_legacy_bootstrap_id_for_same_public_url(self) -> None:
         mod = load_module()

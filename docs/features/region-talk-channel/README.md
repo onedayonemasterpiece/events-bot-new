@@ -124,6 +124,20 @@ regression was `светлый диван`). Historical aliases such as `Цим�
 remain independently usable. The guard runs before image/Gemini spend and does
 not replace or weaken the mandatory dual E5+BGE text decision.
 
+Text-policy refreshes propagate monotonically through the downstream ledger.
+Candidate memory is reconciled by canonical public post URL, not a fetch-path
+specific internal post id; a newly rejected post remains as a compact audit
+row but loses active status and working text. If a post that already has image
+evidence is later rejected by the current source/text/vector policy,
+CandidateReport must persist that image row as
+`rejected_text_gate`; simply omitting it from an in-memory queue rebuild is not
+enough because the old row-level YDB payload would remain readable. Album/frame
+diagnostics stay attached for audit, but the row is no longer actionable. The
+publication finalizer also treats current candidate-memory source/text/vector
+fields as authoritative over the image-admission snapshot, so a stale
+`actual_scored` row cannot bypass a newer rejection between asynchronous
+notebook writes.
+
 ### Kaggle static/offline discipline
 
 Related: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `kaggle_status.py`, `kaggle_registry.py`, `video_announce/kaggle_client.py`.

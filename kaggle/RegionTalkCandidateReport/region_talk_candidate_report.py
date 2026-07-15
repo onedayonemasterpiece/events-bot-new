@@ -2394,6 +2394,7 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "why_not_publication_ready", "media_kind", "manual_media_review_required",
     "video_manual_review_eligible",
     "candidate_memory_source_cleanup_status", "candidate_memory_source_cleanup_reason",
+    "candidate_memory_text_gate_status", "candidate_memory_text_gate_reason",
 ]
 PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
@@ -3249,7 +3250,10 @@ def bound_candidate_memory_rows_for_online_write(rows: list[dict[str, Any]]) -> 
     )
     cleanup_rows = [
         row for row in rows
-        if str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true"
+        if (
+            str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true"
+            or str(row.get("candidate_memory_text_gate_changed_this_run") or "").lower() == "true"
+        )
     ][:cleanup_max_items]
     cleanup_ids = {id(row) for row in cleanup_rows}
     ordinary_rows = [row for row in rows if id(row) not in cleanup_ids]
@@ -3268,11 +3272,12 @@ def candidate_memory_rows_for_ydb_write(
     changed: list[tuple[int, int, dict[str, Any]]] = []
     for row_index, row in enumerate(rows):
         source_cleanup_changed = str(row.get("candidate_memory_source_cleanup_changed_this_run") or "").lower() == "true"
+        text_gate_changed = str(row.get("candidate_memory_text_gate_changed_this_run") or "").lower() == "true"
         bge_fusion_changed = str(row.get("external_bge_m3_fusion_changed_this_run") or "").lower() == "true"
         # The online writer applies a bounded row cap. Put terminal source
         # cleanup first so refreshed ordinary rows cannot repeatedly occupy
         # that cap and leave known local/spam rows in the operational funnel.
-        priority = 0 if source_cleanup_changed else (1 if bge_fusion_changed else 2)
+        priority = 0 if (source_cleanup_changed or text_gate_changed) else (1 if bge_fusion_changed else 2)
         if str(row.get("not_refetched_this_run") or "").lower() != "true":
             changed.append((priority, row_index, row))
             continue
@@ -3280,6 +3285,9 @@ def candidate_memory_rows_for_ydb_write(
             changed.append((priority, row_index, row))
             continue
         if source_cleanup_changed:
+            changed.append((priority, row_index, row))
+            continue
+        if text_gate_changed:
             changed.append((priority, row_index, row))
             continue
         if str(row.get("last_refetched_run_id") or "") == run_id:
@@ -6803,7 +6811,8 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
         if not isinstance(prev, dict):
             continue
         if str(prev.get("current_stage") or "") in CANDIDATE_MEMORY_STAGES:
-            mid = "cmem_" + stable_hash(str(pid))
+            legacy_url = canonical_post_url_for_storage(prev.get("post_url"))
+            mid = memory_id_by_url.get(legacy_url) or "cmem_" + stable_hash(str(pid))
             memory.setdefault(mid, {
                 "candidate_memory_id": mid, "post_id": pid, "post_url": prev.get("post_url", ""),
                 "platform_post_key": prev.get("platform_post_key", ""), "source_id": prev.get("source_id", ""),
@@ -6817,16 +6826,69 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
                 "manual_decision": prev.get("manual_decision", ""), "next_action": "keep_in_memory_or_refetch_source_later",
                 "why_keep_in_memory": "legacy candidate from previous post state", "why_not_publication_ready": "not refetched in this run yet",
             })
-            legacy_url = canonical_post_url_for_storage(prev.get("post_url"))
             if legacy_url:
                 memory_id_by_url.setdefault(legacy_url, mid)
     current_by_id = {str(r.get("post_id")): r for r in current_rows if r.get("post_id")}
     for row in current_rows:
-        if not is_candidate_memory_row(row):
-            continue
         pid = str(row.get("post_id") or stable_hash(row.get("post_url")))
         canonical_memory_url = canonical_post_url_for_storage(row.get("post_url"))
         mid = memory_id_by_url.get(canonical_memory_url) or "cmem_" + stable_hash(pid)
+        if not is_candidate_memory_row(row):
+            # Candidate memory is a durable audit ledger, but its operational
+            # status must follow the newest processed-post decision.  Exact and
+            # history fetches can use different post_ids, so reconcile by the
+            # canonical public URL.  Removing the row only from the rebuilt
+            # snapshot would leave the old row-level YDB candidate active.
+            prev = memory.get(mid)
+            if prev and str(prev.get("manual_decision") or "").lower() not in {
+                "keep", "manual_keep", "favorite", "approve_for_preview", "approve_for_queue",
+            }:
+                vector_status = str(row.get("vector_gate_status") or "")
+                gate_reason = str(
+                    row.get("drop_gate")
+                    or row.get("drop_reason")
+                    or row.get("rejection_reason")
+                    or vector_status
+                    or row.get("current_stage")
+                    or "current_text_gate_reject"
+                )
+                for field in (
+                    "post_id", "post_url", "platform_post_key", "source_id", "source_title", "source_url",
+                    "post_date", "text_hash", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
+                    "matched_place_names", "matched_place_accepted_as_region_evidence", "region_scope_reason",
+                    "is_ad_or_promo", "is_ad_or_promo_hard", "is_ad_or_promo_possible",
+                    "is_multi_region_roundup", "is_multi_topic_digest", "is_digest_or_roundup",
+                    "external_geo_mentions", "mentioned_external_regions", "mentioned_external_countries",
+                    "vector_gate_status", "vector_content_type", "vector_positive_score",
+                    "vector_negative_class", "vector_negative_score", "vector_ad_promo_score",
+                    "vector_news_event_score", "vector_roundup_score", "vector_other_region_score",
+                    "text_vector_fusion_status", "external_bge_m3_status", "bge_m3_enrichment_id",
+                    "bge_m3_match_mode", "processing_policy_version",
+                ):
+                    if field in row and row.get(field) not in (None, ""):
+                        prev[field] = row.get(field)
+                prev.update({
+                    "last_seen_run_id": run_id,
+                    "last_refetched_run_id": run_id,
+                    "not_refetched_this_run": "false",
+                    "previous_stage": prev.get("current_stage", ""),
+                    "current_stage": row.get("current_stage") or "dropped_text_gate",
+                    "previous_lifecycle_status": prev.get("current_lifecycle_status", ""),
+                    "current_lifecycle_status": (
+                        vector_status if vector_status.startswith("vector_reject") else "text_gate_rejected_audit_only"
+                    ),
+                    "visibility_status": "audit_only_current_text_reject",
+                    "candidate_memory_text_gate_status": "audit_only_current_text_reject",
+                    "candidate_memory_text_gate_reason": gate_reason,
+                    "candidate_memory_text_gate_changed_this_run": "true",
+                    "why_not_publication_ready": gate_reason,
+                    "next_action": "skip_text_rejected",
+                    # The terminal audit row needs hashes/reasons, not another
+                    # durable copy of the complete post body.
+                    "full_text": "",
+                    "short_summary": "",
+                })
+            continue
         if canonical_memory_url:
             memory_id_by_url.setdefault(canonical_memory_url, mid)
         prev = memory.get(mid) or {}
@@ -6951,12 +7013,33 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             continue
         vector_region_accept = str(rec.get("vector_gate_status") or "") == "vector_accept_candidate" and str(rec.get("vector_content_type") or "") in {"visit_impression_candidate", "route_useful_candidate", "single_location_photo_card"}
         if (str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"} and not vector_region_accept) or (str(rec.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"} and not vector_region_accept):
-            rec["current_lifecycle_status"] = "region_evidence_missing_needs_refetch"
-            rec["visibility_status"] = "excluded_from_candidate_memory_by_region_vector_gate"
-            rec["next_action"] = "refetch_source_or_manual_region_override"
-            rec["why_not_publication_ready"] = "region/vector evidence missing in candidate memory"
+            already_terminal = (
+                str(rec.get("current_stage") or "") == "dropped_text_gate"
+                and str(rec.get("current_lifecycle_status") or "") in {
+                    "text_gate_rejected_audit_only",
+                    "vector_reject_not_kaliningrad_oblast",
+                    "vector_reject_multi_region_roundup",
+                    "vector_reject_ad_promo",
+                    "vector_reject_news_event",
+                }
+            )
+            rec["current_stage"] = "dropped_text_gate"
+            if not str(rec.get("current_lifecycle_status") or "").startswith("vector_reject"):
+                rec["current_lifecycle_status"] = "text_gate_rejected_audit_only"
+            rec["visibility_status"] = "audit_only_current_text_reject"
+            rec["candidate_memory_text_gate_status"] = "audit_only_current_text_reject"
+            rec["candidate_memory_text_gate_reason"] = str(
+                rec.get("candidate_memory_text_gate_reason")
+                or rec.get("vector_gate_status")
+                or "region/vector evidence missing in candidate memory"
+            )
+            rec["next_action"] = "skip_text_rejected"
+            rec["why_not_publication_ready"] = rec["candidate_memory_text_gate_reason"]
+            rec["full_text"] = ""
+            rec["short_summary"] = ""
+            if not already_terminal:
+                rec["candidate_memory_text_gate_changed_this_run"] = "true"
             region_excluded.append({**rec, "candidate_memory_id": mid})
-            memory.pop(mid, None)
     rows = sorted(memory.values(), key=lambda r: (str(r.get("manual_decision") or "") == "reject", str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("best_candidate_score_ever") or 0), str(r.get("post_date") or "")))
     not_refetched = [r for r in rows if str(r.get("not_refetched_this_run")) == "true" and r.get("current_lifecycle_status") != "manual_reject"]
     deltas = []
@@ -8332,6 +8415,72 @@ def build_image_candidate_queue(
         key = (reason or "unknown").split(":", 1)[0]
         image_queue_product_block_reasons[key] = image_queue_product_block_reasons.get(key, 0) + 1
 
+    text_gate_snapshot_fields = {
+        "source_id", "source_title", "source_url", "source_scope", "source_geo_class",
+        "source_topic_class", "source_quick_class", "source_queue_status",
+        "posts_scanned", "ko_posts_found", "candidate_posts_found",
+        "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
+        "external_geo_mentions", "mentioned_external_regions", "mentioned_external_countries",
+        "is_ad_or_promo", "is_multi_region_roundup", "is_multi_topic_digest",
+        "is_digest_or_roundup", "current_stage", "current_lifecycle_status",
+        "vector_gate_status", "vector_content_type", "text_vector_fusion_status",
+        "external_bge_m3_status", "bge_m3_enrichment_id", "bge_m3_match_mode",
+        "processing_policy_version", "text_hash",
+    }
+
+    def invalidate_image_row(
+        previous: dict[str, Any],
+        current_text: dict[str, Any],
+        reason: str,
+        *,
+        eligibility: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Persist a current text/source rejection over a stale image snapshot.
+
+        Image rows are a durable ledger and CandidateReport writes only changed
+        rows.  Silently dropping a formerly accepted row from the rebuilt
+        in-memory queue leaves the old row-level ``actual_scored`` payload in
+        YDB, where the finalizer can still consume it.  Keep the diagnostic
+        evidence, but close the queue item with the current authoritative text
+        decision so the changed-only writer propagates the invalidation.
+        """
+        row = dict(previous)
+        for field in text_gate_snapshot_fields:
+            if field in current_text and current_text.get(field) not in (None, ""):
+                row[field] = current_text.get(field)
+        previous_status = str(row.get("image_queue_status") or "")
+        transition_origin = (
+            str(row.get("previous_image_queue_status") or "")
+            if previous_status == "rejected_text_gate"
+            else previous_status
+        )
+        row.update({
+            "previous_image_queue_status": transition_origin,
+            "image_queue_status": "rejected_text_gate",
+            "status_changed_this_run": str(previous_status != "rejected_text_gate").lower(),
+            "last_status_changed_at": run_now,
+            "status_color_hint": "red_no_ko",
+            "row_fill_color": "red_no_ko",
+            "text_region_confirmation_status": "invalidated_by_current_text_gate",
+            "image_product_gate_status": "rejected_before_image",
+            "image_product_gate_reason": reason,
+            "image_eligibility_status": "rejected",
+            "image_eligibility_reason": reason,
+            "next_action": "skip_text_rejected",
+            "selected_for_next_image_batch": "false",
+            "queue_item_updated_at": run_now,
+            "last_attempt_run_id": run_id,
+            "last_attempt_at": run_now,
+        })
+        if eligibility:
+            row["publication_eligibility_decision"] = eligibility.get("decision")
+            row["publication_eligibility_gate_version"] = eligibility.get("gate_version")
+            row["publication_eligibility_reason"] = eligibility.get("primary_reason")
+            row["publication_eligibility_evidence_json"] = json.dumps(
+                eligibility.get("evidence") or {}, ensure_ascii=False, sort_keys=True
+            )
+        return row
+
     def rows_from_state_keys(*keys: str) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for key in keys:
@@ -8431,11 +8580,14 @@ def build_image_candidate_queue(
         if block_reason:
             image_queue_pruned_non_region_previous += 1
             bump_block(block_reason)
+            entries[key] = invalidate_image_row(row, row, block_reason)
             continue
         eligibility = publication_eligibility(row, require_actual_image=False)
         if str(eligibility.get("decision") or "") != "accept":
             image_queue_pruned_non_region_previous += 1
-            bump_block(str(eligibility.get("primary_reason") or "publication_eligibility_not_accept"))
+            eligibility_reason = str(eligibility.get("primary_reason") or "publication_eligibility_not_accept")
+            bump_block(eligibility_reason)
+            entries[key] = invalidate_image_row(row, row, eligibility_reason, eligibility=eligibility)
             continue
         row["publication_eligibility_decision"] = eligibility.get("decision")
         row["publication_eligibility_gate_version"] = eligibility.get("gate_version")
@@ -8465,6 +8617,8 @@ def build_image_candidate_queue(
         if added_from != "media_scoring" and block_reason:
             image_queue_rejected_non_region_inputs += 1
             bump_block(block_reason)
+            if key in entries:
+                entries[key] = invalidate_image_row(entries[key], row, block_reason)
             return
         if added_from == "media_scoring" and key not in entries and block_reason:
             image_queue_rejected_non_region_inputs += 1
@@ -8599,7 +8753,10 @@ def build_image_candidate_queue(
         if row.get("has_media"):
             add_or_update(row, added_from="current_run_text_gate")
     for row in candidate_memory_rows:
-        if row.get("post_url") and candidate_memory_should_try_image(row):
+        if row.get("post_url") and (
+            candidate_memory_should_try_image(row)
+            or str(row.get("post_url") or "") in entries
+        ):
             add_or_update(row, added_from="candidate_memory")
     for media in media_rows:
         if media.get("post_url"):
