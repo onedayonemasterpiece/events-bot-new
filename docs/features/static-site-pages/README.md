@@ -1,34 +1,53 @@
 # Static Site Event Pages
 
-> **Status:** Astro SSG production integration candidate publicly verified; accepted desktop composition, mobile v4 and rail/bus transport are combined on a full current catalog, production-root promotion pending
+> **Status:** replacement Astro SSG production-integration candidate under final public verification; exact accepted desktop component, unchanged mobile v4 and rail/bus transport are combined on the full current catalog, production-root promotion pending
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 
 ## Implementation status
 
-### 2026-07-15 production integration candidate
+### 2026-07-15 replacement production integration candidate
 
-`preview-20260715t-production-transport-mobile-real-events-v1` is the current
-single review surface. It combines the accepted desktop Continuous
-Editorial/Split families, the accepted mobile v4 event UI, the shared
-announcement lockup/favicon and additive rail/bus transport blocks. The build
-was exported from a fresh production SQLite snapshot at the current
-Kaliningrad date/time and contains `282` public future or ongoing events. Lab
-routes keep their frozen real-event fixtures, so rotating production data can
-no longer silently change an accepted design scenario.
+`preview-20260715t-production-desktop-contract-v2` is the replacement noindex
+review surface. Unlike the rejected v1 build, every generated desktop event
+route mounts the **same** `DesktopEventPage.astro` implementation used by the
+accepted laboratory scenarios; there is no legacy `EventHero + event-grid`
+desktop imitation. A geometry- and semantic-state-aware router selects only
+the accepted Continuous Editorial or Split family. Portrait and
+resolution-constrained media fail to Split; only a classified
+`event_identity_poster` can create an OCR companion. The unchanged mobile v4
+DOM is retained as a separate breakpoint surface. Rail/bus transport is added
+inside the accepted long reading flow rather than replacing its composition.
 
-- index: <https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/__preview/>;
-- desktop/media regression: [«Гараж»](https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/sobytiya/spektakl-garazh-kaliningrad-5658/);
-- rail: [JOE LYNN TURNER, Светлогорск](https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/sobytiya/joe-lynn-turner-i-j-l-t-band-svetlogorsk-5789/);
-- bus: [«Слёт бабок Ёжек», Романово](https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/sobytiya/slet-babok-ezhek-romanovo-6710/).
+The source snapshot contains `282` public future or ongoing events. The
+mandatory gate checks all `282` generated routes and pins four real specimens:
+Pianissimo `5294` (low-resolution Split), Blogger bus `6815` (portrait Split),
+«Гараж» `5658` (Continuous Editorial) and «Эпидемия» `4671` (Editorial with a
+classified poster companion).
+
+- index: <https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/__preview/>;
+- [Pianissimo](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294/);
+- [Блогерский автобус](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815/);
+- [«Гараж»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/spektakl-garazh-kaliningrad-5658/);
+- [«Эпидемия. Огненная рукопись»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/epidemiya-ognennaya-rukopis-kaliningrad-4671/).
+
+`preview-20260715t-production-transport-mobile-real-events-v1` is rejected by
+`INC-2026-07-15-static-desktop-template-regression`: it rendered the legacy
+production desktop DOM with approximation CSS, routed a `180×320` image into a
+full-width hero, and was never reviewed by Gemini against the mass-generated
+URLs. It must not be cited as desktop acceptance evidence.
 
 The offline related graph is `event_pgvector_related_chain_v2_two_doc`: all
 `282` anchors have `40` current candidates, no dangling ids, and the refresh
 reused `564` unchanged embeddings with `0` provider calls. Browser page views
-still consume only same-origin static discovery JSON. Public Playwright checks
-passed at `1920×1080` and `390×844`: no horizontal overflow, mobile v4 date
-panel active, rail/bus blocks present, related-card navigation stays inside the
-same build, and event plus transport calendars return `200 text/calendar`.
+still consume only same-origin static discovery JSON. The replacement local
+acceptance covers the whole `282/282` catalog with no page errors, plus a
+`4 events × 3 viewports` (`1536×864`, `1920×1080`, `1440×650`) matrix with
+visible H1/CTA and zero horizontal overflow. Interaction checks cover exact
+gallery indices, classified-poster opening, idle autorotation, CTA safe
+release, immutable thumbnail derivatives and both transport types. Public
+HTTP/Playwright and a consultant review must target the replacement URLs above
+before the candidate is called verified.
 
 This is a prefix-only review release. It does not promote or delete the
 production root and does not modify stable `/p/` media or `/ics/` calendars.

@@ -57,13 +57,18 @@ coalesce into that follow-up. Static-site builds use the task-specific maximum
 runtime rather than the historical ten-minute stale-owner constant, so a valid
 long Kaggle build is not rearmed as stale.
 
-The local/public integration proof
+The data/artifact portion of
 `preview-20260715t-production-transport-mobile-real-events-v1` exported `282`
 public future/ongoing events, refreshed both pgvector documents for every
-anchor, reused `564` unchanged embeddings (`0` provider calls), generated `40`
-non-dangling candidates per event and passed Astro/check-preview plus public
-desktop/mobile Playwright checks. This proves the artifact path; it does **not**
-remove the separate atomic production-root promotion gate described above.
+anchor, reused `564` unchanged embeddings (`0` provider calls) and generated
+`40` non-dangling candidates per event. Its desktop presentation evidence is
+**rejected** by `INC-2026-07-15-static-desktop-template-regression`: the build
+kept the legacy production DOM and the consultant did not review the generated
+mass-event URLs. The replacement
+`preview-20260715t-production-desktop-contract-v2` must pass
+`check:production-desktop`, full-catalog browser acceptance and exact public
+URL review. Either prefix proves only the noindex artifact path; neither removes
+the separate atomic production-root promotion gate described above.
 The integration branch stages the corresponding Fly non-secret env
 (`ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`, full-catalog limit, pgvector sync and
 CDN/ICS bases). It becomes active only after this branch is merged and deployed;

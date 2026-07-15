@@ -1,16 +1,18 @@
 ---
-import Icon from '../Icon.astro';
-import EventCard from '../EventCard.astro';
-import EventTokenMedallions from '../EventTokenMedallions.astro';
+import Icon from './Icon.astro';
+import EventCard from './EventCard.astro';
+import EventTokenMedallions from './EventTokenMedallions.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
-import type { EventImageAsset, EventImageDerivative, EventImageMediaRole, PreviewEvent } from '../../lib/types';
+import EventTransportSchedule from './EventTransportSchedule.astro';
+import EventBusTransportSchedule from './EventBusTransportSchedule.astro';
+import type { EventImageAsset, EventImageDerivative, EventImageMediaRole, PreviewEvent } from '../lib/types';
 import {
   displayDate,
   displayDateTime,
   eventHref,
   withBase,
-} from '../../lib/events';
-import { eventImageUrl } from '../../lib/assets';
+} from '../lib/events';
+import { eventImageUrl } from '../lib/assets';
 
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
@@ -45,6 +47,9 @@ interface Props {
   relatedMediaTreatment?: RelatedMediaTreatment;
   mediaRoleOverrides?: Record<number, EventImageMediaRole>;
   mediaDimensionOverrides?: Record<number, { width: number; height: number }>;
+  surface?: 'lab' | 'production';
+  presentationReason?: string;
+  showTransport?: boolean;
 }
 
 type GalleryImage = {
@@ -84,14 +89,17 @@ const {
   relatedMediaTreatment = 'hybrid',
   mediaRoleOverrides = {},
   mediaDimensionOverrides = {},
+  surface = 'lab',
+  presentationReason = 'lab-fixture',
+  showTransport = false,
 } = Astro.props;
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
 const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
 // Historical review fixtures predate the LLM media-role export. Keep this fallback
 // inside the noindex desktop lab only; production routing remains role-first/fail-closed.
-const relatedForLab = related.map((item) => item.image_media_role
+const relatedForRender = surface === 'lab' ? related.map((item) => item.image_media_role
   ? item
-  : ({ ...item, image_media_role:item.image_text_mode === 'visual_only' ? 'event_photo' : 'unknown_document' } as PreviewEvent));
+  : ({ ...item, image_media_role:item.image_text_mode === 'visual_only' ? 'event_photo' : 'unknown_document' } as PreviewEvent)) : related;
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
@@ -139,7 +147,14 @@ const galleryImages = (() => {
       src,
       alt: asset?.alt || heroAlt,
       image_text_mode: imageTextMode,
-      media_role: (sourceIndex === undefined ? undefined : mediaRoleOverrides[sourceIndex]) || asset?.media_role || fallbackMediaRole(imageTextMode),
+      // Production exports can temporarily carry `unknown_document/pending`
+      // after Smart Update while the LLM media-role pass is still catching up.
+      // `visual_only` is sufficient for photo-style rail/rotation treatment,
+      // but never for promoting an asset to the semantic poster companion.
+      // A classified role always wins and poster semantics remain fail-closed.
+      media_role: (sourceIndex === undefined ? undefined : mediaRoleOverrides[sourceIndex])
+        || (asset?.media_semantic_status === 'classified' ? asset.media_role : undefined)
+        || fallbackMediaRole(imageTextMode),
       width: dimensions?.width || asset?.width,
       height: dimensions?.height || asset?.height,
       position: asset?.recommended_object_position,
@@ -227,6 +242,8 @@ const descriptionHtml = (event.description_html || '')
   data-related-media-treatment={relatedMediaTreatment}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
   data-event-id={event.id}
+  data-event-surface={surface}
+  data-presentation-reason={presentationReason}
   style={`--image-ratio:${ratio};--image-position:${preferredPosition};--media-count:${Math.max(1, photoCount)};`}
 >
   <div class="desktop-clean-reading-shell">
@@ -421,6 +438,12 @@ const descriptionHtml = (event.description_html || '')
                   <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
                 </div>
               </section>
+              {showTransport && (
+                <div class="desktop-clean-transport" data-desktop-transport>
+                  <EventTransportSchedule event={event} />
+                  <EventBusTransportSchedule event={event} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -477,7 +500,7 @@ const descriptionHtml = (event.description_html || '')
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
       <div class="cards-grid cards-grid--immersive desktop-clean-related__grid" data-lab-row-normalize>
-        {relatedForLab.map((item) => <EventCard event={item} variant="split-actions" />)}
+        {relatedForRender.map((item) => <EventCard event={item} variant="split-actions" />)}
       </div>
     </div>
   </section>
@@ -1717,6 +1740,10 @@ const descriptionHtml = (event.description_html || '')
     .desktop-prototype__flow-body .desktop-clean-practical { padding:0; }
     .desktop-prototype__flow-body .desktop-clean-practical__grid { grid-template-columns:1fr; }
     .desktop-prototype__flow-body .desktop-clean-practical__grid article { min-height:128px; }
+    .desktop-clean-transport { display:grid; gap:1rem; margin-top:clamp(1.5rem,3vw,2.5rem); }
+    .desktop-clean-transport:empty { display:none; }
+    .desktop-clean-transport :global(.event-transport),
+    .desktop-clean-transport :global(.event-bus-transport) { margin:0; }
     :global(.desktop-prototype__action--inline) { margin:0 clamp(1.5rem,3vw,3.2rem); border-radius:24px; }
 
     /* Editorial: one continuous slab plus one bounded sticky right stack. */
@@ -2294,6 +2321,19 @@ const descriptionHtml = (event.description_html || '')
 
     .desktop-portrait-viewer__track { box-sizing:border-box; }
     .desktop-portrait-viewer__item { max-height:100%; }
+  }
+
+  /* Keep the event identity and primary action readable on wide, shallow
+     desktop viewports. This is intentionally appended after the versioned
+     Editorial rules so later focus-layer overrides cannot silently cancel it. */
+  @media (min-width:1024px) and (max-height:720px) {
+    .desktop-clean-event--editorial .desktop-prototype__content-flow {
+      margin-top:clamp(260px,46svh,330px);
+    }
+    .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side :global(.desktop-prototype__action),
+    .desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] :global(.desktop-prototype__action) {
+      margin-top:max(12px,calc(46svh - 100px));
+    }
   }
 
   @media (prefers-reduced-motion:reduce) {

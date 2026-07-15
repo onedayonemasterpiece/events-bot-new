@@ -1,0 +1,57 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: 4468f76cf81e42d323e07c4dbee88b4c6de01fd9
+base_branch: integration/static-site-transport-mobile-real-events-20260715
+integration_branch: fix/static-site-production-desktop-contract-20260715
+global_constraints:
+  - desktop-only presentation repair
+  - do not alter accepted mobile DOM, layout, or behavior
+  - production must reuse the accepted desktop component/DOM rather than approximate it
+verification_owner: codex-integrator
+stop_conditions:
+  - any mobile visual regression
+  - any production event still rendering the legacy desktop event-grid surface
+  - any Editorial route without a qualifying landscape visual
+lanes:
+  - id: contract-map
+    role: planner
+    requirement_ids: [R01, R02, R04]
+    target: accepted-lab versus production root-cause map
+    depends_on: []
+    execution_mode: serial
+    branch: fix/static-site-production-desktop-contract-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: [.codex/lanes/static-site-production-desktop-contract-repair-20260715]
+    forbidden_files: []
+    expected_output: root-cause and exact promotion contract
+    verification_scope: inspection_only
+    effort: extra-high
+    status: completed
+  - id: production-promotion
+    role: worker
+    requirement_ids: [R01, R02]
+    target: shared accepted desktop component plus data-driven presentation router
+    depends_on: [contract-map]
+    execution_mode: serial_after_dependency
+    branch: fix/static-site-production-desktop-contract-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: [site/src/components, site/src/lib, site/src/pages/sobytiya]
+    forbidden_files: [site/src/components/MobileEventProductionStyles.astro]
+    expected_output: exact accepted desktop DOM on every production event route
+    verification_scope: full_local
+    effort: extra-high
+    status: completed
+  - id: acceptance
+    role: reviewer
+    requirement_ids: [R03, R04]
+    target: representative and corpus-wide public desktop acceptance
+    depends_on: [production-promotion]
+    execution_mode: serial_after_dependency
+    branch: fix/static-site-production-desktop-contract-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: [site/scripts, docs, CHANGELOG.md, .codex]
+    forbidden_files: [site/src/components/MobileEventProductionStyles.astro]
+    expected_output: Playwright matrix, independent consultant review, release evidence
+    verification_scope: full_local_and_public
+    effort: extra-high
+    status: in_progress

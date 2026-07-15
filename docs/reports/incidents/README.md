@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-15-static-desktop-template-regression.md`
+  - Scope: exact accepted desktop event component, production media-family routing, full-catalog static generation and truthful consultant/release acceptance.
+  - Must not regress: generated desktop pages must mount the accepted Continuous Editorial/Split component rather than a CSS imitation; portrait/low-resolution media must fail to Split; all-page and representative Playwright evidence must cover the actual generated preview URLs while mobile v4 stays unchanged.
 - `INC-2026-07-15-fly-volume-critical.md`
   - Scope: Fly `/data` capacity, SQLite/runtime evidence retention, `/healthz` readiness and `/webhook` routing during deploys.
   - Must not regress: production must retain bounded runtime evidence without crossing the disk-critical readiness floor; every deploy must verify free space, SQLite integrity, `/healthz`, Fly checks and fresh disk-full/proxy logs; volume auto-extension stays bounded and cannot replace retention or DB/media hygiene.

@@ -69,8 +69,15 @@ for (const event of eventsData.events) {
   const hasBus = html.includes('data-event-bus-schedule');
   if (hasRail || hasBus) {
     transportEventCount += 1;
-    const factsAt = html.indexOf('>Коротко</h2>');
-    const transportAt = hasRail ? html.indexOf('data-event-transport-schedule') : html.indexOf('data-event-bus-schedule');
+    // Desktop and mobile are deliberately separate DOM surfaces. The shared
+    // accepted desktop component can render its additive transport block
+    // before the preserved mobile-v4 markup, so the mobile ordering contract
+    // must be evaluated inside the mobile root rather than against the first
+    // transport marker in the complete HTML document.
+    const mobileAt = html.indexOf('data-production-mobile-event');
+    const mobileHtml = mobileAt >= 0 ? html.slice(mobileAt) : '';
+    const factsAt = mobileHtml.indexOf('>Коротко</h2>');
+    const transportAt = hasRail ? mobileHtml.indexOf('data-event-transport-schedule') : mobileHtml.indexOf('data-event-bus-schedule');
     if (factsAt < 0 || transportAt < factsAt) throw new Error(`Event ${event.id} transport must follow compact event facts`);
   }
   if (String(event.city || '').toLocaleLowerCase('ru-RU') === 'калининград' && hasRail) {
@@ -162,7 +169,7 @@ if (!desktopV12Pages.garage.includes('data-editorial-motion="continuous"') || !d
   throw new Error('Desktop v12 Garage and OCR companion fixtures must share continuous editorial motion');
 }
 const desktopV12Script = readdirSync(join(root, '_astro'))
-  .find((name) => name.startsWith('DesktopEventCleanPage.astro_astro_type_script_') && name.endsWith('.js'));
+  .find((name) => name.startsWith('DesktopEventPage.astro_astro_type_script_') && name.endsWith('.js'));
 if (!desktopV12Script) throw new Error('Desktop v12 behavior bundle is missing');
 const desktopV12ScriptSource = readFileSync(join(root, '_astro', desktopV12Script), 'utf8');
 for (const marker of ['waiting-media', 'gallery-open', 'manual-rail-interaction', 'pointer-move', 'autoRotateReady']) {

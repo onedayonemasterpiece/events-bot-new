@@ -1,7 +1,7 @@
 ---
-import Icon from '../Icon.astro';
-import CalendarLink from '../CalendarLink.astro';
-import type { PreviewEvent } from '../../lib/types';
+import Icon from './Icon.astro';
+import CalendarLink from './CalendarLink.astro';
+import type { PreviewEvent } from '../lib/types';
 import {
   displayDateTime,
   eventAbsoluteUrl,
@@ -12,7 +12,7 @@ import {
   isExternalHttpUrl,
   isTelephoneUrl,
   isTicketSoldOut,
-} from '../../lib/events';
+} from '../lib/events';
 
 interface Props {
   event: PreviewEvent;

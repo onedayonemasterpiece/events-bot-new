@@ -11,6 +11,27 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
 - [ ] **Blocked** — release manifest records repo SHA, event snapshot, schedule snapshot ID/hash/fetched time, asset prefix and rollback prefix.
 - [ ] **Blocked** — promotion and rollback commands rehearsed against the same candidate; production canonical remains unchanged until approval.
 
+### Desktop event-template regression gate
+
+- [x] **Done locally for replacement candidate** — all `282/282` generated
+  event pages mount the exact shared `DesktopEventPage.astro`; only accepted
+  Continuous Editorial/Split families are present and mobile revision `v4`
+  remains the separate fallback surface.
+- [x] **Done locally for replacement candidate** — real pins `5294`, `6815`,
+  `5658` and `4671` route respectively to low-resolution Split, portrait Split,
+  Continuous Editorial and Editorial with a classified poster companion.
+- [x] **Done locally for replacement candidate** — full-catalog Playwright has
+  zero page errors; the `4 × 3` viewport matrix has visible H1/CTA and zero
+  horizontal overflow; interaction checks cover exact gallery indices,
+  thumbnail derivatives, CTA release, idle autorotation and transport.
+- [ ] **Blocked on public replacement review** — public HTTP and Playwright
+  must target `preview-20260715t-production-desktop-contract-v2`, not rejected
+  `preview-20260715t-production-transport-mobile-real-events-v1`.
+- [ ] **Blocked on truthful consultant evidence** — Gemini Pro/Opus review
+  artifact must list the exact generated replacement URLs and tested
+  viewports. Review of lab fixtures, screenshots from another build or only a
+  transport block cannot be reported as full-catalog desktop acceptance.
+
 ## 2. Demonstration scenarios
 
 - [x] **Done in focus preview** — real Светлогорск event `6510`: compact whole-row calendar links for outbound/return trains, a 20–90 minute arrival window and no public schedule-verification links.

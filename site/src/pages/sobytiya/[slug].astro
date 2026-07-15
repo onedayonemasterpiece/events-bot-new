@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import DesktopEventPage from '../../components/DesktopEventPage.astro';
 import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
 import EventTransportSchedule from '../../components/EventTransportSchedule.astro';
@@ -13,7 +14,9 @@ import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import MobileEventProductionStyles from '../../components/MobileEventProductionStyles.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
-import type { EventImageAsset } from '../../lib/types';
+import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-overrides.json';
+import type { EventImageAsset, EventImageDerivative, PreviewEvent } from '../../lib/types';
+import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
 import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
@@ -109,10 +112,50 @@ const galleryImageAssets = (() => {
 const identityPoster = galleryImageAssets.find((asset) => asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
 const identityPosterIndex = identityPoster ? galleryImageAssets.findIndex((asset) => asset.src === identityPoster.src) : -1;
 const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_media_role || (event.image_text_mode === 'visual_only' ? 'unknown_visual' : 'unknown_document'));
+// A handful of the accepted desktop specimens were enriched before their
+// derivative rows reached the current production snapshot. Reuse only those
+// immutable CDN thumbnails when the canonical asset still has no derivatives;
+// the mobile-v4 event object remains untouched below.
+const desktopThumbnailOverrides = (desktopThumbnailOverridesData.events as Record<string, Record<string, EventImageDerivative[]>>)[String(event.id)] || {};
+const desktopEvent: PreviewEvent = Object.keys(desktopThumbnailOverrides).length > 0
+  ? {
+      ...event,
+      image_assets:(event.image_assets || []).map((asset, index) => asset.thumbnail_sources?.length
+        ? asset
+        : ({ ...asset, thumbnail_sources:desktopThumbnailOverrides[String(index)] || asset.thumbnail_sources })),
+    }
+  : event;
+const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
   <MobileEventProductionStyles />
-  <main id="main" data-mobile-event-production data-mobile-review-revision="v4" data-actions-treatment="dock" data-compact-label-action={compactLabelAction}>
+  <div id="main">
+  <DesktopEventPage
+    event={desktopEvent}
+    related={discoveryFeed}
+    candidate={desktopPresentation.candidate}
+    mediaPolicy={desktopPresentation.mediaPolicy}
+    heroImageIndex={desktopPresentation.heroImageIndex}
+    heroWidth={desktopPresentation.heroWidth}
+    heroHeight={desktopPresentation.heroHeight}
+    heroObjectPosition={desktopPresentation.heroObjectPosition}
+    editorialRail={desktopPresentation.editorialRail}
+    editorialMotion={desktopPresentation.editorialMotion}
+    editorialCropPolicy={desktopPresentation.editorialCropPolicy}
+    ocrCompanionImageIndex={desktopPresentation.ocrCompanionImageIndex}
+    ocrCompanionLayout={desktopPresentation.ocrCompanionLayout}
+    autoRotate={desktopPresentation.autoRotate}
+    ocrSourceIndexes={desktopPresentation.ocrSourceIndexes}
+    duplicateSourceIndexes={desktopPresentation.duplicateSourceIndexes}
+    splitMediaFit={desktopPresentation.splitMediaFit}
+    splitPortraitViewer={desktopPresentation.splitPortraitViewer}
+    splitPortraitSourceIndexes={desktopPresentation.splitPortraitSourceIndexes}
+    relatedMediaTreatment={desktopPresentation.relatedMediaTreatment}
+    surface="production"
+    presentationReason={desktopPresentation.reason}
+    showTransport
+  />
+  <main data-production-mobile-event data-mobile-event-production data-mobile-review-revision="v4" data-actions-treatment="dock" data-compact-label-action={compactLabelAction}>
     <div class="page-shell page-shell--event-impact">
       <div class="desktop-event-reading-shell" data-desktop-event-reading data-desktop-media-family={primaryIsPhoto ? 'editorial' : 'split'} data-has-identity-poster={identityPoster ? 'true' : 'false'}>
       <div class="event-grid">
@@ -206,4 +249,10 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
       </div>
     </div>
   )}
+  </div>
+  <style is:global>
+    @media (min-width: 1024px) {
+      [data-production-mobile-event] { display: none !important; }
+    }
+  </style>
 </EventLayout>

@@ -1,8 +1,8 @@
 # Desktop event media families — 2026-07-12
 
-Status: **clean noindex desktop-only review pages; no layout is promoted to production**.
+Status: **accepted desktop families promoted to the shared production component for noindex full-catalog review; production-root promotion remains blocked on approval**.
 
-Acceptance restoration (2026-07-15): the v11 desktop compositions are restored on top of the approved shared announcement lockup and favicon at <https://kenigevents.ru/preview-20260715t-desktop-v11-acceptance/lab/event-desktop/>. The acceptance surface is intentionally limited to laboratory routes; production event/mobile components are unchanged. Current comparison targets are `editorial-photo-continuous`, `split-low-resolution` and `editorial-ocr-companion-arrival`. The efficient viewer restores the previous visible group when navigating back and uses the event title in its top bar. Transport integration and production-data routing remain separate post-approval steps.
+Acceptance restoration (2026-07-15): the v11 desktop compositions were first restored on top of the approved shared announcement lockup and favicon at <https://kenigevents.ru/preview-20260715t-desktop-v11-acceptance/lab/event-desktop/>. The accepted implementation is now the shared `site/src/components/DesktopEventPage.astro`, used by both the frozen lab fixtures and every generated production-integration event route. Current families are Continuous Editorial and Split; `editorial-photo-continuous`, `split-low-resolution` and `editorial-ocr-companion-arrival` remain the frozen design references. The efficient viewer restores the previous visible group when navigating back and uses the event title/date/time in its top bar. Transport is an additive block inside the same long reading flow. Mobile v4 remains a separate unchanged breakpoint surface.
 
 Related-card media is a hard, testable desktop contract rather than an aesthetic fallback:
 
@@ -35,6 +35,31 @@ cropFraction = 1 - visibleFraction
 ```
 
 Geometry is only a limit, not evidence that edge text is safe. The lab therefore enables cover only when `data-ocr-safe-cover=true`; all other OCR specimens remain contained even when the geometric crop would be under 20%. The lab exposes `data-measured-crop` and `data-potential-cover-crop` for Playwright acceptance. It does not hide empty areas with blur, duplicated images, gradients or fake backdrops.
+
+## Production routing contract (2026-07-15)
+
+`buildDesktopEventPresentation()` is the only production desktop family router.
+It selects **Editorial** only for a `visual_only` primary that is at least
+`1280×720` and ratio `>=1.25`, or for a classified
+`event_identity_poster` accompanied by an equally qualified landscape image.
+Near-square qualified photos use bottom-safe focal placement. Portrait, square
+and resolution-constrained photos route to **Split**; OCR, document and
+unclassified media also route to OCR-safe Split. OCR alone never promotes an
+asset to poster companion. The multi-portrait efficient viewer requires at
+least five portrait visual assets and at least 60% of the distinct event media.
+
+The production route mounts the exact shared component at `>=1024px` and keeps
+mobile revision `v4` under a separate DOM root below that breakpoint. The build
+gate `npm run check:production-desktop` scans every generated event page,
+asserts the exact component/surface and pins real specimens `5294`, `6815`,
+`5658` and `4671`. Browser acceptance additionally covers the full catalog and
+the `1536×864`, `1920×1080`, `1440×650` representative matrix.
+
+`preview-20260715t-production-transport-mobile-real-events-v1` is explicitly
+rejected: it kept the legacy production desktop DOM and only imitated the lab
+with CSS. It is not acceptance evidence. The replacement review surface is
+`preview-20260715t-production-desktop-contract-v2`. See
+`INC-2026-07-15-static-desktop-template-regression`.
 
 ## Real corpus evidence
 
@@ -103,7 +128,7 @@ Do not promote one desktop composition globally.
 - OCR: Gallery for portrait, Split for other ratios; safe-cover is a source-grounded, measured optimization, never a default;
 - Typographic Lead: only after the title gate and media-quality gate pass.
 
-This work changes only `/lab/event-desktop/`, desktop-only example routes, their lab components/data and checks/docs. Production `EventHero.astro`, production event-detail composition and the accepted mobile overlap geometry remain untouched; `EventLayout.astro` is only reused as the existing noindex shell.
+The accepted desktop implementation is now shared by lab and production-integration event routes. The legacy production DOM remains only as the unchanged mobile v4 surface and is hidden at desktop widths; its mobile overlap geometry and motion are not modified. Production-root promotion is still a separate release decision.
 
 ## Published acceptance evidence
 
