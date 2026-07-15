@@ -3431,7 +3431,14 @@ def merge_candidate_image_payload_with_latest(
         if field in latest:
             merged[field] = latest[field]
     candidate_status = str(candidate.get("image_queue_status") or "")
-    if candidate_status not in {"rejected_text_gate", "rejected_publication_eligibility"}:
+    latest_status = str(latest.get("image_queue_status") or "")
+    candidate_repairs_soft_gate = bool(
+        latest_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
+        and candidate_status in {"actual_scored", "deferred_text_gate"}
+        and str(candidate.get("publication_eligibility_decision") or "").startswith("needs_")
+        and str(candidate.get("status_changed_this_run") or "").lower() == "true"
+    )
+    if candidate_status not in {"rejected_text_gate", "rejected_publication_eligibility"} and not candidate_repairs_soft_gate:
         for field in (
             "image_queue_status", "previous_image_queue_status", "status_changed_this_run",
             "last_status_changed_at", "status_color_hint", "row_fill_color", "next_action",

@@ -7677,6 +7677,60 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(merged["images_scored_actual_count"], 6)
         self.assertEqual(merged["image_quality_decision"], "needs_visual_review")
 
+    def test_candidate_image_write_can_restore_actual_score_hidden_by_soft_gate(self) -> None:
+        mod = load_module()
+        latest = {
+            "image_queue_status": "rejected_text_gate",
+            "previous_image_queue_status": "actual_scored",
+            "last_image_diag_run_id": "image-v3",
+            "images_scored_actual_count": 6,
+            "image_model_input_type": "actual_image",
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "image_quality_decision": "needs_visual_review",
+            "next_action": "skip_text_rejected",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(
+            {
+                "image_queue_status": "actual_scored",
+                "previous_image_queue_status": "actual_scored",
+                "status_changed_this_run": "true",
+                "last_status_changed_at": "2026-07-15T11:10:00+00:00",
+                "publication_eligibility_decision": "needs_source_review",
+                "publication_eligibility_reason": "source_verdict_unknown",
+                "next_action": "wait_for_source_or_text_gate_without_rescoring_image",
+            },
+            latest,
+        )
+        self.assertEqual(merged["image_queue_status"], "actual_scored")
+        self.assertEqual(merged["next_action"], "wait_for_source_or_text_gate_without_rescoring_image")
+        self.assertEqual(merged["images_scored_actual_count"], 6)
+        self.assertEqual(merged["image_quality_decision"], "needs_visual_review")
+
+    def test_candidate_image_write_can_reclassify_old_soft_reject_as_deferred(self) -> None:
+        mod = load_module()
+        latest = {
+            "image_queue_status": "rejected_text_gate",
+            "previous_image_queue_status": "rejected_publication_eligibility",
+            "last_image_diag_run_id": "image-v2",
+            "images_scored_actual_count": 0,
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "next_action": "skip_text_rejected",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(
+            {
+                "image_queue_status": "deferred_text_gate",
+                "previous_image_queue_status": "rejected_publication_eligibility",
+                "status_changed_this_run": "true",
+                "last_status_changed_at": "2026-07-15T11:10:00+00:00",
+                "publication_eligibility_decision": "needs_text_review",
+                "publication_eligibility_reason": "fused_e5_bge_m3_required",
+                "next_action": "complete_dual_text_gate",
+            },
+            latest,
+        )
+        self.assertEqual(merged["image_queue_status"], "deferred_text_gate")
+        self.assertEqual(merged["next_action"], "complete_dual_text_gate")
+
     def test_image_online_writer_merges_latest_diagnostic_row_before_bulk_upsert(self) -> None:
         mod = load_module()
         captured: dict[str, object] = {}
