@@ -1,10 +1,10 @@
 # INC-2026-07-15 Telegram RichMessage medallion rendering gaps
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram event publishing (`@kldevents`)
 Opened: 2026-07-15
-Closed: —
+Closed: 2026-07-15
 Owners: events-bot
 Related incidents: `INC-2026-07-05-tg-medallion-description-alias-drift`, `INC-2026-07-05-tg-afisha-edit-spacing-premium-medallions`, `INC-2026-06-25-outbox-unknown-jobtask-publication-outage`
 Related docs: `docs/features/tg-publishing/README.md`, `docs/features/static-site-pages/event-token-medallions.md`, `docs/operations/incident-management.md`
@@ -39,6 +39,9 @@ instead of getting a standalone graphical strip.
 - 2026-07-15 — about ten existing `@kldevents` posts were manually migrated to RichMessage with a bottom graphical strip.
 - 2026-07-15 — operator reported that event `6811` had two rather than three medallions and that RichMessage footer spacing collapsed.
 - 2026-07-15 21:09Z — implementation work established a manifest-backed production resolver/renderer, RichMessage send/edit path and regression tests; deployment and production catch-up remained pending.
+- 2026-07-15 21:28Z — `origin/main` SHA `5578afa3` was deployed to Fly release `v1684` from a clean detached `origin/main` checkout.
+- 2026-07-15 21:31Z — the deployed canonical publisher edited event `6811` in place at `@kldevents/2482`; the post retained its poster, links and calendar button and gained exactly KОНБ + KGD80 + Znanie in a standalone strip.
+- 2026-07-15 21:45Z — the canonical `tg_event_publish` catch-up ledger was reconciled to `done`; post-deploy Telegram, DB, queue, runtime-log, health and VK mapping checks passed.
 
 ## Root Cause
 
@@ -95,7 +98,7 @@ instead of getting a standalone graphical strip.
 
 - Existing RichMessage posts were kept available while the durable implementation was prepared.
 - Production queue audit found no pending Premium jobs requiring cancellation.
-- Integrator owns the immediate event `6811` public correction and final mapping verification.
+- Event `6811` was corrected in place at `https://t.me/kldevents/2482` and its final public/DB mapping was verified.
 
 ## Corrective Actions
 
@@ -109,16 +112,33 @@ instead of getting a standalone graphical strip.
 
 ## Follow-up Actions
 
-- [ ] Integrator: deploy from a clean `origin/main`-reachable SHA and record release evidence below.
-- [ ] Integrator: correct/reconcile event `6811` and run a normal production canary/catch-up.
-- [ ] Events-bot: close or supersede old incident wording that requires custom-emoji medallion enrichment once production verification is complete.
+- [x] Integrator: deploy from a clean `origin/main`-reachable SHA and record release evidence below.
+- [x] Integrator: correct/reconcile event `6811` and run a normal production canary/catch-up.
+- [x] Events-bot: supersede old incident wording that required custom-emoji medallion enrichment.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending integrator
-- deploy path: pending integrator
-- regression checks: implementation lane focused tests recorded in its `RESULTS.md`; production checks pending integrator
-- post-deploy verification: pending integrator
+- deployed SHA: `5578afa38138fe690447e05f2c5d6a0a937a82e0`, reachable from `origin/main`; implementation was merged through PR [#51](https://github.com/onedayonemasterpiece/events-bot-new/pull/51).
+- deploy path: manual `flyctl deploy --remote-only` from a clean detached `origin/main` checkout to `events-bot-new-wngqia`; Fly release `v1684`, machine version `1684`, image `deployment-01KXKV196SS3QDNX0B1KDGMSJE`.
+- regression checks:
+  - focused graphical-medallion/RichMessage suite: `10 passed`;
+  - related Premium/outbox suites: `31 passed`;
+  - prior incident core regressions: `4 passed`;
+  - full `tests/test_tg_event_publish.py`: `86 passed, 8 failed`; the same eight date-relative June 2026 failures reproduced on unchanged `origin/main` (`77 passed, 8 failed`) and are unrelated to this change;
+  - `py_compile` and `git diff --check` passed; deployed runtime has `aiogram 3.29.1`.
+- post-deploy Telegram verification for `https://t.me/kldevents/2482`:
+  - canonical handler edited the same message id in place; DB mode remains `rich_message`;
+  - block order is poster, event text, graphical strip, footer; media dimensions are `1080×1350` and `1300×330`;
+  - the strip visibly contains exactly KОНБ, KGD80 and Znanie at the intended size;
+  - footer contains exactly 12 non-collapsing spaces between the distinct `Подробнее` and `Max` links;
+  - festival, registration, `Подробнее`, `Max`, VK and calendar-button destinations remain present;
+  - custom-emoji node count is zero and no new Premium editor job was enqueued.
+- production catch-up and health:
+  - canonical outbox job `28272` was reconciled to `done` with URL `https://t.me/kldevents/2482`; no due pending/running publication jobs remained;
+  - `/healthz` returned `ok=true`, `ready=true`, DB/worker/loop `ok`, `issues=[]`;
+  - one unrelated invalid historical `joboutbox.status='failed'` row was backed up and normalized to `paused`; subsequent runtime mirror output showed worker state with `failure_count=0` and no fresh `LookupError`/cycle failure;
+  - stale managed VK URL for event `6811` was repaired from absent `wall-231920894_6981` to authenticated current post `https://vk.com/wall-231920894_6996`, with a row-level backup and SQLite quick check.
+- local non-committed evidence: `artifacts/codex/INC-2026-07-15-tg-rich-medallion-rendering-gaps/` and `artifacts/codex/telegram-medallion-rollout/`.
 
 ## Prevention
 

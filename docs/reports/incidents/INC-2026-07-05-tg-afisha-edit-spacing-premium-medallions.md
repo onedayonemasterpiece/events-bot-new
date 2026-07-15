@@ -1,10 +1,10 @@
 # INC-2026-07-05 Telegram Afisha edit jobs throttled new posts and delayed premium medallions
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Telegram event publishing (`tg_event_publish`) / `@kldevents`
 Opened: 2026-07-05
-Closed: —
+Closed: 2026-07-15
 Owners: Codex / events-bot operations
 Related incidents: `INC-2026-07-05-tg-afisha-vk-dependency-backlog.md`, `INC-2026-06-29-tg-event-publish-fresh-import-starvation.md`, `INC-2026-06-29-tg-promo-compensation-repeat.md`
 Related docs: `docs/features/tg-publishing/README.md`, `docs/features/static-site-pages/event-token-medallions.md`, `docs/features/tg-premium-emojis-update/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -19,6 +19,24 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 - New event announcements competed with old message edits for the same 10-minute lane.
 - Operators could see fresh DB `tg_event_publish` completions, but some were edits of older message IDs rather than new top-of-channel posts.
 - Premium emoji / medallion rendering could be absent for minutes after publication, making the public channel look inconsistent.
+
+## 2026-07-15 Graphical-Medallion Supersession
+
+`INC-2026-07-15-tg-rich-medallion-rendering-gaps.md` supersedes this
+incident's custom-emoji requirements **for event medallions**. The historical
+evidence below remains valid for the old posts and for non-medallion Premium
+labels, but canonical event medallions now render as a standalone graphical
+RichMessage strip.
+
+Accordingly, the old requirements that the canonical event publisher invoke a
+Premium editor, that runtime logs show `tg_premium_emoji.edit_done`, and that a
+public smoke contain medallion custom-emoji entities are no longer deployment
+gates. The current regression contract is the opposite: a `rich_message` event
+must not enqueue or invoke the Premium/custom-emoji medallion editor, stale
+editor jobs must skip, and public evidence must show the graphical strip with
+zero medallion custom-emoji nodes. Fresh-post ordering, durable outbox behavior
+for still-supported Premium edits, and Telegram publication spacing remain
+mandatory.
 
 ## Detection
 
