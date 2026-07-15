@@ -1,10 +1,10 @@
 # INC-2026-07-15 Static desktop template regression in production-integration preview
 
-Status: open
+Status: resolved
 Severity: sev2
 Service: KenigEvents static-site production-integration preview
 Opened: 2026-07-15
-Closed: —
+Closed: 2026-07-15
 Owners: static-site integration
 Related incidents: —
 Related docs: `docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md`, `docs/features/static-site-pages/presentation-release-checklist.md`
@@ -43,6 +43,9 @@ geometry.
 - 2026-07-15 19:xx UTC — root cause confirmed by comparing the production route with the accepted lab component.
 - 2026-07-15 19:4x UTC — exact component integration and geometry/semantic router implemented locally; full-catalog validation started.
 - 2026-07-15 20:5x UTC — local replacement passed the `282/282` catalog gate, `4 × 3` viewport matrix, mobile isolation and interaction suite; public replacement build/consultant review remained pending.
+- 2026-07-15 21:2x UTC — prefix-only replacement deployed; all four pinned real-event URLs and both transport specimens returned public HTTP `200`.
+- 2026-07-15 21:3x UTC — public `4 × 3` Playwright matrix and exact interaction suite passed with no failures.
+- 2026-07-15 21:4x UTC — Gemini 3.1 Pro direct browser audit correctly returned `BLOCKED` after its isolated Chromium crashed; a second, explicitly screenshot-based review inspected exact public Playwright captures plus the two machine evidence JSON files and returned `ACCEPT`.
 
 ## Root Cause
 
@@ -103,7 +106,8 @@ geometry.
 ## Immediate Mitigation
 
 Production-root promotion of the invalid preview was stopped. The replacement
-is being built in an isolated fix branch from the reproducible integration SHA.
+was built in an isolated fix branch from the reproducible integration SHA and
+published only under a noindex preview prefix.
 
 ## Corrective Actions
 
@@ -118,14 +122,15 @@ is being built in an isolated fix branch from the reproducible integration SHA.
 
 - [ ] Run the LLM media-role pass before future static generation and expose completion/coverage in build evidence.
 - [ ] Add calibrated visual-quality/focal metadata so low-resolution and face-sensitive media can be routed without guesswork.
-- [ ] Require consultant artifacts to list the exact reviewed URLs and viewport matrix.
+- [x] Require consultant artifacts to list the exact reviewed URLs and viewport matrix.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending commit/push
-- deploy path: pending replacement noindex preview `preview-20260715t-production-desktop-contract-v2`
+- deployed SHA: `45e38a07` (`fix/static-site-production-desktop-contract-20260715`)
+- deploy path: noindex prefix `preview-20260715t-production-desktop-contract-v2`; production root unchanged
 - regression checks: `npm run build` and `check:production-desktop` pass for `282/282`; full-catalog Playwright `282/282`, zero page errors; representative `4 × 3` matrix, mobile-v4 isolation and interaction suite pass
-- post-deploy verification: pending public HTTP/Playwright and exact-URL Gemini Pro/Opus review
+- post-deploy verification: public HTTP `200` for the index, four pinned real-event pages, rail/bus pages and behavior bundle; public `4 × 3` matrix `12/12`; public interaction checks all pass (exact thumbnail/poster indices, medallion preservation, CTA safe release, thumbnail derivatives, transport and idle autorotation)
+- consultant evidence: Gemini 3.1 Pro High direct-browser attempt is recorded as `BLOCKED`, not acceptance; the follow-up screenshot-based review explicitly inspected exact public captures and Playwright JSON and returned `ACCEPT`. Local non-committed evidence: `artifacts/codex/static-site-production-desktop-contract-repair-20260715/gemini-pro-public-acceptance-review.md` and `gemini-pro-screenshot-acceptance-review.md`
 
 ## Prevention
 

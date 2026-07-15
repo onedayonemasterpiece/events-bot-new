@@ -54,4 +54,4 @@ lanes:
     expected_output: Playwright matrix, independent consultant review, release evidence
     verification_scope: full_local_and_public
     effort: extra-high
-    status: in_progress
+    status: completed

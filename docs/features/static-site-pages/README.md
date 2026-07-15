@@ -1,6 +1,6 @@
 # Static Site Event Pages
 
-> **Status:** replacement Astro SSG production-integration candidate under final public verification; exact accepted desktop component, unchanged mobile v4 and rail/bus transport are combined on the full current catalog, production-root promotion pending
+> **Status:** replacement Astro SSG production-integration candidate publicly verified under a noindex prefix; exact accepted desktop component, unchanged mobile v4 and rail/bus transport are combined on the full current catalog, production-root promotion pending product approval
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 
@@ -45,9 +45,13 @@ acceptance covers the whole `282/282` catalog with no page errors, plus a
 `4 events × 3 viewports` (`1536×864`, `1920×1080`, `1440×650`) matrix with
 visible H1/CTA and zero horizontal overflow. Interaction checks cover exact
 gallery indices, classified-poster opening, idle autorotation, CTA safe
-release, immutable thumbnail derivatives and both transport types. Public
-HTTP/Playwright and a consultant review must target the replacement URLs above
-before the candidate is called verified.
+release, immutable thumbnail derivatives and both transport types. Public HTTP
+is `200` for the preview index, four pinned events and both transport examples;
+the public `4 × 3` matrix is `12/12` and the exact interaction suite has no
+failures. Gemini 3.1 Pro's direct browser attempt was correctly recorded as
+`BLOCKED` after its isolated Chromium crashed. It was not mislabeled as a pass;
+the follow-up screenshot-based review inspected exact public Playwright
+captures and evidence JSON and returned `ACCEPT`.
 
 This is a prefix-only review release. It does not promote or delete the
 production root and does not modify stable `/p/` media or `/ics/` calendars.

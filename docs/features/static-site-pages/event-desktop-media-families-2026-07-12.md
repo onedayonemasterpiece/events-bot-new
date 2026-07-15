@@ -61,6 +61,16 @@ with CSS. It is not acceptance evidence. The replacement review surface is
 `preview-20260715t-production-desktop-contract-v2`. See
 `INC-2026-07-15-static-desktop-template-regression`.
 
+Public replacement evidence (2026-07-15): all four pinned generated pages and
+the rail/bus specimens return HTTP `200`; the exact public `4 events × 3
+viewports` matrix passes `12/12` with first-viewport H1/CTA and zero horizontal
+overflow; the exact public interaction suite passes thumbnail/poster identity,
+medallion preservation, CTA safe release, thumbnail derivatives, transport and
+idle autorotation. Gemini 3.1 Pro's own browser attempt was fail-closed as
+`BLOCKED` because its sandbox Chromium crashed. A separate screenshot-based
+review inspected the public Playwright captures and evidence JSON, stated that
+limitation explicitly, and returned `ACCEPT`.
+
 ## Real corpus evidence
 
 Audit source: `312` real event pages from `preview-20260711t-desktop-event-layouts`.

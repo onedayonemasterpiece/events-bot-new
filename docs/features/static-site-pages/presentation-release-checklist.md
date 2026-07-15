@@ -24,13 +24,17 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
   zero page errors; the `4 × 3` viewport matrix has visible H1/CTA and zero
   horizontal overflow; interaction checks cover exact gallery indices,
   thumbnail derivatives, CTA release, idle autorotation and transport.
-- [ ] **Blocked on public replacement review** — public HTTP and Playwright
-  must target `preview-20260715t-production-desktop-contract-v2`, not rejected
-  `preview-20260715t-production-transport-mobile-real-events-v1`.
-- [ ] **Blocked on truthful consultant evidence** — Gemini Pro/Opus review
-  artifact must list the exact generated replacement URLs and tested
-  viewports. Review of lab fixtures, screenshots from another build or only a
-  transport block cannot be reported as full-catalog desktop acceptance.
+- [x] **Done on the public replacement** — public HTTP is `200` for the index,
+  four real pins and both transport pages; exact public Playwright repeats the
+  `4 × 3` matrix with `12/12` passes and the interaction suite has no failures.
+  All evidence targets `preview-20260715t-production-desktop-contract-v2`, not
+  rejected `preview-20260715t-production-transport-mobile-real-events-v1`.
+- [x] **Done with truthful consultant scope** — Gemini 3.1 Pro High direct
+  browser review returned `BLOCKED` after the consultant sandbox Chromium
+  crashed and is not presented as acceptance. A separate screenshot-based
+  review inspected exact public captures plus public matrix/interaction JSON
+  and returned `ACCEPT`; the artifact names the exact generated URLs and its
+  external-Playwright limitation.
 
 ## 2. Demonstration scenarios
 
