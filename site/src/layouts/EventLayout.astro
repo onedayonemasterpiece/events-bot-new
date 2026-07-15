@@ -1085,6 +1085,14 @@ const HEADER_NAVIGATION = [
       .cta-button:hover { background: var(--primary-strong); }
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
+      [data-calendar-action].is-calendar-added,
+      [data-calendar-action].is-calendar-added:hover {
+        color: #fffaf2 !important;
+        background: #302b27 !important;
+        border-color: #302b27 !important;
+        box-shadow: none !important;
+      }
+      [data-calendar-action].is-calendar-added .icon { color: currentColor; }
       .cta-button--disabled,
       .cta-button--disabled:hover {
         cursor: not-allowed;
@@ -2212,6 +2220,9 @@ const HEADER_NAVIGATION = [
         const PERSONAL_FEED_LIMIT = 30;
         const PERSONAL_FEED_TTL_MS = 30 * 60 * 1000;
         const LISTING_MODE_KEY = 'ke_listing_mode_v1';
+        const CALENDAR_STATE_KEY = 'ke_calendar_saved_v1';
+        const CALENDAR_STATE_VERSION = 1;
+        const CALENDAR_STATE_LIMIT = 256;
         const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
         const DEFAULT_WEIGHTS = {
           staticContext: 0.80,
@@ -2247,6 +2258,135 @@ const HEADER_NAVIGATION = [
           } catch (_) {
             return false;
           }
+        }
+
+        function kaliningradEpochDay() {
+          return Math.floor((Date.now() + 2 * 60 * 60 * 1000) / 86400000);
+        }
+
+        function calendarExpiryDayFromIso(value) {
+          const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(value || '').trim());
+          if (!match) return 0;
+          const day = Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
+          return Number.isFinite(day) ? day + 1 : 0;
+        }
+
+        function normalizeCalendarState(value) {
+          const today = kaliningradEpochDay();
+          const entries = value && value.v === CALENDAR_STATE_VERSION && value.e && typeof value.e === 'object' && !Array.isArray(value.e)
+            ? Object.entries(value.e)
+                .filter(([id, expiry]) => /^\d+$/u.test(id) && Number.isInteger(expiry) && expiry > today)
+                .sort((a, b) => a[1] - b[1])
+                .slice(0, CALENDAR_STATE_LIMIT)
+            : [];
+          return { v: CALENDAR_STATE_VERSION, e: Object.fromEntries(entries) };
+        }
+
+        function persistCalendarState(state) {
+          const normalized = normalizeCalendarState(state);
+          const hasEntries = Object.keys(normalized.e).length > 0;
+          try {
+            if (hasEntries) localStorage.setItem(CALENDAR_STATE_KEY, JSON.stringify(normalized));
+            else localStorage.removeItem(CALENDAR_STATE_KEY);
+          } catch (_) {}
+          return normalized;
+        }
+
+        function readCalendarState() {
+          const raw = readJson(CALENDAR_STATE_KEY, null);
+          const normalized = normalizeCalendarState(raw);
+          const serialized = Object.keys(normalized.e).length > 0 ? JSON.stringify(normalized) : '';
+          try {
+            const current = localStorage.getItem(CALENDAR_STATE_KEY) || '';
+            if (serialized !== current) {
+              if (serialized) localStorage.setItem(CALENDAR_STATE_KEY, serialized);
+              else localStorage.removeItem(CALENDAR_STATE_KEY);
+            }
+          } catch (_) {}
+          return normalized;
+        }
+
+        function markCalendarAdded(eventId, expiryDay) {
+          const id = String(eventId || '').trim();
+          const expiry = Number(expiryDay);
+          if (!/^\d+$/u.test(id) || !Number.isInteger(expiry) || expiry <= kaliningradEpochDay()) return false;
+          const state = readCalendarState();
+          if (!state.e[id] && Object.keys(state.e).length >= CALENDAR_STATE_LIMIT) {
+            const farthest = Object.entries(state.e).sort((a, b) => b[1] - a[1])[0];
+            if (farthest) delete state.e[farthest[0]];
+          }
+          state.e[id] = expiry;
+          persistCalendarState(state);
+          return true;
+        }
+
+        function syncCalendarControls() {
+          const state = readCalendarState();
+          document.querySelectorAll('a[data-calendar-action]').forEach((anchor) => {
+            const label = anchor.querySelector('[data-calendar-label]');
+            if (label && !label.dataset.calendarOriginalLabel) label.dataset.calendarOriginalLabel = label.textContent?.trim() || 'В календарь';
+            const added = Boolean(state.e[String(anchor.dataset.calendarEventId || '')]);
+            anchor.classList.toggle('is-calendar-added', added);
+            anchor.dataset.calendarState = added ? 'added' : 'available';
+            if (label) label.textContent = added ? 'Добавлено' : (label.dataset.calendarOriginalLabel || 'В календарь');
+            const title = anchor.dataset.calendarEventTitle || 'событие';
+            anchor.setAttribute('aria-label', added ? `Скачать файл календаря ещё раз: ${title}` : `Добавить в календарь: ${title}`);
+          });
+        }
+
+        function triggerCalendarDownload(blob, eventId) {
+          const objectUrl = URL.createObjectURL(blob);
+          const download = document.createElement('a');
+          download.href = objectUrl;
+          download.download = `kenigevents-event-${eventId}.ics`;
+          download.hidden = true;
+          document.body.appendChild(download);
+          download.click();
+          download.remove();
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+        }
+
+        function fallbackCalendarNavigation(anchor) {
+          const fallback = document.createElement('a');
+          fallback.href = anchor.href;
+          fallback.target = anchor.target || '';
+          fallback.rel = anchor.rel || '';
+          fallback.hidden = true;
+          document.body.appendChild(fallback);
+          fallback.click();
+          fallback.remove();
+        }
+
+        let calendarActionsHydrated = false;
+        function hydrateCalendarActions() {
+          syncCalendarControls();
+          if (calendarActionsHydrated) return;
+          calendarActionsHydrated = true;
+          document.addEventListener('click', async (event) => {
+            const anchor = event.target.closest('a[data-calendar-action]');
+            if (!anchor || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const eventId = String(anchor.dataset.calendarEventId || '').trim();
+            const expiryDay = Number(anchor.dataset.calendarExpiryDay || 0);
+            if (!eventId || !Number.isInteger(expiryDay) || anchor.dataset.calendarPending === 'true') return;
+            event.preventDefault();
+            anchor.dataset.calendarPending = 'true';
+            try {
+              const response = await fetch(anchor.href, { credentials: 'omit' });
+              if (!response.ok) throw new Error(`ICS HTTP ${response.status}`);
+              const blob = await response.blob();
+              triggerCalendarDownload(blob, eventId);
+              markCalendarAdded(eventId, expiryDay);
+              syncCalendarControls();
+            } catch (_) {
+              fallbackCalendarNavigation(anchor);
+            } finally {
+              delete anchor.dataset.calendarPending;
+            }
+          }, true);
+          window.addEventListener('storage', (event) => {
+            if (event.key === CALENDAR_STATE_KEY) syncCalendarControls();
+          });
+          window.addEventListener('pageshow', syncCalendarControls);
         }
 
         function formatLocalResetTime(value) {
@@ -3129,6 +3269,7 @@ const HEADER_NAVIGATION = [
             shares_count: Number(display.shares_count || 0),
             calendar_href: display.calendar_href || candidate?.calendar_href || '#',
             calendar_eligible: Boolean(display.calendar_eligible || candidate?.calendar_eligible),
+            calendar_expiry_day: calendarExpiryDayFromIso(display.end_date || candidate?.end_date || candidate?.date || ''),
             rank: item && item.rank != null ? item.rank : '',
             personal_score: item && item.personal_score != null ? item.personal_score : '',
           };
@@ -3157,7 +3298,7 @@ const HEADER_NAVIGATION = [
           const shareButton = `<button type="button" class="feedback-button feedback-button--share" data-nosnippet data-native-share data-share-event-id="${escapeHtml(data.id)}" data-share-event-title="${escapeHtml(data.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(data.title)}" data-share-text="${escapeHtml(shareText)}" data-share-url="${escapeHtml(data.absolute_url)}" data-share-image="${escapeHtml(data.image_url || '')}" data-share-image-type="${escapeHtml(shareImageType)}" data-share-file-name="${escapeHtml(`kenigevents-${data.id}`)}" data-share-date-time="${escapeHtml(data.display_date_time)}" data-share-place="${escapeHtml(data.venue_name || data.city || '')}" data-share-admission="${escapeHtml(status)}" aria-label="${escapeHtml(`Поделиться событием: ${data.title}`)}">${shareIcon}<span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>`;
           const likeButton = `<button type="button" class="feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-base-count="${likes}" aria-pressed="false" aria-label="${escapeHtml(likes > 0 ? `Поставить лайк: ${data.title}. Сейчас ${likes}` : `Поставить лайк: ${data.title}`)}">${heartIcon}<span class="feedback-count" data-feedback-count>${likeCount}</span></button>`;
           const calendarButton = data.calendar_eligible && data.calendar_href
-            ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span>В календарь</span></a>`
+            ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" data-calendar-action data-calendar-event-id="${escapeHtml(data.id)}" data-calendar-expiry-day="${escapeHtml(data.calendar_expiry_day)}" data-calendar-event-title="${escapeHtml(data.title)}" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span data-calendar-label>В календарь</span></a>`
             : '';
           const imageFallback = `<span class="event-card__image-fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
           const image = data.image_url
@@ -3355,6 +3496,7 @@ const HEADER_NAVIGATION = [
               button.setAttribute('aria-label', `${title}: ${card.dataset.eventTitle || 'событие'}`);
             });
           });
+          syncCalendarControls();
         }
 
         function cardEligibleAfterProfile(card, store, profile, anchorEventId) {
@@ -3840,7 +3982,7 @@ const HEADER_NAVIGATION = [
           const button = event.target.closest('[data-reset-personalization]');
           if (!button) return;
           event.preventDefault();
-          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY];
+          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY];
           keys.forEach((key) => {
             try { localStorage.removeItem(key); } catch (_) {}
           });
@@ -4002,7 +4144,7 @@ const HEADER_NAVIGATION = [
               if (!images.length) return;
               const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
               const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"]'));
-              const usesReverseGapSafePosterParallax = usesGapSafePosterParallax && Boolean(visual.closest('[data-mobile-review-variant="accepted-v5"]'));
+              const usesReverseGapSafePosterParallax = usesGapSafePosterParallax && Boolean(visual.closest('[data-mobile-review-variant="accepted-v5"], [data-mobile-review-variant="accepted-v6"]'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
@@ -4410,6 +4552,7 @@ const HEADER_NAVIGATION = [
         hydrateMobileDiscoveryMenu();
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
+        hydrateCalendarActions();
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();

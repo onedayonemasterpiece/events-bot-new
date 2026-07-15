@@ -11,6 +11,7 @@ import {
   displayUpdatedAtKaliningrad,
   eventActionHref,
   eventCalendarHref,
+  eventCalendarStateExpiryDay,
   eventHref,
   eventTicketActionLabel,
   isCalendarEligible,
@@ -38,6 +39,7 @@ const compactLabelAction = stickyCalendarPrimary && ctaHref
     : 'share';
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const stickyIsTelephone = isTelephoneUrl(stickyHref);
 const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
@@ -111,7 +113,7 @@ const galleryCta = galleryCtaEvent ? {
   <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
     <div class="mobile-sticky-cta__inner">
       <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{displayDateTime(event)}</span></div>
-      <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span>{stickyLabel}</span></a>
+      <a class="cta-button" href={stickyHref} type={stickyCalendarPrimary ? 'text/calendar' : undefined} target={stickyIsExternal && !stickyCalendarPrimary ? '_blank' : undefined} rel={stickyIsExternal && !stickyCalendarPrimary ? 'noopener noreferrer nofollow' : undefined} data-calendar-action={stickyCalendarPrimary ? true : undefined} data-calendar-event-id={stickyCalendarPrimary ? event.id : undefined} data-calendar-expiry-day={stickyCalendarPrimary ? calendarExpiryDay : undefined} data-calendar-event-title={stickyCalendarPrimary ? event.title : undefined} aria-label={stickyCalendarPrimary ? `Добавить в календарь: ${event.title}` : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span data-calendar-label={stickyCalendarPrimary ? true : undefined}>{stickyLabel}</span></a>
     </div>
   </div>
 )}
@@ -321,6 +323,53 @@ const galleryCta = galleryCtaEvent ? {
     margin-top: 0;
   }
   [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__details {
+    margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
+  }
+
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v6"] .event-hero__decision {
+    border: 0;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v6"] .mobile-event-review__continuation {
+    --continuation-rise: clamp(28rem, 110vw, 32rem);
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+    display: block;
+    width: 100vw;
+    margin-top: -1.5rem;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    padding: calc(1.5rem + clamp(0.6rem, 2.8vw, 0.75rem)) 0.75rem 0;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v6"] .mobile-event-review__continuation::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 0;
+    right: 0;
+    top: calc(-1 * var(--continuation-rise));
+    height: calc(var(--continuation-rise) + 44rem);
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(242,231,215,0) 0,
+      rgba(242,231,215,0.22) calc(var(--continuation-rise) - 21rem),
+      rgba(240,225,207,0.7) calc(var(--continuation-rise) - 12rem),
+      rgba(250,240,226,0.9) var(--continuation-rise),
+      rgba(255,249,240,0.82) calc(var(--continuation-rise) + 16rem),
+      rgba(248,240,229,0) calc(var(--continuation-rise) + 44rem)
+    );
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v6"] .mobile-event-review__medallions {
+    margin-top: 0;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v6"] .mobile-event-review__details {
     margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
   }
 

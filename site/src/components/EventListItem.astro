@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAdmissionLabel, eventCalendarHref, eventHref, getLinkedSessionIds, getOtherDates, isCalendarEligible } from '../lib/events';
+import { displayDateTime, eventAdmissionLabel, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, getLinkedSessionIds, getOtherDates, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 interface Props { event: PreviewEvent }
@@ -9,6 +9,7 @@ const { event } = Astro.props;
 const href = eventHref(event);
 const calendarHref = eventCalendarHref(event);
 const canAddToCalendar = isCalendarEligible(event);
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const dateTimeLabel = displayDateTime(event);
 const imageUrl = eventImageUrl(event.image_url);
@@ -35,7 +36,7 @@ const otherTimeLabels = getOtherDates(event)
     {otherTimeLabels.length > 0 && <p class="listing-item__other-times">Также: {otherTimeLabels.join(' · ')}</p>}
     {place && <p>{place}</p>}
     <div class="listing-item__actions">
-      {canAddToCalendar && <a class="secondary-button" href={calendarHref} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>}
+      {canAddToCalendar && <a class="secondary-button" href={calendarHref} type="text/calendar" data-calendar-action data-calendar-event-id={event.id} data-calendar-expiry-day={calendarExpiryDay} data-calendar-event-title={event.title} aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span data-calendar-label>В календарь</span></a>}
       <a class="secondary-button" href={href} data-prefetch>Подробнее</a>
     </div>
   </div>

@@ -179,6 +179,14 @@ export function eventCalendarHref(event: Pick<PreviewEvent, 'id' | 'slug'>): str
   return withBase(`/sobytiya/${event.slug}/event.ics`);
 }
 
+export function eventCalendarStateExpiryDay(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): number {
+  const value = event.end_date || event.start_date;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value || '');
+  if (!match) return 0;
+  const epochDay = Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
+  return Number.isFinite(epochDay) ? epochDay + 1 : 0;
+}
+
 export function isCalendarEligible(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): boolean {
   return !event.end_date || event.end_date === event.start_date;
 }

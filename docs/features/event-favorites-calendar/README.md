@@ -1,6 +1,41 @@
 # Event favorites and calendar
 
-> Status: **design with ICS preview already implemented**. Durable favorite state and cross-device behavior are missing.
+> Status: **ICS + compact device-local acknowledgement implemented in static preview**. Durable account/cross-device favorite state is still missing.
+
+## Current static-site behavior
+
+Every eligible calendar control uses the same markup/runtime contract on event
+details, listings, related cards, sticky CTA, mobile and desktop. JavaScript
+first fetches the canonical `.ics`; only after a successful HTTP response it
+starts the browser download and switches every control for that event to
+`Добавлено`. Repeated activation downloads the ICS again and is idempotent.
+Without JavaScript the control remains an ordinary `text/calendar` link.
+
+`Добавлено` means **the site successfully fetched the ICS and initiated its
+download**. A browser cannot prove that the user completed import into an OS or
+third-party calendar, so this state must never be described as verified external
+calendar membership.
+
+The acknowledgement is shared by mobile and desktop on the same origin through
+one intentionally small localStorage entry:
+
+```json
+{"v":1,"e":{"5658":20649,"5878":20653}}
+```
+
+- key: `ke_calendar_saved_v1`;
+- payload: schema version plus `event_id → exclusive expiry epoch-day` only;
+- no title, href, click log, timestamp, profile id, cookie or analytics copy;
+- invalid and expired entries are removed on every read/boot/write;
+- state survives through the event's Kaliningrad day and is removed the next day;
+- the map is capped at `256` nearest upcoming events;
+- corrupt, blocked or quota-limited storage fails open: the ICS link still works;
+- browser `storage`/`pageshow` events re-sync visible controls and the explicit
+  personalization reset also removes this technical local state.
+
+This local projection is disposable and same-browser/same-origin only. It is not
+the source of truth and is not used as a recommendation feature. Supabase remains
+the future owner of authenticated durable favorite/follow state with RLS.
 
 ## Product contract
 

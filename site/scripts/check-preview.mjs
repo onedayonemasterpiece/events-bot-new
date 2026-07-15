@@ -32,7 +32,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -57,6 +57,7 @@ const mobileReviewCases = {
   acceptedV3: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/photo-paid/index.html'), 'utf8'),
   acceptedV4: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/photo-paid/index.html'), 'utf8'),
   acceptedV5: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/photo-paid/index.html'), 'utf8'),
+  acceptedV6: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -84,6 +85,12 @@ if (!mobileReviewCases.acceptedV4.includes('data-mobile-review-revision="v4"') |
 if (!mobileReviewCases.acceptedV5.includes('data-mobile-review-variant="accepted-v5"') || !mobileReviewCases.acceptedV5.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV5.includes('event-hero__weekday') || !mobileReviewCases.acceptedV5.includes('mobile-event-review__continuation')) {
   throw new Error('Mobile event accepted v5 must preserve v4 controls and expose the gradient continuation surface');
 }
+if (!mobileReviewCases.acceptedV6.includes('data-mobile-review-variant="accepted-v6"') || !mobileReviewCases.acceptedV6.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV6.includes('event-hero__weekday') || !mobileReviewCases.acceptedV6.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v6 must preserve v5 controls and expose the seamless gradient continuation surface');
+}
+if (!mobileReviewCases.acceptedV6.includes('data-calendar-action') || !mobileReviewCases.acceptedV6.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV6.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v6 must expose the shared expiring calendar state contract');
+}
 const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
@@ -99,6 +106,10 @@ if (!mobileAcceptedV4OcrOverride.includes('data-hero-mode="poster-stage"') || !m
 const mobileAcceptedV5OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV5OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV5OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v5 must preserve the no-zoom text-poster override');
+}
+const mobileAcceptedV6OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV6OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV6OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v6 must preserve the no-zoom text-poster override');
 }
 
 const desktopV12Pages = {
@@ -280,6 +291,9 @@ if (!controlVisibleHtml.includes('event-source-gate--section') || !/<div class="
 if (controlVisibleHtml.includes('event-hero__facts')) throw new Error('Hero must not duplicate the compact facts block as a second info block');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
+for (const runtimeMarker of ['ke_calendar_saved_v1', 'CALENDAR_STATE_LIMIT = 256', 'data-calendar-action', 'triggerCalendarDownload', 'syncCalendarControls']) {
+  if (!controlHtml.includes(runtimeMarker)) throw new Error(`Shared calendar acknowledgement runtime misses ${runtimeMarker}`);
+}
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
 if (controlHtml.includes('<details class="details-disclosure"')) throw new Error('Control description is hidden in a details disclosure');
 if (controlHtml.includes('11 июля 2026')) throw new Error('Visible current-year date should omit year in event UI');
@@ -576,6 +590,9 @@ for (const event of eventsData.events) {
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
   if (calendarEligible && !hasOwnCalendarLink) throw new Error(`Short event ${event.id} misses own calendar link`);
   if (!calendarEligible && hasOwnCalendarLink) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
+  if (calendarEligible && (!html.includes(`data-calendar-event-id="${event.id}"`) || !html.includes('data-calendar-expiry-day=') || !html.includes('data-calendar-label'))) {
+    throw new Error(`Short event ${event.id} misses shared calendar state markers`);
+  }
   for (const [label, pattern] of badHtmlPatterns) {
     if (pattern.test(visibleHtml)) throw new Error(`Rendered page ${event.id} contains ${label}`);
   }

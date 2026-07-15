@@ -10,9 +10,11 @@ Mobile event-detail UI вынесен в контролируемый preview la
 варианта образуют матрицу `current/open prose × current/grouped actions`,
 `accepted-v2` сохраняет первый исправленный проход, `accepted-v3` — первый
 Android feedback, `accepted-v4` — предыдущую поправку владельца, а
-`accepted-v5` исправляет направление gap-safe OCR-parallax и соединяет rounded
-decision с medallions + open prose одной full-bleed безрамочной gradient
-continuation surface. Принятые weekday/date/time hierarchy и простой
+`accepted-v5` исправляет направление gap-safe OCR-parallax, а `accepted-v6`
+убирает прямоугольный paint-edge gradient у нижних скруглений: прозрачный
+псевдослой начинается ещё под фотографией и плавно доходит до medallions + open
+prose. V6 также проверяет единое mobile/desktop состояние `Добавлено` после
+успешного скачивания ICS. Принятые weekday/date/time hierarchy и простой
 терракотовый selected-like остаются без изменений.
 Бирка, discovery cards и sticky CTA намеренно зафиксированы. Канонический scope
 и acceptance gate:

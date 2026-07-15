@@ -11,7 +11,7 @@ import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
 import type { EventImageAsset } from '../../lib/types';
-import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -46,6 +46,7 @@ const stickyDateLabel = displayDateTime(event);
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const stickyIsTelephone = isTelephoneUrl(stickyHref);
 const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
@@ -191,7 +192,7 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">
         <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{stickyDateLabel}</span></div>
-        <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span>{stickyLabel}</span></a>
+        <a class="cta-button" href={stickyHref} type={stickyCalendarPrimary ? 'text/calendar' : undefined} target={stickyIsExternal && !stickyCalendarPrimary ? '_blank' : undefined} rel={stickyIsExternal && !stickyCalendarPrimary ? 'noopener noreferrer nofollow' : undefined} data-calendar-action={stickyCalendarPrimary ? true : undefined} data-calendar-event-id={stickyCalendarPrimary ? event.id : undefined} data-calendar-expiry-day={stickyCalendarPrimary ? calendarExpiryDay : undefined} data-calendar-event-title={stickyCalendarPrimary ? event.title : undefined} aria-label={stickyCalendarPrimary ? `Добавить в календарь: ${event.title}` : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span data-calendar-label={stickyCalendarPrimary ? true : undefined}>{stickyLabel}</span></a>
       </div>
     </div>
   )}

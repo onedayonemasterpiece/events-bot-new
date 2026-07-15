@@ -13,6 +13,10 @@ graphite action dock принят как направление. Следующ�
 OCR-parallax не в ту сторону, а один только gap не устранил оптический разрыв.
 `accepted-v5` поэтому инвертирует движение и вводит единое gradient-продолжение
 для medallions + description вместо ещё одной границы между блоками.
+Проверка v5 на Android обнаружила, что собственный gradient-background wrapper
+всё ещё начинался жёсткой горизонтальной линией в нижних скруглениях decision.
+`accepted-v6` переносит градиент на прозрачный псевдослой, поднятый до фото, и
+добавляет одинаковое состояние скачанного ICS для mobile и desktop.
 
 ## Решения после повторного аудита
 
@@ -41,6 +45,7 @@ OCR-parallax не в ту сторону, а один только gap не ус
 | `accepted-v3` | открытый canvas | container-aware графитовый dock | feedback по лайку, labels, weekday и OCR gap |
 | `accepted-v4` | открытый canvas | container-aware графитовый dock | owner correction: параллакс, простой active like, vertical rhythm |
 | `accepted-v5` | единая gradient continuation surface + open prose | container-aware графитовый dock | owner correction: reverse parallax и seamless decision→context composition |
+| `accepted-v6` | gradient rise из-под photo + open prose | тот же dock + shared calendar state | без paint-edge у скруглений; `Добавлено` одинаково на mobile/desktop |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -53,7 +58,7 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 24 комбинации в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 27 комбинаций в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
@@ -63,6 +68,7 @@ Preview builds:
 - feedback candidate: `preview-20260715t-mobile-ui-accepted-v3`.
 - owner-correction candidate: `preview-20260715t-mobile-ui-accepted-v4`.
 - reverse/continuation candidate: `preview-20260715t-mobile-ui-accepted-v5`.
+- seamless/calendar-state candidate: `preview-20260715t-mobile-ui-accepted-v6`.
 
 ## Accepted v2 corrections
 
@@ -159,6 +165,27 @@ V4 остаётся изолированным noindex preview; общий produ
 
 V5 также остаётся noindex preview и не меняет production mobile event template.
 
+## Accepted v6 corrections
+
+У v5 первый непрозрачный stop принадлежал прямоугольному paint-box continuation,
+который начинался на `24px` под decision. Центр перекрывался самой карточкой, но
+в её нижних rounded corners фон открывался как горизонтальная полка; на 390px
+pixel audit показал скачок до `26` RGB-уровней за одну строку.
+
+V6 сохраняет DOM, OCR framing и reverse parallax v5, но:
+
+- у continuation теперь `background:none`, поэтому на его top-coordinate нет
+  собственной линии отрисовки;
+- градиент рисует `::before`, поднятый на `clamp(28rem,110vw,32rem)` — прозрачная
+  часть начинается внутри фото, а тон набирается постепенно за decision;
+- у decision настоящий `border:0`, у обеих поверхностей нет shadow/radius/border;
+- medallions и prose остаются содержимым одного semantic continuation wrapper;
+- календарная ссылка после успешного fetch + запуска ICS download показывает
+  `Добавлено`; состояние синхронизируется на всех mobile/desktop controls этого
+  event id и автоматически удаляется на следующий день после события.
+
+V6 — отдельный noindex preview; production mobile template не продвигается.
+
 ## Visual QA
 
 - проверены все `4 × 3` cases на ширинах `360`, `390`, `430` и `768px`;
@@ -215,6 +242,26 @@ pages) и `check-preview.mjs` завершились успешно.
 Артефакты: `artifacts/codex/mobile-ui-v5-qa-20260715/`.
 Полный preview build собрал `460` страниц; обновлённый `check-preview.mjs` прошёл.
 
+Для `accepted-v6` проверены `360/390/430 × 3` scenarios:
+
+- continuation имеет `background-image:none`, а его `::before` поднимается на
+  `448–473px` внутрь hero/photo и содержит единственный gradient;
+- в бывшей точке top-edge на обоих viewport gutters максимальный one-row RGB
+  delta равен `1` (у v5 было до `26`), то есть жёсткая линия устранена;
+- decision и continuation имеют нулевые borders, без radius/shadow у
+  continuation; horizontal overflow отсутствует, targets остаются `>=52px`;
+- OCR сохраняет `contain`, покрытие clip viewport и принятое движение
+  `-travel → 0`: `-39.6/-42.9/-47.3px` при старте и
+  `-17.4/-20.7/-25.1px` после scroll `180px`;
+- реальный browser download event дал `kenigevents-event-5658.ics`; компактное
+  состояние пережило mobile reload, отобразилось `Добавлено` на desktop той же
+  страницы, повторный click не создал дубль;
+- cleanup удалил expired/corrupt values и ограничил синтетические `300` записей
+  до `256` ближайших будущих.
+
+Артефакты: `artifacts/codex/mobile-ui-v6-calendar-qa-20260715/`.
+Полный Astro build собрал `463` страницы.
+
 ## External consultation
 
 Консультация выполнена через `agy` моделью `Gemini 3.1 Pro (High)`. Gemini
@@ -256,6 +303,13 @@ OCR no-zoom contract. Финальный review дал `PASS` направлен
 gap-safety и composition; P0/P1 blockers не найдено. Raw response:
 `artifacts/codex/mobile-ui-v5-qa-20260715/gemini-v5-acceptance-review.raw.md`.
 
+V6 финально проверен через `agy` моделью `Gemini 3.1 Pro (High)` по реальным
+mobile/desktop screenshots, pixel/geometric measurements и browser calendar
+E2E. Reviewer дал `PASS` seamless gradient, OCR regression safety и честному
+compact calendar acknowledgement; P0/P1 blockers для отдельного preview не
+найдено. Raw response:
+`artifacts/codex/mobile-ui-v6-calendar-qa-20260715/gemini-v6-acceptance-review.raw.md`.
+
 ## Task-channel workflow
 
 Telegram topic, назначенный пользователем каналом задачи/приёмки, не является
@@ -266,8 +320,9 @@ receipt-only сообщения и обещания прислать резул�
 
 ## Acceptance gate
 
-До переноса в основную event page требуется принять либо отклонить v5 reverse
-clipped no-zoom poster parallax и gradient continuation. Унаследованные
-simplified active-like, icons/container-aware labels/date-time также остаются
-видны в preview, но этой итерацией не переутверждаются. Discovery, brand tag и
-sticky CTA не меняются.
+До переноса в основную event page требуется принять либо отклонить v6 seamless
+gradient rise и shared mobile/desktop calendar acknowledgement. Reverse clipped
+no-zoom poster parallax уже принят владельцем и остаётся regression contract.
+Унаследованные simplified active-like, icons/container-aware labels/date-time
+также остаются видны в preview, но этой итерацией не переутверждаются. Discovery
+и brand tag не меняются.

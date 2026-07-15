@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 type CardVariant = 'overlay-controls' | 'split-actions';
 interface Props { event: PreviewEvent; label?: string; variant?: CardVariant }
@@ -43,6 +43,7 @@ const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
 const canAddToCalendar = isCalendarEligible(event);
 const calendarHref = eventCalendarHref(event);
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const cardClass = ['event-card', `event-card--${variant}`].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
 const eventTypeTag = eventTypeLabel(event.event_type);
@@ -135,9 +136,9 @@ const otherTimeLabels = getOtherDates(event)
           <span>Не интересно</span>
         </button>
         {canAddToCalendar && (
-          <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}>
+          <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" data-calendar-action data-calendar-event-id={event.id} data-calendar-expiry-day={calendarExpiryDay} data-calendar-event-title={event.title} aria-label={`Добавить в календарь: ${event.title}`}>
             <Icon name="calendar" />
-            <span>В календарь</span>
+            <span data-calendar-label>В календарь</span>
           </a>
         )}
       </div>

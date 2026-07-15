@@ -1,5 +1,5 @@
 export type MobileEventReviewVariant = {
-  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4' | 'accepted-v5';
+  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4' | 'accepted-v5' | 'accepted-v6';
   label: string;
   shortLabel: string;
   note: string;
@@ -87,6 +87,15 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     label: 'Accepted v5 · gradient continuation',
     shortLabel: 'Accepted v5',
     note: 'Инвертирует OCR-parallax в ожидаемую сторону и соединяет rounded decision с medallions + open prose единой безрамочной gradient-continuation surface.',
+    proseTreatment: 'open',
+    actionsTreatment: 'dock',
+    revision: 'v4',
+  },
+  {
+    slug: 'accepted-v6',
+    label: 'Accepted v6 · seamless rise + calendar state',
+    shortLabel: 'Accepted v6',
+    note: 'Поднимает прозрачный continuation-gradient до фотографии без прямоугольной линии у нижних скруглений и показывает единое состояние «Добавлено» после скачивания ICS на mobile и desktop.',
     proseTreatment: 'open',
     actionsTreatment: 'dock',
     revision: 'v4',
