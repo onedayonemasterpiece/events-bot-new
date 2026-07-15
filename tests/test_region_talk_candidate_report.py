@@ -1438,6 +1438,18 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         rows = mod.processed_post_snapshot_row_items(compact, skip_row_rewrite=False)
         self.assertEqual(rows[0][0], "processed_post_item:tg:example:42")
 
+    def test_compact_snapshot_does_not_overwrite_online_post_link_rows(self) -> None:
+        mod = load_module()
+        compact = {"post_link_queue": {"legacy": {
+            "post_link_queue_id": "exact-local",
+            "post_url": "https://t.me/local/42",
+            "post_link_status": "pending_fetch",
+        }}}
+        self.assertEqual(mod.post_link_snapshot_row_items(compact, skip_row_rewrite=True), [])
+        rows = mod.post_link_snapshot_row_items(compact, skip_row_rewrite=False)
+        self.assertEqual(rows[0][0], "post_link_queue_item:exact-local")
+        self.assertEqual(rows[0][2]["post_link_status"], "pending_fetch")
+
     def test_e5_row_carries_terminal_source_decision_for_bge_skip(self) -> None:
         mod = load_module()
         text = "Калининград и Музей Мирового океана"

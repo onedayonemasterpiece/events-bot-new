@@ -971,14 +971,18 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             {"post_url": "https://t.me/ready/3", "post_link_status": "pending_fetch", "post_link_priority": 2},
             {"post_url": "https://t.me/ready/3?single=1", "post_link_status": "fetch_error", "post_link_priority": 3},
             {"post_url": "https://t.me/done/4", "post_link_status": "fetched", "post_link_priority": 0},
+            {"post_url": "https://t.me/rejected/5", "post_link_status": "operator_rejected", "post_link_priority": 0},
+            {"post_url": "https://t.me/local/6", "post_link_status": "pending_fetch", "post_link_priority": 0, "canonical_source_key": "telegram:local"},
             {"post_url": "not-a-post", "post_link_status": "pending_fetch", "post_link_priority": 4},
         ]
         cache = [{"entity_cache_key": "telegram:username:wait", "username": "wait", "channel_id_private": "1", "access_hash_private": "2"}]
-        metrics = mod._post_link_queue_metrics(rows, cache, now=now)
+        sources = [{"canonical_source_key": "telegram:local", "source_queue_status": "rejected_local_region_source"}]
+        metrics = mod._post_link_queue_metrics(rows, cache, sources, now=now)
         self.assertEqual(metrics["post_link_queue_exact_ready_total"], 2)
         self.assertEqual(metrics["post_link_queue_cooldown_total"], 1)
         self.assertEqual(metrics["post_link_queue_entity_wait_total"], 1)
-        self.assertEqual(metrics["post_link_queue_terminal_total"], 1)
+        self.assertEqual(metrics["post_link_queue_terminal_total"], 3)
+        self.assertEqual(metrics["post_link_queue_source_terminal_cleanup_total"], 1)
         self.assertEqual(metrics["post_link_queue_unknown_status_total"], 1)
         self.assertEqual(metrics["post_link_queue_head_blocked_total"], 2)
         self.assertEqual(metrics["post_link_queue_head_blocked_cooldown_total"], 1)
@@ -993,21 +997,26 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         links = [
             {"post_url": "https://t.me/a/1", "post_link_status": "fetched"},
             {"post_url": "https://t.me/b/2", "post_link_status": "fetched"},
+            {"post_url": "https://t.me/local/3", "post_link_status": "fetched", "canonical_source_key": "telegram:local"},
         ]
         processed = [
             {"post_url": "https://t.me/a/1", "vector_gate_status": "vector_defer_wait_bge_m3"},
             {"post_url": "https://t.me/b/2", "current_stage": "dual_model_vector_enrichment_pending"},
+            {"post_url": "https://t.me/local/3", "current_stage": "dual_model_vector_enrichment_pending"},
         ]
         vectors = [
             {"post_url": "https://t.me/a/1", "model_short": "bge_m3"},
             {"post_url": "https://t.me/b/2", "model_id": "BAAI/bge-m3"},
+            {"post_url": "https://t.me/local/3", "model_id": "BAAI/bge-m3"},
         ]
         publications = [{"post_url": "https://t.me/b/2", "publication_status": "gemini_reject"}]
+        sources = [{"canonical_source_key": "telegram:local", "source_queue_status": "rejected_local_region_source"}]
 
-        metrics = mod._bge_ready_exact_rescore_metrics(links, processed, vectors, publications)
+        metrics = mod._bge_ready_exact_rescore_metrics(links, processed, vectors, publications, sources)
 
         self.assertEqual(metrics["post_link_queue_bge_ready_rescore_total"], 1)
         self.assertEqual(metrics["post_link_queue_bge_ready_rescore_urls"], ["https://t.me/a/1"])
+        self.assertEqual(metrics["post_link_queue_bge_ready_rescore_source_terminal_cleanup_total"], 1)
 
     def test_manual_keyword_hashtag_similar_inflow_metrics_are_distinct(self) -> None:
         mod = load_module()

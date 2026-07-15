@@ -642,6 +642,12 @@ python scripts/region_talk_embedding_quality_compare.py \
   Acceptance requires `fast_check_query_elapsed_seconds <= 200` (allowing one
   final human-like sleep/RPC), no source rejection solely because the stage cap
   was reached, and subsequent execution of exact/vector/YDB handoff stages.
+- Exact-link drain acceptance: when normal row-level snapshot rewrite is
+  disabled, an online `terminal_source_rejected` transition must survive the
+  final state write. `operator_rejected` is terminal, and links whose
+  authoritative source is already local/spam/compliance are counted as
+  source-terminal cleanup—not as exact-ready or BGE-ready product work. A
+  second selector replay must return none of the cleaned URLs.
 - Compare every bounded product run with a full before/after metric snapshot.
   In addition to all existing funnel metrics, require
   `image_visual_review_pending_total` (raw ledger),

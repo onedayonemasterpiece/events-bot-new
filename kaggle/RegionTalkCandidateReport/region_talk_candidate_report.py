@@ -2361,7 +2361,7 @@ POST_STATE_FIELDS = [
     "post_work_kind", "e5_vector_status", "bge_m3_vector_status",
 ]
 POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
-    "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "has_media",
+    "run_id", "updated_at", "first_seen_run_id", "last_seen_run_id", "online_update_stage", "has_media",
     "media_count", "text_hash", "text_excerpt_hash", "source_url", "handle",
     "fetch_status", "post_observation_status", "discovery_method", "discovery_priority",
     "keyword_hit_query", "keyword_hit_hashtag", "ydb_candidate_link_kind", "ydb_candidate_link_pk",
@@ -2519,6 +2519,26 @@ def processed_post_snapshot_row_items(compact: dict[str, Any], *, skip_row_rewri
         key = durable_processed_post_key(item)
         if key:
             items.append(("processed_post_item:" + key, "processed_post_item", item))
+    return items
+
+
+def post_link_snapshot_row_items(compact: dict[str, Any], *, skip_row_rewrite: bool) -> list[tuple[str, str, dict[str, Any]]]:
+    """Return post-link snapshot rows only for explicit maintenance rewrites.
+
+    Exact-link acquisition writes authoritative lifecycle changes online while
+    CandidateReport is still running.  Replaying the stale start-of-run queue
+    during the final snapshot previously resurrected local-source links that
+    had already become ``terminal_source_rejected``.
+    """
+    if skip_row_rewrite:
+        return []
+    items: list[tuple[str, str, dict[str, Any]]] = []
+    for item in (compact.get("post_link_queue") or {}).values():
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("post_link_queue_id") or item.get("post_url") or item.get("keyword_hit_post_url") or "")
+        if key:
+            items.append(("post_link_queue_item:" + key, "post_link_queue_item", item))
     return items
 
 
@@ -4851,11 +4871,14 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         key = str(item.get("comment_link_id") or item.get("edge_id") or item.get("source_candidate_id") or item.get("normalized_url") or "")
                         if key:
                             row_items.append(("comment_link_item:" + key, "comment_link_item", item))
-                for item in (compact.get("post_link_queue") or {}).values():
-                    if isinstance(item, dict):
-                        key = str(item.get("post_link_queue_id") or item.get("post_url") or item.get("keyword_hit_post_url") or "")
-                        if key:
-                            row_items.append(("post_link_queue_item:" + key, "post_link_queue_item", item))
+                # Exact-link rows are written online at every lifecycle
+                # transition. Do not let the stale start-of-run compact queue
+                # overwrite a newer terminal/fetched decision at final state
+                # write. Full maintenance mode retains the explicit rewrite.
+                row_items.extend(post_link_snapshot_row_items(
+                    compact,
+                    skip_row_rewrite=skip_row_rewrite,
+                ))
                 for item in (compact.get("publication_candidate_queue") or {}).values():
                     if isinstance(item, dict):
                         key = str(item.get("publication_candidate_id") or item.get("post_url") or "")

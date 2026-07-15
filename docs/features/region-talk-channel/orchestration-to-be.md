@@ -1086,6 +1086,20 @@ keyword/similar discovery and the durable tail retain their time budgets.
 Operator metrics expose query count, query time, total stage time, configured
 cap and whether it was exhausted.
 
+Exact-post lifecycle transitions are online-write owned. With the normal
+`REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE=1` contract, the final compact snapshot
+must not replay its stale start-of-run `post_link_queue`: otherwise a link that
+was already closed as `terminal_source_rejected` can reappear as
+`pending_fetch`/`fetched` on every run. Full row replay remains available only
+for explicit maintenance. Orchestrator metrics classify `operator_rejected`
+as terminal and report authoritative source-terminal cleanup separately from
+real exact-fetch and BGE-rescore work. This prevents local-source cleanup from
+inflating the product backlog or triggering an unnecessary BGE run.
+
+The compact processed-post online projection includes `first_seen_run_id`.
+Without it, a run that really acquired new posts was reported as zero new and
+all work appeared to be a rescan, undermining the data-driven controller.
+
 If the latest Candidate heartbeat stops in `state_write_started` or
 `report_write_started`, this is reported as a late-tail failure. It does not
 justify replacing high-yield exact/fast-check work with deeper generic history.

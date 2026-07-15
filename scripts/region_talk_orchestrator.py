@@ -54,7 +54,10 @@ CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
 CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
-POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
+POST_LINK_TERMINAL_STATUSES = {
+    "fetched", "scored", "terminal_no_text", "terminal_bad_url",
+    "terminal_source_rejected", "operator_rejected",
+}
 
 MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_STATE_BACKEND": "ydb",
@@ -485,11 +488,17 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         (
             "Очередь конкретных ссылок — новые тексты к чтению / готовы к повторному решению после BGE / "
-            "ждут Telegram cooldown / ждут Telegram entity / исторически тексты уже читались: "
+            "надо только закрыть из уже отклонённых источников (вся очередь / BGE-rescore) / "
+            "ждут Telegram cooldown / ждут Telegram entity / terminal / неизвестный статус / "
+            "исторически тексты уже читались: "
             f"{value('post_link_queue_exact_ready_total')}/"
             f"{value('post_link_queue_bge_ready_rescore_total')}/"
+            f"{value('post_link_queue_source_terminal_cleanup_total')}/"
+            f"{value('post_link_queue_bge_ready_rescore_source_terminal_cleanup_total')}/"
             f"{value('post_link_queue_cooldown_total')}/"
             f"{value('post_link_queue_entity_wait_total')}/"
+            f"{value('post_link_queue_terminal_total')}/"
+            f"{value('post_link_queue_unknown_status_total')}/"
             f"{value('post_link_queue_fetched_total')}"
         ),
         (
@@ -1295,15 +1304,38 @@ def _post_link_state(row: dict[str, Any], *, now: datetime | None = None) -> str
     return "unknown"
 
 
+def _source_terminal_post_link_urls(
+    post_links: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
+) -> set[str]:
+    terminal_aliases: set[str] = set()
+    for source in source_rows:
+        if _vector_source_terminal_excluded(source):
+            terminal_aliases.update(_source_aliases(source))
+    if not terminal_aliases:
+        return set()
+    return {
+        _canonical_post_url(row)
+        for row in post_links
+        if _canonical_post_url(row) and (_source_aliases(row) & terminal_aliases)
+    }
+
+
 def _post_link_queue_metrics(
     post_links: list[dict[str, Any]],
     entity_cache_rows: list[dict[str, Any]] | None = None,
+    source_rows: list[dict[str, Any]] | None = None,
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = now or datetime.now(timezone.utc)
-    states = [_post_link_state(row, now=current) for row in post_links]
     urls = [_canonical_post_url(row) for row in post_links]
+    raw_states = [_post_link_state(row, now=current) for row in post_links]
+    source_terminal_urls = _source_terminal_post_link_urls(post_links, source_rows or [])
+    states = [
+        "terminal" if url and url in source_terminal_urls else state
+        for url, state in zip(urls, raw_states)
+    ]
     url_counts: dict[str, int] = {}
     for url in urls:
         if url:
@@ -1335,6 +1367,10 @@ def _post_link_queue_metrics(
         "post_link_queue_cooldown_total": states.count("cooldown"),
         "post_link_queue_entity_wait_total": states.count("entity_wait"),
         "post_link_queue_terminal_total": states.count("terminal"),
+        "post_link_queue_source_terminal_cleanup_total": sum(
+            1 for url, state in zip(urls, raw_states)
+            if url in source_terminal_urls and state != "terminal"
+        ),
         "post_link_queue_unknown_status_total": states.count("unknown"),
         # Backward-compatible alias: pending means actionable now, not every
         # retry/cooldown/entity-wait row.
@@ -1362,6 +1398,7 @@ def _bge_ready_exact_rescore_metrics(
     processed_rows: list[dict[str, Any]],
     vector_rows: list[dict[str, Any]],
     publication_rows: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     deferred = {
         _canonical_post_url(row)
@@ -1389,10 +1426,13 @@ def _bge_ready_exact_rescore_metrics(
         for row in post_links
         if str(row.get("post_link_status") or "") == "fetched"
     }
-    ready = sorted(((deferred & bge & fetched) - terminal) - {""})
+    source_terminal = _source_terminal_post_link_urls(post_links, source_rows or [])
+    source_terminal_cleanup = ((deferred & bge & fetched) - terminal) & source_terminal
+    ready = sorted((((deferred & bge & fetched) - terminal) - source_terminal) - {""})
     return {
         "post_link_queue_bge_ready_rescore_total": len(ready),
         "post_link_queue_bge_ready_rescore_urls": ready,
+        "post_link_queue_bge_ready_rescore_source_terminal_cleanup_total": len(source_terminal_cleanup - {""}),
     }
 
 
@@ -3541,12 +3581,13 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         and str(r.get("image_model_input_type") or "") == "actual_image"
         and float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.70
     ]
-    post_link_metrics = _post_link_queue_metrics(post_links, entity_cache_rows)
+    post_link_metrics = _post_link_queue_metrics(post_links, entity_cache_rows, source_rows)
     post_link_rescore_metrics = _bge_ready_exact_rescore_metrics(
         post_links,
         processed_post_rows,
         vectors,
         publications,
+        source_rows,
     )
     post_link_source_keys = {str(r.get("canonical_source_key") or r.get("source_key") or "") for r in post_links if str(r.get("canonical_source_key") or r.get("source_key") or "").strip()}
     fast_check_rows = [r for r in source_rows if str(r.get("fast_check_status") or "").strip()]
