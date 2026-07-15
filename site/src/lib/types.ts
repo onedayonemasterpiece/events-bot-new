@@ -19,13 +19,36 @@ export interface ImageFocalPoint {
   y: number;
 }
 
+export type EventImageMediaRole =
+  | 'event_identity_poster'
+  | 'event_photo'
+  | 'attendee_information'
+  | 'program_or_schedule'
+  | 'wayfinding'
+  | 'sponsor_or_brand'
+  | 'unknown_document'
+  | 'unknown_visual';
+
+export interface EventImageDerivative {
+  src: string;
+  width: number;
+  height: number;
+}
+
 export interface EventImageAsset {
   src: string;
   width: number;
   height: number;
   alt: string;
   image_text_mode: 'ocr_text' | 'visual_only' | 'unknown';
+  /** LLM-authored event-relative purpose. Missing/unknown values never unlock poster UI. */
+  media_role?: EventImageMediaRole;
+  media_role_confidence?: number;
+  media_semantic_status?: 'pending' | 'classified' | 'error' | 'stale';
   image_kind?: 'poster' | 'photo' | 'mixed' | 'fallback';
+  /** Content-addressed rail/card derivatives, smallest first. */
+  thumbnail_sources?: EventImageDerivative[];
+  asset_key?: string;
   ocr_boxes?: ImageBox[];
   face_boxes?: ImageBox[];
   saliency_boxes?: ImageBox[];
@@ -74,6 +97,7 @@ export interface PreviewEvent {
   image_url: string | null;
   image_alt: string;
   image_text_mode: 'ocr_text' | 'visual_only' | 'unknown';
+  image_media_role?: EventImageMediaRole;
   /** Future multi-image/face-aware export contract; first item should match image_url when present. */
   image_assets?: EventImageAsset[];
   face_boxes?: ImageBox[];
@@ -119,6 +143,8 @@ export interface DiscoveryDisplayPayload {
   image_url: string | null;
   image_alt: string;
   image_text_mode: PreviewEvent['image_text_mode'];
+  image_media_role?: EventImageMediaRole;
+  focal_y?: number | null;
   display_date: string;
   display_time: string | null;
   display_date_time: string;

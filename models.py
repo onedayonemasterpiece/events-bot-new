@@ -765,6 +765,7 @@ class EventPoster(SQLModel, table=True):
         Index("ix_eventposter_review_status", "event_id", "review_status"),
         Index("ix_eventposter_raw_sha256", "event_id", "raw_sha256"),
         Index("ix_eventposter_pixel_sha256", "event_id", "pixel_sha256"),
+        Index("ix_eventposter_media_semantic", "event_id", "media_semantic_status", "media_role"),
         UniqueConstraint("event_id", "poster_hash", name="ux_eventposter_event_hash"),
     )
 
@@ -794,6 +795,33 @@ class EventPoster(SQLModel, table=True):
     display_order: int = 0
     ocr_text: Optional[str] = None
     ocr_title: Optional[str] = None
+    # Event-relative multimodal classification. OCR presence alone is never a
+    # poster decision; unknown/pending rows fail closed in public UI.
+    image_text_mode: Optional[str] = None
+    media_role: Optional[str] = None
+    media_role_confidence: Optional[float] = None
+    media_semantic_status: str = "pending"
+    media_semantic_reason_code: Optional[str] = None
+    media_semantic_evidence_json: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    media_semantic_model: Optional[str] = None
+    media_semantic_prompt_version: Optional[str] = None
+    media_semantic_context_hash: Optional[str] = None
+    media_semantic_classified_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    focal_x: Optional[float] = None
+    focal_y: Optional[float] = None
+    safe_crop: Optional[bool] = None
+    thumbnail_256_url: Optional[str] = None
+    thumbnail_256_path: Optional[str] = None
+    thumbnail_256_width: Optional[int] = None
+    thumbnail_256_height: Optional[int] = None
+    thumbnail_512_url: Optional[str] = None
+    thumbnail_512_path: Optional[str] = None
+    thumbnail_512_width: Optional[int] = None
+    thumbnail_512_height: Optional[int] = None
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0

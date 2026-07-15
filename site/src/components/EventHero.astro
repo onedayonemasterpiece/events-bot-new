@@ -28,11 +28,15 @@ type HeroGalleryImage = {
   image_text_mode: EventImageAsset['image_text_mode'];
   recommended_hero_fit?: EventImageAsset['recommended_hero_fit'];
   recommended_object_position?: string;
+  media_role?: EventImageAsset['media_role'];
+  width?: number;
+  height?: number;
 };
 
 const { event, modeOverride, composition, headingTag = 'h1', galleryCta } = Astro.props;
 const HeadingTag = headingTag;
 const primaryImageUrl = eventImageUrl(event.image_url);
+const primaryImageAsset = event.image_assets?.find((asset) => eventImageUrl(asset.src) === primaryImageUrl) || event.image_assets?.[0];
 const galleryCtaImageUrl = eventImageUrl(galleryCta?.image_url);
 const derivedMode: HeroMode = primaryImageUrl ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
 const heroMode = modeOverride || derivedMode;
@@ -105,6 +109,9 @@ const galleryImages = (() => {
       image_text_mode: image?.image_text_mode || event.image_text_mode || 'unknown',
       recommended_hero_fit: image?.recommended_hero_fit,
       recommended_object_position: normalizeObjectPosition(image?.recommended_object_position) || undefined,
+      media_role: image?.media_role,
+      width: image?.width,
+      height: image?.height,
     });
   };
   if (primaryImageUrl) {
@@ -114,6 +121,9 @@ const galleryImages = (() => {
       image_text_mode: event.image_text_mode,
       recommended_object_position: heroObjectPosition || undefined,
       recommended_hero_fit: heroMode === 'photo-cover' ? 'cover' : 'contain',
+      media_role: event.image_media_role,
+      width: primaryImageAsset?.width,
+      height: primaryImageAsset?.height,
     });
   }
   for (const asset of event.image_assets || []) {
@@ -123,6 +133,9 @@ const galleryImages = (() => {
       image_text_mode: asset.image_text_mode || 'unknown',
       recommended_object_position: asset.recommended_object_position,
       recommended_hero_fit: asset.recommended_hero_fit,
+      media_role: asset.media_role,
+      width: asset.width,
+      height: asset.height,
     });
   }
   return out;
@@ -132,13 +145,15 @@ const heroGalleryId = `hero-gallery-${event.id}`;
 const heroGalleryTitleId = `${heroGalleryId}-title`;
 const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
 const galleryPhotoCount = galleryImages.length;
+const portraitPhotoCount = galleryImages.filter((image) => image.width && image.height && image.width / image.height < 0.9).length;
+const efficientPortraitViewer = galleryPhotoCount >= 5 && portraitPhotoCount >= Math.ceil(galleryPhotoCount * 0.6);
 const galleryHintLabel = galleryPhotoCount > 1 ? `Фото ${galleryPhotoCount}` : 'Открыть фото';
 const calendarPrimary = canAddToCalendar && (!ctaHref || event.ticket.kind === 'free');
 const showTicketCta = Boolean(ctaHref);
 ---
 <section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
   {hasGallery ? (
-    <button type="button" class="event-hero__visual" data-hero-gallery-open={heroGalleryId} aria-label={`Открыть изображение события «${event.title}» на весь экран`}>
+    <button type="button" class="event-hero__visual" data-hero-gallery-open={heroGalleryId} data-hero-gallery-index="0" aria-label={`Открыть изображение события «${event.title}» на весь экран`}>
       {primaryImageUrl && heroMode !== 'fallback-art' ? (
         <img
           class="event-hero__image"
@@ -189,20 +204,27 @@ const showTicketCta = Boolean(ctaHref);
   </div>
 </section>
 {hasGallery && (
-  <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
+  <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-efficient-portrait-viewer={efficientPortraitViewer ? 'true' : undefined} data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
       <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы">
         <span>Полюбить Калининград</span>
         <strong>Анонсы</strong>
       </a>
-      <h2 id={heroGalleryTitleId} class="sr-only">Фото события: {event.title}</h2>
+      <h2 id={heroGalleryTitleId} class="hero-gallery__event-title">{event.title}</h2>
       <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
     </div>
     <div class="hero-gallery__viewport">
       <div class="hero-gallery__track" data-hero-gallery-track>
         {galleryImages.map((image, index) => (
-          <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} aria-hidden={index === 0 ? 'false' : 'true'}>
+          <figure
+            class="hero-gallery__slide"
+            data-hero-gallery-slide
+            data-gallery-slide-kind="image"
+            data-gallery-index={index}
+            aria-hidden={index === 0 ? 'false' : 'true'}
+            style={image.width && image.height ? `--gallery-ratio: ${(image.width / image.height).toFixed(5)}` : undefined}
+          >
             <img
               class="hero-gallery__image"
               data-gallery-src={image.src}
@@ -210,8 +232,11 @@ const showTicketCta = Boolean(ctaHref);
               loading="lazy"
               decoding="async"
               data-image-text-mode={image.image_text_mode}
+              data-media-role={image.media_role}
               data-event-id={event.id}
               data-event-title={event.title}
+              width={image.width}
+              height={image.height}
               style={image.recommended_object_position ? `object-position: ${image.recommended_object_position}` : undefined}
             />
             <figcaption class="sr-only">Фото события: {event.title}</figcaption>
@@ -230,7 +255,7 @@ const showTicketCta = Boolean(ctaHref);
         )}
       </div>
     </div>
-    <div class="hero-gallery__caption" aria-hidden="true"><span>Фото события</span><strong>{event.title}</strong></div>
+    <div class="hero-gallery__caption" aria-hidden="true"><strong>{event.title}</strong></div>
     {gallerySlideCount > 1 && (
       <>
         <button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button>

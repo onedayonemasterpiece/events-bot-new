@@ -416,6 +416,8 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     image_url: eventImageUrl(event.image_url),
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
+    image_media_role: event.image_media_role,
+    focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
     display_date_time: displayDateTime(event),
@@ -565,6 +567,8 @@ export interface DiscoveryEventPayloadItem {
   image_url: string | null;
   image_alt: string;
   image_text_mode: PreviewEvent['image_text_mode'];
+  image_media_role?: PreviewEvent['image_media_role'];
+  focal_y?: number | null;
   display_date: string;
   display_time: string | null;
   display_date_time: string;
@@ -590,6 +594,8 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     image_url: eventImageUrl(event.image_url),
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
+    image_media_role: event.image_media_role,
+    focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
     display_date_time: displayDateTime(event),
@@ -786,8 +792,8 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   if (ticket.price_label) return ticket.price_label;
   if (hasDonation) return 'За донат';
   if (ticket.kind === 'phone') return 'Запись по телефону';
-  if (ticket.kind === 'ticket') return 'По билетам';
-  if (/билет/u.test(statusText)) return 'По билетам';
+  if (ticket.kind === 'ticket') return 'Билеты';
+  if (/билет/u.test(statusText)) return 'Билеты';
   return event.status_label || ticket.label || 'Условия уточняются';
 }
 
@@ -799,7 +805,7 @@ export function eventTicketActionLabel(event: PreviewEvent): string {
     return 'Открыть пост организатора';
   }
   if (event.ticket.kind === 'free') {
-    return 'Открыть условия';
+    return 'Источник события';
   }
   if (event.ticket.kind === 'registration') {
     return 'Зарегистрироваться';

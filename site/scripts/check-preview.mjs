@@ -21,6 +21,7 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'brand/announcements-wordmark-ui.svg',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -73,12 +74,12 @@ if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-
 if (!controlHtml.includes('data-card-href=')) throw new Error('Event cards must expose full-card navigation href');
 if (!/<div class="event-card__body">\s*<a class="event-card__title"[\s\S]*?<div class="event-card__meta-row">/u.test(controlVisibleHtml)) throw new Error('Event cards must show title before time/status meta for mobile feed scanning');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
-if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error('Text/OCR poster cards must preserve full natural poster ratio without crop');
+if (!controlHtml.includes('event-card__media-shell--document')) throw new Error('Text/document cards must use the width-fit, vertical-overflow-only media contract');
 if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 4:5 cover media shell');
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
-if (/event-card__media-shell--preserve[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('OCR-safe card media must use natural image ratio, not contain over a fixed frame');
-if (/Вход[\s\S]{0,180}Билеты(?:\s+доступны)?/u.test(controlVisibleHtml)) throw new Error('Bare ticket availability must not be rendered as an admission value');
+if (/event-card__media-shell--document[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('Document cards must scale to full width instead of contain-with-side-fields');
+if (/Вход[\s\S]{0,180}По билетам/u.test(controlVisibleHtml)) throw new Error('The rejected “По билетам” copy must not be rendered as an admission value');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
 if (!controlVisibleHtml.includes('data-feed-card-variant="split-actions"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('Control event page must use split-actions baseline cards');
 if (controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Overlay-controls cards must not appear on normal event pages');
@@ -102,7 +103,7 @@ if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !/(Открыт�
 if (!controlHtml.includes('data-gallery-src=') || /class="hero-gallery__image"[^>]*\ssrc=/u.test(controlHtml)) throw new Error('Fullscreen gallery images must be lazy hydrated from data-gallery-src, not eagerly loaded in hidden HTML');
 if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
 if (controlHtml.includes('mobile-discovery-menu__brand-icon') || controlHtml.includes('/brand-mark.svg')) throw new Error('Mobile discovery tag must not expose the rejected brand icon/brand-mark animation');
-if (!controlHtml.includes('mobile-discovery-menu__label') || !controlHtml.includes('hydrateMobileBrandSway') || !controlHtml.includes('--brand-sway-x') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and the calculated title-sway label contract');
+if (!controlHtml.includes('data-announcements-lockup="mobile"') || !controlHtml.includes('announcements-wordmark-ui.svg') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and the shared mobile lettering lockup');
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
@@ -123,7 +124,7 @@ const tretyakovVisibleHtml = stripGeneratedCode(tretyakovHtml);
 const tretyakovEyebrow = (tretyakovVisibleHtml.match(/<p class="event-hero__eyebrow">([^<]*)<\/p>/u) || [null, ''])[1];
 if (!tretyakovEvent.ticket.is_free && tretyakovEvent.ticket.kind === 'ticket' && !tretyakovEvent.ticket.price_label) {
   if (/Билеты|Платный вход/u.test(tretyakovEyebrow)) throw new Error('Paid/generic admission copy must not be shown above the event title');
-  if (!tretyakovVisibleHtml.includes('По билетам')) throw new Error('Paid/ticketed event without exported price must show admission as “По билетам”, not “Платный вход” or “Вход Билеты”');
+  if (!tretyakovVisibleHtml.includes('Билеты') || tretyakovVisibleHtml.includes('По билетам')) throw new Error('Paid/ticketed event without exported price must use the neutral “Билеты” destination copy');
 }
 if (
   tretyakovEvent.ticket.is_free
@@ -156,9 +157,11 @@ if (!controlHtml.includes('data-discovery-feed') || controlHtml.includes('data-p
 if (!controlHtml.includes('ke_personalization_profile') || controlHtml.includes('ke_profile_id_v1') || controlHtml.includes('anon-${')) throw new Error('Control page must use compatible UUID personalization profile, not legacy/prefixed ids');
 if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankEventDetailRelated') || !controlHtml.includes('served_list_id') || !controlHtml.includes('createServedListSummary')) throw new Error('Control page misses event_detail_related local-rerank/served-list contract');
 if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
-if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
+if (!controlHtml.includes('/favicon.svg') || !controlHtml.includes('sizes="any"')) throw new Error('Control page misses scalable favicon link');
 const faviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
-if (!faviconSvg.includes('brand-k-mark') || !faviconSvg.includes('signal-bar-high') || !faviconSvg.includes('heart-block') || !faviconSvg.includes('#2d3035') || !faviconSvg.includes('#af481f') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the warm two-color PK monogram vector SVG without embedded raster');
+if (!faviconSvg.includes('viewBox="0 0 64 64"') || !faviconSvg.includes('announcements-tag') || !faviconSvg.includes('announcements-wide-o') || !faviconSvg.includes('#98401f') || !faviconSvg.includes('fill="#fff"') || faviconSvg.includes('<rect') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the transparent terracotta tag with square top, rounded bottom and one white wide-o vector');
+const announcementsWordmarkSource = readFileSync(join(siteDir, 'public/brand/announcements-wordmark-ui.svg'), 'utf8');
+if ((announcementsWordmarkSource.match(/<path\b/gu) || []).length !== 1 || announcementsWordmarkSource.includes('transform=') || Buffer.byteLength(announcementsWordmarkSource) >= 2048 || !announcementsWordmarkSource.includes('fill="currentColor"')) throw new Error('Announcements wordmark must remain one compact currentColor compound path without transforms');
 const footerSocialUrls = [
   'https://t.me/kenigevents',
   'https://t.me/kldevents',
@@ -380,12 +383,14 @@ const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWit
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
-if (/event-card__media-shell--preserve[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('OCR-safe card media must not use contain over a fixed frame');
+if (/event-card__media-shell--document[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Document card media must not use contain over a fixed frame');
+if (!/#discovery-feed\{[^}]*width:\s*100vw[^}]*margin-inline:\s*calc\(50%\s*-\s*50vw\)[^}]*box-sizing:\s*border-box/iu.test(css)) throw new Error('Desktop related-event surface must be true full-bleed without creating horizontal document overflow');
+if (!/#discovery-feed \.event-card__media-shell--document \.event-card__media\{[^}]*left:\s*0[^}]*width:\s*100%[^}]*height:\s*auto/iu.test(css)) throw new Error('Related document/poster cards must preserve the complete source width and clip only vertical overflow');
 if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
 if (!/event-hero--poster-billboard\.event-hero--poster-stage \.event-hero__image[\s\S]*?\{[^}]*width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero image itself must be full viewport width on mobile');
-if (!/mobile-discovery-menu__summary\{[^}]*background:\s*linear-gradient\([^}]*#793014[^}]*#a54821/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use a site-palette discovery drawer handle and stable after-hero state');
+if (!/mobile-discovery-menu__summary\{[^}]*background:\s*#98401f/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use the approved solid brand tag and stable after-hero state');
 if (
   !/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*position:\s*fixed[^}]*transform:\s*translate3d\(0,\s*calc\(-1\s*\*\s*var\(--drawer-rail-h\)\s*-\s*env\(safe-area-inset-top\)\),\s*0\)/iu.test(css)
   || !/mobile-discovery-menu\[open\]\{[^}]*transform:\s*(?:translate3d\(0,\s*0,\s*0\)|translateZ\(0\))/iu.test(css)
@@ -396,8 +401,8 @@ if (
 ) throw new Error('Mobile discovery navigation must be a monolithic drawer: one root object slides down/up, with the handle attached to the panel and no transitional gap');
 if (!/mobile-discovery-menu__panel\{[^}]*border-radius:\s*0/iu.test(css) || !/mobile-discovery-menu__links a\{[^}]*border:\s*0[^}]*border-radius:\s*0[^}]*background:\s*transparent/iu.test(css)) throw new Error('Mobile discovery drawer menu must be a flat rail with plain text links, not rounded/pill buttons');
 if (/mobile-discovery-menu__brand-icon|brand-icon-mask|mobile-brand-icon-cycle|mobile-brand-text-cycle/iu.test(css)) throw new Error('Rejected brand icon animation must not remain in mobile discovery CSS');
-if (!/mobile-discovery-menu__label\{[^}]*animation:\s*mobile-brand-title-sway/iu.test(css) || !/@keyframes\s+mobile-brand-title-sway/iu.test(css) || !/--brand-sway-x:\s*0px/iu.test(css) || !/translate3d\(var\(--brand-sway-x\),0,0\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery handle must keep only a calculated two-state title-sway animation');
-if (!/mobile-discovery-menu__label\{[^}]*width:\s*100%[^}]*max-width:\s*100%/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*min-height:\s*calc\(5\.35rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the gallery tag geometry and wrap the two-line service kicker instead of clipping it');
+if (/mobile-brand-title-sway|--brand-sway-x|hydrateMobileBrandSway/iu.test(`${css}\n${controlHtml}`)) throw new Error('Approved mobile brand lockup must remain static rather than sway inside the tag');
+if (!/mobile-discovery-menu__lockup\{[^}]*grid-template-rows:\s*18px auto[^}]*gap:\s*6px[^}]*width:\s*104px/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*width:\s*8rem[^}]*min-height:\s*calc\(6rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the approved 128×96 optical lockup geometry');
 if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !/--hero-poster-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = isPosterStage ? 56 : 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps and OCR posters must move as one full-width visual without gray internal gaps');
@@ -405,7 +410,8 @@ if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/h
 if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
 if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');
 if (!/hero-gallery__topbar\{[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__brand\{[^}]*pointer-events:\s*auto/iu.test(css)) throw new Error('Fullscreen gallery brand tag must be top-flush and clickable');
-if (!/hero-gallery__caption\{[^}]*display:\s*block[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__caption span\{[^}]*display:\s*block/iu.test(css) || !/hero-gallery__caption strong\{[^}]*box-decoration-break:\s*clone/iu.test(css)) throw new Error('Fullscreen gallery caption must be one fixed overlay with separate-line inline/subline text stripes, not per-slide flicker or a full-width bottom slab');
+if (!/hero-gallery__event-title\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/iu.test(css) || !controlHtml.includes('hero-gallery__event-title')) throw new Error('Fullscreen gallery must keep the event title in the fixed top bar');
+if (!tretyakovHtml.includes('data-efficient-portrait-viewer="true"') || !tretyakovHtml.includes('const pageSpan = Math.max') || !tretyakovHtml.includes("moveEfficientGallery(activeGallery, 'backward')") || !tretyakovHtml.includes("moveEfficientGallery(activeGallery, 'forward')")) throw new Error('Efficient portrait gallery must page symmetrically in both directions while keeping its multi-image viewport');
 if (!controlHtml.includes('loadGalleryMedia') || !controlHtml.includes('preloadAdjacentGalleryMedia') || !controlHtml.includes('.decode().catch') || !controlHtml.includes('nextImageIndex') || !controlHtml.includes('animationend') || !controlHtml.includes('galleryPanTimer') || !controlHtml.includes('8880') || !/gallery-pan-forward 17\.9s/iu.test(css) || !controlHtml.includes('swipeSurface') || !controlHtml.includes('touchstart') || !controlHtml.includes('touchmove') || !controlHtml.includes('pointermove') || !/gallery-pan-forward/iu.test(css)) throw new Error('Hero gallery must lazy-load but pre-decode adjacent slides, keep ~40% slower pan, and auto-advance after the shorter non-dead viewing interval plus pointer/touch swipe');
 if (!controlHtml.includes('data-not-interested-plate') || !/event-card__not-interest-plate/iu.test(css)) throw new Error('Not-interested feedback must keep an explicit undo plate instead of turning the card into an accidental navigation target');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');

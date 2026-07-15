@@ -13,6 +13,12 @@ Smart Update, а не отдельным ручным процессом и не
 Raw URL `storage.yandexcloud.net/kenigevents.ru/...` безопасно меняет host на
 CDN без копирования объекта; source/Supabase/legacy-bucket URL скачиваются,
 нормализуются в WebP и загружаются в deterministic `p/dh16/...`.
+Одновременно materialization готовит независимые content-addressed WebP
+миниатюры по длинной стороне `256` и `512` px в `p/thumb/v1/...`. Статический
+сайт использует их через `srcset`/`sizes`; полноразмерный объект остаётся только
+для hero и раскрытого viewer. Sprite/contact sheet не является production
+контрактом: отдельные immutable derivatives лучше используют HTTP cache,
+не заставляют декодировать невидимые изображения и не требуют runtime crop-map.
 
 Ошибка оставляет `review_status=pending_review`,
 `review_reason=cdn_mirror_pending` и durable retry `event_media_review`. Это
@@ -103,10 +109,60 @@ unrelated candidate → `rejected`; failure/uncertain → fail-closed quarantine
 После изменения projection обычный event fanout перестраивает Telegraph,
 Telegram, managed VK и static site.
 
+### LLM-first semantic media role
+
+Dedup review и смысловая роль изображения — два разных решения. После
+материализации каждого distinct approved asset один небольшой VLM-запрос
+`event-media-role-v1` классифицирует его в закрытый enum:
+
+- `event_identity_poster`;
+- `event_photo`;
+- `attendee_information`;
+- `program_or_schedule`;
+- `wayfinding`;
+- `sponsor_or_brand`;
+- `unknown_document`;
+- `unknown_visual`.
+
+`event_identity_poster` — строгая положительная роль. Она разрешена только если
+VLM явно подтверждает, что это афиша **конкретного события**, идентичность
+события является главным назначением изображения, а доминирующим назначением
+не являются услуги/правила/цены для посетителя, расписание, навигация или
+спонсорский бренд. Требуется confidence не ниже
+`EVENT_MEDIA_ROLE_POSTER_MIN_CONFIDENCE` (по умолчанию `0.88`) и все schema
+guard booleans. OCR/keyword/соотношение сторон сами по себе никогда не повышают
+изображение до афиши. Ошибка, quota или неполная schema fail-close оставляют
+роль неизвестной; renderer не угадывает её повторно.
+
+Static event-detail использует эту роль только для крупного poster companion.
+`attendee_information` (например карточка услуг кемпинга),
+`program_or_schedule` и другие документы остаются обычными gallery assets и
+никогда не получают подпись/маркер «Афиша». Фото может стать desktop hero;
+строгая афиша показывается целиком в отдельном блоке без серых полей и без crop.
+На карточках и в related-feed `cover` разрешает только явная классифицированная
+роль `event_photo`. `unknown_document`, `unknown_visual`, отсутствующая роль и
+legacy `image_text_mode=visual_only` сохраняют полную ширину исходника: они не
+могут горизонтально обрезать потенциальную афишу. После масштабирования до
+ширины нормализованной карточки допускается только вертикальное переполнение с
+центром или доверенным focal Y.
+
+Идемпотентный operational backfill по умолчанию только показывает план:
+
+```bash
+python scripts/enqueue_static_event_media_enrichment.py --db /data/db.sqlite
+# после проверки счётчиков:
+python scripts/enqueue_static_event_media_enrichment.py --db /data/db.sqlite --apply
+```
+
+Повторное выполнение не переотправляет rows с актуальной версией/input hash;
+`--retry-errors` разрешён только для контролируемого повторного прогона.
+
 ## Schema
 
 `EventPoster` дополняется `raw_sha256`, `pixel_sha256`, `perceptual_hash`,
-dimensions/MIME, `review_status`, `duplicate_of_id`, reason/time/order.
+dimensions/MIME, `review_status`, `duplicate_of_id`, reason/time/order,
+semantic-role evidence/version/model/input hash/status/confidence,
+`focal_x`/`focal_y`/`safe_crop_json` и метаданными WebP derivatives `256`/`512`.
 Старые rows переводятся в `approved` ровно при первом schema upgrade; повторный
 `Database.init()` не перезаписывает статусы. Таблицы `event_media_pair_review` и
 `event_media_review_usage` хранят решения/retry и независимые суточные бюджеты.
