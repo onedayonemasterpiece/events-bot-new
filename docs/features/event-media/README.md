@@ -129,7 +129,7 @@ VLM явно подтверждает, что это афиша **конкрет
 события является главным назначением изображения, а доминирующим назначением
 не являются услуги/правила/цены для посетителя, расписание, навигация или
 спонсорский бренд. Требуется confidence не ниже
-`EVENT_MEDIA_ROLE_POSTER_MIN_CONFIDENCE` (по умолчанию `0.88`) и все schema
+`EVENT_MEDIA_ROLE_POSTER_CONFIDENCE` (по умолчанию `0.88`) и все schema
 guard booleans. OCR/keyword/соотношение сторон сами по себе никогда не повышают
 изображение до афиши. Ошибка, quota или неполная schema fail-close оставляют
 роль неизвестной; renderer не угадывает её повторно.
@@ -153,6 +153,11 @@ python scripts/enqueue_static_event_media_enrichment.py --db /data/db.sqlite
 # после проверки счётчиков:
 python scripts/enqueue_static_event_media_enrichment.py --db /data/db.sqlite --apply
 ```
+
+Backfill использует тот же верхнеуровневый eligibility contract, что и static
+export: только `lifecycle_status=active`, `silent=0` и события, которые ещё не
+закончились на `--from-date`. Отменённые, postponed, merged и silent rows не
+получают derivative/LLM jobs и не могут быть случайно возвращены в public fanout.
 
 Повторное выполнение не переотправляет rows с актуальной версией/input hash;
 `--retry-errors` разрешён только для контролируемого повторного прогона.
