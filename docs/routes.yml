@@ -292,6 +292,10 @@ features:
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
+    service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
+    service_sharing_desktop_clipboard_manual_matrix: docs/features/static-site-pages/service-sharing-desktop-clipboard-manual-matrix.md
+    service_sharing_preview_runbook: docs/operations/service-sharing-preview.md
     image_framing: docs/features/static-site-pages/image-framing.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md

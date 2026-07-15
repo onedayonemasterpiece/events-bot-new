@@ -1,5 +1,6 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
+import ServiceShareAction from '../components/ServiceShareAction.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 
@@ -2166,6 +2167,7 @@ const HEADER_NAVIGATION = [
             <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
           </nav>
         </div>
+        <ServiceShareAction surface="footer" />
         <nav class="site-footer__social" aria-label="Соцсети Полюбить Калининград Анонсы">
           {FOOTER_SOCIAL_LINKS.map((link) => (
             <a

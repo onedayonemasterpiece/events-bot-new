@@ -23,6 +23,13 @@ Event gallery media имеет отдельный fail-closed CDN contract: expo
 rows исключаются тем же static predicate; продолжающиеся события остаются
 eligible по `end_date`.
 
+Footer service share использует отдельный от event-share контракт: на mobile —
+одна system-share action, на desktop — независимые `image/png` и plain-text +
+canonical URL intents. Каноника: [service-sharing.md](service-sharing.md),
+[desktop clipboard research](service-sharing-desktop-clipboard-research.md),
+[manual matrix](service-sharing-desktop-clipboard-manual-matrix.md) и
+[preview runbook](../../operations/service-sharing-preview.md).
+
 
 
 ### Announcement lockup and favicon

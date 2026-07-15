@@ -697,3 +697,61 @@ overflow and the browser console reports zero errors/warnings. Antigravity
 **Gemini 3.1 Pro (High)** completed the final public/source audit with verdict
 **SHIP** and no blocker/high finding; its response and empty stderr remain in
 the same ignored artifact directory.
+
+## Desktop v14: late CTA release, visible-only responsive rails and footer share
+
+V14 remains a **desktop-only event-layout change**. The established mobile event
+composition, hero, controls and motion are untouched. The only new shared
+surface is the separately approved responsive service-share action in the
+common footer.
+
+### CTA release boundary
+
+Continuous Editorial transforms its rail and CTA visually, so the sticky-side
+layout height can no longer be inferred from the untransformed box. The previous
+height kept about `400px` of invisible layout space and released the CTA long
+before the continuation feed. V14 measures the docked visual bottom after every
+geometry update and assigns the sticky-side height from that value plus an
+explicit `24px` release guard. The existing stage/section spacing remains in the
+document flow, producing a measured visual gap of about `72px` at the release
+boundary on `1536×864`. The CTA and rail now leave upward only when the CTA
+bottom has practically reached `Смотрите дальше`, rather than hundreds of
+pixels earlier.
+
+### Thumbnail delivery
+
+The desktop rails retain independent CDN 256/512 WebP objects. A real same-codec
+sprite experiment found only a `-2%…+2%` payload delta and no decoded-memory
+advantage, while losing responsive subset loading, granular immutable caching
+and simple exact-index navigation. Gemini 3.1 Pro (High) selected the independent
+contract. Exact benchmark numbers and official-source rationale are recorded in
+[cdn-asset-delivery.md](cdn-asset-delivery.md#2026-07-15-sprite-decision-keep-independent-responsive-objects).
+For actual first paint the visible subset is also smaller than the complete
+sprite: `6,634 B` versus `7,862 B` for Garage and `22,184 B` versus `44,636 B`
+for Split at 1x. HTTP/2/3 multiplexing means this is not one browser/OS thread
+per thumbnail; request overhead remains, but does not compensate for downloading
+hidden cells in these fixtures.
+
+V14 fixes the actual bottlenecks instead:
+
+- Split emits its server-known `88–196px` slot width in `sizes`, so DPR 1 at
+  Full-HD/125% selects 256 rather than an unnecessary 512 object;
+- Garage, Split and companion rails initially carry transparent placeholders;
+  layout assigns `src/srcset` only to the visible subset;
+- local Chromium at `1536×864` requests five of seven Garage thumbnails, six of
+  eleven Split image thumbnails, and one companion preview; hidden cells retain
+  the placeholder and do not issue network requests;
+- full-resolution gallery sources and exact source/gallery index mapping are
+  unchanged.
+
+### Footer service share
+
+The approved PR #44 footer work is integrated without modifying the accepted
+header. Mobile keeps one `Поделиться` action. Desktop exposes two explicit
+secondary intents: image-only `Скопировать карточку` and plain-text
+`Скопировать текст и ссылку`. Both use the versioned validated service-card
+manifest; event sharing remains a separate control and payload.
+
+Local gates: Astro production build, service-share controller `5/5`, preview
+contract, desktop/mobile Playwright visibility, zero overflow and zero console
+errors. Public v14 evidence is appended after prefix-only publication.

@@ -190,6 +190,8 @@ const railThumbnail = (image: GalleryImage) => railThumbnailSources(image)[0]?.s
 const railThumbnailSrcset = (image: GalleryImage) => railThumbnailSources(image).map((item) => `${item.src} ${item.width}w`).join(', ');
 const railThumbnailWidth = (image: GalleryImage) => railThumbnailSources(image)[0]?.width || image.width || 160;
 const railThumbnailHeight = (image: GalleryImage) => railThumbnailSources(image)[0]?.height || image.height || 100;
+const splitRailSlotWidth = (image: GalleryImage) => Math.round(Math.max(88, Math.min(196, 112 * railAspectValue(image))));
+const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const usesLongFlow = true;
 
 const dateLabel = displayDate(event);
@@ -267,7 +269,7 @@ const descriptionHtml = (event.description_html || '')
                       data-hero-gallery-index={galleryIndex}
                       aria-label={splitPortraitViewer ? `Открыть быстрый просмотр с изображения ${galleryIndex + 1}` : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`}
                     >
-                      <img src={railThumbnail(image)} srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 196px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
+                      <img src={transparentRailPixel} data-rail-thumbnail data-thumbnail-src={railThumbnail(image)} data-thumbnail-srcset={railThumbnailSrcset(image) || undefined} sizes={`(min-width:1024px) ${splitRailSlotWidth(image)}px, 1px`} alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
                       {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
                     </button>
                   ))}
@@ -321,7 +323,7 @@ const descriptionHtml = (event.description_html || '')
                     data-hero-gallery-index={galleryIndex}
                     aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} в полноэкранной галерее`}
                   >
-                    <img src={railThumbnail(image)} srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 96px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="eager" decoding="async" fetchpriority="low" />
+                    <img src={transparentRailPixel} data-rail-thumbnail data-thumbnail-src={railThumbnail(image)} data-thumbnail-srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 96px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
                     {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
                   </button>
                 ))}
@@ -374,7 +376,7 @@ const descriptionHtml = (event.description_html || '')
                 <div class="desktop-editorial-companion-board__previews">
                   {companionPreviewCandidates.map(({ image, galleryIndex }) => (
                     <button type="button" style={`--preview-ratio:${railAspectValue(image).toFixed(4)};`} data-companion-preview-item data-preview-aspect={railAspectBucket(image)} data-media-role={image.media_role} data-source-index={image.sourceIndex} data-hero-gallery-open={galleryId} data-hero-gallery-index={galleryIndex} aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} на весь экран`}>
-                      <img src={railThumbnail(image)} srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 172px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
+                      <img src={transparentRailPixel} data-rail-thumbnail data-thumbnail-src={railThumbnail(image)} data-thumbnail-srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 172px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
                     </button>
                   ))}
                   <button type="button" class="desktop-editorial-companion-board__more" data-companion-preview-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
@@ -576,6 +578,15 @@ const descriptionHtml = (event.description_html || '')
       };
       const syncDesktopHeaderToken = () => cleanRoot.style.setProperty('--desktop-header-height', `${desktopHeaderHeight().toFixed(2)}px`);
       syncDesktopHeaderToken();
+      const activateRailThumbnail = (item:HTMLElement) => {
+        const image = item.querySelector<HTMLImageElement>('img[data-rail-thumbnail]');
+        if (!image || image.dataset.railThumbnailActivated === 'true') return;
+        const src = image.dataset.thumbnailSrc || '';
+        const srcset = image.dataset.thumbnailSrcset || '';
+        image.dataset.railThumbnailActivated = 'true';
+        if (srcset) image.setAttribute('srcset', srcset);
+        if (src) image.src = src;
+      };
       const responsiveRails = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-responsive-rail]'));
       const layoutResponsiveRail = (rail:HTMLElement) => {
         const allItems = Array.from(rail.querySelectorAll<HTMLButtonElement>('[data-responsive-rail-item]'));
@@ -583,7 +594,7 @@ const descriptionHtml = (event.description_html || '')
         if (!more || !allItems.length || !rail.clientWidth) return;
         const validItems = allItems.filter((item) => {
           const image = item.querySelector<HTMLImageElement>('img');
-          const failed = Boolean(image?.complete && !image.naturalWidth);
+          const failed = Boolean(image?.dataset.railThumbnailActivated === 'true' && image.complete && !image.naturalWidth);
           item.toggleAttribute('data-media-failed', failed);
           return !failed;
         });
@@ -594,6 +605,7 @@ const descriptionHtml = (event.description_html || '')
         const capacity = Math.max(2, Math.floor((rail.clientWidth + gap) / (minCell + gap)));
         const visibleCount = validItems.length > capacity ? capacity - 1 : validItems.length;
         validItems.forEach((item, index) => { item.hidden = index >= visibleCount; });
+        validItems.slice(0, visibleCount).forEach(activateRailThumbnail);
         if (validItems.length > visibleCount) {
           const firstHidden = validItems[visibleCount];
           const remaining = validItems.length - visibleCount;
@@ -652,6 +664,7 @@ const descriptionHtml = (event.description_html || '')
           visibleCount = Math.max(1, Math.min(visibleCount, items.length - 1));
         }
         items.forEach((item, index) => { item.hidden = index >= visibleCount; });
+        items.slice(0, visibleCount).forEach(activateRailThumbnail);
         const hiddenCount = items.length - visibleCount;
         if (hiddenCount > 0) {
           const firstHidden = items[visibleCount];
@@ -724,6 +737,7 @@ const descriptionHtml = (event.description_html || '')
           visibleCount += 1;
         }
         companionPreviews.forEach((item, index) => { item.hidden = index >= visibleCount; });
+        companionPreviews.slice(0, visibleCount).forEach(activateRailThumbnail);
         const hiddenCount = companionPreviews.length - visibleCount;
         if (hiddenCount > 0) {
           const firstHidden = companionPreviews[visibleCount];
@@ -746,6 +760,20 @@ const descriptionHtml = (event.description_html || '')
       }
       let editorialSideGeometry:{ holdTop:number; dockTop:number; maxTravel:number; stickyTop:number } | null = null;
       let editorialSideLayoutFrame = 0;
+      const applyEditorialReleaseHeight = (maxTravel:number) => {
+        if (!editorialSide || !editorialAction) return;
+        const releaseGap = 24;
+        const dockedBottoms = [
+          editorialRail ? editorialRail.offsetTop + editorialRail.offsetHeight : 0,
+          editorialAction.offsetTop + editorialAction.offsetHeight - maxTravel,
+          companionBoard ? companionBoard.offsetTop + companionBoard.offsetHeight - maxTravel : 0,
+        ];
+        const releaseHeight = Math.max(releaseGap, ...dockedBottoms) + releaseGap;
+        const currentHeight = Number.parseFloat(editorialSide.style.height) || 0;
+        if (Math.abs(currentHeight - releaseHeight) > .5) editorialSide.style.height = `${releaseHeight.toFixed(2)}px`;
+        editorialSide.dataset.ctaReleaseGap = String(releaseGap);
+        editorialSide.dataset.ctaReleaseHeight = releaseHeight.toFixed(2);
+      };
       const updateEditorialSideMotion = () => {
         if (!editorialSide || !editorialAction) return;
         if (editorialSide.dataset.companionArrival === 'true') {
@@ -785,7 +813,9 @@ const descriptionHtml = (event.description_html || '')
           const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || desktopHeaderHeight() + 24;
           const holdTop = editorialAction.getBoundingClientRect().top;
           const dockTop = stickyTop + 1;
-          editorialSideGeometry = { holdTop, dockTop, maxTravel:Math.max(0, holdTop - dockTop), stickyTop };
+          const maxTravel = Math.max(0, holdTop - dockTop);
+          editorialSideGeometry = { holdTop, dockTop, maxTravel, stickyTop };
+          applyEditorialReleaseHeight(maxTravel);
           updateEditorialSideMotion();
           return;
         }
@@ -794,7 +824,9 @@ const descriptionHtml = (event.description_html || '')
         const holdTop = editorialAction.getBoundingClientRect().top;
         const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || desktopHeaderHeight() + 24;
         const dockTop = editorialRail.getBoundingClientRect().bottom + 12;
-        editorialSideGeometry = { holdTop, dockTop, maxTravel:Math.max(0, holdTop - dockTop), stickyTop };
+        const maxTravel = Math.max(0, holdTop - dockTop);
+        editorialSideGeometry = { holdTop, dockTop, maxTravel, stickyTop };
+        applyEditorialReleaseHeight(maxTravel);
         updateEditorialSideMotion();
       };
       const scheduleEditorialSideLayout = () => {

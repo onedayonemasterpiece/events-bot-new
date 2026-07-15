@@ -22,6 +22,11 @@ const required = [
   'robots.txt',
   'favicon.svg',
   'brand/announcements-wordmark-ui.svg',
+  'assets/icons/link-minimalistic-svgrepo.svg',
+  'service-share/current/manifest.json',
+  'service-share/versions/20260715-896b8af26ac6679f/manifest.json',
+  'service-share/versions/20260715-896b8af26ac6679f/service-share-20260715-896b8af26ac6679f.png',
+  'service-share/versions/20260715-896b8af26ac6679f/service-share-20260715-896b8af26ac6679f.webp',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -47,6 +52,11 @@ const desktopV12Pages = {
   split: readFileSync(join(root, 'lab/event-desktop/examples/split-low-resolution/index.html'), 'utf8'),
   companion: readFileSync(join(root, 'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html'), 'utf8'),
 };
+for (const [name, html] of Object.entries(desktopV12Pages)) {
+  if (!html.includes('data-service-share-root') || !html.includes('data-service-share-intent="image"') || !html.includes('data-service-share-intent="text"')) {
+    throw new Error(`Desktop v14 ${name} fixture must expose the approved footer service-share intents`);
+  }
+}
 if (!desktopV12Pages.garage.includes('data-auto-rotate="true"') || !desktopV12Pages.garage.includes('data-rotation-eligible="true"')) {
   throw new Error('Desktop v12 Garage fixture must expose delayed autorotation with eligible event-photo candidates');
 }
@@ -57,6 +67,9 @@ for (const [name, html] of Object.entries(desktopV12Pages)) {
   if (!html.includes('/p/thumb/v1/') || !html.includes(' 512w')) {
     throw new Error(`Desktop v12 ${name} fixture must use responsive immutable thumbnail derivatives`);
   }
+}
+if (!desktopV12Pages.garage.includes('data-thumbnail-srcset') || !desktopV12Pages.split.includes('data-thumbnail-srcset')) {
+  throw new Error('Desktop v14 rails must defer responsive thumbnail sources until their cells are visible');
 }
 if (!desktopV12Pages.garage.includes('data-editorial-motion="continuous"') || !desktopV12Pages.companion.includes('data-editorial-motion="continuous"')) {
   throw new Error('Desktop v12 Garage and OCR companion fixtures must share continuous editorial motion');
