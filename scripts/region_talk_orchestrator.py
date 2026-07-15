@@ -4009,7 +4009,21 @@ def main() -> int:
     parser.add_argument("--target-image-queue", type=int, default=0, help="loop goal: stop after this many additional image queue rows versus loop baseline")
     parser.add_argument("--target-publication-candidates", type=int, default=0, help="loop goal: stop after this many additional publication candidate rows versus loop baseline")
     args = parser.parse_args()
-    load_env(Path(args.env_file))
+    env_path = Path(args.env_file).expanduser()
+    explicit_env_file = "--env-file" in sys.argv[1:]
+    if explicit_env_file and not env_path.is_file():
+        print(json.dumps({
+            "ok": False,
+            "dry_run": not bool(args.execute or args.execute_ready),
+            "error": "missing_env_file",
+            "env_file": str(env_path),
+            "next_action": "pass an existing absolute --env-file path; do not launch a partially configured CandidateReport from a linked worktree",
+        }, ensure_ascii=False, indent=2))
+        return 2
+    if env_path.exists():
+        env_path = env_path.resolve()
+    args.env_file = str(env_path)
+    load_env(env_path)
     ensure_kaggle_username_env()
     allow_yc_fallback = bool(args.allow_yc_fallback or (os.getenv("REGION_TALK_ALLOW_LOCAL_YC_FALLBACK") or "").strip().lower() in {"1", "true", "yes", "on"})
     missing = [

@@ -1714,6 +1714,22 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", payload)
         self.assertIn("--allow-yc-fallback", payload)
 
+    def test_main_rejects_explicit_missing_env_file_before_live_reads(self) -> None:
+        mod = load_module()
+        missing = "/tmp/region-talk-definitely-missing.env"
+        with mock.patch.dict(os.environ, {}, clear=True), \
+            mock.patch.object(mod, "load_env") as load_env, \
+            mock.patch.object(mod, "read_region_talk_queue_metrics") as read_metrics, \
+            mock.patch.object(sys, "argv", ["region_talk_orchestrator.py", "--env-file", missing, "--execute"]):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = mod.main()
+        self.assertEqual(rc, 2)
+        self.assertIn('"error": "missing_env_file"', out.getvalue())
+        self.assertIn(missing, out.getvalue())
+        load_env.assert_not_called()
+        read_metrics.assert_not_called()
+
     def test_main_accepts_service_account_key_as_direct_credential(self) -> None:
         mod = load_module()
         metrics = {

@@ -231,6 +231,11 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
   review. Newly-created candidate-memory rows still waiting for BGE, actual
   media acquisition or a policy refresh remain visible through
   `candidate_memory_new_this_run`, but are not called reviewable output.
+- Orchestrator environment contract: an explicitly supplied `--env-file` must
+  exist before any live action is planned or launched, and an existing relative
+  path is normalized to an absolute path before it is passed to child launchers.
+  This prevents a linked worktree without its own untracked `.env` from running
+  a superficially successful but Telegram/VK/Gemini-unconfigured CandidateReport.
 - Fast-check KO contract: a source-local keyword hit is both an exact-post task
   (`post_link_queue_item`) and a source-priority signal. CandidateReport must
   persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,
