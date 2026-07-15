@@ -37,6 +37,32 @@ cropped before the renderer adds the event title/date; the face manifest records
 the crop mode, reason and source rectangle. Always regenerate a fresh catalog
 snapshot and selection before a render so new OCR/crop metadata is propagated.
 
+### Verified refined preview
+
+- implementation/evidence SHA: `dc2e82cf20c4`;
+- build id: `preview-20260715t0940z-f18-share-refine`;
+- [footer preview](https://kenigevents.ru/preview-20260715t0940z-f18-share-refine/__preview/);
+- [service-share lab](https://kenigevents.ru/preview-20260715t0940z-f18-share-refine/lab/service-share/);
+- dynamic snapshot: `2026-07-15T07:10:00Z`, `284` eligible events, `15`
+  normalized places, `84` additions in the exact trailing 168 hours;
+- asset version: `20260715-896b8af26ac6679f`; manifest SHA-256
+  `5383a1d81c033be971bc494f1bf0790d465a8bf05cd7ce98e986ac81f56c9fe3`;
+- PNG: `826,924` bytes,
+  `e6335fa840aed21246dfd2b34078025fe19c99c08d5414271c01d788e330420d`;
+  WebP: `72,414` bytes,
+  `ee8f8d78e1ce0d037a20b9e7331a42998cf4b39328539933ea6e7e243c091c10`;
+- exact-bundle Kaggle GPU debug
+  `service-share:2026-07-15:debug:20260715T092428Z` -> CPU final
+  `service-share:2026-07-15:final:20260715T092658Z`, bundle SHA-256
+  `82d19d5f18cec0e593eb1e9ba39986ef85d140163f51a51fa295e5497db1a035`;
+- dry-run: `1,288` planned objects and every destination below the preview
+  prefix; deploy explicitly preserved stable `/ics/` objects;
+- local and public HTTPS Playwright: `14/14` each; controller `5/5`, renderer
+  `23/23`, `build:preview`, `check:preview`, MIME/byte/hash checks and
+  `git diff --check` passed;
+- final CPU card and public desktop footer screenshot were sent to Telegram
+  Saved Messages as messages `32270` and `32271`.
+
 ## Проверенный preview 2026-07-15
 
 - implementation SHA до фиксации этого evidence:
