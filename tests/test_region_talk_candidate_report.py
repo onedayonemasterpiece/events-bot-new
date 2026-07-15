@@ -6931,6 +6931,35 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             3,
         )
 
+    def test_candidate_memory_prunes_checkpoint_only_nonregion_audit_expansion(self) -> None:
+        mod = load_module()
+        previous = {
+            "ydb_row_level_candidate_memory_items_loaded": 1,
+            "candidate_memory": {
+                "durable": {
+                    "candidate_memory_id": "durable",
+                    "post_url": "https://t.me/blog/1",
+                    "current_stage": "dropped_text_gate",
+                    "current_lifecycle_status": "vector_reject_not_kaliningrad_oblast",
+                    "kaliningrad_oblast_only_scope": False,
+                    "_row_level_candidate_memory_loaded": "true",
+                },
+                "checkpoint-only": {
+                    "candidate_memory_id": "checkpoint-only",
+                    "post_url": "https://t.me/blog/2",
+                    "current_stage": "dropped_text_gate",
+                    "current_lifecycle_status": "vector_reject_not_kaliningrad_oblast",
+                    "kaliningrad_oblast_only_scope": False,
+                },
+            },
+        }
+
+        memory, _not_refetched, _deltas = mod.build_candidate_memory(
+            previous, [], [], "run-current", "2026-07-15T06:00:00+00:00"
+        )
+
+        self.assertEqual([row["candidate_memory_id"] for row in memory], ["durable"])
+
     def test_candidate_launcher_defaults_to_live_ydb_backend(self) -> None:
         mod = load_runner_module()
         old_backend = os.environ.pop("REGION_TALK_STATE_BACKEND", None)

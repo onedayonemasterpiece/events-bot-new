@@ -4506,7 +4506,15 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         for _pk, item in candidate_items.items():
                             key = str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or _pk.replace("candidate_memory_item:", ""))
                             if key:
-                                c[key] = {**c.get(key, {}), **item}
+                                c[key] = {
+                                    **c.get(key, {}),
+                                    **item,
+                                    # Runtime-only provenance.  It lets the
+                                    # next build distinguish an actual durable
+                                    # row from a compact-checkpoint projection;
+                                    # CANDIDATE_MEMORY_STATE_FIELDS omits it.
+                                    "_row_level_candidate_memory_loaded": "true",
+                                }
                         data0["candidate_memory"] = c
                         data0["ydb_row_level_candidate_memory_items_loaded"] = len(candidate_items)
                     if image_items:
@@ -6805,7 +6813,16 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
     # processed-post bootstrap below is only a compatibility import; retaining
     # every old non-region bootstrap as a new audit row inflated live memory
     # from 811 to 2,322 rows in one run and created no product value.
-    durable_memory_ids = set(memory)
+    row_level_memory_was_loaded = int(previous_state.get("ydb_row_level_candidate_memory_items_loaded") or 0) > 0
+    durable_memory_ids = (
+        {
+            mid
+            for mid, row in memory.items()
+            if str(row.get("_row_level_candidate_memory_loaded") or "").lower() == "true"
+        }
+        if row_level_memory_was_loaded
+        else set(memory)
+    )
     # Exact-link and source-history fetches historically derived different
     # post_id values for the same public URL. Candidate memory is a product
     # entity, so reuse the oldest durable memory id for that URL instead of
