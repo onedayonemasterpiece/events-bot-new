@@ -23,6 +23,7 @@ PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 IMAGE_DECISION_CONTRACT_VERSION = "region_talk_image_album_guard_v2"
 IMAGE_ACQUISITION_VERSION = "region_talk_plural_media_v2"
+IMAGE_AUTH_RETRY_RESET_VERSION = "vk_service_read_token_v1"
 IMAGE_LEGACY_SCORER_VERSION = "region_talk_cv_clip_laion_nima_legacy_v1"
 IMAGE_QUALITY_NEEDS_REVIEW = "needs_visual_review"
 IMAGE_QUALITY_LEGACY_ACCEPT = "legacy_auto_accept"
@@ -790,6 +791,24 @@ def image_row_needs_acquisition_repair(row: dict) -> bool:
     reason = str(row.get("image_quality_reason") or "").strip().lower()
     return acquisition in {"partial", "versioned_album_rescore_required"} or reason == "incomplete_album_never_terminal_quality_reject"
 
+
+def image_row_needs_auth_strategy_retry_reset(row: dict) -> bool:
+    """Allow one bounded retry after replacing an IP-bound VK token.
+
+    A few albums exhausted all three attempts before the remote worker began
+    preferring the service read token.  The ordinary retry cap must remain
+    monotonic, but those historical failures deserve exactly one reset under
+    the new acquisition strategy.  The durable version marker prevents an
+    endless reset loop if the service token later fails for another reason.
+    """
+    if str(row.get("media_fetch_retry_reset_version") or "") == IMAGE_AUTH_RETRY_RESET_VERSION:
+        return False
+    error = str(row.get("media_fetch_error") or "").lower()
+    if "error_subcode': 1130" not in error and 'error_subcode": 1130' not in error and "another ip address" not in error:
+        return False
+    _token, token_name = _vk_read_token()
+    return token_name in {"VK_SERVICE_TOKEN", "VK_SERVICE_KEY"}
+
 def ydb_upsert_image_rows(batch, *, stage: str):
     if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
@@ -955,6 +974,12 @@ def ydb_rows_for_diagnostic(limit_n: int):
             r["media_acquisition_status"] = "needs_actual_image_fetch"
             r["actual_image_retry_reason"] = "partial_album_requires_acquisition_repair"
             status = "needs_actual_image_fetch"
+            if image_row_needs_auth_strategy_retry_reset(r):
+                r["media_fetch_attempt_count_before_strategy_reset"] = int(r.get("media_fetch_attempt_count") or 0)
+                r["media_fetch_attempt_count"] = 0
+                r["media_fetch_retry_exhausted"] = "false"
+                r["media_fetch_retry_reset_version"] = IMAGE_AUTH_RETRY_RESET_VERSION
+                r["media_fetch_retry_reset_reason"] = "ip_bound_vk_token_replaced_by_service_read_token"
         elif status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
             continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():

@@ -249,3 +249,8 @@ an explicit history timestamp, a positive durable `posts_scanned` counter, or
 a recorded access-level deferral such as cached-entity/cooldown handling.  This
 keeps zero-post `pending_scan` bloggers in the primary high-probability lane
 instead of incorrectly cooling them down as rescans.
+
+Historical VK albums that exhausted their bounded media attempts specifically
+on IP-bound token error `1130` receive one durable, versioned retry reset when
+the Kaggle worker has a service read token.  The normal three-attempt cap still
+applies after that migration and the reset marker prevents a retry loop.

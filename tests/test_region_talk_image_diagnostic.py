@@ -505,6 +505,57 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertEqual(leased[0]["actual_image_retry_reason"], "partial_album_requires_acquisition_repair")
             self.assertTrue(any(stage == "leased_for_image_analysis" for stage, _batch in writes))
 
+    def test_exhausted_ip_bound_vk_album_gets_one_service_token_retry_reset(self) -> None:
+        old_service = os.environ.get("VK_SERVICE_KEY")
+        os.environ["VK_SERVICE_KEY"] = "test-service-token"
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                mod = self._load_in_temp_output(td)
+                row = {
+                    "image_queue_id": "exhausted-vk-album",
+                    "image_queue_order": 1,
+                    "image_queue_status": "needs_visual_review",
+                    "image_model_input_type": "actual_image",
+                    "post_url": "https://vk.com/wall-1_3",
+                    "kaliningrad_oblast_only_scope": "true",
+                    "kaliningrad_mention_role": "main_subject",
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "publication-gate-test-v1",
+                    "image_quality_decision": "needs_visual_review",
+                    "image_quality_terminality": "nonterminal",
+                    "image_quality_reason": "media_acquisition_exhausted_without_complete_album",
+                    "image_acquisition_status": "partial",
+                    "media_fetch_attempt_count": 3,
+                    "media_fetch_retry_exhausted": "true",
+                    "media_fetch_error": "error_subcode': 1130; access_token was given to another ip address",
+                }
+                writes = []
+                mod.ydb_select_image_queue = lambda _limit: [row]
+                mod.ydb_upsert_image_rows = lambda batch, *, stage: writes.append((stage, batch))
+
+                leased, total = mod.ydb_rows_for_diagnostic(10)
+
+                self.assertEqual(total, 1)
+                self.assertEqual(len(leased), 1)
+                self.assertEqual(leased[0]["image_queue_status"], "image_analysis_in_progress")
+                self.assertEqual(leased[0]["media_fetch_attempt_count"], 0)
+                self.assertEqual(leased[0]["media_fetch_attempt_count_before_strategy_reset"], 3)
+                self.assertEqual(leased[0]["media_fetch_retry_reset_version"], mod.IMAGE_AUTH_RETRY_RESET_VERSION)
+                self.assertFalse(any(stage == "media_fetch_retry_exhausted" for stage, _batch in writes))
+
+                # The durable marker makes the reset one-shot even if the new
+                # service-token attempt later fails.
+                replay = dict(leased[0])
+                replay["image_queue_status"] = "needs_visual_review"
+                replay["image_acquisition_status"] = "partial"
+                replay["media_fetch_attempt_count"] = 3
+                self.assertFalse(mod.image_row_needs_auth_strategy_retry_reset(replay))
+        finally:
+            if old_service is None:
+                os.environ.pop("VK_SERVICE_KEY", None)
+            else:
+                os.environ["VK_SERVICE_KEY"] = old_service
+
     def test_image_queue_scan_is_not_limited_to_five_batches(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",

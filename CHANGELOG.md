@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Fixed Region Talk confirmed-external source selection so a generic evidence-ingestion `fetch_attempted` flag no longer hides zero-post `pending_scan` bloggers behind the rescan cooldown.
+- Added a one-shot Region Talk VK album recovery for rows that exhausted media acquisition on IP-bound token error 1130 before service-token reads were enabled; the durable reset version preserves the normal bounded retry contract.
 
 - Fixed Region Talk VK album acquisition on Kaggle and in the server-side media prefetcher to prefer service read tokens over IP-bound user tokens, and reopen nonterminal incomplete-album rows (including persisted `actual_scored` partial rows) for bounded acquisition repair instead of leaving them permanently stuck after `wall.getById` error 5.
 
