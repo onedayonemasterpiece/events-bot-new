@@ -9,6 +9,11 @@ import httpx
 from html.parser import HTMLParser
 
 from tg_medallions import event_medallion_html_block
+from tg_graphic_medallions import (
+    graphic_medallion_signature,
+    render_event_graphic_medallion_strip,
+    resolve_event_graphic_medallions,
+)
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
@@ -4838,10 +4843,8 @@ async def publish_tg_promo_event_publication(
     target_chat = str(target_chat or "").strip()
     if not target_chat or not bot:
         return None
-    # Public channel bots can't use arbitrary custom emoji unless the bot has
-    # Fragment-purchased usernames. Send a clean message first; the Premium
-    # Telethon editor inserts medallions later without visible placeholders.
-    medallion_block = event_medallion_html_block(event)
+    # Promo transport still uses its legacy message/media shape, but graphical
+    # event medallions are never emulated with a delayed custom-emoji mosaic.
     message = build_tg_promo_event_publication_message(event, include_medallions=False)
     if len(message) > 4096:
         message = message[:4050].rstrip() + "\n\n..."
@@ -4894,7 +4897,6 @@ async def publish_tg_promo_event_publication(
         _schedule_tg_premium_emoji_editor(
             [(target_chat, message_id) for message_id in sent_message_ids],
             context="tg_promo_event_publish",
-            medallion_html_block=medallion_block or None,
         )
     return _tg_channel_message_link(target_chat, int(sent.message_id))
 
@@ -5225,6 +5227,7 @@ TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.ru/im/channels/-239844596"
 TG_EVENT_MAX_URL = "https://max.ru/channel_kenigevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
+TG_EVENT_SOCIAL_LINK_GAP_SPACES = 12
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
 # This is a final public-copy writer, not an internal processing stage.  Keep it
@@ -5942,8 +5945,10 @@ def build_tg_event_announcement(
     if footer_links:
         footer_line = " · ".join(footer_links)
         if social_links and details_url and not details_button_highlight:
-            social_gap_spaces = 8 if include_calendar_link else 12
-            footer_line += " " * social_gap_spaces + social_links
+            # These are separate semantic destinations that intentionally share
+            # one visual row.  Keep a deliberate non-compact gap on every post
+            # mode; RichMessage HTML converts it to non-collapsing spaces.
+            footer_line += " " * TG_EVENT_SOCIAL_LINK_GAP_SPACES + social_links
         elif social_links:
             footer_line += " · " + social_links
         lines.append(footer_line)
@@ -6401,7 +6406,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_channel_medallion_editor_v9_city_location_dedupe",
+                "tg_event_format=rich_graphic_medallion_strip_v1_footer_gap12",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
@@ -6422,7 +6427,7 @@ def build_tg_event_source_hash(
                 str(getattr(event, "telegraph_url", "") or ""),
                 str(getattr(event, "telegraph_path", "") or ""),
                 media_signature,
-                event_medallion_html_block(event),
+                graphic_medallion_signature(event),
                 text or "",
             ]
         )
@@ -6520,6 +6525,91 @@ async def materialize_tg_event_media_for_upload(url: str, index: int) -> types.B
     return types.BufferedInputFile(data, filename=f"event-media-{index}{suffix}")
 
 
+def build_tg_event_rich_message_html(message_html: str, *, event_media_count: int) -> str:
+    """Wrap ordinary event HTML in Telegram RichMessage block markup.
+
+    The graphical medallion image is always its own final media block before
+    the footer.  Runs of spaces in the footer become ``&nbsp;`` so Telegram's
+    HTML renderer cannot collapse the deliberate gap between ``Подробнее`` and
+    the separate MAX/VK destinations.
+    """
+
+    lines = str(message_html or "").splitlines()
+    footer_index: int | None = None
+    for index in range(len(lines) - 1, -1, -1):
+        line = lines[index]
+        if (
+            TG_EVENT_MAX_URL in line
+            or TG_EVENT_VK_URL in line
+            or "🔎 Подробнее" in line
+            or "✨ Подробнее" in line
+        ):
+            footer_index = index
+            break
+    footer = lines[footer_index].strip() if footer_index is not None else ""
+    content_lines = lines[:footer_index] if footer_index is not None else lines
+    while content_lines and not content_lines[-1].strip():
+        content_lines.pop()
+
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for line in content_lines:
+        if not line.strip():
+            if current:
+                paragraphs.append("<br>".join(current))
+                current = []
+            continue
+        current.append(line)
+    if current:
+        paragraphs.append("<br>".join(current))
+
+    blocks = [f'<img src="tg://photo?id=event-{index}"/>' for index in range(event_media_count)]
+    blocks.extend(f"<p>{paragraph}</p>" for paragraph in paragraphs)
+    blocks.append('<img src="tg://photo?id=medallions"/>')
+    if footer:
+        # Only deliberate multi-space runs are protected.  Normal word spaces
+        # keep ordinary HTML behavior.
+        footer = re.sub(r" {2,}", lambda match: "&nbsp;" * len(match.group(0)), footer)
+        blocks.append(f"<p>{footer}</p>")
+    return "\n".join(blocks)
+
+
+def build_tg_event_input_rich_message(
+    message_html: str,
+    event_media: Sequence[types.BufferedInputFile],
+    medallion_strip: bytes,
+) -> types.InputRichMessage:
+    media: list[dict[str, Any]] = []
+    for index, upload in enumerate(event_media):
+        media.append(
+            {
+                "id": f"event-{index}",
+                "media": types.InputMediaPhoto(media=upload),
+            }
+        )
+    media.append(
+        {
+            "id": "medallions",
+            "media": types.InputMediaPhoto(
+                media=types.BufferedInputFile(
+                    medallion_strip,
+                    filename="event-medallions.jpg",
+                )
+            ),
+        }
+    )
+    # ``media`` is the Bot API attachment map for tg://photo?id=... references.
+    # aiogram models allow forward-compatible extra fields and serialize the
+    # BufferedInputFile values as multipart attachments.
+    return types.InputRichMessage(
+        html=build_tg_event_rich_message_html(
+            message_html,
+            event_media_count=len(event_media),
+        ),
+        media=media,
+    )
+
+
 async def publish_tg_event_announcement(
     event: Event,
     text: str,
@@ -6564,7 +6654,10 @@ async def publish_tg_event_announcement(
                 f"tg_event_publish_missing_approved_cdn_media:event_id={getattr(event, 'id', None)}"
             )
     chunks = _chunked_tg_media(photo_urls)
-    if len(photo_urls) == 1:
+    graphic_medallions = resolve_event_graphic_medallions(event)
+    if graphic_medallions:
+        desired_mode = "rich_message"
+    elif len(photo_urls) == 1:
         desired_mode = "photo_caption"
     elif len(photo_urls) > 1:
         desired_mode = "album_caption"
@@ -6572,6 +6665,20 @@ async def publish_tg_event_announcement(
         desired_mode = "text"
     existing_id = getattr(event, "tg_event_post_id", None)
     existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
+    if existing_id and existing_mode == "album_caption" and desired_mode == "rich_message":
+        # The legacy schema stores only the first id from a media group. Bot
+        # API cannot enumerate the remaining album items later, so an automatic
+        # replacement could delete the caption item and orphan the other
+        # photos. Keep the existing album shape until an audited migration has
+        # the complete message-id ledger; all newly published matched events
+        # still use RichMessage.
+        logging.warning(
+            "publish_tg_event_announcement preserve legacy album event_id=%s "
+            "post_id=%s; rich migration requires complete media-group ledger",
+            getattr(event, "id", None),
+            existing_id,
+        )
+        desired_mode = "album_caption"
     if (
         (getattr(event, "tg_event_source_hash", None) or "") == source_hash
         and (getattr(event, "tg_event_post_url", None) or "").strip()
@@ -6583,7 +6690,6 @@ async def publish_tg_event_announcement(
             event.tg_event_post_mode,
             source_hash,
         )
-    medallion_block = event_medallion_html_block(event)
     message_html, _rewritten = await build_tg_event_announcement_for_publish(
         event,
         text,
@@ -6602,9 +6708,28 @@ async def publish_tg_event_announcement(
     )
     message_text, message_entities = telegram_event_html_to_text_entities(message_html)
 
-    if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:
+    async def uploaded_event_media() -> list[types.BufferedInputFile]:
+        return [
+            await materialize_tg_event_media_for_upload(url, index)
+            for index, url in enumerate(photo_urls)
+        ]
+
+    def graphical_rich_message(event_media: Sequence[types.BufferedInputFile]) -> types.InputRichMessage:
+        strip = render_event_graphic_medallion_strip(graphic_medallions)
+        return build_tg_event_input_rich_message(message_html, event_media, strip)
+
+    if existing_id and existing_mode in {"text", "album_caption", "photo_caption", "rich_message"}:
         try:
-            if existing_mode in {"album_caption", "photo_caption"} and desired_mode == existing_mode:
+            if existing_mode == "rich_message" and desired_mode == "rich_message":
+                rich_message = graphical_rich_message(await uploaded_event_media())
+                await bot.edit_message_text(
+                    chat_id=target,
+                    message_id=existing_id,
+                    text=None,
+                    rich_message=rich_message,
+                    reply_markup=reply_markup,
+                )
+            elif existing_mode in {"album_caption", "photo_caption"} and desired_mode == existing_mode:
                 await bot.edit_message_caption(
                     chat_id=target,
                     message_id=existing_id,
@@ -6623,11 +6748,11 @@ async def publish_tg_event_announcement(
                 )
             else:
                 raise RuntimeError(f"mode change requires new message: {existing_mode}->{desired_mode}")
-            _schedule_tg_premium_emoji_editor(
-                [(target, int(existing_id))],
-                context="tg_event_publish_edit",
-                medallion_html_block=medallion_block or None,
-            )
+            if existing_mode != "rich_message":
+                _schedule_tg_premium_emoji_editor(
+                    [(target, int(existing_id))],
+                    context="tg_event_publish_edit",
+                )
             return (
                 (getattr(event, "tg_event_post_url", None) or "").strip() or None,
                 int(existing_id),
@@ -6641,6 +6766,13 @@ async def publish_tg_event_announcement(
                 existing_mode,
                 exc,
             )
+            if existing_mode == "album_caption":
+                # We cannot delete every old media-group item without its full
+                # id ledger. Retrying the edit is safer than publishing a
+                # second complete album beside the first one.
+                raise RuntimeError(
+                    "legacy album caption edit failed; refusing duplicate fallback"
+                ) from exc
 
     sent_url: str | None = None
     sent_id: int | None = None
@@ -6663,7 +6795,18 @@ async def publish_tg_event_announcement(
         return uploaded
 
     try:
-        if desired_mode == "photo_caption":
+        if desired_mode == "rich_message":
+            rich_message = graphical_rich_message(await uploaded_event_media())
+            msg = await _await_tg_event_send_result(
+                bot.send_rich_message(
+                    chat_id=target,
+                    rich_message=rich_message,
+                    reply_markup=reply_markup,
+                )
+            )
+            sent_id = msg.message_id
+            sent_url = message_link(msg.chat.id, msg.message_id)
+        elif desired_mode == "photo_caption":
             upload = await materialize_tg_event_media_for_upload(photo_urls[0], 0)
             msg = await _await_tg_event_send_result(
                 bot.send_photo(
@@ -6710,7 +6853,7 @@ async def publish_tg_event_announcement(
     if (
         existing_id
         and int(existing_id) != int(sent_id or 0)
-        and existing_mode in {"text", "photo_caption", "album_caption"}
+        and existing_mode in {"text", "photo_caption", "rich_message"}
     ):
         try:
             await bot.delete_message(chat_id=target, message_id=int(existing_id))
@@ -6724,11 +6867,10 @@ async def publish_tg_event_announcement(
                 exc_info=True,
             )
 
-    if sent_id is not None:
+    if sent_id is not None and sent_mode != "rich_message":
         _schedule_tg_premium_emoji_editor(
             [(target, int(sent_id))],
             context="tg_event_publish_send",
-            medallion_html_block=medallion_block or None,
         )
 
     logging.info(

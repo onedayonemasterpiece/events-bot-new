@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Telegram event graphical medallions (INC-2026-07-15)**: moved curated organizer/venue/festival/source/program/Pushkin identities from delayed custom-emoji mosaics into a deterministic `1300×330` bottom strip in Bot API RichMessage, versioned publication hashes with asset digests, preserved every approved poster and calendar button, edit existing RichMessages in place, skip stale emoji-editor jobs after migration, and keep legacy albums intact unless their complete message-id ledger is available for an audited replacement.
 - **Event age-rating acceptance and source repair**: distinguish terminal-state completeness from the owner's literal 100% numeric fill-rate gate; the full 291-event sweep plus source-by-source repair ended with 64 declared, 11 assessed-only and 216 terminal nonnumeric outcomes, including correction of two live BGE/source disagreements, so the approved high-confidence cascade is not described as completion of no-missing calibration.
 - **Kaggle run status isolation**: preserve a hash of the complete run id in every status-dataset slug, preventing concurrent/retried runs with the same long prefix from versioning one shared callback config and corrupting each other's ledger heartbeats.
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
@@ -52,6 +53,7 @@
 
 ### Fixed
 
+- **Telegram medallion completeness and footer semantics (INC-2026-07-15)**: resolve event `6811` as KОНБ + KGD80 + Znanie without duplicate partner marks, preserve the intentional 12-space `Подробнее` → `Max` gap as non-collapsing RichMessage HTML, and prevent RichMessage posts from enqueueing/receiving legacy emoji medallions.
 - **Event age-rating fallback leakage/runtime**: mask any unresolved literal age marks before production BGE/TF-IDF inference exactly as in calibration, and cap the default CPU encoder length at 768 tokens with OCR-first ordering instead of allowing 4096-token batches to stall.
 - **Event age-rating production scope**: restrict startup backlog and every CPU assessment selector to current/future events, so historical rows that still carry `lifecycle_status=active` cannot consume an unbounded sequence of Kaggle batches.
 - **Event age-rating calibration closure**: make the manual Kaggle launcher expose partial reports, complete all 718 masked CPU vectors, continue iterative calibration over 531 scope-clean official labels, and pass the untouched grouped OOF gate with a raw-matrix TF-IDF safety cascade (51.4% coverage, 96.0% exact, 99.3% within-one, 0 severe-under); hash/logit self-test mismatch still fails closed.
