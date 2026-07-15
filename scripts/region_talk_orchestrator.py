@@ -561,13 +561,14 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"из уже отклонённых источников {value('text_vector_current_version_e5_without_bge_source_terminal_total')})"
         ),
         (
-            "Следующий BGE-запуск — всего actionable / из них новые пары / stale-bank refresh / "
-            "вместимость / загрузка / пропущено из отклонённых источников: "
-            f"{value('bge_pending_sample_total')}/"
-            f"{value('bge_missing_current_sample_total')}/"
-            f"{value('bge_existing_stale_rescore_sample_total')}/"
+            "BGE — срочно не хватает пар / вместимость следующего CPU-запуска / загрузка; "
+            "отдельно фоновый stale-bank backlog / выбрано в диагностическую выборку / "
+            "пропущено из отклонённых источников: "
+            f"{value('bge_immediate_pair_backlog_total')}/"
             f"{value('bge_capacity_rows')}/"
-            f"{value('bge_backlog_capacity_percent')}%/"
+            f"{value('bge_immediate_pair_backlog_capacity_percent')}%; "
+            f"{value('bge_stale_maintenance_backlog_total')}/"
+            f"{value('bge_stale_maintenance_selected_sample_total')}/"
             f"{value('bge_source_terminal_skipped_sample_total')}"
         ),
         (
@@ -2967,7 +2968,15 @@ def _has_active_region_talk_kernel(kaggle_statuses: dict[str, str]) -> bool:
 def candidate_adaptive_budget(metrics: dict[str, Any]) -> dict[str, int]:
     """Use measured runtime headroom without extending the 20-minute guardrail."""
     runtime_seconds = _safe_float(metrics.get("candidate_heartbeat_runtime_elapsed_seconds")) or 0.0
-    bge_backlog = _safe_int(metrics.get("bge_pending_sample_total"))
+    # Only missing current BGE pairs block the live funnel.  The worker sample
+    # may also contain already-paired rows selected for semantic-bank
+    # maintenance; treating those rows as product debt used to suppress the
+    # confirmed-blogger breadth budget even at 100% actionable dual coverage.
+    bge_backlog = (
+        _safe_int(metrics.get("bge_missing_current_sample_total"))
+        if "bge_missing_current_sample_total" in metrics
+        else _safe_int(metrics.get("bge_pending_sample_total"))
+    )
     bge_capacity = max(1, _safe_int(metrics.get("bge_capacity_rows")) or _env_int("REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS", 48))
     confirmed_blogger_pending = _safe_int(metrics.get("confirmed_external_blogger_pending_total"))
     heartbeat_event = str(metrics.get("candidate_heartbeat_event_name") or "").strip().lower()
@@ -3563,6 +3572,15 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "bge_existing_stale_rescore_sample_total": _safe_int(bge_collect_stats.get("existing_stale_rescore")),
         "bge_selected_missing_current_sample_total": _safe_int(bge_collect_stats.get("selected_missing_current_bge")),
         "bge_selected_stale_rescore_sample_total": _safe_int(bge_collect_stats.get("selected_stale_rescore")),
+        # Product-facing BGE debt is deliberately separated from optional
+        # stale semantic-bank maintenance.  Compatibility fields above retain
+        # the raw worker sample for diagnostics.
+        "bge_immediate_pair_backlog_total": _safe_int(bge_collect_stats.get("missing_current_bge")),
+        "bge_immediate_pair_backlog_capacity_percent": int(round((
+            _safe_int(bge_collect_stats.get("missing_current_bge")) / bge_capacity_rows
+        ) * 100)),
+        "bge_stale_maintenance_backlog_total": _safe_int(bge_collect_stats.get("existing_stale_rescore")),
+        "bge_stale_maintenance_selected_sample_total": _safe_int(bge_collect_stats.get("selected_stale_rescore")),
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
         **_heartbeat_metric_fields("bge", latest_rows.get("latest_business_heartbeat:bge_m3_enrichment")),
         **_heartbeat_metric_fields("image", latest_rows.get("latest_business_heartbeat:image_diagnostic")),
@@ -3721,13 +3739,17 @@ def build_decision_plan(
         if current_backlog_key in metrics
         else int(metrics.get("text_vector_e5_without_bge_exact_text_total") or 0)
     )
-    # `bge_pending_sample_total` is produced by the same collect_text_rows()
-    # contract as the worker. Pair-gap metrics may include legacy/version rows
-    # whose BGE PK already exists and cannot be repaired by launching the worker
-    # again. Prefer the actionable sample whenever it is present; use the pair
-    # gap only for older metric snapshots that predate this field.
+    # Missing current BGE pairs are the only immediate dual-vector dependency.
+    # `bge_pending_sample_total` also contains optional stale semantic-bank
+    # rescoring, which must not occupy the production launch slot or suppress
+    # source breadth.  Keep the old sample as a compatibility fallback for
+    # metric snapshots produced before the split.
     bge_backlog = (
-        int(metrics.get("bge_pending_sample_total") or 0)
+        int(metrics.get("bge_missing_current_sample_total") or 0)
+        if "bge_missing_current_sample_total" in metrics
+        else int(metrics.get("bge_immediate_pair_backlog_total") or 0)
+        if "bge_immediate_pair_backlog_total" in metrics
+        else int(metrics.get("bge_pending_sample_total") or 0)
         if "bge_pending_sample_total" in metrics
         else pair_backlog
     )
@@ -3746,7 +3768,7 @@ def build_decision_plan(
                 "--batch-size", str(max(1, bge_batch_size)),
                 "--no-wait",
             ],
-            f"pending E5 text-vector rows need paired BGE enrichment immediately after main E5 ({bge_backlog}/{external_cpu_capacity} CPU-row capacity)",
+            f"current E5 rows missing their paired BGE vector need immediate enrichment ({bge_backlog}/{external_cpu_capacity} CPU-row capacity)",
             resource="kaggle:bge_m3",
             parallel_safe=True,
             timeout_seconds=300,
@@ -3884,11 +3906,13 @@ def run_orchestrator_cycle(args: argparse.Namespace, *, allow_yc_fallback: bool,
 
 def orchestrator_poll_sleep_seconds(metrics: dict[str, Any], *, normal_seconds: int, downstream_seconds: int) -> int:
     normal = max(5, int(normal_seconds or 180))
-    if any(int(metrics.get(key) or 0) > 0 for key in (
-        "bge_pending_sample_total",
-        "image_pending_total",
-        "finalizer_pending_url_total",
-        "publication_unsent_confirmed_total",
+    bge_immediate = (
+        int(metrics.get("bge_missing_current_sample_total") or 0)
+        if "bge_missing_current_sample_total" in metrics
+        else int(metrics.get("bge_pending_sample_total") or 0)
+    )
+    if bge_immediate > 0 or any(int(metrics.get(key) or 0) > 0 for key in (
+        "image_pending_total", "finalizer_pending_url_total", "publication_unsent_confirmed_total",
     )):
         return min(normal, max(5, int(downstream_seconds or 60)))
     return normal

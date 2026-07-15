@@ -107,7 +107,11 @@ selectable missing pairs before it spends remaining capacity on stale refresh;
 the exact/fast-check versus generic 80/20 reserve is applied independently
 inside each population. Operator metrics report these two populations
 separately so a large maintenance backlog cannot be mistaken for product
-throughput or starve fresh KO evidence.
+throughput or starve fresh KO evidence. The orchestrator launches the CPU BGE
+notebook immediately only for **missing current pairs**. A stale-only worker
+sample remains visible as maintenance telemetry, but does not shorten the
+control-loop interval or suppress confirmed-blogger source breadth; maintenance
+can still be run explicitly without weakening the E5+BGE production gate.
 
 ### Kaggle static/offline discipline
 
@@ -217,7 +221,11 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
   handoff writes only changed/refetched rows unless BGE fusion changed memory
   statuses, and both source/candidate handoffs have explicit row caps. Telethon
   network operations are guarded by per-call timeouts and cached-entity-only
-  mode can defer username cache misses instead of burning FloodWait.
+  mode can defer username cache misses instead of burning FloodWait. The single
+  per-run uncached Telegram resolve lane must be selected only from nonterminal
+  source rows: a historical `rejected_*` audit row is retained in YDB but may
+  never consume that scarce human-like resolve allowance ahead of a live
+  confirmed external blogger.
 - Product-heartbeat contract: `current_run_reviewable_candidates` counts only
   current-run rows whose lifecycle stage is actually ready for operator
   review. Newly-created candidate-memory rows still waiting for BGE, actual

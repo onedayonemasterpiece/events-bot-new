@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk's controlled uncached Telegram lane so terminal `rejected_*` sources cannot consume its single human-like resolve allowance; live confirmed external bloggers now advance one safely paced entity warm-up per eligible run without increasing resolve/FloodWait limits.
+- Separated immediate Region Talk BGE pair debt from stale semantic-bank maintenance in orchestration, adaptive source budgeting, polling and operator metrics; stale-only rows no longer trigger a product BGE launch or suppress confirmed-blogger breadth, while dual E5+BGE remains mandatory for publication.
 - Fixed Region Talk confirmed-external source selection so a generic evidence-ingestion `fetch_attempted` flag no longer hides zero-post `pending_scan` bloggers behind the rescan cooldown.
 - Added a one-shot Region Talk VK album recovery for rows that exhausted media acquisition on IP-bound token error 1130 before service-token reads were enabled; the durable reset version preserves the normal bounded retry contract.
 

@@ -1599,6 +1599,22 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
     uncached_telegram_pairs: list[tuple[Seed, dict[str, Any]]] = []
     uncached_seen: set[str] = set()
     for index, row in enumerate(rows, start=1):
+        # A terminal row must never consume the single human-like network
+        # resolve allowance.  In production an old
+        # ``rejected_unresolvable_telegram_source`` row sat before 55 live
+        # confirmed bloggers, was selected into the lane on every run and was
+        # then discarded by selected_sources_for_run().  The governor therefore
+        # reported zero resolve attempts even though an eligible backlog
+        # existed.  Keep terminal rows in the durable queue for audit, but do
+        # not admit them to the scarce uncached resolve lane.
+        row_status = str(
+            row.get("source_queue_status")
+            or row.get("queue_status")
+            or row.get("fetch_status")
+            or ""
+        )
+        if source_terminal_rejected_status(row_status):
+            continue
         candidate = seed_from_unified_queue_row(row, index)
         if not candidate or candidate.platform != "telegram" or source_queue_row_has_cached_entity(row, previous_state):
             continue

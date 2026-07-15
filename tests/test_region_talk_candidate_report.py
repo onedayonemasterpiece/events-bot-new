@@ -451,6 +451,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("https://t.me/fresh", urls)
         self.assertNotIn("https://t.me/oldretry", urls)
 
+    def test_uncached_lane_never_selects_terminal_rejected_source(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 0,
+            "telegram_entity_cache": {},
+            "unified_source_queue": {
+                "telegram:terminal": {
+                    "canonical_source_key": "telegram:terminal",
+                    "platform": "telegram",
+                    "handle": "@terminal",
+                    "source_url": "https://t.me/terminal",
+                    "source_queue_status": "rejected_unresolvable_telegram_source",
+                    "queue_order": 1,
+                    "external_blogger_evidence_status": "confirmed_external",
+                },
+                "telegram:live": {
+                    "canonical_source_key": "telegram:live",
+                    "platform": "telegram",
+                    "handle": "@live",
+                    "source_url": "https://t.me/live",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 2,
+                    "external_blogger_evidence_status": "confirmed_external",
+                },
+            },
+        }
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
+        }, clear=False):
+            seeds = mod.unified_queue_dynamic_seeds(previous, 1)
+
+        self.assertEqual([seed.canonical_url for seed in seeds], ["https://t.me/live"])
+        self.assertEqual(
+            mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"],
+            ["telegram:username:live"],
+        )
+
     def test_single_uncached_lane_prefers_fresh_confirmed_evidence_over_generic_queue_order(self) -> None:
         mod = load_module()
         previous = {

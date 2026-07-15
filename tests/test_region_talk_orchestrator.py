@@ -476,6 +476,17 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(evidence_headroom["confirmed_blogger_slots"], 5)
         self.assertEqual(evidence_headroom["confirmed_blogger_headroom_used"], 1)
 
+        stale_only_headroom = mod.candidate_adaptive_budget({
+            "candidate_heartbeat_runtime_elapsed_seconds": 401,
+            "confirmed_external_blogger_pending_total": 26,
+            "bge_pending_sample_total": 100,
+            "bge_missing_current_sample_total": 0,
+            "bge_existing_stale_rescore_sample_total": 700,
+            "bge_capacity_rows": 48,
+        })
+        self.assertEqual(stale_only_headroom["history_sources"], 6)
+        self.assertEqual(stale_only_headroom["confirmed_blogger_headroom_used"], 1)
+
         old_sources = os.environ.get("REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES")
         try:
             os.environ["REGION_TALK_ORCHESTRATOR_FAST_CHECK_SOURCES"] = "1"
@@ -692,12 +703,16 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "candidate_memory_dual_pending_total": 12,
             "candidate_memory_image_wait_total": 8,
             "bge_pending_sample_total": 36,
+            "bge_immediate_pair_backlog_total": 4,
+            "bge_immediate_pair_backlog_capacity_percent": 8,
+            "bge_stale_maintenance_backlog_total": 32,
+            "bge_stale_maintenance_selected_sample_total": 32,
             "bge_capacity_rows": 48,
             "bge_backlog_capacity_percent": 75,
             "bge_source_terminal_skipped_sample_total": 9,
         })
         self.assertIn("100/70/25/5/12/8", message)
-        self.assertIn("36/0/0/48/75%/9", message)
+        self.assertIn("4/48/8%; 32/32/9", message)
 
     def test_loop_goal_progress_tracks_delta_targets(self) -> None:
         mod = load_module()
@@ -1122,6 +1137,30 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         metrics["bge_pending_sample_total"] = 1
         actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
         self.assertIn("launch_bge_m3", [action["action"] for action in actions])
+
+    def test_stale_only_bge_worker_sample_does_not_launch_product_bge(self) -> None:
+        mod = load_module()
+        metrics = {
+            "text_vector_current_version_e5_without_bge_total": 268,
+            "text_vector_current_version_e5_without_bge_actionable_total": 0,
+            "bge_pending_sample_total": 100,
+            "bge_missing_current_sample_total": 0,
+            "bge_existing_stale_rescore_sample_total": 711,
+        }
+        actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
+        self.assertNotIn("launch_bge_m3", [action["action"] for action in actions])
+        self.assertEqual(
+            mod.orchestrator_poll_sleep_seconds(metrics, normal_seconds=180, downstream_seconds=60),
+            180,
+        )
+
+        metrics["bge_missing_current_sample_total"] = 1
+        actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
+        self.assertIn("launch_bge_m3", [action["action"] for action in actions])
+        self.assertEqual(
+            mod.orchestrator_poll_sleep_seconds(metrics, normal_seconds=180, downstream_seconds=60),
+            60,
+        )
 
     def test_decision_does_not_launch_bge_when_worker_sample_is_empty(self) -> None:
         mod = load_module()
