@@ -1,0 +1,124 @@
+mode: read_only_parallel_then_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: 22a7b0dca170066fda1f2add266435ba7f89d3fa
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-mosaic-20260715
+global_constraints:
+  - Telegram topic 6 was reread before implementation and must be reread after evidence publication.
+  - No paid image generation; use grounded existing event media only.
+  - Mosaic is desktop-optional and must preserve a useful text-first mobile/no-JS/reduced-motion state.
+  - Hero remains at most 50 percent of the viewport with categories and feed entry visible.
+  - Image reaches the physical viewport edge; no nested card, frame, radius or shadow.
+  - Code changes require canonical docs and CHANGELOG synchronization.
+verification_owner: root integrator
+stop_conditions:
+  - No grounded future event/media can support any proposed narrative without invention.
+  - Telegram E2E human session is unavailable for mandatory mobile review.
+  - Neither Gemini Pro nor Opus is available for exact-state visual acceptance.
+requirements:
+  - id: R01
+    requirement: Add grounded narrative candidates for chief architect, writer, bridge opening and Kruzenshtern departure/open-sea scenes.
+    area: scenarios/data grounding
+    lane: scenario-auditor
+    done_when: Each implemented candidate names a real future object or is explicitly documented as gated; no role/date/departure is invented.
+  - id: R02
+    requirement: Render an optional desktop media image as a rectangular 8x3 or 8x4 square mosaic without rounded corners.
+    area: visual composition
+    lane: ui-integrator
+    done_when: Deterministic square cells reconstruct one crop and extend to the viewport edge without nested framing.
+  - id: R03
+    requirement: Reveal and retire mosaic cells non-uniformly with stable ease-in-out opacity timing.
+    area: motion
+    lane: ui-integrator
+    done_when: Timings are deterministic per scenario/cell, no random reflow, and replay is reproducible.
+  - id: R04
+    requirement: Keep cells nearest the text partially transparent with non-uniform final opacity.
+    area: readability
+    lane: ui-integrator
+    done_when: Text-side attenuation is spatially graded and remains visible after the image fully enters.
+  - id: R05
+    requirement: Extend the crop to and visually beyond the right edge of the screen without horizontal scrolling.
+    area: responsive layout
+    lane: ui-integrator
+    done_when: Media is viewport-bound, clipped at the physical edge and body cannot scroll horizontally.
+  - id: R06
+    requirement: Preserve a paper stripe beneath overlapping narrative text.
+    area: typography
+    lane: ui-integrator
+    done_when: Every overlapping line remains readable over arbitrary event imagery.
+  - id: R07
+    requirement: Define and implement stable mobile behavior for mosaic scenarios.
+    area: mobile accessibility/performance
+    lane: ui-integrator
+    done_when: Mobile remains text-first, loads no mosaic image, keeps hero <=50vh and still shows categories/feed entry.
+  - id: R08
+    requirement: Obtain a fresh critical agy visual/product verdict on exact desktop mosaic motion and mobile degradation.
+    area: external consultation
+    lane: visual-consultant
+    done_when: Exact captures/video receive an explicit PASS/FAIL gate; any blocker is corrected and rechecked.
+lanes:
+  - id: scenario-auditor
+    role: planner
+    effort: high
+    requirement_ids: [R01]
+    target: Inspect current/future event data and assets for the four proposed narratives; return grounded candidates and copy, without edits.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-20260715-integration
+    writable_files: []
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Candidate IDs, dates, roles, media quality/crop notes and fail-closed copy contracts.
+    verification_scope: inspection_only
+    status: planned
+  - id: visual-consultant
+    role: planner
+    effort: extra-high
+    requirement_ids: [R08]
+    target: Derive a strict pre-implementation mosaic motion/layout acceptance contract from the existing hero and user proposal.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-20260715-integration
+    writable_files: [artifacts/codex/static-typed-briefing-mosaic-20260715/**]
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Exact grid/opacity/easing/mobile rules and review prompt; post-fix gate remains integrator-owned.
+    verification_scope: inspection_only
+    status: planned
+  - id: ui-integrator
+    role: worker
+    effort: extra-high
+    requirement_ids: [R02, R03, R04, R05, R06, R07]
+    target: Serially implement scenarios and mosaic renderer after both read-only audits.
+    depends_on: [scenario-auditor, visual-consultant]
+    execution_mode: serial_after_dependency
+    branch: integration/typed-briefing-mosaic-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-20260715-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/backlog/features/static-typed-briefing/**
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - docs/operations/mobile-ui-telegram-review.md
+      - CHANGELOG.md
+      - .codex/**
+    forbidden_files: []
+    expected_output: Deterministic desktop mosaic prototype, mobile degradation, tests, exact review, immutable preview and Telegram evidence.
+    verification_scope: full_local
+    status: planned
+  - id: merge-reviewer
+    role: merge_reviewer
+    effort: high
+    requirement_ids: []
+    target: Independently audit R01-R08, tests, exact visual gate and lab-only release boundary.
+    depends_on: [ui-integrator]
+    execution_mode: serial_after_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-20260715-integration
+    writable_files: []
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Done/Partial/Missing/Blocked matrix and publish recommendation.
+    verification_scope: full_local
+    status: planned
