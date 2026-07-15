@@ -11,11 +11,13 @@ Related docs: `docs/features/cherryflash/README.md`, `docs/features/promo-campai
 
 ## Summary
 
-VK stories for video announcements and `80 историй о главном` promo activity did
-not match the desired wall-first product contract. Video announcements must
-create a VK wall post first, then publish the same mp4 as a VK video story with
-`link_url` pointing at that wall post. Promo poster stories must stay image-only
-and must not render VK's wall-link caption card under the image.
+VK stories for base video announcements and `80 историй о главном` promo
+activity did not match the desired wall-first product contract. Base video
+announcements must create a VK wall post first, then publish the same mp4 as a
+VK video story with `link_url` pointing at that wall post. Promo poster stories
+must stay image-only and must not render VK's wall-link caption card under the
+image. Since 2026-07-15 the КОНБ partner track is an explicit product exception:
+it publishes a direct `vk_story` to `konb39` and does not create a VK wall post.
 
 ## User / Business Impact
 
@@ -82,8 +84,9 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 
 ### Mandatory checks before closure or deploy
 
-- Unit tests must prove `popular_review` and КОНБ no longer configure direct
-  `vk_story` targets for these video paths.
+- Unit tests must prove base `popular_review` does not configure direct
+  `vk_story` targets, while КОНБ configures exactly one direct `vk_story` VK target
+  and no `vk_wall` / `vk_wall_story` target.
 - Unit tests must prove `vk_wall_story` uses `stories.getVideoUploadServer` with
   `link_url` to the previous wall post and does not call
   `stories.getPhotoUploadServer`.
@@ -114,7 +117,8 @@ by linked VK video stories after live API validation showed
   `kenigeventsofficial` wall clip, same-community story link, then delayed
   `klgdevents` story link or local wall fallback.
 - Changed КОНБ prod VK target order to `vk_wall` then `vk_wall_story` for
-  `konb39`.
+  `konb39`; this historical corrective action was superseded for КОНБ only on
+  2026-07-15 by the operator-requested direct `vk_story` without a wall post.
 - Changed `vk_wall_story` to upload the mp4 as a VK video story with `link_url`
   to the previous wall post, preserving wall-first ordering while keeping the
   story itself as video.
@@ -182,4 +186,5 @@ by linked VK video stories after live API validation showed
 ## Prevention
 
 VK story fanout changes must keep the wall-first and caption-free story tests in
-the release gate for this surface.
+the release gate for the base surfaces, plus the КОНБ story-only/no-wall target
+test for the explicit partner exception.

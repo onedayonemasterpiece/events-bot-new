@@ -641,32 +641,23 @@ async def test_telegram_chat_target_posts_without_story_preflight(
 
 
 @pytest.mark.asyncio
-async def test_vk_targets_continue_when_telethon_client_unavailable(
+async def test_konb_direct_vk_story_continues_when_telethon_client_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     media_path = tmp_path / "story.mp4"
     media_path.write_bytes(b"video")
-    published_wall: list[str] = []
+    published_story: list[str] = []
 
-    def fake_wall_video(*, auth, config, target_cfg, media_path):  # noqa: ANN001
-        published_wall.append(str(target_cfg["label"]))
+    def fake_story_video(*, auth, config, target_cfg, media_path):  # noqa: ANN001
+        published_story.append(str(target_cfg["label"]))
         return {
-            "post_url": "https://vk.com/wall-231828790_42",
             "owner_id": -231828790,
-            "post_id": 42,
-        }
-
-    def fake_wall_story(*, auth, config, target_cfg, media_path, source_wall):  # noqa: ANN001
-        return {
-            "source_wall_post_url": source_wall["post_url"],
             "story_id": 456,
-            "owner_id": -231828790,
             "expires_at": 1,
         }
 
-    monkeypatch.setattr(helper, "_publish_vk_wall_video", fake_wall_video)
-    monkeypatch.setattr(helper, "_publish_vk_wall_story_forward", fake_wall_story)
+    monkeypatch.setattr(helper, "_publish_vk_story_video", fake_story_video)
     monkeypatch.setattr(helper, "_video_probe", lambda path: {"path": str(path)})
     monkeypatch.setattr(helper, "_vk_group_id", lambda *_args, **_kwargs: 231828790)
 
@@ -683,15 +674,8 @@ async def test_vk_targets_continue_when_telethon_client_unavailable(
                 },
                 {
                     "peer": "konb39",
-                    "label": "vk:konb39:wall",
-                    "transport": "vk_wall",
-                    "blocking": False,
-                    "required": False,
-                },
-                {
-                    "peer": "konb39",
                     "label": "vk:konb39:story",
-                    "transport": "vk_wall_story",
+                    "transport": "vk_story",
                     "blocking": False,
                     "required": False,
                 },
@@ -707,9 +691,9 @@ async def test_vk_targets_continue_when_telethon_client_unavailable(
     assert report["ok"] is True
     assert report["fanout_ok"] is False
     assert report["partial_ok"] is True
-    assert [item["ok"] for item in report["targets"]] == [False, True, True]
+    assert [item["ok"] for item in report["targets"]] == [False, True]
     assert "not authorized" in report["targets"][0]["error"]
-    assert published_wall == ["vk:konb39:wall"]
+    assert published_story == ["vk:konb39:story"]
 
 
 @pytest.mark.asyncio
