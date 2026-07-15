@@ -782,7 +782,7 @@ def image_row_needs_contract_rescore(row: dict) -> bool:
 
 def image_row_needs_acquisition_repair(row: dict) -> bool:
     """Return true when a review row is unresolved only because input is partial."""
-    if str(row.get("image_queue_status") or "") != "needs_visual_review":
+    if str(row.get("image_queue_status") or "") not in {"actual_scored", "needs_visual_review"}:
         return False
     if str(row.get("image_quality_terminality") or "") != "nonterminal":
         return False
@@ -941,21 +941,22 @@ def ydb_rows_for_diagnostic(limit_n: int):
         status=str(r.get("image_queue_status") or "")
         input_type=str(r.get("image_model_input_type") or "")
         lease=str(r.get("lease_run_id") or "")
-        if status == "actual_scored" and input_type == "actual_image" and not image_row_needs_contract_rescore(r): continue
         needs_contract_rescore = image_row_needs_contract_rescore(r)
+        needs_acquisition_repair = image_row_needs_acquisition_repair(r)
+        if status == "actual_scored" and input_type == "actual_image" and not needs_contract_rescore and not needs_acquisition_repair:
+            continue
         if status in IMAGE_TERMINAL_SKIP_STATUSES and not (
             status == IMAGE_TERMINAL_ELIGIBILITY_STATUS and needs_contract_rescore
         ):
             continue
-        if status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
-            if image_row_needs_acquisition_repair(r):
-                r["previous_image_queue_status"] = status
-                r["image_queue_status"] = "needs_actual_image_fetch"
-                r["media_acquisition_status"] = "needs_actual_image_fetch"
-                r["actual_image_retry_reason"] = "partial_album_requires_acquisition_repair"
-                status = "needs_actual_image_fetch"
-            else:
-                continue
+        if needs_acquisition_repair:
+            r["previous_image_queue_status"] = status
+            r["image_queue_status"] = "needs_actual_image_fetch"
+            r["media_acquisition_status"] = "needs_actual_image_fetch"
+            r["actual_image_retry_reason"] = "partial_album_requires_acquisition_repair"
+            status = "needs_actual_image_fetch"
+        elif status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
+            continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
             r["image_queue_status"] = "needs_visual_review"
             r["media_acquisition_status"] = "media_fetch_exhausted_requires_nonterminal_review"

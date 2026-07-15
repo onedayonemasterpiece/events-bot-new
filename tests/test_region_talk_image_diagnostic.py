@@ -478,7 +478,10 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             row = {
                 "image_queue_id": "partial-vk-album",
                 "image_queue_order": 1,
-                "image_queue_status": "needs_visual_review",
+                # Scored partial albums retain actual_scored as their queue
+                # status; the nonterminal quality decision carries review.
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
                 "post_url": "https://vk.com/wall-1_2",
                 "kaliningrad_oblast_only_scope": "true",
                 "kaliningrad_mention_role": "main_subject",
