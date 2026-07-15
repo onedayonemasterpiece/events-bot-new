@@ -23,6 +23,7 @@ def event(event_id: int, **overrides):
         "id": event_id, "title": f"Событие {event_id}", "date": "2026-07-20", "end_date": None,
         "time": "19:00", "city": "Калининград", "festival": None,
         "poster_url": f"https://cdn.test/{event_id}.webp", "safe_crop": True,
+        "image_has_ocr_text": False,
         "added_at": "2026-07-14T12:00:00+00:00", "identity_status": "canonical",
         "merged_into_event_id": None, "silent": False, "lifecycle_status": "active",
     }
@@ -51,6 +52,8 @@ def test_selection_reserves_promo_and_never_mislabels_underfill():
     events = []
     for event_id in range(1, 13):
         row = event(event_id)
+        if event_id == 1:
+            row["image_has_ocr_text"] = True
         row.update({"start_date": row["date"], "image_url": row["poster_url"],
                     "source_likes_count": 100 - event_id, "source_views_count": event_id * 10,
                     "source_engagement_sources_count": 1})
@@ -59,6 +62,7 @@ def test_selection_reserves_promo_and_never_mislabels_underfill():
                                                                          "target_id": 9, "provenance": "explicit_target_preview_fallback_no_surface_activity"}])
     assert result["events"][1]["event_id"] == 1
     assert result["events"][1]["selection_group"] == "promoted"
+    assert result["events"][1]["image_has_ocr_text"] is True
     assert result["promo_status"] == {"requested": 2, "selected": 1, "underfilled": True, "missing": 1,
                                       "fallback_mislabeled_as_promo": False,
                                       "reason": "active_explicit_promo_targets_with_approved_posters_exhausted"}
@@ -152,17 +156,24 @@ def test_snapshot_accepts_approved_managed_poster_without_semantic_classifier_ga
               id INTEGER PRIMARY KEY, event_id INT, thumbnail_512_url TEXT,
               supabase_url TEXT, thumbnail_256_url TEXT, duplicate_of_id INT,
               review_status TEXT, media_semantic_status TEXT, display_order INT,
-              safe_crop INT, image_text_mode TEXT
+              safe_crop INT, image_text_mode TEXT, ocr_text TEXT
             );
             INSERT INTO event VALUES(1,'Будущее событие','2026-07-20',NULL,'19:00',
               'Калининград',NULL,'[]','2026-07-14T12:00:00Z','canonical',NULL,0,'active');
+            INSERT INTO event VALUES(2,'Событие с фото','2026-07-21',NULL,'20:00',
+              'Калининград',NULL,'[]','2026-07-14T12:00:00Z','canonical',NULL,0,'active');
             INSERT INTO eventposter VALUES(1,1,'https://static.test/512.webp',
-              'https://static.test/full.webp',NULL,NULL,'approved','error',0,1,NULL);
+              'https://static.test/full.webp',NULL,NULL,'approved','error',0,0,NULL,'АФИША 20 ИЮЛЯ');
+            INSERT INTO eventposter VALUES(2,2,'https://static.test/photo-512.webp',
+              'https://static.test/photo.webp',NULL,NULL,'approved','error',0,0,NULL,'');
             """)
             await conn.commit()
         snapshot = await load_catalog_snapshot(db, measured_at=datetime(2026, 7, 15, tzinfo=timezone.utc))
         await db.close()
         return snapshot
     snapshot = asyncio.run(run())
-    assert snapshot["eligible_event_count"] == 1
+    assert snapshot["eligible_event_count"] == 2
     assert snapshot["events"][0]["image_url"] == "https://static.test/full.webp"
+    assert snapshot["events"][0]["image_has_ocr_text"] is True
+    assert snapshot["events"][1]["image_url"] == "https://static.test/photo.webp"
+    assert snapshot["events"][1]["image_has_ocr_text"] is False

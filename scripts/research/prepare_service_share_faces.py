@@ -14,6 +14,11 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 
 MONTHS = {1:"ЯНВАРЯ",2:"ФЕВРАЛЯ",3:"МАРТА",4:"АПРЕЛЯ",5:"МАЯ",6:"ИЮНЯ",7:"ИЮЛЯ",8:"АВГУСТА",9:"СЕНТЯБРЯ",10:"ОКТЯБРЯ",11:"НОЯБРЯ",12:"ДЕКАБРЯ"}
+CROP_REASONS = {
+    "safe_center_cover": "explicit_safe_crop",
+    "non_ocr_photo_center_cover": "non_ocr_photo_with_renderer_title_and_date",
+    "full_image_contain": "protect_ocr_or_unclassified_document_edges",
+}
 
 
 def load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
@@ -56,6 +61,32 @@ def contain_square(image: Image.Image) -> tuple[Image.Image, list[int]]:
     y = (1024 - foreground.height) // 2
     canvas.alpha_composite(foreground.convert("RGBA"), (x, y))
     return canvas.convert("RGB"), [0, 0, image.width, image.height]
+
+
+def frame_square(image: Image.Image, row: dict) -> tuple[Image.Image, list[int], str]:
+    """Frame a source image without treating an event photo like a document.
+
+    ``safe_crop`` was designed as a document/poster safety switch.  Applying
+    its ``False`` branch to a photo creates a small contained image with a
+    blurred letterbox around it, even though the face already receives its own
+    title and date.  The accepted media classification and actual OCR presence
+    distinguish that case: explicit or legacy non-OCR photos use a
+    source-faithful cover crop, while OCR-bearing assets retain the existing
+    contain treatment so text at the edge of a poster is not newly destroyed.
+    """
+
+    text_mode = str(row.get("image_text_mode") or "unknown").strip().casefold()
+    if row.get("safe_crop"):
+        square, crop = cover_square(image)
+        return square, crop, "safe_center_cover"
+    if bool(row.get("image_has_ocr_text")) or text_mode == "ocr_text":
+        square, crop = contain_square(image)
+        return square, crop, "full_image_contain"
+    if text_mode in {"visual_only", "unknown", ""}:
+        square, crop = cover_square(image)
+        return square, crop, "non_ocr_photo_center_cover"
+    square, crop = contain_square(image)
+    return square, crop, "full_image_contain"
 
 
 def _wrap_pixels(title: str, font: ImageFont.FreeTypeFont, max_width: int = 880) -> list[str]:
@@ -132,8 +163,7 @@ def main() -> int:
     for index, row in enumerate(selection["events"]):
         body, content_type = download(row["image_url"])
         source = Image.open(io.BytesIO(body)).convert("RGB")
-        crop_mode = "safe_center_cover" if row.get("safe_crop") else "full_image_contain"
-        square, crop = cover_square(source) if row.get("safe_crop") else contain_square(source)
+        square, crop, crop_mode = frame_square(source, row)
         face = overlay(square, row, Path(args.bold_font), Path(args.semibold_font))
         path = out_dir / f"face_{index:02d}_{row['event_id']}.png"
         face.save(path, optimize=True)
@@ -145,6 +175,7 @@ def main() -> int:
             "source_dimensions": list(source.size),
             "selected_crop": crop,
             "crop_mode": crop_mode,
+            "crop_reason": CROP_REASONS[crop_mode],
             "source_content_type": content_type,
             "source_sha256": hashlib.sha256(body).hexdigest(),
             "face_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
@@ -159,7 +190,7 @@ def main() -> int:
         "faces": rows,
         "critical_bbox_cut_count": 0,
         "aspect_ratio_distortion_count": 0,
-        "crop_contract": "safe_crop=true uses centered cover; unsafe metadata uses full-image contain over blurred fill; title/date overlay after framing",
+        "crop_contract": "safe_crop=true uses centered cover; visual_only or null/unknown mode without OCR uses centered photo cover without letterbox; OCR-bearing unsafe assets use full-image contain over blurred fill; title/date overlay after framing",
         "typography_contract": {
             "layout_engine": "RAQM",
             "kerning": True,

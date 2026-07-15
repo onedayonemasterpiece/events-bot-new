@@ -56,6 +56,7 @@ def _row(event: dict, *, group: str, reason: str, score: float, local_date: str)
         "start_date": event.get("start_date"), "end_date": event.get("end_date"),
         "start_time": event.get("start_time"), "image_url": event.get("image_url"),
         "image_text_mode": event.get("image_text_mode"), "safe_crop": bool(event.get("safe_crop")),
+        "image_has_ocr_text": bool(event.get("image_has_ocr_text")),
         "image_object_position": event.get("image_object_position"), "festival": event.get("festival"),
         "selection_group": group, "selection_reason": reason, "popularity_score": score,
         "metrics": {"likes": event.get("source_likes_count") or 0, "views": event.get("source_views_count") or 0,

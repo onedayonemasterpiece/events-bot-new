@@ -99,6 +99,7 @@ def _canonical_event(event: dict[str, Any]) -> dict[str, Any]:
         "image_url": image_url,
         "safe_crop": bool(event.get("safe_crop", True)),
         "image_text_mode": event.get("image_text_mode"),
+        "image_has_ocr_text": bool(event.get("image_has_ocr_text")),
         "image_object_position": event.get("image_object_position"),
         "added_at": _parse_datetime(event.get("added_at")).isoformat() if _parse_datetime(event.get("added_at")) else None,
         "lifecycle_status": "active",
@@ -162,11 +163,21 @@ async def load_catalog_snapshot(db: Database, *, measured_at: datetime | None = 
                        AND ep.review_status='approved'
                      ORDER BY ep.display_order, ep.id LIMIT 1) AS poster_url,
                    (SELECT ep.safe_crop FROM eventposter ep
-                     WHERE ep.event_id=e.id AND ep.duplicate_of_id IS NULL
+                     WHERE ep.event_id=e.id
+                       AND ep.duplicate_of_id IS NULL
+                       AND ep.review_status='approved'
                      ORDER BY ep.display_order, ep.id LIMIT 1) AS safe_crop,
                    (SELECT ep.image_text_mode FROM eventposter ep
-                     WHERE ep.event_id=e.id AND ep.duplicate_of_id IS NULL
-                     ORDER BY ep.display_order, ep.id LIMIT 1) AS image_text_mode
+                     WHERE ep.event_id=e.id
+                       AND ep.duplicate_of_id IS NULL
+                       AND ep.review_status='approved'
+                     ORDER BY ep.display_order, ep.id LIMIT 1) AS image_text_mode,
+                   (SELECT CASE WHEN NULLIF(TRIM(ep.ocr_text), '') IS NULL THEN 0 ELSE 1 END
+                      FROM eventposter ep
+                     WHERE ep.event_id=e.id
+                       AND ep.duplicate_of_id IS NULL
+                       AND ep.review_status='approved'
+                     ORDER BY ep.display_order, ep.id LIMIT 1) AS image_has_ocr_text
               FROM event e
             """
         )
