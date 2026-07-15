@@ -397,6 +397,7 @@ async def _smart_update_from_theatre_event(
     ticket_price_max: int | None,
     ticket_status: str | None,
     photos: Sequence[str] | None,
+    age_restriction: str | None = None,
 ) -> tuple[str, int | None]:
     from smart_event_update import EventCandidate, smart_event_update
 
@@ -416,6 +417,8 @@ async def _smart_update_from_theatre_event(
         ticket_price_max=ticket_price_max,
         ticket_link=url,
         ticket_status=(str(ticket_status or "").strip() or "available"),
+        age_restriction=(str(age_restriction or "").strip() or None),
+        age_restriction_is_structured=bool(str(age_restriction or "").strip()),
         event_type=None,
         emoji=None,
         is_free=None,
@@ -575,6 +578,7 @@ async def process_ticket_sites_queue(
                             ticket_price_min=getattr(ev, "ticket_price_min", None),
                             ticket_price_max=getattr(ev, "ticket_price_max", None),
                             ticket_status=getattr(ev, "ticket_status", None),
+                            age_restriction=getattr(ev, "age_restriction", None),
                             photos=list(getattr(ev, "photos", None) or []),
                         )
                         report.processed += 1
@@ -637,6 +641,7 @@ async def process_ticket_sites_queue(
                             ticket_price_min=getattr(ev, "ticket_price_min", None),
                             ticket_price_max=getattr(ev, "ticket_price_max", None),
                             ticket_status=getattr(ev, "ticket_status", None),
+                            age_restriction=getattr(ev, "age_restriction", None),
                             photos=list(getattr(ev, "photos", None) or []),
                         )
                         report.processed += 1
@@ -703,6 +708,7 @@ async def process_ticket_sites_queue(
                             ticket_price_min=getattr(ev, "ticket_price_min", None),
                             ticket_price_max=getattr(ev, "ticket_price_max", None),
                             ticket_status=getattr(ev, "ticket_status", None),
+                            age_restriction=getattr(ev, "age_restriction", None),
                             photos=list(getattr(ev, "photos", None) or []),
                         )
                         report.processed += 1

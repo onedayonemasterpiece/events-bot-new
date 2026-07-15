@@ -714,6 +714,7 @@ async def _append_festival_activities(
                 "date": str(activity.get("date") or "").strip() or None,
                 "time": str(activity.get("time") or "").strip() or None,
                 "location_name": str(activity.get("location_name") or "").strip() or None,
+                "age_restriction": str(activity.get("age_restriction") or "").strip() or None,
                 "program_only": True,
             }
         )
@@ -948,6 +949,11 @@ async def _process_vk_item(
             ticket_link=str(ev.get("ticket_link") or "").strip() or None,
             ticket_price_min=ev.get("ticket_price_min"),
             ticket_price_max=ev.get("ticket_price_max"),
+            age_restriction=str(ev.get("age_restriction") or "").strip() or None,
+            # This field came from the upstream semantic festival parser, not
+            # from a source-native JSON property. Preserve it in the payload but
+            # require Smart Update evidence grounding before canonical use.
+            age_restriction_is_structured=False,
             event_type=str(ev.get("event_type") or "").strip() or None,
             emoji=str(ev.get("emoji") or "").strip() or None,
             is_free=ev.get("is_free"),

@@ -427,6 +427,25 @@ class Database:
                     topics_manual BOOLEAN DEFAULT 0,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     content_hash TEXT,
+                    age_restriction TEXT,
+                    age_restriction_status TEXT NOT NULL DEFAULT 'unknown',
+                    age_restriction_provenance TEXT,
+                    age_restriction_source_url TEXT,
+                    age_restriction_confidence REAL,
+                    age_restriction_evidence JSON,
+                    age_restriction_decision_version TEXT,
+                    age_restriction_input_hash TEXT,
+                    age_restriction_updated_at TIMESTAMP,
+                    age_assessment TEXT,
+                    age_assessment_status TEXT NOT NULL DEFAULT 'not_scheduled',
+                    age_assessment_provenance TEXT,
+                    age_assessment_confidence REAL,
+                    age_assessment_evidence JSON,
+                    age_assessment_decision_version TEXT,
+                    age_assessment_input_hash TEXT,
+                    age_assessment_engine TEXT,
+                    age_assessment_run_id TEXT,
+                    age_assessment_updated_at TIMESTAMP,
                     FOREIGN KEY(merged_into_event_id) REFERENCES event(id) ON DELETE SET NULL
                 )
                 """
@@ -482,6 +501,31 @@ class Database:
             await _add_column(conn, "event", "date_confidence REAL")
             await _add_column(conn, "event", "end_date_provenance TEXT")
             await _add_column(conn, "event", "end_date_confidence REAL")
+            await _add_column(conn, "event", "age_restriction TEXT")
+            await _add_column(
+                conn, "event", "age_restriction_status TEXT NOT NULL DEFAULT 'unknown'"
+            )
+            await _add_column(conn, "event", "age_restriction_provenance TEXT")
+            await _add_column(conn, "event", "age_restriction_source_url TEXT")
+            await _add_column(conn, "event", "age_restriction_confidence REAL")
+            await _add_column(conn, "event", "age_restriction_evidence JSON")
+            await _add_column(conn, "event", "age_restriction_decision_version TEXT")
+            await _add_column(conn, "event", "age_restriction_input_hash TEXT")
+            await _add_column(conn, "event", "age_restriction_updated_at TIMESTAMP")
+            await _add_column(conn, "event", "age_assessment TEXT")
+            await _add_column(
+                conn,
+                "event",
+                "age_assessment_status TEXT NOT NULL DEFAULT 'not_scheduled'",
+            )
+            await _add_column(conn, "event", "age_assessment_provenance TEXT")
+            await _add_column(conn, "event", "age_assessment_confidence REAL")
+            await _add_column(conn, "event", "age_assessment_evidence JSON")
+            await _add_column(conn, "event", "age_assessment_decision_version TEXT")
+            await _add_column(conn, "event", "age_assessment_input_hash TEXT")
+            await _add_column(conn, "event", "age_assessment_engine TEXT")
+            await _add_column(conn, "event", "age_assessment_run_id TEXT")
+            await _add_column(conn, "event", "age_assessment_updated_at TIMESTAMP")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_event_tourist_label ON event(tourist_label)"
             )

@@ -8876,6 +8876,12 @@ async def init_db_and_scheduler(
     logging.info("CATBOX_ENABLED resolved to %s", CATBOX_ENABLED)
     global VK_PHOTOS_ENABLED
     VK_PHOTOS_ENABLED = await get_vk_photos_enabled(db)
+    try:
+        seeded_age_batch = await seed_event_age_bge_backlog(db)
+        if seeded_age_batch:
+            logging.info("event_age_bge: startup backlog action=%s", seeded_age_batch)
+    except Exception:
+        logging.exception("event_age_bge: startup backlog seed failed")
     
     # Only set webhook if webhook URL is provided (production mode)
     if webhook:

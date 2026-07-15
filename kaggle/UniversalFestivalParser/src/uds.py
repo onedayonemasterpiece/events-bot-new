@@ -30,6 +30,7 @@ class UDSActivity(BaseModel):
     duration_minutes: Optional[int] = None
     venue: Optional[str] = None  # Venue title reference
     description: Optional[str] = None
+    age_restriction: Optional[Literal["0+", "6+", "12+", "16+", "18+"]] = None
     price: Optional[str] = None
     is_free: Optional[bool] = None
     registration_url: Optional[str] = None
@@ -63,6 +64,7 @@ class UDSFestival(BaseModel):
     is_annual: Optional[bool] = None
     edition: Optional[int] = None  # Which edition (e.g., 5th annual)
     audience: Optional[str] = None  # Target audience description
+    age_restriction: Optional[Literal["0+", "6+", "12+", "16+", "18+"]] = None
     links: Optional[dict[str, Any]] = Field(
         default=None,
         description="{'website': 'url', 'socials': ['url1', 'url2']}"

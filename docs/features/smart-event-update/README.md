@@ -689,3 +689,11 @@ one or two short paragraphs without forced headings or filler; sparsity is an ho
 a prompt to invent detail. Later concrete organizer sources can enrich the same event through
 the normal LLM merge. Managed VK publication URLs are output projections and are excluded from
 legacy `event_source` backfill, preventing published AI copy from becoming circular evidence.
+
+### Возраст события
+
+Source-native `age_restriction` сохраняется без LLM. Для text/OCR строгий
+`age_decision` piggybacked в уже существующий facts/create/merge вызов, поэтому
+feature не увеличивает число provider requests на событие. Declared и assessed
+разделены; конфликт fail-closed, публичный default — declared-only. Полная
+каноника, CPU Kaggle/BGE gate и backfill: [Event age rating](../event-age-rating/README.md).

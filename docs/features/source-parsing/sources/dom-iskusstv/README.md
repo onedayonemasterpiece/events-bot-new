@@ -41,6 +41,11 @@ https://xn--b1admiilxbaki.xn--p1ai/любой-проект
 | `ticket_status` | available/sold_out/unknown |
 | `age_restriction` | "6+" |
 
+Возраст извлекается только из standalone/явно подписанной event-page
+маркировки допустимого enum. Первый произвольный `N+` во всём HTML не
+используется: при нескольких значениях parser оставляет поле пустым и передаёт
+контекст в semantic Smart Update.
+
 ## Технические детали
 
 **Файлы:**

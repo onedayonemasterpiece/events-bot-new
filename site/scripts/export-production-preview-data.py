@@ -232,6 +232,43 @@ def row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
         return default
 
 
+def event_age_projection(row: sqlite3.Row) -> dict[str, Any]:
+    """Project stored fields only; never infer an age from rendered prose."""
+
+    valid_age_values = {"0+", "6+", "12+", "16+", "18+"}
+    age_status = clean_text(row_get(row, "age_restriction_status")) or "unknown"
+    declared_age_raw = clean_text(row_get(row, "age_restriction"))
+    declared_age = (
+        declared_age_raw
+        if declared_age_raw in valid_age_values and age_status == "declared"
+        else None
+    )
+    public_age_policy = (os.getenv("STATIC_EVENT_AGE_POLICY") or "declared_only").strip().lower()
+    assessed_age_raw = clean_text(row_get(row, "age_assessment"))
+    assessed_age = assessed_age_raw if assessed_age_raw in valid_age_values else None
+    age_recommendation = (
+        assessed_age
+        if public_age_policy == "declared_or_assessed_labeled" and not declared_age
+        else None
+    )
+    return {
+        "age_restriction": declared_age,
+        "age_restriction_status": "declared" if declared_age else age_status,
+        "age_restriction_provenance": (
+            clean_text(row_get(row, "age_restriction_provenance")) if declared_age else None
+        ),
+        "age_restriction_decision_version": clean_text(
+            row_get(row, "age_restriction_decision_version")
+        ) or None,
+        "age_recommendation": age_recommendation,
+        "age_recommendation_label": (
+            f"Рекомендуемый возраст: {age_recommendation} — оценка сервиса"
+            if age_recommendation
+            else None
+        ),
+    }
+
+
 def strip_emoji_prefix(value: str) -> str:
     value = re.sub(r"^[^\wА-Яа-яЁё0-9\"«]+", "", value or "").strip()
     return clean_text(value)
@@ -1119,6 +1156,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None
+    age_projection = event_age_projection(row)
     return {
         "id": event_id,
         "source_prod_id": event_id,
@@ -1142,6 +1180,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "address": address,
         "map_query": ", ".join([part for part in [city, venue, address] if part]) or None,
         "ticket": ticket,
+        **age_projection,
         "source_url": source_url,
         "source_urls": source_urls,
         "source_count": len(source_urls),
@@ -1259,6 +1298,9 @@ def event_fingerprint(event: dict[str, Any]) -> str:
         "end_date": event.get("end_date"),
         "ticket": event.get("ticket"),
         "lifecycle_status": event.get("lifecycle_status"),
+        "age_restriction": event.get("age_restriction"),
+        "age_restriction_status": event.get("age_restriction_status"),
+        "age_recommendation": event.get("age_recommendation"),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
