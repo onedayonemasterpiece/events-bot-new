@@ -36,6 +36,7 @@ writeFileSync(htmlPath, html);
 mkdirSync(path.join(outputDir, 'brand'), { recursive: true });
 copyFileSync(path.join(siteDir, 'public/favicon.svg'), path.join(outputDir, 'favicon.svg'));
 copyFileSync(path.join(siteDir, 'public/brand/announcements-wide-o-ui.svg'), path.join(outputDir, 'brand/announcements-wide-o-ui.svg'));
+copyFileSync(path.join(siteDir, 'public/brand/announcements-wordmark-ui.svg'), path.join(outputDir, 'brand/announcements-wordmark-ui.svg'));
 const manifest = {
   kind: 'briefing-lab',
   buildId,

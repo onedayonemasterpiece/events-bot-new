@@ -57,6 +57,41 @@ The local screenshots and run logs remain under
 `artifacts/codex/static-typed-briefing-media-correction/` and are intentionally
 not committed.
 
+## Exact small-media/weather visual-harmony gate
+
+The earlier wide-media/mobile acceptance did **not** review the exact
+`anticipated_person_named` and `weather_water_demo` desktop states later shown
+by the user. Those states received a new screenshot-based gate rather than
+inheriting the earlier pass:
+
+- exact-state critique: `2026-07-15 19:39:40–19:40:36 UTC`, status `0`,
+  `FAIL / FAIL / overall FAIL`;
+- post-fix six-viewport critique: `2026-07-15 19:53:45–19:54:59 UTC`, status
+  `0`, `PASS WITH CONDITIONS`; the only remaining blocker was the 1366×768
+  short/wide poster crop;
+- focused 4:5 crop recheck: `2026-07-15 19:58:49–19:59:10 UTC`, status `0`,
+  blocker `CLOSED`, named scene `PASS` at 1366/1440/1920 and final
+  `PUBLISH PASS`.
+
+All three were run through `/home/dev/.local/bin/a-gemini`, resolved by agy to
+the display model `Gemini 3.1 Pro (High)`, with empty stderr. The correction
+restores the complete approved header lockup, makes small media a flat 4:5
+editorial grid element without radius/shadow, strengthens the named-scene
+typography, keeps weather copy within the line budget and demotes terminal
+`Показать следующее` to a ghost action below the semantic CTA hierarchy.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`visual-harmony-exact-states-prompt.md`](visual-harmony-exact-states-prompt.md) | Exact user-state rejection prompt. | `3d46f7c54776e2b94d493c689b0d8ef389a6a7841e13a8f2deff929f0a7e0014` |
+| [`visual-harmony-exact-states-gemini.md`](visual-harmony-exact-states-gemini.md) | Initial `FAIL` critique. | `4597f7f5d6bf023f1a763cb4991689bcc31f3664960a1746c019e296473b50ac` |
+| [`visual-harmony-postfix-prompt.md`](visual-harmony-postfix-prompt.md) | Six-capture post-fix prompt. | `d19dce82a8e51e8b3708cb997fb4c2e2235e553887d45b147f88410c9807f318` |
+| [`visual-harmony-postfix-gemini.md`](visual-harmony-postfix-gemini.md) | `PASS WITH CONDITIONS` response. | `8ec64e4e3238090c7f2b09baa0cbb4fec17ce80b54f9a595c98538b486f32ade` |
+| [`visual-harmony-cropfix-prompt.md`](visual-harmony-cropfix-prompt.md) | Focused 1366 crop gate. | `50d8cae90a38b52354f258e11de33a2b1ba6f75f28179396c13ac5143d101a4f` |
+| [`visual-harmony-cropfix-gemini.md`](visual-harmony-cropfix-gemini.md) | Final `PUBLISH PASS`. | `f15709160aa388dbfc0e937ba58f49568ac6c86cd84d72e0404684ac9670e92e` |
+
+Operational screenshots, geometry JSON and run receipts remain ignored under
+`artifacts/codex/static-typed-briefing-artist-unusual/`.
+
 ## Decision trace
 
 ### Accepted from Gemini

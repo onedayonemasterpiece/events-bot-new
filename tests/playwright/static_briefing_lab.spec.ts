@@ -35,6 +35,16 @@ async function waitForServer() {
 }
 async function open(page: Page, variant = 'c', scenario = 'today_count', extra = '') {
   await page.goto(`${baseUrl}?variant=${variant}&scenario=${scenario}${extra}`, { waitUntil: 'domcontentloaded' });
+  const rendered = await page.locator('[data-briefing-lab]').getAttribute('data-briefing-scenario-id');
+  // A deliberately short fast chain can advance while a loaded CI worker is
+  // still returning from goto(). Reset through the public lab selector rather
+  // than turning the production-candidate automatic chain off in tests.
+  if (rendered !== scenario) {
+    await page.locator('[data-scenario-select]').evaluate((node: HTMLSelectElement, value) => {
+      node.value = String(value);
+      node.dispatchEvent(new Event('change', { bubbles: true }));
+    }, scenario);
+  }
   await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', scenario);
 }
 async function visibleFragments(page: Page) {
@@ -120,7 +130,7 @@ test('expanded scenario deck is discoverable; Replay, session state, Play all an
 
   await page.locator('[data-play-all]').click();
   await expect.poll(async () => (await labState(page)).scenario, { timeout: 8500 }).toBe('tomorrow_count');
-  await page.locator('[data-pause]').click();
+  if (!(await labState(page)).paused) await page.locator('[data-pause]').click();
   const paused = await labState(page);
   expect(paused.paused).toBeTruthy();
   const frozenScenario = paused.scenario;
@@ -354,6 +364,17 @@ test('selected media is desktop-only, wide media belongs to viewport, exits, and
   await expect(desktopImage).toHaveAttribute('src', /https:\/\//u);
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'small');
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  const smallGeometry = await desktop.page.evaluate(() => {
+    const media = document.querySelector('[data-narrative-media]')!.getBoundingClientRect();
+    const message = document.querySelector('[data-briefing]')!.getBoundingClientRect();
+    const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
+    return { media: media.toJSON(), message: message.toJSON(), borderRadius: style.borderRadius, boxShadow: style.boxShadow };
+  });
+  expect(smallGeometry.media.width).toBeGreaterThanOrEqual(240);
+  expect(smallGeometry.media.right).toBeLessThanOrEqual(1311);
+  expect(smallGeometry.message.right).toBeLessThan(smallGeometry.media.left);
+  expect(smallGeometry.borderRadius).toBe('0px');
+  expect(smallGeometry.boxShadow).toBe('none');
   await desktop.context.close();
 
   const mobile = await freshPage(browser, { width: 390, height: 844 });
@@ -407,4 +428,47 @@ test('selected media is desktop-only, wide media belongs to viewport, exits, and
   await reduced.page.waitForTimeout(4300);
   await expect(reduced.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
   await reduced.context.close();
+});
+
+test('approved header lockup, named-person grid and weather actions keep visual hierarchy at desktop review widths', async ({ browser }) => {
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }, { width: 1920, height: 900 }]) {
+    const run = await freshPage(browser, viewport);
+    await open(run.page, 'b', 'anticipated_person_named');
+    const wordmark = run.page.locator('.site-header__desktop-lockup .announcements-lockup__wordmark');
+    await expect(wordmark).toBeVisible();
+    const useHref = await wordmark.locator('use').getAttribute('href');
+    expect(useHref).toContain('/brand/announcements-wordmark-ui.svg#announcements-wordmark-ui');
+    const wordmarkBox = await wordmark.boundingBox();
+    expect(wordmarkBox!.width).toBeGreaterThanOrEqual(190);
+    expect(wordmarkBox!.height).toBeGreaterThanOrEqual(30);
+
+    const geometry = await run.page.evaluate(() => {
+      const stage = document.querySelector('[data-briefing-slot]')!.getBoundingClientRect();
+      const message = document.querySelector('[data-message]')!.getBoundingClientRect();
+      const media = document.querySelector('[data-narrative-media]')!.getBoundingClientRect();
+      const longName = document.querySelectorAll('[data-reveal-fragment]')[1] as HTMLElement;
+      longName.textContent = 'Христофор Константинопольский.';
+      const longMessage = document.querySelector('[data-message]')!.getBoundingClientRect();
+      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
+    });
+    expect(geometry.stage.height).toBeLessThanOrEqual(viewport.height * .5);
+    expect(geometry.message.right).toBeLessThan(geometry.media.left);
+    expect(geometry.longMessage.right).toBeLessThan(geometry.media.left);
+    expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
+
+    await open(run.page, 'b', 'weather_water_demo');
+    const actions = await run.page.evaluate(() => {
+      const next = document.querySelector('[data-public-next]') as HTMLButtonElement;
+      next.hidden = false;
+      const cta = document.querySelector('[data-scenario-cta]')!;
+      const nextStyle = getComputedStyle(next);
+      const ctaStyle = getComputedStyle(cta);
+      const lineYs = [...document.querySelectorAll('[data-reveal-fragment]')].flatMap((node) => [...node.getClientRects()].map((rect) => Math.round(rect.y)));
+      return { nextBackground: nextStyle.backgroundColor, nextColor: nextStyle.color, nextFont: Number.parseFloat(nextStyle.fontSize), ctaFont: Number.parseFloat(ctaStyle.fontSize), lineCount: new Set(lineYs).size };
+    });
+    expect(actions.nextBackground).toBe('rgba(0, 0, 0, 0)');
+    expect(actions.nextFont).toBeLessThan(actions.ctaFont);
+    expect(actions.lineCount).toBeLessThanOrEqual(3);
+    await run.context.close();
+  }
 });

@@ -106,6 +106,44 @@ scene намеренно говорит `Допустим` и маркирует
 границы описаны в
 [platform backlog](../../backlog/features/static-typed-briefing/README.md).
 
+### Visual harmony + artist/unusual foundation — следующий candidate
+
+Два exact desktop-состояния из пользовательских скриншотов не были частью
+предыдущего wide/mobile acceptance и при отдельной проверке Gemini 3.1 Pro
+получили `FAIL`: small-media выглядело оторванной карточкой, solid Next
+перебивал смысловой CTA, named typography была слишком слабой, а deployed lab
+не содержал внешний SVG `Анонсы` и показывал только endorsement. Candidate
+исправляет именно эти дефекты:
+
+- isolated build allowlist теперь физически включает и проверяет полный
+  `announcements-wordmark-ui.svg`, поэтому утверждённый `240×88` desktop
+  lockup не деградирует в один текстовый tier;
+- small media живёт во второй колонке одной hero-grid, сохраняет исходное
+  `4:5`, не имеет frame/radius/shadow и остаётся небольшим editorial poster;
+- named H1 использует bounded desktop scale `56–64px`; weather-сцена остаётся
+  в 2–3 строках; terminal Next — ghost/muted и легче основного CTA;
+- 1366×768, 1440×900 и 1920×900 проверены отдельно, включая длинное русское
+  имя, отсутствие overlap/overflow и source-faithful poster crop.
+
+External gate прошёл последовательность `FAIL` → `PASS WITH CONDITIONS` →
+`PUBLISH PASS`; committed prompts/answers находятся в
+[consultation evidence](../../reports/static-typed-briefing-consultation-2026-07-15/README.md).
+Локальный candidate прошёл isolated build/check, `11/11` Playwright и `4/4`
+registry converter tests. Immutable URL и Telegram evidence фиксируются после
+публикации этого source commit.
+
+Supplied workbook нормализован в
+[artist visit registry](../../reference/artist-visit-registry.md), но все 1 235
+seed entities намеренно имеют `locality.status=unknown`: присутствие или
+отсутствие имени не доказывает неместность. Автоматический 14-day digest
+приездов, participant/locality evidence gates и dedupe описаны в
+[product contract](../../backlog/features/static-typed-briefing/artist-arrivals-and-unusual-events.md).
+Выявление действительно необычных будущих событий вынесено в отдельный
+[LLM-first contract](../../llm/unusual-event-detection.md): semantic signature,
+season-aware baseline, grounded adjudication и fail-closed public writer;
+исторические примеры вроде дня клубники, цветения маков или прогулки с
+фонарщиком — только типовые иллюстрации, не текущие факты.
+
 Техническая приёмка immutable build
 `preview-20260715t1853-briefing-lab-d6bf2e1e` (`source d6bf2e1e`): isolated build/check pass; Playwright
 `10/10` pass; geometry покрывает `17 scenes including fallback × B/C × 4

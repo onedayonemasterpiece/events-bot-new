@@ -15,7 +15,7 @@ cd site
 PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run lab
 ```
 
-For a reviewed public artifact, choose the strict immutable ID, source the repository `.env` into the current process without copying it into a linked worktree, then run `npm run deploy:lab`. The deploy allowlist is only `lab/briefing/index.html`, `_astro/**`, `lab-manifest.json`, `favicon.svg` and the exact announcement wordmark. The page is `noindex,nofollow,noarchive`; no production route or stable object is modified.
+For a reviewed public artifact, choose the strict immutable ID, source the repository `.env` into the current process without copying it into a linked worktree, then run `npm run deploy:lab`. The deploy allowlist is only `lab/briefing/index.html`, `_astro/**`, `lab-manifest.json`, `favicon.svg`, the exact standalone wide-`О` and the complete approved announcement wordmark. The page is `noindex,nofollow,noarchive`; no production route or stable object is modified.
 
 Current 2026-07-15 curiosity/action showcase: <https://kenigevents.ru/preview-20260715t1526-briefing-lab-07143d5e/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1>. The automatic local queue is <https://kenigevents.ru/preview-20260715t1526-briefing-lab-07143d5e/lab/briefing/?variant=c&pace=slow&replay=1>. It mixes count orientation, share/like/not-interested education and explicit `DEMO-СИГНАЛ` curiosity scenes; qualified local exposures and only verified actions after a corresponding narrative control future repetition. Use `Повторить` for one scene or `Показать все 8` for the finite deck.
 

@@ -18,7 +18,7 @@ const visit = (dir) => readdirSync(dir).forEach((name) => {
   else files.push(path.relative(buildRoot, target).split(path.sep).join('/'));
 });
 visit(buildRoot);
-const allowed = (name) => name === 'lab/briefing/index.html' || name === 'lab-manifest.json' || name === 'favicon.svg' || name === 'brand/announcements-wide-o-ui.svg' || name.startsWith('_astro/');
+const allowed = (name) => name === 'lab/briefing/index.html' || name === 'lab-manifest.json' || name === 'favicon.svg' || name === 'brand/announcements-wide-o-ui.svg' || name === 'brand/announcements-wordmark-ui.svg' || name.startsWith('_astro/');
 const rejected = files.filter((name) => !allowed(name));
 if (rejected.length) throw new Error(`Unexpected lab artifacts:\n${rejected.join('\n')}`);
 for (const forbidden of ['sobytiya/', 'ics/', '__preview/', 'sitemap', 'robots']) {
@@ -38,12 +38,16 @@ for (const route of ['segodnya', 'zavtra', 'vyhodnye', 'vystavki', 'populyarnoe'
   if (html.includes(`href="/${buildId}/${route}/`)) throw new Error(`Production navigation was incorrectly versioned: ${route}`);
 }
 if (html.includes(`"/${buildId}/sobytiya/`)) throw new Error('Production event links were incorrectly versioned');
-for (const asset of [`/${buildId}/_astro/`, `/${buildId}/favicon.svg`, `/${buildId}/brand/announcements-wide-o-ui.svg`]) {
+for (const asset of [`/${buildId}/_astro/`, `/${buildId}/favicon.svg`, `/${buildId}/brand/announcements-wide-o-ui.svg`, `/${buildId}/brand/announcements-wordmark-ui.svg`]) {
   if (!html.includes(asset)) throw new Error(`Versioned lab asset URL missing: ${asset}`);
 }
 const wideO = readFileSync(path.join(buildRoot, 'brand/announcements-wide-o-ui.svg'), 'utf8');
 const pathCount = (wideO.match(/<path\b/gu) || []).length;
 if (!wideO.includes('viewBox="2571 410 1600 1104"') || pathCount !== 1 || !wideO.includes('M3371 410C3971 410') || wideO.includes('M33 1490')) {
   throw new Error('Standalone wide-O asset is not the exact isolated wordmark contour');
+}
+const wordmark = readFileSync(path.join(buildRoot, 'brand/announcements-wordmark-ui.svg'), 'utf8');
+if (!wordmark.includes('id="announcements-wordmark-ui"') || !wordmark.includes('viewBox="0 0 7819 1514"') || !wordmark.includes('M33 1490')) {
+  throw new Error('Approved announcement wordmark asset is missing or malformed');
 }
 console.log(`Briefing lab allowlist OK (${files.length} files): ${buildId}`);

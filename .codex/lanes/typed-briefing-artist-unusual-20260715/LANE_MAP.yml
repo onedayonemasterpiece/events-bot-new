@@ -1,0 +1,156 @@
+mode: full_fanout_then_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: a9b829d6a865bcf08bc267aa5360103298e461fc
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-artist-unusual-20260715
+global_constraints:
+  - Read Telegram topic 6 before implementation and again after evidence publication.
+  - No paid OpenAI image generation; use existing assets and CSS only.
+  - Gemini consultant must be Pro class; preserve exact model/status evidence.
+  - Treat the artist workbook as source evidence, never commit the artifact workbook itself.
+  - Absence from a local registry is not evidence that an artist is non-local.
+  - Code changes require canonical docs and CHANGELOG synchronization.
+verification_owner: root integrator
+stop_conditions:
+  - Telegram E2E human session is unavailable for mandatory mobile review.
+  - Neither Gemini Pro nor Opus is available for requested external visual consultation.
+  - Workbook provenance or columns are insufficient to make a safe locality claim.
+requirements:
+  - id: R01
+    requirement: Transform the supplied XLSX artist list into a useful canonical format and document it.
+    area: reference data
+    likely_files: [docs/reference, docs/features/static-personal-announcements]
+    dependencies: []
+    conflict_risk: low
+    lane: data-product
+    parallelizable: true
+    done_when: A normalized, provenance-preserving format and conversion path are documented and validated against the workbook.
+  - id: R02
+    requirement: Use the artist basis to detect artists who are not local.
+    area: entity/locality classification
+    likely_files: [docs/reference, docs/features/static-personal-announcements]
+    dependencies: [R01]
+    conflict_risk: medium
+    lane: data-product
+    parallelizable: true
+    done_when: Matching, evidence, confidence, unknown handling, and false-positive guardrails are specified.
+  - id: R03
+    requirement: Add an automatic digest of artists visiting the region as a useful future function.
+    area: product pipeline/backlog
+    likely_files: [docs/features/static-personal-announcements, docs/backlog]
+    dependencies: [R01, R02]
+    conflict_risk: low
+    lane: data-product
+    parallelizable: true
+    done_when: Digest eligibility, grouping, copy, cadence, dedupe, observability, and acceptance criteria are documented.
+  - id: R04
+    requirement: Obtain a critical agy review of the exact screenshots and visual harmony.
+    area: external consultation
+    likely_files: [docs/reports/static-typed-briefing-consultation-2026-07-15]
+    dependencies: []
+    conflict_risk: low
+    lane: visual-consultant
+    parallelizable: true
+    done_when: Exact-state captures receive a Pro-class PASS/FAIL critique with actionable geometry and branding findings.
+  - id: R05
+    requirement: Correct the hero/media/logo composition shown in the screenshots.
+    area: static-site UI/motion
+    likely_files: [site/src/pages/lab/briefing/index.astro, site/src/data/briefingLab.ts, site/src/components, tests/playwright/static_briefing_lab.spec.ts, CHANGELOG.md]
+    dependencies: [R04]
+    conflict_risk: high
+    lane: ui-integrator
+    parallelizable: false
+    done_when: The exact named-person and weather states are visually coherent, the approved logo lockup is restored, tests pass, and mobile evidence is published.
+  - id: R06
+    requirement: Define a framework that detects truly unusual future events from the event mass.
+    area: LLM-first product/data design
+    likely_files: [docs/features/static-personal-announcements, docs/llm, docs/backlog]
+    dependencies: []
+    conflict_risk: medium
+    lane: data-product
+    parallelizable: true
+    done_when: Candidate generation, baselines, adjudication, evidence fields, blockers, thresholds, public-copy rules, and evaluation are specified.
+lanes:
+  - id: data-product
+    role: worker
+    effort: high
+    requirement_ids: [R01, R02, R03, R06]
+    target: Inspect XLSX and implement disjoint reference/product documentation plus a reproducible canonical conversion artifact if justified.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/typed-briefing-artist-unusual-20260715/data-product
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-artist-unusual-20260715-data
+    writable_files:
+      - docs/reference/**
+      - docs/features/static-personal-announcements/**
+      - docs/backlog/**
+      - docs/llm/**
+      - scripts/**artist**
+      - tests/**artist**
+      - .codex/lanes/data-product/RESULTS.md
+    forbidden_files:
+      - site/src/pages/lab/briefing/index.astro
+      - site/src/data/briefingLab.ts
+      - CHANGELOG.md
+    expected_output: A committed lane result with workbook profile, canonical schema/conversion, locality safeguards, digest design, and unusualness framework.
+    verification_scope: targeted
+    status: merged
+  - id: visual-consultant
+    role: planner
+    effort: high
+    requirement_ids: [R04]
+    target: Capture the two exact public lab states and obtain a critical Gemini Pro review.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-artist-unusual-20260715-integration
+    writable_files:
+      - artifacts/codex/static-typed-briefing-artist-unusual/**
+    forbidden_files:
+      - site/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Artifact prompt, exact screenshots, full model response, model/status/time evidence, and concise handoff.
+    verification_scope: inspection_only
+    status: completed
+  - id: ui-integrator
+    role: worker
+    effort: extra-high
+    requirement_ids: [R05]
+    target: Serially integrate approved visual corrections after the external critique.
+    depends_on: [visual-consultant]
+    execution_mode: serial_after_dependency
+    branch: integration/typed-briefing-artist-unusual-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-artist-unusual-20260715-integration
+    writable_files:
+      - site/src/pages/lab/briefing/index.astro
+      - site/src/data/briefingLab.ts
+      - site/src/components/**
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - docs/features/static-personal-announcements/**
+      - docs/operations/mobile-ui-telegram-review.md
+      - CHANGELOG.md
+      - .codex/integration/INTEGRATION_REPORT.md
+    forbidden_files: []
+    expected_output: Corrected prototype, tests, preview, Telegram evidence, documentation, changelog, and closure audit.
+    verification_scope: full_local
+    status: in_progress
+  - id: merge-reviewer
+    role: merge_reviewer
+    effort: high
+    requirement_ids: []
+    target: Audit merged scope, requirements, tests, evidence, and worker cleanliness.
+    depends_on: [data-product, ui-integrator]
+    execution_mode: serial_after_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-artist-unusual-20260715-integration
+    writable_files:
+      - .codex/lanes/merge-reviewer/RESULTS.md
+    forbidden_files:
+      - site/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Independent closure audit with explicit Done/Partial/Missing/Blocked status per requirement.
+    verification_scope: full_local
+    status: planned
