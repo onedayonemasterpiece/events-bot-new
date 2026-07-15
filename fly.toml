@@ -197,6 +197,11 @@ app = "events-bot-new-wngqia"
 [[mounts]]
   source = "data"
   destination = "/data"
+  # Keep SQLite/runtime storage above the health-check free-space floor.
+  # Growth is bounded; retention and DB hygiene remain mandatory.
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = "1GB"
+  auto_extend_size_limit = "3GB"
 
 
 [[services]]
