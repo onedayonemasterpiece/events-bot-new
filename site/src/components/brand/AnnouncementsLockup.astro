@@ -1,0 +1,21 @@
+---
+import AnnouncementsWordmark from './AnnouncementsWordmark.astro';
+
+interface Props {
+  variant?: 'desktop' | 'mobile';
+  class?: string;
+}
+
+const { variant = 'desktop', class: className } = Astro.props;
+---
+
+<span class:list={['announcements-lockup', `announcements-lockup--${variant}`, className]} data-announcements-lockup={variant}>
+  <span class="announcements-lockup__endorsement">
+    {variant === 'mobile' ? (
+      <><span>Полюбить</span><span>Калининград</span></>
+    ) : (
+      'Полюбить Калининград'
+    )}
+  </span>
+  <AnnouncementsWordmark class="announcements-lockup__wordmark" />
+</span>

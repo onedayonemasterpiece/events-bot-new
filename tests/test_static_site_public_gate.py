@@ -147,7 +147,7 @@ def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
         ],
     )
 
-    _primary, _mode, assets = exporter.collect_images(
+    _primary, _mode, _role, assets = exporter.collect_images(
         con,
         7,
         '["https://legacy.example/leak.jpg"]',
@@ -157,6 +157,9 @@ def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
     assert [asset["src"] for asset in assets] == [
         "https://static.kenigevents.ru/a.webp",
     ]
+    assert assets[0]["media_role"] == "unknown_document"
+    assert assets[0]["recommended_hero_fit"] == "contain"
+    assert _role == "unknown_document"
 
 
 def test_collect_images_canonicalizes_current_bucket_and_rejects_other_hosts() -> None:
@@ -183,7 +186,7 @@ def test_collect_images_canonicalizes_current_bucket_and_rejects_other_hosts() -
         ],
     )
 
-    primary, _mode, assets = exporter.collect_images(con, 9, "[]", "Событие")
+    primary, _mode, _role, assets = exporter.collect_images(con, 9, "[]", "Событие")
 
     assert primary == "https://static.kenigevents.ru/p/a.webp"
     assert [asset["src"] for asset in assets] == [
@@ -202,7 +205,7 @@ def test_collect_images_does_not_fallback_when_only_quarantined_rows_exist() -> 
     con.execute(
         "insert into eventposter values(1, 8, 'https://static.example/pending.webp', null, null, 'pending_review', 0)"
     )
-    _primary, _mode, assets = exporter.collect_images(
+    _primary, _mode, _role, assets = exporter.collect_images(
         con, 8, '["https://legacy.example/leak.jpg"]', "Событие"
     )
     assert assets == []

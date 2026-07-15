@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-15-fly-volume-critical.md`
+  - Scope: Fly `/data` capacity, SQLite/runtime evidence retention, `/healthz` readiness and `/webhook` routing during deploys.
+  - Must not regress: production must retain bounded runtime evidence without crossing the disk-critical readiness floor; every deploy must verify free space, SQLite integrity, `/healthz`, Fly checks and fresh disk-full/proxy logs; volume auto-extension stays bounded and cannot replace retention or DB/media hygiene.
 - `INC-2026-07-14-ecodvor-unknown-start-time-cursor.md`
   - Scope: Telegram Monitoring parent/program versus child-activity time roles, Smart Update explicit-TBD anchor review, server time fallback and legitimate zero-event source cursor advancement.
   - Must not regress: a child activity whose source explicitly says its start time is still being clarified must keep unknown time rather than inherit the parent `14:00–17:00` window; successfully scanned legitimate `events=[]` tail messages must advance the source cursor without entering Smart Update or polluting scanned-message metrics.

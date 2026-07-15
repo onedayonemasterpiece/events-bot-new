@@ -50,6 +50,16 @@ RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
+EVENT_IMAGE_MEDIA_ROLES = {
+    "event_identity_poster",
+    "event_photo",
+    "attendee_information",
+    "program_or_schedule",
+    "wayfinding",
+    "sponsor_or_brand",
+    "unknown_document",
+    "unknown_visual",
+}
 TICKET_LINK_OVERRIDES = {
     # Production row currently points to the organiser chat, while the source
     # registration page is a first-party kgd80 URL provided by product QA.
@@ -424,7 +434,7 @@ def ticket_info(row: sqlite3.Row) -> dict[str, Any]:
     elif has_registration and href:
         kind, label = "registration", "Зарегистрироваться"
     elif free:
-        kind, label = "free", "Открыть условия"
+        kind, label = "free", "Источник события"
     elif has_registration:
         kind, label = "registration", "Зарегистрироваться"
     elif href:
@@ -445,7 +455,7 @@ def status_label(row: sqlite3.Row, ticket: dict[str, Any]) -> str:
     if re.search(r"регистрац|registration", status, re.I):
         return "Регистрация"
     if re.search(r"sale|available|продаж|билет", status, re.I):
-        return "По билетам"
+        return "Билеты"
     return "Условия уточняются"
 
 
@@ -453,7 +463,7 @@ def apply_preview_overrides(event_id: int, ticket: dict[str, Any], status: str) 
     if event_id == 5370:
         ticket = {**ticket, "kind": "ticket", "label": "Купить билет", "is_free": False, "status": "paid"}
         if not ticket.get("price_label"):
-            status = "По билетам"
+            status = "Билеты"
     return ticket, status
 
 
@@ -662,6 +672,10 @@ def hero_image_quality_score(asset: dict[str, Any]) -> float:
         score -= 1.3
     if asset.get("image_text_mode") == "visual_only":
         score += 0.15
+    if asset.get("media_role") == "event_photo":
+        score += 0.45
+    elif asset.get("media_role") == "event_identity_poster":
+        score -= 0.08
     if str(asset.get("src") or "").startswith("https://storage.yandexcloud.net/kenigevents/"):
         score += 0.04
     return score
@@ -689,7 +703,12 @@ def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] |
     best_score = hero_image_quality_score(best)
     if best is first:
         return first
-    if first.get("image_text_mode") == "ocr_text" and best.get("image_text_mode") != "ocr_text" and first_area >= 500_000:
+    if (
+        first.get("media_role") != "event_identity_poster"
+        and first.get("image_text_mode") == "ocr_text"
+        and best.get("image_text_mode") != "ocr_text"
+        and first_area >= 500_000
+    ):
         return first
     # Strong quality rescue: low-quality first image vs a clearly better later image.
     if first_area and best_area >= max(first_area * 2.25, first_area + 600_000) and best_score >= first_score + 1.0:
@@ -697,12 +716,38 @@ def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] |
     return first
 
 
-def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, title: str) -> tuple[str | None, str, list[dict[str, Any]]]:
+def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, title: str) -> tuple[str | None, str, str | None, list[dict[str, Any]]]:
     canonical_ledger_present = False
     try:
+        eventposter_columns = {
+            str(row[1]) for row in con.execute("pragma table_info('eventposter')").fetchall()
+        }
+        optional_fields = [
+            "width",
+            "height",
+            "media_role",
+            "media_role_confidence",
+            "media_semantic_status",
+            "focal_x",
+            "focal_y",
+            "safe_crop",
+            "thumbnail_256_url",
+            "thumbnail_256_width",
+            "thumbnail_256_height",
+            "thumbnail_512_url",
+            "thumbnail_512_width",
+            "thumbnail_512_height",
+            "raw_sha256",
+            "pixel_sha256",
+            "canonical_object_path",
+        ]
+        optional_select = ", ".join(
+            field if field in eventposter_columns else f"NULL AS {field}"
+            for field in optional_fields
+        )
         rows = con.execute(
-            """
-            select supabase_url, catbox_url, ocr_text
+            f"""
+            select supabase_url, catbox_url, ocr_text, {optional_select}
             from eventposter
             where event_id=? and review_status='approved'
             order by display_order asc, id asc
@@ -722,7 +767,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             (event_id,),
         ).fetchall()
         canonical_ledger_present = bool(rows)
-    ocr_by_url: dict[str, str] = {}
+    metadata_by_url: dict[str, dict[str, Any]] = {}
     poster_urls: list[str] = []
     for row in rows:
         # One EventPoster is one logical gallery item.  Its managed and source
@@ -731,8 +776,11 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         if not url:
             continue
         poster_urls.append(url)
-        if row["ocr_text"]:
-            ocr_by_url[image_url_key(url)] = str(row["ocr_text"] or "")
+        metadata_by_url[image_url_key(url)] = {
+            key: row_get(row, key)
+            for key in row.keys()
+            if key not in {"supabase_url", "catbox_url"}
+        }
     photo_urls = read_json(photo_urls_raw, [])
     urls = []
     seen = set()
@@ -762,27 +810,69 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         else:
             needs_rescue_scan = True
     for index, url in enumerate(urls[:12]):
-        ocr = ocr_by_url.get(image_url_key(url), "")
+        metadata = metadata_by_url.get(image_url_key(url), {})
+        ocr = str(metadata.get("ocr_text") or "")
         mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
-        if index == 0:
+        semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
+        raw_role = clean_text(metadata.get("media_role")).lower()
+        media_role = raw_role if semantic_status == "classified" and raw_role in EVENT_IMAGE_MEDIA_ROLES else None
+        if index == 0 and not metadata.get("width"):
             probed_width, probed_height = first_width, first_height
-        elif needs_rescue_scan and not SKIP_IMAGE_PROBES:
+        elif not metadata.get("width") and needs_rescue_scan and not SKIP_IMAGE_PROBES:
             probed_width, probed_height = probe_image_dimensions(url)
         else:
             probed_width, probed_height = (None, None)
-        width = int(probed_width or 1080)
-        height = int(probed_height or 1350)
+        width = int(metadata.get("width") or probed_width or 1080)
+        height = int(metadata.get("height") or probed_height or 1350)
+        # Unknown media is deliberately no-crop. OCR/no-OCR heuristics are not
+        # semantic evidence: only the classified event_photo role may unlock
+        # cover cropping in card/hero UI.
+        role_for_ui = media_role or "unknown_document"
+        thumbnail_sources = []
+        for size in (256, 512):
+            thumb_url = canonical_event_media_cdn_url(metadata.get(f"thumbnail_{size}_url"))
+            thumb_width = int(metadata.get(f"thumbnail_{size}_width") or 0)
+            thumb_height = int(metadata.get(f"thumbnail_{size}_height") or 0)
+            if thumb_url and thumb_width > 0 and thumb_height > 0:
+                thumbnail_sources.append({"src": thumb_url, "width": thumb_width, "height": thumb_height})
+        focal_x = metadata.get("focal_x")
+        focal_y = metadata.get("focal_y")
+        focal_point = None
+        try:
+            if focal_x is not None and focal_y is not None and 0 <= float(focal_x) <= 1 and 0 <= float(focal_y) <= 1:
+                focal_point = {"x": round(float(focal_x), 5), "y": round(float(focal_y), 5)}
+        except (TypeError, ValueError):
+            focal_point = None
+        if role_for_ui == "event_identity_poster":
+            alt = f"Афиша события «{title}»"
+        elif role_for_ui == "program_or_schedule":
+            alt = f"Расписание события «{title}»"
+        elif role_for_ui == "attendee_information":
+            alt = f"Полезная информация для посетителей события «{title}»"
+        else:
+            alt = f"Фотография события «{title}»"
         asset = {
             "src": url,
             "width": width,
             "height": height,
-            "alt": f"Афиша события «{title}»",
+            "alt": alt,
             "image_text_mode": mode,
-            "image_kind": "poster" if mode == "ocr_text" else "photo",
-            "recommended_hero_fit": "contain" if mode == "ocr_text" else "cover",
-            "safe_crop": mode != "ocr_text",
+            "media_role": role_for_ui,
+            "media_role_confidence": round(float(metadata.get("media_role_confidence") or 0), 5),
+            "media_semantic_status": semantic_status if semantic_status in {"pending", "classified", "error", "stale"} else "pending",
+            "image_kind": "poster" if role_for_ui == "event_identity_poster" else ("photo" if role_for_ui == "event_photo" else "mixed"),
+            "recommended_hero_fit": "cover" if role_for_ui == "event_photo" else "contain",
+            "safe_crop": bool(metadata.get("safe_crop")) if metadata.get("safe_crop") is not None else False,
             "source_order": index,
         }
+        if thumbnail_sources:
+            asset["thumbnail_sources"] = thumbnail_sources
+        if focal_point:
+            asset["focal_point"] = focal_point
+            asset["recommended_object_position"] = f"{round(focal_point['x'] * 100)}% {round(focal_point['y'] * 100)}%"
+        asset_key = clean_text(metadata.get("raw_sha256") or metadata.get("pixel_sha256") or metadata.get("canonical_object_path"))
+        if asset_key:
+            asset["asset_key"] = asset_key
         asset["quality_score"] = round(hero_image_quality_score(asset), 4)
         assets.append(asset)
     primary_asset = choose_primary_image_asset(assets)
@@ -802,7 +892,8 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         assets = [primary_asset] + [asset for asset in assets if asset is not primary_asset]
     primary = assets[0]["src"] if assets else None
     primary_mode = assets[0]["image_text_mode"] if assets else "unknown"
-    return primary, primary_mode, assets
+    primary_role = assets[0].get("media_role") if assets else None
+    return primary, primary_mode, primary_role, assets
 
 
 def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row) -> list[str]:
@@ -1018,7 +1109,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     ticket = ticket_info(row)
     status = status_label(row, ticket)
     ticket, status = apply_preview_overrides(event_id, ticket, status)
-    primary_image, image_mode, image_assets = collect_images(con, event_id, row["photo_urls"], title)
+    primary_image, image_mode, image_role, image_assets = collect_images(con, event_id, row["photo_urls"], title)
     source_urls = collect_source_urls(con, event_id, row)
     source_likes, source_views, source_shares, engagement_sources = source_metrics(con, source_urls)
     summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
@@ -1058,12 +1149,13 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "image_url": primary_image,
         "image_alt": f"Афиша события «{title}»",
         "image_text_mode": image_mode,
+        "image_media_role": image_role,
         "image_assets": image_assets,
         "face_boxes": [],
         "ocr_boxes": [],
         "focal_point": None,
         "image_object_position": None,
-        "safe_crop": image_mode != "ocr_text",
+        "safe_crop": bool(image_assets and image_assets[0].get("safe_crop")),
         "summary": summary,
         "meta_description": clean_text(row["short_description"]) or summary,
         "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",

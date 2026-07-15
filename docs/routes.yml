@@ -282,6 +282,9 @@ features:
   static_site_pages:
     status: preview
     docs: docs/features/static-site-pages/README.md
+    design_system: docs/features/static-site-pages/design-system/README.md
+    brand_lockups: docs/features/static-site-pages/design-system/brand-lockups.md
+    favicon: docs/features/static-site-pages/design-system/favicon.md
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
     related_personalization: docs/features/unsigned-personalization/README.md

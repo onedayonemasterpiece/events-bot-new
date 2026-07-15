@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -9,6 +10,18 @@ from io import BytesIO
 @dataclass(frozen=True, slots=True)
 class PreparedImage:
     dhash_hex: str
+    webp_bytes: bytes
+    width: int = 0
+    height: int = 0
+    encoded_sha256: str = ""
+    thumbnails: tuple["PreparedImageThumbnail", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedImageThumbnail:
+    longest_edge: int
+    width: int
+    height: int
     webp_bytes: bytes
 
 
@@ -272,7 +285,37 @@ def prepare_image_for_supabase(
             webp_bytes = out.getvalue()
             if not webp_bytes:
                 return None
-            return PreparedImage(dhash_hex=dhash_hex, webp_bytes=webp_bytes)
+            thumbnails: list[PreparedImageThumbnail] = []
+            resampling = getattr(Image, "Resampling", None)
+            lanczos = resampling.LANCZOS if resampling else Image.LANCZOS
+            for longest_edge in (256, 512):
+                thumb = im2.copy()
+                thumb.thumbnail((longest_edge, longest_edge), lanczos)
+                thumb_out = BytesIO()
+                thumb.save(
+                    thumb_out,
+                    format="WEBP",
+                    quality=max(64, min(int(webp_quality), 78)),
+                    method=6,
+                )
+                thumb_bytes = thumb_out.getvalue()
+                if thumb_bytes:
+                    thumbnails.append(
+                        PreparedImageThumbnail(
+                            longest_edge=longest_edge,
+                            width=int(thumb.width),
+                            height=int(thumb.height),
+                            webp_bytes=thumb_bytes,
+                        )
+                    )
+            return PreparedImage(
+                dhash_hex=dhash_hex,
+                webp_bytes=webp_bytes,
+                width=int(im2.width),
+                height=int(im2.height),
+                encoded_sha256=hashlib.sha256(webp_bytes).hexdigest(),
+                thumbnails=tuple(thumbnails),
+            )
     except Exception:
         return None
 
@@ -297,3 +340,21 @@ def build_supabase_poster_object_path(
         raise ValueError("dhash_hex is required")
     algo = f"dh{int(dhash_size)}"
     return f"{pfx}/{algo}/{h[:2]}/{h}.webp"
+
+
+def build_event_thumbnail_object_path(
+    encoded_sha256: str,
+    *,
+    longest_edge: int,
+    prefix: str = "p/thumb/v1",
+) -> str:
+    """Build an immutable content-and-recipe-addressed thumbnail path."""
+
+    digest = str(encoded_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("encoded_sha256 must be a 64-character hex digest")
+    edge = int(longest_edge)
+    if edge not in {256, 512}:
+        raise ValueError("unsupported event thumbnail edge")
+    pfx = (prefix or "p/thumb/v1").strip().strip("/") or "p/thumb/v1"
+    return f"{pfx}/{digest[:2]}/{digest}/{edge}.webp"
