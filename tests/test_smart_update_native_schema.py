@@ -21,6 +21,42 @@ class _FakeGemmaClient:
         return item, {}
 
 
+@pytest.mark.asyncio
+async def test_rich_facts_age_evidence_includes_ocr_title_body_beyond_first_three(
+    monkeypatch,
+):
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":[],"program_or_examples":[],'
+                '"context_methodology_facts":[],"people_org_facts":[],'
+                '"logistics_facts":[],"uncertain_or_drop":[]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/example/1",
+        source_text="Анонс события",
+        title="Событие",
+        posters=[
+            su.PosterCandidate(ocr_text=f"poster {index}") for index in range(3)
+        ]
+        + [
+            su.PosterCandidate(
+                ocr_title="ТОЛЬКО ДЛЯ ВЗРОСЛЫХ",
+                ocr_text="Возрастное ограничение 18+",
+            )
+        ],
+    )
+    await su._llm_extract_candidate_facts(candidate)
+    prompt = client.calls[0]["prompt"]
+    assert "ТОЛЬКО ДЛЯ ВЗРОСЛЫХ" in prompt
+    assert "Возрастное ограничение 18+" in prompt
+
+
 def test_g4_split_create_cleanup_keeps_route_words_but_strips_hard_logistics():
     candidate = su.EventCandidate(
         source_type="vk",

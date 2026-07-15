@@ -2,8 +2,8 @@
 """CPU-only BGE-M3 retrieval and gated dual-head age assessment.
 
 Nearest-prototype similarity is evidence retrieval only.  An age candidate is
-emitted solely when two independently fitted calibrated heads agree and their
-reviewed evaluation manifest approves the exact encoder/bank/head hashes.
+emitted solely when two independently fitted calibrated heads agree and an
+automatic quality-gate manifest approves the exact encoder/bank/head hashes.
 Without that bundle the fail-closed shadow result is ``insufficient_evidence``.
 """
 
@@ -59,6 +59,27 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def load_run_config() -> dict[str, Any]:
+    try:
+        path = find_input("event_age_bge_run.json")
+    except FileNotFoundError:
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return {}
+    payload["__input_root"] = str(path.parent)
+    return payload
+
+
+def config_int(config: dict[str, Any], key: str, env_name: str, default: int) -> int:
+    if (os.getenv(env_name) or "").strip():
+        return getenv_int(env_name, default)
+    try:
+        return max(1, int(config.get(key, default)))
+    except Exception:
+        return default
+
+
 def load_status_client():
     try:
         from kaggle_status_client import load_status_client as loader  # type: ignore
@@ -81,7 +102,15 @@ def ensure_dependencies() -> None:
         import huggingface_hub  # noqa: F401
     except Exception:
         subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-q", "FlagEmbedding==1.3.5", "huggingface-hub==0.33.4"]
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "FlagEmbedding==1.3.5",
+                "huggingface-hub>=0.34,<2.0",
+            ]
         )
 
 
@@ -182,22 +211,41 @@ def classify_with_dual_heads(vectors: Any, bundle: Any, gate: dict[str, Any]) ->
 
 
 def load_prepared_artifacts(
-    *, bank_payload: dict[str, Any], model_revision: str
+    *, bank_payload: dict[str, Any], model_revision: str, model: Any, prototype_texts: list[str]
 ) -> tuple[Any, Any | None, dict[str, Any] | None, str | None]:
-    """Load prepared prototype vectors and an optional approved classifier."""
+    """Load vectors and an optional automatically gated classifier."""
 
     import numpy as np
 
     bank_hash = stable_hash(bank_payload)
-    vector_path = find_input("event_age_bge_prototype_vectors.npz")
-    prepared = np.load(vector_path, allow_pickle=False)
-    if str(prepared["prototype_bank_hash"].item()) != bank_hash:
-        raise ValueError("prepared prototype vectors do not match prototype bank")
-    if str(prepared["model_revision"].item()) != model_revision:
-        raise ValueError("prepared prototype vectors do not match pinned model revision")
-    if str(prepared["encoder_contract"].item()) != ENCODER_CONTRACT:
-        raise ValueError("prepared prototype vectors use another encoder contract")
-    prototype_vectors = np.asarray(prepared["vectors"], dtype="float32")
+    try:
+        vector_path = find_input("event_age_bge_prototype_vectors.npz")
+    except FileNotFoundError:
+        # Cold-start calibration run: compute the bank once on Kaggle CPU and
+        # export the exact pinned vectors. Production runs should reuse this
+        # output as a prepared artifact rather than repeatedly encoding it.
+        prototype_vectors = encode_dense(
+            model,
+            prototype_texts,
+            batch_size=max(1, min(8, len(prototype_texts))),
+            max_length=1024,
+        )
+        np.savez_compressed(
+            OUTPUT_DIR / "event_age_bge_prototype_vectors.npz",
+            vectors=prototype_vectors,
+            model_revision=np.asarray(model_revision),
+            encoder_contract=np.asarray(ENCODER_CONTRACT),
+            prototype_bank_hash=np.asarray(bank_hash),
+        )
+    else:
+        prepared = np.load(vector_path, allow_pickle=False)
+        if str(prepared["prototype_bank_hash"].item()) != bank_hash:
+            raise ValueError("prepared prototype vectors do not match prototype bank")
+        if str(prepared["model_revision"].item()) != model_revision:
+            raise ValueError("prepared prototype vectors do not match pinned model revision")
+        if str(prepared["encoder_contract"].item()) != ENCODER_CONTRACT:
+            raise ValueError("prepared prototype vectors use another encoder contract")
+        prototype_vectors = np.asarray(prepared["vectors"], dtype="float32")
     norms = np.linalg.norm(prototype_vectors, axis=1, keepdims=True)
     prototype_vectors = prototype_vectors / np.maximum(norms, 1e-12)
     classifier = None
@@ -213,6 +261,8 @@ def load_prepared_artifacts(
     gate = json.loads(gate_path.read_text(encoding="utf-8"))
     required = {
         "approval_status": "approved",
+        "gate_authority": "automatic_quality_gate_v1",
+        "quality_gates_passed": True,
         "model_revision": model_revision,
         "encoder_contract": ENCODER_CONTRACT,
         "prototype_bank_hash": bank_hash,
@@ -229,8 +279,10 @@ def load_prepared_artifacts(
             "critical_over_permissive_rate",
             "head_a_min_probability",
             "head_b_min_probability",
-            "approved_by",
-            "approved_at",
+            "generated_at",
+            "class_support",
+            "exact_accuracy",
+            "within_one_accuracy",
         )
     ):
         return prototype_vectors, None, gate, classifier_hash
@@ -251,21 +303,28 @@ def main() -> int:
     if status:
         status.event("kernel_started", phase="bootstrap", status="running", progress=STATE)
         status.start_alive(interval_seconds=60, progress_provider=lambda: dict(STATE))
-    revision = (os.getenv("EVENT_AGE_BGE_MODEL_REVISION") or "").strip()
+    run_config = load_run_config()
+    revision = (
+        os.getenv("EVENT_AGE_BGE_MODEL_REVISION")
+        or str(run_config.get("model_revision") or "")
+    ).strip()
     if not revision:
         raise RuntimeError("EVENT_AGE_BGE_MODEL_REVISION is required; unpinned model downloads are forbidden")
-    input_path = find_input("event_age_bge_input.jsonl")
-    bank_path = find_input("event_age_bge_prototypes.json")
+    input_root = Path(str(run_config.get("__input_root") or ""))
+    input_path = input_root / "event_age_bge_input.jsonl"
+    bank_path = input_root / "event_age_bge_prototypes.json"
+    if not input_path.exists() or not bank_path.exists():
+        raise FileNotFoundError("run config, event input, and prototype bank must share one dataset")
     events = load_jsonl(input_path)
     bank_payload = json.loads(bank_path.read_text(encoding="utf-8"))
     prototypes = bank_payload.get("prototypes") if isinstance(bank_payload, dict) else None
     if not isinstance(prototypes, list) or not prototypes:
         raise ValueError("prototype bank is empty")
     bank_hash = stable_hash(bank_payload)
-    batch_limit = getenv_int("EVENT_AGE_BGE_BATCH_LIMIT", 64)
-    batch_size = getenv_int("EVENT_AGE_BGE_BATCH_SIZE", 4)
-    max_length = getenv_int("EVENT_AGE_BGE_MAX_LENGTH", 2048)
-    top_k = getenv_int("EVENT_AGE_BGE_TOP_K", 8)
+    batch_limit = config_int(run_config, "batch_limit", "EVENT_AGE_BGE_BATCH_LIMIT", 64)
+    batch_size = config_int(run_config, "batch_size", "EVENT_AGE_BGE_BATCH_SIZE", 4)
+    max_length = config_int(run_config, "max_length", "EVENT_AGE_BGE_MAX_LENGTH", 2048)
+    top_k = config_int(run_config, "top_k", "EVENT_AGE_BGE_TOP_K", 8)
     events = events[:batch_limit]
     STATE.update({"phase": "preflight", "events_total": len(events)})
     if status:
@@ -277,12 +336,28 @@ def main() -> int:
     prototype_vectors, classifier, evaluation_gate, classifier_hash = load_prepared_artifacts(
         bank_payload=bank_payload,
         model_revision=revision,
+        model=model,
+        prototype_texts=prototype_texts,
     )
+    expected_classifier_hash = str(run_config.get("expected_classifier_sha256") or "").strip()
+    if classifier is not None and (
+        not expected_classifier_hash or classifier_hash != expected_classifier_hash
+    ):
+        # A classifier may never become active merely because a different
+        # Kaggle dataset happened to be attached to the notebook.
+        classifier = None
     if prototype_vectors.shape[0] != len(prototypes):
         raise ValueError("prepared vector count does not match prototype count")
     results: list[dict[str, Any]] = []
-    max_runtime_seconds = getenv_int("EVENT_AGE_BGE_MAX_RUNTIME_SECONDS", 25 * 60)
-    runtime_guard_seconds = getenv_int("EVENT_AGE_BGE_RUNTIME_GUARD_SECONDS", 90)
+    vector_chunks: list[Any] = []
+    vector_event_ids: list[int] = []
+    vector_input_hashes: list[str] = []
+    max_runtime_seconds = config_int(
+        run_config, "max_runtime_seconds", "EVENT_AGE_BGE_MAX_RUNTIME_SECONDS", 25 * 60
+    )
+    runtime_guard_seconds = config_int(
+        run_config, "runtime_guard_seconds", "EVENT_AGE_BGE_RUNTIME_GUARD_SECONDS", 90
+    )
     checkpoint_path = OUTPUT_DIR / "event_age_bge_checkpoint.json"
     STATE["phase"] = "run"
     for offset in range(0, len(events), batch_size):
@@ -292,6 +367,9 @@ def main() -> int:
         batch = events[offset : offset + batch_size]
         texts = [str(item.get("text") or "").strip() for item in batch]
         vectors = encode_dense(model, texts, batch_size=batch_size, max_length=max_length)
+        vector_chunks.append(vectors)
+        vector_event_ids.extend(int(item.get("event_id") or 0) for item in batch)
+        vector_input_hashes.extend(str(item.get("input_hash") or "") for item in batch)
         features = retrieve_features(vectors, prototype_vectors, prototypes, top_k=top_k)
         classifications = (
             classify_with_dual_heads(vectors, classifier, evaluation_gate)
@@ -324,9 +402,9 @@ def main() -> int:
                     "input_hash": item.get("input_hash"),
                     **classification,
                     "next_action": (
-                        "candidate_for_internal_review"
+                        "automatic_hash_bound_import"
                         if classification["status"] == "assessed"
-                        else "needs_approved_calibrated_dual_head"
+                        else "terminal_insufficient_evidence"
                     ),
                     "age_restriction": None,
                     "retrieval": feature,
@@ -351,6 +429,18 @@ def main() -> int:
                 "partial_results": results,
             },
         )
+    if vector_chunks:
+        import numpy as np
+
+        np.savez_compressed(
+            OUTPUT_DIR / "event_age_bge_event_vectors.npz",
+            vectors=np.concatenate(vector_chunks, axis=0),
+            event_ids=np.asarray(vector_event_ids, dtype="int64"),
+            input_hashes=np.asarray(vector_input_hashes),
+            model_revision=np.asarray(revision),
+            encoder_contract=np.asarray(ENCODER_CONTRACT),
+            prototype_bank_hash=np.asarray(bank_hash),
+        )
     report = {
         "schema_version": "event-age-bge-shadow-v1",
         "status": "complete" if len(results) == len(events) else "partial",
@@ -358,8 +448,11 @@ def main() -> int:
         "model_id": MODEL_ID,
         "model_revision": revision,
         "encoder_contract": ENCODER_CONTRACT,
+        "run_id": run_config.get("run_id"),
+        "assessment_policy_version": run_config.get("assessment_policy_version"),
         "prototype_bank_hash": bank_hash,
         "classifier_sha256": classifier_hash,
+        "classifier_active": classifier is not None,
         "evaluation_approval_status": (
             evaluation_gate.get("approval_status") if isinstance(evaluation_gate, dict) else "missing"
         ),

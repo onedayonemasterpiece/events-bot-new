@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -142,6 +145,157 @@ def test_bge_dual_heads_require_agreement_and_artifact_cutoffs():
     bundle["weights_b"] = np.asarray([[0, 0, 0, 6, 0], [0, 0, 0, 6, 0]], dtype="float32")
     rejected = classify_with_dual_heads(np.asarray([[1, 0]], dtype="float32"), bundle, gate)[0]
     assert rejected["status"] == "insufficient_evidence"
+
+
+def test_bge_classifier_gate_is_automatic_and_hash_bound(tmp_path, monkeypatch):
+    worker = load_bge_worker()
+    bank = {"version": "test", "prototypes": [{"id": "p", "text": "пример"}]}
+    bank_hash = worker.stable_hash(bank)
+    vector_path = tmp_path / "event_age_bge_prototype_vectors.npz"
+    np.savez_compressed(
+        vector_path,
+        vectors=np.asarray([[1.0, 0.0]], dtype="float32"),
+        model_revision=np.asarray("revision"),
+        encoder_contract=np.asarray(worker.ENCODER_CONTRACT),
+        prototype_bank_hash=np.asarray(bank_hash),
+    )
+    classifier_path = tmp_path / "event_age_bge_classifier.npz"
+    np.savez_compressed(
+        classifier_path,
+        classes=np.asarray(["0+", "6+", "12+", "16+", "18+"]),
+        weights_a=np.zeros((2, 5), dtype="float32"),
+        weights_b=np.zeros((2, 5), dtype="float32"),
+        bias_a=np.zeros(5, dtype="float32"),
+        bias_b=np.zeros(5, dtype="float32"),
+    )
+    classifier_hash = hashlib.sha256(classifier_path.read_bytes()).hexdigest()
+    gate_path = tmp_path / "event_age_bge_evaluation.json"
+    gate_path.write_text(
+        json.dumps(
+            {
+                "approval_status": "approved",
+                "gate_authority": "automatic_quality_gate_v1",
+                "quality_gates_passed": True,
+                "model_revision": "revision",
+                "encoder_contract": worker.ENCODER_CONTRACT,
+                "prototype_bank_hash": bank_hash,
+                "classifier_sha256": classifier_hash,
+                "evaluation_dataset_hash": "dataset-hash",
+                "labeled_case_count": 100,
+                "assessment_agreement": 0.9,
+                "critical_over_permissive_rate": 0.0,
+                "head_a_min_probability": 0.7,
+                "head_b_min_probability": 0.7,
+                "generated_at": "2026-07-15T00:00:00Z",
+                "class_support": {label: 20 for label in ["0+", "6+", "12+", "16+", "18+"]},
+                "exact_accuracy": 0.8,
+                "within_one_accuracy": 0.98,
+            }
+        ),
+        encoding="utf-8",
+    )
+    paths = {
+        "event_age_bge_prototype_vectors.npz": vector_path,
+        "event_age_bge_classifier.npz": classifier_path,
+        "event_age_bge_evaluation.json": gate_path,
+    }
+    monkeypatch.setattr(worker, "find_input", lambda name: paths[name])
+    _, classifier, gate, actual_hash = worker.load_prepared_artifacts(
+        bank_payload=bank,
+        model_revision="revision",
+        model=None,
+        prototype_texts=["пример"],
+    )
+    assert classifier is not None
+    assert gate["gate_authority"] == "automatic_quality_gate_v1"
+    assert "approved_by" not in gate
+    assert actual_hash == classifier_hash
+
+
+def test_automatic_calibrator_uses_official_grouped_holdout_without_human(tmp_path):
+    worker = load_bge_worker()
+    bank = {"version": "test", "prototypes": [{"id": "p", "text": "пример"}]}
+    bank_path = tmp_path / "bank.json"
+    bank_path.write_text(json.dumps(bank, ensure_ascii=False), encoding="utf-8")
+    bank_hash = worker.stable_hash(bank)
+    vectors: list[np.ndarray] = []
+    hashes: list[str] = []
+    labels: list[dict] = []
+    classes = ["0+", "6+", "12+", "16+", "18+"]
+    # Find deterministic group ids for each split bucket. Every class gets
+    # independent train/calibration/official-holdout support.
+    bucket_groups: dict[int, list[str]] = {bucket: [] for bucket in range(10)}
+    candidate = 0
+    while any(len(values) < 8 for values in bucket_groups.values()):
+        value = f"group-{candidate}"
+        bucket = int(hashlib.sha256(value.encode()).hexdigest()[:8], 16) % 10
+        if len(bucket_groups[bucket]) < 8:
+            bucket_groups[bucket].append(value)
+        candidate += 1
+    for class_index, label in enumerate(classes):
+        groups = [
+            *bucket_groups[0][class_index : class_index + 3],
+            *bucket_groups[1][class_index : class_index + 3],
+            *bucket_groups[2][class_index : class_index + 3],
+            *bucket_groups[7][class_index : class_index + 6],
+            *bucket_groups[8][class_index : class_index + 6],
+            *bucket_groups[9][class_index : class_index + 6],
+        ]
+        # The slices above can overlap across classes, but grouping remains
+        # deterministic and never crosses split buckets.
+        for row_index, group in enumerate(groups):
+            vector = np.zeros(5, dtype="float32")
+            vector[class_index] = 1.0
+            vectors.append(vector)
+            row_hash = hashlib.sha256(f"{label}:{row_index}:{group}".encode()).hexdigest()
+            hashes.append(row_hash)
+            labels.append(
+                {
+                    "event_id": len(labels) + 1,
+                    "input_hash": row_hash,
+                    "label": label,
+                    "label_origin": "official_source_declared",
+                    "group_id": group,
+                }
+            )
+    vectors_path = tmp_path / "vectors.npz"
+    np.savez_compressed(
+        vectors_path,
+        vectors=np.asarray(vectors),
+        input_hashes=np.asarray(hashes),
+        model_revision=np.asarray("revision"),
+        encoder_contract=np.asarray(worker.ENCODER_CONTRACT),
+        prototype_bank_hash=np.asarray(bank_hash),
+    )
+    labels_path = tmp_path / "labels.jsonl"
+    labels_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in labels), encoding="utf-8"
+    )
+    output = tmp_path / "output"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "calibrate_event_age_bge.py"),
+            "--vectors",
+            str(vectors_path),
+            "--labels",
+            str(labels_path),
+            "--prototype-bank",
+            str(bank_path),
+            "--output-dir",
+            str(output),
+            "--min-class-support",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    manifest = json.loads((output / "event_age_bge_evaluation.json").read_text())
+    assert manifest["gate_authority"] == "automatic_quality_gate_v1"
+    assert manifest["quality_gates_passed"] is True
+    assert manifest["label_policy"]["human_approval_required"] is False
 
 
 def test_ui_contract_contains_age_fields_without_description_parsing():

@@ -1,7 +1,8 @@
 # Возрастные ограничения событий
 
 Статус: **структурированный data path реализован; публичный режим —
-`declared_only`; BGE assessment — gated shadow до калибровки**.
+`declared_only`; BGE assessment — автоматический gated batch, shadow до
+прохождения quality gates**.
 
 ## Контракт продукта
 
@@ -37,7 +38,8 @@ HTML было невозможно.
 - компактный `age_restriction_evidence` (kind, короткая цитата/span, hashes и
   document id), `..._decision_version`, `..._input_hash`, `..._updated_at`.
 
-Assessed хранится отдельно в `age_assessment*` с engine/version/hash. Большие
+Assessed хранится отдельно в `age_assessment*` с
+`status/run_id/updated_at/engine/version/hash`. Большие
 исходные тексты не копируются. Тексты остаются в существующих `event_source` и
 poster OCR; каноническая запись хранит только короткое evidence. При будущей
 потребности подробный decision log должен иметь отдельный retention, а не
@@ -99,17 +101,100 @@ internal candidate, а безопасный публичный режим ост
 - phase/progress/alive heartbeat и bounded runtime, как в Telegram Monitoring и
   CherryFlash.
 
-Worker требует pinned Hugging Face revision и **подготовленные** prototype
-vectors. Nearest prototypes используются только как retrieval evidence. Итоговый
-candidate возможен лишь при согласии двух независимо обученных calibrated heads
-и approval manifest, совпадающем по model revision, encoder contract, bank hash
-и classifier SHA-256. Пороги читаются из evaluation artifact, а не выбираются в
-runtime. Нет/не совпал artifact, головы расходятся или истёк runtime —
-`insufficient_evidence`; canonical declared поле не меняется.
+### Запуск batch
 
-Это shadow/gated путь: в репозитории нет достаточного human-labeled набора и
-approved classifier bundle, поэтому ближайший prototype сам по себе **не**
-превращается в возрастную маркировку.
+После каждого Smart Update события без declared rating один глобальный
+`JobOutbox` job с coalesce key `event_age_bge_assessment:prod` переносится на
+25 минут после последнего обновления. Таким образом пачка набирается в quiet
+window, а не создаёт Kaggle run на событие. При старте приложения такой же job
+однократно seed-ится для исторических `not_scheduled` событий. Selector повторно
+проверяет:
+
+- active, non-silent, canonical event;
+- нет declared rating и unresolved conflict;
+- assessment отсутствует либо corpus hash устарел;
+- обязательный OCR уже готов либо его двухчасовое окно завершилось явным
+  `ocr_unavailable`.
+
+Если первый batch видит `ocr_pending`, он обязательно создаёт durable recheck
+через 30 минут; поэтому OCR wait не может оставить событие в вечном pending.
+
+Batch имеет лимит, bounded runtime, unique output namespace, status ledger,
+resource lease, heartbeat и partial follow-up. Длинный age job не считается
+stale по общему 10-минутному порогу. Перед импортом снова проверяются declared
+value, corpus hash, pinned model/encoder/head hashes. Поэтому поздний официальный
+рейтинг или изменившийся текст не перезаписываются устаревшим Kaggle result.
+
+### OCR как обязательная часть corpus
+
+В Smart Update уже существующий facts-call получает `ocr_title + ocr_text` до
+8 постеров (0 дополнительных LLM calls). BGE corpus помещает OCR **перед**
+description/source text, чтобы max-length truncation не срезал знак на афише.
+Берутся только approved event-scoped media roles; rejected/foreign poster OCR
+не допускается. Состояния покрытия: `not_applicable`, `complete`, `pending`,
+`terminal_unavailable`. Последнее означает наблюдаемую техническую
+невозможность OCR, а не выдуманный возраст.
+
+### Автокалибровка без человека
+
+Человек исключён из approval-схемы. `scripts/build_event_age_bge_calibration.py`
+строит private corpus из source-declared gold, маскируя явные age tokens до
+embedding, чтобы модель не «сдавала экзамен по подсказке». Kaggle экспортирует
+hash-bound event vectors. `scripts/calibrate_event_age_bge.py` делает
+grouped train/calibration/official-holdout split, обучает два deterministic
+bootstrap ridge-head и выводит пороги из calibration split.
+
+Production gate создаётся автоматически и требует exact совпадения model
+revision, encoder contract, prototype bank и classifier SHA-256, минимальный
+support каждого класса, ноль severe under-rate, предел общего under-rate,
+exact/within-one accuracy и accepted coverage. `ai_consensus_silver` разрешён
+только для обучения при точном согласии Codex+Gemini; official holdout он не
+заменяет. Полей `approved_by`/ручного review нет. Если support/метрики не
+достигнуты, manifest остаётся `shadow`, worker выдаёт terminal
+`insufficient_evidence`, а не угадывает по nearest prototype.
+
+Активный classifier дополнительно pin-ится во Fly через
+`EVENT_AGE_BGE_CLASSIFIER_SHA256`. Model revision, prototype bytes, corpus
+contract и этот SHA входят в `assessment_policy_version`: смена любого из них
+автоматически делает прежний terminal result stale и возвращает событие в batch.
+
+### Инвариант «нет пропавшего рейтинга»
+
+У каждого события должен быть наблюдаемый terminal outcome:
+
+- source-declared `N+`;
+- service-assessed `N+` (отдельно, непублично по умолчанию);
+- `conflict`/scoped-only;
+- `insufficient_evidence` или `ocr_unavailable`.
+
+Это гарантирует отсутствие вечного silent/pending состояния. Инвариант **не**
+означает принудительный numeric default: при недостатке данных `NULL` безопаснее
+ложного `0+` или завышенного/заниженного значения.
+
+### Реальный Kaggle CPU canary 2026-07-15
+
+На private dataset запущены 12 актуальных событий без явного age token: 6 с
+approved OCR и 6 без доступного OCR. Pinned BGE-M3 revision
+`5617a9f61b028005a4858fdac845db406aefb181`, CPU-only, `12/12` обработаны,
+checkpoint/result/event vectors/prototype vectors выгружены. Первый kernel run
+завершился за 191.213 s и корректно дал 12 abstentions без classifier.
+
+Глазной разбор текстов и Gemini Pro canary review обнаружили semantic collapse
+абстрактных law anchors: например, выставка ошибочно получала ближайшим
+`age18-drugs-cruelty`, а экосубботник — age/trap anchors. Prototype bank v3
+переведён на конкретные content examples и **безвозрастные** neutral-context
+anchors (они не назначают label). Повторный standard-run через общий
+status/heartbeat launcher завершился `complete` (`12/12`; kernel 298.295 s,
+launcher 345.026 s): выставка получила `neutral-art-exhibition=0.551`,
+мастер-класс `neutral-creative-workshop=0.628`, экосубботник
+`neutral-eco-volunteer=0.579`, концерты `neutral-classical-concert=0.576–0.627`.
+Все 12 по-прежнему безопасно abstained: реальный canary улучшил retrieval
+evidence, но не заменил official-holdout classifier gate.
+Private input dataset после сохранения результатов удалён; canonical private
+kernel оставлен для следующих hash-bound batch runs.
+
+Ignored evidence:
+`artifacts/codex/event-age-rating-auto-calibration-2026-07-15/event-age-bge-canary-20260715t1128z/`.
 
 ## Public projection
 
@@ -179,7 +264,7 @@ python scripts/backfill_event_age_ratings.py \
   --max-llm-calls 0
 ```
 
-Default открывает SQLite `mode=ro`. `--apply` требует reviewed decision plan,
+Default открывает SQLite `mode=ro`. `--apply` требует hash-bound decision plan,
 совпадение catalog/input hashes и мигрированную схему. Production write без
 отдельного подтверждения запрещён. Для evaluation:
 
@@ -189,17 +274,17 @@ python scripts/evaluate_event_age_golden.py \
   --predictions predictions.json --output artifacts/codex/age-eval.json
 ```
 
-Мониторить: breakdown status/provenance, unknown/conflict share, declared
+Мониторить: breakdown status/provenance, pending age старше SLA,
+`ocr_unavailable`/conflict share, declared
 precision/recall, false-positive rate, BGE/LLM agreement, critical
 over-permissive rate, LLM calls/event, stale input hashes, Kaggle heartbeat age
 и partial runs.
 
 ## Нерешённые gate-вопросы
 
-- human-labeled assessment dataset и минимальный support по каждому классу;
-- calibration/approval dual-head BGE bundle и допустимые quality gates;
+- накопить достаточный official source-declared holdout и пройти автоматические
+  quality gates по каждому классу; до этого classifier остаётся shadow;
 - юридическое/продуктовое решение о публичном показе assessment;
 - отдельная модель для entry/audience/accompaniment constraints;
 - независимая проверка LLM assessment, если когда-либо разрешат больше нуля
   дополнительных запросов.
-

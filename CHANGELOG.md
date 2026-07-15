@@ -5,6 +5,7 @@
 ### Changed
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
 - **Event age-rating semantics and LLM budget**: piggyback a strict evidence-grounded age decision on existing Smart Update facts/create/merge calls with zero additional requests per event, keep automatic assessments internal by default, and fail unresolved source conflicts closed instead of choosing a numeric maximum.
+- **Event age-rating CPU batches**: coalesce missing/stale events for 25 minutes into one Kaggle CPU BGE run, put approved poster OCR title/body ahead of prose, persist terminal assessment/OCR states, reject stale or ungated imports, and replace manual classifier approval with hash-bound automatic official-holdout quality gates.
 - **Fly volume availability (INC-2026-07-15)**: provisioned production `/data` from 1 GiB to 2 GiB after the free-space readiness floor made `/healthz` critical, and added bounded `80%` automatic growth in 1 GiB increments up to 3 GiB while retaining the existing log, snapshot and disk-hygiene contracts.
 - **Static event pages / production desktop integration**: promoted the continuous Editorial desktop event composition with a full reading-shell boundary, delayed/sticky CTA and media rail, strict full-ratio poster companion, grouped multi-portrait viewer navigation, graphite continuation cards, and width-fit/vertical-only document normalization while leaving the established mobile event composition unchanged.
 - **Static preview staging**: replace the cross-filesystem temporary preview copy with same-filesystem atomic renames, preventing long builds from duplicating the complete output tree under `/tmp` and exhausting the builder disk.
@@ -31,7 +32,8 @@
 
 ### Added
 
-- **Event age-rating data path**: added declared/assessed canonical fields and migration, parser/Universal Festival preservation, declared-only static/vector projections, a reviewed hash-guarded resumable backfill, golden evaluator, and a CPU-only Kaggle BGE dual-head shadow worker using the existing status/heartbeat framework.
+- **Event age-rating data path**: added declared/assessed canonical fields and migration, parser/Universal Festival preservation, declared-only static/vector projections, a hash-guarded resumable backfill, golden evaluator, and a CPU-only Kaggle BGE dual-head shadow worker using the existing status/heartbeat framework.
+- **Event age-rating automatic calibration**: added leakage-masked source-declared corpus building, Kaggle event-vector export, deterministic dual-head fitting and an automatic fail-closed evaluation manifest; AI-consensus silver is training-only and no human approval is required.
 
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.
 

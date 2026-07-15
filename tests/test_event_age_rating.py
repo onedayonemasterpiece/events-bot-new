@@ -133,6 +133,7 @@ def test_assessment_is_stored_separately_and_public_default_is_declared_only():
     assert apply_age_decision(event, decision)
     assert event.age_restriction is None
     assert event.age_assessment == "12+"
+    assert event.age_assessment_status == "assessed"
     assert public_age_projection(event)["age_restriction"] is None
     labeled = public_age_projection(event, policy="declared_or_assessed_labeled")
     assert labeled["age_recommendation"] == "12+"

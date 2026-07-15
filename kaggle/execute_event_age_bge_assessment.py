@@ -64,6 +64,11 @@ async def amain() -> int:
             run_config={"run_id": run_id, "cpu_only": True},
             dataset_sources=list(dict.fromkeys(args.dataset_source)),
             db=db,
+            registry_job_type="event_age_bge",
+            ledger_kind="event_age_bge_assessment",
+            resource_leases=["kaggle_kernel:event_age_bge"],
+            output_namespace=run_id,
+            registry_meta={"run_id": run_id},
         )
     finally:
         await db.close()

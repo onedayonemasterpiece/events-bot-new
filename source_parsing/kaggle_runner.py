@@ -18,6 +18,7 @@ from video_announce.kaggle_client import (
     KaggleClient,
     KERNELS_ROOT_PATH,
     LOCAL_KERNEL_PREFIX,
+    await_kernel_dataset_sources,
 )
 from kaggle_registry import register_job, remove_job
 from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset, enrich_kaggle_status_from_ledger
@@ -37,6 +38,11 @@ async def run_kaggle_kernel(
     run_config: dict[str, Any] | None = None,
     dataset_sources: list[str] | None = None,
     db: Database | None = None,
+    registry_job_type: str = "parse_theatres",
+    ledger_kind: str = "parser_kernel",
+    resource_leases: list[str] | None = None,
+    output_namespace: str | None = None,
+    registry_meta: dict[str, Any] | None = None,
 ) -> tuple[str, list[str], float]:
     """Run the Kaggle kernel and wait for completion.
     
@@ -99,14 +105,16 @@ async def run_kaggle_kernel(
 
     if db is not None:
         run_token = str((run_config or {}).get("run_id") or f"{kernel_folder}-{int(start_time)}")
-        ledger_run_id = f"parser:{kernel_folder}:{run_token}"
+        ledger_prefix = "parser" if ledger_kind == "parser_kernel" else ledger_kind
+        ledger_run_id = f"{ledger_prefix}:{kernel_folder}:{run_token}"
         kaggle_run_config = await create_kaggle_run_config(
             db,
             run_id=ledger_run_id,
             session_id=None,
-            kind="parser_kernel",
+            kind=ledger_kind,
             notebook=kernel_folder,
             kernel_ref=kernel_ref,
+            resource_leases=list(resource_leases or []),
         )
         username = (os.getenv("KAGGLE_USERNAME") or "").strip()
         if username and kaggle_run_config:
@@ -179,6 +187,14 @@ async def run_kaggle_kernel(
                 client.push_kernel(kernel_path=tmp_path, dataset_sources=dataset_sources_clean)
         else:
             client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources_clean)
+        if dataset_sources_clean:
+            await await_kernel_dataset_sources(
+                client,
+                kernel_ref,
+                dataset_sources_clean,
+                timeout_seconds=180,
+                poll_interval_seconds=10,
+            )
     except Exception as e:
         logger.error("theatres_kaggle: push failed: %s", e)
         await _notify("push_failed")
@@ -187,9 +203,13 @@ async def run_kaggle_kernel(
     await _notify("pushed")
     try:
         await register_job(
-            "parse_theatres",
+            registry_job_type,
             kernel_ref,
-            meta={"kernel_folder": kernel_folder, "pid": os.getpid()},
+            meta={
+                "kernel_folder": kernel_folder,
+                "pid": os.getpid(),
+                **dict(registry_meta or {}),
+            },
         )
         registered = True
     except Exception:
@@ -251,11 +271,15 @@ async def run_kaggle_kernel(
         if final_status == "timeout":
             await _notify("timeout", last_status)
         if registered:
-            await remove_job("parse_theatres", kernel_ref)
+            await remove_job(registry_job_type, kernel_ref)
         return final_status, [], duration
 
     # Download output files
-    output_files = await _download_outputs(client, kernel_ref)
+    output_files = await _download_outputs(
+        client,
+        kernel_ref,
+        output_namespace=output_namespace,
+    )
     
     logger.info(
         "theatres_kaggle: complete duration=%.1fs files=%d",
@@ -264,13 +288,22 @@ async def run_kaggle_kernel(
     )
     
     if registered:
-        await remove_job("parse_theatres", kernel_ref)
+        await remove_job(registry_job_type, kernel_ref)
     return final_status, output_files, duration
 
 
-async def _download_outputs(client: KaggleClient, kernel_ref: str) -> list[str]:
+async def _download_outputs(
+    client: KaggleClient,
+    kernel_ref: str,
+    *,
+    output_namespace: str | None = None,
+) -> list[str]:
     """Download kernel output files."""
-    output_dir = Path(tempfile.gettempdir()) / "theatres_afisha_output"
+    suffix = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "-"
+        for ch in str(output_namespace or "theatres").strip()
+    )[:80]
+    output_dir = Path(tempfile.gettempdir()) / f"kaggle_output_{suffix or 'theatres'}"
     output_dir.mkdir(exist_ok=True)
     
     try:

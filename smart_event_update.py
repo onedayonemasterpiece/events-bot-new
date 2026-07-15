@@ -8343,7 +8343,22 @@ async def _llm_extract_candidate_facts(
             7000 if SMART_UPDATE_G4_SPLIT_CREATE else 2800,
         ),
         "raw_excerpt": _clip(_strip_promo_lines(candidate.raw_excerpt) or candidate.raw_excerpt, 800),
-        "poster_texts": [_clip(p.ocr_text, 700) for p in candidate.posters if (p.ocr_text or "").strip()][:3],
+        # Poster OCR is first-class evidence for age marks.  Keep both the
+        # short OCR title and body, and do not silently throw away poster 4+;
+        # the bounded per-poster/per-request limits still protect the LLM
+        # budget without adding another model call.
+        "poster_texts": [
+            _clip(
+                "\n".join(
+                    value.strip()
+                    for value in (p.ocr_title or "", p.ocr_text or "")
+                    if value.strip()
+                ),
+                1200,
+            )
+            for p in candidate.posters
+            if (p.ocr_title or "").strip() or (p.ocr_text or "").strip()
+        ][:8],
     }
     if SMART_UPDATE_G4_SPLIT_CREATE:
         schema = _g4_rich_facts_schema()

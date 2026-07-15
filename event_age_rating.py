@@ -105,6 +105,7 @@ class AgeRatingDecision:
     rubric_version: str = DEFAULT_RUBRIC_VERSION
     input_hash: str | None = None
     assessment_engine: str | None = None
+    run_id: str | None = None
 
 
 def utc_now() -> datetime:
@@ -312,12 +313,14 @@ def apply_age_decision(event: Any, decision: AgeRatingDecision, *, now: datetime
             "age_restriction_decision_version",
             "age_restriction_input_hash",
             "age_assessment",
+            "age_assessment_status",
             "age_assessment_provenance",
             "age_assessment_confidence",
             "age_assessment_evidence",
             "age_assessment_decision_version",
             "age_assessment_input_hash",
             "age_assessment_engine",
+            "age_assessment_run_id",
         )
     )
 
@@ -334,12 +337,14 @@ def apply_age_decision(event: Any, decision: AgeRatingDecision, *, now: datetime
         event.age_restriction_input_hash = decision.input_hash
     elif decision.status == "assessed":
         event.age_assessment = decision.value
+        event.age_assessment_status = "assessed"
         event.age_assessment_provenance = decision.provenance
         event.age_assessment_confidence = decision.confidence
         event.age_assessment_evidence = decision.evidence
         event.age_assessment_decision_version = decision.decision_version
         event.age_assessment_input_hash = decision.input_hash
         event.age_assessment_engine = decision.assessment_engine
+        event.age_assessment_run_id = decision.run_id
         if not getattr(event, "age_restriction", None) and not manual:
             event.age_restriction_status = "assessed"
     elif decision.status == "conflict" and not manual:
@@ -362,6 +367,9 @@ def apply_age_decision(event: Any, decision: AgeRatingDecision, *, now: datetime
             event.age_restriction_status = decision.status
             event.age_restriction_decision_version = decision.decision_version
             event.age_restriction_input_hash = decision.input_hash
+        if not getattr(event, "age_assessment", None):
+            event.age_assessment_status = decision.status
+            event.age_assessment_input_hash = decision.input_hash
 
     after = tuple(
         getattr(event, name, None)
@@ -375,17 +383,27 @@ def apply_age_decision(event: Any, decision: AgeRatingDecision, *, now: datetime
             "age_restriction_decision_version",
             "age_restriction_input_hash",
             "age_assessment",
+            "age_assessment_status",
             "age_assessment_provenance",
             "age_assessment_confidence",
             "age_assessment_evidence",
             "age_assessment_decision_version",
             "age_assessment_input_hash",
             "age_assessment_engine",
+            "age_assessment_run_id",
         )
     )
     changed = before != after
     if changed:
-        event.age_restriction_updated_at = now or utc_now()
+        changed_at = now or utc_now()
+        event.age_restriction_updated_at = changed_at
+        if decision.status in {
+            "assessed",
+            "insufficient_evidence",
+            "unknown",
+            "budget_deferred",
+        }:
+            event.age_assessment_updated_at = changed_at
     return changed
 
 

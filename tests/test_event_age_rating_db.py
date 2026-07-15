@@ -26,11 +26,15 @@ async def test_event_age_columns_and_roundtrip(tmp_path):
         "age_restriction_provenance",
         "age_restriction_evidence",
         "age_assessment",
+        "age_assessment_status",
         "age_assessment_evidence",
+        "age_assessment_run_id",
+        "age_assessment_updated_at",
     }
     assert required <= columns.keys()
     assert columns["age_restriction"][4] is None
     assert columns["age_restriction_status"][4] == "'unknown'"
+    assert columns["age_assessment_status"][4] == "'not_scheduled'"
     async with db.get_session() as session:
         event = Event(
             title="T",
