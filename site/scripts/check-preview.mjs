@@ -66,6 +66,7 @@ for (const rel of serviceShareFamilyPaths) {
     'Поделиться',
     configuredServiceShareLabel,
     'aria-live="polite"',
+    '<noscript>',
   ]) {
     if (!footer.includes(marker)) throw new Error(`F18 ${rel} footer misses marker: ${marker}`);
   }

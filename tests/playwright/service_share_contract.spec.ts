@@ -247,3 +247,13 @@ test('common page families expose only the footer placement', async ({ page }) =
     await expect(page.locator('.site-header [data-service-share-root]'), path).toHaveCount(0);
   }
 });
+
+test('no-JS footer keeps an ordinary selectable canonical link', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  await page.goto(withPathPrefix('/__preview/'), { waitUntil: 'domcontentloaded', timeout: 15_000 });
+  const link = page.locator('.site-footer noscript a[href="https://kenigevents.ru/"]');
+  await expect(link).toBeVisible();
+  await expect(link).toHaveText(CANONICAL_URL);
+  await context.close();
+});
