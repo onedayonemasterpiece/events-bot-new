@@ -104,7 +104,9 @@ test('expanded scenario deck is discoverable; Replay, session state, Play all an
   await page.reload({ waitUntil: 'domcontentloaded' });
   await openDock(page);
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete');
-  await expect(page.locator('[data-playback-status]')).toContainText('Уже показано');
+  await expect(page.locator('[data-playback-status]')).toContainText('Пауза для чтения');
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('frequently_forwarded');
+  await expect(page.locator('[data-chain-progress]')).toContainText('2/3');
   await page.locator('[data-pace="slow"]').click();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await page.locator('[data-replay]').click();
@@ -146,7 +148,7 @@ test('hero, categories and contextual feed geometry hold across every scenario a
             .flatMap((node) => [...node.getClientRects()].map((rect) => Math.round(rect.y)));
           return {
             stage: rect('[data-briefing-slot]'), categoriesBox: rect('[data-briefing-categories]'), feedHeading: rect('.briefing-context-feed__heading'),
-            stageFits: stage.scrollHeight <= stage.clientHeight && stage.scrollWidth <= stage.clientWidth,
+            stageFits: stage.scrollHeight <= stage.clientHeight && (stage.dataset.mediaMode === 'wide' || stage.scrollWidth <= stage.clientWidth),
             messageFits: message.scrollHeight <= message.clientHeight && message.scrollWidth <= message.clientWidth,
             categories, bodyWidth: document.body.scrollWidth, innerWidth,
             lineCount: new Set(fragmentLineYs).size,
@@ -207,7 +209,8 @@ test('local queue memory, verified actions, pace preference, exact O and non-lin
   await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-ready', 'true');
   await expect(page).not.toHaveURL(/scenario=/u);
 
-  await page.locator('[data-pace-select]').selectOption('slow');
+  await openDock(page);
+  await page.locator('[data-pace="slow"]').click();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ke-briefing-lab-prefs-v1') || '{}').pace)).toBe('slow');
   await page.goto(`${baseUrl}?variant=c`, { waitUntil: 'domcontentloaded' });
   expect((await labState(page)).pace).toBe('slow');
@@ -312,14 +315,26 @@ test('lab remains noindex and performs no remote telemetry', async ({ page }) =>
   expect(await page.evaluate(() => (window as any).__briefingTelemetry.length)).toBeLessThanOrEqual(24);
 });
 
-test('page is homepage-like, public Next follows a chain and named guest is explicit and linked', async ({ browser }) => {
+test('page is clean, finite narrative chain advances automatically, and public Next appears only after stop', async ({ browser }) => {
   const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
-  await open(page, 'b', 'anticipated_person');
+  await open(page, 'c', 'greeting_day', '&replay=1&pace=fast');
   await expect(page.locator('[data-lab-review-bar]')).toHaveCount(0);
   await expect(page.locator('[data-lab-dock] > details')).not.toHaveAttribute('open', '');
+  await expect(page.locator('[data-briefing-slot] [data-progress], [data-briefing-slot] [data-demo-label], [data-briefing-slot] [data-pause], [data-briefing-slot] [data-pace], [data-briefing-slot] [data-pace-select]')).toHaveCount(0);
   const publicNext = page.locator('[data-public-next]');
   await expect(publicNext).toHaveText('Показать следующее');
+  await expect(publicNext).toBeHidden();
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('today_count');
+  await expect(publicNext).toBeHidden();
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('frequently_forwarded');
+  await expect(publicNext).toBeVisible({ timeout: 2500 });
   expect((await publicNext.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await publicNext.click();
+  await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'anticipated_person');
+  await expect(publicNext).toBeHidden();
+
+  await open(page, 'b', 'anticipated_person');
+  await expect(publicNext).toBeVisible();
   await publicNext.click();
   await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'anticipated_person_named');
   await expect(page.locator('[data-message]')).toContainText('Татьяна Куртукова');
@@ -329,7 +344,7 @@ test('page is homepage-like, public Next follows a chain and named guest is expl
   await context.close();
 });
 
-test('selected media is desktop-only, wide media exits, and reduced motion stays static', async ({ browser }) => {
+test('selected media is desktop-only, wide media belongs to viewport, exits, and reduced motion stays static', async ({ browser }) => {
   const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#b56b45"/></svg>';
   const desktop = await freshPage(browser, { width: 1440, height: 900 });
   await desktop.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
@@ -350,9 +365,27 @@ test('selected media is desktop-only, wide media exits, and reduced motion stays
 
   const wide = await freshPage(browser, { width: 1440, height: 900 });
   await wide.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(wide.page, 'b', 'rare_event');
+  await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  const wideGeometry = await wide.page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const stage = box('[data-briefing-slot]');
+    const media = box('[data-narrative-media]');
+    const message = box('[data-briefing]');
+    const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
+    return { stage: stage.toJSON(), media: media.toJSON(), message: message.toJSON(), borderRadius: style.borderRadius, boxShadow: style.boxShadow, innerWidth, innerHeight };
+  });
+  expect(wideGeometry.stage.x).toBeLessThanOrEqual(1);
+  expect(Math.abs(wideGeometry.stage.right - wideGeometry.innerWidth)).toBeLessThanOrEqual(1);
+  expect(wideGeometry.stage.height).toBeLessThanOrEqual(wideGeometry.innerHeight * .5);
+  expect(wideGeometry.media.width).toBeGreaterThanOrEqual(wideGeometry.innerWidth * .6);
+  expect(Math.abs(wideGeometry.media.right - wideGeometry.innerWidth)).toBeLessThanOrEqual(1);
+  expect(wideGeometry.message.left).toBeLessThanOrEqual(32);
+  expect(wideGeometry.borderRadius).toBe('0px');
+  expect(wideGeometry.boxShadow).toBe('none');
   await open(wide.page, 'c', 'rare_event', '&replay=1&pace=fast');
   await expect(wide.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
-  await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await wide.page.evaluate(() => (window as any).__briefingLab.pause());
   const categoriesTopWithMedia = (await wide.page.locator('[data-briefing-categories]').boundingBox())!.y;
   await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 5000 });
   const categoriesTopAfterExit = (await wide.page.locator('[data-briefing-categories]').boundingBox())!.y;

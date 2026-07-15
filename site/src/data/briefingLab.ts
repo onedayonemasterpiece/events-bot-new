@@ -27,7 +27,7 @@ export type BriefingLabScenario = {
   demoValidUntil?: string;
   cursor: BriefingLabCursor;
   nextScenarioId?: string;
-  media?: { eventId: number; mode: BriefingLabMediaMode };
+  media?: { eventId: number; mode: BriefingLabMediaMode; assetSourceOrder?: number };
 };
 
 // Fixed lab fixtures, never live production claims. Scenarios marked as a
@@ -39,7 +39,7 @@ export const briefingLabScenarios = [
       { text: 'Сегодня —' }, { text: '18 идей.', accent: true, breakAfter: true, href: '/segodnya/' },
       { text: 'Какая' }, { text: 'зацепит вас?' },
     ],
-    ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/',
+    ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/', nextScenarioId: 'frequently_forwarded',
   },
   {
     id: 'tomorrow_count', label: 'Завтра', family: 'count', cooldownDays: 1, cursor: 'underscore',
@@ -47,7 +47,7 @@ export const briefingLabScenarios = [
       { text: 'Завтра —' }, { text: '12 поводов', accent: true, breakAfter: true, href: '/zavtra/' },
       { text: 'выйти' }, { text: 'из дома.' },
     ],
-    ctaLabel: 'Заглянуть в завтра', ctaHref: '/zavtra/',
+    ctaLabel: 'Заглянуть в завтра', ctaHref: '/zavtra/', nextScenarioId: 'anticipated_person',
   },
   {
     id: 'weekend_count', label: 'Выходные', family: 'count', cooldownDays: 1, cursor: 'bar',
@@ -55,7 +55,7 @@ export const briefingLabScenarios = [
       { text: '24 идеи', accent: true, href: '/vyhodnye/' }, { text: 'на выходные.', breakAfter: true },
       { text: 'С чего' }, { text: 'начнём?' },
     ],
-    ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/',
+    ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/', nextScenarioId: 'weather_water_demo',
   },
   {
     id: 'greeting_day', label: 'Добрый день', family: 'welcome', cooldownDays: 1, cursor: 'bar',
@@ -63,7 +63,7 @@ export const briefingLabScenarios = [
       { text: 'Добрый день!', accent: true, breakAfter: true },
       { text: 'Что сегодня' }, { text: 'вас удивит?' },
     ],
-    ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/',
+    ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/', nextScenarioId: 'today_count',
   },
   {
     id: 'local_keska', label: 'По-калининградски', family: 'welcome', cooldownDays: 60, maxExposuresPerYear: 3, cursor: 'underscore',
@@ -72,7 +72,7 @@ export const briefingLabScenarios = [
       { text: 'по-калининградски.', accent: true, breakAfter: true },
       { text: 'И скажем' }, { text: '«кеска».' },
     ],
-    ctaLabel: 'Найти повод выйти', ctaHref: '/segodnya/',
+    ctaLabel: 'Найти повод выйти', ctaHref: '/segodnya/', nextScenarioId: 'festival_demo',
   },
   {
     id: 'smart_search_education', label: 'Умный поиск', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3, cursor: 'bar',
@@ -80,7 +80,7 @@ export const briefingLabScenarios = [
       { text: 'Можно просто спросить:', breakAfter: true },
       { text: '«Куда с ребёнком?»', accent: true, href: '/poisk/' },
     ],
-    ctaLabel: 'Попробовать умный поиск', ctaHref: '/poisk/',
+    ctaLabel: 'Попробовать умный поиск', ctaHref: '/poisk/', nextScenarioId: 'share_education',
   },
   {
     id: 'share_education', label: 'Как поделиться', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
@@ -89,7 +89,7 @@ export const briefingLabScenarios = [
       { text: 'Есть' }, { text: 'с кем пойти?', accent: true, breakAfter: true },
       { text: 'Нажмите' }, { text: '«Поделиться».' },
     ],
-    ctaLabel: 'Показать в ленте', ctaHref: '#events',
+    ctaLabel: 'Показать в ленте', ctaHref: '#events', nextScenarioId: 'like_education',
   },
   {
     id: 'like_education', label: 'Зачем ставить лайк', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
@@ -98,7 +98,7 @@ export const briefingLabScenarios = [
       { text: 'Событие' }, { text: 'понравилось?', accent: true, breakAfter: true },
       { text: 'Отметьте' }, { text: 'сердцем.' },
     ],
-    ctaLabel: 'Показать в ленте', ctaHref: '#events',
+    ctaLabel: 'Показать в ленте', ctaHref: '#events', nextScenarioId: 'not_interested_education',
   },
   {
     id: 'not_interested_education', label: 'Не моё', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
@@ -107,7 +107,7 @@ export const briefingLabScenarios = [
       { text: 'Не ваше?', accent: true, breakAfter: true },
       { text: 'Нажмите' }, { text: '«Не интересно».' },
     ],
-    ctaLabel: 'Показать в ленте', ctaHref: '#events',
+    ctaLabel: 'Показать в ленте', ctaHref: '#events', nextScenarioId: 'smart_search_education',
   },
   {
     id: 'frequently_forwarded', label: 'Часто пересылают', family: 'signal', cooldownDays: 14,
@@ -116,7 +116,7 @@ export const briefingLabScenarios = [
       { text: 'Это событие' }, { text: 'часто пересылают.', accent: true, breakAfter: true },
       { text: 'Что в нём' }, { text: 'нашли?' },
     ],
-    ctaLabel: 'Узнать, что там', ctaHref: '/populyarnoe/',
+    ctaLabel: 'Узнать, что там', ctaHref: '/populyarnoe/', nextScenarioId: 'anticipated_person',
   },
   {
     id: 'anticipated_person', label: 'Кого особенно ждут', family: 'signal', cooldownDays: 30,
@@ -136,16 +136,16 @@ export const briefingLabScenarios = [
       { text: 'Пойдём?' },
     ],
     ctaLabel: 'Посмотреть концерт', ctaEventId: 6020,
-    media: { eventId: 6020, mode: 'small' },
+    media: { eventId: 6020, mode: 'small' }, nextScenarioId: 'rare_event',
   },
   {
     id: 'rare_event', label: 'Редкое событие', family: 'signal', cooldownDays: 30, cursor: 'underscore',
     fragments: [
-      { text: 'Редкий фонд', accent: true, eventId: 6607, breakAfter: true },
-      { text: 'Открывают редко.', breakAfter: true }, { text: 'Заглянем?' },
+      { text: 'Редкий формат:', breakAfter: true },
+      { text: 'Вертинский.', accent: true, eventId: 5373 }, { text: 'Идём?' },
     ],
-    ctaLabel: 'Открыть редкое событие', ctaEventId: 6607,
-    media: { eventId: 6607, mode: 'wide' },
+    ctaLabel: 'Открыть кабаре', ctaEventId: 5373, nextScenarioId: 'festival_demo',
+    media: { eventId: 5373, mode: 'wide', assetSourceOrder: 3 },
   },
   {
     id: 'weather_water_demo', label: 'Погода → вода', family: 'signal', cooldownDays: 7,
@@ -163,7 +163,7 @@ export const briefingLabScenarios = [
       { text: 'Допустим:' }, { text: 'фестиваль идёт.', accent: true, breakAfter: true },
       { text: 'Что ещё' }, { text: 'успеем?' },
     ],
-    ctaLabel: 'Посмотреть фестивали', ctaHref: '/poisk/',
+    ctaLabel: 'Посмотреть фестивали', ctaHref: '/poisk/', nextScenarioId: 'unusual_format_demo',
   },
   {
     id: 'unusual_format_demo', label: 'Необычный формат', family: 'signal', cooldownDays: 14,
@@ -172,7 +172,7 @@ export const briefingLabScenarios = [
       { text: 'Иногда план —', breakAfter: true },
       { text: 'паблик-ток.', accent: true }, { text: 'Послушаем город?' },
     ],
-    ctaLabel: 'Найти необычное', ctaHref: '/poisk/',
+    ctaLabel: 'Найти необычное', ctaHref: '/poisk/', nextScenarioId: 'weekend_count',
   },
 ] as const satisfies readonly BriefingLabScenario[];
 

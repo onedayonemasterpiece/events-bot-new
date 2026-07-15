@@ -24,7 +24,8 @@ const eventHref = (eventId: number) => {
 };
 const resolveScenario = (item: BriefingLabScenario) => {
   const mediaEvent = item.media ? byId.get(item.media.eventId) : undefined;
-  const mediaAsset = mediaEvent?.image_assets?.find((asset) => asset.safe_crop && asset.recommended_hero_fit === 'cover')
+  const mediaAsset = mediaEvent?.image_assets?.find((asset) => asset.source_order === item.media?.assetSourceOrder && asset.safe_crop && asset.recommended_hero_fit === 'cover')
+    || mediaEvent?.image_assets?.find((asset) => asset.safe_crop && asset.recommended_hero_fit === 'cover')
     || mediaEvent?.image_assets?.find((asset) => asset.safe_crop)
     || undefined;
   return {
@@ -58,11 +59,6 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         <div class="briefing-stage__media" data-narrative-media aria-hidden="true">
           <a data-media-link tabindex="-1"><img data-media-image alt="" /></a>
         </div>
-        <div class="briefing-stage__meta">
-          <span>КАЛИНИНГРАД · ГОРОДСКОЙ ОБЗОР</span>
-          <span class="briefing-stage__demo" data-demo-label>DEMO-ДАННЫЕ</span>
-          <span data-progress={`1 из ${scenarioCount}`}>1 из {scenarioCount}</span>
-        </div>
         <div class="briefing-stage__message" data-briefing data-motion="complete" aria-live="off">
           <h1 data-message>
             {scenario.fragments.map((fragment, index) => (
@@ -76,21 +72,9 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
               </>
             ))}
           </h1>
-          <a href={scenario.ctaHref} class="briefing-stage__cta" data-scenario-cta>{scenario.ctaLabel} <span aria-hidden="true">↗</span></a>
-        </div>
-        <div class="briefing-stage__controls" aria-label="Управление рассказом">
-          <button type="button" data-pause><span data-pause-label>Пауза</span></button>
-          <button type="button" class="briefing-stage__next" data-public-next>Показать следующее</button>
-          <span class="briefing-stage__status" data-playback-status>Готово</span>
-          <div class="pace-control" role="group" aria-label="Темп показа">
-            <select data-pace-select aria-label="Темп показа">
-              <option value="slow">Медленнее</option>
-              <option value="normal">Обычно</option>
-              <option value="fast">Быстрее</option>
-            </select>
-            <button type="button" data-pace="slow">Медленнее</button>
-            <button type="button" data-pace="normal" aria-pressed="true">Обычно</button>
-            <button type="button" data-pace="fast">Быстрее</button>
+          <div class="briefing-stage__actions">
+            <a href={scenario.ctaHref} class="briefing-stage__cta" data-scenario-cta>{scenario.ctaLabel} <span aria-hidden="true">↗</span></a>
+            <button type="button" class="briefing-stage__next" data-public-next hidden>Показать следующее</button>
           </div>
         </div>
       </section>
@@ -115,6 +99,12 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         <details>
           <summary>LAB · управление</summary>
           <div class="lab-dock__panel">
+            <div class="lab-state" aria-label="Состояние сценария">
+              <span data-demo-label>DEMO-ДАННЫЕ</span>
+              <span data-progress={`1 из ${scenarioCount}`}>1 из {scenarioCount}</span>
+              <span data-chain-progress>цепочка 1/3</span>
+              <span data-playback-status>Готово</span>
+            </div>
             <div class="lab-variants" role="group" aria-label="Вариант прототипа">
               <a href="?variant=a" data-variant-switch="control">A</a>
               <a href="?variant=b" data-variant-switch="static">B</a>
@@ -131,6 +121,17 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
               <button type="button" data-previous>← Предыдущий</button>
               <button type="button" data-replay>↻ Повторить</button>
               <button type="button" data-play-all>▶ Показать все {scenarioCount}</button>
+              <button type="button" data-pause aria-pressed="false"><span data-pause-label>Пауза</span></button>
+            </div>
+            <div class="pace-control" role="group" aria-label="Темп показа">
+              <button type="button" data-pace="slow">Медленнее</button>
+              <button type="button" data-pace="normal" aria-pressed="true">Обычно</button>
+              <button type="button" data-pace="fast">Быстрее</button>
+              <select data-pace-select aria-label="Темп показа">
+                <option value="slow">Медленнее</option>
+                <option value="normal">Обычно</option>
+                <option value="fast">Быстрее</option>
+              </select>
             </div>
             <details data-review-guide>
               <summary>Что оценивать</summary>
@@ -148,7 +149,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   </main>
 
   <script type="application/json" id="briefing-lab-scenarios" set:html={JSON.stringify(scenarios)} />
-  <noscript><style>.lab-dock, .briefing-stage__controls { display: none !important; }</style></noscript>
+  <noscript><style>.lab-dock, [data-public-next] { display: none !important; }</style></noscript>
   <script is:inline>
     (() => {
       const lab = document.querySelector('[data-briefing-lab]');
@@ -237,6 +238,8 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       let ignoreOutOfViewUntil = 0;
       let running = false;
       let deckPlaying = params.get('autoplay') === '1';
+      const AUTO_CHAIN_LIMIT = 3;
+      let autoChainStep = 1;
       let explicitPaused = false;
       let hoverPaused = false;
       let focusPaused = false;
@@ -277,8 +280,17 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const updateProgress = () => {
         const pos = deck.findIndex((item) => item.id === currentScenario.id);
         lab.querySelector('[data-progress]').textContent = pos >= 0 ? `${pos + 1} из ${deck.length}` : 'Fallback';
+        const chain = lab.querySelector('[data-chain-progress]');
+        if (chain) chain.textContent = deckPlaying ? 'LAB · весь банк' : `цепочка ${autoChainStep}/${AUTO_CHAIN_LIMIT}`;
         const select = lab.querySelector('[data-scenario-select]'); if (select) select.value = currentScenario.id;
         lab.dataset.briefingScenarioId = currentScenario.id;
+      };
+      const setPublicNext = (visible) => {
+        const button = lab.querySelector('[data-public-next]');
+        if (!button) return;
+        button.hidden = !visible;
+        button.setAttribute('aria-hidden', String(!visible));
+        stage.dataset.chainState = visible ? 'stopped' : 'active';
       };
       const syncPaceControls = () => {
         lab.querySelectorAll('[data-pace]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.pace === pace)));
@@ -341,6 +353,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       };
       const renderMessage = () => {
         clearTimeout(exposureTimer); exposureTimer = 0;
+        setPublicNext(false);
         message.replaceChildren();
         currentScenario.fragments.forEach((fragment, index) => {
           message.append(makeFragment(fragment, index));
@@ -362,12 +375,37 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const rememberReveal = () => { try { sessionStorage.setItem(revealKey, 'complete'); } catch (_) {} };
       const scheduleAdvance = () => {
         clearTimeout(advanceTimer);
-        if (!deckPlaying || explicitPaused || hoverPaused || focusPaused || reduced.matches) return;
+        setPublicNext(false);
+        if (explicitPaused || hoverPaused || focusPaused) return;
+        if (variant !== 'reveal' || reduced.matches) {
+          deckPlaying = false;
+          setPublicNext(true);
+          updateStatus(reduced.matches ? 'Без анимации · цепочка остановлена' : 'Статичный вариант');
+          return;
+        }
         const hold = { slow: 5200, normal: 3600, fast: 2400 }[pace];
+        if (!deckPlaying) {
+          const chained = currentScenario.nextScenarioId ? deck.findIndex((item) => item.id === currentScenario.nextScenarioId) : -1;
+          if (autoChainStep >= AUTO_CHAIN_LIMIT || chained < 0) {
+            setPublicNext(true);
+            updateStatus(reduced.matches ? 'Без анимации · цепочка остановлена' : 'Цепочка остановлена');
+            emit('briefing_chain_stop', { chain_step: autoChainStep });
+            return;
+          }
+          updateStatus(`Пауза для чтения · ${autoChainStep}/${AUTO_CHAIN_LIMIT}`);
+          advanceTimer = setTimeout(() => {
+            current = chained;
+            currentScenario = deck[current];
+            autoChainStep += 1;
+            automaticExposureCandidate = false;
+            startReveal({ force: true, reason: 'chain_next' });
+          }, hold);
+          return;
+        }
         advanceTimer = setTimeout(() => {
           completedDeckIndexes.add(current);
           if (completedDeckIndexes.size >= deck.length) {
-            deckPlaying = false; updateStatus(`Все ${deck.length} показаны`); emit('deck_complete'); return;
+            deckPlaying = false; setPublicNext(true); updateStatus(`Все ${deck.length} показаны`); emit('deck_complete'); return;
           }
           current = (current + 1) % deck.length;
           while (completedDeckIndexes.has(current)) current = (current + 1) % deck.length;
@@ -385,8 +423,8 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         scheduleAdvance();
       };
       const startReveal = ({ force = false, reason = 'replay' } = {}) => {
-        clearMotionTimers(); renderMessage();
-        if (variant !== 'reveal' || reduced.matches) { briefing.dataset.motion = 'complete'; showAllFragments(); updateStatus(reduced.matches ? 'Без анимации' : 'Статичный вариант'); return; }
+        clearMotionTimers(); setPublicNext(false); renderMessage();
+        if (variant !== 'reveal' || reduced.matches) { briefing.dataset.motion = 'complete'; showAllFragments(); updateStatus(reduced.matches ? 'Без анимации' : 'Статичный вариант'); scheduleAdvance(); return; }
         if (!force) {
           try { if (sessionStorage.getItem(revealKey) === 'complete' && params.get('replay') !== '1') return complete('session_complete', { remember: false }); } catch (_) {}
         }
@@ -421,6 +459,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         preserveAutomaticUrl = false;
         const chained = followChain && step > 0 && currentScenario.nextScenarioId ? deck.findIndex((item) => item.id === currentScenario.nextScenarioId) : -1;
         current = chained >= 0 ? chained : (current + step + deck.length) % deck.length;
+        autoChainStep = 1;
         currentScenario = deck[current]; automaticExposureCandidate = false; startReveal({ force: true, reason: step > 0 ? 'next' : 'previous' });
       };
 
@@ -443,12 +482,12 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         const next = byId.get(event.target.value) || byId.get('neutral_fallback');
         runFromDock(() => {
           currentScenario = next; current = Math.max(0, deck.findIndex((item) => item.id === next.id));
-          preserveAutomaticUrl = false; automaticExposureCandidate = false; deckPlaying = false; completedDeckIndexes.clear(); startReveal({ force: true, reason: 'scenario_select' });
+          preserveAutomaticUrl = false; automaticExposureCandidate = false; deckPlaying = false; autoChainStep = 1; completedDeckIndexes.clear(); startReveal({ force: true, reason: 'scenario_select' });
         });
       });
-      lab.querySelector('[data-replay]')?.addEventListener('click', () => runFromDock(() => { automaticExposureCandidate = false; startReveal({ force: true, reason: 'manual_replay' }); }));
+      lab.querySelector('[data-replay]')?.addEventListener('click', () => runFromDock(() => { automaticExposureCandidate = false; deckPlaying = false; autoChainStep = 1; startReveal({ force: true, reason: 'manual_replay' }); }));
       lab.querySelector('[data-play-all]')?.addEventListener('click', () => {
-        runFromDock(() => { preserveAutomaticUrl = false; automaticExposureCandidate = false; deckPlaying = true; completedDeckIndexes.clear(); current = 0; currentScenario = deck[0]; startReveal({ force: true, reason: 'play_all' }); });
+        runFromDock(() => { preserveAutomaticUrl = false; automaticExposureCandidate = false; deckPlaying = true; autoChainStep = 1; completedDeckIndexes.clear(); current = 0; currentScenario = deck[0]; startReveal({ force: true, reason: 'play_all' }); });
       });
       lab.querySelector('[data-previous]')?.addEventListener('click', () => runFromDock(() => move(-1)));
       lab.querySelector('[data-public-next]')?.addEventListener('click', () => move(1, true));
@@ -495,7 +534,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
       });
-      window.__briefingLab = { replay: () => { automaticExposureCandidate = false; startReveal({ force: true }); }, next: () => move(1, true), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, deckPlaying, paused: explicitPaused || hoverPaused || focusPaused, pace, memory: cleanMemory(memory) }) };
+      window.__briefingLab = { replay: () => { automaticExposureCandidate = false; autoChainStep = 1; startReveal({ force: true }); }, next: () => move(1, true), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, chainStep: autoChainStep, chainState: stage.dataset.chainState, deckPlaying, paused: explicitPaused || hoverPaused || focusPaused, pace, memory: cleanMemory(memory) }) };
       lab.dataset.briefingReady = 'true';
     })();
   </script>
@@ -506,6 +545,8 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   .lab-dock > details > summary { width: fit-content; color: var(--muted); font: 800 .66rem/1.1 ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; }
   .lab-dock__panel { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-top: .55rem; padding: .7rem; border: 1px solid var(--line); background: rgba(255,253,248,.72); }
   .lab-dock__actions, .lab-variants { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+  .lab-state { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: .35rem .7rem; color: var(--muted); font: 800 .66rem/1.2 ui-monospace, monospace; letter-spacing: .045em; text-transform: uppercase; }
+  .lab-state [data-demo-label] { color: var(--primary-strong); }
   .lab-variants a, .lab-dock button, .lab-dock [data-review-guide] > summary, .lab-scenario-select select { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: .35rem .65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: 800 .75rem/1.1 inherit; text-decoration: none; cursor: pointer; }
   .lab-variants a[aria-current="page"] { background: var(--text); color: #fff; border-color: var(--text); }
   .lab-scenario-select { display: flex; align-items: center; gap: .35rem; color: var(--muted); font-size: .72rem; font-weight: 800; }
@@ -516,12 +557,9 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   .lab-dock .review-guide__content { position: static; margin-top: .45rem; box-shadow: none; }
   .review-guide__content ol { margin: .5rem 0; padding-left: 1.25rem; }
   .review-guide__content p { margin: .5rem 0; color: var(--muted); }
-  .briefing-stage { position: relative; height: min(42svh, 250px); min-height: 220px; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; gap: .35rem; padding: .65rem 0 .55rem; border-bottom: 2px solid var(--text); background: linear-gradient(100deg, rgba(165,72,33,.07), transparent 58%); isolation: isolate; }
+  .briefing-stage { position: relative; height: min(42svh, 250px); min-height: 220px; overflow: hidden; display: grid; grid-template-rows: 1fr; align-items: center; padding: .65rem 0; background: linear-gradient(100deg, rgba(165,72,33,.07), transparent 58%); isolation: isolate; }
   .briefing-stage__brand-o { position: absolute; z-index: -1; right: 0; top: 8%; width: min(75vw, 18rem); height: auto; opacity: .055; overflow: visible; transform: none; }
   .briefing-stage__media { display: none; }
-  .briefing-stage__meta { position: relative; z-index: 3; display: flex; align-items: center; gap: .45rem; color: var(--muted); font: 800 .61rem/1.1 ui-monospace, monospace; letter-spacing: .065em; }
-  .briefing-stage__meta [data-progress] { margin-left: auto; color: var(--text); }
-  .briefing-stage__demo { padding: .18rem .32rem; background: rgba(165,72,33,.12); color: var(--primary-strong); }
   .briefing-stage__message { position: relative; z-index: 2; align-self: center; min-width: 0; }
   .briefing-stage__message h1 { max-width: 20ch; min-height: 2.05em; margin: 0; padding-bottom: .12em; font-size: clamp(1.72rem, 8.5vw, 2.12rem); font-weight: 820; line-height: 1; letter-spacing: -.045em; text-wrap: wrap; }
   .briefing-fragment { position: relative; display: inline; color: inherit; text-decoration: none; }
@@ -531,18 +569,12 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
   [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-visible { opacity: 1; transform: none; filter: none; }
   [data-briefing-variant="reveal"] [data-motion="running"] .briefing-fragment.is-active::after { content: ""; display: inline-block; width: .11em; height: .78em; margin-left: .08em; background: var(--primary); animation: briefing-cursor 780ms step-end infinite; vertical-align: -.03em; }
   [data-briefing][data-cursor="underscore"] .briefing-fragment.is-active::after { width: .62em !important; height: .09em !important; vertical-align: -.12em !important; }
-  .briefing-stage__cta { display: inline-flex; margin-top: .28rem; color: var(--primary-strong); font-size: .78rem; font-weight: 900; text-underline-offset: .2em; }
-  .briefing-stage__controls { position: relative; z-index: 3; display: flex; align-items: center; gap: .35rem; min-width: 0; }
-  .briefing-stage__controls button { min-width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,248,.9); color: var(--text); font: 850 .72rem/1 inherit; cursor: pointer; }
-  .briefing-stage__controls .briefing-stage__next { width: auto; padding-inline: .78rem; background: var(--text); color: #fff; border-color: var(--text); }
-  .briefing-stage__status { display: none; color: var(--muted); font-size: .68rem; font-weight: 750; white-space: nowrap; }
-  .pace-control { display: flex; margin-left: auto; gap: .2rem; }
-  .pace-control select { display: block; min-width: 92px; min-height: 44px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,248,.9); color: var(--text); padding: 0 .55rem; font: 800 .72rem/1 inherit; }
-  .pace-control button { display: none; min-width: 44px; width: 44px; padding: 0; font-size: 0; }
-  .pace-control button::after { font-size: .72rem; }
-  .pace-control button[data-pace="slow"]::after { content: "−"; }
-  .pace-control button[data-pace="normal"]::after { content: "1×"; }
-  .pace-control button[data-pace="fast"]::after { content: "+"; }
+  .briefing-stage__actions { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; margin-top: .35rem; }
+  .briefing-stage__cta { display: inline-flex; color: var(--primary-strong); font-size: .78rem; font-weight: 900; text-underline-offset: .2em; }
+  .briefing-stage__next { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: .45rem .8rem; border: 1px solid var(--text); border-radius: 999px; background: var(--text); color: #fff; font: 850 .72rem/1 inherit; cursor: pointer; }
+  .briefing-stage__next[hidden] { display: none; }
+  .pace-control { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; }
+  .pace-control select { display: none; }
   .pace-control button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
   .briefing-categories { display: flex; flex-wrap: wrap; gap: .42rem; margin: .62rem 0 .72rem; }
   .briefing-categories a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: .45rem .72rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font-size: .78rem; font-weight: 850; text-decoration: none; }
@@ -555,27 +587,28 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
     .briefing-stage__brand-o { right: 2%; top: -22%; width: clamp(15rem, 34vw, 27rem); }
     .briefing-stage__message h1 { max-width: 24ch; min-height: 2em; font-size: clamp(3rem, 5vw, 4.5rem); line-height: .98; }
     .briefing-stage__cta { font-size: 1rem; }
-    .briefing-stage__status { display: inline; min-width: 7.5rem; }
-    .briefing-stage__controls button { min-height: 44px; }
-    .pace-control select { display: none; }
-    .pace-control button { display: block; width: auto; min-width: 44px; padding-inline: .65rem; font-size: .7rem; }
-    .pace-control button::after { display: none; }
     .briefing-categories { flex-wrap: nowrap; }
     .briefing-categories a { padding-inline: 1rem; }
   }
   @media (min-width: 1024px) {
-    .briefing-stage__media[data-media-mode] { position: absolute; z-index: 0; top: 2.05rem; right: 4%; bottom: 3.5rem; display: block; width: 64%; overflow: hidden; opacity: 0; transform: translateX(6%); transition: opacity 620ms cubic-bezier(.65,0,.35,1), transform 760ms cubic-bezier(.65,0,.35,1); pointer-events: none; }
+    .briefing-stage__media[data-media-mode] { position: absolute; z-index: 0; top: 0; right: 0; bottom: 0; display: block; width: 66vw; overflow: hidden; opacity: 0; transform: translateX(100%); transition: opacity 760ms cubic-bezier(.16,1,.3,1), transform 1100ms cubic-bezier(.16,1,.3,1); pointer-events: none; }
     .briefing-stage__media a, .briefing-stage__media img { display: block; width: 100%; height: 100%; }
     .briefing-stage__media img { object-fit: cover; object-position: center; }
-    .briefing-stage__media.is-present { opacity: .88; transform: none; pointer-events: auto; }
-    .briefing-stage__media.is-exiting { opacity: 0; transform: translateX(6%); pointer-events: none; }
+    .briefing-stage__media.is-present { opacity: .96; transform: none; pointer-events: auto; }
+    .briefing-stage__media.is-exiting { opacity: 0; transform: translateX(100%); pointer-events: none; }
     .briefing-stage__media.is-error { display: none; }
-    .briefing-stage__media[data-media-mode="small"] { top: 16%; right: 2%; bottom: 16%; width: clamp(190px, 25%, 290px); border-radius: .35rem; box-shadow: 0 16px 36px rgba(48,26,13,.17); }
-    .briefing-stage[data-media-mode="wide"] .briefing-stage__message { width: 42%; }
-    .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { font-size: clamp(2.8rem, 4vw, 3rem); }
+    [data-briefing-variant="static"] .briefing-stage__media { transition: none; }
+    .briefing-stage__media[data-media-mode="small"] { top: 14%; right: 2%; bottom: 14%; width: clamp(190px, 25%, 290px); border-radius: .35rem; box-shadow: 0 16px 36px rgba(48,26,13,.17); transform: translateX(35%); }
+    .briefing-stage__media[data-media-mode="small"].is-present { transform: none; }
+    .briefing-stage__media[data-media-mode="small"].is-exiting { transform: translateX(35%); }
+    .briefing-stage[data-media-mode="wide"] { box-sizing: border-box; width: 100vw; max-width: none; margin-left: calc(50% - 50vw); padding: 0 clamp(20px, 2.2vw, 32px); background: var(--background); }
+    .briefing-stage[data-media-mode="wide"] .briefing-stage__brand-o { display: none; }
+    .briefing-stage[data-media-mode="wide"] .briefing-stage__message { width: 40vw; max-width: 40vw; }
+    .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { font-size: clamp(2.8rem, 4vw, 3rem); line-height: 1.05; }
     .briefing-stage[data-media-mode="small"] .briefing-stage__message h1 { font-size: clamp(2.65rem, 3.6vw, 2.85rem); }
     .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { max-width: 100%; }
-    .briefing-stage[data-media-mode="wide"] .briefing-fragment { background: rgba(255,253,248,.94); box-shadow: .09em 0 0 rgba(255,253,248,.94), -.09em 0 0 rgba(255,253,248,.94); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .briefing-stage[data-media-mode="wide"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .briefing-stage[data-media-mode="wide"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
     .briefing-stage[data-media-mode="small"] .briefing-stage__message h1 { max-width: 68%; }
   }
   @media (max-width: 759px) {

@@ -1,6 +1,6 @@
 # Городской обзор на главной: минимальный prototype gate
 
-> **Status:** clean-home lab with an expanded narrative queue and optional desktop media; immutable review build is recorded below after each verified publication.
+> **Status:** clean-home lab with an expanded narrative queue, finite automatic chains and optional desktop media; immutable review build is recorded below after each verified publication.
 > **Implementation:** dedicated one-route build for `/lab/briefing/`; no production homepage integration.
 > **Production effect:** none; the lab is not linked from production navigation and is published only under an immutable preview prefix.
 > **Decision:** `GO_TO_PROTOTYPE_ONLY`.
@@ -87,10 +87,15 @@ Final immutable review build:
 - верх страницы выглядит как обычная главная: hero → категории → начало ленты;
   A/B/C, selector, replay, play-all, debug memory/telemetry вынесены в компактный
   collapsed `LAB · управление` внизу;
-- публичная кнопка `Показать следующее` следует deck/скомпилированному
-  `nextScenarioId` и не смешивается с лабораторным управлением;
+- meta/progress, pause и pace полностью удалены из public hero и существуют
+  только внутри закрытого нижнего LAB-dock;
+- Variant C сам проигрывает конечную цепочку максимум из трёх связанных сцен с
+  readable hold; публичная кнопка `Показать следующее` скрыта во время цепочки и
+  появляется только в terminal state;
 - на desktop named-person scene может показать небольшую афишу, а редкая сцена
-  — bounded wide-media easter egg справа; на mobile media не загружается;
+  — full-bleed wide-media easter egg: stage выходит из shared `max-width` на
+  `100vw`, media занимает `66vw` до правой границы окна без frame/radius/shadow,
+  text начинается в `20–32px` от левой границы; на mobile media не загружается;
 - законченная фраза больше не оставляет blinking cursor: bar/underscore виден
   только во время реального reveal;
 - декоративная «О» — отдельный source-faithful asset; составной path всего
@@ -109,9 +114,12 @@ request; desktop small/wide media, bounded exit, static/reduced-motion state и
 HTTP 200, 1–3 строки, `bodyWidth == viewportWidth`, закрытый LAB-dock и нулевые
 page errors на `320×568`, `390×844`, `1440×900`.
 
-Mobile review gate выполнен в Telegram topic `6`: task card `#44`, final URL
-`#51`, реальные `320×568`/`390×844` screenshots `#52–53`, motion evidence
-`#54`; post-send inspection новых входящих комментариев не обнаружил.
+Mobile review gate ведётся в Telegram topic `6`: прежние URL/screenshots/motion
+были доставлены как `#51–54`; пользовательские сообщения `#55–57` отвергли
+public meta/pause/pace, отсутствие automatic continuation и desktop
+frame-inside-frame. Комментарии и аннотированный screenshot были прочитаны до
+правки; receipt `#58` подтвердил Gemini gate и scope коррекции. Новые финальные
+mobile artifacts должны быть добавлены в этот же topic после immutable publish.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 
@@ -141,7 +149,7 @@ Variants:
 | `B · static` | весь короткий editorial briefing виден сразу | проверить ценность содержания |
 | `C · motion` | тот же текст проявляется 2–5 смысловыми фрагментами; курсор бывает вертикальным или underscore только во время reveal | проверить исходную коммуникационную механику |
 
-Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface оставляет `Пауза`, `Показать следующее` и темп, а collapsed LAB-dock после ленты содержит A/B/C, selector всех 16 сцен, `Повторить`, конечный `Показать все 16` и lab-only previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
+Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface содержит только narrative, его смысловой CTA и terminal-only `Показать следующее`. Collapsed LAB-dock после ленты содержит A/B/C, selector всех 16 сцен, progress/demo/status, pace, Pause, `Повторить`, конечный `Показать все 16` и previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
 
 ## Минимальная очередь нарративов
 
@@ -161,7 +169,7 @@ Lab содержит 16 видимых scenario IDs и universal fallback. Эт�
 | `frequently_forwarded` | bounded social signal, currently demo | `Это событие часто пересылают. Что в нём нашли?` | 14 дней |
 | `anticipated_person` | grounded public-comment signal, currently demo | `В комментариях ждут гостя. Угадаете кого?` | 30 дней |
 | `anticipated_person_named` | grounded fixture person/event | `В Светлогорск едет Татьяна Куртукова. Пойдём?` | 30 дней |
-| `rare_event` | grounded fixture title/event, lab editorial framing | `Редкий фонд. Открывают редко. Заглянем?` | 30 дней |
+| `rare_event` | grounded fixture event, lab editorial framing | `Редкий формат: Вертинский. Идём?` | 30 дней |
 | `weather_water_demo` | fixed future-signal demo; no provider data | `Допустим, на выходных ясно. Может, на воду?` | 7 дней |
 | `festival_demo` | fixed future-signal demo | `Представим: фестиваль уже идёт. Что ещё успеем?` | 7 дней |
 | `unusual_format_demo` | fixed format demo | `Иногда лучший план — паблик-ток. Послушаем город?` | 14 дней |
@@ -217,8 +225,10 @@ Contract:
 - optional `next_scenario_id` резолвится только в другой compiled eligible node;
 - optional media содержит canonical `event_id`, validated derivative и
   `small|wide` mode; отсутствие/ошибка media не инвалидирует text/link;
-- public `Показать следующее` — переход по compiled edge/queue, а не успех
-  CTA/action.
+- `next_scenario_id` задаёт automatic edge; runtime останавливает chain после
+  третьей сцены даже при циклическом графе;
+- public `Показать следующее` доступен только после terminal stop и начинает
+  новую bounded chain; это переход по compiled edge/queue, а не успех CTA/action.
 
 ## Layout gate
 
@@ -232,8 +242,11 @@ Contract:
 - production `EventLayout` и `EventListItem` оставлены только как масштабный фон, без уменьшения их размеров.
 - media существует только на desktop `≥1024px`, не меняет фиксированную
   высоту stage/позицию categories/feed и не получает `src` на mobile;
-- wide media занимает `60–66%` stage справа, text остаётся в левой колонке с
-  paper stripe; reduced-motion показывает статичное изображение без auto-exit.
+- wide media выводит только hero из shared container на `100vw`, занимает
+  `66vw` справа до физической границы viewport, не имеет border/radius/shadow;
+  text находится не далее `32px` от левой границы, а каждый перекрывающий media
+  fragment защищён клонированной paper stripe; reduced-motion показывает
+  статичное изображение без auto-exit.
 
 Автоматическая матрица проверяет все 16 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
 
@@ -272,9 +285,13 @@ The earlier full static build failed because the host filesystem was at `99–10
 - 4–5 semantic fragments appear with deterministic ease-out, not one whole-card wipe and not slow literal typing;
 - first fragment is visible immediately; total formation is about `0.9–1.5s` depending on `Медленнее / Обычно / Быстрее`;
 - terracotta cursor имеет два scenario-driven вида — вертикальный bar и горизонтальный underscore; после user-review blinking linger удалён: cursor исчезает вместе с active fragment при completion, а при reduced/static скрыт;
-- `Повторить` intentionally replays in lab without reload, while ordinary session reload shows `Уже показано · можно повторить`;
-- `Показать все 16` в LAB-dock plays each representative scenario once and stops; mobile remains manual unless the user explicitly starts the deck;
-- public `Показать следующее` и Pause/Continue остаются в hero; LAB-only Previous/Replay не создают впечатление production controls; progress is textual `N из 16`;
+- `Повторить` intentionally restarts the current bounded chain in lab without reload;
+- `Показать все 16` в LAB-dock remains a separate QA mode that plays each representative scenario once and stops;
+- обычный Variant C на desktop и mobile автоматически продолжает только
+  2–3 compiled scenes, затем останавливается; public `Показать следующее`
+  появляется лишь после stop;
+- Pause/Continue, pace, progress `N из 16`, DEMO/status, Previous/Replay и
+  Play-all являются LAB-only и отсутствуют в hero;
 - hover, focus, blank-area pointer interaction, hidden tab and BFCache finish the complete sentence and pause; links remain stable and activate on the first tap;
 - `prefers-reduced-motion` shows the complete current scene with manual controls and no auto-advance;
 - B has the exact same current message fully static; A removes only the communication surface.
@@ -394,7 +411,9 @@ A public experiment still needs baseline eligible sessions/open rate, unit of ra
 4. Hover, focus and pointer interaction complete the sentence and expose a stable paused state; Replay works intentionally.
 5. BFCache restore does not replay the reveal.
 6. Missing/stale/invalid facts select the neutral fallback.
-7. B/C retain identical scenario copy; C exposes distinct fragment states, finite play-all and three discrete pace controls without remote requests or CLS.
+7. B/C retain identical scenario copy; C exposes distinct fragment states, a
+   maximum-three-node automatic chain and terminal-only public Next; finite
+   play-all, Pause, progress and three discrete pace controls stay in LAB-dock.
 8. Eligible session, impression, completion/interruption, first-event visibility and source-side event activation are distinguishable in the local lab sink; no activation is mislabeled as destination `event_detail_open`.
 
 P1/P2 platform checks, the extended scenario platform, personalization, Gemini writer boundaries and the extended risk register are preserved only in the [post-validation backlog](../../backlog/features/static-typed-briefing/README.md).
@@ -407,9 +426,18 @@ Committed evidence:
 - [prompt v1](../../reports/static-typed-briefing-consultation-2026-07-15/prompt-v1.md);
 - [Gemini Part I](../../reports/static-typed-briefing-consultation-2026-07-15/gemini-part1.md);
 - [corrective prompt v2](../../reports/static-typed-briefing-consultation-2026-07-15/prompt-v2.md);
-- [Gemini Part II](../../reports/static-typed-briefing-consultation-2026-07-15/gemini-part2.md).
+- [Gemini Part II](../../reports/static-typed-briefing-consultation-2026-07-15/gemini-part2.md);
+- [focused rejected-media prompt and Gemini FAIL](../../reports/static-typed-briefing-consultation-2026-07-15/media-correction-gemini.md);
+- [post-change Gemini acceptance](../../reports/static-typed-briefing-consultation-2026-07-15/media-acceptance-gemini.md).
 
 The model was Antigravity/agy `Gemini 3.1 Pro (High)`, run twice as one correlated consultation thread from input commit `926dad8a91fc7f1070126d32a05281aa92ff1666`. Checksums and accepted/corrected/deferred decisions are in the evidence README.
+
+The later screenshot-specific correction gate used the same display model on
+2026-07-15 at 18:24–18:45 UTC. It rejected the nested-container version,
+confirmed the full-viewport replacement as `PASS WITH CONDITIONS`, and its two
+remaining implementation conditions (continuous paper protection and wrapped
+terminal actions) were applied. This is a visual prototype gate, not user or
+metric validation.
 
 ## External-audit traceability
 

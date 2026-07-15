@@ -125,9 +125,9 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 |---|---:|---:|---:|---:|---|
 | 1440×900 | 88 | 260 / 360 | 72 | 480 | типографика до 52px, лента видна существенно |
 | 1366×768 | 88 | 220 / 300 | 64 | 396 | не более 3 строк основного текста |
-| 390×844 | 96 | 196 / 300 | 64 | 488 | первая сцена статична, далее manual |
-| 360×800 | 96 | 180 / 280 | 64 | 460 | контролы одной строкой |
-| 320×568 | 96 | 136 / 220 | 48 | 288 | короткий copy variant, 2–3 строки, без status-перегруза |
+| 390×844 | 96 | 196 / 300 | 64 | 488 | bounded chain 2–3 scenes, без lab chrome |
+| 360×800 | 96 | 180 / 280 | 64 | 460 | narrative + CTA; terminal Next переносится |
+| 320×568 | 96 | 136 / 220 | 48 | 288 | короткий copy variant, 2–3 строки, без metadata/status |
 
 Значения — prototype targets, а не новые design-system tokens. Точный header берётся из approved `AnnouncementsLockup`, а не уменьшается ради hero.
 
@@ -135,11 +135,12 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 
 **Внутри обзора:**
 
-1. короткий видимый label `Городской обзор`;
-2. источник/основание (`Сегодня`, `С прошлого визита`, `Выбор редакции`) без технического шума;
-3. 1–3 строки, одна мысль, максимум две ссылки;
-4. `1 из N`, `Назад`, `Дальше`; `Пауза` только когда автоплей действительно включён;
-5. `Смотреть всю афишу` после последней сцены.
+1. 1–3 сильные строки, одна мысль, максимум две ссылки;
+2. смысловой CTA текущей сцены;
+3. terminal-only `Показать следующее` после остановки bounded chain.
+
+Label, demo flag, progress, pace, Pause/Continue, Previous/Replay и Play-all —
+LAB-only. Они не занимают public hero и не конкурируют с нарративом.
 
 **Снаружи и постоянно доступны:**
 
@@ -152,12 +153,10 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 
 ```text
 ┌ approved header / lockup ────────────── navigation + search ┐
-│ Городской обзор                         обновлено 8 минут назад │
-│                                                               │
 │ Пока вас не было, появилось                                  │
 │ 12 новых событий. Три — в разделе Живая музыка.              │
 │                                                               │
-│ Назад   1 из 3   Дальше                        Пауза           │
+│ Смотреть новые события ↗                                     │
 └───────────────────────────────────────────────────────────────┘
 [ Сегодня ] [ Завтра ] [ Выходные ] [ Выставки ] [ Популярное ]
 
@@ -165,22 +164,22 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 ┌ event card ┐ ┌ event card ┐ ...
 ```
 
-- flat/full-width inside shared content container;
+- flat/full-width; ordinary scenes follow the shared container, while rare
+  wide-media scenes let only the hero break out to `100vw`;
 - no border, shadow or dark terminal panel;
 - main copy `clamp(32px, 3.2vw, 52px)`, line-height `1.02–1.12`, max `28–38ch`;
 - links are terracotta, underline remains visible independently of color;
-- controls are secondary, each at least `44×44px`.
+- terminal Next is at least `44×44px`; lab controls live after the feed.
 
 ### Wireframe: mobile
 
 ```text
 ┌ approved mobile brand handle ┐
 
-Городской обзор                     1 из 3
 Сегодня в Калининграде 18 событий.
 Начните с событий на выходные.
 
-[Назад] [Дальше]
+[Смотреть события ↗]       # Next появляется только после stop
 [Сегодня] [Завтра] [Выходные] [ещё]
 
 Новые события
@@ -188,7 +187,7 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 ```
 
 - first scene is immediately readable;
-- no autoplay after scene 1;
+- automatic chain is finite: 2–3 scenes, never an endless carousel;
 - font `24–30px`, at 320px `21–23px`;
 - status metadata may be omitted at 320px before reducing copy below 21px;
 - no truncation of a link. If a scene fails the 320px fit validator, use its short variant.
@@ -242,13 +241,14 @@ UI-fragment с provenance. На mobile media не загружается; тек
 
 - `small`: афиша/иллюстрация до `180–210px` справа, когда текст называет
   конкретное событие или человека;
-- `wide-easter-egg`: редкий режим, `60–66%` ширины stage справа, сильно
-  кропнутый по высоте; текст сдвигается в левую колонку примерно `42%`, а его
+- `wide-easter-egg`: редкий desktop-only режим; hero выходит из shared
+  `max-width` на `100vw`, media занимает `60–66vw` до правой границы viewport
+  без border/radius/shadow, текст начинается в `20–32px` от левого края, а его
   inline-fragments получают непрозрачную paper stripe через
   `box-decoration-break: clone`;
 - слой абсолютный внутри заранее фиксированной высоты hero, поэтому появление
   не меняет позиции категорий/feed и не создаёт CLS;
-- только `transform/opacity`, ease-in-out около `650ms`, bounded exit примерно
+- только `transform/opacity`, ease-out около `0.8–1.2s`, bounded exit примерно
   через 4 секунды; смена сценария отменяет timer;
 - `safe_crop=true` и hero-fit `cover` обязательны для wide-mode; ошибка media
   деградирует в text-only;
@@ -270,24 +270,24 @@ UI-fragment с provenance. На mobile media не загружается; тек
 2. **Плотность:** за короткое время показано слишком много равнозначных фактов.
 3. **Ориентация:** «что, где, когда» не остаются одновременно видимыми и сравнимыми.
 
-Поэтому text briefing уже выигрывает у видео структурно: готовый текст можно просканировать, он остаётся неподвижным, ссылка не исчезает, а ручные `Назад`/`Дальше` снимают зависимость от авторского темпа. Настройка скорости полезна как дополнительный контроль, но не заменяет ясный copy contract.
+Поэтому text briefing уже выигрывает у видео структурно: каждую готовую сцену можно просканировать, она остаётся неподвижной в течение readable hold, ссылка не исчезает, а после конечной цепочки доступно явное `Показать следующее`. Настройка скорости полезна как лабораторный probe и возможная secondary setting, но не должна загромождать public hero и не заменяет ясный copy contract.
 
 Для event-specific сцены вводится отдельный eligibility gate: одновременно должны быть подтверждены **что** (canonical title), **когда** (date/time or honest date-only) и **где** (grounded venue/location). Все три факта остаются видимыми одновременно: под linked title рендерится детерминированная строка `{{date_time}} · {{location}}`, которая входит в общий лимит 1–3 строк и не пишется LLM. Если один из трёх фактов ненадёжен или композиция не помещается, обзор показывает безопасную category/date scene, а не неполный единичный анонс. В одной сцене не перечисляется серия событий, которую невозможно сопоставить по этим трём признакам.
 
 ### Решение по настройке темпа
 
-Для первого motion-прототипа принимается **дискретный выбор, а не ползунок**:
+Для первого motion-прототипа принимается **дискретный LAB-выбор, а не публичный ползунок**:
 
 ```text
 Темп:  [Самостоятельно] [Спокойно] [Обычно] [Быстро]
 ```
 
-- `Самостоятельно` — без auto-advance; пользователь нажимает `Дальше`. Это default на mobile и при reduced motion.
+- `Самостоятельно` — без auto-advance; это accessibility/debug profile и default при reduced motion.
 - `Спокойно` — увеличенная неподвижная фаза чтения.
 - `Обычно` — baseline для desktop-эксперимента.
 - `Быстро` — более короткая фаза чтения, но без ускорения до «мелькания».
 
-На desktop это один компактный `Темп` control в строке управления; раскрытая форма — native select или `radiogroup` с видимыми text labels. На mobile control не занимает первый экран: manual mode уже решает задачу, а включение auto-показа может появиться позже в secondary settings.
+В текущем lab pace находится только в закрытом доке после ленты и работает на desktop/mobile одинаково. Вынос pace в production secondary settings требует отдельного usability evidence; на первом экране его нет.
 
 Ползунок в V2 не рекомендуется:
 
@@ -304,10 +304,10 @@ Slider можно исследовать только если дискретн�
 
 | Profile | Auto-advance | Reading hold hypothesis | Entrance multiplier | Default |
 |---|---|---|---|---|
-| `manual` | off | none | `1.0`; manual scene fully visible or ≤150 ms fade | mobile, reduced motion |
-| `calm` | desktop only | `clamp(8s, 6.5s + 0.25s × word_count, 13s)` | max `1.15` | explicit choice |
-| `normal` | desktop only | `clamp(5s, 3.5s + 0.20s × word_count, 9s)` | `1.0` | experiment baseline |
-| `fast` | desktop only | `clamp(3.5s, 2s + 0.15s × word_count, 6s)` | min `0.85` | explicit choice |
+| `manual` | off | none | `1.0`; full scene immediately | reduced motion / lab |
+| `calm` | desktop + mobile | `clamp(8s, 6.5s + 0.25s × word_count, 13s)` | max `1.15` | explicit lab choice |
+| `normal` | desktop + mobile | `clamp(5s, 3.5s + 0.20s × word_count, 9s)` | `1.0` | prototype baseline |
+| `fast` | desktop + mobile | `clamp(3.5s, 2s + 0.15s × word_count, 6s)` | min `0.85` | explicit lab choice |
 
 Это стартовые hypotheses для usability test, не норматив скорости чтения. Ни один профиль не отменяет pause-on-interaction, максимум auto-scenes и статичную фазу.
 
@@ -318,13 +318,13 @@ Slider можно исследовать только если дискретн�
 | Уровень | Desktop | Mobile | Reduced motion |
 |---|---|---|---|
 | initial useful fragment | видим сразу | видим сразу | видим сразу |
-| secondary fragment enter | 180–260 ms | 0–160 ms, только первая сцена | 0 ms |
+| secondary fragment enter | 180–260 ms | 145–280 ms semantic fragments | 0 ms |
 | stagger | 60–100 ms | 0–60 ms | 0 |
 | translate | 4–6px | 0–3px | 0 |
 | blur | по умолчанию 0; экспериментально ≤1px | 0 | 0 |
-| reading hold | 4–7 s по длине | manual | manual |
-| scene exit | 140–220 ms | manual fade ≤120 ms | 0 |
-| auto transitions | максимум 2 после initial | 0 | 0 |
+| reading hold | 4–7 s по длине | 4–7 s по длине | manual |
+| scene exit | 140–220 ms | 120–200 ms | 0 |
+| auto transitions | максимум 2 после initial | максимум 2 после initial | 0 |
 
 `cubic-bezier(0.16, 1, 0.3, 1)` допустим для entrance. Character typing допустим лишь для необязательного status label длиной до 24 символов и не входит в V0/V1.
 
@@ -346,11 +346,11 @@ Slider можно исследовать только если дискретн�
 |---|---|---|---|---|
 | `static_ssg` | HTML loaded | полная безопасная scene 1 | нет | `hydrating`, остаётся static |
 | `hydrating` | JS available | тот же текст, без layout change | нет | `ready_static`, `error` |
-| `ready_static` | manifest/profile resolved | scene 1 готова | desktop may schedule | `entering_next`, `paused_user`, `manual` |
-| `entering_next` | desktop auto/manual next | новая сцена в зарезервированной геометрии | entrance only | `reading`, interrupt |
-| `reading` | entrance complete | полностью статичный текст | desktop hold | `entering_next`, `exhausted`, `paused_user` |
+| `ready_static` | manifest/profile resolved | scene 1 готова | device-independent bounded schedule | `entering_next`, `paused_user`, `manual` |
+| `entering_next` | automatic edge or public Next | новая сцена в зарезервированной геометрии | entrance only | `reading`, interrupt |
+| `reading` | entrance complete | полностью статичный текст | readable hold | `entering_next`, `exhausted`, `paused_user` |
 | `paused_pointer` | hover/pointer proximity | текущая сцена завершена | остановлен на время hover | `paused_user` or explicit resume |
-| `paused_user` | focusin, pointerdown, Pause | полный текст, ручные controls | нет | `manual` only until Continue |
+| `paused_user` | focusin, pointerdown or LAB Pause | полный текст; public chrome не добавляется | нет | explicit resume / terminal |
 | `manual` | Next/Previous | выбранная сцена | нет | `manual`, `exhausted` |
 | `exhausted` | max auto reached | последняя сцена + CTA | нет | `manual` |
 | `document_hidden` | visibility hidden | полный текст, no animation | нет | visible → remains paused |
@@ -371,10 +371,10 @@ Slider можно исследовать только если дискретн�
 
 ### Controls и accessibility
 
-- visible buttons: `Назад`, `Дальше`, `Пауза` / `Продолжить`;
-- pace control uses visible text labels and a native select or `radiogroup`; a slider is outside V2 scope;
-- visible progress: `1 из 3`, не dots-only;
-- минимум `44×44px`, visible focus ring;
+- public hero: semantic CTA текущей сцены и terminal-only `Показать следующее`;
+- LAB-dock: Previous/Replay/Pause/Continue/pace/progress/Play-all, только после
+  ленты и в закрытом `<details>` по умолчанию;
+- public Next и все LAB buttons минимум `44×44px`, с visible focus ring;
 - для auto mode region may use carousel semantics; в manual/static mode обычный `section` проще и надёжнее;
 - текущий DOM содержит один настоящий readable text tree, а не визуальную и скрытую дублирующую копию;
 - во время auto mode `aria-live="off"`;
@@ -456,7 +456,7 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 | `local_keska` | timeless human-approved local phrase bank | later/manual; once/30d | только editorial local tone; фигурные кавычки `«кеска»`; не приписывать слово конкретному пользователю | 1) «Мы говорим по-калининградски. И даже можем сказать «кеска».» 2) «По-калининградски? Конечно. «Кеска» тоже есть в словаре.» |
 | `anticipated_person_named` | canonical participant identity, active event and event link grounded; comment anticipation is optional and separately provenanced | scene 1/2; once/person/event/30d | имя можно показывать без teaser; нельзя добавлять «ждут», если comment gate не пройден | 1) «В Светлогорск приезжает {{person_name}}. {{link:event:event_id|Посмотреть событие}}.» 2) «Гость ближайшей афиши — {{person_name}}. {{link:event:event_id|Вот подробности}}.» |
 | `humorous_guest` | participant role/genre/humour fact explicitly grounded, active linked event | later/manual; once/person/event/30d | юмор — стиль, не источник факта; «любит шутить» запрещено без comedian/humour evidence | 1) «В Калининградскую область приедет гость, который любит шутить. {{link:event:event_id|Узнать кого}}.» 2) «Улыбнитесь, а мы пока покажем {{link:event:event_id|событие с юмором}}.» |
-| `weather_water_chain` | fresh licensed forecast envelope overlaps an eligible geolocated activity event; controlled activity/environment taxonomy | max 2-node manual chain; once/forecast hash | описывать прогноз, не безопасность; нельзя переносить sea wave signal на реку/лагуну или скрывать attribution | 1) «На выходных прогноз обещает солнце. Поедем к морю или откроем {{link:route:weekend|афишу выходных}}?» 2) «В афише есть {{link:event:event_id|сплав на байдарках}}. Условия и отмены уточняйте у организатора.» |
+| `weather_water_chain` | fresh licensed forecast envelope overlaps an eligible geolocated activity event; controlled activity/environment taxonomy | max 2-node automatic chain; once/forecast hash | описывать прогноз, не безопасность; нельзя переносить sea wave signal на реку/лагуну или скрывать attribution | 1) «На выходных прогноз обещает солнце. Поедем к морю или откроем {{link:route:weekend|афишу выходных}}?» 2) «В афише есть {{link:event:event_id|сплав на байдарках}}. Условия и отмены уточняйте у организатора.» |
 | `visiting_artist_ru` | named participant identity and event are source-grounded; home city/region is in Russia and outside Kaliningrad Oblast; arrival/current participation is not inferred from a repost | later/manual; once/person/event/30d | «приезжает в Калининград», а не «из России»; не подменять артистом ведущего/запись | 1) «В Калининград приезжает {{person_name}} из {{home_city}}. {{link:event:event_id|Вот событие}}.» 2) «Гость из {{home_city}} — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
 | `visiting_artist_international` | named participant/event/country are source-grounded; home country is not Russia; participation remains active and inside expiry window | later/manual; once/person/event/30d | можно «зарубежный артист» или country; нельзя выводить nationality из имени или места публикации | 1) «В Калининграде выступит {{person_name}} из {{country_name}}. {{link:event:event_id|Узнать подробности}}.» 2) «Зарубежный гость на ближайшей неделе — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
 | `festival_window` | canonical festival entity with grounded start/end; starts within next 7 local calendar days or `start_date <= today <= end_date` | scene 1/2; once/festival/7d | чётко различать «откроется» и «продолжается»; не называть фестивалем одно событие | 1) «На этой неделе откроется {{festival_name}}. {{link:event:event_id|Начать с программы}}.» 2) «{{festival_name}} уже идёт. {{link:event:event_id|Что ещё можно успеть}}?» |
@@ -482,7 +482,8 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
    - P4: one diversity candidate.
 4. Hard exclusions: dismissed, past/inactive, unsafe time boundary, stale time-sensitive claim, duplicate event/link.
 5. Penalties: explicitly viewed `−80%`; shown scenario within cooldown `−100%`; same category as previous scene `−40%`.
-6. Select maximum 4 total scenes; desktop autoplays at most first 3 including initial, mobile autoplays none.
+6. Select maximum 3 auto scenes including initial on both desktop and mobile;
+   additional eligible nodes require terminal public Next.
 7. Tie-breakers: higher provenance confidence → fewer previous impressions → fresher build → stable scenario ID.
 8. Never show both `return_zero` and `return_delta`, or `first_*` and returning personalization, in one session.
 9. Record exposure only after scene remained visible long enough to read; do not treat auto-created hidden scene as shown.
@@ -508,10 +509,11 @@ Node содержит `scenario_id`, optional `chain_id`, `node_id`, `family`, `
 `required_fact_ids`, `event_ids`, `link_tokens`, provenance/expiry, priority,
 cooldown/caps, viewport fragments и edges вида
 `after_read|public_next|action_success → node_id`. Клиентская state machine:
-`ready → entering → reading → stopped|exhausted`. В `stopped` при наличии
-скомпилированного edge всегда доступна публичная кнопка `Показать следующее`;
-она не относится к LAB-controls и фиксирует намерение, но не успех целевого
-действия.
+`ready → entering → reading → entering` максимум три раза, затем
+`stopped|exhausted`. Automatic edge не показывает controls во время readable
+hold. Только в terminal `stopped` доступна публичная кнопка `Показать
+следующее`; она запускает следующую bounded chain, не относится к LAB-controls
+и фиксирует намерение, но не успех целевого действия.
 
 Local state хранит только bounded IDs/timestamps: последние scenario/node,
 qualified exposures, action successes, dismissals и explicit facets. Текст,
@@ -773,7 +775,7 @@ Cache key includes writer prompt version, model ID, scenario ID, locale, normali
 |---|---|---|---|
 | V0 documentation | this spec, copy pack, wireframes, schema | no code, no Gemini runtime | product/design review |
 | V1 static prototype | Astro lab page, mobile/desktop, categories + feed | no animation, no personal data | layout/a11y/content value |
-| V2 motion prototype | semantic fragments + manual controls | hardcoded/fixture manifest | interruption/CLS/reduced motion |
+| V2 motion prototype | semantic fragments + bounded 2–3-scene auto chain; controls in LAB | hardcoded/fixture manifest | interruption/CLS/reduced motion |
 | V3 data-connected prototype | static manifest + bounded local overlay | no production rollout | correctness/perf/privacy |
 | V4 experiment | A/B/C/D assignment and analytics | no automatic full rollout | decision thresholds |
 | V5 writer pilot | offline Gemini Lite + validators | no client LLM | editorial acceptance |
@@ -784,8 +786,8 @@ Cache key includes writer prompt version, model ID, scenario ID, locale, normali
 |---|---|
 | A categories-first | fastest control; no briefing value |
 | B static briefing | grounded summary improves event-detail discovery without motion cost |
-| C1 semantic motion, manual default | lets the user own reading pace while preserving kinetic scene changes |
-| C2 semantic motion, normal auto default + pace control | tests whether bounded autoplay adds value beyond manual navigation |
+| C1 semantic motion, manual | accessibility/control challenger kept in LAB |
+| C2 semantic motion, bounded auto chain; pace only in LAB | current prototype: tests whether 2–3 connected scenes form a useful narrative without public chrome |
 | D literal typewriter | diagnostic: expected to raise wait/misclick and novelty fatigue |
 
 Personalized vs generic content should be a separate factor or later experiment; otherwise copy relevance and motion cannot be disentangled.
@@ -945,15 +947,19 @@ Payload is bounded: experiment variant, scenario ID, scene index, link kind/targ
 - [ ] Low-end Android, keyboard, screen reader, reduced-motion and JS-off checks pass.
 - [ ] Rollout stop conditions are agreed before exposure.
 
-## Open decisions before code
+## Open decisions before production experiment
 
-1. Is the desktop auto-sequence necessary, or should manual navigation be the baseline on every device?
+1. Does the now-implemented 2–3-scene auto chain improve comprehension on
+   desktop and mobile, or should production use a manual/static challenger?
 2. Which facts are production-ready today: last visit, explicit facets, favorites, organizer follows, popularity and editorial flags?
 3. What exact activity makes a visit watermark meaningful?
 4. What byte budget and freshness SLA can the existing static publisher guarantee for briefing manifests?
 5. Is the separate wide-«о» transition motif worth a design-system exception, or should V1 stay purely typographic?
 6. Which analytics consent state permits experiment events?
 7. What first-session generic copy wins editorial approval before any generated variants are considered?
-8. Should desktop default to `Самостоятельно` or `Обычно`, and does a pace control earn its first-screen cost?
+8. Does pace earn any production secondary-settings surface? Current evidence
+   explicitly rejects its first-screen cost.
 
-До ответов на эти вопросы корректный следующий шаг — **V1 static content prototype**, а не data-connected personalized motion.
+До ответов на эти вопросы корректный следующий шаг — **user review текущего
+V2 lab и сравнение со static/manual challenger**, а не data-connected
+personalized motion.

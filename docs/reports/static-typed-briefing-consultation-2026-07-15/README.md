@@ -31,6 +31,32 @@ artifacts/codex/static-typed-intro-consultation-20260715/
 
 The committed copies are the durable review surface; the ignored directory is not required to audit the product decision.
 
+## Focused media-correction gate
+
+After user review rejected the first `wide-media` composition as a nested
+frame and marked public meta/pause/pace as lab chrome, the exact rejected
+desktop screenshot and annotated mobile screenshot were sent to the same
+Antigravity/agy display model `Gemini 3.1 Pro (High)`.
+
+- corrective review: `2026-07-15 18:24:55–18:25:44 UTC`, status `0`, verdict
+  `FAIL`;
+- post-change acceptance: `2026-07-15 18:45:10–18:45:46 UTC`, status `0`,
+  verdict `PASS WITH CONDITIONS` for desktop and `PASS` for mobile;
+- the acceptance explicitly confirmed that `frame inside frame` was removed;
+  its remaining stripe/terminal-action spacing conditions were applied before
+  publication.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`media-correction-prompt.md`](media-correction-prompt.md) | Exact screenshot-based rejection prompt. | `155e0b5c818a3f33e6791b7317634934eeab5b761ed376265e5a34f5b26321d3` |
+| [`media-correction-gemini.md`](media-correction-gemini.md) | `FAIL` critique and replacement geometry/motion checks. | `e6ed161e1667755848bb56494439164ee537ebf08832ddfbeb63e8745ffdb248` |
+| [`media-acceptance-prompt.md`](media-acceptance-prompt.md) | Before/after acceptance prompt with measured geometry. | `4c70115b57caa837eaa205413f085e3e3fcd865e4d0c56caf5aa483b236e5143` |
+| [`media-acceptance-gemini.md`](media-acceptance-gemini.md) | Post-change acceptance verdict. | `0827822a809d0743120c988360bf0cc29f31aca26d451299e3cc28f857778282` |
+
+The local screenshots and run logs remain under
+`artifacts/codex/static-typed-briefing-media-correction/` and are intentionally
+not committed.
+
 ## Decision trace
 
 ### Accepted from Gemini
