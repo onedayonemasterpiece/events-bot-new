@@ -57,18 +57,32 @@ def test_null_mode_without_ocr_uses_legacy_photo_cover() -> None:
 
     assert framed.size == (1024, 1024)
     assert crop == [300, 0, 900, 600]
-    assert mode == "non_ocr_photo_center_cover"
+    assert mode == "classification_gap_landscape_cover"
+    assert CROP_REASONS[mode] == "null_mode_landscape_with_renderer_title_and_date"
 
 
-def test_null_mode_with_ocr_keeps_full_poster() -> None:
+def test_null_mode_landscape_with_incidental_ocr_uses_photo_cover() -> None:
     framed, crop, mode = frame_square(
         _wide_source(),
         {"image_text_mode": None, "image_has_ocr_text": True, "safe_crop": False},
     )
 
     assert framed.size == (1024, 1024)
-    assert crop == [0, 0, 1200, 600]
-    assert mode == "full_image_contain"
+    assert crop == [300, 0, 900, 600]
+    assert mode == "classification_gap_landscape_cover"
+
+
+def test_null_mode_portrait_or_square_with_ocr_keeps_full_document() -> None:
+    for size in ((800, 1000), (900, 900)):
+        source = Image.new("RGB", size, (80, 100, 120))
+        framed, crop, mode = frame_square(
+            source,
+            {"image_text_mode": None, "image_has_ocr_text": True, "safe_crop": False},
+        )
+
+        assert framed.size == (1024, 1024)
+        assert crop == [0, 0, *size]
+        assert mode == "full_image_contain"
 
 
 def test_ocr_poster_still_honours_explicit_safe_crop() -> None:

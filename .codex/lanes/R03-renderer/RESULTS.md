@@ -26,10 +26,12 @@ would change that SHA.
   preparation.
 - Added one framing decision point:
   - `safe_crop=true` remains centered cover;
-  - `visual_only`, or null/unknown mode with no OCR, uses a centered square
-    photo cover and therefore has no generated contain/letterbox field;
-  - unsafe `ocr_text` or any asset with actual OCR remains full-image contain
-    over blurred fill, preserving poster-edge copy.
+  - `visual_only` uses a centered square photo cover;
+  - the conservative classification-gap fallback treats null/unknown landscape
+    sources at aspect ratio 1.2 or wider as photos even when OCR is incidental;
+  - explicit unsafe `ocr_text`, plus null/unknown portrait or square assets
+    with OCR, remain full-image contain, preserving poster-edge copy;
+  - remaining null/unknown non-OCR sources use cover.
 - Retained the title/date overlay and all selection/composition behavior.
 - Recorded the chosen framing mode and source crop in the existing face
   manifest.
@@ -37,14 +39,20 @@ would change that SHA.
 ## Verification
 
 - `/tmp/f18-renderer-venv/bin/python -m pytest -q tests/test_service_share_face_preparation.py tests/test_service_share_still_kaggle.py tests/test_service_share_card_daily.py`
-  — **22 passed**.
+  — **23 passed**.
 - `/tmp/f18-renderer-venv/bin/python -m compileall -q ...` — passed for all
   changed Python modules/tests.
 - `git diff --check` — passed.
-- Read-only inspection of `prod-20260715.sqlite` confirmed the visible
-  landscape event `5370` uses the first approved face (`eventposter.id=9513`),
+- Read-only inspection of `prod-20260715.sqlite` confirmed the HERO event
+  `3216` (`Великие учителя`) uses approved `eventposter.id=13898`, has null
+  `image_text_mode`, 102 incidental OCR characters from museum labels, and a
+  1280x853 landscape source. It now resolves to
+  `classification_gap_landscape_cover` with center crop
+  `[213, 0, 1066, 853]` instead of full-image contain.
+- The same inspection confirmed the other visible landscape event `5370` uses
+  the first approved face (`eventposter.id=9513`),
   has null `image_text_mode`, empty OCR, and a 1280x853 source. It now resolves
-  to `non_ocr_photo_center_cover`; the representative center crop is
+  to `classification_gap_landscape_cover`; the representative center crop is
   `[213, 0, 1066, 853]` before 1024x1024 scaling instead of full-image contain.
 - The same production inspection confirmed OCR-bearing selected faces remain
   protected, including events `6811` (269 OCR characters), `4517` (176),
@@ -55,7 +63,8 @@ would change that SHA.
 - A fresh catalog snapshot/selection is required before rerendering. Reusing an
   old selection that predates `image_has_ocr_text` would interpret a null mode
   as non-OCR.
-- The rule intentionally follows the supplied accepted metadata; it does not
-  add a deterministic image-content/OCR classifier or change event meaning.
+- The fallback uses only a conservative aspect-ratio framing threshold for the
+  null-classification gap. It does not classify event meaning or override an
+  explicit `ocr_text` decision.
 - No site/UI, documentation, changelog, schedule, Kaggle, or production files
   were changed in this lane.

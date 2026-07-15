@@ -17,8 +17,10 @@ MONTHS = {1:"ЯНВАРЯ",2:"ФЕВРАЛЯ",3:"МАРТА",4:"АПРЕЛЯ",5:
 CROP_REASONS = {
     "safe_center_cover": "explicit_safe_crop",
     "non_ocr_photo_center_cover": "non_ocr_photo_with_renderer_title_and_date",
+    "classification_gap_landscape_cover": "null_mode_landscape_with_renderer_title_and_date",
     "full_image_contain": "protect_ocr_or_unclassified_document_edges",
 }
+CLASSIFICATION_GAP_LANDSCAPE_RATIO = 1.2
 
 
 def load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
@@ -70,19 +72,32 @@ def frame_square(image: Image.Image, row: dict) -> tuple[Image.Image, list[int],
     its ``False`` branch to a photo creates a small contained image with a
     blurred letterbox around it, even though the face already receives its own
     title and date.  The accepted media classification and actual OCR presence
-    distinguish that case: explicit or legacy non-OCR photos use a
-    source-faithful cover crop, while OCR-bearing assets retain the existing
-    contain treatment so text at the edge of a poster is not newly destroyed.
+    distinguish that case.  A narrow geometry fallback also handles old
+    landscape photos whose null classification contains incidental OCR (for
+    example, a museum label): null/unknown landscape sources at 1.2:1 or wider
+    use cover, while null/unknown portrait or square OCR documents retain
+    contain.  Explicit ``ocr_text`` always remains protected.
     """
 
     text_mode = str(row.get("image_text_mode") or "unknown").strip().casefold()
+    width, height = image.size
+    aspect_ratio = width / height if height else 0.0
     if row.get("safe_crop"):
         square, crop = cover_square(image)
         return square, crop, "safe_center_cover"
-    if bool(row.get("image_has_ocr_text")) or text_mode == "ocr_text":
+    if text_mode == "ocr_text":
         square, crop = contain_square(image)
         return square, crop, "full_image_contain"
-    if text_mode in {"visual_only", "unknown", ""}:
+    if text_mode == "visual_only":
+        square, crop = cover_square(image)
+        return square, crop, "non_ocr_photo_center_cover"
+    if text_mode in {"unknown", ""} and aspect_ratio >= CLASSIFICATION_GAP_LANDSCAPE_RATIO:
+        square, crop = cover_square(image)
+        return square, crop, "classification_gap_landscape_cover"
+    if bool(row.get("image_has_ocr_text")):
+        square, crop = contain_square(image)
+        return square, crop, "full_image_contain"
+    if text_mode in {"unknown", ""}:
         square, crop = cover_square(image)
         return square, crop, "non_ocr_photo_center_cover"
     square, crop = contain_square(image)
@@ -190,7 +205,7 @@ def main() -> int:
         "faces": rows,
         "critical_bbox_cut_count": 0,
         "aspect_ratio_distortion_count": 0,
-        "crop_contract": "safe_crop=true uses centered cover; visual_only or null/unknown mode without OCR uses centered photo cover without letterbox; OCR-bearing unsafe assets use full-image contain over blurred fill; title/date overlay after framing",
+        "crop_contract": "safe_crop=true uses centered cover; visual_only uses photo cover; null/unknown landscape at aspect ratio >=1.2 uses cover even with incidental OCR; explicit ocr_text and null/unknown portrait or square OCR assets use full-image contain; null/unknown non-OCR assets use cover; title/date overlay after framing",
         "typography_contract": {
             "layout_engine": "RAQM",
             "kerning": True,
