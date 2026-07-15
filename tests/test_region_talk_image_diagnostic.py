@@ -860,6 +860,129 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 else:
                     os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = old_expected
 
+    def test_soft_source_review_restores_actual_score_instead_of_terminalizing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_status": "rejected_publication_eligibility",
+                "image_model_input_type": "actual_image",
+                "images_scored_actual_count": 3,
+                "overall_media_score": 0.71,
+                "final_visual_status": "scored_actual_image",
+                "publication_eligibility_decision": "needs_source_review",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+            }
+
+            eligible, deferred = mod.partition_publication_eligible_rows([row])
+
+            self.assertEqual(eligible, [])
+            self.assertEqual(len(deferred), 1)
+            self.assertEqual(row["image_queue_status"], "actual_scored")
+            self.assertEqual(row["images_scored_actual_count"], 3)
+            self.assertEqual(row["overall_media_score"], 0.71)
+            self.assertEqual(row["final_visual_status"], "scored_actual_image")
+            self.assertEqual(row["image_eligibility_status"], "deferred_soft_gate")
+            self.assertEqual(row["next_action"], "wait_for_source_or_text_gate_without_rescoring_image")
+
+    def test_soft_text_review_without_image_evidence_uses_nonterminal_deferred_status(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_status": "rejected_publication_eligibility",
+                "publication_eligibility_decision": "needs_text_review",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+            }
+
+            eligible, deferred = mod.partition_publication_eligible_rows([row])
+
+            self.assertEqual(eligible, [])
+            self.assertEqual(len(deferred), 1)
+            self.assertEqual(row["image_queue_status"], "deferred_text_gate")
+            self.assertEqual(row["image_eligibility_status"], "deferred_soft_gate")
+            self.assertEqual(row["next_action"], "complete_dual_text_gate")
+
+    def test_soft_visual_review_preserves_unsupported_video_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_status": "not_reviewable_unsupported_media",
+                "image_model_input_type": "unsupported_media",
+                "media_acquisition_status": "unsupported_media_or_decode_failed",
+                "publication_eligibility_decision": "needs_visual_review",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+            }
+
+            eligible, deferred = mod.partition_publication_eligible_rows([row])
+
+            self.assertEqual(eligible, [])
+            self.assertEqual(len(deferred), 1)
+            self.assertEqual(row["image_queue_status"], "not_reviewable_unsupported_media")
+            self.assertEqual(row["image_model_input_type"], "unsupported_media")
+            self.assertEqual(row["image_eligibility_status"], "deferred_soft_gate")
+
+    def test_hard_publication_reject_closes_queue_but_preserves_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+                "images_scored_actual_count": 4,
+                "overall_media_score": 0.81,
+                "final_visual_status": "scored_actual_image",
+                "media_acquisition_status": "actual_album_downloaded_and_scored",
+                "publication_eligibility_decision": "reject",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "publication_eligibility_reason": "source_local",
+            }
+
+            eligible, blocked = mod.partition_publication_eligible_rows([row])
+
+            self.assertEqual(eligible, [])
+            self.assertEqual(len(blocked), 1)
+            self.assertEqual(row["image_queue_status"], "rejected_publication_eligibility")
+            self.assertEqual(row["image_eligibility_status"], "blocked")
+            self.assertEqual(row["images_scored_actual_count"], 4)
+            self.assertEqual(row["overall_media_score"], 0.81)
+            self.assertEqual(row["final_visual_status"], "scored_actual_image")
+            self.assertEqual(row["media_acquisition_status"], "actual_album_downloaded_and_scored")
+
+    def test_ydb_poll_counts_soft_defer_separately_from_hard_block(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            rows = [
+                {
+                    "image_queue_id": "soft",
+                    "image_queue_status": "needs_actual_image_fetch",
+                    "publication_eligibility_decision": "needs_source_review",
+                    "publication_eligibility_gate_version": "publication-gate-test-v1",
+                },
+                {
+                    "image_queue_id": "hard",
+                    "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image",
+                    "images_scored_actual_count": 2,
+                    "publication_eligibility_decision": "reject",
+                    "publication_eligibility_gate_version": "publication-gate-test-v1",
+                },
+            ]
+            writes: list[tuple[str, list[dict]]] = []
+            mod.ydb_select_image_queue = lambda _limit: rows
+            mod.ydb_upsert_image_rows = lambda batch, *, stage: writes.append(
+                (stage, [dict(row) for row in batch])
+            )
+
+            leased, total = mod.ydb_rows_for_diagnostic(10)
+
+            self.assertEqual(leased, [])
+            self.assertEqual(total, 2)
+            self.assertEqual(mod.input_payload["publication_eligibility_blocked_count"], 1)
+            self.assertEqual(mod.input_payload["publication_eligibility_soft_deferred_count"], 1)
+            self.assertEqual(mod.input_payload["publication_eligibility_refresh_deferred_count"], 0)
+            persisted = [row for stage, batch in writes if stage == "blocked_publication_eligibility" for row in batch]
+            self.assertEqual({row["image_queue_id"] for row in persisted}, {"soft", "hard"})
+            self.assertEqual(next(row for row in persisted if row["image_queue_id"] == "soft")["image_queue_status"], "deferred_text_gate")
+            self.assertEqual(next(row for row in persisted if row["image_queue_id"] == "hard")["images_scored_actual_count"], 2)
+
     def test_previous_version_only_terminalization_is_restored_to_actual_scored(self) -> None:
         old_expected = os.environ.get("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION")
         with tempfile.TemporaryDirectory() as td:

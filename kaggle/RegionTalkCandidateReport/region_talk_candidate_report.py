@@ -10151,9 +10151,9 @@ def confirmed_blogger_fast_check_query_ladder() -> list[str]:
 
     A 2026-07-13 cached-peer canary found six current-year KO posts that the
     broad three-query control did not return.  Keep broad recall first, then
-    spend the rest of the confirmed-source thirty-query budget on distinctive
-    low-frequency places.  Generic sources retain the stable global bank and
-    its existing cursor semantics.
+    spend successive bounded confirmed-source waves on distinctive
+    low-frequency places.  The durable cursor preserves the full bank across
+    runs; generic sources retain the same stable bank and cursor semantics.
     """
     return [
         "Калининградская область", "Калининград", "Куршская коса",
@@ -10332,7 +10332,7 @@ def source_fast_check_queries(
             # stop-on-first-hit and the durable continuation cursor.
             per_source = max(
                 per_source,
-                max(1, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 30)),
+                max(1, getenv_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 8)),
             )
         bank = source_fast_check_query_bank_for_row(source_row)
         cursor = max(0, int(start_cursor or 0))
@@ -10656,6 +10656,9 @@ async def run_source_fast_check_ko(
     errors = 0
     search_results_rejected = 0
     query_elapsed_total = 0.0
+    stage_started = time.monotonic()
+    stage_max_seconds = max(1.0, _rt_float(os.getenv("REGION_TALK_FAST_CHECK_STAGE_MAX_SECONDS"), 180.0))
+    stage_budget_exhausted = False
     post_link_items_written = 0
     cutoff = history_min_post_datetime()
     strategy = source_fast_check_query_strategy()
@@ -10676,6 +10679,9 @@ async def run_source_fast_check_ko(
         progress_label=f"fast-check KO {len(seeds)} sources; strategy={strategy}",
     )
     for idx, seed in enumerate(seeds, start=1):
+        if time.monotonic() - stage_started >= stage_max_seconds:
+            stage_budget_exhausted = True
+            break
         if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300)):
             break
         base_row = source_status_row(seed, "", fetch_attempted="false")
@@ -10750,6 +10756,9 @@ async def run_source_fast_check_ko(
             source_hit_urls: set[str] = set()
             first_hit_position = 0
             for q in queries:
+                if time.monotonic() - stage_started >= stage_max_seconds:
+                    stage_budget_exhausted = True
+                    break
                 if not governor.has_total_request_budget("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url):
                     break
                 if not await governor.humanlike_pause(
@@ -10989,6 +10998,9 @@ async def run_source_fast_check_ko(
         "fast_check_ko_query_strategy": strategy,
         "fast_check_ko_query_terms_total": query_terms_total,
         "fast_check_ko_query_elapsed_seconds": round(query_elapsed_total, 3),
+        "fast_check_ko_stage_elapsed_seconds": round(time.monotonic() - stage_started, 3),
+        "fast_check_ko_stage_max_seconds": round(stage_max_seconds, 3),
+        "fast_check_ko_stage_budget_exhausted": stage_budget_exhausted,
         "fast_check_ko_control_hits_q1_q2": control_hits,
         "fast_check_ko_incremental_hits_q3_plus": incremental_hits,
         "fast_check_ko_no_hit_partial": partial_no_hits,
@@ -11008,6 +11020,9 @@ async def run_source_fast_check_ko(
         no_hit_partial=partial_no_hits, no_hit_exhausted=exhausted_no_hits,
         search_results_rejected=search_results_rejected,
         query_elapsed_seconds=round(query_elapsed_total, 3),
+        stage_elapsed_seconds=round(time.monotonic() - stage_started, 3),
+        stage_max_seconds=round(stage_max_seconds, 3),
+        stage_budget_exhausted=stage_budget_exhausted,
         local_rejected=local_rejected, spam_rejected=spam_rejected,
         progress_label=f"fast-check KO done sources={hits}/{len(rows)} posts={hit_posts}; q={queried}",
     )
@@ -16605,6 +16620,11 @@ def build_report(
         "keyword_post_hits_raw": int(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hits_raw") or 0),
         "fast_check_sources_checked": int(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_sources_checked") or 0),
         "fast_check_hits": int(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_hits") or 0),
+        "fast_check_queries_processed": int(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_queries_processed") or 0),
+        "fast_check_query_elapsed_seconds": float(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_query_elapsed_seconds") or 0),
+        "fast_check_stage_elapsed_seconds": float(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_stage_elapsed_seconds") or 0),
+        "fast_check_stage_max_seconds": float(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_stage_max_seconds") or 0),
+        "fast_check_stage_budget_exhausted": int(bool(_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_stage_budget_exhausted"))),
         "text_embedding_error_rows": sum(1 for r in new_posts if str(r.get("embedding_error") or "").strip()),
     }
     all_time_metrics = build_all_time_metrics(state_to_write, source_frontier_unique, candidate_memory_rows)

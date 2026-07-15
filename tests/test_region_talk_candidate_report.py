@@ -2142,6 +2142,69 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len(written[0]), 3)
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_hit_posts"], 3)
 
+    def test_fast_check_stage_budget_stops_before_another_telegram_query(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="seed_budget", platform="telegram", source_title="Travel Writer",
+            handle="budgeted", url="https://t.me/budgeted", source_kind="channel",
+            source_scope_guess="travel", priority=1, discovered_from="unit",
+            discovered_from_url="", why_seeded="confirmed evidence", expected_value="high",
+            known_risks="", initial_status="pending_scan", monitoring_enabled=True,
+            rights_policy="manual_review", notes="",
+        )
+
+        class Governor:
+            async def resolve_entity(self, _client, _seed):
+                return types.SimpleNamespace(title="Travel Writer"), {
+                    "telegram_resolve_status": "resolved_from_private_cache",
+                }
+
+            def has_total_request_budget(self, *_args):
+                return True
+
+            async def humanlike_pause(self, *_args, **_kwargs):
+                raise AssertionError("stage budget must stop before another paced Telegram query")
+
+        class Status:
+            def event(self, *_args, **_kwargs):
+                return None
+
+        previous = {"unified_source_queue": {"telegram:budgeted": {
+            "canonical_source_key": "telegram:budgeted", "platform": "telegram",
+            "source_url": "https://t.me/budgeted", "source_queue_status": "pending_scan",
+            "external_blogger_evidence_status": "confirmed_external",
+        }}}
+        ticks = iter([0.0, 0.2, 0.3, 1.2, 1.3, 1.4, 1.5])
+
+        def next_tick() -> float:
+            try:
+                return next(ticks)
+            except StopIteration:
+                return 2.0
+        search = mock.AsyncMock()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_FAST_CHECK_KO_ENABLED": "1",
+            "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "1",
+            "REGION_TALK_FAST_CHECK_QUERY_STRATEGY": "adaptive_cursor_v1",
+            "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "8",
+            "REGION_TALK_FAST_CHECK_STAGE_MAX_SECONDS": "1",
+        }, clear=False), \
+             mock.patch.object(mod, "source_fast_check_backlog_seeds", return_value=[seed]), \
+             mock.patch.object(mod, "runtime_budget_ok", return_value=True), \
+             mock.patch.object(mod.time, "monotonic", side_effect=next_tick), \
+             mock.patch.object(mod, "telethon_iter_messages_list", search), \
+             mock.patch.object(mod, "write_region_talk_online_source_item", return_value=True):
+            source_rows, post_hits, same_run_posts = asyncio.run(
+                mod.run_source_fast_check_ko(object(), Governor(), previous, "budget-run", Status())
+            )
+
+        search.assert_not_awaited()
+        self.assertEqual(len(source_rows), 1)
+        self.assertEqual(source_rows[0]["fast_check_status"], "deferred_no_query_budget")
+        self.assertEqual(post_hits, [])
+        self.assertEqual(same_run_posts, [])
+        self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_stage_budget_exhausted"])
+
     def test_generic_adaptive_fast_check_keeps_small_wave(self) -> None:
         mod = load_module()
         with mock.patch.dict(os.environ, {

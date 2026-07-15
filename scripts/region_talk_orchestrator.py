@@ -201,7 +201,12 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_ENABLED": "1",
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_TABLE": "region_talk_external_blogger_evidence",
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS": "2000",
-    "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "30",
+    # The durable adaptive cursor preserves the full low-frequency place bank
+    # across runs.  Keep each confirmed-blogger wave bounded so a no-hit source
+    # cannot spend most of a 20-minute CandidateReport run sleeping between
+    # human-like Telegram searches.
+    "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": "8",
+    "REGION_TALK_FAST_CHECK_STAGE_MAX_SECONDS": "180",
     "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_RESULTS_PER_QUERY": "20",
     "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_COLLECT_MULTIPLE_POSTS": "1",
     "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_POSTS_PER_QUERY": "2",
@@ -557,6 +562,15 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('fast_check_latest_run_sources_total')}/"
             f"{value('fast_check_latest_run_hit_sources_total')}/"
             f"{value('fast_check_latest_run_hit_rate_percent')}%"
+        ),
+        (
+            "Fast-check последнего запуска — запросов / время запросов, сек / всё время стадии, сек / "
+            "лимит стадии, сек / лимит исчерпан: "
+            f"{value('fast_check_latest_run_queries_total')}/"
+            f"{decimal_value('fast_check_latest_run_query_elapsed_seconds')}/"
+            f"{decimal_value('fast_check_latest_run_stage_elapsed_seconds')}/"
+            f"{decimal_value('fast_check_latest_run_stage_max_seconds')}/"
+            f"{value('fast_check_latest_run_stage_budget_exhausted')}"
         ),
         (
             "Технические source-overlay обновления последнего run_id — строк с scan evidence / с KO / доля "
@@ -3662,6 +3676,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "candidate_run_posts_waiting_for_bge_without_e5_recompute": _safe_int(latest_run_funnel.get("posts_waiting_for_bge_without_e5_recompute")),
         "candidate_run_posts_skipped_unchanged_current": _safe_int(latest_run_funnel.get("posts_skipped_unchanged_current")),
         "candidate_run_posts_skipped_legacy_current_dual": _safe_int(latest_run_funnel.get("posts_skipped_legacy_current_dual")),
+        "fast_check_latest_run_queries_total": _safe_int(latest_run_funnel.get("fast_check_queries_processed")),
+        "fast_check_latest_run_query_elapsed_seconds": _safe_float(latest_run_funnel.get("fast_check_query_elapsed_seconds")),
+        "fast_check_latest_run_stage_elapsed_seconds": _safe_float(latest_run_funnel.get("fast_check_stage_elapsed_seconds")),
+        "fast_check_latest_run_stage_max_seconds": _safe_float(latest_run_funnel.get("fast_check_stage_max_seconds")),
+        "fast_check_latest_run_stage_budget_exhausted": _safe_int(latest_run_funnel.get("fast_check_stage_budget_exhausted")),
         "candidate_memory_total": len(candidates),
         "candidate_memory_terminal_local_audit_total": len(candidate_memory_terminal_local),
         "candidate_memory_terminal_spam_audit_total": len(candidate_memory_terminal_spam),
@@ -3806,7 +3825,11 @@ def build_decision_plan(
         ),
         "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE": str(max(
             1,
-            _env_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 30),
+            _env_int("REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_QUERIES_PER_SOURCE", 8),
+        )),
+        "REGION_TALK_FAST_CHECK_STAGE_MAX_SECONDS": str(max(
+            1,
+            _env_int("REGION_TALK_FAST_CHECK_STAGE_MAX_SECONDS", 180),
         )),
         "REGION_TALK_CONFIRMED_BLOGGER_FAST_CHECK_RESULTS_PER_QUERY": str(max(
             2,

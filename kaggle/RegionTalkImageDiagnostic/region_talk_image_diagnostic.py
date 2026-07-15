@@ -20,6 +20,14 @@ IMAGE_TERMINAL_SKIP_STATUSES = {
     "broken_media",
 }
 PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
+PUBLICATION_ELIGIBILITY_SOFT_DECISIONS = {
+    "needs_source_review",
+    "needs_text_review",
+    "needs_visual_review",
+    "review",
+    "defer",
+    "deferred",
+}
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 IMAGE_DECISION_CONTRACT_VERSION = "region_talk_image_album_guard_v2"
 IMAGE_ACQUISITION_VERSION = "region_talk_plural_media_v2"
@@ -46,7 +54,7 @@ IMAGE_DIAG_HEARTBEAT_FIELDS = (
     "run_id", "event_name", "created_at", "phase", "reason", "attempt",
     "total", "leased", "remaining_budget", "pending", "blocked",
     "publication_eligibility_pending_count", "publication_eligibility_blocked_count",
-    "publication_eligibility_refresh_deferred_count",
+    "publication_eligibility_refresh_deferred_count", "publication_eligibility_soft_deferred_count",
     "batch_index", "rows", "actual_scored", "actual_images", "actual_posts", "actual_frames", "failures",
     "xlsx", "html", "summary", "source", "max_items_per_run", "batch_size",
     "poll_interval_seconds", "wait_initial_seconds", "wait_after_drain_seconds",
@@ -507,7 +515,17 @@ def apply_publication_eligibility_audit(row: dict, *, reason: str | None = None)
     row["image_eligibility_reason"] = gate_reason or str(row.get("publication_eligibility_reason") or "accepted")
     refresh_helper = globals().get("_publication_eligibility_refreshable")
     refreshable = bool(gate_reason and callable(refresh_helper) and refresh_helper(gate_reason))
-    row["image_eligibility_status"] = "deferred_refresh" if refreshable else ("blocked" if gate_reason else "accepted")
+    soft_helper = globals().get("_publication_eligibility_soft_deferred")
+    soft_deferred = bool(gate_reason and callable(soft_helper) and soft_helper(gate_reason))
+    row["image_eligibility_status"] = (
+        "deferred_refresh"
+        if refreshable
+        else "deferred_soft_gate"
+        if soft_deferred
+        else "blocked"
+        if gate_reason
+        else "accepted"
+    )
     row["image_eligibility_checked_at"] = datetime.now(timezone.utc).isoformat()
     if gate_reason and not str(row.get("publication_eligibility_reason") or "").strip():
         row["publication_eligibility_reason"] = gate_reason
@@ -519,6 +537,40 @@ def _publication_eligibility_refreshable(reason: str) -> bool:
         "publication_eligibility_decision_missing",
         "publication_eligibility_gate_version_missing",
     } or reason.startswith("publication_eligibility_gate_version_mismatch:")
+
+
+def _publication_eligibility_soft_deferred(reason: str) -> bool:
+    prefix = "publication_eligibility_decision_not_accept:"
+    if not str(reason or "").startswith(prefix):
+        return False
+    return str(reason)[len(prefix):].strip().lower() in PUBLICATION_ELIGIBILITY_SOFT_DECISIONS
+
+
+def _row_has_actual_diagnostic_evidence(row: dict) -> bool:
+    """Return true when ImageDiagnostic has already produced durable evidence.
+
+    Publication eligibility controls whether a row may advance, not whether a
+    previously computed album score exists.  The two facts intentionally live
+    in separate fields so a later source/text review cannot erase expensive
+    image evidence.
+    """
+    try:
+        scored_count = int(row.get("images_scored_actual_count") or 0)
+    except (TypeError, ValueError):
+        scored_count = 0
+    return bool(
+        str(row.get("image_model_input_type") or "").strip() == "actual_image"
+        or str(row.get("final_visual_status") or "").strip() == "scored_actual_image"
+        or scored_count > 0
+    )
+
+
+def _row_has_unsupported_media_evidence(row: dict, previous_status: str) -> bool:
+    return bool(
+        previous_status in {"not_reviewable_no_media", IMAGE_TERMINAL_UNSUPPORTED_STATUS}
+        or str(row.get("image_model_input_type") or "").strip() == "unsupported_media"
+        or str(row.get("media_acquisition_status") or "").strip() == "unsupported_media_or_decode_failed"
+    )
 
 
 def _legacy_actual_image_accept_attestation(row: dict) -> bool:
@@ -556,12 +608,47 @@ def mark_publication_eligibility_blocked(row: dict, reason: str) -> dict:
         row["next_action"] = "recompute_publication_eligibility_before_image_analysis"
         row.setdefault("images_scored_actual_count", int(row.get("actual_image_count") or 0))
         return row
+    if _publication_eligibility_soft_deferred(reason):
+        # ``needs_*`` is absence of final publication evidence, not a negative
+        # verdict.  A previous implementation collapsed every non-accept value
+        # into the terminal eligibility reject and, on a one-row queue poll,
+        # rewrote the whole ledger.  Restore/preserve ImageDiagnostic-owned
+        # evidence and only defer the missing source/text/publication decision.
+        row["previous_image_queue_status"] = previous_status
+        if _row_has_actual_diagnostic_evidence(row):
+            restored_status = "actual_scored"
+            next_action = (
+                "visual_review_nonterminal"
+                if reason.endswith(":needs_visual_review")
+                else "wait_for_source_or_text_gate_without_rescoring_image"
+            )
+        elif _row_has_unsupported_media_evidence(row, previous_status):
+            restored_status = (
+                previous_status
+                if previous_status in {"not_reviewable_no_media", IMAGE_TERMINAL_UNSUPPORTED_STATUS}
+                else IMAGE_TERMINAL_UNSUPPORTED_STATUS
+            )
+            next_action = "skip_unsupported_media"
+        else:
+            restored_status = "deferred_text_gate"
+            next_action = (
+                "resolve_source_verdict"
+                if reason.endswith(":needs_source_review")
+                else "complete_dual_text_gate"
+            )
+        row["image_queue_status"] = restored_status
+        row["next_action"] = next_action
+        row["status_changed_this_run"] = str(previous_status != restored_status).lower()
+        if previous_status != restored_status or not row.get("last_status_changed_at"):
+            row["last_status_changed_at"] = datetime.now(timezone.utc).isoformat()
+        return row
     row["previous_image_queue_status"] = previous_status
     row["image_queue_status"] = IMAGE_TERMINAL_ELIGIBILITY_STATUS
-    row["media_acquisition_status"] = "blocked_publication_eligibility"
-    row["final_visual_status"] = "blocked_publication_eligibility"
-    row["images_scored_actual_count"] = 0
-    row["next_action"] = "recompute_publication_eligibility_before_image_analysis"
+    # A hard local/spam/compliance/text rejection closes publication spend, but
+    # it must not mutate acquisition/model facts or erase an existing score.
+    # Keeping the evidence makes the ledger auditable and avoids paying for a
+    # second score if an authoritative source verdict is corrected later.
+    row["next_action"] = "skip_publication_eligibility_rejected"
     row["status_changed_this_run"] = str(previous_status != IMAGE_TERMINAL_ELIGIBILITY_STATUS).lower()
     if previous_status != IMAGE_TERMINAL_ELIGIBILITY_STATUS or not row.get("last_status_changed_at"):
         row["last_status_changed_at"] = datetime.now(timezone.utc).isoformat()
@@ -580,10 +667,17 @@ def partition_publication_eligible_rows(batch: list[dict]) -> tuple[list[dict], 
     return eligible, blocked
 
 
-def expose_publication_eligibility_counters(*, pending: int, blocked: int, refresh_deferred: int = 0) -> None:
+def expose_publication_eligibility_counters(
+    *,
+    pending: int,
+    blocked: int,
+    refresh_deferred: int = 0,
+    soft_deferred: int = 0,
+) -> None:
     input_payload["publication_eligibility_pending_count"] = max(0, int(pending))
     input_payload["publication_eligibility_blocked_count"] = max(0, int(blocked))
     input_payload["publication_eligibility_refresh_deferred_count"] = max(0, int(refresh_deferred))
+    input_payload["publication_eligibility_soft_deferred_count"] = max(0, int(soft_deferred))
 
 def ydb_table_name(suffix: str = "state_kv") -> str:
     ns = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk_compact").strip() or "region_talk_compact").strip("_") or "region_talk_compact"
@@ -1020,11 +1114,15 @@ def ydb_rows_for_diagnostic(limit_n: int):
     refresh_deferred = sum(
         1 for row in blocked if str(row.get("image_eligibility_status") or "") == "deferred_refresh"
     )
-    terminal_blocked = len(blocked) - refresh_deferred
+    soft_deferred = sum(
+        1 for row in blocked if str(row.get("image_eligibility_status") or "") == "deferred_soft_gate"
+    )
+    terminal_blocked = len(blocked) - refresh_deferred - soft_deferred
     expose_publication_eligibility_counters(
         pending=len(pending),
         blocked=terminal_blocked,
         refresh_deferred=refresh_deferred,
+        soft_deferred=soft_deferred,
     )
     pending=sorted(pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))[:limit_n]
     now=datetime.now(timezone.utc).isoformat()
@@ -1044,7 +1142,8 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
             eligibility_pending = int(input_payload.get("publication_eligibility_pending_count") or 0)
             eligibility_blocked = int(input_payload.get("publication_eligibility_blocked_count") or 0)
             eligibility_refresh_deferred = int(input_payload.get("publication_eligibility_refresh_deferred_count") or 0)
-            log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n, pending=eligibility_pending, blocked=eligibility_blocked, publication_eligibility_pending_count=eligibility_pending, publication_eligibility_blocked_count=eligibility_blocked, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred)
+            eligibility_soft_deferred = int(input_payload.get("publication_eligibility_soft_deferred_count") or 0)
+            log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n, pending=eligibility_pending, blocked=eligibility_blocked, publication_eligibility_pending_count=eligibility_pending, publication_eligibility_blocked_count=eligibility_blocked, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred, publication_eligibility_soft_deferred_count=eligibility_soft_deferred)
             ydb_upsert_cursor("image_diagnostic", {
                 "phase": "poll",
                 "status": "running",
@@ -1060,7 +1159,8 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
                 "publication_eligibility_pending_count": eligibility_pending,
                 "publication_eligibility_blocked_count": eligibility_blocked,
                 "publication_eligibility_refresh_deferred_count": eligibility_refresh_deferred,
-                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}; eligibility pending={eligibility_pending} blocked={eligibility_blocked} refresh_deferred={eligibility_refresh_deferred}",
+                "publication_eligibility_soft_deferred_count": eligibility_soft_deferred,
+                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}; eligibility pending={eligibility_pending} blocked={eligibility_blocked} refresh_deferred={eligibility_refresh_deferred} soft_deferred={eligibility_soft_deferred}",
             })
             if batch:
                 return batch, total
@@ -1783,16 +1883,27 @@ def process_batch(batch_rows, batch_index: int):
         1 for row in eligibility_blocked_rows
         if str(row.get("image_eligibility_status") or "") == "deferred_refresh"
     )
-    eligibility_terminal_blocked_count = len(eligibility_blocked_rows) - eligibility_refresh_deferred_count
+    eligibility_soft_deferred_count = sum(
+        1 for row in eligibility_blocked_rows
+        if str(row.get("image_eligibility_status") or "") == "deferred_soft_gate"
+    )
+    eligibility_terminal_blocked_count = (
+        len(eligibility_blocked_rows)
+        - eligibility_refresh_deferred_count
+        - eligibility_soft_deferred_count
+    )
     if eligibility_blocked_rows:
         expose_publication_eligibility_counters(
             pending=len(rows),
             blocked=eligibility_terminal_blocked_count,
             refresh_deferred=eligibility_refresh_deferred_count,
+            soft_deferred=eligibility_soft_deferred_count,
         )
         ydb_upsert_image_rows(eligibility_blocked_rows, stage="blocked_publication_eligibility")
     elif source_mode != "ydb":
-        expose_publication_eligibility_counters(pending=len(rows), blocked=0, refresh_deferred=0)
+        expose_publication_eligibility_counters(
+            pending=len(rows), blocked=0, refresh_deferred=0, soft_deferred=0
+        )
     attempt_at = datetime.now(timezone.utc).isoformat()
     for r in rows:
         r["media_fetch_attempt_count"] = int(r.get("media_fetch_attempt_count") or 0) + 1
@@ -1800,7 +1911,8 @@ def process_batch(batch_rows, batch_index: int):
     eligibility_pending_count = int(input_payload.get("publication_eligibility_pending_count") or 0)
     eligibility_blocked_count = int(input_payload.get("publication_eligibility_blocked_count") or 0)
     eligibility_refresh_deferred_count = int(input_payload.get("publication_eligibility_refresh_deferred_count") or 0)
-    log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred_count)
+    eligibility_soft_deferred_count = int(input_payload.get("publication_eligibility_soft_deferred_count") or 0)
+    log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred_count, publication_eligibility_soft_deferred_count=eligibility_soft_deferred_count)
     # Fetch media, no source/comment scanning.
     tg=[r for r in rows if "t.me/" in (r.get("post_url") or "")]
     vk=[r for r in rows if "vk.com/wall" in (r.get("post_url") or "")]
@@ -1871,7 +1983,7 @@ def process_batch(batch_rows, batch_index: int):
     ydb_upsert_image_rows(rows, stage="scored_or_retry")
     ydb_update_source_visual_rollups()
     result_rows = rows + eligibility_blocked_rows
-    log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(result_rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"), actual_posts=sum(1 for r in rows if r.get("images_scored_actual_count")), actual_frames=sum(int(r.get("images_scored_actual_count") or 0) for r in rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred_count)
+    log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(result_rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"), actual_posts=sum(1 for r in rows if r.get("images_scored_actual_count")), actual_frames=sum(int(r.get("images_scored_actual_count") or 0) for r in rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count, publication_eligibility_refresh_deferred_count=eligibility_refresh_deferred_count, publication_eligibility_soft_deferred_count=eligibility_soft_deferred_count)
     return result_rows
 
 all_processed_rows=[]

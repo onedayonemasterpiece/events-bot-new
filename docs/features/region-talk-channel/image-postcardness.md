@@ -51,6 +51,15 @@ The current production-safe transition contract is
   source or compliance rejection becomes terminal. The orchestrator continues
   to count accepted v2/v3/v4 low-score rows as versioned rescore work even if
   an earlier migration attempt temporarily wrote the terminal image status.
+- Publication eligibility is tri-state at the image consumer as well as at the
+  producer. `needs_source_review`, `needs_text_review` and
+  `needs_visual_review` are soft deferrals
+  (`image_eligibility_status=deferred_soft_gate`), not aliases for `reject`.
+  Rows with an existing album score remain `actual_scored`; unsupported media
+  retains its own terminal media evidence; rows with no image evidence become
+  `deferred_text_gate`. A hard current local/spam/compliance/text rejection may
+  close `image_queue_status`, but cannot zero frame counts, scores, acquisition
+  state or model output.
 - Source-level exclusion based on average raw image score is disabled. Raw
   source image statistics remain diagnostics only; exact local/spam/legal
   exclusions are unaffected.
@@ -118,6 +127,16 @@ source. The final handoff skips an early row only when CandidateReport's own
 source/text/vector projection is unchanged; a richer final hard verdict for
 the same row must still be written, while ImageDiagnostic-owned frame/model
 fields remain protected by the latest-row merge.
+
+A subsequent one-item ImageDiagnostic poll exposed the same missing tri-state
+boundary in the image consumer itself: it rewrote 92 ledger rows as
+`rejected_publication_eligibility`, including soft `needs_*` decisions, and
+zeroed diagnostic frame counts. The consumer now separates hard rejection,
+producer-contract refresh and soft review. Queue-poll heartbeats report hard
+blocked, gate-version refresh and soft-deferred counts separately, so a large
+review cohort can no longer be hidden inside a misleading terminal-reject
+counter. This repair changes state ownership only; it does not lower image
+thresholds or turn `needs_visual_review` into automatic acceptance.
 
 ## Principle
 

@@ -1076,6 +1076,16 @@ scan slot and only when it has a persisted direct KO URL/fast-check hit/KO post
 or publication-source evidence. Mere similarity never earns that slot and no
 extra Telegram resolve allowance is created.
 
+Confirmed external bloggers keep the complete adaptive place/POI bank, but no
+single run is allowed to spend most of its wall time traversing that bank. Each
+source advances by at most eight terms per wave and persists its cursor; the
+whole fast-check stage is capped at 180 seconds. Reaching that cap is a normal
+`no_hit_partial`/deferred continuation, not a source rejection. The next run
+continues with later low-frequency locations, while exact links, E5 handoff,
+keyword/similar discovery and the durable tail retain their time budgets.
+Operator metrics expose query count, query time, total stage time, configured
+cap and whether it was exhausted.
+
 If the latest Candidate heartbeat stops in `state_write_started` or
 `report_write_started`, this is reported as a late-tail failure. It does not
 justify replacing high-yield exact/fast-check work with deeper generic history.

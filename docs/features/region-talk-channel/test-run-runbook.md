@@ -635,6 +635,13 @@ python scripts/region_talk_embedding_quality_compare.py \
   vector planning/state write; a later cycle without critical acquired work
   must still emit keyword/similar completion metrics, proving discovery was
   deferred rather than disabled.
+- Confirmed-blogger fast-check is continuation-based rather than a single deep
+  blocking pass. The orchestrated profile uses at most eight adaptive terms per
+  source wave and a 180-second whole-stage cap; the persisted query cursor must
+  advance so later runs still cover the full low-frequency place/POI bank.
+  Acceptance requires `fast_check_query_elapsed_seconds <= 200` (allowing one
+  final human-like sleep/RPC), no source rejection solely because the stage cap
+  was reached, and subsequent execution of exact/vector/YDB handoff stages.
 - Compare every bounded product run with a full before/after metric snapshot.
   In addition to all existing funnel metrics, require
   `image_visual_review_pending_total` (raw ledger),
