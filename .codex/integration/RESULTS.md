@@ -71,6 +71,8 @@
   Messages as message `32270`.
 - Verification: controller `5/5`, renderer `23/23`, local Playwright `14/14`,
   public HTTPS Playwright `14/14`, preview static contract check, public
-  MIME/byte/hash verification and `git diff --check` passed. Public preview:
+  MIME/byte/hash verification, real Chromium clipboard readback (text-only
+  canonical payload vs one image-only PNG item) and `git diff --check` passed.
+  Public preview:
   `https://kenigevents.ru/preview-20260715t0940z-f18-share-refine/__preview/`;
   lab: `https://kenigevents.ru/preview-20260715t0940z-f18-share-refine/lab/service-share/`.

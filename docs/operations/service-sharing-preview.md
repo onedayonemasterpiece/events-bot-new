@@ -59,7 +59,9 @@ snapshot and selection before a render so new OCR/crop metadata is propagated.
   prefix; deploy explicitly preserved stable `/ics/` objects;
 - local and public HTTPS Playwright: `14/14` each; controller `5/5`, renderer
   `23/23`, `build:preview`, `check:preview`, MIME/byte/hash checks and
-  `git diff --check` passed;
+  `git diff --check` passed; a real public Chromium clipboard readback confirmed
+  that the text action contains the canonical URL without a preview path and the
+  card action contains exactly one `image/png` representation;
 - final CPU card and public desktop footer screenshot were sent to Telegram
   Saved Messages as messages `32270` and `32271`.
 
