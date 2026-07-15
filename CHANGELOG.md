@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk false KO routing for ambiguous place-name homonyms: canonical names such as `Светлый`, `Пионерский` and `Сокольники` remain available to broad source-local fast-check recall, but require a second regional/location context before they can act as Kaliningrad evidence. The narrow safety gate now rejects the observed `светлый диван` regression before image/Gemini spend even when generic E5+BGE semantic classes are close; unambiguous historical aliases and the dual-model production contract are unchanged.
 - Fixed Region Talk live orchestration from linked worktrees: an explicitly supplied missing `--env-file` now fails before YDB planning/Kaggle launch, while a valid relative path is converted to an absolute child-launcher path, preventing empty partially configured CandidateReport runs.
 - Fixed Region Talk's controlled uncached Telegram lane so terminal `rejected_*` sources cannot consume its single human-like resolve allowance; live confirmed external bloggers now advance one safely paced entity warm-up per eligible run without increasing resolve/FloodWait limits.
 - Separated immediate Region Talk BGE pair debt from stale semantic-bank maintenance in orchestration, adaptive source budgeting, polling and operator metrics; stale-only rows no longer trigger a product BGE launch or suppress confirmed-blogger breadth, while dual E5+BGE remains mandatory for publication.

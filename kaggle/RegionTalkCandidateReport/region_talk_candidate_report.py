@@ -5558,7 +5558,11 @@ def build_region_talk_place_query_terms(lexicon: list[dict[str, Any]] | None = N
         ambiguity = str(row.get("ambiguity_level") or "")
         requires_context = str(row.get("requires_context") or "").lower() == "true"
         safe_global = tier in {"core", "tourist", "important"} and ambiguity in {"low", "medium"} and not requires_context
-        safe_preflight = ambiguity in {"low", "medium"} and not requires_context
+        # Source-local search is a recall operation, not a region verdict.  It
+        # may safely query ambiguous names (for example Светлый) because the
+        # exact post is subsequently checked by the context-aware scope gate.
+        # Global search/hashtags remain restricted to unambiguous terms.
+        safe_preflight = ambiguity in {"low", "medium"} or requires_context
         if safe_global and name:
             global_plain.append(name)
             tag = _safe_hashtag_from_place_term(name)
@@ -5705,8 +5709,7 @@ def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[d
     seen: set[tuple[str, str]] = set()
     strong_context_terms = [normalize_geo_text(x) for x in DEFAULT_ANCHORS[:8]] + [
         "калининградская область", "калининградской области", "зеленоградский", "светлогорский",
-        "балтийский район", "куршская коса", "балтийская коса", "пос.", "поселок", "поселке",
-        "маршрут", "поездка", "путешествие",
+        "балтийский район", "куршская коса", "балтийская коса",
     ]
     for place in lexicon:
         if str(place.get("allowed_for_kaliningrad_scope") or "").lower() != "true":
@@ -5721,9 +5724,25 @@ def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[d
                 seen.add(key)
                 idx = norm.find(norm_term)
                 raw_text = text or ""
-                requires_context = str(place.get("requires_context") or "").lower() == "true"
+                # Old/historical aliases are generally distinctive (Тапиау,
+                # Циммербуде).  The context requirement protects the ambiguous
+                # canonical surface, not those unambiguous aliases.
+                requires_context = (
+                    str(place.get("requires_context") or "").lower() == "true"
+                    and kind == "canonical_name"
+                )
                 context_norm = normalize_geo_text(raw_text[max(0, idx-120):idx+len(term)+120]) if idx >= 0 else norm
-                accepted_context = (not requires_context) or any(t and t in context_norm for t in strong_context_terms)
+                explicit_place_form = bool(re.search(
+                    rf"(?:\b(?:г|город|пос[её]лок|пос)\.?\s+{re.escape(norm_term)}\b|"
+                    rf"\b{re.escape(norm_term)}\s*(?:—|-|,)\s*(?:город|пос[её]лок)\b)",
+                    context_norm,
+                    flags=re.I,
+                ))
+                accepted_context = (
+                    (not requires_context)
+                    or any(t and t != norm_term and t in context_norm for t in strong_context_terms)
+                    or explicit_place_form
+                )
                 matches.append({
                     "place_id": place.get("place_id", ""),
                     "matched_place_name": term,
@@ -5798,6 +5817,20 @@ def kaliningrad_oblast_only_scope_gate(text: str, lexicon: list[dict[str, Any]])
         "region_scope_reason": reason,
         "place_matches": matches,
     }
+
+
+def scope_has_only_ambiguous_place_evidence(scope: dict[str, Any]) -> bool:
+    """True when a post matched a KO token but no context-qualified KO place.
+
+    This is a narrow precision guard for ordinary words such as ``светлый``
+    and ``пионерский``.  It does not classify post meaning and does not replace
+    the dual E5+BGE gate; it only prevents a lexical homonym from acting as the
+    region anchor for otherwise generic text.
+    """
+    return bool(
+        str(scope.get("matched_place_names") or "").strip()
+        and not str(scope.get("matched_place_accepted_as_region_evidence") or "").strip()
+    )
 
 
 def parse_post_datetime(value: Any) -> datetime | None:
@@ -13141,7 +13174,7 @@ E5_TEXT_MODEL_ID = "intfloat/multilingual-e5-base"
 BGE_M3_TEXT_MODEL_ID = "BAAI/bge-m3"
 BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
 E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
-POST_PROCESSING_POLICY_VERSION = "region_talk_post_processing_v2_idempotent_dual"
+POST_PROCESSING_POLICY_VERSION = "region_talk_post_processing_v3_ambiguous_place_context"
 TEXT_EMBEDDING_MODELS = [E5_TEXT_MODEL_ID, BGE_M3_TEXT_MODEL_ID]
 
 
@@ -14871,7 +14904,25 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "llm_usage_input_tokens": "", "llm_usage_output_tokens": "", "llm_usage_total_tokens": "",
             "rejection_reason_primary": "", "rejection_reason_details": "",
         }
-        if not rejection and str(vector_gate.get("vector_gate_status") or "").startswith("vector_reject"):
+        if not rejection and scope_has_only_ambiguous_place_evidence(scope):
+            # A dual vector may correctly see a generic lifestyle/impression
+            # post as semantically fluent while still having no evidence that
+            # it is about Kaliningrad Oblast.  Do not spend image/Gemini budget
+            # when the only region anchor is a lexical homonym (observed live:
+            # "светлый диван" matched the city Светлый).
+            drop_gate = "ambiguous_place_context_safety_gate"
+            rejection = "vector_reject_not_kaliningrad_oblast"
+            visual_skip_reason = "ambiguous Kaliningrad place token lacks region/location context"
+            current_stage = "dropped_text_gate"
+            vector_gate.update({
+                "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+                "vector_rejection_reason": visual_skip_reason,
+                "needs_llm_final_verify": "false",
+                "llm_status": "not_called_ambiguous_place_context_safety",
+                "llm_not_called_reason": "ambiguous_place_context_safety_gate",
+            })
+            gate_trace.append("ambiguous_place_context_safety_gate:reject")
+        elif not rejection and str(vector_gate.get("vector_gate_status") or "").startswith("vector_reject"):
             drop_gate = "semantic_vector_gate"
             rejection = str(vector_gate.get("vector_gate_status") or "vector_reject")
             visual_skip_reason = str(vector_gate.get("vector_rejection_reason") or rejection)

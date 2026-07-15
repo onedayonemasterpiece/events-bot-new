@@ -113,6 +113,17 @@ sample remains visible as maintenance telemetry, but does not shorten the
 control-loop interval or suppress confirmed-blogger source breadth; maintenance
 can still be run explicitly without weakening the E5+BGE production gate.
 
+Place-name queries are recall signals, not automatic region verdicts. Ambiguous
+canonical names such as `Светлый`, `Пионерский` and `Сокольники` remain in the
+wide source-local fast-check ladder, but they require an explicit regional or
+place-form context (`Калининградская область`, another unambiguous KO anchor,
+`город Светлый`, etc.) before they count as KO evidence. This narrow guard is
+needed because both semantic models can correctly see generic lifestyle text
+as an “impression” while the only apparent geo anchor is a homonym (the live
+regression was `светлый диван`). Historical aliases such as `Циммербуде`
+remain independently usable. The guard runs before image/Gemini spend and does
+not replace or weaken the mandatory dual E5+BGE text decision.
+
 ### Kaggle static/offline discipline
 
 Related: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `kaggle_status.py`, `kaggle_registry.py`, `video_announce/kaggle_client.py`.

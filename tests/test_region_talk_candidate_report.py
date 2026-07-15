@@ -3897,6 +3897,84 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         kosa = mod.kaliningrad_oblast_only_scope_gate("Лесной, Куршская коса, Калининградская область — спокойная остановка маршрута", lexicon)
         self.assertTrue(kosa["kaliningrad_oblast_only_scope"])
 
+        sofa = mod.kaliningrad_oblast_only_scope_gate(
+            "Любить светлый диван букле = любить моющий пылесос. Снимаю всё во влог.",
+            lexicon,
+        )
+        self.assertFalse(sofa["kaliningrad_oblast_only_scope"])
+        self.assertIn("Светлый", sofa["ambiguous_place_names"])
+        self.assertTrue(mod.scope_has_only_ambiguous_place_evidence(sofa))
+
+        city = mod.kaliningrad_oblast_only_scope_gate(
+            "Город Светлый, Калининградская область: приехали на прогулку и делимся впечатлениями.",
+            lexicon,
+        )
+        self.assertTrue(city["kaliningrad_oblast_only_scope"])
+        self.assertFalse(mod.scope_has_only_ambiguous_place_evidence(city))
+
+    def test_ambiguous_place_names_remain_source_preflight_queries(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        terms = mod.build_region_talk_place_query_terms(lexicon)
+        for name in ["Светлый", "Пионерский", "Сокольники"]:
+            self.assertIn(name, terms["source_preflight_terms"])
+        self.assertNotIn("#Светлый", terms["hashtag_terms"])
+
+    def test_ambiguous_place_only_cannot_reach_image_even_if_vector_accepts(self) -> None:
+        mod = load_module()
+        old_gate = mod.text_vector_gate
+        old_blogger = mod.load_public_blogger_links
+        old_xlsx = mod.write_xlsx
+        old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")
+        try:
+            os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = "prototype"
+            mod.load_public_blogger_links = lambda previous_state: []
+            mod.write_xlsx = lambda path, sheets: Path(path).write_text("unit", encoding="utf-8")
+            mod.text_vector_gate = lambda *args, **kwargs: {
+                "vector_gate_status": "vector_accept_candidate",
+                "vector_content_type": "visit_impression_candidate",
+                "vector_positive_score": 0.80,
+                "vector_negative_class": "low_substance",
+                "vector_negative_score": 0.84,
+                "vector_margin_positive_vs_negative": -0.04,
+                "vector_rejection_reason": "",
+                "needs_llm_final_verify": "true",
+                "llm_status": "not_called_until_final_verifier",
+                "llm_not_called_reason": "",
+                "text_embedding_model_id": "unit/e5+unit/bge",
+                "text_embedding_runtime": "unit_dual_stub",
+            }
+            seed = mod.Seed(
+                "s", "telegram", "Lifestyle", "@lifestyle", "https://t.me/lifestyle",
+                "travel_media", "", 1, "unit", "", "", "", "", "pending_scan",
+                True, "unknown", "",
+            )
+            post = {
+                "post_id": "post_sofa", "source_id": seed.source_id,
+                "source_seed_id": seed.source_seed_id, "source_title": "Lifestyle",
+                "platform": "telegram", "handle": "@lifestyle",
+                "post_url": "https://t.me/lifestyle/1", "platform_post_key": "tg:lifestyle:1",
+                "post_date": "2026-06-01T12:00:00+00:00",
+                "text": "Любить светлый диван букле = любить моющий пылесос. Снимаю всё во влог.",
+                "has_media": True, "media_count": 2, "rights_policy": "unknown",
+                "source_kind": "travel_media", "source_type": "travel_media",
+                "source_url": "https://t.me/lifestyle",
+            }
+            with tempfile.TemporaryDirectory() as td:
+                report = mod.build_report([seed], [], [post], "ambiguous-sofa-unit", Path(td))
+            dropped = {row.get("post_id"): row for row in report["sheets"]["08_dropped_posts"]}
+            self.assertEqual(dropped["post_sofa"]["rejection_reason"], "vector_reject_not_kaliningrad_oblast")
+            self.assertEqual(dropped["post_sofa"]["drop_gate"], "ambiguous_place_context_safety_gate")
+            self.assertEqual(report["summary"]["image_model_calls"], 0)
+        finally:
+            mod.text_vector_gate = old_gate
+            mod.load_public_blogger_links = old_blogger
+            mod.write_xlsx = old_xlsx
+            if old_mode is None:
+                os.environ.pop("REGION_TALK_TEXT_VECTOR_MODE", None)
+            else:
+                os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = old_mode
+
     def test_llm_accept_allows_image_scoring(self) -> None:
         mod = load_module()
         mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}

@@ -15,7 +15,15 @@ FIELDS = [
     "ambiguity_level", "allowed_for_kaliningrad_scope", "requires_context", "reject_if_external_context",
     "source_url", "source_note",
 ]
-AMBIGUOUS_CONTEXT_NAMES = {"Лесной", "Морское", "Рыбачий", "Приморье", "Русское", "Малиновка", "Куликово", "Покровское", "Дивное", "Ясное", "Северный", "Красное", "Весёлое", "Высокое", "Луговое", "Невское"}
+AMBIGUOUS_CONTEXT_NAMES = {
+    "Лесной", "Морское", "Рыбачий", "Приморье", "Русское", "Малиновка", "Куликово",
+    "Покровское", "Дивное", "Ясное", "Северный", "Красное", "Весёлое", "Высокое",
+    "Луговое", "Невское",
+    # These are valid Kaliningrad Oblast place names but also ordinary words,
+    # adjectives or shared Russian place names.  They remain useful recall
+    # queries; by themselves they are not sufficient region evidence.
+    "Светлый", "Пионерский", "Сокольники",
+}
 
 CORE_REQUIRED = {
     "Калининград", "Багратионовск", "Балтийск", "Гвардейск", "Гурьевск", "Гусев", "Зеленоградск",

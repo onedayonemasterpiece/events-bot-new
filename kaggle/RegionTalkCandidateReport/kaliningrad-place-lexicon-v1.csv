@@ -14,11 +14,11 @@ kgd_mamonovo,Мамоново,city,Мамоново,,true,true,true,false,false,
 kgd_neman,Неман,city,Неман,,true,true,true,false,false,,Рагнит;Ragnit,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_nesterov,Нестеров,city,Нестеров,,true,true,true,false,false,,Шталлупёнен;Эбенроде;Stallupönen;Ebenrode,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_ozersk,Озёрск,city,Озёрск,,true,true,true,false,false,,Даркемен;Ангерапп;Darkehmen;Angerapp,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
-kgd_pionerskii,Пионерский,city,Пионерский,,true,true,true,false,false,,Нойкурен;Neukuhren,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_pionerskii,Пионерский,city,Пионерский,,true,true,true,false,false,,Нойкурен;Neukuhren,,,kaliningrad_oblast,core,high,true,true,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_polessk,Полесск,city,Полесск,,true,true,true,false,false,,Лабиау;Labiau,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_pravdinsk,Правдинск,city,Правдинск,,true,true,true,false,false,,Фридланд;Friedland,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_svetlogorsk,Светлогорск,city,Светлогорск,,true,true,true,false,false,,Раушен;Rauschen,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
-kgd_svetlyi,Светлый,city,Светлый,,true,true,true,false,false,,Циммербуде;Zimmerbude,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
+kgd_svetlyi,Светлый,city,Светлый,,true,true,true,false,false,,Циммербуде;Zimmerbude,,,kaliningrad_oblast,core,high,true,true,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_slavsk,Славск,city,Славск,,true,true,true,false,false,,Хайнрихсвальде;Heinrichswalde,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_sovetsk,Советск,city,Советск,,true,true,true,false,false,,Тильзит;Tilsit,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
 kgd_chernyahovsk,Черняховск,city,Черняховск,,true,true,true,false,false,,Инстербург;Insterburg,,,kaliningrad_oblast,core,low,true,false,true,https://gov39.ru/vlast/muni/,municipal center; old names retained as scope aliases
@@ -74,7 +74,7 @@ kgd_ornitologicheskaya_stantsiya_fringilla,орнитологическая ст
 kgd_stantsiya_fringilla,станция Фрингилла,landmark,,,false,false,true,false,false,,,,,kaliningrad_oblast,important,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
 kgd_malinovka,Малиновка,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
 kgd_kulikovo,Куликово,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
-kgd_sokolniki,Сокольники,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
+kgd_sokolniki,Сокольники,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
 kgd_zaostrove,Заостровье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
 kgd_pereslavskoe,Переславское,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,low,true,false,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
 kgd_primore,Приморье,settlement,,,false,true,true,false,false,,,,,kaliningrad_oblast,local,high,true,true,true,https://visit-kaliningrad.ru/,curonian seed from user-provided v1 list
