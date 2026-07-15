@@ -1975,6 +1975,7 @@ def _heuristic_ko_funnel_metrics(
     source_rows: list[dict[str, Any]],
     *,
     latest_candidate_run_id: str = "",
+    latest_processed_post_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     source_by_key = {_source_merge_key(row): row for row in source_rows if _source_merge_key(row)}
     heuristic_rows: list[tuple[dict[str, Any], dict[str, Any], str]] = []
@@ -2002,6 +2003,14 @@ def _heuristic_ko_funnel_metrics(
     def belongs_to_run(row: dict[str, Any]) -> bool:
         if not latest_candidate_run_id:
             return False
+        # Candidate/image/publication projections may be reconciled and
+        # stamped with the current run even when the post itself was not read
+        # or rescored.  Latest-run product conversion must therefore be owned
+        # by the authoritative processed-post ledger, not by a downstream
+        # overlay timestamp.
+        if latest_processed_post_keys is not None:
+            key = _post_merge_key(row)
+            return bool(key and key in latest_processed_post_keys)
         return latest_candidate_run_id in {
             str(row.get("run_id") or ""),
             str(row.get("last_seen_run_id") or ""),
@@ -3472,10 +3481,17 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     )
     regex_vector_metrics = _regex_vector_comparison_metrics(diagnostic_post_rows)
     latest_candidate_run_id = str((latest_rows.get("latest_business_heartbeat") or {}).get("run_id") or "")
+    processed_post_rows = rows_by_kind["processed_post_item"]
+    processed_post_unique_keys = {_post_merge_key(row) for row in processed_post_rows if _post_merge_key(row)}
+    ko_scope_conversion_metrics = _ko_scope_conversion_metrics(processed_post_rows)
+    processed_post_latest_run_metrics, processed_post_latest_run_rows, processed_post_latest_run_unique_keys = (
+        _latest_processed_post_metrics(processed_post_rows, latest_candidate_run_id)
+    )
     heuristic_ko_funnel_metrics = _heuristic_ko_funnel_metrics(
         diagnostic_post_rows,
         source_rows,
         latest_candidate_run_id=latest_candidate_run_id,
+        latest_processed_post_keys=processed_post_latest_run_unique_keys,
     )
     source_statuses = [str(r.get("source_queue_status") or r.get("queue_status") or r.get("fetch_status") or "") for r in source_rows]
     source_terminal = [
@@ -3494,12 +3510,6 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         r for r, status in zip(source_rows, source_statuses)
         if status and status != "pending_scan"
     ]
-    processed_post_rows = rows_by_kind["processed_post_item"]
-    processed_post_unique_keys = {_post_merge_key(row) for row in processed_post_rows if _post_merge_key(row)}
-    ko_scope_conversion_metrics = _ko_scope_conversion_metrics(processed_post_rows)
-    processed_post_latest_run_metrics, processed_post_latest_run_rows, processed_post_latest_run_unique_keys = (
-        _latest_processed_post_metrics(processed_post_rows, latest_candidate_run_id)
-    )
     processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
     source_with_posts = [
         r for r in source_rows

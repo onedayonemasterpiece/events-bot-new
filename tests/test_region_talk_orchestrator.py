@@ -260,6 +260,37 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["heuristic_ko_latest_run_raw_posts_total"], 4)
         self.assertEqual(metrics["heuristic_ko_latest_run_sent_total"], 1)
 
+    def test_heuristic_latest_run_ignores_downstream_overlay_run_stamp(self) -> None:
+        mod = load_module()
+        run_id = "region-talk-orchestrator-candidate-report-unit"
+        rows = [
+            {
+                "text": "Побывали в Калининграде, запомнилась прогулка",
+                "post_url": "https://t.me/current/1",
+                "run_id": run_id,
+                "vector_gate_status": "vector_reject_multi_region_roundup",
+            },
+            {
+                "text": "Побывали в Калининграде, запомнилась прогулка",
+                "post_url": "https://t.me/stale_overlay/2",
+                # A CandidateReport reconciliation touched this historical
+                # publication row, but the post was not processed in the run.
+                "last_seen_run_id": run_id,
+                "vector_gate_status": "vector_accept_candidate",
+                "publication_candidate_status": "visual_review_pending",
+            },
+        ]
+        metrics = mod._heuristic_ko_funnel_metrics(
+            rows,
+            [],
+            latest_candidate_run_id=run_id,
+            latest_processed_post_keys={"url:https://t.me/current/1"},
+        )
+        self.assertEqual(metrics["heuristic_ko_raw_posts_total"], 2)
+        self.assertEqual(metrics["heuristic_ko_latest_run_raw_posts_total"], 1)
+        self.assertEqual(metrics["heuristic_ko_latest_run_text_accepted_total"], 0)
+        self.assertEqual(metrics["heuristic_ko_latest_run_publication_total"], 0)
+
     def test_ko_scope_conversion_is_unique_and_pre_content_filter(self) -> None:
         mod = load_module()
         metrics = mod._ko_scope_conversion_metrics([

@@ -1097,6 +1097,11 @@ real exact-fetch and BGE-rescore work. This prevents local-source cleanup from
 inflating the product backlog or triggering an unnecessary BGE run.
 
 The compact processed-post online projection includes `first_seen_run_id`.
+Latest-run KO conversion is joined back to the authoritative
+`processed_post_item` identities touched by that CandidateReport run. Routine
+candidate/image/publication reconciliation may refresh a downstream row's
+`run_id`, but it must not make an old post look like a newly processed KO,
+media or publication success in the per-run scorecard.
 Without it, a run that really acquired new posts was reported as zero new and
 all work appeared to be a rescan, undermining the data-driven controller.
 
