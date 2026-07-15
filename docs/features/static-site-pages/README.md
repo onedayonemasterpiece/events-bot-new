@@ -208,6 +208,7 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Merged implementation skeleton for the first page build: `docs/features/static-site-pages/event-page-merged-skeleton.md`.
 - Event-card UI A/B comparison and product hypothesis: `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`.
 - Event hero composition lab / mobile-first decision: `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`.
+- Homepage typed briefing / compact hero research, scenario library and Gemini Pro gate: `docs/features/static-site-pages/typed-briefing-hero-research.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
 - Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.
 - Production integration plan for personalization, promo, Smart Update rebuilds, analytics and CTA: `docs/features/unsigned-personalization/production-integration.md`.

@@ -29,6 +29,8 @@
 
 ### Added
 
+- **Static homepage / typed city briefing research**: documented the conditional prototype gate for a compact ≤50svh editorial briefing above categories and feed, including responsive height budgets, 33 grounded scenario families, motion/accessibility state machine, static manifest and Gemini Lite writer boundaries, experiment metrics, risk register, and a two-pass Gemini 3.1 Pro High consultation.
+
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.
 
 - **Telegram Monitoring / КЛДскоп**: добавлен официальный `@kldscope_news` с `high` trust, source default и канонической площадкой `КЛДскоп, Земельная 12, 1 этаж, кабинет 3, Калининград`; официальные формулировки и склонения имени канонизируются через reference/alias layer.
