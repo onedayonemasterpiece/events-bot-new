@@ -21398,7 +21398,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             source_hash=source_hash,
         )
         logline("TG", event_id, "event done", url=url)
-    if post_id:
+    if post_id and mode != "rich_message":
         await enqueue_tg_event_premium_emoji_edit_job(db, event_id, int(post_id))
     return True
 
@@ -21421,11 +21421,13 @@ async def job_edit_tg_event_premium_emoji(event_id: int, db: Database, bot: Bot 
 
         if not premium_emoji_editor_enabled():
             return False
-        medallion_block = event_medallion_html_block(ev)
         results = await edit_messages_with_env(
             [(target, int(post_id))],
             delay_seconds=0,
-            medallion_html_block=medallion_block or None,
+            # Graphical medallions are part of the RichMessage media payload.
+            # The legacy custom-emoji editor may still normalize unrelated
+            # labels on old posts, but it must never place medallions again.
+            medallion_html_block=None,
         )
         logging.info(
             "tg_premium_emoji.edit_done context=tg_event_publish_durable results=%s",
