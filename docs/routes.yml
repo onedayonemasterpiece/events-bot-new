@@ -683,14 +683,30 @@ features:
       - scripts/apply_event_media_audit_cleanup.py
       - scripts/stage_event_media_review_backfill.py
   linked_events:
-    status: implemented
+    status: core_and_telegraph_implemented_static_card_release_blocker
     docs: docs/features/linked-events/README.md
+    capabilities:
+      canonical_linked_event_ids: implemented
+      symmetric_recompute: implemented
+      telegraph_other_dates: implemented
+      static_detail_other_dates: partial_preview
+      static_export_canonical_links: missing_hardcoded_empty
+      static_event_card_date_time_choices: missing_release_blocker
+      full_catalog_graph_audit: missing_release_gate
     entrypoints:
       - linked_events.py
       - smart_event_update.py
       - source_parsing/handlers.py
       - main.py
       - main_part2.py
+      - site/scripts/export-production-preview-data.py
+      - site/src/lib/events.ts
+      - site/src/components/EventCard.astro
+      - site/src/components/EventListItem.astro
+      - site/src/pages/sobytiya/[slug].astro
+    tests:
+      - tests/test_tg_event_publish.py
+      - site/scripts/check-preview.mjs
   vk_auto_queue:
     status: implemented
     docs: docs/features/vk-auto-queue/README.md

@@ -315,6 +315,13 @@ Supabase/Postgres personalization DB
 - одна страница соответствует конкретному event occurrence/date;
 - `linked_event_ids` используются для блока “Другие даты”, но не склеивают разные даты в один canonical URL.
 
+For release M6 this relation must also be visible inside every shared event card:
+the primary occurrence keeps its own URL/date/time, while compact alternatives
+expose other eligible dates/times of the same programme. The current exporter
+hardcodes `other_date_ids=[]` and the frontend title/venue inference is only a
+preview fallback, not release truth. Canonical requirements and full-surface gates:
+[`docs/features/linked-events/README.md`](../linked-events/README.md#m6-обязательный-static-site-release-contract).
+
 Нужны отдельные правила для:
 
 - отмены события;

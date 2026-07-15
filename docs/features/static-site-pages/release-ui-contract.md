@@ -10,6 +10,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 
 - root/index and responsive navigation with one shared information architecture;
 - a shared age-rating fact on every concrete-event representation whenever canonical `age_restriction` is present;
+- visible alternative dates/times inside every event card when the programme has other eligible linked occurrences;
 - common mobile menu/footer service-share actions and their desktop copy-link variants;
 - today, tomorrow, weekend and relevant category listings;
 - event detail, gallery and quick-read organizer/venue/festival medallion row;
@@ -32,6 +33,21 @@ If H1 is accepted, its branch/SHA, V1/V2 screenshots, accessibility/performance 
 M5 requires one shared event-age formatter/component, not renderer-specific copy. A non-null canonical `age_restriction` appears as visible `0+|6+|12+|16+|18+` on homepage/listing/search/tag/related/personal/favorite/festival/transport cards and as an immediately discoverable age fact on event detail; generated first-party event summaries preserve the same value. Unknown never renders a default `0+`.
 
 The marker remains readable without color, has an accessible name such as `Возрастное ограничение 12+`, does not overlap title/date/media/actions and is present in no-JS HTML. Compact and detail variants share the [same source/projection/UI contract](event-age-rating.md); the frozen UI inventory must prove every actual renderer rather than one sample page.
+
+## Linked occurrence choices in cards
+
+M6 requires the existing Telegraph `Другие даты` capability to survive canonical
+static export and become visible directly inside shared cards. One programme with
+several confirmed occurrence dates/times keeps separate canonical URLs and
+occurrence-specific calendar/favorite/reminder/ticket/transport state, while the
+card shows the nearest alternatives and a truthful total/expand path.
+
+The UI must distinguish other occurrences from `Похожие события`; same-slot
+duplicates are merged, not rendered as alternatives. Same-day card collapse is
+allowed only when all eligible times or an explicit `ещё N` control remain visible.
+No-JS HTML exposes crawlable occurrence links, mobile does not depend on hover and
+the card-wide link pattern must not create nested interactive controls. Canonical
+data, Smart Update and full acceptance are defined by [Linked Events M6](../linked-events/README.md#m6-обязательный-static-site-release-contract).
 
 ## Responsive navigation
 
@@ -87,6 +103,7 @@ The frozen event-detail UI consumes the single medallion slice from draft PR [#3
 - visual baselines tied to one immutable preview build id;
 - an explicit H1 `ship|defer` record; if `ship`, categories-first/static/motion comparison, 320–1440 viewport captures, no-JS/reduced-motion/keyboard/low-end checks and downstream discovery instrumentation are bound to that same preview;
 - M5 full renderer inventory covers every non-null rating plus unknown at mobile/tablet/desktop, with zero missing, contradictory, clipped, color-only or invented labels and visible/structured/ICS parity where applicable;
+- M6 captures same-day multi-time and different-date groups in every shared card family at mobile/tablet/desktop and no-JS; each alternative opens/saves the correct occurrence, while past/unavailable/false-linked/same-slot duplicates never appear as available choices;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 
 ## Branch rule
