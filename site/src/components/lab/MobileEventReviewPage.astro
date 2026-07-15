@@ -1,7 +1,7 @@
 ---
 import EventCard from '../EventCard.astro';
 import EventFacts from '../EventFacts.astro';
-import EventHero, { type HeroComposition } from '../EventHero.astro';
+import EventHero, { type HeroComposition, type HeroMode } from '../EventHero.astro';
 import EventTokenMedallions from '../EventTokenMedallions.astro';
 import Icon from '../Icon.astro';
 import type { PreviewEvent } from '../../lib/types';
@@ -24,12 +24,18 @@ interface Props {
   related: PreviewEvent[];
   variant: MobileEventReviewVariant;
   composition: HeroComposition;
+  modeOverride?: HeroMode;
 }
 
-const { event, related, variant, composition } = Astro.props;
+const { event, related, variant, composition, modeOverride } = Astro.props;
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const compactLabelAction = stickyCalendarPrimary && ctaHref
+  ? 'ticket'
+  : !stickyCalendarPrimary && isCalendarEligible(event)
+    ? (event.id % 2 === 0 ? 'calendar' : 'share')
+    : 'share';
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
@@ -57,11 +63,13 @@ const galleryCta = galleryCtaEvent ? {
   data-mobile-review-variant={variant.slug}
   data-prose-treatment={variant.proseTreatment}
   data-actions-treatment={variant.actionsTreatment}
+  data-mobile-review-revision={variant.revision}
+  data-compact-label-action={compactLabelAction}
 >
   <div class="page-shell page-shell--event-impact mobile-event-review__shell">
     <article class="main-col section-card section-card--hero section-card--impact-hero">
       <div class="section-card__inner section-card__inner--hero">
-        <EventHero event={event} composition={composition} galleryCta={galleryCta} />
+        <EventHero event={event} composition={composition} modeOverride={modeOverride} galleryCta={galleryCta} />
       </div>
     </article>
 
@@ -109,6 +117,37 @@ const galleryCta = galleryCtaEvent ? {
 <style is:global>
   [data-mobile-event-review] .mobile-event-review__shell { padding-bottom: 1.5rem; }
   [data-mobile-event-review] .mobile-event-review__medallions { margin-top: 0.25rem; }
+
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .section-card--impact-hero {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.45rem;
+    margin-top: 0.05rem;
+    padding: 0.72rem 0.82rem;
+    border: 1px solid rgba(121,48,20,0.12);
+    border-radius: 14px;
+    background: rgba(181,77,34,0.07);
+    color: #46372d;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__when {
+    color: #8f3517;
+    font-size: 1.05rem;
+    font-weight: 920;
+    line-height: 1.15;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__where {
+    flex-basis: 100%;
+    font-size: 0.92rem;
+    font-weight: 780;
+    line-height: 1.24;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__meta-separator { display: none; }
 
   [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__details {
     overflow: visible;
@@ -184,6 +223,25 @@ const galleryCta = galleryCtaEvent ? {
       flex-basis: 5.9rem;
       padding-inline: 0.34rem;
       font-size: 0.79rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-actions-treatment="dock"] .event-hero__actions > .secondary-button {
+      flex: 0 0 48px;
+      width: 48px;
+      padding-inline: 0.35rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-actions-treatment="dock"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
+      display: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"],
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="share"] .event-hero__actions > .native-share-button {
+      flex: 1 1 0;
+      width: auto;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
+      display: inline;
     }
   }
   @media (min-width: 760px) and (max-width: 1023px) {

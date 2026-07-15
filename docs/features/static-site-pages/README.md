@@ -6,9 +6,10 @@
 
 ## Implementation status
 
-Mobile event-detail UI вынесен в контролируемый preview lab: четыре варианта
-образуют матрицу `current/open prose × current/grouped actions` на photo,
-free-like и OCR-poster событиях. Бирка, media policy, discovery cards и sticky
+Mobile event-detail UI вынесен в контролируемый preview lab: четыре исходных
+варианта образуют матрицу `current/open prose × current/grouped actions`, а
+`accepted-v2` candidate проверяет исправления full-bleed alignment, date/time
+hierarchy, OCR-safe framing и compact labels. Бирка, discovery cards и sticky
 CTA намеренно зафиксированы. Канонический scope и acceptance gate:
 [`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).
 
