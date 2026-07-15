@@ -140,3 +140,14 @@ events до terminal outcome: 52 declared, 18 assessed, 99
 fill составил `70/291 = 24.05%`; среди 239 событий без declared BGE принял
 `18/239 = 7.53%`. Поэтому итоговый `FAIL` для no-missing подтверждён не только
 OOF, но и полным live срезом; половинчатый результат не маркируется завершённым.
+
+Последующая source-by-source проверка восстановила ещё 12 прямых declared
+значений, пропущенных старым projection path, включая две контрольные ошибки
+BGE (`6112`: assessed 16+ / declared 12+; `6776`: assessed 0+ / declared 16+).
+Финальный live срез: 64 declared, 11 assessed-only, 216 terminal nonnumeric;
+numeric fill `75/291 = 25.77%`. Grounded cases добавлены в calibration scope и
+grouped OOF пересчитан на 539 строках: high-confidence gate снова прошёл
+(`52.69%` coverage, `95.42%` exact, `98.94%` within-one, severe-under `0`), но
+mixed-title группы, включая рискованный live case, исключаются из grouped
+training/evaluation. Поэтому новый artifact не развёрнут: он не решает 100%
+fill-rate и не отменяет production blocker.

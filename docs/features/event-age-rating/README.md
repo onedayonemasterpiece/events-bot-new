@@ -277,12 +277,12 @@ Ignored evidence:
 ### Production rollout и полный current/future sweep 2026-07-15
 
 В production загружен private approved artifact, включён CPU worker и сохранён
-public default `declared_only`. Grounded source review вернул 52 актуальным
-событиям declared rating. Затем missing-only selector полностью обработал
+public default `declared_only`. Grounded source review сначала вернул 52
+актуальным событиям declared rating. Затем missing-only selector полностью обработал
 оставшиеся 239 событий тремя валидными batch (`64 + 128 + 60`); stale/invalid
 imports — 0, declared значения не перезаписаны.
 
-Финальный срез 291 current/future canonical event:
+Первичный срез 291 current/future canonical event:
 
 - declared numeric: `52`;
 - high-confidence BGE assessed numeric: `18`;
@@ -296,6 +296,21 @@ imports — 0, declared значения не перезаписаны.
 official-label OOF coverage `51.41%` и является дополнительным доказательством,
 что high-confidence gate нельзя выдавать за завершённый no-missing pipeline.
 После rollout: SQLite `quick_check=ok`, `/healthz ready=true`.
+
+Полная сверка 18 принятых BGE-строк с production source rows нашла исторический
+projection gap: 12 event-scoped источников с прямым `N+` (Qtickets/VK/Telegram)
+были до внедрения поля сохранены только в `event_source`, а scope review ложно
+отнёс их к ambiguous. Источники повторно проверены по event id/title/date/URL,
+строки `event` сохранены в backup table
+`codex_backup_event_age_source_repair_20260715`, после чего 12 declared values
+восстановлены. Два из них выявили реальные ошибки BGE: `6112` получил assessed
+`16+` вместо source `12+`, а `6776` — assessed `0+` вместо source `16+`.
+
+После source repair итог: declared `64`, assessed-only `11`,
+`insufficient_evidence` `94`, `ocr_unavailable` `122`; numeric fill
+`75/291 = 25.77%`, nonterminal `0`. Среди оставшихся 227 событий без declared
+BGE принял `11/227 = 4.85%`. Source-declared всегда имеет приоритет; старые
+assessment оставлены только как audit evidence расхождения.
 
 Во время rollout обнаружена коллизия status-dataset slug у двух длинных run id.
 Исправление добавляет hash полного run id; следующие datasets
