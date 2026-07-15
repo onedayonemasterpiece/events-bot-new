@@ -1,8 +1,8 @@
 # Возрастные ограничения событий
 
 Статус: **структурированный data path реализован; публичный режим —
-`declared_only`; BGE assessment — автоматический gated batch, shadow до
-прохождения quality gates**.
+`declared_only`; CPU assessment прошёл автоматический quality gate и готов для
+внутреннего hash-bound rollout без дополнительных LLM-вызовов**.
 
 ## Контракт продукта
 
@@ -201,28 +201,62 @@ kernel оставлен для следующих hash-bound batch runs.
 Ignored evidence:
 `artifacts/codex/event-age-rating-auto-calibration-2026-07-15/event-age-bge-canary-20260715t1128z/`.
 
-### Полный calibration run 2026-07-15
+### Полный calibration и закрытие quality gate 2026-07-15
 
-Повторный CPU-прогон закрыл весь свежий snapshot: `704 + 14 = 718/718`
-событий, `718` уникальных input hash, один model/encoder/prototype contract и
-ноль незамаскированных age tokens. Follow-up из 14 строк потребовался после
-runtime guard основного batch. Manual launcher теперь различает внешний Kaggle
-`COMPLETE` и внутренний worker `partial`, поэтому такой результат больше нельзя
-выдать за завершённый batch.
+CPU-прогон закрыл весь свежий snapshot: `704 + 14 = 718/718` событий,
+`718` уникальных input hash, один model/encoder/prototype contract и ноль
+незамаскированных age tokens. Follow-up из 14 строк потребовался после runtime
+guard основного batch. Manual launcher различает внешний Kaggle `COMPLETE` и
+внутренний worker `partial`, поэтому такой результат нельзя выдать за
+завершённый batch.
 
-Классификатор quality gate **не прошёл** и не активирован:
+Первый dense BGE head quality gate не прошёл. После этого калибровка не была
+остановлена: проведён Gemini Pro scope audit всех 718 кандидатов, сравнены 270
+dense-head конфигураций, ordinal cascade, TF-IDF и hybrid варианты. В итоговый
+scope-clean набор вошла 531 source-declared метка (`0+` 42, `6+` 66, `12+`
+105, `16+` 109, `18+` 209); 182 rejected/ambiguous scope rows и 5
+противоречивых title-groups исключены до оценки.
 
-- grouped source-candidate test: accepted coverage `75.2%`, exact `71.4%`,
-  within-one `92.3%`, severe-under `2.2%`;
-- Gemini Pro scope review на calibration/test: `72 accept`, `19 reject`,
-  `103 ambiguous`; на принятом test exact `36%`, class support недостаточен;
-- дополнительный deterministic class-stratified test: exact `68.1%`,
-  within-one `86.7%`.
+Итоговая числовая голова — ортогональный к BGE lexical safety cascade:
 
-Таким образом полный run завершил калибровочную проверку, но доказал, что
-текущие source-token labels слишком шумные, а BGE head недостаточно точен.
-Production остаётся `shadow/declared_only`; numeric default и classifier bundle
-не создаются.
+- BGE-M3 остаётся semantic retrieval/evidence слоем;
+- `char_wb` TF-IDF 3–5 grams + четыре bootstrap `LinearSVC` дают consensus;
+- три независимые ordinal головы (`>=12`, `>=16`, `>=18`) только запрещают
+  небезопасное принятие и не выбирают максимальный/default возраст;
+- два grouped 5-fold OOF seed использованы только для порогов;
+- третий untouched grouped 5-fold OOF seed использован один раз для acceptance.
+
+Untouched acceptance на 531 официальной метке:
+
+- coverage `51.4124%` (273 события);
+- exact `95.9707%`;
+- within-one `99.2674%`;
+- under-rate `1.4652%`;
+- severe-under `0%`;
+- support каждого класса существенно выше 5.
+
+Все исходные автоматические gates (`coverage >= 50%`, `exact >= 72%`,
+`within-one >= 95%`, `under <= 10%`, `severe-under = 0`) пройдены. Отдельный
+неблокирующий safety diagnostic для завышения `0+/6+` на две ступени — `7.4074%`
+(2 из 27 принятых child-label случаев). Это внутренний assessed-only результат:
+он не заменяет source-declared `0+`, не меняет публичный `declared_only` и
+наблюдается отдельно.
+
+Gemini 3.1 Pro High дал `CONDITIONAL PASS`: условием были raw-matrix artifact без
+pickle/joblib и deterministic startup parity. Условие реализовано:
+classifier NPZ хранит только vocabulary/IDF/coef/intercept, Kaggle worker
+выполняет `char_wb`/TF-IDF и matrix inference без sklearn, а gate JSON содержит
+пять text→logits→decision self-tests. Calibrator сравнивает pure inference со
+sklearn при сборке; worker при несовпадении hash/logits fail closed и abstains.
+Предложение консультанта добавить человеческую очередь не принято, поскольку
+контракт задачи исключает человека из схемы.
+
+Prepared bundle загружен в private Kaggle dataset. Реальный CPU canary через
+стандартный launcher/status/heartbeat обработал `15/15` событий (по три каждого
+класса), `classifier_active=true`, `evaluation_approval_status=approved`,
+worker `complete`; все 15 приняты и совпали с замаскированными official labels.
+Worker elapsed `162.108 s`, launcher `214.315 s`. Временный input dataset после
+проверки удалён.
 
 Ignored evidence:
 `artifacts/codex/event-age-rating-full-calibration-2026-07-15-v3/`.

@@ -10,6 +10,8 @@ import types
 from pathlib import Path
 
 import numpy as np
+import pytest
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from scripts.backfill_event_age_ratings import apply_reviewed_plan, build_plan
 from scripts.evaluate_event_age_golden import evaluate, structured_baseline
@@ -249,6 +251,148 @@ def test_bge_classifier_gate_is_automatic_and_hash_bound(tmp_path, monkeypatch):
     assert gate["gate_authority"] == "automatic_quality_gate_v1"
     assert "approved_by" not in gate
     assert actual_hash == classifier_hash
+
+
+def _make_safety_cascade_artifacts(tmp_path, worker):
+    samples = [
+        "семейный мастер-класс для детей",
+        "детский спектакль по сказке",
+        "лекция об истории города",
+        "вечерний рок концерт",
+        "психологический триллер",
+    ]
+    vectorizer = TfidfVectorizer(
+        analyzer="char_wb",
+        ngram_range=(3, 5),
+        min_df=1,
+        sublinear_tf=True,
+    ).fit(samples)
+    terms = np.asarray(vectorizer.get_feature_names_out(), dtype="str")
+    feature_count = len(terms)
+    classifier_path = tmp_path / "event_age_bge_classifier.npz"
+    head_bias = np.zeros((4, 5), dtype="float64")
+    head_bias[:, 2] = 6.0
+    np.savez_compressed(
+        classifier_path,
+        classifier_kind=np.asarray("char_tfidf_safety_cascade_v1"),
+        classes=np.asarray(["0+", "6+", "12+", "16+", "18+"]),
+        tfidf_terms=terms,
+        tfidf_idf=np.asarray(vectorizer.idf_, dtype="float64"),
+        head_weights=np.zeros((4, 5, feature_count), dtype="float64"),
+        head_bias=head_bias,
+        boundary_weights=np.zeros((3, feature_count), dtype="float64"),
+        boundary_bias=np.full(3, -2.0, dtype="float64"),
+    )
+    bundle = np.load(classifier_path, allow_pickle=False)
+    thresholds = {
+        "confidence": 0.8,
+        "low_consensus": 3,
+        "high_consensus": 3,
+        "max_severe_votes": 0,
+        "max_severe_risk": 0.5,
+        "min_high_votes": 0,
+        "min_high_risk": 0.0,
+    }
+    gate = {"cascade_thresholds": thresholds}
+    decisions = worker.classify_with_safety_cascade(samples, bundle, gate)
+    self_tests = []
+    for text, decision in zip(samples, decisions):
+        head_logits, boundary_logits = worker.safety_cascade_logits(text, bundle)
+        self_tests.append(
+            {
+                "text": text,
+                "head_logits": head_logits.tolist(),
+                "boundary_logits": boundary_logits.tolist(),
+                "status": decision["status"],
+                "age_assessment": decision["age_assessment"],
+            }
+        )
+    gate["deterministic_self_tests"] = self_tests
+    return samples, vectorizer, classifier_path, bundle, gate
+
+
+def test_tfidf_safety_cascade_has_sklearn_parity_and_fail_closed_selftests(tmp_path):
+    worker = load_bge_worker()
+    samples, vectorizer, _, bundle, gate = _make_safety_cascade_artifacts(tmp_path, worker)
+
+    expected = vectorizer.transform([samples[0]]).toarray()[0]
+    terms = [str(value) for value in bundle["tfidf_terms"].tolist()]
+    actual_sparse = worker._tfidf_features(
+        samples[0], {term: index for index, term in enumerate(terms)}, bundle["tfidf_idf"]
+    )
+    actual = np.zeros_like(expected)
+    for index, value in actual_sparse.items():
+        actual[index] = value
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=1e-12)
+
+    decision = worker.classify_with_safety_cascade([samples[0]], bundle, gate)[0]
+    assert decision["status"] == "assessed"
+    assert decision["age_assessment"] == "12+"
+    worker.validate_safety_cascade_self_tests(bundle, gate)
+
+    gate["deterministic_self_tests"][0]["head_logits"][0][0] += 0.1
+    with pytest.raises(ValueError, match="multiclass self-test mismatch"):
+        worker.validate_safety_cascade_self_tests(bundle, gate)
+
+
+def test_v2_safety_cascade_gate_requires_valid_startup_selftests(tmp_path, monkeypatch):
+    worker = load_bge_worker()
+    _, _, classifier_path, _, gate = _make_safety_cascade_artifacts(tmp_path, worker)
+    bank = {"version": "test", "prototypes": [{"id": "p", "text": "пример"}]}
+    bank_hash = worker.stable_hash(bank)
+    vector_path = tmp_path / "event_age_bge_prototype_vectors.npz"
+    np.savez_compressed(
+        vector_path,
+        vectors=np.asarray([[1.0, 0.0]], dtype="float32"),
+        model_revision=np.asarray("revision"),
+        encoder_contract=np.asarray(worker.ENCODER_CONTRACT),
+        prototype_bank_hash=np.asarray(bank_hash),
+    )
+    classifier_hash = hashlib.sha256(classifier_path.read_bytes()).hexdigest()
+    gate.update(
+        {
+            "approval_status": "approved",
+            "gate_authority": "automatic_quality_gate_v2",
+            "quality_gates_passed": True,
+            "model_revision": "revision",
+            "encoder_contract": worker.ENCODER_CONTRACT,
+            "prototype_bank_hash": bank_hash,
+            "classifier_sha256": classifier_hash,
+            "evaluation_dataset_hash": "dataset-hash",
+            "labeled_case_count": 531,
+            "critical_over_permissive_rate": 0.0,
+            "generated_at": "2026-07-15T00:00:00Z",
+            "class_support": {label: 20 for label in ["0+", "6+", "12+", "16+", "18+"]},
+            "exact_accuracy": 0.95,
+            "within_one_accuracy": 0.99,
+        }
+    )
+    gate_path = tmp_path / "event_age_bge_evaluation.json"
+    gate_path.write_text(json.dumps(gate, ensure_ascii=False), encoding="utf-8")
+    paths = {
+        "event_age_bge_prototype_vectors.npz": vector_path,
+        "event_age_bge_classifier.npz": classifier_path,
+        "event_age_bge_evaluation.json": gate_path,
+    }
+    monkeypatch.setattr(worker, "find_input", lambda name: paths[name])
+
+    _, classifier, _, _ = worker.load_prepared_artifacts(
+        bank_payload=bank,
+        model_revision="revision",
+        model=None,
+        prototype_texts=["пример"],
+    )
+    assert classifier is not None
+
+    gate["deterministic_self_tests"][0]["boundary_logits"][0] += 0.1
+    gate_path.write_text(json.dumps(gate, ensure_ascii=False), encoding="utf-8")
+    _, classifier, _, _ = worker.load_prepared_artifacts(
+        bank_payload=bank,
+        model_revision="revision",
+        model=None,
+        prototype_texts=["пример"],
+    )
+    assert classifier is None
 
 
 def test_automatic_calibrator_uses_official_grouped_holdout_without_human(tmp_path):

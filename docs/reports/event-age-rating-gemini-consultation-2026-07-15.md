@@ -88,3 +88,17 @@ Prototype v3 повторно проверен на тех же 12 событи�
 для безопасных выставки/экоакции/мастер-класса исчезли, корректные neutral
 anchors стали top-1, а отсутствие approved classifier сохранило 12/12
 abstentions.
+
+## Итерация 3: acceptance после полного цикла
+
+После dense BGE/ordinal/hybrid неудач консультант получил untouched grouped OOF
+результат lexical safety cascade: coverage `51.41%`, exact `95.97%`, within-one
+`99.27%`, under `1.47%`, severe-under `0`. Gemini 3.1 Pro High подтвердил
+`PASS` исходного gate и дал итоговый `CONDITIONAL PASS` на внутренний rollout.
+Условия: не использовать pickle/joblib, экспортировать raw vocabulary/IDF/
+матрицы, а при старте сверять deterministic text→logits→decision cases. Оба
+условия реализованы в calibrator/worker. Diagnostic child severe-over `7.41%`
+консультант не признал blocker для internal assessed-only при неизменном
+`declared_only`. Предложенную human audit queue интегратор отклонил как
+противоречащую явному no-human контракту. Полный brief/ответ: ignored artifacts
+`gemini-iteration-3-brief.md` и `gemini-iteration-3-review.raw.md`.

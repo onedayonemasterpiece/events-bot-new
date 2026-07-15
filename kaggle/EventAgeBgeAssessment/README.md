@@ -11,11 +11,13 @@ Input dataset files:
 - `event_age_bge_prototypes.json`: versioned prototype metadata/text;
 - optional `event_age_bge_prototype_vectors.npz`: `vectors`, `model_revision`,
   `encoder_contract`, `prototype_bank_hash`;
-- optional `event_age_bge_classifier.npz`: `classes`, `weights_a`, `bias_a`,
-  `weights_b`, `bias_b`;
-- optional `event_age_bge_evaluation.json`: automatic quality-gate result plus
-  exact hashes and calibrated probability thresholds. Human approval fields are
-  neither required nor accepted as the gate authority.
+- optional `event_age_bge_classifier.npz`: either the legacy dense dual head or
+  the approved raw-matrix `char_tfidf_safety_cascade_v1` bundle
+  (vocabulary/IDF/coef/intercept only; no pickle/joblib);
+- optional `event_age_bge_evaluation.json`: automatic quality-gate result,
+  exact hashes, calibrated cascade thresholds and deterministic startup
+  text→logits→decision parity cases. Human approval fields are neither required
+  nor accepted as the gate authority.
 
 `event_age_bge_run.json`, input JSONL and prototype bank must live in the same
 private input dataset. A separate prepared-artifact dataset must not duplicate
@@ -57,13 +59,17 @@ Automatic calibration:
 python scripts/build_event_age_bge_calibration.py \
   --db snapshot.sqlite --output-dir artifacts/codex/age-calibration
 
-python scripts/calibrate_event_age_bge.py \
+python scripts/calibrate_event_age_tfidf.py \
   --vectors event_age_bge_event_vectors.npz \
+  --inputs artifacts/codex/age-calibration/event_age_bge_input.jsonl \
   --labels artifacts/codex/age-calibration/event_age_bge_labels.jsonl \
+  --scope-review artifacts/codex/age-calibration/gemini-scope-review.json \
   --prototype-bank kaggle/EventAgeBgeAssessment/event_age_bge_prototypes.json \
   --output-dir artifacts/codex/age-calibration/bundle
 ```
 
-The gold builder masks explicit age tokens before encoding. AI-consensus silver
-may help training, but only source-declared labels can enter the official
-holdout and unlock the automatic gate.
+The gold builder masks explicit age tokens before encoding. Only scope-clean
+source-declared labels enter grouped OOF acceptance. The final cascade uses two
+development seeds and one untouched seed, exports only raw matrices, verifies
+pure-inference parity against sklearn at build time, and is activated only when
+all hash-bound startup self-tests and quality gates pass.

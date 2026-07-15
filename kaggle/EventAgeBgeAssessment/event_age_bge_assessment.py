@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -172,6 +173,205 @@ def softmax(logits: Any):
     return exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-12)
 
 
+def _char_wb_ngrams(text: str, *, min_n: int = 3, max_n: int = 5) -> list[str]:
+    """Match sklearn's lowercase ``char_wb`` analyzer without sklearn.
+
+    The calibrated artifact contains only raw matrices and vocabulary bytes.
+    Keeping inference here avoids pickle/joblib and sklearn-version drift in
+    the Kaggle runtime.
+    """
+
+    normalized = re.sub(r"\s\s+", " ", str(text).lower())
+    ngrams: list[str] = []
+    for word in normalized.split():
+        padded = " " + word + " "
+        word_length = len(padded)
+        for n in range(min_n, max_n + 1):
+            offset = 0
+            ngrams.append(padded[offset : offset + n])
+            while offset + n < word_length:
+                offset += 1
+                ngrams.append(padded[offset : offset + n])
+            if offset == 0:
+                break
+    return ngrams
+
+
+def _tfidf_features(text: str, vocabulary: dict[str, int], idf: Any) -> dict[int, float]:
+    """Return sparse sublinear-TF/IDF/L2 features as an index/value map."""
+
+    import math
+
+    counts: dict[int, int] = {}
+    for ngram in _char_wb_ngrams(text):
+        index = vocabulary.get(ngram)
+        if index is not None:
+            counts[index] = counts.get(index, 0) + 1
+    values = {
+        index: (1.0 + math.log(count)) * float(idf[index])
+        for index, count in counts.items()
+    }
+    norm = math.sqrt(sum(value * value for value in values.values()))
+    if norm > 0:
+        values = {index: value / norm for index, value in values.items()}
+    return values
+
+
+def load_safety_cascade_runtime(bundle: Any) -> dict[str, Any]:
+    """Validate and materialize immutable matrices once per worker batch."""
+
+    import numpy as np
+
+    terms = [str(value) for value in bundle["tfidf_terms"].tolist()]
+    if len(set(terms)) != len(terms):
+        raise ValueError("TF-IDF vocabulary terms must be unique")
+    vocabulary = {term: index for index, term in enumerate(terms)}
+    idf = np.asarray(bundle["tfidf_idf"], dtype="float64")
+    head_weights = np.asarray(bundle["head_weights"], dtype="float64")
+    head_bias = np.asarray(bundle["head_bias"], dtype="float64")
+    boundary_weights = np.asarray(bundle["boundary_weights"], dtype="float64")
+    boundary_bias = np.asarray(bundle["boundary_bias"], dtype="float64")
+    if idf.shape != (len(terms),):
+        raise ValueError("TF-IDF idf shape does not match vocabulary")
+    if head_weights.ndim != 3 or head_weights.shape[1:] != (5, len(terms)):
+        raise ValueError("multiclass head matrix has an invalid shape")
+    if head_bias.shape != head_weights.shape[:2]:
+        raise ValueError("multiclass head bias has an invalid shape")
+    if boundary_weights.shape != (3, len(terms)) or boundary_bias.shape != (3,):
+        raise ValueError("ordinal boundary matrices have an invalid shape")
+    return {
+        "vocabulary": vocabulary,
+        "idf": idf,
+        "head_weights": head_weights,
+        "head_bias": head_bias,
+        "boundary_weights": boundary_weights,
+        "boundary_bias": boundary_bias,
+    }
+
+
+def safety_cascade_logits(
+    text: str, bundle: Any, *, runtime: dict[str, Any] | None = None
+) -> tuple[Any, Any]:
+    """Compute raw multiclass and ordinal logits from a matrix-only bundle."""
+
+    runtime = runtime or load_safety_cascade_runtime(bundle)
+    features = _tfidf_features(text, runtime["vocabulary"], runtime["idf"])
+    multi_logits = runtime["head_bias"].copy()
+    boundary_logits = runtime["boundary_bias"].copy()
+    for index, value in features.items():
+        multi_logits += runtime["head_weights"][:, :, index] * value
+        boundary_logits += runtime["boundary_weights"][:, index] * value
+    return multi_logits, boundary_logits
+
+
+def classify_with_safety_cascade(
+    texts: list[str], bundle: Any, gate: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Classify with bootstrap consensus plus an asymmetric ordinal veto."""
+
+    import numpy as np
+
+    classes = [str(value) for value in bundle["classes"].tolist()]
+    if classes != ["0+", "6+", "12+", "16+", "18+"]:
+        raise ValueError("classifier classes must use the canonical order")
+    kind = str(bundle["classifier_kind"].item())
+    if kind != "char_tfidf_safety_cascade_v1":
+        raise ValueError(f"unsupported safety cascade kind: {kind}")
+    params = gate.get("cascade_thresholds") or {}
+    required = {
+        "confidence",
+        "low_consensus",
+        "high_consensus",
+        "max_severe_votes",
+        "max_severe_risk",
+        "min_high_votes",
+        "min_high_risk",
+    }
+    if not required.issubset(params):
+        raise ValueError("evaluation gate has incomplete cascade thresholds")
+    runtime = load_safety_cascade_runtime(bundle)
+    outputs: list[dict[str, Any]] = []
+    for text in texts:
+        multi_logits, boundary_logits = safety_cascade_logits(text, bundle, runtime=runtime)
+        probabilities = softmax(multi_logits)
+        head_predictions = np.argmax(probabilities, axis=1)
+        counts = np.bincount(head_predictions, minlength=5)
+        predicted = int(np.argmax(counts))
+        consensus = int(counts[predicted])
+        confidence = float(np.mean(probabilities[:, predicted]))
+        boundary_risk = 1.0 / (1.0 + np.exp(-np.clip(boundary_logits, -30, 30)))
+        boundary_votes = (boundary_risk >= 0.5).astype("int64")
+        accepted = bool(
+            confidence >= float(params["confidence"])
+            and (
+                (predicted <= 2 and consensus >= int(params["low_consensus"]))
+                or (predicted >= 3 and consensus >= int(params["high_consensus"]))
+            )
+        )
+        severe_boundary = {0: 2, 1: 3, 2: 4}.get(predicted)
+        if severe_boundary is not None:
+            boundary_index = severe_boundary - 2
+            accepted = bool(
+                accepted
+                and boundary_votes[boundary_index] <= int(params["max_severe_votes"])
+                and boundary_risk[boundary_index] <= float(params["max_severe_risk"])
+            )
+        corroboration_boundary = {2: 2, 3: 3, 4: 4}.get(predicted)
+        if corroboration_boundary is not None:
+            boundary_index = corroboration_boundary - 2
+            accepted = bool(
+                accepted
+                and boundary_votes[boundary_index] >= int(params["min_high_votes"])
+                and boundary_risk[boundary_index] >= float(params["min_high_risk"])
+            )
+        outputs.append(
+            {
+                "status": "assessed" if accepted else "insufficient_evidence",
+                "age_assessment": classes[predicted] if accepted else None,
+                "provenance": "model_assessed" if accepted else None,
+                "confidence": round(confidence, 6) if accepted else None,
+                "verification": {
+                    "classifier_kind": kind,
+                    "head_predictions": [classes[int(value)] for value in head_predictions],
+                    "consensus": consensus,
+                    "confidence": round(confidence, 6),
+                    "ordinal_risk": {
+                        "gte_12": round(float(boundary_risk[0]), 6),
+                        "gte_16": round(float(boundary_risk[1]), 6),
+                        "gte_18": round(float(boundary_risk[2]), 6),
+                    },
+                },
+            }
+        )
+    return outputs
+
+
+def validate_safety_cascade_self_tests(bundle: Any, gate: dict[str, Any]) -> None:
+    """Reject an artifact whose pure inference no longer reproduces logits."""
+
+    import numpy as np
+
+    cases = gate.get("deterministic_self_tests")
+    if not isinstance(cases, list) or len(cases) < 5:
+        raise ValueError("safety cascade requires at least five deterministic self-tests")
+    runtime = load_safety_cascade_runtime(bundle)
+    decisions = classify_with_safety_cascade(
+        [str(case.get("text") or "") for case in cases], bundle, gate
+    )
+    for case, actual in zip(cases, decisions):
+        multi_logits, boundary_logits = safety_cascade_logits(
+            str(case.get("text") or ""), bundle, runtime=runtime
+        )
+        expected_multi = np.asarray(case.get("head_logits"), dtype="float64")
+        expected_boundary = np.asarray(case.get("boundary_logits"), dtype="float64")
+        if not np.allclose(multi_logits, expected_multi, rtol=0.0, atol=1e-5):
+            raise ValueError("safety cascade multiclass self-test mismatch")
+        if not np.allclose(boundary_logits, expected_boundary, rtol=0.0, atol=1e-5):
+            raise ValueError("safety cascade ordinal self-test mismatch")
+        if actual["status"] != case.get("status") or actual["age_assessment"] != case.get("age_assessment"):
+            raise ValueError("safety cascade decision self-test mismatch")
+
+
 def classify_with_dual_heads(vectors: Any, bundle: Any, gate: dict[str, Any]) -> list[dict[str, Any]]:
     """Return assessed candidates only under artifact-owned calibrated cutoffs."""
 
@@ -266,7 +466,6 @@ def load_prepared_artifacts(
     gate = json.loads(gate_path.read_text(encoding="utf-8"))
     required = {
         "approval_status": "approved",
-        "gate_authority": "automatic_quality_gate_v1",
         "quality_gates_passed": True,
         "model_revision": model_revision,
         "encoder_contract": ENCODER_CONTRACT,
@@ -275,23 +474,37 @@ def load_prepared_artifacts(
     }
     if any(gate.get(key) != value for key, value in required.items()):
         return prototype_vectors, None, gate, classifier_hash
-    if any(
-        key not in gate
-        for key in (
-            "evaluation_dataset_hash",
-            "labeled_case_count",
-            "assessment_agreement",
-            "critical_over_permissive_rate",
-            "head_a_min_probability",
-            "head_b_min_probability",
-            "generated_at",
-            "class_support",
-            "exact_accuracy",
-            "within_one_accuracy",
-        )
-    ):
+    authority = gate.get("gate_authority")
+    common_fields = (
+        "evaluation_dataset_hash",
+        "labeled_case_count",
+        "critical_over_permissive_rate",
+        "generated_at",
+        "class_support",
+        "exact_accuracy",
+        "within_one_accuracy",
+    )
+    if any(key not in gate for key in common_fields):
         return prototype_vectors, None, gate, classifier_hash
     classifier = np.load(classifier_path, allow_pickle=False)
+    kind = (
+        str(classifier["classifier_kind"].item())
+        if "classifier_kind" in classifier.files
+        else "bge_dense_dual_head_v1"
+    )
+    if authority == "automatic_quality_gate_v1" and kind == "bge_dense_dual_head_v1":
+        if any(
+            key not in gate
+            for key in ("assessment_agreement", "head_a_min_probability", "head_b_min_probability")
+        ):
+            return prototype_vectors, None, gate, classifier_hash
+    elif authority == "automatic_quality_gate_v2" and kind == "char_tfidf_safety_cascade_v1":
+        try:
+            validate_safety_cascade_self_tests(classifier, gate)
+        except (KeyError, TypeError, ValueError):
+            return prototype_vectors, None, gate, classifier_hash
+    else:
+        return prototype_vectors, None, gate, classifier_hash
     return prototype_vectors, classifier, gate, classifier_hash
 
 
@@ -376,10 +589,18 @@ def main() -> int:
         vector_event_ids.extend(int(item.get("event_id") or 0) for item in batch)
         vector_input_hashes.extend(str(item.get("input_hash") or "") for item in batch)
         features = retrieve_features(vectors, prototype_vectors, prototypes, top_k=top_k)
-        classifications = (
-            classify_with_dual_heads(vectors, classifier, evaluation_gate)
-            if classifier is not None and evaluation_gate is not None
-            else [
+        if classifier is not None and evaluation_gate is not None:
+            classifier_kind = (
+                str(classifier["classifier_kind"].item())
+                if "classifier_kind" in classifier.files
+                else "bge_dense_dual_head_v1"
+            )
+            if classifier_kind == "char_tfidf_safety_cascade_v1":
+                classifications = classify_with_safety_cascade(texts, classifier, evaluation_gate)
+            else:
+                classifications = classify_with_dual_heads(vectors, classifier, evaluation_gate)
+        else:
+            classifications = [
                 {
                     "status": "insufficient_evidence",
                     "age_assessment": None,
@@ -389,7 +610,6 @@ def main() -> int:
                 }
                 for _ in batch
             ]
-        )
         for item, feature, classification in zip(batch, features, classifications):
             # A source-declared value always wins and is handled by Smart Update,
             # never by this content-assessment worker.

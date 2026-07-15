@@ -50,7 +50,7 @@
 
 ### Fixed
 
-- **Event age-rating calibration closure**: make the manual Kaggle launcher fail visibly on an internally partial worker report, complete the 718-row masked CPU calibration through a remainder batch, and keep the classifier shadow-only after exact/within-one/severe-under quality gates failed.
+- **Event age-rating calibration closure**: make the manual Kaggle launcher expose partial reports, complete all 718 masked CPU vectors, continue iterative calibration over 531 scope-clean official labels, and pass the untouched grouped OOF gate with a raw-matrix TF-IDF safety cascade (51.4% coverage, 96.0% exact, 99.3% within-one, 0 severe-under); hash/logit self-test mismatch still fails closed.
 - **Event age-rating Kaggle CPU runtime**: probe the concrete BGE-M3 model symbol and upgrade an incompatible preinstalled FlagEmbedding 1.3.x to the pinned Transformers-5-compatible 1.4.0 before loading the encoder.
 - **Parser age preservation**: carry Qtickets/Pyramida/Dom Iskusstv/Philharmonia structured restrictions through `EventCandidate`, reconcile them on the repeated-source fast path, preserve Universal Festival program ratings, and stop the Dom Iskusstv kernel from treating the first arbitrary `N+` in page HTML as the event rating.
 - **Static media enrichment scope**: restrict the operational derivative/LLM backfill to active, non-silent current-or-ongoing events, preventing cancelled, postponed and incident-tombstoned rows from consuming media budgets or re-entering public fanout; align the documented poster confidence environment name with runtime.
