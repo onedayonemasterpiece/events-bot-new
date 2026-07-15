@@ -633,3 +633,51 @@ CTA at `69px` without a text leak. At scroll `600`, the OCR companion hero moves
 from `57px` to `-333px` (the intended `0.65×` net viewport speed) while the CTA
 docks at `82px` and the poster board follows at `333.92px`. A fresh `390×844`
 load keeps the desktop laboratory root `display:none`.
+
+## Desktop v13: idle-resuming editorial rotation and exact media navigation
+
+V13 is still a **desktop-only noindex laboratory**. It changes neither the
+mobile event composition nor its motion/hydration rules.
+
+### Quiet idle rotation
+
+Continuous Editorial no longer waits for every full-size candidate before it
+can start. Full hero sources decode in a staged background queue; rotation may
+use only an already decoded source and leaves the current hero untouched on a
+slow or failed load. The first change requires `10s` of real inactivity. Any
+pointer, keyboard, wheel, scroll, focus or visibility interaction restarts that
+idle window instead of permanently opting out. An open fullscreen gallery is a
+hard temporary pause; after it closes the page waits a fresh `10s` and resumes.
+Stationary hover/focus alone does not become a permanent pause.
+
+After an automatic change the next dwell is `8s`. The transition is a
+`1500ms` overlay cross-dissolve using
+`cubic-bezier(0.4, 0, 0.2, 1)`: the outgoing frame stays painted until the
+incoming decoded frame is opaque, avoiding the dark flash of two simultaneous
+half-opacity layers. `prefers-reduced-motion: reduce` disables automatic media
+changes completely.
+
+Antigravity **Gemini 3.1 Pro (High)** selected this single timing/state contract
+and rejected the old `4.5s`/`600ms` banner-like cadence. The successful prompt,
+response and empty stderr are retained under ignored
+`artifacts/codex/static-desktop-v13-20260715/`.
+
+### Exact-index and compact viewer fixes
+
+- all gallery openers now rely on the one canonical `EventLayout` exact-index
+  handler; the duplicate local “click Next N times” shim is removed, so the
+  Кауп poster (`sourceIndex=0`, `galleryIndex=1`) opens itself rather than the
+  following village photo;
+- the accepted Кауп venue-brand medallion is restored from its official SVG and
+  remains in the event document before, during and after gallery use;
+- the low-resolution Split preview subset, including its `+N` cell, is centered
+  as one measured group even when not every source fits;
+- the efficient mixed-media viewer top bar carries event title plus the same
+  public date/time label as the event page.
+
+Local Chromium acceptance at the Full-HD/125% CSS viewport (`1536×864`) proves
+the first decoded rotation after the idle boundary, activity pause plus resume,
+gallery hard-pause plus fresh-ten-second resume, exact poster source `0`, a
+persistent Кауп medallion, a centered Split rail (`contentCenter - railCenter =
+0px`), and the efficient-viewer title/date/time pair. Public preview evidence is
+recorded with the release handoff.

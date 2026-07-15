@@ -65,8 +65,18 @@ const desktopV12Script = readdirSync(join(root, '_astro'))
   .find((name) => name.startsWith('DesktopEventCleanPage.astro_astro_type_script_') && name.endsWith('.js'));
 if (!desktopV12Script) throw new Error('Desktop v12 behavior bundle is missing');
 const desktopV12ScriptSource = readFileSync(join(root, '_astro', desktopV12Script), 'utf8');
-for (const marker of ['preload-failed', 'manual-rail-interaction', 'autoRotateReady']) {
-  if (!desktopV12ScriptSource.includes(marker)) throw new Error(`Desktop v12 behavior bundle misses ${marker} guard`);
+for (const marker of ['waiting-media', 'gallery-open', 'manual-rail-interaction', 'pointer-move', 'autoRotateReady']) {
+  if (!desktopV12ScriptSource.includes(marker)) throw new Error(`Desktop v13 behavior bundle misses ${marker} idle-resume guard`);
+}
+if (desktopV12ScriptSource.includes('preload-failed')) throw new Error('Desktop v13 must not wait for or fail the whole autorotation set');
+if (!desktopV12Pages.split.includes('desktop-portrait-viewer__heading') || !desktopV12Pages.split.includes('<time datetime=')) {
+  throw new Error('Desktop v13 efficient viewer must expose event title plus date/time');
+}
+if (!desktopV12Pages.companion.includes('event-token--kaup') || !desktopV12Pages.companion.includes('/assets/festivals/kaup.svg')) {
+  throw new Error('Desktop v13 OCR companion must retain the accepted Kaup venue-brand medallion');
+}
+if (!/data-editorial-ocr-companion[^>]*data-source-index="0"[^>]*data-hero-gallery-index="1"/u.test(desktopV12Pages.companion)) {
+  throw new Error('Desktop v13 OCR companion poster must retain its exact source/gallery index mapping');
 }
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {

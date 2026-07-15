@@ -483,7 +483,10 @@ const descriptionHtml = (event.description_html || '')
   {splitPortraitViewer && splitViewerImages.length > 1 && (
     <div class="desktop-portrait-viewer" data-efficient-viewer role="dialog" aria-modal="true" aria-hidden="true" aria-label={`Быстрый просмотр изображений: ${event.title}`} hidden>
       <div class="desktop-portrait-viewer__topbar">
-        <strong>{event.title}</strong>
+        <div class="desktop-portrait-viewer__heading">
+          <strong>{event.title}</strong>
+          <time datetime={event.starts_at || undefined}>{dateTimeLabel}</time>
+        </div>
         <button type="button" data-efficient-viewer-close aria-label="Закрыть просмотр изображений">×</button>
       </div>
       <div class="desktop-portrait-viewer__viewport" data-efficient-viewer-viewport tabindex="0">
@@ -558,9 +561,12 @@ const descriptionHtml = (event.description_html || '')
       let rotationEnabled = cleanRoot.dataset.autoRotate === 'true' && rotationButtons.length > 1 && !reducedMotion.matches;
       let rotationReady = false;
       let rotationInterval = 0;
-      let mediaHovered = false;
-      let mediaFocused = false;
-      const pageOpenedAt = window.performance.now();
+      let rotationTransitioning = false;
+      let rotationPreloadStarted = false;
+      let lastRotationActivityAt = window.performance.now();
+      let nextRotationAt = lastRotationActivityAt + 10_000;
+      const readyRotationSources = new Set<string>();
+      const rotationPreloadRefs = new Map<string, HTMLImageElement>();
 
       const clamp = (value:number, min=0, max=1) => Math.max(min, Math.min(max, value));
       const desktopHeaderHeight = () => {
@@ -929,9 +935,28 @@ const descriptionHtml = (event.description_html || '')
         }
       });
 
-      const markRotation = () => {
+      const nextReadyRotationButton = () => {
+        if (!rotationButtons.length) return null;
+        const activeThumb = thumbButtons[Number(cleanRoot.dataset.activeHeroIndex || '0')];
+        const activeRotationIndex = rotationButtons.indexOf(activeThumb);
+        const start = activeRotationIndex >= 0 ? activeRotationIndex + 1 : 0;
+        for (let step = 0; step < rotationButtons.length; step += 1) {
+          const button = rotationButtons[(start + step) % rotationButtons.length];
+          const src = button?.dataset.src;
+          if (button && button !== activeThumb && src && readyRotationSources.has(src)) return button;
+        }
+        return null;
+      };
+
+      const syncRotationReadiness = () => {
+        rotationReady = Boolean(nextReadyRotationButton());
+      };
+
+      const markRotation = (state?:string) => {
+        syncRotationReadiness();
         cleanRoot.dataset.autoRotateReady = rotationReady ? 'true' : 'false';
         cleanRoot.dataset.autoRotateActive = rotationEnabled && rotationReady ? 'true' : 'false';
+        if (state) cleanRoot.dataset.autoRotateState = state;
         if (rotationToggle) {
           rotationToggle.setAttribute('aria-pressed', rotationEnabled ? 'true' : 'false');
           rotationToggle.setAttribute('aria-label', rotationEnabled ? 'Остановить автоматическую смену фотографий' : 'Включить автоматическую смену фотографий');
@@ -941,19 +966,24 @@ const descriptionHtml = (event.description_html || '')
 
       const disableRotation = (reason:string) => {
         rotationEnabled = false;
-        rotationReady = false;
         if (rotationInterval) window.clearInterval(rotationInterval);
         rotationInterval = 0;
         cleanRoot.dataset.autoRotateOptOut = reason;
-        markRotation();
+        markRotation('disabled');
+      };
+
+      const noteRotationActivity = (reason:string) => {
+        if (!rotationEnabled) return;
+        const now = window.performance.now();
+        lastRotationActivityAt = now;
+        nextRotationAt = now + 10_000;
+        cleanRoot.dataset.autoRotatePauseReason = reason;
+        markRotation('waiting-idle');
       };
 
       const selectHero = async (index:number, source:'manual'|'auto'='manual') => {
         if (!heroImage || !thumbButtons.length) return;
-        if (source === 'manual') {
-          rotationEnabled = false;
-          markRotation();
-        }
+        if (source === 'manual') noteRotationActivity('manual-selection');
         const next = Math.max(0, Math.min(thumbButtons.length - 1, index));
         const button = thumbButtons[next];
         const src = button?.dataset.src;
@@ -977,13 +1007,15 @@ const descriptionHtml = (event.description_html || '')
           incoming.height = nextHeight;
           incoming.style.objectPosition = nextPosition;
           incoming.style.opacity = '0';
+          incoming.style.pointerEvents = 'none';
           incoming.setAttribute('aria-hidden', 'true');
           heroImage.parentElement.append(incoming);
-          const outgoingAnimation = heroImage.animate([{ opacity:1 }, { opacity:0 }], { duration:600, easing:'ease-in-out', fill:'forwards' });
-          const incomingAnimation = incoming.animate([{ opacity:0 }, { opacity:1 }], { duration:600, easing:'ease-in-out', fill:'forwards' });
-          try { await Promise.all([outgoingAnimation.finished, incomingAnimation.finished]); } catch {}
+          const incomingAnimation = incoming.animate(
+            [{ opacity:0 }, { opacity:1 }],
+            { duration:1_500, easing:'cubic-bezier(0.4, 0, 0.2, 1)', fill:'forwards' },
+          );
+          try { await incomingAnimation.finished; } catch {}
           if (token !== imageRequest) {
-            outgoingAnimation.cancel();
             incomingAnimation.cancel();
             incoming.remove();
             return;
@@ -993,7 +1025,6 @@ const descriptionHtml = (event.description_html || '')
           heroImage.width = nextWidth;
           heroImage.height = nextHeight;
           heroImage.style.objectPosition = nextPosition;
-          outgoingAnimation.cancel();
           incomingAnimation.cancel();
           incoming.remove();
         } else {
@@ -1011,81 +1042,158 @@ const descriptionHtml = (event.description_html || '')
         });
         cleanRoot.dataset.activeHeroIndex = String(next);
         updateOcrFrame();
+        markRotation('waiting-idle');
       };
 
-      const indexedGalleryOpeners = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-hero-gallery-open][data-hero-gallery-index]'));
-      indexedGalleryOpeners.forEach((opener) => {
-        opener.addEventListener('click', () => {
-          const requested = Number(opener.dataset.heroGalleryIndex || 0);
-          if (requested <= 0) return;
-          queueMicrotask(() => {
-            const galleryId = opener.dataset.heroGalleryOpen;
-            const gallery = galleryId ? document.getElementById(galleryId) : null;
-            const slides = gallery?.querySelectorAll('[data-hero-gallery-slide]');
-            const next = gallery?.querySelector<HTMLButtonElement>('[data-hero-gallery-next]');
-            if (!gallery || gallery.hidden || !slides?.length || !next) return;
-            const selected = Math.min(requested, slides.length - 1);
-            for (let step = 0; step < selected; step += 1) next.click();
-          });
-        });
-      });
       rotationToggle?.addEventListener('click', () => {
-        rotationEnabled = !rotationEnabled;
-        markRotation();
-      });
-      const rotationInteractionSurfaces = [mediaFrame, editorialRail].filter((surface):surface is HTMLElement => Boolean(surface));
-      rotationInteractionSurfaces.forEach((surface) => {
-        surface.addEventListener('pointerenter', () => { mediaHovered = true; });
-        surface.addEventListener('pointerleave', () => { mediaHovered = rotationInteractionSurfaces.some((item) => item.matches(':hover')); });
-        surface.addEventListener('focusin', () => { mediaFocused = true; });
-        surface.addEventListener('focusout', () => window.setTimeout(() => { mediaFocused = rotationInteractionSurfaces.some((item) => item.contains(document.activeElement)); }, 0));
+        if (rotationEnabled) {
+          disableRotation('manual-toggle');
+          return;
+        }
+        rotationEnabled = cleanRoot.dataset.autoRotate === 'true' && rotationButtons.length > 1 && !reducedMotion.matches;
+        delete cleanRoot.dataset.autoRotateOptOut;
+        noteRotationActivity('manual-toggle-resume');
+        startRotationScheduler();
+        void preloadRotationCandidates();
       });
       thumbButtons.forEach((button) => {
-        button.addEventListener('pointerdown', () => disableRotation('manual-rail-interaction'), { once:true });
+        button.addEventListener('pointerdown', () => noteRotationActivity('manual-rail-interaction'));
         button.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter' || event.key === ' ') disableRotation('manual-rail-interaction');
-        }, { once:true });
+          if (event.key === 'Enter' || event.key === ' ') noteRotationActivity('manual-rail-interaction');
+        });
       });
-      markRotation();
+      markRotation(rotationEnabled ? 'waiting-media' : 'disabled');
 
-      const rotateNext = () => {
-        if (!rotationEnabled || !rotationReady || reducedMotion.matches || mediaHovered || mediaFocused || document.visibilityState !== 'visible' || window.scrollY > 4 || !mediaFrame || !rotationButtons.length) return;
+      const rotateNext = async () => {
+        if (!rotationEnabled || rotationTransitioning || reducedMotion.matches || document.visibilityState !== 'visible' || !mediaFrame || !rotationButtons.length) return;
         const rect = mediaFrame.getBoundingClientRect();
         if (rect.bottom <= 0 || rect.top >= window.innerHeight) return;
-        const activeThumb = thumbButtons[Number(cleanRoot.dataset.activeHeroIndex || '0')];
-        const current = Math.max(0, rotationButtons.indexOf(activeThumb));
-        const nextButton = rotationButtons[(current + 1) % rotationButtons.length];
+        const nextButton = nextReadyRotationButton();
+        if (!nextButton) {
+          markRotation('waiting-media');
+          return;
+        }
         const nextIndex = thumbButtons.indexOf(nextButton);
-        if (nextIndex >= 0) void selectHero(nextIndex, 'auto');
+        if (nextIndex < 0) return;
+        rotationTransitioning = true;
+        const transitionStartedAt = window.performance.now();
+        markRotation('transitioning');
+        try {
+          await selectHero(nextIndex, 'auto');
+        } finally {
+          rotationTransitioning = false;
+          const now = window.performance.now();
+          nextRotationAt = lastRotationActivityAt > transitionStartedAt
+            ? lastRotationActivityAt + 10_000
+            : now + 8_000;
+          markRotation('waiting-idle');
+        }
+      };
+
+      const registerDecodedRotationSource = (src:string) => {
+        if (!src) return;
+        readyRotationSources.add(src);
+        rotationPreloadRefs.delete(src);
+        markRotation(window.performance.now() >= nextRotationAt ? 'ready' : 'waiting-idle');
+      };
+
+      const preloadRotationButton = (button:HTMLButtonElement) => {
+        const src = button.dataset.src;
+        if (!src || readyRotationSources.has(src)) return Promise.resolve(Boolean(src));
+        const existing = rotationPreloadRefs.get(src);
+        if (existing) {
+          return existing.decode().then(() => true).catch(() => existing.complete && existing.naturalWidth > 0);
+        }
+        const probe = new Image();
+        probe.decoding = 'async';
+        probe.fetchPriority = 'low';
+        rotationPreloadRefs.set(src, probe);
+        const decoded = new Promise<boolean>((resolve) => {
+          let settled = false;
+          const finish = (ready:boolean) => {
+            if (settled) return;
+            settled = true;
+            if (ready) registerDecodedRotationSource(src);
+            else rotationPreloadRefs.delete(src);
+            resolve(ready);
+          };
+          probe.addEventListener('load', () => finish(probe.naturalWidth > 0), { once:true });
+          probe.addEventListener('error', () => finish(false), { once:true });
+          probe.src = src;
+          probe.decode().then(() => finish(probe.complete && probe.naturalWidth > 0)).catch(() => {
+            if (probe.complete) finish(probe.naturalWidth > 0);
+          });
+        });
+        return decoded;
       };
 
       const preloadRotationCandidates = async () => {
+        if (rotationPreloadStarted || !rotationEnabled || reducedMotion.matches) return;
+        rotationPreloadStarted = true;
+        const activeThumb = thumbButtons[Number(cleanRoot.dataset.activeHeroIndex || '0')];
+        const activeRotationIndex = rotationButtons.indexOf(activeThumb);
+        const ordered = rotationButtons.map((_, offset) => rotationButtons[(activeRotationIndex + offset + 1) % rotationButtons.length]);
+        if (activeThumb?.dataset.src && heroImage) {
+          heroImage.decode().then(() => registerDecodedRotationSource(activeThumb.dataset.src || '')).catch(() => {});
+        }
+        for (const button of ordered) {
+          if (!rotationEnabled || reducedMotion.matches) {
+            rotationPreloadStarted = false;
+            return;
+          }
+          const decode = preloadRotationButton(button);
+          await Promise.race([decode, new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 12_000))]);
+        }
+        rotationPreloadStarted = false;
+      };
+
+      const rotationTick = () => {
         if (!rotationEnabled || reducedMotion.matches) return;
-        if (document.readyState !== 'complete') await new Promise<void>((resolve) => window.addEventListener('load', () => resolve(), { once:true }));
-        const probes = rotationButtons.map(async (button) => {
-          const src = button.dataset.src;
-          if (!src) return false;
-          const probe = new Image();
-          probe.decoding = 'async';
-          probe.src = src;
-          const decoded = probe.decode().then(() => probe.complete && probe.naturalWidth > 0).catch(() => false);
-          const timed = new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 15_000));
-          return Promise.race([decoded, timed]);
-        });
-        const decoded = await Promise.all(probes);
-        if (!rotationEnabled || decoded.some((ready) => !ready)) {
-          if (rotationEnabled) disableRotation('preload-failed');
+        const now = window.performance.now();
+        if (document.visibilityState !== 'visible') {
+          nextRotationAt = now + 10_000;
+          markRotation('page-hidden');
           return;
         }
-        const remainingDelay = Math.max(0, 10_000 - (window.performance.now() - pageOpenedAt));
-        if (remainingDelay > 0) await new Promise<void>((resolve) => window.setTimeout(resolve, remainingDelay));
-        if (!rotationEnabled || reducedMotion.matches) return;
-        rotationReady = true;
-        markRotation();
-        rotateNext();
-        rotationInterval = window.setInterval(rotateNext, 4_500);
+        if (document.body.classList.contains('has-hero-gallery-open')) {
+          lastRotationActivityAt = now;
+          nextRotationAt = now + 10_000;
+          markRotation('gallery-open');
+          return;
+        }
+        if (!rotationReady) {
+          markRotation('waiting-media');
+          return;
+        }
+        if (now < nextRotationAt) {
+          markRotation('waiting-idle');
+          return;
+        }
+        void rotateNext();
       };
-      window.setTimeout(() => { void preloadRotationCandidates(); }, 0);
+
+      function startRotationScheduler() {
+        if (!rotationEnabled || rotationInterval) return;
+        rotationInterval = window.setInterval(rotationTick, 500);
+        rotationTick();
+      }
+
+      let activityThrottleUntil = 0;
+      const recordFrequentActivity = (reason:string) => {
+        const now = window.performance.now();
+        if (now < activityThrottleUntil) return;
+        activityThrottleUntil = now + 250;
+        noteRotationActivity(reason);
+      };
+      document.addEventListener('pointermove', () => recordFrequentActivity('pointer-move'), { passive:true });
+      document.addEventListener('pointerdown', () => noteRotationActivity('pointer-down'), { passive:true });
+      document.addEventListener('wheel', () => recordFrequentActivity('wheel'), { passive:true });
+      document.addEventListener('scroll', () => recordFrequentActivity('scroll'), { passive:true });
+      document.addEventListener('keydown', () => noteRotationActivity('keyboard'));
+      document.addEventListener('focusin', () => noteRotationActivity('focus'));
+      document.addEventListener('visibilitychange', () => noteRotationActivity(document.visibilityState === 'visible' ? 'page-visible' : 'page-hidden'));
+      window.setTimeout(() => { void preloadRotationCandidates(); }, 500);
+      startRotationScheduler();
 
       let layoutFrame = 0;
       const layoutScrollMedia = () => {
@@ -1209,6 +1317,13 @@ const descriptionHtml = (event.description_html || '')
       }, { passive:true });
       reducedMotion.addEventListener?.('change', () => {
         if (reducedMotion.matches) disableRotation('reduced-motion');
+        else if (cleanRoot.dataset.autoRotate === 'true' && rotationButtons.length > 1) {
+          rotationEnabled = true;
+          delete cleanRoot.dataset.autoRotateOptOut;
+          noteRotationActivity('reduced-motion-disabled');
+          startRotationScheduler();
+          void preloadRotationCandidates();
+        }
         scheduleMotion();
       });
       new ResizeObserver(scheduleLayout).observe(cleanRoot);
@@ -1910,7 +2025,9 @@ const descriptionHtml = (event.description_html || '')
       background:rgba(23,20,18,.96);
       border-bottom:1px solid rgba(255,255,255,.12);
     }
-    .desktop-portrait-viewer__topbar strong { font-size:1rem; }
+    .desktop-portrait-viewer__heading { min-width:0; display:flex; align-items:baseline; gap:clamp(.75rem,1.4vw,1.4rem); }
+    .desktop-portrait-viewer__heading strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1rem; }
+    .desktop-portrait-viewer__heading time { flex:none; color:#d8c9bd; font-size:.84rem; font-weight:780; font-variant-numeric:tabular-nums; }
     .desktop-portrait-viewer__topbar button {
       width:46px;
       height:46px;
@@ -2132,8 +2249,8 @@ const descriptionHtml = (event.description_html || '')
       max-width:196px;
     }
     .desktop-prototype__media-rail--poster [hidden] { display:none !important; }
-    .desktop-prototype__media-rail--poster[data-rail-complete="true"] { justify-content:safe center; }
-    .desktop-prototype__media-rail--poster[data-rail-complete="false"] { justify-content:flex-start; }
+    .desktop-prototype__media-rail--poster[data-rail-complete="true"],
+    .desktop-prototype__media-rail--poster[data-rail-complete="false"] { justify-content:center; }
     .desktop-prototype__media-rail--poster .desktop-prototype__media-rail-more { flex:0 0 104px; width:104px; min-width:104px; }
     .desktop-prototype__media-rail--poster button[data-media-role="event_photo"] img { object-fit:cover; background:transparent; }
     .desktop-prototype__media-rail--poster button:not([data-media-role="event_photo"]) img { object-fit:contain; background:#181411; }

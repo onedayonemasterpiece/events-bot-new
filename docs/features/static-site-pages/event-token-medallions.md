@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb` and `kantata-festival` are WebP-first raster items until source SVGs are found; `act-opus` is a self-contained SVG medallion assembled from the official raster wordmark.
+> **Status:** design + runtime medallion assets; organizer, venue-brand and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-15, SVG is the primary runtime format for organizer/venue-brand medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb` and `kantata-festival` are WebP-first raster items until source SVGs are found; `act-opus` is a self-contained SVG medallion assembled from the official raster wordmark.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -123,6 +123,7 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the enlarged white internal `З` symbol as a root-clipped group, optically centered and clipped by the lower circle edge |
 | Фестиваль «80 историй о главном» | `kgd80` | `/assets/organizers/kgd80.svg` (`.png` fallback/QA) | KGD80 hero lockup from `site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg`; tighter medallion viewBox with safe margins and a small downward optical nudge; forced for `event.festival=80 историй о главном` |
 | Фестиваль «Кантата» | `kantata-festival` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | official Tilda PNG wordmark `КАНТАТА`; WebP-first because source is raster |
+| Поселение викингов «Кауп» | `kaup` | `/assets/festivals/kaup.svg` | official SVG mark from `kaup39.ru`; matched as a curated `venue_brand` by normalized venue/source aliases, including `Поселение викингов Кауп` |
 
 Asset inventory:
 
@@ -141,6 +142,7 @@ Asset inventory:
 - `znanie-russia` is updated to the official blue `#0501D0` full circle with the internal `З` kept white, scaled larger, browser-rendered via a root-clipped group, optically centered and clipped by the lower circle edge;
 - `kgd80` is added as an SVG festival medallion from the «80 историй о главном» hero logo, using a tighter lockup viewBox plus a small downward optical nudge for fuller circular occupancy;
 - `kantata-festival` remains a WebP-first raster medallion because the available official source is PNG;
+- `kaup` restores the accepted official SVG venue-brand medallion for events whose normalized venue/source explicitly names Кауп; it is not inferred from unrelated description prose;
 - `znanie-russia` is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`, and is also forced by curated policy for `event.festival=80 историй о главном`.
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.

@@ -321,6 +321,30 @@
       "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
       "retrievedAt": "2026-07-02",
       "assetFormat": "webp-source-only"
+    },
+    {
+      "slug": "kaup",
+      "name": "Поселение викингов «Кауп»",
+      "shortName": "Кауп",
+      "aliases": [
+        "Поселение викингов Кауп",
+        "поселение викингов «Кауп»",
+        "Кауп",
+        "kaup39.ru",
+        "nightkaup.ru"
+      ],
+      "sourcePage": "https://www.kaup39.ru/",
+      "sourceUrl": "https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg",
+      "sourceFile": "kaup-logo.svg",
+      "background": "#26372D",
+      "ring": "#B9A06A",
+      "ariaLabel": "Локация и бренд: поселение викингов «Кауп»",
+      "renderNote": "Официальный знак площадки «Кауп» возвращён в общий runtime-манифест как venue-brand; совпадение выполняется по нормализованным алиасам площадки/источника.",
+      "avatarUrl": "/assets/festivals/kaup.svg",
+      "sourcePath": "site/src/assets/organizers/source/kaup-logo.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg",
+      "category": "venue_brand"
     }
   ]
 }

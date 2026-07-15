@@ -18,6 +18,7 @@ type OrganizerMedallion = {
   background?: string;
   ring?: string;
   ariaLabel?: string;
+  category?: 'venue_brand' | string;
 };
 
 type Token = {
@@ -88,8 +89,16 @@ const organizerHaystack = normalize([
   event.source_url,
   ...sourceUrls,
 ].filter(Boolean).join(' '));
+const venueBrandHaystack = normalize([
+  event.venue_name,
+  event.festival,
+  event.source_url,
+  ...sourceUrls,
+].filter(Boolean).join(' '));
 const organizers = (manifest.items || [])
-  .filter((item) => matchesOrganizer(item, organizerHaystack, event.festival))
+  .filter((item) => item.category === 'venue_brand'
+    ? includesAlias(venueBrandHaystack, item.aliases || [item.name, item.shortName || ''])
+    : matchesOrganizer(item, organizerHaystack, event.festival))
   .sort((left, right) => organizerPriority(left, event.festival) - organizerPriority(right, event.festival))
   .slice(0, 3);
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
