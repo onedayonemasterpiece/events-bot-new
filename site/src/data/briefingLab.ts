@@ -158,31 +158,22 @@ export const briefingLabScenarios = [
     ctaLabel: 'Найти событие у моря', ctaHref: '/poisk/',
   },
   {
-    id: 'storm_weekend_demo', label: 'Шторм → в уют', family: 'signal', cooldownDays: 7,
-    demoSignal: true, demoValidUntil: '2026-08-31T23:59:59+02:00', cursor: 'underscore', nextScenarioId: 'storm_lecture_art_demo',
+    id: 'storm_weekend_demo', label: 'Если шторм → в уют', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-07-24T23:59:59+02:00', cursor: 'underscore', nextScenarioId: 'storm_lecture_science_demo',
     fragments: [
-      { text: 'В выходные —' }, { text: 'ветер и шторм.', accent: true, breakAfter: true },
-      { text: 'Пойдём на лекцию?' },
+      { text: 'Если прогнозируют' }, { text: 'шторм —', accent: true, breakAfter: true },
+      { text: 'может, в уют?' },
     ],
-    ctaLabel: 'Показать первую лекцию', ctaEventId: 3592,
+    ctaLabel: 'Показать лекцию', ctaEventId: 5803,
   },
   {
-    id: 'storm_lecture_art_demo', label: 'Шторм → лекция 1', family: 'signal', cooldownDays: 7,
-    demoSignal: true, demoValidUntil: '2026-07-19T23:59:59+02:00', cursor: 'bar', nextScenarioId: 'storm_lecture_cinema_demo',
+    id: 'storm_lecture_science_demo', label: 'Шторм → лекция', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-07-24T23:59:59+02:00', cursor: 'bar',
     fragments: [
-      { text: 'Можно послушать', breakAfter: true },
-      { text: 'о монументальном искусстве.', accent: true, eventId: 3592 },
+      { text: 'Шоу-лекция:', breakAfter: true },
+      { text: 'Суперспособности.', accent: true, eventId: 5803 },
     ],
-    ctaLabel: 'Открыть первую лекцию', ctaEventId: 3592,
-  },
-  {
-    id: 'storm_lecture_cinema_demo', label: 'Шторм → лекция 2', family: 'signal', cooldownDays: 7,
-    demoSignal: true, demoValidUntil: '2026-08-03T23:59:59+02:00', cursor: 'underscore', nextScenarioId: 'unusual_format_demo',
-    fragments: [
-      { text: 'Или —', breakAfter: true },
-      { text: 'как снимали Калининград.', accent: true, eventId: 5077 },
-    ],
-    ctaLabel: 'Открыть вторую лекцию', ctaEventId: 5077,
+    ctaLabel: 'Открыть лекцию', ctaEventId: 5803,
   },
   {
     id: 'festival_demo', label: 'Pianissimo', family: 'signal', cooldownDays: 7,

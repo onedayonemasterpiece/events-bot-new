@@ -21,8 +21,8 @@ const baseUrl = `http://127.0.0.1:${port}/${buildId}/lab/briefing/`;
 const scenarioIds = [
   'today_count', 'tomorrow_count', 'weekend_count', 'greeting_day', 'local_keska', 'smart_search_education',
   'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person',
-  'anticipated_person_named', 'rare_event', 'weather_water_demo', 'storm_weekend_demo', 'storm_lecture_art_demo',
-  'storm_lecture_cinema_demo', 'festival_demo', 'unusual_format_demo',
+  'anticipated_person_named', 'rare_event', 'weather_water_demo', 'storm_weekend_demo', 'storm_lecture_science_demo',
+  'festival_demo', 'unusual_format_demo',
 ];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
 let server: ChildProcess;
@@ -245,14 +245,13 @@ test('weather, forwarded event, festival and storm chain are concrete and direct
   await expect(page.locator('[data-scenario-cta]')).toHaveAttribute('href', await festival.getAttribute('href') as string);
 
   await open(page, 'c', 'storm_weekend_demo', '&replay=1&pace=fast');
-  await expect(page.locator('[data-message]')).toContainText('ветер и шторм');
-  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('storm_lecture_art_demo');
-  const firstLecture = page.locator('a[data-reveal-fragment]', { hasText: 'монументальном искусстве' });
-  await expect(firstLecture).toHaveAttribute('href', /sobytiya\/lektsiya-evgeniya-mosiyenko/u);
-  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('storm_lecture_cinema_demo');
-  const secondLecture = page.locator('a[data-reveal-fragment]', { hasText: 'снимали Калининград' });
-  await expect(secondLecture).toHaveAttribute('href', /sobytiya\/kaliningrad-i-oblast-kak-kinodekoratsiya/u);
-  await expect(page.locator('[data-public-next]')).toBeVisible({ timeout: 2500 });
+  await expect(page.locator('[data-message]')).toContainText('Если прогнозируют шторм');
+  await expect(page.locator('[data-scenario-cta]')).toHaveAttribute('href', /-5803\//u);
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('storm_lecture_science_demo');
+  const lecture = page.locator('a[data-reveal-fragment]', { hasText: 'Суперспособности' });
+  await expect(lecture).toHaveAttribute('href', /sobytiya\/supersposobnosti-vydumka-i-realnost-kaliningrad-5803\//u);
+  await expect(page.locator('[data-scenario-cta]')).toHaveAttribute('href', await lecture.getAttribute('href') as string);
+  await expect(page.locator('[data-public-next]')).toBeVisible({ timeout: 5000 });
   await context.close();
 });
 
@@ -322,7 +321,14 @@ test('horizontal cursor signals a timed continuation and retires after terminal 
   expect(cursor.width).toBeGreaterThan(20);
   expect(cursor.height).toBeLessThan(10);
   expect(cursor.animation).toContain('briefing-cursor');
-  await expect.poll(async () => (await labState(page)).scenario, { timeout: 7000 }).toBe('storm_lecture_art_demo');
+  await page.dispatchEvent('[data-briefing]', 'mouseenter');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'false');
+  expect((await labState(page)).paused).toBeTruthy();
+  await page.waitForTimeout(900);
+  expect((await labState(page)).scenario).toBe('storm_weekend_demo');
+  await page.dispatchEvent('[data-briefing]', 'mouseleave');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'true', { timeout: 1500 });
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 7000 }).toBe('storm_lecture_science_demo');
   const nextState = await page.locator('[data-briefing]').evaluate((node: HTMLElement) => `${node.dataset.motion}:${node.dataset.cursorLinger}`);
   expect(['running:false', 'complete:true']).toContain(nextState);
 
@@ -446,6 +452,7 @@ test('selected media is desktop-only, wide media belongs to viewport, exits, and
   await expect(desktopImage).toHaveAttribute('src', /https:\/\//u);
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'small');
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await expect.poll(() => desktop.page.locator('[data-narrative-media]').evaluate((node) => getComputedStyle(node).transform)).toBe('none');
   const smallGeometry = await desktop.page.evaluate(() => {
     const media = document.querySelector('[data-narrative-media]')!.getBoundingClientRect();
     const message = document.querySelector('[data-briefing]')!.getBoundingClientRect();

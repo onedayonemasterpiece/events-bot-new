@@ -125,6 +125,31 @@ production-home approval or product desirability result.
 | [`visual-harmony-text-states-postfix-prompt.md`](visual-harmony-text-states-postfix-prompt.md) | Five-state desktop, mobile and cursor post-fix gate. | `572889668af27393f5063628787f8f941b72c76151b4273554b7e86f70c15ade` |
 | [`visual-harmony-text-states-postfix-gemini.md`](visual-harmony-text-states-postfix-gemini.md) | Final `LAB PUBLISH PASS`. | `458fe2978e0a72fa36b4c5cd31b0485264474dbc0b072e0ce5ba874375cdb6dc` |
 
+### Storm grounding correction after merge review
+
+An independent merge reviewer then found that the visually accepted storm
+chain was not safely grounded: events `3592` and `5077` had past display dates,
+and their broad end dates did not establish future lecture occurrences. The
+first immutable prefix containing that chain was therefore superseded before
+Telegram/user handoff. The lab now uses conditional copy with no live forecast
+claim and a two-screen chain to genuinely future event `5803` on 24 July.
+
+The focused recheck ran `2026-07-15 22:06:44–22:07:57 UTC`, status `0`, empty
+stderr. It correctly returned `LAB PUBLISH FAIL` because the supplied WebM was
+stale and still showed the pre-fix quoted title with a dangling `».` line,
+while the PNGs already showed the corrected no-quotes version. A new WebM was
+captured from the exact current build; the corrective continuation ran
+`2026-07-15 22:09:00–22:09:19 UTC`, status `0`, empty stderr, closed that sole
+visual blocker and returned `LAB PUBLISH PASS`. The stale WebM is retained only
+as local provenance and is not a review/send artifact.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`visual-harmony-storm-grounding-recheck-prompt.md`](visual-harmony-storm-grounding-recheck-prompt.md) | Focused grounding and exact-state recheck. | `4432f9122724ab9b9204eda507107e5513662f595fac15a08af227fdab302d45` |
+| [`visual-harmony-storm-grounding-recheck-gemini.md`](visual-harmony-storm-grounding-recheck-gemini.md) | Correct `FAIL` on the stale-video mismatch. | `20bc103490f33f04261904872fcdc848759b7f647b18b24fa3d51e670af608c0` |
+| [`visual-harmony-storm-grounding-correction-prompt.md`](visual-harmony-storm-grounding-correction-prompt.md) | Corrective continuation with exact new WebM/state receipt. | `b8d577706d2bf2d413fd00bbb9a55b0368fabf1d42dea9cc54418697429d9631` |
+| [`visual-harmony-storm-grounding-correction-gemini.md`](visual-harmony-storm-grounding-correction-gemini.md) | Final focused `LAB PUBLISH PASS`. | `5bb0b74765e29bb1905e3655d1a93356f04d666545d2d8853a713cff247ae55d` |
+
 ## Decision trace
 
 ### Accepted from Gemini

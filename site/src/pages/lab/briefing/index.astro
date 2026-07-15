@@ -459,7 +459,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       };
       const pause = (reason, explicit = true) => {
         if (running) complete(reason, { remember: true });
-        clearTimeout(advanceTimer);
+        clearTimeout(advanceTimer); advanceTimer = 0;
         setPendingCursor(false);
         if (reason === 'hover') hoverPaused = true;
         else if (reason === 'focus') focusPaused = true;
@@ -528,7 +528,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         if (event.target.closest('a')) { if (running) pause('link_pointer', true); return; }
         (explicitPaused || hoverPaused || focusPaused) ? resume('blank_tap') : pause('blank_tap');
       });
-      briefing.addEventListener('mouseenter', () => { if (running || deckPlaying) pause('hover', false); });
+      briefing.addEventListener('mouseenter', () => { if (running || deckPlaying || advanceTimer) pause('hover', false); });
       briefing.addEventListener('mouseleave', () => { if (!hoverPaused || explicitPaused || focusPaused) return; setTimeout(() => { if (hoverPaused && !explicitPaused && !focusPaused) resume('hover_leave'); }, 750); });
       stage.addEventListener('focusin', () => pause('focus', false));
       lab.addEventListener('click', (event) => {

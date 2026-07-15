@@ -77,7 +77,7 @@ Final immutable review build:
 Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
 экрана:
 
-- selector раскрывает **19**, а не 8 сценариев; count/progress/play-all
+- selector раскрывает **18**, а не 8 сценариев; count/progress/play-all
   вычисляются из deck, а не захардкожены;
 - рядом с curiosity-teaser есть отдельный named-person формат с Татьяной
   Куртуковой и ссылкой на canonical fixture event `6020`;
@@ -194,10 +194,13 @@ Follow-up contract:
   а не общий `/populyarnoe/`;
 - festival scene называет Pianissimo и Максима Милославского и ведёт на event
   `5294`, а не generic search;
-- добавлена трёхэкранная DEMO-цепочка `storm_weekend_demo` →
-  `storm_lecture_art_demo` → `storm_lecture_cinema_demo`: forecast premise,
-  затем две конкретные linked indoor-рекомендации. В production такая цепочка
-  допускается только при свежем storm/wind forecast и date-compatible events.
+- добавлена двухэкранная условная DEMO-цепочка `storm_weekend_demo` →
+  `storm_lecture_science_demo`: premise не утверждает наличие текущего прогноза,
+  а linked recommendation ведёт на будущую шоу-лекцию `5803` 24 июля. Две
+  прежние лекции с прошедшими display dates исключены после grounding review;
+  broad `end_date` больше не трактуется как будущий occurrence. В production
+  weather premise допускается только при свежем storm/wind forecast и
+  date-compatible events; при одном прошедшем gate цепочка остаётся двухэкранной.
 - horizontal cursor возвращён как state signal: он остаётся на finished scene,
   пока действительно поставлен таймер следующего сообщения; terminal scene
   делает три blink и убирает cursor, pause/reduced/static скрывают его сразу.
@@ -235,11 +238,11 @@ Variants:
 | `B · static` | весь короткий editorial briefing виден сразу | проверить ценность содержания |
 | `C · motion` | тот же текст проявляется 2–5 смысловыми фрагментами; bar/underscore сопровождает reveal, а horizontal underscore удерживает ожидание только при scheduled continuation | проверить исходную коммуникационную механику |
 
-Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface содержит только narrative, его смысловой CTA и terminal-only `Показать следующее`. Collapsed LAB-dock после ленты содержит A/B/C, selector всех 19 сцен, progress/demo/status, pace, Pause, `Повторить`, конечный `Показать все 19` и previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
+Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface содержит только narrative, его смысловой CTA и terminal-only `Показать следующее`. Collapsed LAB-dock после ленты содержит A/B/C, selector всех 18 сцен, progress/demo/status, pace, Pause, `Повторить`, конечный `Показать все 18` и previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
 
 ## Минимальная очередь нарративов
 
-Lab содержит 19 видимых scenario IDs и universal fallback. Это смешанная очередь: ориентиры, приветствия, обучение целевым действиям, social curiosity, named-event media и явно маркированные future-signal demos. Все доступны в selector; production eligibility и расширенная библиотека остаются backlog.
+Lab содержит 18 видимых scenario IDs и universal fallback. Это смешанная очередь: ориентиры, приветствия, обучение целевым действиям, social curiosity, named-event media и явно маркированные future-signal demos. Все доступны в selector; production eligibility и расширенная библиотека остаются backlog.
 
 | ID | Family / eligibility | Копирайт в lab | Cooldown |
 |---|---|---|---|
@@ -257,9 +260,8 @@ Lab содержит 19 видимых scenario IDs и universal fallback. Эт�
 | `anticipated_person_named` | grounded fixture person/event | `В Светлогорск едет Татьяна Куртукова. Пойдём?` | 30 дней |
 | `rare_event` | grounded fixture event, lab editorial framing | `Редкий формат: Вертинский. Идём?` | 30 дней |
 | `weather_water_demo` | fixed future-signal demo; no provider data | `Обещают ясные выходные. Махнём на море?` | 7 дней |
-| `storm_weekend_demo` | fixed storm premise demo | `В выходные — ветер и шторм. Пойдём на лекцию?` | 7 дней |
-| `storm_lecture_art_demo` | linked indoor option 1 | `Можно послушать о монументальном искусстве.` | 7 дней |
-| `storm_lecture_cinema_demo` | linked indoor option 2 | `Или — как снимали Калининград.` | 7 дней |
+| `storm_weekend_demo` | conditional storm premise demo; no live forecast claim | `Если прогнозируют шторм — может, в уют?` | 7 дней |
+| `storm_lecture_science_demo` | one genuinely future linked lecture | `Шоу-лекция: Суперспособности.` | до 24 июля |
 | `festival_demo` | fixed concrete-festival demo | `Pianissimo. Максим Милославский.` | 7 дней |
 | `unusual_format_demo` | fixed format demo | `Иногда лучший план — паблик-ток. Послушаем город?` | 14 дней |
 | `neutral_fallback` | нет eligible-сцен | `Город не ждёт. Что удивит сегодня?` | не запоминается |
@@ -324,7 +326,7 @@ Contract:
 Исправленный lab проверяет коммуникацию, а не дизайн ещё не спроектированной главной ленты:
 
 - hero занимает `min(42svh, 250px)` на mobile и `min(42svh, 360px)` на desktop, всегда `≤50svh`;
-- сообщение имеет 1–3 визуальные строки во всех 19 сценариях на `320×568`, `375×667`, `390×844`, `1440×900`;
+- сообщение имеет 1–3 визуальные строки во всех 18 сценариях на `320×568`, `375×667`, `390×844`, `1440×900`;
 - mobile typography примерно `27–34px`, desktop `48–72px`, с отдельными терракотовыми фактами/ссылками;
 - пять категорий переносятся на две строки без скрытого горизонтального жеста и остаются видимыми сразу под hero;
 - начало контекстной ленты видно, но карточки не являются предметом оценки;
@@ -337,7 +339,7 @@ Contract:
   fragment защищён клонированной paper stripe; reduced-motion показывает
   статичное изображение без auto-exit.
 
-Автоматическая матрица проверяет все 19 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
+Автоматическая матрица проверяет все 18 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
 
 ## Reproducible shareable-lab workflow
 
@@ -378,11 +380,11 @@ The earlier full static build failed because the host filesystem was at `99–10
   запланирован следующий timed scene, в terminal state исчезает после трёх
   циклов, а при pause/reduced/static скрыт;
 - `Повторить` intentionally restarts the current bounded chain in lab without reload;
-- `Показать все 19` в LAB-dock remains a separate QA mode that plays each representative scenario once and stops;
+- `Показать все 18` в LAB-dock remains a separate QA mode that plays each representative scenario once and stops;
 - обычный Variant C на desktop и mobile автоматически продолжает только
   2–3 compiled scenes, затем останавливается; public `Показать следующее`
   появляется лишь после stop;
-- Pause/Continue, pace, progress `N из 19`, DEMO/status, Previous/Replay и
+- Pause/Continue, pace, progress `N из 18`, DEMO/status, Previous/Replay и
   Play-all являются LAB-only и отсутствуют в hero;
 - hover, focus, blank-area pointer interaction, hidden tab and BFCache finish the complete sentence and pause; links remain stable and activate on the first tap;
 - `prefers-reduced-motion` shows the complete current scene with manual controls and no auto-advance;
@@ -537,7 +539,7 @@ metric validation.
 |---|---|
 | R01 status/evidence | `GO_TO_PROTOTYPE_ONLY`; user/metric validation false |
 | R02 no Gemini/personalization MVP | excluded from V0; retained only in appendix |
-| R03 initial ≤8 scenarios + fallback | первоначально выполнено как 8+fallback; последующий явный user-review superseded этот showcase-limit, поэтому selector расширен до 19+fallback без изменения production gate |
+| R03 initial ≤8 scenarios + fallback | первоначально выполнено как 8+fallback; последующий явный user-review superseded этот showcase-limit, поэтому selector расширен до 18+fallback без изменения production gate |
 | R04 isolated A/B/C lab | `/lab/briefing/` |
 | R05 mobile visibility | hero `≤50svh`; categories and beginning of secondary feed visible; message remains 1–3 lines |
 | R06 no production/deploy | explicit lab-only scope |

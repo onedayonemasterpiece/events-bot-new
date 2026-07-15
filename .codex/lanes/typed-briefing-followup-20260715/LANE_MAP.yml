@@ -122,7 +122,7 @@ lanes:
     forbidden_files: []
     expected_output: Corrected scenarios/composition/interactions, tests, immutable preview, Telegram evidence, documentation, changelog and closure audit.
     verification_scope: full_local
-    status: committed
+    status: merged
   - id: merge-reviewer
     role: merge_reviewer
     effort: high
@@ -136,4 +136,4 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Done/Partial/Missing/Blocked audit for R01-R06 and publish recommendation.
     verification_scope: full_local
-    status: spawned
+    status: merged
