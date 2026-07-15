@@ -506,6 +506,12 @@ python scripts/region_talk_embedding_quality_compare.py \
   `build_report`/XLSX tail is best-effort only after
   `early_image_queue_handoff_done`; do not block the product pipeline waiting
   for it.
+- Automated orchestrator runs set `REGION_TALK_WRITE_REPORT_ARTIFACTS=0` and
+  finish after durable queue/state handoffs with minimal JSON status only.
+  Manual/offline review may explicitly set the flag to `1` to restore XLSX/CSV/
+  JSON/Markdown/HTML exports. Do not use the older early-tail flags as a
+  substitute: they can return before publication queue and compact state are
+  durable.
 - ImageDiagnostic completion for publication requires actual image evidence.
   A row is final only when `image_queue_status=actual_scored` **and**
   `image_model_input_type=actual_image`. Historical metadata-only pseudo-scores

@@ -730,6 +730,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS",
             "REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY",
             "REGION_TALK_LIGHTWEIGHT_REPORT",
+            "REGION_TALK_WRITE_REPORT_ARTIFACTS",
         ]}
         old_create = mod.create_or_replace_dataset
         old_wait = mod.wait_dataset_ready
@@ -766,6 +767,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS"] = "20"
             os.environ["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"] = "1"
             os.environ["REGION_TALK_LIGHTWEIGHT_REPORT"] = "1"
+            os.environ["REGION_TALK_WRITE_REPORT_ARTIFACTS"] = "0"
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
             mod.build_input_datasets(object(), run_id="unit-run", username="unit")
@@ -791,6 +793,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS"], "20")
             self.assertEqual(env["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"], "1")
             self.assertEqual(env["REGION_TALK_LIGHTWEIGHT_REPORT"], "1")
+            self.assertEqual(env["REGION_TALK_WRITE_REPORT_ARTIFACTS"], "0")
         finally:
             mod.create_or_replace_dataset = old_create
             mod.wait_dataset_ready = old_wait
@@ -1650,6 +1653,36 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("source_queue_total", summary)
         self.assertIn("image_queue_total", summary)
         self.assertEqual(summary["favorites_candidates_consistency_status"], "ok")
+
+    def test_automated_pipeline_can_skip_review_artifacts_after_state_handoff(self) -> None:
+        mod = load_module()
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        old_flag = os.environ.get("REGION_TALK_WRITE_REPORT_ARTIFACTS")
+        old_cwd = Path.cwd()
+        try:
+            os.environ["REGION_TALK_WRITE_REPORT_ARTIFACTS"] = "0"
+            with tempfile.TemporaryDirectory() as td:
+                tmp_path = Path(td)
+                os.chdir(tmp_path)
+                output_dir = tmp_path / "run"
+                payload = mod.build_report(seeds, [], [], "no-artifacts-unit", output_dir)
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["status"], "done")
+                self.assertFalse(payload["report_artifacts_written"])
+                self.assertEqual(payload["xlsx_path"], "")
+                self.assertTrue((tmp_path / "output.json").exists())
+                self.assertTrue((output_dir / "stage_status.json").exists())
+                self.assertFalse((output_dir / "region-talk-candidates-no-artifacts-unit.xlsx").exists())
+                self.assertFalse((output_dir / "region-talk-candidates-no-artifacts-unit.csv").exists())
+                self.assertFalse((output_dir / "region-talk-candidates-no-artifacts-unit.html").exists())
+                self.assertFalse((output_dir / "region-talk-candidates-no-artifacts-unit.md").exists())
+                self.assertFalse((output_dir / "region-talk-candidates-no-artifacts-unit.json").exists())
+        finally:
+            os.chdir(old_cwd)
+            if old_flag is None:
+                os.environ.pop("REGION_TALK_WRITE_REPORT_ARTIFACTS", None)
+            else:
+                os.environ["REGION_TALK_WRITE_REPORT_ARTIFACTS"] = old_flag
 
     def test_text_and_media_scoring_strong_region_media(self) -> None:
         mod = load_module()

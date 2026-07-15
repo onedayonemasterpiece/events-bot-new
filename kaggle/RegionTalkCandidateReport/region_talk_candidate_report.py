@@ -16531,6 +16531,54 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "stage_counts_json":json.dumps(stage_counts, ensure_ascii=False),"artifact_paths":""
     }
     run_summary = [summary_row]
+    if not getenv_bool("REGION_TALK_WRITE_REPORT_ARTIFACTS", True):
+        # The historical build_report() name wraps the live candidate pipeline,
+        # not only XLSX generation. At this point publication/source/image
+        # queues and compact state are already durable in YDB. Automated runs
+        # can therefore stop before assembling 58 report sheets and writing
+        # duplicate XLSX/CSV/full-JSON/Markdown/HTML artifacts.
+        payload = {
+            "ok": True,
+            "status": "done",
+            "run_id": run_id,
+            "generated_at": run_now,
+            "summary": summary_row,
+            "sheets": {},
+            "xlsx_path": "",
+            "latest_xlsx": "",
+            "report_artifacts_written": False,
+        }
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "stage_status.json").write_text(json.dumps({
+            "run_id": run_id,
+            "generated_at": run_now,
+            "status": "done",
+            "summary": summary_row,
+            "report_artifacts_written": False,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        (Path.cwd() / "output.json").write_text(json.dumps({
+            "ok": True,
+            "status": "done",
+            "run_id": run_id,
+            "summary": summary_row,
+            "xlsx": "",
+            "report_artifacts_written": False,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        report_event(
+            "report_artifacts_skipped",
+            phase="state_write",
+            status="done",
+            report_artifacts_written="false",
+            posts_fetched=len(posts),
+            posts_scored=posts_scored_count,
+            candidates_created=len(candidates),
+            image_queue_total=len(image_candidate_queue_sheet),
+            publication_candidate_rows=len(publication_candidate_rows),
+            state_backend=state_write_meta.get("state_backend"),
+            ydb_write_status=state_write_meta.get("ydb_write_status"),
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
+        return payload
     seq_fresh = [r for r in new_posts if r.get("fresh_enough")]
     seq_region = [r for r in seq_fresh if r.get("kaliningrad_oblast_only_scope")]
     seq_non_ad = [r for r in seq_region if not r.get("is_ad_or_promo")]

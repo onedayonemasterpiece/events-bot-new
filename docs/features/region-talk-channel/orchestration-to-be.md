@@ -470,14 +470,16 @@ Important invariants:
   handoff. Source-queue persistence is important, but it must not return the
   notebook early before `candidate_memory_item` rows have been checked against
   the strict image/product gate and blocker metrics have been emitted.
-- Orchestrated CandidateReport runs set `REGION_TALK_LIGHTWEIGHT_REPORT=1`.
-  Complete operational state remains in YDB; the per-run workbook/JSON contains
-  only summary, funnel, blocker, candidate/image/publication shortlist and
-  observability sheets. This avoids spending several tail minutes repeatedly
-  serializing the full multi-thousand-row source ledger. A deliberate offline
-  audit can unset the flag to build the full workbook.
-  The launcher must serialize this flag into `region_talk_run_config.json`;
-  setting it only in the local orchestrator process does not affect Kaggle.
+- Orchestrated CandidateReport runs set
+  `REGION_TALK_WRITE_REPORT_ARTIFACTS=0`. Complete operational state remains in
+  YDB; after publication/source/image queue writes and compact state persistence
+  the worker writes only minimal `output.json` + `stage_status.json`. It does
+  not assemble 58 report sheets or serialize XLSX/CSV/full JSON/Markdown/HTML.
+  A deliberate offline/manual audit may set the flag to `1`; its separate
+  `REGION_TALK_LIGHTWEIGHT_REPORT=1` then selects 18 review sheets instead of
+  the full workbook. Both flags must be serialized into
+  `region_talk_run_config.json`; setting them only in the local orchestrator
+  process does not affect Kaggle.
 - CandidateReport, BGE-M3 and ImageDiagnostic share one Kaggle input-dataset
   readiness contract. It accepts both Kaggle SDK file objects and the mapping
   rows returned by the project wrapper; a ready dataset must not consume its
@@ -831,6 +833,26 @@ and `vector_without_regex_filtered_posts_total`. These regex numbers are a
 monitoring comparator only: if filtered regex KO volume is materially higher
 than vector KO volume, the vector gates/prototypes need review; regexes do not
 accept/reject production candidates.
+
+The product scoreboard separately reports the all-time unique-post conversion
+into the canonical pre-content geographic scope gate:
+
+- denominator: `processed_posts_unique_total`;
+- numerator: `ko_scope_detected_posts_unique_total`, unique processed posts with
+  `kaliningrad_oblast_only_scope=true` before ad/news/substance/media/Gemini
+  filters;
+- rate: `processed_to_ko_scope_conversion_percent` and
+  `processed_to_ko_scope_detected_per_1000`;
+- coverage: `ko_scope_evaluated_posts_unique_total` and
+  `ko_scope_evaluation_coverage_percent`;
+- conditional yield: `evaluated_to_ko_scope_conversion_percent`.
+
+The 2026-07-15 baseline was `525 / 12,075 = 4.35%` (43.5 per 1,000),
+but only `3,563 / 12,075 = 29.51%` historical rows carried the current
+scope/vector evaluation contract. Therefore the end-to-end conversion must be
+read together with coverage; it cannot by itself distinguish low-yield source
+selection from an incomplete historical evaluation pass. Raw lexical
+`heuristic_ko_raw_posts_total` remains a lower-bound diagnostic, not this KPI.
 Keyword-source queue health is monitored separately via
 `publics_keyword_discovered_total`, `publics_keyword_scanned_with_posts_total`,
 `publics_keyword_with_ko_candidates_total`,

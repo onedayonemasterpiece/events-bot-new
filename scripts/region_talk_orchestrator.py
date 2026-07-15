@@ -82,9 +82,11 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "0",
     "REGION_TALK_BUILD_IMAGE_QUEUE_BEFORE_SOURCE_QUEUE": "1",
     # Full queue state is already durable in YDB. Keep per-run artifacts to the
-    # lightweight product/debug shortlist instead of serializing 7k source rows
-    # into a 40-sheet workbook and duplicate JSON/HTML copies every cycle.
+    # lightweight product/debug shortlist for explicit manual runs. Automated
+    # orchestration needs only durable YDB state plus minimal completion JSON;
+    # it must not serialize XLSX/CSV/full JSON/Markdown/HTML on every cycle.
     "REGION_TALK_LIGHTWEIGHT_REPORT": "1",
+    "REGION_TALK_WRITE_REPORT_ARTIFACTS": "0",
     # Keep under the product requirement of <=30 minutes, but do not starve the
     # high-yield discovery/vector/image handoff stages. A 12-minute debug window
     # caused keyword discovery to be skipped and E5 to be capped to ~49 seconds
@@ -344,6 +346,9 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
     an unlabeled historical ``image rows`` total.
     """
     value = lambda key: _safe_int(metrics.get(key))
+    decimal_value = lambda key: (
+        f"{float(_safe_float(metrics.get(key)) or 0):.2f}".rstrip("0").rstrip(".")
+    )
     source_total = value("publics_total")
     # Ever-scanned is evidence-owned (source counters or canonical processed
     # post source keys), not `total - pending`. A source temporarily selected
@@ -483,6 +488,22 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('processed_posts_unique_total')}/"
             f"{value('processed_post_rows_total')}/"
             f"{value('processed_post_duplicate_identity_rows_total')}"
+        ),
+        (
+            "Конверсия обработанных постов в выявленный KO scope до content/media/Gemini-фильтров — "
+            "KO / обработано / доля / на 1000: "
+            f"{value('ko_scope_detected_posts_unique_total')}/"
+            f"{value('processed_posts_unique_total')}/"
+            f"{decimal_value('processed_to_ko_scope_conversion_percent')}%/"
+            f"{decimal_value('processed_to_ko_scope_detected_per_1000')}"
+        ),
+        (
+            "Покрытие текущим KO scope-контрактом — оценено / обработано / покрытие; "
+            "KO среди оценённых: "
+            f"{value('ko_scope_evaluated_posts_unique_total')}/"
+            f"{value('processed_posts_unique_total')}/"
+            f"{decimal_value('ko_scope_evaluation_coverage_percent')}%; "
+            f"{decimal_value('evaluated_to_ko_scope_conversion_percent')}%"
         ),
         (
             "Последний основной ноутбук — впервые добавлено новых постов / повторно обновлено известных / "
@@ -1694,6 +1715,48 @@ def _latest_processed_post_metrics(
         "processed_posts_reprocessed_latest_candidate_run_total": len(latest_keys - new_keys),
         "processed_post_duplicate_identity_rows_latest_candidate_run_total": max(0, len(latest_rows) - len(latest_keys)),
     }, latest_rows, latest_keys)
+
+
+def _ko_scope_conversion_metrics(rows: list[dict[str, Any]]) -> dict[str, int | float]:
+    """Measure unique processed-post yield into the pre-content KO scope gate.
+
+    ``kaliningrad_oblast_only_scope`` is the canonical geographic decision
+    before ad/news/substance/media/Gemini filtering. It is intentionally
+    stricter than a raw toponym hit because other-region, multiregion and
+    comparison-only mentions have already been excluded. Evaluation coverage
+    is reported separately so a low end-to-end yield cannot hide that many
+    historical processed rows never reached the current vector/scope contract.
+    """
+    by_key: dict[str, dict[str, bool]] = {}
+    for row in rows:
+        key = _post_merge_key(row)
+        if not key:
+            continue
+        state = by_key.setdefault(key, {"evaluated": False, "ko_scope": False})
+        if str(row.get("vector_gate_status") or "").strip():
+            state["evaluated"] = True
+        if str(row.get("kaliningrad_oblast_only_scope") or "").strip().lower() in {"1", "true", "yes"}:
+            state["ko_scope"] = True
+
+    processed_total = len(by_key)
+    evaluated_total = sum(1 for state in by_key.values() if state["evaluated"])
+    ko_scope_total = sum(1 for state in by_key.values() if state["ko_scope"])
+    return {
+        "ko_scope_detected_posts_unique_total": ko_scope_total,
+        "ko_scope_evaluated_posts_unique_total": evaluated_total,
+        "processed_to_ko_scope_conversion_percent": round(
+            (ko_scope_total / processed_total) * 100, 2
+        ) if processed_total else 0.0,
+        "processed_to_ko_scope_detected_per_1000": round(
+            (ko_scope_total / processed_total) * 1000, 1
+        ) if processed_total else 0.0,
+        "ko_scope_evaluation_coverage_percent": round(
+            (evaluated_total / processed_total) * 100, 2
+        ) if processed_total else 0.0,
+        "evaluated_to_ko_scope_conversion_percent": round(
+            (ko_scope_total / evaluated_total) * 100, 2
+        ) if evaluated_total else 0.0,
+    }
 
 
 def _row_text_for_regex(row: dict[str, Any]) -> str:
@@ -3279,6 +3342,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     processed_post_rows = rows_by_kind["processed_post_item"]
     processed_post_unique_keys = {_post_merge_key(row) for row in processed_post_rows if _post_merge_key(row)}
+    ko_scope_conversion_metrics = _ko_scope_conversion_metrics(processed_post_rows)
     processed_post_latest_run_metrics, processed_post_latest_run_rows, processed_post_latest_run_unique_keys = (
         _latest_processed_post_metrics(processed_post_rows, latest_candidate_run_id)
     )
@@ -3499,6 +3563,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "processed_posts_unique_total": processed_posts_unique_total,
         "processed_post_rows_total": len(processed_post_rows),
         "processed_post_duplicate_identity_rows_total": max(0, len(processed_post_rows) - processed_posts_unique_total),
+        **ko_scope_conversion_metrics,
         "processed_posts_latest_candidate_run_id": latest_candidate_run_id,
         **processed_post_latest_run_metrics,
         "candidate_run_posts_actionable_after_idempotency": _safe_int(latest_run_funnel.get("posts_actionable_after_idempotency")),

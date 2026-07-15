@@ -22,6 +22,8 @@
 - [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
 - [Implementation plan](implementation-plan.md) — MVP-0 → MVP-5 phases and readiness checklist.
 - [MVP-1 test-run runbook](test-run-runbook.md) — bounded Candidate Report Only runbook.
+- [Gemini effectiveness audit](../../reports/region-talk-effectiveness-gemini-audit-2026-07-15.md) — внешний product-funnel review по live evidence.
+- [Independent consultant prompt](../../reports/region-talk-effectiveness-external-consultant-prompt-2026-07-15.md) — GitHub-readable handoff с веткой, файлами, метриками и полным Gemini input.
 
 ## Product intent
 
@@ -48,7 +50,7 @@ Pipeline должен уметь:
 5. Оценивать позитивные, нейтрально-полезные и конструктивно-негативные смыслы.
 6. Оценивать фотографии: красивость, открыточность, региональную визуальную релевантность, техническое качество и publication safety.
 7. Сохранять source/post/media/candidate/run state в **YDB sidecar**.
-8. Формировать MVP candidate report / favorites table, прежде всего **XLSX** для ручного просмотра.
+8. Хранить операционный результат в YDB и по явному запросу формировать XLSX/favorites report для ручного аудита; автоматический orchestration не обязан экспортировать его каждый run.
 9. Запускать final LLM/VLM verifier только на top candidates.
 10. Для финального кандидата собирать компактный публичный evidence pack, переиспользуемый профиль источника и один проверяемый абзац `О блогере`.
 11. В будущем генерировать короткий пост, ставить в очередь, публиковать в Telegram и VK и вести ledger.
@@ -224,15 +226,24 @@ The feature has three contours:
 2. **Post Discovery** — scan monitored sources and select concrete posts about the region.
 3. **Publishing** — candidate → verifier → render assets → queue → Telegram/VK publish → ledger. Disabled until later MVPs.
 
-## MVP result: XLSX-first candidate report
+## MVP result: live YDB queue; report on demand
 
-For the current MVP, the visible result is a spreadsheet/report, not a live channel:
+Для текущего supervised MVP продуктовый source of truth — row-level YDB state и
+Gemini-confirmed operator queue. Исторически CandidateReport создавал workbook
+каждый run, когда отладка шла вручную. Теперь автоматический orchestrator задаёт
+`REGION_TALK_WRITE_REPORT_ARTIFACTS=0`: после source/image/publication handoff и
+compact state write worker оставляет только минимальные `output.json` и
+`stage_status.json`.
+
+Для явного offline/manual review флаг можно вернуть в `1`; тогда сохраняются:
 
 - latest workbook: `artifacts/region-talk/candidates-latest.xlsx`;
 - per-run immutable workbook: `artifacts/region-talk/runs/{run_id}/region-talk-candidates-{run_id}.xlsx`;
 - companion CSV/JSON/Markdown/HTML artifacts in the same per-run folder.
 
-The XLSX must be cumulative and delta-aware: it shows what was found, what is new this run, what changed stage, what became candidate/favorite, what dropped out, which image-quality gates passed/failed, and the final candidates for human eye review. See [MVP candidate report](mvp-candidate-report.md).
+Ручной XLSX остаётся cumulative/delta-aware audit artifact. Он не является
+pipeline stage и его отсутствие не означает потерю candidate/image/publication
+state. См. [MVP candidate report](mvp-candidate-report.md).
 
 ## External references and technical constraints
 

@@ -260,6 +260,34 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["heuristic_ko_latest_run_raw_posts_total"], 4)
         self.assertEqual(metrics["heuristic_ko_latest_run_sent_total"], 1)
 
+    def test_ko_scope_conversion_is_unique_and_pre_content_filter(self) -> None:
+        mod = load_module()
+        metrics = mod._ko_scope_conversion_metrics([
+            {
+                "post_url": "https://t.me/travel/1",
+                "vector_gate_status": "vector_accept_candidate",
+                "kaliningrad_oblast_only_scope": True,
+            },
+            {
+                "post_url": "https://t.me/travel/1",
+                "vector_gate_status": "vector_reject_ad_promo",
+                "kaliningrad_oblast_only_scope": "true",
+            },
+            {
+                "post_url": "https://t.me/travel/2",
+                "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+                "kaliningrad_oblast_only_scope": False,
+            },
+            {"post_url": "https://t.me/legacy/3"},
+            {"post_url": "https://t.me/legacy/4"},
+        ])
+        self.assertEqual(metrics["ko_scope_detected_posts_unique_total"], 1)
+        self.assertEqual(metrics["ko_scope_evaluated_posts_unique_total"], 2)
+        self.assertEqual(metrics["processed_to_ko_scope_conversion_percent"], 25.0)
+        self.assertEqual(metrics["processed_to_ko_scope_detected_per_1000"], 250.0)
+        self.assertEqual(metrics["ko_scope_evaluation_coverage_percent"], 50.0)
+        self.assertEqual(metrics["evaluated_to_ko_scope_conversion_percent"], 50.0)
+
     def test_post_source_merge_key_prefers_canonical_source_over_synthetic_id(self) -> None:
         mod = load_module()
         self.assertEqual(
@@ -638,6 +666,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_POST_ROWS"]), 20000)
         self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"]), 20000)
         self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_CANDIDATE_ROWS"]), 5000)
+        self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_WRITE_REPORT_ARTIFACTS"], "0")
 
     def test_cursor_metric_prefers_highest_position_over_stale_history(self) -> None:
         mod = load_module()
@@ -713,6 +742,20 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         })
         self.assertIn("100/70/25/5/12/8", message)
         self.assertIn("4/48/8%; 32/32/9", message)
+
+    def test_stats_message_exposes_processed_to_pre_filter_ko_conversion(self) -> None:
+        mod = load_module()
+        message = mod.build_orchestrator_stats_message({
+            "processed_posts_unique_total": 12075,
+            "ko_scope_detected_posts_unique_total": 525,
+            "ko_scope_evaluated_posts_unique_total": 3563,
+            "processed_to_ko_scope_conversion_percent": 4.35,
+            "processed_to_ko_scope_detected_per_1000": 43.5,
+            "ko_scope_evaluation_coverage_percent": 29.51,
+            "evaluated_to_ko_scope_conversion_percent": 14.74,
+        })
+        self.assertIn("525/12075/4.35%/43.5", message)
+        self.assertIn("3563/12075/29.51%; 14.74%", message)
 
     def test_loop_goal_progress_tracks_delta_targets(self) -> None:
         mod = load_module()

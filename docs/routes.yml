@@ -255,6 +255,8 @@ features:
     telegram_vk_publishing: docs/features/region-talk-channel/telegram-vk-publishing.md
     risk_register: docs/features/region-talk-channel/risk-register.md
     implementation_plan: docs/features/region-talk-channel/implementation-plan.md
+    effectiveness_gemini_audit_2026_07_15: docs/reports/region-talk-effectiveness-gemini-audit-2026-07-15.md
+    effectiveness_external_consultant_prompt_2026_07_15: docs/reports/region-talk-effectiveness-external-consultant-prompt-2026-07-15.md
     related_subscriber_acquisition: docs/features/subscriber-acquisition/README.md
     related_post_metrics: docs/features/post-metrics/README.md
     related_unsigned_personalization: docs/features/unsigned-personalization/semantic-vector-retrieval.md

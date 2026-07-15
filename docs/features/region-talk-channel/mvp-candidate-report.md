@@ -578,6 +578,14 @@ is acceptable after `early_image_queue_handoff_done`; a missing
 `image_queue_item` handoff is not acceptable because ImageDiagnostic then has no
 work item.
 
+Automated orchestration uses the narrower
+`REGION_TALK_WRITE_REPORT_ARTIFACTS=0` contract. Unlike the older early-return
+flags, it is checked only after publication/source/image queues and compact YDB
+state are durable. The run completes with minimal `output.json` and
+`stage_status.json`, empty `xlsx_path`/`latest_xlsx`, and no XLSX/CSV/full
+JSON/Markdown/HTML export. Standalone/manual audit runs retain the backward-
+compatible default `1`.
+
 `04a_final_shortlist` is now the cumulative active candidate-memory shortlist, while `04a_current_run_shortlist` remains current-run-only. Metadata-only/CV-only image fallback is never `publication_ready` or `reviewable`; rows needing real media bytes go to `09b_image_fetch_retry_queue`. `low_priority_defer` is replaced by `frontier_stage` values such as `unresolved`, `probe_due`, `history_due`, `vk_not_configured`, `unsupported`, and `inactive_low_quality`.
 
 ## MVP-1.z6 throughput / hard-region / recursive discovery correction

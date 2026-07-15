@@ -1,0 +1,72 @@
+mode: serial_integration_with_parallel_read_only_discovery
+repo: https://github.com/onedayonemasterpiece/events-bot-new
+base_ref: origin/agent/region-talk/R04-live-canary
+base_sha: 19de9abf96ac6ea040e2c3e4e378fdf4f786ec0c
+base_branch: agent/region-talk/R04-live-canary
+integration_branch: agent/region-talk/R04-live-canary
+global_constraints:
+  - no production or YDB mutations
+  - preserve Telegram role-scoped sessions
+  - preserve source/text/media safety gates
+  - all writes integrated serially in the clean Region Talk worktree
+verification_owner: root
+stop_conditions:
+  - ambiguous detected-KO grain or numerator
+  - report-output removal would disable acquisition/vector/state persistence
+  - branch becomes dirty from unrelated work
+lanes:
+  - id: R01-metric
+    role: planner
+    effort: high
+    requirement_ids: [R01]
+    target: define unique processed post to pre-filter detected-KO conversion
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: agent/region-talk/R04-live-canary
+    worktree: /home/dev/projects/events-bot-new-region-talk-r04-live
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: numerator/denominator contract, current value, code/docs/tests touchpoints
+    verification_scope: inspection_only
+    status: completed
+  - id: R02-report-runtime
+    role: planner
+    effort: high
+    requirement_ids: [R02]
+    target: separate essential CandidateReport worker behavior from optional report artifacts
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: agent/region-talk/R04-live-canary
+    worktree: /home/dev/projects/events-bot-new-region-talk-r04-live
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: safe runtime simplification recommendation and test/doc touchpoints
+    verification_scope: inspection_only
+    status: completed
+  - id: R01-R03-integration
+    role: worker
+    effort: extra-high
+    requirement_ids: [R01, R02, R03]
+    target: implement metric/runtime simplification and publish consultant artifacts
+    depends_on: [R01-metric, R02-report-runtime]
+    execution_mode: serial_after_dependency
+    branch: agent/region-talk/R04-live-canary
+    worktree: /home/dev/projects/events-bot-new-region-talk-r04-live
+    writable_files:
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - scripts/region_talk_orchestrator.py
+      - tests/test_region_talk_candidate_report.py
+      - tests/test_region_talk_orchestrator.py
+      - docs/features/region-talk-channel/**
+      - docs/reports/region-talk-effectiveness-*
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/integration/REGION_TALK_EFFECTIVENESS_METRICS_LANE_MAP.yml
+      - .codex/integration/REGION_TALK_EFFECTIVENESS_METRICS_INTEGRATION_REPORT.md
+    forbidden_files:
+      - .env
+      - production databases
+      - unrelated feature files
+    expected_output: committed and pushed branch with metric, lightweight runtime, and GitHub-readable audit prompt
+    verification_scope: targeted_and_region_talk_suite
+    status: completed
