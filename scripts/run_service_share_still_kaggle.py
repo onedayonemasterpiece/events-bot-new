@@ -15,11 +15,16 @@ import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from scripts.research.service_share_poster_cubes.layout_contract import (
+    FAMILY_ORDER as COMPOSITION_FAMILIES,
+    resolve_layout,
+)
 KERNEL_SOURCE = ROOT / "kaggle" / "ServiceShareStill"
 RENDER_SOURCE = ROOT / "scripts" / "research" / "service_share_poster_cubes"
 BRAND_SOURCE = RENDER_SOURCE / "assets" / "brand"
@@ -58,6 +63,7 @@ def copy_bundle_inputs(bundle_dir: Path, stage: Path) -> None:
     (bundle / "tools").mkdir(parents=True)
     shutil.copy2(RENDER_SOURCE / "render_scene.py", bundle / "tools" / "render_scene.py")
     shutil.copy2(RENDER_SOURCE / "composite_product.py", bundle / "tools" / "composite_product.py")
+    shutil.copy2(RENDER_SOURCE / "layout_contract.py", bundle / "tools" / "layout_contract.py")
     brand_source = bundle_dir / "brand" if (bundle_dir / "brand").is_dir() else BRAND_SOURCE
     if not brand_source.is_dir():
         raise FileNotFoundError(brand_source)
@@ -75,6 +81,18 @@ def copy_bundle_inputs(bundle_dir: Path, stage: Path) -> None:
             if not source.is_file():
                 raise FileNotFoundError(source)
             shutil.copy2(source, bundle / "fonts" / name)
+    required_fonts = {
+        "Cygre-Bold.ttf": ROOT / "assets" / "fonts" / "Cygre-Bold.ttf",
+        "Cygre-ExtraBold.ttf": ROOT / "assets" / "fonts" / "Cygre-ExtraBold.ttf",
+        "Cygre-SemiBold.ttf": ROOT / "assets" / "fonts" / "Cygre-SemiBold.ttf",
+        "Cygre-Regular.ttf": ROOT / "kaggle" / "CherryFlash" / "assets" / "ro_znanie_fonts" / "Cygre-Regular.ttf",
+    }
+    for name, source in required_fonts.items():
+        target = bundle / "fonts" / name
+        if not target.exists():
+            if not source.is_file():
+                raise FileNotFoundError(source)
+            shutil.copy2(source, target)
     faces_source = bundle_dir / "kaggle_faces"
     manifest = faces_source / "face_manifest.json"
     if not manifest.exists():
@@ -193,6 +211,18 @@ def validate_output(out_dir: Path, config: dict, *, require_bundle_sha: str) -> 
         raise RuntimeError("event-date placement contract failed")
     if result.get("selection_mix") != config.get("selection_mix"):
         raise RuntimeError("selection mix contract failed")
+    composition = result.get("composition") or {}
+    if not composition.get("gates_passed"):
+        raise RuntimeError("composition gates did not pass")
+    if result.get("composition_date") != config.get("composition_date"):
+        raise RuntimeError("composition date contract failed")
+    if result.get("composition_family_requested") != config.get("composition_family"):
+        raise RuntimeError("composition family contract failed")
+    if result.get("composition_seed_input") != config.get("composition_seed"):
+        raise RuntimeError("composition seed contract failed")
+    expected_family, expected_seed, _ = resolve_layout(config)
+    if composition.get("family") != expected_family or composition.get("seed") != expected_seed:
+        raise RuntimeError("resolved composition identity failed")
     if config["profile"] == "debug-gpu" and (result.get("actual_device") or {}).get("actual") != "GPU":
         raise RuntimeError(f"GPU debug silently fell back: {result.get('actual_device')}")
     output = out_dir / result["output_filename"]
@@ -213,6 +243,13 @@ def main() -> int:
     parser.add_argument("--poll-interval", type=int, default=20)
     parser.add_argument("--timeout-minutes", type=int, default=60)
     parser.add_argument("--require-debug-result")
+    parser.add_argument(
+        "--composition-date",
+        default=datetime.now(ZoneInfo("Europe/Kaliningrad")).date().isoformat(),
+        help="Local date used for stable daily composition rotation.",
+    )
+    parser.add_argument("--composition-family", choices=("auto", *COMPOSITION_FAMILIES), default="auto")
+    parser.add_argument("--composition-seed", default="")
     parser.add_argument("--keep-dataset", action="store_true")
     parser.add_argument("--keep-staging", action="store_true")
     args = parser.parse_args()
@@ -246,6 +283,20 @@ def main() -> int:
                     raise RuntimeError("debug result does not approve this exact bundle")
                 if (debug.get("actual_device") or {}).get("actual") != "GPU":
                     raise RuntimeError("debug result is not a verified GPU run")
+                if debug.get("composition_date") != args.composition_date:
+                    raise RuntimeError("debug result approves another composition date")
+                if debug.get("composition_family_requested") != args.composition_family:
+                    raise RuntimeError("debug result approves another composition family request")
+                if debug.get("composition_seed_input") != args.composition_seed:
+                    raise RuntimeError("debug result approves another composition seed")
+                expected_family, expected_seed, _ = resolve_layout({
+                    "composition_date": args.composition_date,
+                    "composition_family": args.composition_family,
+                    "composition_seed": args.composition_seed,
+                })
+                debug_composition = debug.get("composition") or {}
+                if not debug_composition.get("gates_passed") or debug_composition.get("family") != expected_family or debug_composition.get("seed") != expected_seed:
+                    raise RuntimeError("debug result did not pass this resolved composition")
             kernel_ref = stage_kernel(kernel_stage, username=username, profile=profile)
             dataset_slug = run_id.lower().replace("_", "-")[:48].strip("-")
             dataset_ref = f"{username}/{dataset_slug}"
@@ -261,6 +312,10 @@ def main() -> int:
                 "adaptive_min_samples": 16,
                 "bundle_sha256": bundle_hash,
                 "selection_mix": face_manifest["selection"]["requested_mix"],
+                "composition_date": args.composition_date,
+                "composition_family": args.composition_family,
+                "composition_seed": args.composition_seed,
+                "keep_blend": profile == "final-cpu",
                 "base_filename": f"service_share_base_{profile}_{settings['resolution']}.png",
                 "output_filename": f"service_share_card_{profile}_{settings['resolution']}.png",
                 "thumbnail_filename": f"service_share_card_{profile}_360.png",

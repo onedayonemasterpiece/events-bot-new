@@ -88,7 +88,10 @@ networking is degraded.
   progress for Blender samples, composite and image QA. Its local launcher
   polls Kaggle kernel logs plus the redacted JSONL artifact without enabling a
   production callback/ledger; production server launchers must still create a
-  signed status config through the canonical framework.
+  signed status config through the canonical framework. Its renderer also
+  emits a deterministic daily-composition contract (family/seed, projected
+  bboxes, overlap and 3D-distance ratios); final CPU acceptance is bound to the
+  same resolved geometry and bundle as the successful GPU gate.
 
 ## Events And Heartbeat
 

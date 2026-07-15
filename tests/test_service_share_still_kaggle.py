@@ -9,6 +9,7 @@ from PIL import Image
 
 from scripts.research.prepare_service_share_faces import date_label
 from scripts.research.select_service_share_events import select
+from scripts.research.service_share_poster_cubes.layout_contract import FAMILY_ORDER, resolve_layout
 from scripts.run_service_share_still_kaggle import (
     PROFILES,
     build_bundle,
@@ -95,6 +96,7 @@ def test_bundle_is_relative_minimal_and_secret_free(tmp_path: Path) -> None:
         names = archive.getnames()
     assert "bundle/tools/render_scene.py" in names
     assert "bundle/tools/composite_product.py" in names
+    assert "bundle/tools/layout_contract.py" in names
     assert "bundle/faces/face.png" in names
     assert not any(".env" in name or "secret" in name.lower() for name in names)
     assert not any(name.startswith("/") or ".." in Path(name).parts for name in names)
@@ -114,8 +116,24 @@ def test_bundle_uses_tracked_brand_and_font_fallbacks(tmp_path: Path) -> None:
     with tarfile.open(tar_path, "r:gz") as archive:
         names = set(archive.getnames())
     assert "bundle/brand/desktop_tag_exact_240x88.png" in names
+    assert "bundle/brand/desktop_tag_exact_960x352.png" in names
     assert "bundle/brand/announcements-wordmark-ui.svg" in names
     assert "bundle/fonts/Cygre-Regular.ttf" in names
+    assert "bundle/fonts/Cygre-Bold.ttf" in names
+
+
+def test_daily_composition_rotation_is_deterministic_and_changes_family() -> None:
+    dates = ["2026-07-15", "2026-07-16", "2026-07-17"]
+    resolved = [resolve_layout({"composition_date": day, "composition_family": "auto"}) for day in dates]
+    assert resolved[0][0] == "soft_s_curve"
+    assert {family for family, _, _ in resolved} == set(FAMILY_ORDER)
+    assert resolve_layout({"composition_date": dates[0], "composition_family": "auto"}) == resolved[0]
+    for family, _, layout in resolved:
+        hero = layout[0]
+        assert family in FAMILY_ORDER
+        assert hero[0] == "HERO"
+        assert hero[2] > 4.0
+        assert len(layout) == 5
 
 
 def test_event_date_labels_are_face_copy_not_snapshot_copy() -> None:
@@ -123,6 +141,26 @@ def test_event_date_labels_are_face_copy_not_snapshot_copy() -> None:
     assert date_label({"start_date": "2026-06-30", "end_date": "2026-07-30"}) == "ДО 30 ИЮЛЯ"
     composite = Path("scripts/research/service_share_poster_cubes/composite_product.py").read_text()
     assert "ДАННЫЕ НА" not in composite
+
+
+def test_typography_pipeline_uses_high_resolution_brand_and_no_baked_face_shadow() -> None:
+    composite = Path("scripts/research/service_share_poster_cubes/composite_product.py").read_text()
+    faces = Path("scripts/research/prepare_service_share_faces.py").read_text()
+    assert "desktop_tag_exact_960x352.png" in composite
+    assert "ImageFont.Layout.RAQM" in composite
+    assert "ImageFont.Layout.RAQM" in faces
+    assert "shadow_draw" not in faces
+    assert '"baked_text_shadow": False' in faces
+
+
+def test_render_scene_enforces_hero_safe_zone_and_chain_overlap_gates() -> None:
+    source = Path("scripts/research/service_share_poster_cubes/render_scene.py").read_text()
+    for token in (
+        "product safe-zone intrusion", "must exit both right and bottom",
+        "_bbox_overlap_ratio", "insufficient screen-space overlap",
+        "excessive 3D distance ratio", "seamless_cyclorama",
+    ):
+        assert token in source
 
 
 def test_output_validator_rejects_gpu_fallback(tmp_path: Path) -> None:
@@ -134,9 +172,11 @@ def test_output_validator_rejects_gpu_fallback(tmp_path: Path) -> None:
         "ok":True,"research_only":True,"profile":"debug-gpu","bundle_sha256":"abc",
         "resolution":[512,512],"actual_device":{"actual":"CPU"},
         "global_snapshot_date_present":False,"event_dates_on_faces":True,"selection_mix":{"popular":3},
+        "composition_date":"2026-07-15","composition_family_requested":"auto","composition_seed_input":"",
+        "composition":{"gates_passed":True,"family":"soft_s_curve","seed":resolve_layout({"composition_date":"2026-07-15","composition_family":"auto","composition_seed":""})[1]},
         "output_filename":"card.png","output_sha256":output_hash,
     }))
-    config = {"profile":"debug-gpu","resolution":512,"selection_mix":{"popular":3}}
+    config = {"profile":"debug-gpu","resolution":512,"selection_mix":{"popular":3},"composition_date":"2026-07-15","composition_family":"auto","composition_seed":""}
     import pytest
     with pytest.raises(RuntimeError, match="silently fell back"):
         validate_output(tmp_path, config, require_bundle_sha="abc")

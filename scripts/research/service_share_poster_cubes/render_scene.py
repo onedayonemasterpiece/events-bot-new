@@ -8,7 +8,13 @@ import sys
 from pathlib import Path
 
 import bpy
+from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from layout_contract import resolve_layout
 
 
 def srgb(value: str) -> tuple[float, float, float, float]:
@@ -149,6 +155,90 @@ def area(name, location, energy, size, color, target):
     point(obj, target)
 
 
+def _projected_bbox(scene, camera, obj) -> dict:
+    points = [world_to_camera_view(scene, camera, obj.matrix_world @ Vector(corner)) for corner in obj.bound_box]
+    xs = [point.x for point in points]
+    ys = [point.y for point in points]
+    bbox = [min(xs), min(ys), max(xs), max(ys)]
+    clipped = [max(0, bbox[0]), max(0, bbox[1]), min(1, bbox[2]), min(1, bbox[3])]
+    clipped_area = max(0, clipped[2] - clipped[0]) * max(0, clipped[3] - clipped[1])
+    return {
+        "bbox": [round(value, 5) for value in bbox],
+        "clipped_bbox": [round(value, 5) for value in clipped],
+        "clipped_area": round(clipped_area, 6),
+        "center": [round((bbox[0] + bbox[2]) / 2, 5), round((bbox[1] + bbox[3]) / 2, 5)],
+    }
+
+
+def _bbox_gap(first: list[float], second: list[float]) -> float:
+    gap_x = max(0.0, first[0] - second[2], second[0] - first[2])
+    gap_y = max(0.0, first[1] - second[3], second[1] - first[3])
+    return (gap_x * gap_x + gap_y * gap_y) ** .5
+
+
+def _bbox_overlap_ratio(first: list[float], second: list[float]) -> float:
+    overlap_x = max(0.0, min(first[2], second[2]) - max(first[0], second[0]))
+    overlap_y = max(0.0, min(first[3], second[3]) - max(first[1], second[1]))
+    overlap = overlap_x * overlap_y
+    first_area = max(0.0, first[2] - first[0]) * max(0.0, first[3] - first[1])
+    second_area = max(0.0, second[2] - second[0]) * max(0.0, second[3] - second[1])
+    return overlap / max(1e-9, min(first_area, second_area))
+
+
+def validate_composition(scene, camera, objects: list, *, family: str, seed: int) -> dict:
+    projected = {obj.name.removeprefix("Cube_"): _projected_bbox(scene, camera, obj) for obj in objects}
+    errors = []
+    safe_x = .435
+    for name, metrics in projected.items():
+        if metrics["bbox"][0] < safe_x:
+            errors.append(f"{name}: product safe-zone intrusion x={metrics['bbox'][0]:.3f}")
+    hero = projected["HERO"]
+    bridge = projected["BRIDGE"]
+    if hero["bbox"][2] < 1.0 or hero["bbox"][1] > 0.0:
+        errors.append("HERO: must exit both right and bottom frame edges")
+    if not (.16 <= hero["clipped_area"] <= .42):
+        errors.append(f"HERO: clipped area outside dominance band ({hero['clipped_area']:.3f})")
+    if hero["clipped_area"] < bridge["clipped_area"] * 2.0:
+        errors.append("HERO: insufficient dominance over BRIDGE")
+    for name, threshold in {"BRIDGE":.018, "A":.0025, "B":.0025, "C":.0018}.items():
+        if projected[name]["clipped_area"] < threshold:
+            errors.append(f"{name}: visible area below {threshold}")
+    chain = ["HERO", "BRIDGE", "A", "B", "C"]
+    gaps = {}
+    overlaps = {}
+    world_ratios = {}
+    object_map = {obj.name.removeprefix("Cube_"):obj for obj in objects}
+    for first, second in zip(chain, chain[1:]):
+        gap = _bbox_gap(projected[first]["bbox"], projected[second]["bbox"])
+        overlap = _bbox_overlap_ratio(projected[first]["bbox"], projected[second]["bbox"])
+        first_object, second_object = object_map[first], object_map[second]
+        mean_size = (first_object.dimensions.x + second_object.dimensions.x) / 2
+        world_ratio = (first_object.location - second_object.location).length / max(.001, mean_size)
+        gaps[f"{first}->{second}"] = round(gap, 6)
+        overlaps[f"{first}->{second}"] = round(overlap, 6)
+        world_ratios[f"{first}->{second}"] = round(world_ratio, 6)
+        if gap > .005:
+            errors.append(f"{first}->{second}: disconnected screen-space gap {gap:.3f}")
+        if overlap < .05:
+            errors.append(f"{first}->{second}: insufficient screen-space overlap {overlap:.3f}")
+        if world_ratio > 2.4:
+            errors.append(f"{first}->{second}: excessive 3D distance ratio {world_ratio:.3f}")
+    if errors:
+        raise RuntimeError("composition rejected: " + "; ".join(errors) + " projected=" + json.dumps(projected, sort_keys=True))
+    return {
+        "family": family,
+        "seed": seed,
+        "safe_zone_x": safe_x,
+        "hero_exits": ["right", "bottom"],
+        "projected": projected,
+        "chain_gaps": gaps,
+        "chain_overlap_ratios": overlaps,
+        "chain_world_distance_ratios": world_ratios,
+        "gates_passed": True,
+        "seamless_cyclorama": True,
+    }
+
+
 def configure_device(scene, requested: str) -> dict:
     if requested == "CPU":
         scene.cycles.device = "CPU"
@@ -183,15 +273,12 @@ def build(config_path: Path, bundle_root: Path, output_dir: Path) -> None:
     graphite = matte("Deep graphite", srgb("#1f2322"), .55)
     graphite_2 = matte("Quiet graphite", srgb("#292d2c"), .62)
     floor = diffuse("Seamless warm cyclorama", srgb("#d8d4cc"), .92)
-    cubes = [
-        ("HERO", (4.20,-5.35,-1.45), 4.25, graphite, (0,0,0)),
-        ("BRIDGE", (3.25,-1.58,.82), 2.32, graphite_2, (.02,-.015,-.085)),
-        ("A", (2.10,.72,3.25), 1.16, graphite_2, (-.025,.015,-.065)),
-        ("B", (3.50,1.18,2.92), 1.36, graphite, (.035,-.02,.075)),
-        ("C", (4.82,1.90,2.28), 1.25, graphite_2, (-.03,.02,-.095)),
-    ]
+    family, composition_seed, layout = resolve_layout(config)
+    material_map = {"graphite":graphite, "graphite_2":graphite_2}
+    cubes = [(name, location, size, material_map[material], rotation) for name, location, size, material, rotation in layout]
+    cube_objects = []
     for index, (name, location, size, body, rotation) in enumerate(cubes):
-        cube("Cube_" + name, location, size, body, rotation)
+        cube_objects.append(cube("Cube_" + name, location, size, body, rotation))
         plane(f"EventFront_{name}_{faces[index]['event_id']}", location, size, "front", materials[index], .90, rotation)
     plane(f"EventLeft_HERO_{faces[5]['event_id']}", cubes[0][1], cubes[0][2], "left", materials[5], .87, cubes[0][4])
     plane(f"EventTop_HERO_{faces[6]['event_id']}", cubes[0][1], cubes[0][2], "top", materials[6], .87, cubes[0][4])
@@ -211,6 +298,10 @@ def build(config_path: Path, bundle_root: Path, output_dir: Path) -> None:
     point(camera, (1.85,.2,.25))
     scene = bpy.context.scene
     scene.camera = camera
+    scene.render.resolution_x = scene.render.resolution_y = int(config["resolution"])
+    scene.render.resolution_percentage = 100
+    bpy.context.view_layer.update()
+    composition = validate_composition(scene, camera, cube_objects, family=family, seed=composition_seed)
     scene.render.engine = "CYCLES"
     scene.cycles.use_denoising = True
     scene.cycles.use_adaptive_sampling = True
@@ -226,8 +317,6 @@ def build(config_path: Path, bundle_root: Path, output_dir: Path) -> None:
     scene.cycles.use_refractive_caustics = False
     scene.cycles.sample_clamp_indirect = 2.0
     device = configure_device(scene, str(config["device"]).upper())
-    scene.render.resolution_x = scene.render.resolution_y = int(config["resolution"])
-    scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGB"
     scene.view_settings.view_transform = "Standard"
@@ -246,12 +335,20 @@ def build(config_path: Path, bundle_root: Path, output_dir: Path) -> None:
     scene["no_dof"] = True
     scene["render_profile"] = config["profile"]
     scene["render_device"] = device["actual"]
-    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
-    bpy.ops.file.pack_all()
-    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+    scene["composition_family"] = family
+    scene["composition_seed"] = str(composition_seed)
+    scene["composition_gates_passed"] = True
+    print("SERVICE_SHARE_COMPOSITION " + json.dumps(composition, ensure_ascii=False, sort_keys=True), flush=True)
     print("SERVICE_SHARE_PREFLIGHT " + json.dumps({"device": device, "profile": config["profile"], "resolution": config["resolution"], "samples": config["samples"]}), flush=True)
+    if config.get("preflight_only"):
+        return
+    if config.get("keep_blend", True):
+        bpy.context.preferences.filepaths.save_version = 0
+        bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+        bpy.ops.file.pack_all()
+        bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
     bpy.ops.render.render(write_still=True)
-    print("SERVICE_SHARE_RENDER_DONE " + json.dumps({"base": scene.render.filepath, "blend": str(blend_path), "device": device}), flush=True)
+    print("SERVICE_SHARE_RENDER_DONE " + json.dumps({"base": scene.render.filepath, "blend": str(blend_path) if config.get("keep_blend", True) else None, "device": device}), flush=True)
 
 
 def main() -> None:

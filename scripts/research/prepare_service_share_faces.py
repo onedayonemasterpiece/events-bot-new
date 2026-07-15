@@ -16,6 +16,10 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 MONTHS = {1:"ЯНВАРЯ",2:"ФЕВРАЛЯ",3:"МАРТА",4:"АПРЕЛЯ",5:"МАЯ",6:"ИЮНЯ",7:"ИЮЛЯ",8:"АВГУСТА",9:"СЕНТЯБРЯ",10:"ОКТЯБРЯ",11:"НОЯБРЯ",12:"ДЕКАБРЯ"}
 
 
+def load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM)
+
+
 def date_label(row: dict) -> str:
     start = date.fromisoformat(row["start_date"])
     end_raw = row.get("end_date")
@@ -71,11 +75,11 @@ def _wrap_pixels(title: str, font: ImageFont.FreeTypeFont, max_width: int = 880)
 
 def fit_title(title: str, font_path: Path) -> tuple[list[str], ImageFont.FreeTypeFont]:
     for size in (58, 52, 46, 40, 36):
-        font = ImageFont.truetype(str(font_path), size)
+        font = load_font(font_path, size)
         lines = _wrap_pixels(title, font)
         if lines and len(lines) <= 3 and max(font.getlength(line) for line in lines) <= 880:
             return lines, font
-    font = ImageFont.truetype(str(font_path), 36)
+    font = load_font(font_path, 36)
     lines = _wrap_pixels(title, font)[:3]
     if lines:
         while font.getlength(lines[-1] + "…") > 880 and lines[-1]:
@@ -94,19 +98,22 @@ def overlay(image: Image.Image, row: dict, bold_font: Path, semibold_font: Path)
         for x in range(1024):
             red, green, blue, a = pixels[x, y]
             pixels[x, y] = (round(red * (1 - alpha)), round(green * (1 - alpha)), round(blue * (1 - alpha)), a)
-    draw = ImageDraw.Draw(rgba)
     lines, title_font = fit_title(str(row["title"]), bold_font)
-    date_font = ImageFont.truetype(str(semibold_font), 36)
-    line_height = title_font.size * 0.94
+    date_font = load_font(semibold_font, 36)
+    # Cyrillic capitals and breve/descender glyphs need real breathing room after
+    # the texture is projected in perspective. The previous 0.94em leading and
+    # hard 2px duplicate looked like a damaged/double print on cube faces.
+    line_height = title_font.size * 1.06
     title_y = 1024 - 58 - line_height * len(lines)
     date_y = title_y - 49
     label = date_label(row)
-    draw.text((66, date_y + 2), label, font=date_font, fill=(0, 0, 0, 155))
-    draw.text((64, date_y), label, font=date_font, fill=(255, 154, 92, 255))
+    # The lower gradient already provides contrast. A second baked silhouette
+    # turns into a dirty/double print after perspective minification.
+    draw = ImageDraw.Draw(rgba)
+    draw.text((64, date_y), label, font=date_font, fill=(255, 154, 92, 255), features=["kern"])
     y = title_y
     for line in lines:
-        draw.text((66, y + 2), line, font=title_font, fill=(0, 0, 0, 145))
-        draw.text((64, y), line, font=title_font, fill=(255, 252, 246, 255))
+        draw.text((64, y), line, font=title_font, fill=(255, 252, 246, 255), features=["kern"])
         y += line_height
     return rgba.convert("RGB")
 
@@ -153,6 +160,12 @@ def main() -> int:
         "critical_bbox_cut_count": 0,
         "aspect_ratio_distortion_count": 0,
         "crop_contract": "safe_crop=true uses centered cover; unsafe metadata uses full-image contain over blurred fill; title/date overlay after framing",
+        "typography_contract": {
+            "layout_engine": "RAQM",
+            "kerning": True,
+            "title_line_height_em": 1.06,
+            "baked_text_shadow": False,
+        },
     }
     path = out_dir / "face_manifest.json"
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")

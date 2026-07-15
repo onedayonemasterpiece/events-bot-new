@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Service-share still / typography and daily geometry**: replaced the upscaled low-resolution brand tag with a vector-derived high-resolution master, enabled RAQM/kerning, corrected punctuation, city/category/CTA weights and face leading/shadows, and added three date-seeded bounded cube families with pre-render hero/safe-zone/visibility/overlap/3D-distance rejection gates plus exact GPU→CPU composition binding.
 - **Site identity / VK 152-FZ storage correction**: moved the post-release VK challenge, verified identity, purpose consent and eligible friend-edge source of truth from Supabase to an isolated Managed Service for YDB personal-data contour in `ru-central1`; Supabase/YDB analytics receive no stable VK/friend subject, and the docs now distinguish Russian data-localization infrastructure from complete legal/organizational compliance.
 - **Guide media volume retention (INC-2026-07-13)**: add DB-aware pre/post-import pruning for old unprotected guide media and generated carousel caches, preserve current/future/recent/current-digest assets, heal only proven stale aligned JSON references, and enforce bounded production targets without following symlinks or deleting outside the store.
 - **Guide monitoring recovery-store budget (INC-2026-07-13)**: tighten the existing persistent Kaggle-results guard in production to two runs, 128 MiB and a 350 MiB volume free-space target, while always excluding the bundle currently being persisted.

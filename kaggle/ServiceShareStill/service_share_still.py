@@ -128,6 +128,7 @@ def run_blender(config_path: Path, bundle: Path, config: dict) -> dict:
     samples_total = int(config["samples"])
     last_emit = 0
     actual_device = None
+    composition = None
     log_path = WORK / "render.log"
     with log_path.open("w", encoding="utf-8") as log:
         assert process.stdout is not None
@@ -136,6 +137,8 @@ def run_blender(config_path: Path, bundle: Path, config: dict) -> dict:
             log.write(line)
             if line.startswith("SERVICE_SHARE_PREFLIGHT "):
                 actual_device = json.loads(line.split(" ", 1)[1])["device"]
+            if line.startswith("SERVICE_SHARE_COMPOSITION "):
+                composition = json.loads(line.split(" ", 1)[1])
             match = re.search(r"Sample\s+(\d+)/(\d+)", line)
             if match:
                 done = int(match.group(1))
@@ -154,7 +157,12 @@ def run_blender(config_path: Path, bundle: Path, config: dict) -> dict:
     code = process.wait()
     if code != 0:
         raise RuntimeError(f"Blender failed with exit code {code}")
-    return actual_device or {"requested":config["device"],"actual":"unknown"}
+    if not composition or not composition.get("gates_passed"):
+        raise RuntimeError("renderer did not return a passing composition contract")
+    return {
+        "device": actual_device or {"requested":config["device"],"actual":"unknown"},
+        "composition": composition,
+    }
 
 
 def main() -> int:
@@ -176,7 +184,9 @@ def main() -> int:
     version = subprocess.check_output([str(BLENDER), "--version"], text=True).splitlines()[0]
     emit("preflight_ok", phase="preflight", progress_percent=15, progress_label=f"{version} · {config['device']}", blender_version=version, requested_device=config["device"])
     emit("render_started", phase="render", progress_percent=20, progress_label=f"{config['profile']} · render started", samples_done=0, samples_total=config["samples"])
-    actual_device = run_blender(config_path, bundle, config)
+    runtime = run_blender(config_path, bundle, config)
+    actual_device = runtime["device"]
+    composition = runtime["composition"]
     emit("alive", phase="composite", status="alive", progress_percent=86, progress_label="компоновка продукта", actual_device=actual_device)
     output = WORK / config["output_filename"]
     subprocess.run([
@@ -209,6 +219,10 @@ def main() -> int:
         "global_snapshot_date_present": False,
         "event_dates_on_faces": True,
         "selection_mix": config["selection_mix"],
+        "composition_date": config["composition_date"],
+        "composition_family_requested": config["composition_family"],
+        "composition_seed_input": config.get("composition_seed", ""),
+        "composition": composition,
         "near_black_fraction": round(near_black_fraction, 8),
     }
     (WORK / "scene_qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=2) + "\n")
@@ -225,6 +239,9 @@ def main() -> int:
         "blend_filename": config["blend_filename"],
     }
     (WORK / "service_share_render_result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    if not config.get("keep_blend", True):
+        (WORK / config["blend_filename"]).unlink(missing_ok=True)
+        Path(str(WORK / config["blend_filename"]) + "1").unlink(missing_ok=True)
     emit("report_written", phase="report", status="done", progress_percent=100, progress_label="отчёт записан")
     return 0
 

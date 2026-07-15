@@ -10,6 +10,7 @@
 - Локальный v7 master завершён в `1024×1024 / 256 samples`.
 - Рендер перенесён в отдельный приватный script-kernel `ServiceShareStill`: быстрый gate на Kaggle GPU, затем обязательный финал на Kaggle CPU по тому же SHA-256 bundle.
 - Входные события формируются воспроизводимой смесью `3 популярных + 2 промотируемых + 3 псевдослучайных`.
+- Геометрия кубов теперь меняется по локальной дате внутри трёх откалиброванных families, не меняя hero/safe-zone/brand invariants.
 - Каждый новый принятый visual result отправлен в Telegram Saved Messages; production-каналы не затронуты.
 
 ## Даты на событиях
@@ -109,32 +110,103 @@ Local v7 master был отправлен ранее как message `32239`; por
 
 Артефакты прогонов находятся в `artifacts/codex/service-share-poster-cubes-research-v7/` и не коммитятся.
 
+## v8: типографика и дневное разнообразие
+
+Статус: v8 supersedes v7 как текущий visual master; v7 evidence выше сохранён как история переноса на Kaggle.
+
+### Визуальная диагностика и Gemini Pro gate
+
+Консультации выполнены через `agy` на `Gemini 3.1 Pro (High)`; ответы сохранены в `artifacts/codex/service-share-poster-cubes-research-v8/gemini/`:
+
+- `gemini_font_composition_review_v1.txt` — первичная диагностика шрифтов и четыре geometry hypotheses;
+- `gemini_variant_gate_review_v2.txt` — критика трёх реально отрендеренных families; первоначальные `diagonal_ribbon` и `ascending_arc` были отклонены из-за разрыва/слабой связности и затем перекалиброваны;
+- `gemini_gpu_acceptance_v3.txt` — acceptance реального Kaggle T4 render: `APPROVE`, без критичных font defects на `512/360`, score `typography 9`, `thumbnail 9`, `composition 10`, `publish readiness 10`.
+
+Gemini recommendations принимались только после проверки на реальном изображении. Например, утверждение о тесном интерлиньяже блока городов не подтвердилось на master и не применялось; утверждение о разрыве цепочки подтвердилось на preview и привело к более строгому projection gate.
+
+### Исправления шрифтов
+
+- Низкоразрешённая бирка `240×88`, которая увеличивалась до `420×154`, заменена на `960×352` raster master, полученный из согласованного SVG-wordmark; в карточке она теперь только уменьшается.
+- Pillow fonts явно используют `ImageFont.Layout.RAQM` и OpenType kerning.
+- Запятая после `НАЙДИТЕ` сохранена грамматически, но набрана меньшим `SemiBold` glyph с отдельной оптической позицией.
+- Города рисуются нативно в целевом разрешении, а не берутся из готового text raster; увеличены вес, контраст и leading.
+- Вторичная строка категорий переведена с `Regular` на `SemiBold`; CTA усилен `Bold`, при этом домен не уменьшен до слабого service text.
+- Event face titles используют `1.06em` leading. Жёсткая двухпиксельная и затем blur-shadow копия полностью удалены: контраст обеспечивает нижний photo gradient.
+- Face manifest фиксирует `RAQM`, kerning, leading и `baked_text_shadow=false`.
+
+### Daily geometry algorithm
+
+Чистый deterministic contract находится в `scripts/research/service_share_poster_cubes/layout_contract.py`. Три разрешённые families:
+
+1. `soft_s_curve` — S-образная связная глубинная траектория; выбрана auto-rotation для 2026-07-15;
+2. `diagonal_ribbon` — диагональная лента после опускания первого дальнего куба и восстановления overlap с Bridge;
+3. `ascending_arc` — восходящая дуга после устранения вертикального разрыва/тангенса.
+
+Auto-selection циклически использует local date ordinal, поэтому соседние даты гарантированно получают разные families. Внутри family SHA-256 seed даёт только bounded jitter:
+
+- hero location не более `±0.045/0.035/0.025`, rotation `±0.007 rad`, size `±0.8%`;
+- остальные кубы location не более `±0.10/0.09/0.08`, rotation `±0.014 rad`, size `±1.8%`.
+
+Это создаёт разнообразие без случайной перестройки концепта. Hero всегда остаётся крупнейшим и выходит через правый и нижний края; бирка и вся левая product hierarchy не участвуют в вариативности.
+
+### Automatic rejection gates
+
+Blender до рендера проецирует cube bounding boxes в нормализованные screen coordinates и fail-closes сцену, если:
+
+- любой куб пересекает product safe-zone `x < 0.435`;
+- hero не выходит одновременно за right+bottom edges;
+- видимая hero area не находится в диапазоне `0.16..0.42` или меньше двойной Bridge area;
+- Bridge/A/B/C имеют недостаточную projected area;
+- соседняя пара имеет `bbox gap > 0.005`;
+- screen-space overlap соседей `< 0.05` площади меньшего bbox;
+- 3D center distance / mean cube size `> 2.4`.
+
+Во всех families строится одна и та же бесшовная циклорама; wall/floor layout в алгоритме отсутствует, а result фиксирует `seamless_cyclorama=true`.
+
+В `scene_qa.json` и result сохраняются family, seed, projected bboxes, overlap ratios, world-distance ratios и `gates_passed=true`. GPU→CPU gate дополнительно требует совпадения date, family request, seed input, resolved family/seed и bundle SHA.
+
+### v8 live evidence
+
+Один и тот же v8 bundle: `529881570d29fdd171b1638ce4f05ac534ab85f11498993c09b98debb57c051e`.
+
+- GPU: `service-share-still-debug-gpu-20260715T004221Z`, T4/OPTIX, `512×512 / 24`, `61.469 s`, output `41a93d58c9ac5b20c849660017e67254f9f7c1959b8d478d3e15722eb83ff45a`, Saved Messages `32248`.
+- CPU: `service-share-still-final-cpu-20260715T004540Z`, `1024×1024 / 256`, `185.791 s`, output `1d8c18c1b9d698542bdce444464e8ce0deedd06cbaf2dfb46093945be3645687`, Saved Messages `32249`.
+- Resolved composition: `soft_s_curve`, seed `3223940777870682008`; all chain gaps `0`, overlap ratios `0.1365..0.439455`, world-distance ratios `1.181403..1.515056`, hero clipped area `0.226341`, no safe-zone intrusion.
+- Typography diagnostic and three local family previews were sent as `32244..32247`.
+- Tests: `10 passed` focused; `27 passed` with Kaggle status/instrumentation regressions. После зелёного summary сохранился известный interpreter shutdown hang, остановленный bounded timeout.
+
+Артефакты v8 находятся в `artifacts/codex/service-share-poster-cubes-research-v8/` и не коммитятся.
+
 ## Воспроизведение
 
 ```bash
 python3 scripts/research/select_service_share_events.py \
   --events-json site/src/data/preview-events.json \
-  --output artifacts/codex/service-share-poster-cubes-research-v7/selection_manifest.json \
+  --output artifacts/codex/service-share-poster-cubes-research-v8/selection_manifest.json \
   --local-date 2026-07-15 \
   --promo-festival '80 историй о главном' \
   --preflight-media
 
 python3 scripts/research/prepare_service_share_faces.py \
-  --selection artifacts/codex/service-share-poster-cubes-research-v7/selection_manifest.json \
-  --output-dir artifacts/codex/service-share-poster-cubes-research-v7/kaggle_faces \
+  --selection artifacts/codex/service-share-poster-cubes-research-v8/selection_manifest.json \
+  --output-dir artifacts/codex/service-share-poster-cubes-research-v8/kaggle_faces \
   --bold-font assets/fonts/Cygre-ExtraBold.ttf \
   --semibold-font assets/fonts/Cygre-SemiBold.ttf
 
 python3 scripts/run_service_share_still_kaggle.py \
   --env-file /home/dev/projects/events-bot-new/.env \
-  --bundle-dir artifacts/codex/service-share-poster-cubes-research-v7 \
-  --profile debug-gpu
+  --bundle-dir artifacts/codex/service-share-poster-cubes-research-v8 \
+  --profile debug-gpu \
+  --composition-date 2026-07-15 \
+  --composition-family auto
 
 python3 scripts/run_service_share_still_kaggle.py \
   --env-file /home/dev/projects/events-bot-new/.env \
-  --bundle-dir artifacts/codex/service-share-poster-cubes-research-v7 \
+  --bundle-dir artifacts/codex/service-share-poster-cubes-research-v8 \
   --profile final-cpu \
-  --require-debug-result artifacts/codex/service-share-poster-cubes-research-v7/kaggle/<accepted-debug-run>/service_share_render_result.json
+  --composition-date 2026-07-15 \
+  --composition-family auto \
+  --require-debug-result artifacts/codex/service-share-poster-cubes-research-v8/kaggle/<accepted-debug-run>/service_share_render_result.json
 ```
 
 ## Ограничения productization
