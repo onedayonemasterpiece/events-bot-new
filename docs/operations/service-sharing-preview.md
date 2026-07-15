@@ -3,6 +3,40 @@
 > Scope: footer-only HTTPS preview. Never updates production/current pointer,
 > stable `/ics/`, stable service-share assets or production telemetry.
 
+## Desktop refinement after paste testing
+
+The first footer preview used a full-width tinted card and one desktop action
+whose D1/D2 research modes mixed image, HTML and plain-text clipboard
+representations.  Real messenger paste testing showed that this was both too
+visually dominant for a footer utility and too ambiguous: receiving apps could
+prefer the image even when the user intended to send text and a link.
+
+The accepted follow-up contract is explicit instead of format-priority based:
+
+- desktop **«Скопировать карточку»** writes one `ClipboardItem` containing only
+  `image/png`;
+- desktop **«Скопировать текст и ссылку»** uses `clipboard.writeText()` with the
+  frozen share copy and canonical `https://kenigevents.ru/` URL;
+- neither desktop action silently changes into the other intent;
+- both controls have equal outline/secondary weight; the footer component has
+  no banner background, shadow or marketing question;
+- mobile keeps one **«Поделиться»** action and the verified WebP file → native
+  text+URL → clipboard/link fallback chain.
+
+There is no prior artifact proving that a Gemini Pro consultant approved the
+original dominant footer block. A new Antigravity visual probe under the display
+alias `Gemini 3.1 Pro (High)` independently rejected that treatment and supported
+the two-intent redesign, but the CLI did not expose a canonical provider model
+ID. Under the repository consultant policy this evidence is retained as
+`supplementary probe material`, not presented as a completed Gemini Pro gate.
+
+Cube-face preparation now distinguishes document protection from photographic
+framing. Explicit `ocr_text` posters remain contain-framed unless `safe_crop` is
+set. `visual_only` assets and conservative photo fallbacks are center-cover
+cropped before the renderer adds the event title/date; the face manifest records
+the crop mode, reason and source rectangle. Always regenerate a fresh catalog
+snapshot and selection before a render so new OCR/crop metadata is propagated.
+
 ## Проверенный preview 2026-07-15
 
 - implementation SHA до фиксации этого evidence:
@@ -36,8 +70,8 @@ launcher потерял процесс ожидания уже после remote
 
 1. `git fetch origin --prune`.
 2. Work only from a clean, pushed branch with recorded SHA.
-3. Confirm `PUBLIC_SERVICE_SHARE_DESKTOP_MODE` is `d0` unless the build is an
-   explicitly labelled D1/D2 research preview.
+3. Confirm the desktop build exposes both isolated intents (`image` and `text`)
+   and does not re-enable the retired mixed-format D1/D2 clipboard experiment.
 4. Generate/select the accepted catalog snapshot and keep DB/log artifacts only
    under `artifacts/codex/f18-service-share/`.
 5. Verify GPU gate and CPU final use the same bundle/date/catalog/selection/

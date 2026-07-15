@@ -40,9 +40,6 @@ for (const rel of required) {
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
 
-const requestedServiceShareMode = String(process.env.PUBLIC_SERVICE_SHARE_DESKTOP_MODE || 'd0').toLowerCase();
-const configuredServiceShareMode = ['d0', 'd1', 'd2'].includes(requestedServiceShareMode) ? requestedServiceShareMode : 'd0';
-const configuredServiceShareLabel = configuredServiceShareMode === 'd0' ? 'Скопировать ссылку' : 'Скопировать карточку';
 const serviceShareFamilyPaths = [
   '__preview/index.html',
   'segodnya/index.html',
@@ -58,13 +55,14 @@ for (const rel of serviceShareFamilyPaths) {
   if (header.includes('data-service-share-root')) throw new Error(`F18 ${rel} must defer header/mobile-menu placement until V12`);
   for (const marker of [
     'data-service-share-surface="footer"',
-    `data-service-share-desktop-mode="${configuredServiceShareMode}"`,
     'data-service-share-canonical-url="https://kenigevents.ru/"',
-    'aria-label="Поделиться KenigEvents"',
-    'Понравилась афиша?',
-    'Поделитесь KenigEvents',
+    'data-service-share-intent="mobile"',
+    'data-service-share-intent="image"',
+    'data-service-share-intent="text"',
+    'Поделиться афишей',
     'Поделиться',
-    configuredServiceShareLabel,
+    'Скопировать карточку',
+    'Скопировать текст и ссылку',
     'aria-live="polite"',
     '<noscript>',
   ]) {
@@ -78,8 +76,8 @@ for (const marker of [
   'noindex,nofollow,noarchive',
   'data-service-share-lab',
   'data-service-share-desktop-mode="d0"',
-  'data-service-share-desktop-mode="d1"',
-  'data-service-share-desktop-mode="d2"',
+  'data-service-share-intent="image"',
+  'data-service-share-intent="text"',
   'data-service-share-preview',
   'data-service-share-capabilities',
   'data-capability="secure-context"',
@@ -102,21 +100,21 @@ const serviceShareControllerSource = readFileSync(join(siteDir, 'src/lib/service
 for (const marker of [
   "SERVICE_SHARE_CANONICAL_URL = 'https://kenigevents.ru/'",
   "SERVICE_SHARE_DEFAULT_MANIFEST_PATH = '/service-share/current/manifest.json'",
-  "SERVICE_SHARE_DESKTOP_MODES = Object.freeze(['d0', 'd1', 'd2'])",
   "navigator.canShare({ files: [file] })",
   "await navigator.share(filePayload)",
   "await navigator.share({ text: manifest.share_text, url: SERVICE_SHARE_CANONICAL_URL })",
   "navigator.clipboard.writeText(serviceSharePlainText(manifest))",
   "navigator.clipboard.write([item])",
-  "'text/html': html, 'image/png': png, 'text/plain': plain",
-  "'image/png': png, 'text/html': html, 'text/plain': plain",
+  "return new ClipboardItemCtor({ 'image/png': png })",
   'Скопированы текст и ссылка',
-  'Карточка скопирована. При вставке приложение выберет поддерживаемый формат',
+  'Карточка скопирована в буфер',
+  'Не удалось скопировать картинку',
   "reason === 'cancelled'",
   "event_kind: eventKind",
 ]) {
   if (!serviceShareControllerSource.includes(marker)) throw new Error(`F18 controller misses contract marker: ${marker}`);
 }
+if (/new ClipboardItemCtor\(\{[^}]*text\/(?:plain|html)/su.test(serviceShareControllerSource)) throw new Error('F18 image action must not mix text clipboard representations');
 if (serviceShareControllerSource.includes('location.href;') || serviceShareControllerSource.includes('document.location')) throw new Error('F18 controller must never derive its payload from the current page URL');
 if (serviceShareControllerSource.includes('await prepared.ready')) throw new Error('F18 click path must not await manifest/network preparation and lose transient activation');
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');

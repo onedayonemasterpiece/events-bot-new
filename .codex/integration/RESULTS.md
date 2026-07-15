@@ -16,8 +16,8 @@
   success/cancel copy are fixed in one contract.
 - **R02 Done** — one shared component/controller is mounted only in the common
   footer.
-- **R03 Done** — mobile file/text/clipboard/link fallbacks and desktop D0/D1/D2
-  are implemented; D0 remains the default.
+- **R03 Superseded by the refinement below** — the original desktop D0/D1/D2
+  experiment was implemented and measured, then retired after real paste tests.
 - **R04 Done** — noindex `/lab/service-share/` exposes preview, capabilities,
   controlled paste targets and a bounded in-memory ledger.
 - **R05 Done** — the accepted snapshot produced `284` current events, `15`
@@ -40,4 +40,34 @@
 
 - Native Android/iOS share-sheet and Windows/macOS paste matrices.
 - V12 header/mobile-menu placement.
-- Production owner decision for desktop D1/D2 and schedule/publisher enablement.
+- Production owner decision for schedule/publisher enablement.
+
+## Refinement after desktop paste testing — 2026-07-15
+
+- The dominant tinted footer banner was removed. Desktop now shows a quiet
+  `Поделиться афишей` utility row with equal outline actions
+  `Скопировать карточку` and `Скопировать текст и ссылку`; mobile still shows one
+  native `Поделиться` action.
+- Clipboard contracts are intentionally disjoint: the card action writes one
+  image-only PNG `ClipboardItem`, while the text action calls `writeText()` with
+  the frozen service copy and canonical URL. Neither action silently falls back
+  to the other intent.
+- The previous visual treatment has no recorded Gemini approval. A new
+  Antigravity visual response rejected its aggressiveness, but is classified as
+  supplementary probe material because the CLI did not expose a canonical
+  Gemini Pro model ID. The permitted Opus fallback was quota-blocked.
+- Fresh snapshot `2026-07-15T07:10:00Z` remains data-bound rather than
+  hard-coded: `284` eligible events, `15` normalized places and `84` additions in
+  the exact trailing 168 hours. The accepted face mix is honestly
+  `4 popular / 1 promoted / 3 random` with one recorded promo shortfall.
+- Non-OCR/photo faces are center-cover cropped; explicit OCR posters remain
+  contain-protected. The landscape classification-gap case `event_id=3216` now
+  records `classification_gap_landscape_cover` and fills its square face.
+- Exact-bundle Kaggle evidence: GPU debug
+  `service-share:2026-07-15:debug:20260715T092428Z`, CPU final
+  `service-share:2026-07-15:final:20260715T092658Z`, bundle
+  `82d19d5f18cec0e593eb1e9ba39986ef85d140163f51a51fa295e5497db1a035`.
+  Final CPU output passed scene gates and was delivered to Telegram Saved
+  Messages as message `32270`.
+- Verification: controller `5/5`, renderer `23/23`, local Playwright `14/14`,
+  preview static contract check and `git diff --check` passed.
