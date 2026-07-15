@@ -216,4 +216,3 @@ event status, date, distinctive facts или taxonomy decision инвалиди�
 6. Canary показывает только human-approved decisions. Auto-publication
    разрешается после gate на свежей выборке и остаётся kill-switchable по
    model/taxonomy version.
-

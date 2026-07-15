@@ -233,4 +233,3 @@ event в следующем узле bounded chain.
 6. `distinctive_fact_only` canary в hero.
 7. Только после baseline/precision gate — `unusual_public` и автоматическая
    подборка.
-
