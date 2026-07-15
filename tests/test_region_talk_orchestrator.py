@@ -620,6 +620,23 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("drain up to 8 exact KO links first", main["reason"])
         self.assertEqual(main["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
 
+    def test_source_terminal_exact_cleanup_gets_one_bounded_drain_wave(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "post_link_queue_exact_ready_total": 0,
+                "post_link_queue_bge_ready_rescore_total": 0,
+                "post_link_queue_source_terminal_cleanup_total": 3,
+                "post_link_queue_bge_ready_rescore_source_terminal_cleanup_total": 12,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        main = next(action for action in actions if action["action"] == "launch_candidate_report")
+        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "8")
+        self.assertIn("drain up to 8 source-terminal exact cleanup rows", main["reason"])
+
     def test_orchestrator_polls_faster_while_downstream_backlog_exists(self) -> None:
         mod = load_module()
         self.assertEqual(

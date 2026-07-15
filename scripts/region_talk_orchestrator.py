@@ -3836,6 +3836,10 @@ def build_decision_plan(
         int(metrics.get("post_link_queue_exact_ready_total") or 0)
         + int(metrics.get("post_link_queue_bge_ready_rescore_total") or 0)
     )
+    exact_source_terminal_cleanup = (
+        int(metrics.get("post_link_queue_source_terminal_cleanup_total") or 0)
+        + int(metrics.get("post_link_queue_bge_ready_rescore_source_terminal_cleanup_total") or 0)
+    )
     exact_cache_hits = int(metrics.get("post_link_queue_entity_cache_hit_total") or 0)
     # Five is still a small human-like exact batch and lets one run consume
     # fresh pending links plus a few `bge_ready_rescore` links. Username resolve
@@ -3843,6 +3847,11 @@ def build_decision_plan(
     exact_fetch_limit = 5
     if exact_ready > 5 and exact_cache_hits > 5:
         exact_fetch_limit = min(8, exact_ready, exact_cache_hits)
+    elif exact_source_terminal_cleanup > 5:
+        # These rows require no Telegram request or BGE inference: the main
+        # worker only persists its already-known authoritative source terminal
+        # outcome. Give that bounded cleanup enough room to finish in one run.
+        exact_fetch_limit = min(8, exact_source_terminal_cleanup)
     candidate_budget = candidate_adaptive_budget(metrics)
     candidate_env = {
         **MAIN_DISCOVERY_YDB_BUDGET_ENV,
@@ -3925,7 +3934,9 @@ def build_decision_plan(
         "launch_candidate_report",
         ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", str(candidate_budget["history_sources"]), "--no-wait"],
         (
-            f"drain up to {exact_fetch_limit} exact KO links first; then history={candidate_budget['history_sources']} "
+            f"drain up to {exact_fetch_limit} "
+            + ("source-terminal exact cleanup rows" if exact_source_terminal_cleanup else "exact KO links")
+            + f" first; then history={candidate_budget['history_sources']} "
             f"and fast-check={candidate_budget['fast_check_sources']} from measured runtime={candidate_budget['runtime_seconds_observed']}s; "
             "continue keyword/similar discovery"
             + (" after publication goal" if goal_reached else "")
