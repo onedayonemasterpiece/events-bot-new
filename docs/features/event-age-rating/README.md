@@ -1,8 +1,8 @@
 # Возрастные ограничения событий
 
 Статус: **структурированный data path реализован; публичный режим —
-`declared_only`; CPU assessment прошёл автоматический quality gate и готов для
-внутреннего hash-bound rollout без дополнительных LLM-вызовов**.
+`declared_only`; high-confidence CPU assessment прошёл автоматический gate, но
+буквальный gate 100% numeric fill rate пока не пройден**.
 
 ## Контракт продукта
 
@@ -172,7 +172,7 @@ exact/within-one accuracy и accepted coverage. `ai_consensus_silver` разре
 contract и этот SHA входят в `assessment_policy_version`: смена любого из них
 автоматически делает прежний terminal result stale и возвращает событие в batch.
 
-### Инвариант «нет пропавшего рейтинга»
+### Terminal completeness и буквальный no-missing
 
 У каждого события должен быть наблюдаемый terminal outcome:
 
@@ -181,9 +181,13 @@ contract и этот SHA входят в `assessment_policy_version`: смена
 - `conflict`/scoped-only;
 - `insufficient_evidence` или `ocr_unavailable`.
 
-Это гарантирует отсутствие вечного silent/pending состояния. Инвариант **не**
-означает принудительный numeric default: при недостатке данных `NULL` безопаснее
-ложного `0+` или завышенного/заниженного значения.
+Это гарантирует отсутствие вечного silent/pending состояния, но **не выполняет
+буквальное продуктовое требование 100% numeric fill rate**. После уточнения
+владельца эти два gate нельзя смешивать. Принудительный numeric default пока не
+разрешён: forced OOF дал либо severe under-rating, либо неприемлемое завышение
+детских событий. До появления прошедшего independent gate fallback `NULL` с
+явным terminal status честнее ложной точности, но задача no-missing остаётся
+незакрытой.
 
 ### Реальный Kaggle CPU canary 2026-07-15
 
@@ -269,6 +273,34 @@ Worker elapsed `162.108 s`, launcher `214.315 s`. Временный input datas
 
 Ignored evidence:
 `artifacts/codex/event-age-rating-full-calibration-2026-07-15-v3/`.
+
+### Production rollout и полный current/future sweep 2026-07-15
+
+В production загружен private approved artifact, включён CPU worker и сохранён
+public default `declared_only`. Grounded source review вернул 52 актуальным
+событиям declared rating. Затем missing-only selector полностью обработал
+оставшиеся 239 событий тремя валидными batch (`64 + 128 + 60`); stale/invalid
+imports — 0, declared значения не перезаписаны.
+
+Финальный срез 291 current/future canonical event:
+
+- declared numeric: `52`;
+- high-confidence BGE assessed numeric: `18`;
+- `insufficient_evidence`: `99`;
+- `ocr_unavailable`: `122`;
+- pending/not_scheduled без declared: `0`.
+
+Итого terminal completeness `291/291`, но literal numeric fill только `70/291`
+(`24.05%`), а BGE acceptance на реальном missing-only хвосте — `18/239`
+(`7.53%`). Это подтверждает production distribution shift относительно
+official-label OOF coverage `51.41%` и является дополнительным доказательством,
+что high-confidence gate нельзя выдавать за завершённый no-missing pipeline.
+После rollout: SQLite `quick_check=ok`, `/healthz ready=true`.
+
+Во время rollout обнаружена коллизия status-dataset slug у двух длинных run id.
+Исправление добавляет hash полного run id; следующие datasets
+`...-event-age-c41280c3` и `...-event-age-2cbf1c27` получили независимые callback
+configs и правильные ledger rows.
 
 ## Public projection
 
@@ -357,8 +389,10 @@ over-permissive rate, LLM calls/event, stale input hashes, Kaggle heartbeat age
 
 ## Нерешённые gate-вопросы
 
-- накопить достаточный official source-declared holdout и пройти автоматические
-  quality gates по каждому классу; до этого classifier остаётся shadow;
+- пройти independent **100% numeric coverage** gate. High-confidence classifier
+  уже approved (`51.41%` coverage, `95.97%` exact), но forced режим на 531
+  official labels дал `73.82%` exact, `93.22%` within-one и один severe-under;
+  он не может быть выдан за завершённую калибровку no-missing;
 - юридическое/продуктовое решение о публичном показе assessment;
 - отдельная модель для entry/audience/accompaniment constraints;
 - независимая проверка LLM assessment, если когда-либо разрешат больше нуля
