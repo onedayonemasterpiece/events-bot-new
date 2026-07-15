@@ -171,6 +171,10 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # Manual and discovered exact URLs are the first bounded intake lane.  They
     # do not replace source/history/similar/keyword/hashtag discovery below.
     "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
+    # Exact links, fast-check hits and confirmed-source posts are already the
+    # highest-probability input.  Finish their E5/YDB handoff in the same run;
+    # discovery remains enabled and runs in cycles without critical work.
+    "REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK": "1",
     "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "8",
     "REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT": "5000",
     "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
@@ -594,14 +598,18 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         (
             "Медиа — исторических постов / ждут оценки / постов реально оценено / отдельных кадров оценено / "
-            "legacy auto-accept / требуют визуальной проверки / partial albums / scoring retry / видео вручную: "
+            "legacy auto-accept / visual-review raw/active/tombstoned / partial albums raw/active / "
+            "scoring retry / видео вручную: "
             f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
             f"{value('image_actual_scored_total')}/"
             f"{value('image_actual_frames_scored_total')}/"
             f"{value('image_legacy_auto_accept_total')}/"
             f"{value('image_visual_review_pending_total')}/"
+            f"{value('image_visual_review_active_total')}/"
+            f"{value('image_visual_review_tombstoned_total')}/"
             f"{value('image_partial_album_acquisition_total')}/"
+            f"{value('image_partial_album_active_total')}/"
             f"{value('image_scoring_retry_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}"
         ),
@@ -613,6 +621,10 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publication_sent_total')}/"
             f"{value('publication_ready_total')}/"
             f"{value('publication_delivery_completed_total')}"
+        ),
+        (
+            "Целостность публикационного lifecycle — противоречивых активных строк: "
+            f"{value('publication_lifecycle_contradiction_total')}"
         ),
         (
             "Финализатор — постов с оценённым фото / видео / non-terminal visual review / "
@@ -2184,6 +2196,45 @@ def _publication_handoff_metrics(
     }
 
 
+def _image_review_lifecycle_metrics(
+    images: list[dict[str, Any]],
+    publications: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Separate immutable image-ledger history from current review work."""
+    raw_review_rows = [
+        row for row in images
+        if str(row.get("image_quality_decision") or "").lower() == "needs_visual_review"
+    ]
+    partial_rows = [
+        row for row in images
+        if str(row.get("image_acquisition_status") or "").lower() == "partial"
+    ]
+    publication_by_url, _ = _latest_rows_by_post_url(publications)
+    review_by_url, _ = _latest_rows_by_post_url(raw_review_rows)
+    partial_by_url, _ = _latest_rows_by_post_url(partial_rows)
+    active_review_urls = {
+        url for url, row in publication_by_url.items()
+        if str(row.get("publication_candidate_status") or "").lower() == "visual_review_pending"
+    }
+    active_image_review_urls = set(review_by_url) & active_review_urls
+    contradiction_urls: set[str] = set()
+    for url, row in publication_by_url.items():
+        candidate_status = str(row.get("publication_candidate_status") or "").lower()
+        decision = str(row.get("llm_decision") or row.get("publication_llm_decision") or "").lower()
+        sent = str(row.get("sent_to_chat") or "").lower() == "true" or candidate_status == "sent_to_chat"
+        if candidate_status == "awaiting_text_restore" and (decision in {"accept", "reject"} or sent):
+            contradiction_urls.add(url)
+        elif candidate_status == "visual_review_pending" and (decision == "reject" or sent):
+            contradiction_urls.add(url)
+    return {
+        "image_visual_review_raw_urls_total": len(review_by_url),
+        "image_visual_review_active_total": len(active_image_review_urls),
+        "image_visual_review_tombstoned_total": len(set(review_by_url) - active_image_review_urls),
+        "image_partial_album_active_total": len(set(partial_by_url) & active_review_urls),
+        "publication_lifecycle_contradiction_total": len(contradiction_urls),
+    }
+
+
 def _is_keyword_discovered_source(row: dict[str, Any]) -> bool:
     haystack = " ".join(str(row.get(k) or "") for k in [
         "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
@@ -2900,12 +2951,36 @@ def select_actions_for_execution(actions: list[dict[str, Any]], *, execute_ready
     return [actions[0]]
 
 
+PRODUCT_PROGRESS_METRIC_KEYS = (
+    # Source/post acquisition that widens the actually inspected population.
+    "publics_scanned_with_posts_total",
+    "publics_with_ko_candidates_total",
+    "processed_posts_unique_total",
+    "ko_scope_detected_posts_unique_total",
+    # Exact/high-probability durable stage advancement, including known posts.
+    "fast_check_exact_posts_processed_unique_total",
+    "fast_check_exact_posts_dual_vectorized_total",
+    "fast_check_exact_posts_strict_text_accepted_total",
+    "confirmed_external_blogger_scanned_total",
+    "confirmed_external_blogger_with_ko_total",
+    "confirmed_external_blogger_vector_accepted_posts_total",
+    # Downstream product milestones.
+    "image_actual_scored_total",
+    "publication_candidate_total",
+    "publication_confirmed_total",
+    "publication_delivery_completed_total",
+)
+
+
 def _progress_signature(metrics: dict[str, Any]) -> tuple[tuple[str, int], ...]:
-    # Monitor the complete numeric funnel. If a metric is emitted as a scalar
-    # number, it participates in progress/no-progress decisions without manual
-    # allow-lists or omissions.
+    """Return product milestones only; retries/status churn is not progress.
+
+    All metrics remain visible in the operator scorecard.  This narrower view
+    is used only by the loop feedback controller, so a retry counter, policy
+    refresh or arbitrary future scalar cannot keep a zero-output loop alive.
+    """
     out: list[tuple[str, int]] = []
-    for key in sorted(metrics):
+    for key in PRODUCT_PROGRESS_METRIC_KEYS:
         value = metrics.get(key)
         if isinstance(value, bool):
             out.append((key, int(value)))
@@ -2921,6 +2996,17 @@ def _progress_signature(metrics: dict[str, Any]) -> tuple[tuple[str, int], ...]:
             if re.fullmatch(r"[-+]?\d+(?:\.0+)?", raw):
                 out.append((key, int(float(raw))))
     return tuple(out)
+
+
+def _product_progress_increased(
+    previous: tuple[tuple[str, int], ...] | None,
+    current: tuple[tuple[str, int], ...],
+) -> bool:
+    """Count only a monotonic durable milestone increase as new progress."""
+    if previous is None:
+        return True
+    before = dict(previous)
+    return any(value > int(before.get(key, 0)) for key, value in current)
 
 
 def _latest_fast_check_rows(source_rows: list[dict[str, Any]], candidate_run_id: str) -> list[dict[str, Any]]:
@@ -3306,6 +3392,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     image_terminal_metrics = _image_queue_status_metrics(images)
     publication_metrics = _publication_handoff_metrics(images, publications, source_rows)
+    image_review_lifecycle_metrics = _image_review_lifecycle_metrics(images, publications)
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
     vector_pair_metrics = _text_vector_pair_metrics(e5_vectors, bge_vectors)
@@ -3588,6 +3675,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_actual_scored_total": len(image_actual),
         "image_frame_scores_total": len(image_frame_scores),
         "image_actual_frames_scored_total": sum(_safe_int(row.get("images_scored_actual_count")) for row in image_actual),
+        # Keep the historical raw row count for compatibility, but expose the
+        # current actionable review population separately.  Old image rows can
+        # remain in the immutable ledger after the publication row is rejected
+        # or sent and must not be reported as live backlog.
         "image_visual_review_pending_total": len(image_visual_review),
         "image_scoring_retry_total": len(image_scoring_retry),
         "image_legacy_auto_accept_total": len(image_legacy_accept),
@@ -3600,6 +3691,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),  # compatibility only
         "image_strong_actual_ge_0_70_total": len(strong_images),  # compatibility only
         **publication_metrics,
+        **image_review_lifecycle_metrics,
         "publication_delivery_rows_total": len(deliveries),
         "publication_delivery_completed_total": sum(1 for row in deliveries if str(row.get("status") or "") == "delivered"),
         "source_onboarding_evidence_total": len(onboarding_evidence_rows),
@@ -4178,9 +4270,15 @@ def main() -> int:
         signature = _progress_signature(metrics)
         active = _has_active_region_talk_kernel(dict(metrics.get("kaggle_kernel_statuses") or {}))
         executed = bool(result.get("execution"))
-        if signature != last_signature or active or executed:
+        if _product_progress_increased(last_signature, signature):
             idle_no_progress = 0
+        elif active:
+            # A running remote worker has not yet had a chance to publish its
+            # durable outcome. Do not penalize it, but do not claim progress.
+            pass
         else:
+            # Launching another action is activity, not progress. Repeated
+            # zero-yield launches must eventually hit the configured stop.
             idle_no_progress += 1
         last_signature = signature
         if int(args.max_cycles or 0) and cycle >= int(args.max_cycles):

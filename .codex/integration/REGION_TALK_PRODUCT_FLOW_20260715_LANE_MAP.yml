@@ -1,0 +1,78 @@
+mode: read_only_parallel_then_serial_integrator
+repo: /home/dev/projects/events-bot-new-region-talk-r04-live
+base_ref: 43b20d3f064633a7fb1a6a46f747177c61e42aa4
+base_branch: agent/region-talk/R04-live-canary
+integration_branch: agent/region-talk/R04-live-canary
+global_constraints:
+  - preserve dual E5+BGE-M3 production contract
+  - keep discovery enabled but bounded away from exact/high-probability SLA
+  - never repurpose Telegram auth bundles
+  - do not auto-accept unknown/local/compliance or partial-media cases
+  - YDB and Telegram live mutations are owned only by the serial integrator
+verification_owner: primary Codex integrator
+stop_conditions:
+  - repeated YDB RESOURCE_EXHAUSTED after the targeted fix
+  - Telegram FloodWait or auth-key conflict
+  - publication eligibility cannot be reconciled without weakening local/compliance safety
+lanes:
+  - id: R01-R02
+    role: planner
+    requirement_ids: [R01, R02]
+    target: map YDB contention and exact/confirmed source critical path
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: read-only current commit
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: concrete code hotspots, minimal safe patch plan, tests and live acceptance checks
+    verification_scope: inspection_only
+    status: merged
+    effort: high
+    evidence: read-only explorer Ohm mapped the duplicate YDB reads and confirmed_external priority gap
+  - id: R03-R04
+    role: planner
+    requirement_ids: [R03, R04]
+    target: map visual-review sink, Gemini lifecycle and product progress/churn control
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: read-only current commit
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: concrete minimal recovery patch plan without broad image-v2 redesign
+    verification_scope: inspection_only
+    status: merged
+    effort: high
+    evidence: read-only explorer Gauss mapped image-ledger versus active backlog and terminal lifecycle contradictions
+  - id: R05
+    role: worker
+    requirement_ids: [R05]
+    target: canonical operating rule for periodic critical agy Gemini product review
+    depends_on: [R01-R02, R03-R04]
+    execution_mode: serial_after_dependency
+    branch: agent/region-talk/R04-live-canary
+    worktree: /home/dev/projects/events-bot-new-region-talk-r04-live
+    writable_files:
+      - docs/features/region-talk-channel/orchestration-to-be.md
+      - docs/features/region-talk-channel/test-run-runbook.md
+      - CHANGELOG.md
+    forbidden_files: []
+    expected_output: documented cadence, input evidence contract and critical-review rule
+    verification_scope: targeted
+    status: merged
+    effort: high
+  - id: R06
+    role: merge_reviewer
+    requirement_ids: [R06]
+    target: integrate minimal patches, run tests, launch bounded live cycles and report full metric deltas
+    depends_on: [R01-R02, R03-R04, R05]
+    execution_mode: serial_after_dependency
+    branch: agent/region-talk/R04-live-canary
+    worktree: /home/dev/projects/events-bot-new-region-talk-r04-live
+    writable_files: ['repo files owned by serial integrator only']
+    forbidden_files: []
+    expected_output: clean commit, pushed branch, run IDs, logs, funnel deltas and closure audit
+    verification_scope: full_local
+    status: spawned
+    effort: high

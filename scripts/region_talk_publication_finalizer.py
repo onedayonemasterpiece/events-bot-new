@@ -1269,6 +1269,107 @@ def _mark_text_restore_pending(row: dict[str, Any]) -> None:
     row["next_action"] = "refetch_exact_post_text_then_finalize"
 
 
+def _reconcile_terminal_provider_decision(
+    row: dict[str, Any],
+    previous: dict[str, Any],
+    *,
+    eligibility_verdict: str,
+    now_iso: str,
+) -> bool:
+    """Keep paid/delivered terminal evidence out of review/restore loops.
+
+    Current hard eligibility can still revoke an earlier acceptance.  A review
+    verdict blocks an unsent acceptance without spending Gemini again, while a
+    delivered row and a provider rejection remain terminal and monotonic.
+    """
+    before = {
+        key: row.get(key)
+        for key in (
+            "publication_status", "publication_candidate_status",
+            "publication_tombstone", "publication_revoked", "revoked_at",
+            "finalization_status", "llm_attempted_this_run",
+            "next_attempt_after", "next_action", "text_restore_reason",
+        )
+    }
+    decision = str(
+        previous.get("llm_decision")
+        or previous.get("publication_llm_decision")
+        or row.get("llm_decision")
+        or row.get("publication_llm_decision")
+        or ""
+    ).strip().lower()
+    previous_status = str(previous.get("publication_status") or "").strip().lower()
+    previous_candidate_status = str(previous.get("publication_candidate_status") or "").strip().lower()
+    # Historical rows did not always persist ``llm_decision`` even though the
+    # normalized terminal status is authoritative.  Infer the provider verdict
+    # before reconciling so a newly discovered local/spam source can still
+    # revoke an old accept, and an old reject cannot re-enter text restoration.
+    if not decision:
+        if previous_status == "gemini_accept" or previous_candidate_status in {
+            "llm_confirmed", "sent_to_chat", "accepted_for_publication",
+        }:
+            decision = "accept"
+        elif previous_status == "gemini_reject" or previous_candidate_status == "llm_rejected":
+            decision = "reject"
+    sent = (
+        str(previous.get("sent_to_chat") or row.get("sent_to_chat") or "").strip().lower() == "true"
+        or previous_candidate_status == "sent_to_chat"
+    )
+
+    if eligibility_verdict not in {"eligible", "review"} and decision == "accept":
+        _mark_ineligible(row, eligibility_verdict, now_iso=now_iso)
+    elif decision == "reject":
+        row["publication_status"] = "gemini_reject"
+        row["publication_candidate_status"] = "llm_rejected"
+        row["publication_tombstone"] = "false"
+        row["publication_revoked"] = "false"
+        row["revoked_at"] = ""
+        row["finalization_status"] = "terminal"
+        row["llm_attempted_this_run"] = "false"
+        row["next_attempt_after"] = ""
+    elif sent:
+        row["publication_status"] = "gemini_accept"
+        row["publication_candidate_status"] = "sent_to_chat"
+        row["publication_tombstone"] = "false"
+        row["publication_revoked"] = "false"
+        row["revoked_at"] = ""
+        row["finalization_status"] = "terminal"
+        row["llm_attempted_this_run"] = "false"
+        row["next_attempt_after"] = ""
+    elif decision == "accept" and eligibility_verdict == "review":
+        # Preserve the provider verdict fields on ``row`` but block delivery
+        # until source/media evidence is explicitly resolved.
+        _mark_review_pending(row)
+    elif decision == "accept":
+        row["publication_status"] = "gemini_accept"
+        row["publication_candidate_status"] = "llm_confirmed"
+        row["publication_tombstone"] = "false"
+        row["publication_revoked"] = "false"
+        row["revoked_at"] = ""
+        row["finalization_status"] = "terminal"
+        row["llm_attempted_this_run"] = "false"
+        row["next_attempt_after"] = ""
+    else:
+        # Operator/tombstone terminal rows without a provider decision retain
+        # their authoritative previous lifecycle.
+        for key in (
+            "publication_status", "publication_candidate_status",
+            "publication_tombstone", "publication_revoked", "revoked_at",
+            "finalization_status", "next_attempt_after",
+        ):
+            if previous.get(key) not in (None, ""):
+                row[key] = previous.get(key)
+        row["llm_attempted_this_run"] = "false"
+
+    # A terminal repair must also clear the stale restore request that caused
+    # the contradiction.  Review-after-accept has its own explicit status and
+    # likewise must not enqueue a text refetch.
+    row["next_action"] = ""
+    row["text_restore_reason"] = ""
+    after = {key: row.get(key) for key in before}
+    return after != before
+
+
 def _retry_after(now_iso: str, gate_status: str) -> str:
     now = _parse_time(now_iso) or datetime.now(timezone.utc)
     env_name = (
@@ -1294,6 +1395,18 @@ def verify_rows(
     llm_calls = 0
     for row in rows:
         verdict, _raw_eligibility = _eligibility_fields(row)
+        previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+        if previous and _terminal_decision_blocks_text_restore(previous):
+            if verdict not in {"eligible", "review"} and _ineligible_state_is_current(row, verdict):
+                continue
+            if _reconcile_terminal_provider_decision(
+                row,
+                previous,
+                eligibility_verdict=verdict,
+                now_iso=now_iso,
+            ):
+                results.append(row)
+            continue
         if verdict == "review":
             if _review_state_is_current(row):
                 continue

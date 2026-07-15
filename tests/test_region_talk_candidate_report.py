@@ -6808,6 +6808,64 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(payload["online_update_stage"], "terminal_publication_restore_suppressed")
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["terminal_restore_suppressions_persisted"], 1)
 
+    def test_candidate_link_selector_reuses_loaded_state_without_ydb_scan(self) -> None:
+        mod = load_module()
+        state = {
+            "post_link_queue": {
+                "postlink_one": {
+                    "post_link_queue_id": "postlink_one",
+                    "post_link_status": "pending_fetch",
+                    "post_url": "https://t.me/travelproof/101",
+                    "canonical_source_key": "telegram:travelproof",
+                },
+            },
+            "unified_source_queue": {
+                "telegram:travelproof": {
+                    "canonical_source_key": "telegram:travelproof",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "source_scope": "external",
+                },
+            },
+            "telegram_entity_cache": {
+                "travelproof": {
+                    "username": "travelproof",
+                    "channel_id_private": "123",
+                    "access_hash_private": "456",
+                },
+            },
+            "processed_posts": {},
+            "candidate_memory": {},
+            "publication_candidate_queue": {},
+            "text_vector_enrichment": {},
+        }
+        with mock.patch.object(
+            mod,
+            "ydb_candidate_link_rows_from_row_kv",
+            side_effect=AssertionError("loaded-state selector must not scan YDB again"),
+        ):
+            selected = mod.candidate_link_rows_from_state(
+                state,
+                1,
+                kinds=("post_link_queue_item",),
+            )
+        self.assertEqual([row["post_url"] for row in selected], ["https://t.me/travelproof/101"])
+        self.assertEqual(selected[0]["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(selected[0]["source_scope"], "external")
+
+    def test_confirmed_external_status_is_priority_lane_one(self) -> None:
+        mod = load_module()
+        self.assertEqual(
+            mod._post_work_priority(
+                {
+                    "post_url": "https://t.me/travelproof/102",
+                    "external_blogger_evidence_status": "confirmed_external",
+                    "has_media": True,
+                },
+                None,
+            )[0],
+            1,
+        )
+
     def test_candidate_memory_reuses_existing_id_for_same_public_url(self) -> None:
         mod = load_module()
         previous = {

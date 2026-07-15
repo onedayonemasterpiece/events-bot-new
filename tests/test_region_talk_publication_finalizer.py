@@ -819,6 +819,47 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             )
         select_mock.assert_not_called()
 
+    def test_verify_rows_reconciles_terminal_provider_evidence_before_restore_or_review(self) -> None:
+        mod = self.mod
+        rejected = candidate_row(
+            text="",
+            short_summary="",
+            _previous_publication={
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "llm_decision": "reject",
+            },
+        )
+        sent = candidate_row(
+            "https://t.me/travelcase/20",
+            _authoritative_source=None,
+            _previous_publication={
+                "publication_status": "gemini_accept",
+                "publication_candidate_status": "sent_to_chat",
+                "sent_to_chat": "true",
+            },
+        )
+        with (
+            mock.patch.object(mod.rt, "publication_eligibility", create=True, return_value=eligibility("eligible")),
+            mock.patch.object(mod, "telegram_public_text", return_value="") as fallback_mock,
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [rejected, sent],
+                max_llm=2,
+                model="gemini-test",
+                default_env_var_name="KEY",
+                now_iso="2026-07-15T10:00:00+00:00",
+            )
+        self.assertEqual(len(result), 2)
+        self.assertEqual(rejected["publication_status"], "gemini_reject")
+        self.assertEqual(rejected["publication_candidate_status"], "llm_rejected")
+        self.assertEqual(rejected["next_action"], "")
+        self.assertEqual(sent["publication_status"], "gemini_accept")
+        self.assertEqual(sent["publication_candidate_status"], "sent_to_chat")
+        fallback_mock.assert_not_called()
+        llm_mock.assert_not_called()
+
     def test_no_text_enters_exact_restore_queue_without_consuming_llm_budget(self) -> None:
         mod = self.mod
         first = candidate_row(text="", short_summary="")

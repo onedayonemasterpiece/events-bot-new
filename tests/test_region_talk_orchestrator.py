@@ -667,6 +667,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"]), 20000)
         self.assertGreaterEqual(int(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_YDB_MAX_CANDIDATE_ROWS"]), 5000)
         self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_WRITE_REPORT_ARTIFACTS"], "0")
+        self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK"], "1")
 
     def test_cursor_metric_prefers_highest_position_over_stale_history(self) -> None:
         mod = load_module()
@@ -675,23 +676,29 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertFalse(mod._cursor_row_is_better(current, stale, "unified_source_queue"))
         self.assertTrue(mod._cursor_row_is_better(stale, current, "unified_source_queue"))
 
-    def test_progress_signature_uses_all_numeric_metrics_without_classes(self) -> None:
+    def test_progress_signature_uses_only_durable_product_milestones(self) -> None:
         mod = load_module()
         base = {
             "publics_total": 10,
             "processed_posts_unique_total": 15,
-            "publication_sent_total": 0,
+            "publication_delivery_completed_total": 0,
             "some_future_numeric_metric": 1,
             "kaggle_kernel_statuses": {"region-talk-candidate-report": "RUNNING"},
             "non_numeric_status": "RUNNING",
         }
         more_publics = dict(base, publics_total=11)
         more_future_metric = dict(base, some_future_numeric_metric=2)
-        self.assertIn(("publics_total", 10), mod._progress_signature(base))
-        self.assertIn(("some_future_numeric_metric", 1), mod._progress_signature(base))
+        more_posts = dict(base, processed_posts_unique_total=16)
+        self.assertIn(("processed_posts_unique_total", 15), mod._progress_signature(base))
+        self.assertNotIn(("publics_total", 10), mod._progress_signature(base))
+        self.assertNotIn(("some_future_numeric_metric", 1), mod._progress_signature(base))
         self.assertNotIn(("non_numeric_status", 0), mod._progress_signature(base))
-        self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_publics))
-        self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_future_metric))
+        self.assertEqual(mod._progress_signature(base), mod._progress_signature(more_publics))
+        self.assertEqual(mod._progress_signature(base), mod._progress_signature(more_future_metric))
+        self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_posts))
+        self.assertTrue(mod._product_progress_increased(None, mod._progress_signature(base)))
+        self.assertFalse(mod._product_progress_increased(mod._progress_signature(base), mod._progress_signature(more_publics)))
+        self.assertTrue(mod._product_progress_increased(mod._progress_signature(base), mod._progress_signature(more_posts)))
 
     def test_heartbeat_metrics_keep_run_identity_and_stage(self) -> None:
         mod = load_module()
@@ -1164,6 +1171,54 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publication_text_restore_pending_total"], 1)
         self.assertEqual(metrics["publication_active_candidate_total"], 1)
         self.assertEqual(metrics["finalizer_pending_url_total"], 0)
+
+    def test_image_review_metrics_separate_active_work_from_historical_ledger(self) -> None:
+        mod = load_module()
+        images = [
+            {
+                "post_url": "https://t.me/active/1",
+                "image_quality_decision": "needs_visual_review",
+                "image_acquisition_status": "partial",
+            },
+            {
+                "post_url": "https://t.me/rejected/2",
+                "image_quality_decision": "needs_visual_review",
+                "image_acquisition_status": "partial",
+            },
+            {
+                "post_url": "https://t.me/sent/3",
+                "image_quality_decision": "needs_visual_review",
+            },
+        ]
+        publications = [
+            {
+                "post_url": "https://t.me/active/1",
+                "publication_candidate_status": "visual_review_pending",
+                "llm_decision": "accept",
+            },
+            {
+                "post_url": "https://t.me/rejected/2",
+                "publication_candidate_status": "llm_rejected",
+                "llm_decision": "reject",
+            },
+            {
+                "post_url": "https://t.me/sent/3",
+                "publication_candidate_status": "visual_review_pending",
+                "sent_to_chat": "true",
+                "llm_decision": "accept",
+            },
+            {
+                "post_url": "https://t.me/restore/4",
+                "publication_candidate_status": "awaiting_text_restore",
+                "llm_decision": "reject",
+            },
+        ]
+        metrics = mod._image_review_lifecycle_metrics(images, publications)
+        self.assertEqual(metrics["image_visual_review_raw_urls_total"], 3)
+        self.assertEqual(metrics["image_visual_review_active_total"], 2)
+        self.assertEqual(metrics["image_visual_review_tombstoned_total"], 1)
+        self.assertEqual(metrics["image_partial_album_active_total"], 1)
+        self.assertEqual(metrics["publication_lifecycle_contradiction_total"], 2)
 
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()

@@ -4,7 +4,7 @@ Status: target architecture for the 20-link product goal after the July 2026 Kag
 
 ## Why the main notebook should not be split into hard modes
 
-The normal `RegionTalkCandidateReport` run should remain queue-driven and opportunistic, not a set of mutually exclusive manual modes. Except for the expensive Telegram discovery step, each launch can consume whatever YDB queues are already ready:
+The normal `RegionTalkCandidateReport` run should remain queue-driven and opportunistic, not a set of mutually exclusive manual modes. Except for the expensive Telegram discovery step, each launch can consume whatever YDB queues are already ready. The product-SLA order is:
 
 1. consume BGE-M3 enrichment already written by the external worker;
 2. fuse E5+BGE text/vector evidence for rows that now have both sides;
@@ -12,6 +12,14 @@ The normal `RegionTalkCandidateReport` run should remain queue-driven and opport
 4. consume actual-image scores already written by `RegionTalkImageDiagnostic`;
 5. build/update `publication_candidate_item`, call Gemini Lite only for image-ready finalists within the shared limiter, and export/send the operator shortlist;
 6. only then spend remaining runtime on source/post discovery and new E5 scoring/enqueueing for BGE.
+
+When exact-post, fast-check or confirmed-external acquisition has already
+produced actionable post bodies, the run may stop Telegram acquisition at that
+boundary and immediately perform E5/state/image handoff. This is
+`REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK=1`. It does **not** disable
+discovery: the next cycle without critical acquired work executes the normal
+history/keyword/hashtag/similar tail. The purpose is to prevent a proven KO post
+from waiting behind lower-probability acquisition and another full YDB pass.
 
 This keeps every launch useful in several directions while still bounding one Kaggle run to about 20-30 minutes. Explicit modes remain useful only for probes, recovery and tests (`vector_probe_only`, BGE-only batch validation, no-discovery maintenance), not as the default product workflow.
 
@@ -163,6 +171,15 @@ calibrated strong-image decision. See
 [`image-scoring-audit-methodology-v2.md`](../../reference/image-scoring-audit-methodology-v2.md)
 for the source-disjoint calibration, shadow and automatic-reject stop/go
 criteria.
+
+`image_visual_review_pending_total` and
+`image_partial_album_acquisition_total` are immutable-ledger/raw compatibility
+counters. Current work is reported separately as
+`image_visual_review_active_total` and `image_partial_album_active_total`; the
+difference is `image_visual_review_tombstoned_total`. A rejected or delivered
+publication must not remain an active image-review backlog merely because its
+historical image row is retained. `publication_lifecycle_contradiction_total`
+must be zero after finalizer reconciliation.
 
 A producer gate-version bump is not a quality rejection. Missing/stale
 attestations are written as `deferred_refresh`; existing actual-image evidence
@@ -411,7 +428,15 @@ Important invariants:
   slice because live YDB/local probes showed broad raw `Калининград` searches
   mostly rediscover local/regional publics and hashtag spam. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
-  turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image, publication and scan-depth counters are monitored together without manual omissions. History depth metrics (`history_*_post_age_days`) are used to decide whether to lower/raise scan depth for speed versus coverage.
+  turning the Telegram session into an aggressive crawler. Every numeric funnel
+  metric remains visible and must be reflected on; no inconvenient metric may
+  be removed from the scorecard. The no-progress **controller**, however, uses
+  only monotonic durable product milestones (new actually scanned sources,
+  processed/KO posts, exact dual/text acceptance, image scoring, publication
+  and delivery). Kernel launches, retries and unrelated scalar churn are
+  activity, not product progress, and cannot keep a zero-yield loop alive.
+  History depth metrics (`history_*_post_age_days`) remain visible and are used
+  to decide whether to lower/raise scan depth for speed versus coverage.
 - The default orchestrator runtime window is 20 minutes
   (`REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=1200`), still below the 30-minute
   product bound. This is intentional: a 12-minute window made the run
@@ -458,8 +483,10 @@ Important invariants:
   stop-the-world mode. Every CandidateReport run consumes them before history
   scans; when more than three ready links already have cached Telegram private
   entities, the orchestrator raises the paced batch up to eight while keeping
-  the uncached username-resolve allowance at one. Lower-probability discovery
-  then receives its bounded share in the same run, preserving source growth.
+  the uncached username-resolve allowance at one. If that batch returns real
+  post bodies, the current run proceeds directly to E5/YDB handoff and defers
+  lower-probability discovery to the next eligible cycle. If it returns no
+  actionable body, history/fast-check/keyword/similar continue normally.
 - Keyword/hashtag discovery is higher product priority than similar-channel
   exploration because it can directly produce a source with a concrete
   Kaliningrad Oblast post. In the default orchestrated run, keyword discovery
@@ -520,8 +547,10 @@ Important invariants:
   durable rows before selecting the bounded batch, so a blocked PK prefix
   cannot starve later ready work. Terminal, cooldown and entity-wait rows are excluded from the
   actionable head; ready rows are ordered cached-entity first, newest first and
-  then by attempt count. This phase does not replace discovery: the same run
-  continues source history, fast-check, keyword/hashtag and similar discovery.
+  then by attempt count. This phase does not replace discovery globally. A
+  successful critical batch may defer the remaining acquisition phases for one
+  cycle so the post reaches E5/BGE handoff immediately; discovery remains
+  enabled and resumes in the next cycle without newly acquired critical work.
 - The orchestrated source-selection profile is YDB-queue-only when durable queue
   rows are available. Static CSV seeds are fallback/bootstrap data, not a source
   of repeated scans once the live queue exists.
@@ -696,6 +725,12 @@ CandidateReport therefore uses full row-level read floors (`posts=20000`,
 `vectors=20000`, `candidates=5000`, `sources=20000`) even when per-run scoring
 and discovery batches remain small. These read limits are state-integrity
 limits, not work-batch limits, and must not be reduced to shorten a run.
+CandidateReport loads this complete starting snapshot exactly once per run and
+passes it to exact-link selection, acquisition and report/state assembly. Exact
+selection must not issue an overlapping multi-kind scan, and the scoring tail
+must not reload the whole state after Telegram acquisition. The required
+heartbeat is one `state_load_completed`; a second full load or a post-fetch
+`RESOURCE_EXHAUSTED` is a failed canary, not a partial product success.
 The BGE worker independently scans at least 20,000 `text_vector_enrichment_item`
 rows. A 6,000-row prefix window is invalid once the shared E5+BGE kind exceeds
 that size: newer E5 PKs can otherwise remain invisible and actionable dual
@@ -707,6 +742,29 @@ clean empty queue from a worker stuck after YDB loading.
 Publication finalization is URL-idempotent. A row with `sent_to_chat=true` is
 terminal even when source-attestation fields later change: it may be retained
 for audit, but must not consume Gemini again or increment `accepted_new`.
+The same monotonic rule applies to durable Gemini rejects. Stale
+`awaiting_text_restore`/`visual_review_pending` projections are reconciled to
+their terminal provider/delivery state before any text fetch or Gemini call;
+only a new hard source/text/compliance reject may revoke an earlier accept.
+
+## Periodic critical product consultation
+
+The orchestrator operator must request an **explicitly critical** agy Gemini
+Pro review after either three complete product cycles (or roughly two hours of
+supervised work), two technically successful cycles with zero new publication
+output, or before a material architecture/policy change. The evidence packet
+must include the complete metric snapshot and deltas (not selected favorable
+metrics), run IDs, heartbeat/log artifact links, branch and commit SHA, Gemini
+budget use, exact/confirmed/keyword/similar funnel outcomes, image raw versus
+active backlog, publication lifecycle contradictions and delivered links.
+
+Only a Pro-class response is a consultant review under the project policy.
+The prompt asks the consultant to challenge both the implementation and the
+operator hypothesis against the sole product goal: more safe, external,
+non-advertising KO publication candidates. Its recommendations are advisory:
+Codex must verify them against code, live data, session safety and dual E5+BGE
+quality, and must reject recommendations that merely inflate activity, weaken
+gates or stop discovery without evidence.
 
 `queue_seq_repaired_this_run` is a transient marker scoped by
 `queue_seq_repair_run_id`. It is cleared while reconstructing the queue and only

@@ -626,6 +626,31 @@ python scripts/region_talk_embedding_quality_compare.py \
   20-minute run rewriting thousands of unchanged rows.
   Send periodic operator stats with `scripts/region_talk_goal_notify.py --stats`; it must read row-level YDB state, not heartbeat-only rows.
 - The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. Use local `scripts/region_talk_goal_notify.py` with the E2E human session to send confirmed links to the operator chat and mark them as sent.
+- CandidateReport live-canary acceptance requires exactly one
+  `state_load_completed` event before acquisition, no second complete YDB state
+  load after `posts_fetched`, and no `RESOURCE_EXHAUSTED` between a successful
+  exact/fast-check fetch and E5/state handoff. When a critical exact,
+  fast-check or confirmed-source post is acquired,
+  `discovery_deferred_critical_sla` is expected and the same run must reach
+  vector planning/state write; a later cycle without critical acquired work
+  must still emit keyword/similar completion metrics, proving discovery was
+  deferred rather than disabled.
+- Compare every bounded product run with a full before/after metric snapshot.
+  In addition to all existing funnel metrics, require
+  `image_visual_review_pending_total` (raw ledger),
+  `image_visual_review_active_total`,
+  `image_visual_review_tombstoned_total`,
+  `image_partial_album_active_total` and
+  `publication_lifecycle_contradiction_total`. The last metric must converge to
+  zero after the finalizer; a historical image row is not an active backlog by
+  itself.
+- Long-loop stop/reflection logic counts only increases in durable product
+  milestones. A Kaggle launch, retry counter or heartbeat is operational
+  activity, not progress. This does not permit hiding metrics: operator stats
+  and the periodic critical agy Gemini Pro evidence packet always contain the
+  complete scorecard and deltas. Trigger that review after three full cycles,
+  about two supervised hours, two technically successful zero-output cycles,
+  or before a material architecture change.
 - Semantic prototype vectors are cached in YDB as `semantic_bank_embedding`
   rows keyed by semantic-bank hash and embedding model, so only fresh post query
   vectors are recomputed every run.
