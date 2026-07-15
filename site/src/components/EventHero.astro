@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, withBase } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
@@ -207,7 +207,7 @@ const showTicketCta = Boolean(ctaHref);
   <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-efficient-portrait-viewer={efficientPortraitViewer ? 'true' : undefined} data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
-      <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы">
+      <a class="hero-gallery__brand" href={siteHomeHref()} aria-label="Перейти к афише Полюбить Калининград Анонсы">
         <span>Полюбить Калининград</span>
         <strong>Анонсы</strong>
       </a>

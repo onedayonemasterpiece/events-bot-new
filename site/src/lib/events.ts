@@ -14,6 +14,8 @@ import type {
 export const SITE_NAME = 'Полюбить Калининград Анонсы';
 export const SITE_ORIGIN = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 export const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/u, '');
+export const SITE_MODE = import.meta.env.PUBLIC_SITE_MODE === 'production' ? 'production' : 'preview';
+export const IS_PRODUCTION = SITE_MODE === 'production';
 export const PREVIEW_BUILD_ID = import.meta.env.PUBLIC_PREVIEW_BUILD_ID || 'local';
 export const ICS_BASE_URL = (
   import.meta.env.PUBLIC_ICS_BASE_URL ||
@@ -156,6 +158,10 @@ export function withBase(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`;
   if (!BASE_PATH) return normalized;
   return `${BASE_PATH}${normalized}`;
+}
+
+export function siteHomeHref(query = ''): string {
+  return withBase(`${IS_PRODUCTION ? '/' : '/__preview/'}${query}`);
 }
 
 export function absoluteUrl(path: string): string {

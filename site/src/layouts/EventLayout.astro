@@ -1,7 +1,7 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
-import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { getCurrentDate, IS_PRODUCTION, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular';
 
@@ -19,7 +19,7 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
-const robots = 'noindex,nofollow,noarchive';
+const robots = IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive';
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
@@ -2114,7 +2114,7 @@ const HEADER_NAVIGATION = [
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
-        <a class="site-header__brand-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+        <a class="site-header__brand-tag" href={siteHomeHref()} aria-label="Полюбить Калининград Анонсы — на главную">
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
@@ -2131,7 +2131,7 @@ const HEADER_NAVIGATION = [
                 <a href={withBase('/populyarnoe/')}>Популярное</a>
                 <a href={withBase('/poisk/')}>Поиск</a>
                 <a href={withBase('/partners/')}>Инфопартнёры</a>
-                <a href={withBase('/__preview/')}>Все анонсы</a>
+                <a href={siteHomeHref()}>Все анонсы</a>
               </div>
             </nav>
           </div>
@@ -2156,7 +2156,7 @@ const HEADER_NAVIGATION = [
             <a href={withBase('/populyarnoe/')}>Популярное</a>
             <a href={withBase('/poisk/')}>Поиск</a>
             <a href={withBase('/partners/')}>Инфопартнёры</a>
-            <a href={withBase('/__preview/')}>Все анонсы</a>
+            <a href={siteHomeHref()}>Все анонсы</a>
             <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
           </nav>
         </div>
@@ -2180,7 +2180,7 @@ const HEADER_NAVIGATION = [
           <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
           <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
         </div>
-        <p class="site-footer__note">Preview · noindex · {SITE_ORIGIN}</p>
+        <p class="site-footer__note">{IS_PRODUCTION ? SITE_ORIGIN : <>Preview · noindex · {SITE_ORIGIN}</>}</p>
       </div>
     </footer>
 

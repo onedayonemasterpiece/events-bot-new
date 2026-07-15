@@ -4,19 +4,21 @@ import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro'
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, getWeekendEvents, getWeekendRange, IS_PRODUCTION, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
 
 const events = getWeekendEvents();
 const weekend = getWeekendRange();
 const canonicalUrl = absoluteUrl('/vyhodnye/');
 const title = `События на выходные в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ближайшие выходные ${weekend.label}: афиша, билеты, регистрация и календарь.`;
+const description = IS_PRODUCTION
+  ? `Афиша событий на ближайшие выходные ${weekend.label}: билеты, регистрация и календарь.`
+  : `Статический preview-листинг событий на ближайшие выходные ${weekend.label}: афиша, билеты, регистрация и календарь.`;
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="weekend">
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Выходные</span>
       </nav>
@@ -28,7 +30,7 @@ const description = `Статический preview-листинг событи�
           <div class="source-links">
             <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
             <a href={withBase('/zavtra/')}>Смотреть завтра</a>
-            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
+            <a href={siteHomeHref()}>{IS_PRODUCTION ? 'Все анонсы' : 'Все тестовые страницы'}</a>
           </div>
         </div>
       </section>
@@ -38,7 +40,7 @@ const description = `Статический preview-листинг событи�
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <ListingPersonalFilter total={events.length} label="на выходных" />
-          <h2>{events.length ? `Найдено: ${events.length}` : 'На эти выходные в fixture нет событий'}</h2>
+          <h2>{events.length ? `Найдено: ${events.length}` : (IS_PRODUCTION ? 'На эти выходные событий не найдено' : 'На эти выходные в fixture нет событий')}</h2>
           <div class="listing-stack">
             {events.map((event) => <EventListItem event={event} />)}
           </div>

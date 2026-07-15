@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { HERO_REVIEW_CASES } from '../lib/heroReview';
-import { absoluteUrl, eventPath, getEvents } from '../lib/events';
+import { absoluteUrl, eventPath, getEvents, IS_PRODUCTION } from '../lib/events';
 
 function normalizeLastmod(value: string | null | undefined, fallback: string): string {
   if (!value) return fallback;
@@ -11,19 +11,27 @@ function normalizeLastmod(value: string | null | undefined, fallback: string): s
 
 export const GET: APIRoute = () => {
   const now = new Date().toISOString();
-  const entries = [
-    { loc: absoluteUrl('/__preview/'), lastmod: now },
+  const publicEntries = [
+    { loc: absoluteUrl('/'), lastmod: now },
     { loc: absoluteUrl('/segodnya/'), lastmod: now },
     { loc: absoluteUrl('/zavtra/'), lastmod: now },
     { loc: absoluteUrl('/vyhodnye/'), lastmod: now },
     { loc: absoluteUrl('/vystavki/'), lastmod: now },
     { loc: absoluteUrl('/populyarnoe/'), lastmod: now },
     { loc: absoluteUrl('/poisk/'), lastmod: now },
+    { loc: absoluteUrl('/partners/'), lastmod: now },
+  ];
+  const previewOnlyEntries = [
+    { loc: absoluteUrl('/__preview/'), lastmod: now },
+    ...publicEntries.slice(1, 7),
     { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     { loc: absoluteUrl('/partners/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
     ...HERO_REVIEW_CASES.map((item) => ({ loc: absoluteUrl(`/lab/hero/review/${item.caseId}/`), lastmod: now })),
+  ];
+  const entries = [
+    ...(IS_PRODUCTION ? publicEntries : previewOnlyEntries),
     ...getEvents().map((event) => ({ loc: absoluteUrl(eventPath(event)), lastmod: normalizeLastmod(event.updated_at, now) })),
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map((entry) => `  <url><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod></url>`).join('\n')}\n</urlset>\n`;
