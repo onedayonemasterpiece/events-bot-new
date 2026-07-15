@@ -1,0 +1,4 @@
+interface:
+  display_name: "Telegram Mobile UI Review"
+  short_description: "Read mobile feedback and post UI evidence"
+  default_prompt: "Use $telegram-mobile-ui-review to inspect the task thread, apply its feedback, and post mobile review evidence."

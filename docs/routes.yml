@@ -14,6 +14,7 @@ sections:
     commands: docs/operations/commands.md
     cron: docs/operations/cron.md
     repository_workflow: docs/operations/repository-workflow.md
+    mobile_ui_telegram_review: docs/operations/mobile-ui-telegram-review.md
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md

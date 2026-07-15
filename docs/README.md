@@ -13,6 +13,7 @@
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
+- Обязательное мобильное UI-ревью через Telegram forum: `docs/operations/mobile-ui-telegram-review.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event-media automatic gate: `docs/features/event-media/README.md`

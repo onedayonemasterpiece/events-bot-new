@@ -37,6 +37,14 @@
   - обязательны `TELEGRAM_BOT_TOKEN` и (`TELEGRAM_API_ID`/`TELEGRAM_API_HASH` **или** `TG_API_ID`/`TG_API_HASH`) и одна из: `TELEGRAM_AUTH_BUNDLE_E2E` или `TELEGRAM_SESSION`.
   - `behave`/`pytest` E2E подхватывают `.env` автоматически (best-effort) и **не** перетирают уже заданные переменные окружения.
   - если запускаешь бота руками из терминала, `.env` не подгружается автоматически: используй `set -a; source .env; set +a` перед `python main.py`.
+
+## Mobile UI review через Telegram (critical)
+
+- Любая задача, которая включает, меняет, тестирует или публикует мобильный web/UI view, обязана использовать skill `.codex/skills/telegram-mobile-ui-review/SKILL.md` и канонику `docs/operations/mobile-ui-telegram-review.md`.
+- До начала реализации агент обязан проверить форум `KenigEvents · UI review` (`https://t.me/c/4337049383/1`), найти тред этой задачи и прочитать все комментарии/скриншоты; если треда нет — создать его и зафиксировать краткий scope.
+- Комментарии и вложения из треда являются входными требованиями и должны быть обработаны до запуска работы. Нельзя молча пропускать gate при проблеме с Telegram/session.
+- После мобильного render/preview агент обязан отправить в тот же тред реальные мобильные скриншоты, для motion-задач — видео или phase sequence, ссылку/build и явный список того, что оценивать; затем проверить доставку и перечитать новые комментарии перед closure.
+- Для local human-client использовать только `TELEGRAM_AUTH_BUNDLE_E2E` / `TELEGRAM_SESSION`; `TELEGRAM_AUTH_BUNDLE_S22` остаётся зарезервированным для Kaggle/remote monitoring.
 - Production Telegram UI E2E запускается только в `@events_love39_bot`; локальный `.env` используется только для human Telethon session/API id/hash. Не определяй production bot через локальный `TELEGRAM_BOT_TOKEN`, потому что он может указывать на тестовый `@eventsbotTestBot`.
 - Перед production admin UI E2E сверяй Telethon `get_me()` с production DB `/data/db.sqlite`, таблица `user`, `is_superadmin=1`; если grant отсутствует, запроси явное разрешение перед изменением prod DB.
 - Если production bot молчит на команду, сразу смотри `/data/runtime_logs/events-bot.log` и rotated logs по времени/user_id/update id/команде; webhook `200` без ответа часто означает штатный access-check return, а не сетевую поломку.
