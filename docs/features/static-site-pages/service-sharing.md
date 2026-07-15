@@ -220,17 +220,17 @@ full UA, profile/email/session, event/personal URL, `paste_completed` и
 
 ## Acceptance текущего preview slice
 
-- [ ] footer использует один общий component/controller на preview index, listing,
+- [x] footer использует один общий component/controller на preview index, listing,
   search, event detail и lab;
-- [ ] mobile и desktop используют один canonical URL, manifest и copy source;
-- [ ] mobile file/text/clipboard/link fallbacks и `AbortError` проверены Playwright;
-- [ ] desktop D0 default, D1/D2 lab payload/order/security/fallbacks проверены;
-- [ ] `/lab/service-share/` существует, закрыт от навигации и `noindex`;
-- [ ] daily selector/metrics/composition и GPU→CPU contract дают validated manifest;
-- [ ] local build/check/Playwright и public HTTPS preview проверки зелёные;
-- [ ] preview publish не меняет stable ICS, production/current pointer или assets;
-- [ ] implementation SHA, preview URL, manifest SHA и screenshots записаны;
-- [ ] no-JS/clipboard-denied state оставляет обычную selectable canonical link;
+- [x] mobile и desktop используют один canonical URL, manifest и copy source;
+- [x] mobile file/text/clipboard/link fallbacks и `AbortError` проверены Playwright;
+- [x] desktop D0 default, D1/D2 lab payload/order/security/fallbacks проверены;
+- [x] `/lab/service-share/` существует, закрыт от навигации и `noindex`;
+- [x] daily selector/metrics/composition и GPU→CPU contract дают validated manifest;
+- [x] local build/check/Playwright и public HTTPS preview проверки зелёные;
+- [x] preview publish не меняет stable ICS, production/current pointer или assets;
+- [x] implementation SHA, preview URL, manifest SHA и screenshots записаны;
+- [x] no-JS/clipboard-denied state оставляет обычную selectable canonical link;
 - [ ] native matrix честно остаётся Pending, если реальные устройства не проверены.
 
 ## Что остаётся до полного F18

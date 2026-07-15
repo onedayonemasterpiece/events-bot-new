@@ -3,15 +3,34 @@
 > Scope: footer-only HTTPS preview. Never updates production/current pointer,
 > stable `/ics/`, stable service-share assets or production telemetry.
 
-## Evidence placeholders
+## Проверенный preview 2026-07-15
 
-The integrator must replace these in run evidence, not silently in canonical claims:
+- implementation SHA до фиксации этого evidence:
+  `8fafd9923f416fbd7cabb7cd31c0628376d4472d`;
+- build id: `preview-20260715t0752z-f18-service-share-footer`;
+- [footer preview](https://kenigevents.ru/preview-20260715t0752z-f18-service-share-footer/__preview/);
+- [service-share lab](https://kenigevents.ru/preview-20260715t0752z-f18-service-share-footer/lab/service-share/);
+- manifest SHA-256:
+  `dc40d9aca2975e8c5e193bfc749f346d278c5c0eb071190a57d8ca27336b3d0b`;
+- asset version: `20260715-399690a07ba97209`;
+- WebP: `71,692` bytes,
+  `7d124bbe39c9c9a744e36f01f8f5cc6ffff5f16265e500047ebc2c5646a50a00`;
+- PNG: `818,803` bytes,
+  `aaab887ca248de15aef30f6226eb40c048abcb5eed52296baa23bfef8bd7337a`;
+- GPU run: `service-share:2026-07-15:debug:20260715T073944Z`, verified
+  `GPU/OPTIX`, composition gates passed;
+- CPU run: `service-share:2026-07-15:final:20260715T074157Z`, verified
+  `CPU`, exact bundle SHA
+  `33240c76e2b83b44a17220783e6220ee42cb4bf1741e48c310771ef82dff1767`;
+- dry-run: `1,286` planned objects, `0` destinations outside preview prefix;
+- public Playwright: `12 passed`; local controller: `5 passed`; renderer:
+  `17 passed`; `build:preview` and `check:preview` passed.
 
-- implementation SHA: `<IMPLEMENTATION_SHA>`;
-- build id: `<PREVIEW_BUILD_ID>`;
-- preview URL: `<PUBLIC_PREVIEW_URL>`;
-- manifest SHA-256: `<SERVICE_SHARE_MANIFEST_SHA256>`;
-- Kaggle GPU/CPU run IDs: `<GPU_RUN_ID>` / `<CPU_RUN_ID>`.
+CPU kernel завершился штатно и записал terminal `report_written`; локальный
+launcher потерял процесс ожидания уже после remote start, поэтому output был
+повторно скачан по kernel ref, провалидирован тем же bundle/composition contract,
+а временный input dataset удалён. Это отмечено в локальном redacted receipt, а не
+скрыто как обычный непрерывный launcher run.
 
 ## Preflight
 
@@ -62,7 +81,15 @@ npm --prefix site run deploy:preview
 4. supports a dry-run/object plan that is reviewed before upload;
 5. applies immutable cache metadata to content-addressed WebP/PNG and correct
    `Content-Type` to WebP, PNG and JSON;
-6. records the exact command as `<PREVIEW_ONLY_DEPLOY_COMMAND>` in evidence.
+6. records the exact command in evidence.
+
+Для проверенного preview команда была:
+
+```bash
+PREVIEW_BUILD_ID=preview-20260715t0752z-f18-service-share-footer \
+KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY=1 \
+npm --prefix site run deploy:preview
+```
 
 Если dry-run показывает хотя бы один key вне preview prefix, публикация
 **Blocked**. Строка о запрете stable ICS в stdout является обязательной частью

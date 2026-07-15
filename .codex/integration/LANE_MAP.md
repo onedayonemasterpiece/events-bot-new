@@ -32,7 +32,7 @@ lanes:
     forbidden_files: [scripts/research/**, kaggle/**, scheduling.py, docs/**, CHANGELOG.md]
     expected_output: committed UI vertical slice and focused tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: renderer
     role: worker
     requirement_ids: [R05, R06]
@@ -45,7 +45,7 @@ lanes:
     forbidden_files: [site/src/**, site/scripts/**, docs/**, CHANGELOG.md]
     expected_output: committed production-ready-but-disabled daily pipeline and tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: docs
     role: worker
     requirement_ids: [R08]
@@ -58,7 +58,7 @@ lanes:
     forbidden_files: [site/**, scripts/**, kaggle/**, tests/**, scheduling.py, main.py]
     expected_output: committed synchronized documentation
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: integration
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
@@ -71,5 +71,5 @@ lanes:
     forbidden_files: [production/current pointer]
     expected_output: test implementation ready or evidence-backed blocker
     verification_scope: full_local_and_public_preview
-    status: planned
+    status: completed
 ```
