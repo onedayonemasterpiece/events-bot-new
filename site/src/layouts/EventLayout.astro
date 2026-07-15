@@ -4001,13 +4001,19 @@ const HEADER_NAVIGATION = [
               const images = Array.from(visual.querySelectorAll('.event-hero__image'));
               if (!images.length) return;
               const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
+              const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"]'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
               const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
-              const maxOffset = isPosterStage ? 56 : 64;
-              const offset = -maxOffset + progress * maxOffset * 2;
+              const maxOffset = isPosterStage
+                ? (usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56)
+                : 64;
+              const offset = usesGapSafePosterParallax
+                ? -progress * maxOffset
+                : -maxOffset + progress * maxOffset * 2;
               if (isPosterStage) {
+                if (usesGapSafePosterParallax) visual.style.setProperty('--hero-poster-travel', `${maxOffset.toFixed(1)}px`);
                 visual.style.setProperty('--hero-poster-parallax-y', `${offset.toFixed(1)}px`);
               } else {
                 images.forEach((image) => image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`));

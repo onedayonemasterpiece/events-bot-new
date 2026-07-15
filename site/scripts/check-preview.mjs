@@ -32,7 +32,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -55,6 +55,7 @@ const mobileReviewCases = {
   combined: readFileSync(join(root, 'lab/event-mobile/examples/open-prose-action-dock/photo-paid/index.html'), 'utf8'),
   acceptedV2: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/photo-paid/index.html'), 'utf8'),
   acceptedV3: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/photo-paid/index.html'), 'utf8'),
+  acceptedV4: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -76,6 +77,9 @@ if (!mobileReviewCases.acceptedV2.includes('data-mobile-review-revision="v2"') |
 if (!mobileReviewCases.acceptedV3.includes('data-mobile-review-revision="v3"') || !mobileReviewCases.acceptedV3.includes('event-hero__meta-line--weekday-panel') || !mobileReviewCases.acceptedV3.includes('event-hero__weekday')) {
   throw new Error('Mobile event accepted v3 must expose the feedback revision and weekday-first metadata panel');
 }
+if (!mobileReviewCases.acceptedV4.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV4.includes('event-hero__meta-line--weekday-panel') || !mobileReviewCases.acceptedV4.includes('event-hero__weekday')) {
+  throw new Error('Mobile event accepted v4 must preserve the accepted weekday-first date/time panel');
+}
 const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
@@ -83,6 +87,10 @@ if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !m
 const mobileAcceptedV3OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV3OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV3OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v3 must preserve the no-zoom text-poster override');
+}
+const mobileAcceptedV4OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV4OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV4OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v4 must preserve the no-zoom text-poster override');
 }
 
 const desktopV12Pages = {
@@ -478,7 +486,15 @@ if (/mobile-brand-title-sway|--brand-sway-x|hydrateMobileBrandSway/iu.test(`${cs
 if (!/mobile-discovery-menu__lockup\{[^}]*grid-template-rows:\s*18px auto[^}]*gap:\s*6px[^}]*width:\s*104px/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*width:\s*8rem[^}]*min-height:\s*calc\(6rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the approved 128×96 optical lockup geometry');
 if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
-if (!/--hero-parallax-y/iu.test(css) || !/--hero-poster-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = isPosterStage ? 56 : 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps and OCR posters must move as one full-width visual without gray internal gaps');
+if (
+  !/--hero-parallax-y/iu.test(css)
+  || !/--hero-poster-parallax-y/iu.test(css)
+  || !/--hero-poster-travel/iu.test(css)
+  || !controlHtml.includes('usesGapSafePosterParallax')
+  || !controlHtml.includes('usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56')
+  || !controlHtml.includes(': -maxOffset + progress * maxOffset * 2')
+  || controlHtml.includes('--hero-parallax-scale')
+) throw new Error('Hero parallax must preserve the production constant-scale motion while the v4 OCR lab moves a no-zoom poster inside a travel-clipped viewport without layout gaps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*height:\s*100%[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, full-height, controlled and preserve OCR/text images with the base contain mode');
 if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
 if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');

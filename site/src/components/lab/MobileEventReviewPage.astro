@@ -69,7 +69,7 @@ const galleryCta = galleryCtaEvent ? {
   <div class="page-shell page-shell--event-impact mobile-event-review__shell">
     <article class="main-col section-card section-card--hero section-card--impact-hero">
       <div class="section-card__inner section-card__inner--hero">
-        <EventHero event={event} composition={composition} modeOverride={modeOverride} galleryCta={galleryCta} metaTreatment={variant.revision === 'v3' ? 'weekday-panel' : 'standard'} />
+        <EventHero event={event} composition={composition} modeOverride={modeOverride} galleryCta={galleryCta} metaTreatment={variant.revision === 'v3' || variant.revision === 'v4' ? 'weekday-panel' : 'standard'} />
       </div>
     </article>
 
@@ -124,6 +124,11 @@ const galleryCta = galleryCtaEvent ? {
     margin-right: calc(50% - 50vw);
   }
   [data-mobile-event-review][data-mobile-review-revision="v3"] .section-card--impact-hero {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .section-card--impact-hero {
     width: 100vw;
     margin-left: calc(50% - 50vw);
     margin-right: calc(50% - 50vw);
@@ -208,9 +213,80 @@ const galleryCta = galleryCtaEvent ? {
     line-height: 1.22;
   }
 
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__meta-line {
+    display: grid;
+    gap: 0.58rem;
+    margin-top: 0.08rem;
+    padding: 0.78rem 0.08rem 0.82rem;
+    border-top: 1px solid rgba(121,48,20,0.22);
+    border-bottom: 1px solid rgba(121,48,20,0.14);
+    border-radius: 0;
+    background: transparent;
+    color: #34271f;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__when {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__weekday {
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.54rem;
+    border-radius: 9px;
+    background: #b54d22;
+    color: #fffaf2;
+    font-size: 0.74rem;
+    font-weight: 950;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__date {
+    color: #7e2d12;
+    font-size: 1.12rem;
+    font-weight: 950;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__time {
+    color: #241c17;
+    font-size: 1.2rem;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__where {
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(121,48,20,0.14);
+    font-size: 0.92rem;
+    font-weight: 820;
+    line-height: 1.22;
+  }
+
   [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero--poster-stage .event-hero__visual {
     transform: translateX(-50%) !important;
     will-change: auto;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero--poster-stage .event-hero__visual {
+    transform: translateX(-50%) !important;
+    overflow: hidden;
+    will-change: auto;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero--poster-stage .event-hero__image {
+    margin-bottom: calc(-1 * var(--hero-poster-travel, 42px));
+    transform: translate3d(0, var(--hero-poster-parallax-y, 0px), 0);
+    will-change: transform;
+  }
+
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .mobile-event-review__medallions {
+    margin-top: clamp(0.85rem, 3.8vw, 1.05rem);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .mobile-event-review__details {
+    margin-top: clamp(1.35rem, 5.5vw, 1.65rem) !important;
   }
 
   [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__details {
@@ -326,8 +402,33 @@ const galleryCta = galleryCtaEvent ? {
     display: block !important;
   }
 
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+    position: relative;
+    flex-basis: 56px;
+    width: 56px;
+    min-height: 52px;
+    overflow: hidden;
+    transition: color 180ms ease, background 180ms ease, border-color 180ms ease;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] {
+    border-color: transparent !important;
+    background: #b54d22 !important;
+    color: #fff !important;
+    box-shadow: none !important;
+    transform: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-outline {
+    display: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-solid {
+    display: block !important;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+      transition: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
       transition: none;
     }
   }
@@ -338,7 +439,15 @@ const galleryCta = galleryCtaEvent ? {
       width: 52px;
       padding-inline: 0.38rem;
     }
+    [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__actions > .secondary-button {
+      flex: 0 0 52px;
+      width: 52px;
+      padding-inline: 0.38rem;
+    }
     [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
+      display: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
       display: none;
     }
     [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
@@ -347,9 +456,20 @@ const galleryCta = galleryCtaEvent ? {
       flex: 1 1 0;
       width: auto;
     }
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"],
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="share"] .event-hero__actions > .native-share-button {
+      flex: 1 1 0;
+      width: auto;
+    }
     [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
     [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
     [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
+      display: inline;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
       display: inline;
     }
   }

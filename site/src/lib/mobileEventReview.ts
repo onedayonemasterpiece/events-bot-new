@@ -1,11 +1,11 @@
 export type MobileEventReviewVariant = {
-  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3';
+  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4';
   label: string;
   shortLabel: string;
   note: string;
   proseTreatment: 'card' | 'open';
   actionsTreatment: 'current' | 'dock';
-  revision: 'v1' | 'v2' | 'v3';
+  revision: 'v1' | 'v2' | 'v3' | 'v4';
 };
 
 export type MobileEventReviewScenario = {
@@ -72,6 +72,15 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     proseTreatment: 'open',
     actionsTreatment: 'dock',
     revision: 'v3',
+  },
+  {
+    slug: 'accepted-v4',
+    label: 'Accepted v4 · owner correction',
+    shortLabel: 'Accepted v4',
+    note: 'Сохраняет принятую дату/время, возвращает OCR-параллакс без zoom и layout gap, упрощает active like и вводит чистый вертикальный ритм между информационными поверхностями.',
+    proseTreatment: 'open',
+    actionsTreatment: 'dock',
+    revision: 'v4',
   },
 ];
 
