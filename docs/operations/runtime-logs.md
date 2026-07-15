@@ -23,6 +23,7 @@ Production file mirror **включён постоянно** и пишет root 
 - volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=256`;
 - level: `RUNTIME_LOG_LEVEL=INFO`.
 - `/healthz` disk telemetry: warning below `350 MiB`, critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
+- Fly volume capacity: `/data` is provisioned at `2 GiB`; `fly.toml` requests bounded automatic extension at `80%` usage in `1 GiB` increments, capped at `3 GiB`. Capacity growth is a last-resort availability guard, not a replacement for the log budget, retention, DB/media cleanup, snapshots, or the free-space health floors above.
 
 При обычном потоке это даёт до двух суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Fly logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
 
@@ -48,6 +49,8 @@ Production file mirror **включён постоянно** и пишет root 
 - `RUNTIME_LOG_LEVEL` — уровень file handler независимо от console verbosity.
 
 Нельзя повышать budget/retention или снижать free-space floor без фактического `df`/`du` и regression-check инцидента `INC-2026-04-16`.
+
+Нельзя без отдельного capacity review повышать `auto_extend_size_limit` выше `3 GiB`. После любого ручного или автоматического resize обязательны `df -h /data`, `PRAGMA quick_check`, `/healthz`, Fly health checks и проверка свежих логов на `Errno 28` / `database or disk is full`.
 
 ## Investigation Workflow
 
