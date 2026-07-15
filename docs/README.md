@@ -20,6 +20,7 @@
 - Medallion visual QA (all actual static-site Playwright targets; Telegram excluded): `docs/features/static-site-pages/medallion-visual-qa.md`
 - Final SEO/GEO and AI-search transparency gate (last pre-RC stage, after feature-complete UI/UX freeze): `docs/features/static-site-pages/seo-geo-release-optimization.md`
 - Preliminary homepage feature candidate «Городской обзор» (typed/semantic editorial briefing): `docs/features/static-site-pages/typed-briefing-hero-research.md`
+- Event age-rating release coverage on every event-bearing public surface: `docs/features/static-site-pages/event-age-rating.md`
 - Share KenigEvents itself (mobile prerendered card / evidence-gated desktop copy): `docs/features/static-site-pages/service-sharing.md`
   - Windows/macOS desktop clipboard analytics and test matrix: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`

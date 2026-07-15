@@ -7,7 +7,7 @@
 
 This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F18 and explicitly named release candidates from becoming an unowned flat checklist.
 
-All F1–F18 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope. Preliminary homepage candidate H1 is different: its **decision gate** is mandatory before UI freeze, while implementation joins the RC only after an explicit owner `ship` decision.
+All F1–F18 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope. Cross-cutting M1–M5 gates are mandatory where their status says so, including M5 all-surface age-rating coverage. Preliminary homepage candidate H1 is different: its **decision gate** is mandatory before UI freeze, while implementation joins the RC only after an explicit owner `ship` decision.
 
 ## Capability ownership
 
@@ -49,6 +49,7 @@ H1 is not silently promoted to the mandatory F1–F18 scope by appearing here. B
 | M2 | No duplicate images inside an event gallery | [Event image duplicate audit](../../operations/event-image-duplicate-audit.md), [automatic event-media gate](../event-media/README.md) | 2026-07-13 baseline found duplicates in `79/266` eligible events and reviewed `158/158` multi-image events; automatic gate is in main, production cleanup/rebuild/public-surface closure pending |
 | M3 | Consolidated event engagement from sources and site | [Consolidated event engagement](../post-metrics/consolidated-event-engagement.md) | TG/VK source metrics and partial counters exist; `/populyarnoe/` is currently a source-only local-formula preview; one source+site read function, shared popular projection and ecological view/share persistence are missing |
 | M4 | Final SEO/GEO and AI-search transparency | [SEO/GEO release optimization](../static-site-pages/seo-geo-release-optimization.md) | mandatory last pre-RC gate; starts only after immutable UI/UX acceptance and integration of all public-HTML-changing release features, then requires independent Codex + `agy` Gemini Pro + `a-opus` audits |
+| M5 | Confirmed event age rating is visible on every public event representation | [Event age rating](../static-site-pages/event-age-rating.md) | mandatory release blocker; several source parsers expose `age_restriction`, but canonical Event/static projection/shared renderers and complete surface evidence are missing |
 
 ## Cross-feature authorities
 
@@ -66,6 +67,7 @@ Current decisions and questions that affect several feature families live in [gl
 ## Release sequencing constraints
 
 - H1 «Городской обзор» is evaluated before F5 UI freeze, not added after SEO/GEO: first prove a static V1 against categories-first control, then semantic-fragment V2 with zero-CLS interruption and manual mobile/reduced-motion. No personalized/backend/Gemini writer path is part of that initial decision. If owner selects `ship`, integrate and refreeze the homepage before M4; otherwise record `defer` and retain the normal categories/feed entry.
+- M5 age marking is a shared event fact, not detail-page decoration: once Smart Update accepts `age_restriction`, one canonical projection/formatter must show it on every event-bearing card/list/detail/search/related/personal/favorite/festival/transport/share surface and applicable ICS/structured data. Missing values never default to `0+`; source conflicts and door/audience wording fail closed into the quality workflow.
 - Navigation keeps one cross-device information architecture but adapts its geometry: compact mobile brand-tag disclosure, persistent desktop horizontal navigation with the shallow hybrid tag as the recommended release candidate. The exact immutable preview still needs owner sign-off.
 - F18 adds one shared service-sharing action to that shell: on mobile it appears both under the expanded brand tag and in the footer and shares a centrally prerendered WebP card; desktop never invokes native share. D0 copies text+URL; D1/D2 rich clipboard candidates require the [Windows/macOS matrix](../static-site-pages/service-sharing-desktop-clipboard-research.md) before owner selection. Browser/runtime composition generation, unsupported superlatives and per-user payloads are forbidden; the parent requirements live in the [service-sharing contract](../static-site-pages/service-sharing.md).
 - The gallery slide «Как добраться» is an optional F11 presentation candidate: it may summarize validated transport data after real event media, but cannot replace the accessible full schedule block or weaken the nightly refresh/fail-closed gates.

@@ -44,6 +44,7 @@
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F18, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
   - homepage «Городской обзор»: `docs/features/static-site-pages/typed-briefing-hero-research.md` — preliminary Conditional Go candidate; static/motion prototype and owner release-scope decision pending
+  - event age rating: `docs/features/static-site-pages/event-age-rating.md` — mandatory source-to-canonical-to-every-renderer coverage gate for any confirmed `0+|6+|12+|16+|18+`
   - share the service itself: `docs/features/static-site-pages/service-sharing.md` — mobile menu/footer Web Share card, evidence-gated desktop copy and centralized metric-bound prerender
   - F18 desktop clipboard research: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md` — Windows/macOS D0/D1/D2 paste matrix before rich-copy product selection
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending

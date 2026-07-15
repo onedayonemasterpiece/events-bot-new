@@ -195,6 +195,7 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Responsive navigation decision/research: `docs/features/static-site-pages/responsive-navigation.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
 - Service sharing card, mobile share and desktop copy-link: `docs/features/static-site-pages/service-sharing.md`.
+- Event age-rating source/projection/UI coverage on every public event representation: `docs/features/static-site-pages/event-age-rating.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
 - Event gallery duplicate release audit: `docs/operations/event-image-duplicate-audit.md`.
 - Event transport: `docs/features/event-transport/README.md`; optional gallery card: `docs/features/event-transport/gallery-how-to-get-there-card.md`.

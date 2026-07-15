@@ -168,6 +168,7 @@ features:
     homepage_typed_briefing_research: docs/features/static-site-pages/typed-briefing-hero-research.md
     homepage_typed_briefing_source_branch: feature/static-typed-intro-prototype-20260715
     homepage_typed_briefing_source_commit: 8045599b
+    event_age_rating: docs/features/static-site-pages/event-age-rating.md
     service_sharing: docs/features/static-site-pages/service-sharing.md
     service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
 
@@ -316,6 +317,7 @@ features:
     typed_briefing_hero_research: docs/features/static-site-pages/typed-briefing-hero-research.md
     typed_briefing_hero_source_branch: feature/static-typed-intro-prototype-20260715
     typed_briefing_hero_source_commit: 8045599b
+    event_age_rating: docs/features/static-site-pages/event-age-rating.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
     event_token_medallions_visual_qa: docs/features/static-site-pages/medallion-visual-qa.md
     event_token_medallions_integration_branch: integration/static-site-medallions-release-20260712
@@ -337,6 +339,7 @@ features:
       release_ui: candidate_signoff_pending
       responsive_navigation: adaptive_hybrid_selected_visual_signoff_pending
       homepage_typed_briefing: conditional_go_research_only_static_motion_prototype_missing
+      event_age_rating: release_blocker_source_partial_canonical_projection_ui_missing
       sharing: preview_canvas_offline_generator_missing
       service_sharing: release_blocker_design_only_desktop_windows_macos_matrix_pending
       popular_listing: partial_source_only_local_formula

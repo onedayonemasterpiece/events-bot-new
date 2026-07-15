@@ -9,6 +9,7 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 ## Required surfaces
 
 - root/index and responsive navigation with one shared information architecture;
+- a shared age-rating fact on every concrete-event representation whenever canonical `age_restriction` is present;
 - common mobile menu/footer service-share actions and their desktop copy-link variants;
 - today, tomorrow, weekend and relevant category listings;
 - event detail, gallery and quick-read organizer/venue/festival medallion row;
@@ -25,6 +26,12 @@ H1 is provisionally routed into release planning but is not yet part of the immu
 The candidate may ship only if the first useful scene is already in SSG/no-JS HTML, search/categories and at least the beginning of the feed remain visible and independently usable, the briefing stays within its 320/360/390/1366/1440 viewport budgets, and mobile plus `prefers-reduced-motion` are static/manual rather than autoplay. Links have stable hitboxes, motion interruption creates zero CLS, the approved lockup is unchanged, and every number/time/event/popularity/personal claim is backed by a versioned deterministic fact and route token. Client/runtime LLM, invented urgency and a terminal/chat-assistant skin are out of scope.
 
 If H1 is accepted, its branch/SHA, V1/V2 screenshots, accessibility/performance evidence and homepage experiment contract become part of F5 acceptance, and M4 SEO/GEO starts only after the resulting homepage is refrozen. If it is deferred, the standard categories/feed homepage remains the release baseline and H1 does not block F1–F18.
+
+## Event age-rating coverage
+
+M5 requires one shared event-age formatter/component, not renderer-specific copy. A non-null canonical `age_restriction` appears as visible `0+|6+|12+|16+|18+` on homepage/listing/search/tag/related/personal/favorite/festival/transport cards and as an immediately discoverable age fact on event detail; generated first-party event summaries preserve the same value. Unknown never renders a default `0+`.
+
+The marker remains readable without color, has an accessible name such as `Возрастное ограничение 12+`, does not overlap title/date/media/actions and is present in no-JS HTML. Compact and detail variants share the [same source/projection/UI contract](event-age-rating.md); the frozen UI inventory must prove every actual renderer rather than one sample page.
 
 ## Responsive navigation
 
@@ -79,6 +86,7 @@ The frozen event-detail UI consumes the single medallion slice from draft PR [#3
 - mobile menu/footer service-card share and desktop menu/footer copy checks, including D0 text/link fallback and the owner-selected D1/D2 rich clipboard behavior after native Windows/macOS evidence;
 - visual baselines tied to one immutable preview build id;
 - an explicit H1 `ship|defer` record; if `ship`, categories-first/static/motion comparison, 320–1440 viewport captures, no-JS/reduced-motion/keyboard/low-end checks and downstream discovery instrumentation are bound to that same preview;
+- M5 full renderer inventory covers every non-null rating plus unknown at mobile/tablet/desktop, with zero missing, contradictory, clipped, color-only or invented labels and visible/structured/ICS parity where applicable;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
 
 ## Branch rule
