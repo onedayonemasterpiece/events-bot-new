@@ -1,0 +1,114 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
+
+const canonicalUrl = absoluteUrl('/lab/event-desktop/');
+const title = `Desktop media focus v11 | ${SITE_NAME}`;
+const description = 'Desktop-only проверка нижнего старта CTA, плотного OCR-board, адаптивной ленты и эффективного многофотографийного viewer с рекомендацией. Mobile не изменён.';
+const examples = [
+  ['editorial-photo', 'Editorial · закреплённый hero', 'Верх фотографии защищён от кропа; нижняя часть раскрывается внутренним параллаксом.'],
+  ['editorial-photo-continuous', 'Continuous · rail + CTA admission', 'Спектакль «Гараж»: лента остаётся сверху, CTA ждёт информационный блок и только затем присоединяется снизу.'],
+  ['editorial-photo-continuous-wide', 'Continuous · широкий 2,36:1', 'Pianissimo: естественная высота сильной широкой фотографии без ненужного увеличения.'],
+  ['editorial-photo-continuous-near-square', 'Continuous · 4:3 bottom-safe', '«Город в персональном зеркале»: не более 20% кропа только сверху, нижняя граница сохранена.'],
+  ['editorial-ocr-companion', 'Service info · не афиша', '«Услуги в кемпинге» остаются полезным документом и больше не получают ложную метку «Афиша».'],
+  ['editorial-ocr-companion-arrival', 'OCR companion · приезжает', 'CTA ждёт информационный блок внизу, затем media-board с афишей поднимается и стыкуется без пустых полей.'],
+  ['split-ocr', 'Split · одна OCR-афиша', 'Афиша занимает ровно 50% ширины; лента не появляется для повторного rendition той же картинки.'],
+  ['split-portrait', 'Split · одна portrait-композиция', 'Семантически одинаковые варианты не создают ложную галерею.'],
+  ['split-low-resolution', 'Split · низкое разрешение', 'Адаптивная лента использует всю ширину; любой кадр открывает height-fit просмотр нескольких изображений с рекомендацией в конце.'],
+  ['split-multi-portrait', 'Split · много вертикальных фото', 'Нажатие на главный кадр или серию открывает несколько height-fit фотографий одновременно; частичный правый кадр становится первым.'],
+  ['split-ocr-with-photos', 'Split · OCR + реальные фото', 'Читаемая главная афиша и дополнительные фотографии под ней с точным переходом в полноэкранный просмотр.'],
+];
+const relatedExamples = [
+  ['related-cover', '01 · Compact cover', 'Самый короткий ряд, но агрессивно кропает OCR. Контрольный рискованный вариант.'],
+  ['related-ambient', '02 · Ambient preserve', 'Полная афиша поверх размытого продолжения изображения — без плоских полей и без потери текста.'],
+  ['related-hybrid', '03 · Bounded OCR crop', 'Рекомендуемый: единая высота ряда, до 12% вертикального кропа высокой афиши и безопасный contain-fallback без бокового кропа.'],
+];
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v11>
+    <div class="page-shell desktop-focus__shell">
+      <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v11</span></nav>
+
+      <section class="section-card desktop-focus__intro">
+        <div class="section-card__inner">
+          <p class="eyebrow">desktop only · mobile production untouched</p>
+          <h1>Continuous Editorial как приоритет, Split — для документов и серий</h1>
+          <p class="lead"><strong>Editorial</strong> сравнивается сразу на трёх реальных форматах фотографии. <strong>Split/Fallback</strong> принимает OCR-документы, портретные серии и изображения, которым не хватает разрешения для полноэкранного hero.</p>
+        </div>
+      </section>
+
+      <section class="desktop-focus__examples" aria-labelledby="related-title">
+        <header><p class="eyebrow">одни реальные карточки · три media-контракта</p><h2 id="related-title">Без плоских полей</h2></header>
+        <p class="lead">Все ссылки ведут к полному событию и сразу к блоку «Смотрите дальше». Сравниваются сохранность OCR, высота ряда и качество фотографии; действия остаются на общем графитовом фоне.</p>
+        <div>
+          {relatedExamples.map(([slug, label, note]) => (
+            <a href={`${withBase(`/lab/event-desktop/examples/${slug}/`)}#related-5658`} data-related-media-example={slug}>
+              <span aria-hidden="true">↳</span><strong>{label}</strong><p>{note}</p>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section class="desktop-focus__comparison" aria-labelledby="motion-title">
+        <header><p class="eyebrow">одно событие · два честных scroll-контракта</p><h2 id="motion-title">Сравнение Editorial motion</h2></header>
+        <div>
+          <article><strong>Закреплённый</strong><p>Hero нативно sticky. Фотография заметно смещается внутри кадра, а затем весь media-блок уходит с обычной скоростью страницы — без отдельного ускоренного transform.</p></article>
+          <article><strong>Непрерывный</strong><p>Hero не sticky. Его экранная скорость составляет примерно 0,65 от скорости контента, поэтому глубина заметна, но нет момента «отлипания».</p></article>
+        </div>
+      </section>
+
+      <section class="desktop-focus__examples" aria-labelledby="examples-title">
+        <header><p class="eyebrow">чистые страницы · реальные данные</p><h2 id="examples-title">Открыть и прокрутить</h2></header>
+        <div>
+          {examples.map(([slug, label, note], index) => (
+            <a href={withBase(`/lab/event-desktop/examples/${slug}/`)} data-desktop-focused-example={slug}>
+              <span>{String(index + 1).padStart(2, '0')}</span><strong>{label}</strong><p>{note}</p>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section class="section-card desktop-focus__routing" aria-labelledby="routing-title">
+        <div class="section-card__inner">
+          <p class="eyebrow">media routing contract</p><h2 id="routing-title">Как выбирается семейство</h2>
+          <div role="list">
+            <p role="listitem"><strong>Сильная horizontal ≥1200px и ratio ≥1,33</strong><span>Editorial</span></p>
+            <p role="listitem"><strong>OCR + сильная horizontal</strong><span>Editorial + отдельная OCR-афиша</span></p>
+            <p role="listitem"><strong>OCR без сильной horizontal</strong><span>Split/Fallback</span></p>
+            <p role="listitem"><strong>Portrait-only без OCR</strong><span>Split/Fallback</span></p>
+            <p role="listitem"><strong>Горизонталь низкого разрешения</strong><span>Split/Fallback</span></p>
+          </div>
+          <small>Размеры — предварительный геометрический gate, а не замена смысловой оценки релевантности изображения событию.</small>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .desktop-focus { background:#f8f0e5; color:#241c17; }
+  .desktop-focus__shell { display:grid; gap:clamp(3rem,6vw,6rem); padding-bottom:6rem; }
+  .desktop-focus h1 { max-width:17ch; font-size:clamp(3rem,6.4vw,7rem); line-height:.9; letter-spacing:-.065em; }
+  .desktop-focus h2 { margin:0; font-size:clamp(2.1rem,4vw,4.4rem); line-height:.95; letter-spacing:-.05em; }
+  .desktop-focus__comparison, .desktop-focus__examples { display:grid; gap:1.4rem; }
+  .desktop-focus__comparison>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+  .desktop-focus__comparison article { min-height:220px; padding:1.5rem; border-radius:24px; background:#292521; color:#fffaf2; }
+  .desktop-focus__comparison article:last-child { background:#285852; }
+  .desktop-focus__comparison strong { font-size:1.65rem; }
+  .desktop-focus__comparison p { max-width:52ch; color:#d8c9bc; line-height:1.55; }
+  .desktop-focus__examples>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem; }
+  .desktop-focus__examples a { display:grid; grid-template-columns:3.2rem minmax(0,1fr); gap:.35rem 1rem; min-height:150px; padding:1.25rem; border:1px solid rgba(121,48,20,.15); border-radius:22px; background:#fffaf2; color:#241c17; text-decoration:none; }
+  .desktop-focus__examples a:hover { border-color:#b54d22; box-shadow:0 16px 30px rgba(72,45,29,.1); transform:translateY(-2px); }
+  .desktop-focus__examples a>span { grid-row:1/span 2; color:#b54d22; font-weight:900; }
+  .desktop-focus__examples strong { font-size:1.2rem; }
+  .desktop-focus__examples p { grid-column:2; margin:0; color:#716357; line-height:1.45; }
+  .desktop-focus__routing div[role="list"] { display:grid; gap:.55rem; margin-top:1.4rem; }
+  .desktop-focus__routing p[role="listitem"] { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,.6fr); gap:1rem; margin:0; padding:.8rem 1rem; background:#f2e6d6; }
+  .desktop-focus__routing span { color:#285852; font-weight:850; }
+  .desktop-focus__routing small { display:block; margin-top:1rem; color:#74665c; }
+  @media (max-width:800px) {
+    .desktop-focus__comparison>div, .desktop-focus__examples>div { grid-template-columns:1fr; }
+    .desktop-focus__routing p[role="listitem"] { grid-template-columns:1fr; gap:.25rem; }
+  }
+</style>
