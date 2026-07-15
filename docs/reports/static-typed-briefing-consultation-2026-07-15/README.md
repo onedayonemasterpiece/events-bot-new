@@ -150,6 +150,27 @@ as local provenance and is not a review/send artifact.
 | [`visual-harmony-storm-grounding-correction-prompt.md`](visual-harmony-storm-grounding-correction-prompt.md) | Corrective continuation with exact new WebM/state receipt. | `b8d577706d2bf2d413fd00bbb9a55b0368fabf1d42dea9cc54418697429d9631` |
 | [`visual-harmony-storm-grounding-correction-gemini.md`](visual-harmony-storm-grounding-correction-gemini.md) | Final focused `LAB PUBLISH PASS`. | `5bb0b74765e29bb1905e3655d1a93356f04d666545d2d8853a713cff247ae55d` |
 
+### Desktop mosaic exact-state gate
+
+Новая пользовательская идея `8×3` mosaic прошла отдельный, а не перенесённый
+с wide-media, visual/motion gate. Gemini **3.1 Pro (High)** получил exact
+`1366×768`/`1440×900` final screenshots, три промежуточные фазы, полный
+`12.5s` slow WebM, `320×568`/`390×844` text-only mobile и измерения geometry,
+request count, alpha/rank matrices и 404 degradation. Запуск
+`2026-07-15 22:54:57–22:55:50 UTC`, provider status `0`, stderr empty.
+
+Вердикт: `MOSAIC LAB GATE: PASS`, blockers отсутствуют,
+`PUBLISH FOR USER REVIEW: YES`. Это разрешение опубликовать изолированный lab
+для пользовательского просмотра, не production rollout и не доказательство
+product desirability. Предложения про более тёплый stripe и дополнительные
+desktop spacing/gradient оставлены polish, потому что не исправляют дефект и
+могли бы снова изменить уже принятую композицию до пользовательской проверки.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`mosaic-acceptance-prompt.md`](mosaic-acceptance-prompt.md) | Exact screenshots/video, measurements and strict failure request. | `8b06ddba0471f23f48923f30f1f91b64b0f1f433651f69f940d79ff62ab98f2f` |
+| [`mosaic-acceptance-gemini.md`](mosaic-acceptance-gemini.md) | Final `MOSAIC LAB GATE: PASS`. | `5d5ad43ae83da05044bbdab2f72f23b5c01fcc28859d2e642bedbe6f9d90b87a` |
+
 ## Decision trace
 
 ### Accepted from Gemini

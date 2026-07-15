@@ -9,7 +9,7 @@ export type BriefingLabFragment = {
 export type BriefingLabScenarioFamily = 'count' | 'education' | 'signal' | 'welcome';
 export type BriefingLabCursor = 'bar' | 'underscore';
 export type BriefingLabAction = 'share_event' | 'like_event' | 'not_interested';
-export type BriefingLabMediaMode = 'small' | 'wide';
+export type BriefingLabMediaMode = 'small' | 'wide' | 'mosaic';
 
 export type BriefingLabScenario = {
   id: string;
@@ -137,7 +137,18 @@ export const briefingLabScenarios = [
       { text: 'Пойдём?' },
     ],
     ctaLabel: 'Посмотреть концерт', ctaEventId: 6020,
-    media: { eventId: 6020, mode: 'small' }, nextScenarioId: 'rare_event',
+    media: { eventId: 6020, mode: 'small' }, nextScenarioId: 'live_meeting_mosaic',
+  },
+  {
+    id: 'live_meeting_mosaic', label: 'Живая встреча · мозаика', family: 'signal', cooldownDays: 30,
+    cursor: 'underscore',
+    fragments: [
+      { text: 'Живая встреча', breakAfter: true },
+      { text: 'Алексей Мышкин.', accent: true, eventId: 6112, breakAfter: true },
+      { text: '13 августа.' },
+    ],
+    ctaLabel: 'Открыть встречу', ctaEventId: 6112,
+    media: { eventId: 6112, mode: 'mosaic', assetSourceOrder: 0 }, nextScenarioId: 'rare_event',
   },
   {
     id: 'rare_event', label: 'Редкое событие', family: 'signal', cooldownDays: 30, cursor: 'underscore',

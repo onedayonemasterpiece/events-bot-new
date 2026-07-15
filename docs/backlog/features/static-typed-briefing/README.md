@@ -252,15 +252,37 @@ UI-fragment с provenance. На mobile media не загружается; тек
   без border/radius/shadow, текст начинается в `20–32px` от левого края, а его
   inline-fragments получают непрозрачную paper stripe через
   `box-decoration-break: clone`;
+- `mosaic`: ещё более редкий desktop-only режим для canonical photo без
+  встроенного текста. Hero full-bleed только внутри своей фиксированной высоты;
+  один cached raster реконструируется через CSS-grid ровно `8×3` square cells без
+  radius/shadow/общей подложки. Левые cells около текста сохраняют меньшую и
+  неодинаковую alpha, а правый край продолжается за viewport и crop-ится без
+  horizontal scroll. Reveal/exit используют версионированные rank/alpha
+  matrices и ease-in-out; runtime randomness и saturation в V0 запрещены;
 - слой абсолютный внутри заранее фиксированной высоты hero, поэтому появление
   не меняет позиции категорий/feed и не создаёт CLS;
-- только `transform/opacity`, ease-out около `0.8–1.2s`, bounded exit примерно
-  через 4 секунды; смена сценария отменяет timer;
+- только `transform/opacity`; обычные modes используют прежний bounded exit,
+  а mosaic — `520ms` deterministic scatter reveal и `360ms` reverse scatter,
+  синхронизированный с реальным `next_scenario_id`; смена сценария отменяет
+  timer;
 - `safe_crop=true` и hero-fit `cover` обязательны для wide-mode; ошибка media
   деградирует в text-only;
 - `prefers-reduced-motion` оставляет статичное media без автоматического exit;
   будущий video-вариант обязан иметь poster, жёсткий byte/duration budget,
   без autoplay/audio на mobile и тот же text-only fallback.
+
+Mosaic eligibility: `(min-width:1024px) and (min-height:650px)`, выбранный
+asset обязан иметь `safe_crop=true`, `recommended_hero_fit=cover` и не быть
+text-heavy poster. Mobile/short-desktop/no-JS не получают media URL и не рисуют
+placeholder. Production target — один `8:3` WebP/AVIF derivative около
+`1800×675`, до `350KiB`; ошибка загрузки не меняет текст, CTA, categories или
+feed geometry.
+
+Renderer note: V0 не анимирует `<rect>` внутри SVG mask, чтобы не зависеть от
+известного класса проблем Blink «SVG image mask is not applied during CSS
+transition» ([Chromium issue 40178321](https://issues.chromium.org/issues/40178321)).
+Используются обычные CSS-grid cells с фрагментами одного cached raster:
+никакой SVG/CSS mask animation и зависимого от неё compositor path.
 
 ## 4. Кинетика и взаимодействие
 
@@ -468,6 +490,10 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 | `polite_daypart` | local daypart computed in `Europe/Kaliningrad`; no event claim required | opening/diversity; max 1/session | приветствие не должно занимать отдельную долгую сцену или выдавать server UTC за local time | 1) «Добрый день! Что сегодня удивит?» 2) «Добрый вечер! Посмотрим, что ещё начинается сегодня?» |
 | `local_keska` | timeless human-approved local phrase bank | later/manual; once/30d | только editorial local tone; фигурные кавычки `«кеска»`; не приписывать слово конкретному пользователю | 1) «Мы говорим по-калининградски. И даже можем сказать «кеска».» 2) «По-калининградски? Конечно. «Кеска» тоже есть в словаре.» |
 | `anticipated_person_named` | canonical participant identity, active event and event link grounded; comment anticipation is optional and separately provenanced | scene 1/2; once/person/event/30d | имя можно показывать без teaser; нельзя добавлять «ждут», если comment gate не пройден | 1) «В Светлогорск приезжает {{person_name}}. {{link:event:event_id|Посмотреть событие}}.» 2) «Гость ближайшей афиши — {{person_name}}. {{link:event:event_id|Вот подробности}}.» |
+| `meet_writer_or_poet` | active linked meeting, canonical participant identity and explicit role from event/source/entity provenance | later/manual; once/person/event/30d | нельзя превращать просто «творчество» в профессию или называть поэта писателем без role evidence; если роль не доказана, нейтрально «живая встреча с {{person_name}}» | 1) «Живая встреча с писателем {{person_name}}. {{link:event:event_id|Открыть встречу}}.» 2) safe fallback: «Живая встреча с {{person_name}}. {{link:event:event_id|13 августа}}.» |
+| `meet_chief_architect` | active linked public meeting and exact official `chief_architect` role with organisation/territory and validity interval | later/manual; once/person/event/30d | «главный специалист», историк архитектуры и архитектор — разные роли; без exact role fail closed | «Встретиться с главным архитектором {{territory}} — {{person_name}}. {{link:event:event_id|Открыть встречу}}.» |
+| `bridge_opening_view` | authoritative navigation/municipal schedule, exact bridge, local datetime, public event/access and safe observation point | later/manual; once/occurrence | keyword «мост» и обычное разведение технического сооружения не создают event; нельзя обещать доступность/безопасность без source | «Сегодня разводят {{bridge_name}}. {{link:event:event_id|Где и когда посмотреть}}?» |
+| `kruzenshtern_departure` | official barque schedule with exact departure local datetime, port/access/viewing facts and canonical linked occurrence | scene 1/2; once/voyage | подготовка к рейсу не равна опубликованному выходу; «в открытое море» допустимо только при доказуемой наблюдаемой точке/маршруте | «Барк „Крузенштерн“ выходит в рейс. {{link:event:event_id|Проводим?}}» |
 | `humorous_guest` | participant role/genre/humour fact explicitly grounded, active linked event | later/manual; once/person/event/30d | юмор — стиль, не источник факта; «любит шутить» запрещено без comedian/humour evidence | 1) «В Калининградскую область приедет гость, который любит шутить. {{link:event:event_id|Узнать кого}}.» 2) «Улыбнитесь, а мы пока покажем {{link:event:event_id|событие с юмором}}.» |
 | `weather_water_chain` | fresh licensed forecast envelope overlaps an eligible geolocated activity event; controlled activity/environment taxonomy | max 2-node automatic chain; once/forecast hash | описывать прогноз, не безопасность; нельзя переносить sea wave signal на реку/лагуну или скрывать attribution | 1) «На выходных прогноз обещает солнце. Поедем к морю или откроем {{link:route:weekend|афишу выходных}}?» 2) «В афише есть {{link:event:event_id|сплав на байдарках}}. Условия и отмены уточняйте у организатора.» |
 | `weather_storm_indoor_chain` | fresh licensed local forecast contains a versioned wind/storm trigger for the weekend; one or two active indoor events overlap that interval | exactly 2–3 automatic scenes; once/forecast hash | premise explicitly attributes the forecast, not observed/certain weather; every following scene has one concrete linked indoor event; no outdoor-safety advice or stale event | 1) «По прогнозу, в выходные — ветер и шторм. Может, в уют?» 2) «Можно послушать {{link:event:event_id_1|lecture_1}}.» 3) optional: «Или — {{link:event:event_id_2|lecture_2}}.» |
@@ -484,6 +510,29 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 | `no_safe_recommendation` | candidates all fail gates | scene 1/manual | navigation fallback | 1) «Не будем гадать. Выберите дату: {{link:route:today|сегодня}} или {{link:route:weekend|выходные}}.» 2) «Начните с {{link:route:search:q_all|поиска по всей афише}}.» |
 | `already_viewed` | event detail explicitly opened or strong viewed event; still active | manual only; 1/event/day | acknowledge prior view; no “new” | 1) «Вы уже открывали {{link:event:event_id|event_title}}. Событие состоится {{date_text}}.» 2) «Вернуться к просмотренному: {{link:event:event_id|event_title}}.» |
 | `dismissed` | explicit “not interested” action, TTL active | never recommend same event | hard exclusion; no copy about hidden item | 1) «Скрытые события не попадут в обзор до окончания выбранного периода.» 2) «Можно продолжить с {{link:route:search:q_all|остальной афишей}}.» |
+
+#### Аудит четырёх новых идей, 2026-07-15
+
+- В текущем static preview только event `6112`, «Живая встреча с Алексеем
+  Мышкиным», 13 августа 2026 в `HUMAN concept`, даёт будущую связанную сцену.
+  Canonical JSON подтверждает встречу, имя, дату и открытый разговор, но не
+  профессию; поэтому lab честно пишет имя без «писатель/поэт». Для mosaic выбран
+  только `image_assets.source_order=0`: `478×317`, `visual_only`, `cover`,
+  `safe_crop=true`. Низкое разрешение допустимо лишь для lab-mask, не для
+  production high-DPI derivative.
+- Идея главного архитектора не имеет будущего candidate с exact role. Нельзя
+  подменять её прошедшей встречей с «главным специалистом» или историком
+  архитектуры.
+- Для развода мостов нет canonical schedule/event, безопасной публичной точки и
+  времени; keyword-hit не допускается.
+- Для выхода барка «Крузенштерн» официальный материал КГТУ от 29 июня 2026
+  подтверждает подготовку к рейсу, но не exact departure time/public viewing
+  point: <https://klgtu.ru/en/media/news_en/a-celebration-marking-the-100th-anniversary-of-the-kruzenshtern-and-the-105th-anniversary-of-the-sed/>.
+  Поэтому сцена остаётся gated и не утверждает «выход в открытое море».
+
+Если participant role для `6112` будет импортирован отдельно, допустим
+проверяемый provenance о том, что Алексей Мышкин — поэт/автор; до этого
+production writer обязан использовать нейтральное название canonical event.
 
 ### Deterministic assembly
 

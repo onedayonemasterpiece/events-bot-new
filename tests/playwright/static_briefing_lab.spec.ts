@@ -20,8 +20,8 @@ const port = 4187;
 const baseUrl = `http://127.0.0.1:${port}/${buildId}/lab/briefing/`;
 const scenarioIds = [
   'today_count', 'tomorrow_count', 'weekend_count', 'greeting_day', 'local_keska', 'smart_search_education',
-  'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person',
-  'anticipated_person_named', 'rare_event', 'weather_water_demo', 'storm_weekend_demo', 'storm_lecture_science_demo',
+    'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person',
+    'anticipated_person_named', 'live_meeting_mosaic', 'rare_event', 'weather_water_demo', 'storm_weekend_demo', 'storm_lecture_science_demo',
   'festival_demo', 'unusual_format_demo',
 ];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
@@ -513,6 +513,95 @@ test('selected media is desktop-only, wide media belongs to viewport, exits, and
   const reduced = await freshPage(browser, { width: 1440, height: 900 }, 'reduce');
   await reduced.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
   await open(reduced.page, 'c', 'rare_event', '&replay=1');
+  await expect(reduced.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await reduced.page.waitForTimeout(4300);
+  await expect(reduced.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
+  await reduced.context.close();
+});
+
+test('8×3 mosaic is deterministic, full-bleed, uneven, mobile-silent and fail-closed', async ({ browser }) => {
+  const mosaicAsset = /24126606666687270ba582a7e2cbc883400762266887e0936119618d618cb0a4\.webp/u;
+  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="450"><rect width="1200" height="450" fill="#705045"/><circle cx="830" cy="170" r="150" fill="#c58f82"/></svg>';
+  const expectedOpacity = [.16, .28, .44, .62, .78, .88, .94, .97, .12, .24, .4, .58, .76, .9, .96, 1, .18, .3, .48, .66, .8, .89, .93, .96];
+
+  const desktop = await freshPage(browser, { width: 1440, height: 900 });
+  let mosaicRequests = 0;
+  desktop.page.on('request', (request) => { if (mosaicAsset.test(request.url())) mosaicRequests += 1; });
+  await desktop.page.route(mosaicAsset, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(desktop.page, 'b', 'live_meeting_mosaic');
+  const shell = desktop.page.locator('[data-narrative-media]');
+  await expect(shell).toHaveAttribute('data-media-mode', 'mosaic');
+  await expect(shell).toHaveClass(/is-present/u);
+  await expect(desktop.page.locator('[data-mosaic-tile]')).toHaveCount(24);
+  const geometry = await desktop.page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const stage = box('[data-briefing-slot]');
+    const media = box('[data-narrative-media]');
+    const message = box('[data-briefing]');
+    const tiles = [...document.querySelectorAll('[data-mosaic-tile]')].map((node) => ({
+      rect: node.getBoundingClientRect().toJSON(),
+      opacity: Number.parseFloat(getComputedStyle(node).opacity),
+      delay: getComputedStyle(node).getPropertyValue('--tile-in-delay').trim(),
+    }));
+    const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
+    return { stage: stage.toJSON(), media: media.toJSON(), message: message.toJSON(), tiles, borderRadius: style.borderRadius, boxShadow: style.boxShadow, bodyWidth: document.body.scrollWidth, innerWidth };
+  });
+  expect(geometry.stage.left).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.stage.right - geometry.innerWidth)).toBeLessThanOrEqual(1);
+  expect(geometry.media.right).toBeGreaterThan(geometry.innerWidth);
+  expect(geometry.media.left).toBeLessThan(geometry.message.right);
+  expect(Math.abs(geometry.media.width / geometry.media.height - 8 / 3)).toBeLessThan(.01);
+  expect(geometry.tiles.every((tile) => Math.abs(tile.rect.width - tile.rect.height) <= 1)).toBeTruthy();
+  expect(geometry.tiles.map((tile) => tile.opacity)).toEqual(expectedOpacity);
+  expect(new Set(geometry.tiles.map((tile) => tile.delay)).size).toBe(24);
+  expect(geometry.tiles[0].opacity).toBeLessThan(geometry.tiles[7].opacity);
+  expect(geometry.borderRadius).toBe('0px');
+  expect(geometry.boxShadow).toBe('none');
+  expect(geometry.bodyWidth).toBe(geometry.innerWidth);
+  expect(mosaicRequests).toBe(1);
+  const delaysBeforeReload = geometry.tiles.map((tile) => tile.delay);
+  await desktop.page.reload({ waitUntil: 'networkidle' });
+  const delaysAfterReload = await desktop.page.locator('[data-mosaic-tile]').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).getPropertyValue('--tile-in-delay').trim()));
+  expect(delaysAfterReload).toEqual(delaysBeforeReload);
+  await desktop.context.close();
+
+  const animated = await freshPage(browser, { width: 1366, height: 768 });
+  await animated.page.route(mosaicAsset, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(animated.page, 'c', 'live_meeting_mosaic', '&replay=1&pace=fast');
+  await animated.page.waitForTimeout(250);
+  const partial = await animated.page.locator('[data-mosaic-tile]').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) > .01).length);
+  expect(partial).toBeGreaterThan(0);
+  expect(partial).toBeLessThan(24);
+  await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(animated.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 4000 });
+  await expect.poll(async () => (await labState(animated.page)).scenario, { timeout: 2000 }).toBe('rare_event');
+  await animated.context.close();
+
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 1024, height: 600 }]) {
+    const mobile = await freshPage(browser, viewport);
+    let requested = 0;
+    mobile.page.on('request', (request) => { if (mosaicAsset.test(request.url())) requested += 1; });
+    await open(mobile.page, 'b', 'live_meeting_mosaic');
+    await mobile.page.waitForTimeout(250);
+    await expect(mobile.page.locator('[data-briefing-slot]')).toHaveAttribute('data-media-mode', 'none');
+    await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
+    await expect.poll(() => mobile.page.locator('[data-mosaic-tile]').first().evaluate((node) => getComputedStyle(node).backgroundImage)).toBe('none');
+    expect(requested).toBe(0);
+    expect(await mobile.page.evaluate(() => document.body.scrollWidth)).toBe(viewport.width);
+    await mobile.context.close();
+  }
+
+  const blocked = await freshPage(browser, { width: 1440, height: 900 });
+  await blocked.page.route(mosaicAsset, (route) => route.fulfill({ status: 404, body: '' }));
+  await open(blocked.page, 'b', 'live_meeting_mosaic');
+  await expect(blocked.page.locator('[data-narrative-media]')).toHaveClass(/is-error/u);
+  await expect(blocked.page.locator('[data-message]')).toContainText('Алексей Мышкин');
+  await expect(blocked.page.locator('[data-scenario-cta]')).toBeVisible();
+  await blocked.context.close();
+
+  const reduced = await freshPage(browser, { width: 1440, height: 900 }, 'reduce');
+  await reduced.page.route(mosaicAsset, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(reduced.page, 'c', 'live_meeting_mosaic', '&replay=1');
   await expect(reduced.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
   await reduced.page.waitForTimeout(4300);
   await expect(reduced.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);

@@ -70,7 +70,7 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Candidate IDs, dates, roles, media quality/crop notes and fail-closed copy contracts.
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: visual-consultant
     role: planner
     effort: extra-high
@@ -84,7 +84,7 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Exact grid/opacity/easing/mobile rules and review prompt; post-fix gate remains integrator-owned.
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: ui-integrator
     role: worker
     effort: extra-high
@@ -107,7 +107,7 @@ lanes:
     forbidden_files: []
     expected_output: Deterministic desktop mosaic prototype, mobile degradation, tests, exact review, immutable preview and Telegram evidence.
     verification_scope: full_local
-    status: planned
+    status: in_progress
   - id: merge-reviewer
     role: merge_reviewer
     effort: high

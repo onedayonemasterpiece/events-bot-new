@@ -50,6 +50,35 @@ const scenarioCount = briefingLabScenarios.length;
 const title = `Живой городской обзор — lab | ${SITE_NAME}`;
 const description = 'Изолированный прототип короткой типографической коммуникации: сценарии, ссылки, пауза и повтор.';
 const canonicalUrl = absoluteUrl('/lab/briefing/');
+const mosaicColumns = 8;
+const mosaicRows = 3;
+const mosaicOpacity = [
+  .16, .28, .44, .62, .78, .88, .94, .97,
+  .12, .24, .40, .58, .76, .90, .96, 1,
+  .18, .30, .48, .66, .80, .89, .93, .96,
+];
+const mosaicRevealRank = [
+  9, 2, 17, 6, 21, 12, 4, 19,
+  14, 7, 0, 16, 10, 23, 5, 13,
+  3, 20, 11, 1, 18, 8, 22, 15,
+];
+const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index) => {
+  const column = index % mosaicColumns;
+  const row = Math.floor(index / mosaicColumns);
+  const rank = mosaicRevealRank[index];
+  return {
+    index,
+    column,
+    row,
+    style: [
+      `--tile-x:${column * (100 / (mosaicColumns - 1))}%`,
+      `--tile-y:${row * (100 / (mosaicRows - 1))}%`,
+      `--tile-opacity:${mosaicOpacity[index]}`,
+      `--tile-in-delay:${120 + rank * 34}ms`,
+      `--tile-out-delay:${(mosaicColumns * mosaicRows - 1 - rank) * 20}ms`,
+    ].join(';'),
+  };
+});
 ---
 <EventLayout {title} {description} {canonicalUrl} structuredData={[]}>
   <main id="main" data-briefing-lab data-briefing-variant="static" data-briefing-scenario-id={scenario.id} data-fixture-ids={briefingLabFixtureIds.join(',')}>
@@ -57,7 +86,21 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       <section class="briefing-stage" aria-label="Городской обзор" data-briefing-slot>
         <img class="briefing-stage__brand-o" src={withBase('/brand/announcements-wide-o-ui.svg')} alt="" aria-hidden="true" />
         <div class="briefing-stage__media" data-narrative-media aria-hidden="true">
-          <a data-media-link tabindex="-1"><img data-media-image alt="" /></a>
+          <a data-media-link tabindex="-1">
+            <img data-media-image alt="" />
+            <span class="briefing-stage__mosaic" data-media-mosaic aria-hidden="true">
+              {mosaicTiles.map((tile) => (
+                <span
+                  class="briefing-stage__mosaic-tile"
+                  data-mosaic-tile
+                  data-tile-index={tile.index}
+                  data-tile-column={tile.column}
+                  data-tile-row={tile.row}
+                  style={tile.style}
+                />
+              ))}
+            </span>
+          </a>
         </div>
         <div class="briefing-stage__message" data-briefing data-motion="complete" aria-live="off">
           <h1 data-message>
@@ -327,21 +370,28 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const mediaShell = lab.querySelector('[data-narrative-media]');
       const mediaLink = lab.querySelector('[data-media-link]');
       const mediaImage = lab.querySelector('[data-media-image]');
+      const mosaicTiles = [...lab.querySelectorAll('[data-mosaic-tile]')];
+      const mosaicMedia = matchMedia('(min-width: 1024px) and (min-height: 650px)');
+      const mediaAllowed = (media) => media?.mode === 'mosaic' ? mosaicMedia.matches : desktopMedia.matches;
+      const clearMosaicSource = () => mosaicTiles.forEach((tile) => { tile.style.backgroundImage = ''; });
+      const setMosaicSource = (src) => mosaicTiles.forEach((tile) => { tile.style.backgroundImage = `url(${JSON.stringify(src)})`; });
       const hideMedia = ({ removeSource = false } = {}) => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
         mediaShell?.classList.remove('is-present');
         mediaShell?.classList.add('is-exiting');
-        if (removeSource && mediaImage) mediaImage.removeAttribute('src');
+        if (removeSource) { mediaImage?.removeAttribute('src'); clearMosaicSource(); }
       };
       const renderMedia = () => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
         const media = currentScenario.media;
-        stage.dataset.mediaMode = media?.mode || 'none';
-        briefing.dataset.hasMedia = String(Boolean(media));
+        const allowed = Boolean(media && mediaAllowed(media));
+        stage.dataset.mediaMode = allowed ? media.mode : 'none';
+        briefing.dataset.hasMedia = String(allowed);
         mediaShell?.classList.remove('is-present', 'is-exiting', 'is-error');
         if (!media || !mediaShell || !mediaImage || !mediaLink) {
           if (mediaShell) delete mediaShell.dataset.mediaMode;
           mediaImage?.removeAttribute('src'); mediaImage?.removeAttribute('data-src');
+          clearMosaicSource();
           mediaLink?.removeAttribute('href');
           return;
         }
@@ -349,17 +399,25 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         mediaImage.dataset.src = media.src;
         mediaImage.alt = media.alt;
         mediaLink.href = media.href;
-        if (!desktopMedia.matches) { mediaImage.removeAttribute('src'); return; }
+        if (!allowed) { delete mediaShell.dataset.mediaMode; mediaImage.removeAttribute('src'); clearMosaicSource(); return; }
         const revealLoaded = () => { mediaShell.classList.remove('is-error', 'is-exiting'); mediaShell.classList.add('is-present'); };
+        const revealFailed = () => { mediaShell.classList.remove('is-present'); mediaShell.classList.add('is-error'); mediaImage.removeAttribute('src'); clearMosaicSource(); };
         mediaImage.onload = revealLoaded;
-        mediaImage.onerror = () => { mediaShell.classList.remove('is-present'); mediaShell.classList.add('is-error'); mediaImage.removeAttribute('src'); };
+        mediaImage.onerror = revealFailed;
+        if (media.mode === 'mosaic') {
+          clearMosaicSource();
+          mediaImage.onload = () => { setMosaicSource(media.src); revealLoaded(); };
+        } else clearMosaicSource();
         if (mediaImage.getAttribute('src') !== media.src) mediaImage.src = media.src;
-        if (mediaImage.complete && mediaImage.naturalWidth) revealLoaded();
+        if (mediaImage.complete && mediaImage.naturalWidth) { if (media.mode === 'mosaic') setMosaicSource(media.src); revealLoaded(); }
       };
       const scheduleMediaExit = () => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
-        if (variant !== 'reveal' || !currentScenario.media || reduced.matches || !desktopMedia.matches) return;
-        mediaExitTimer = setTimeout(() => hideMedia(), 4000);
+        if (variant !== 'reveal' || !currentScenario.media || reduced.matches || !mediaAllowed(currentScenario.media)) return;
+        const delay = currentScenario.media.mode === 'mosaic'
+          ? { slow: 5200, normal: 3600, fast: 2400 }[pace]
+          : 4000;
+        mediaExitTimer = setTimeout(() => hideMedia(), delay);
       };
       const renderMessage = () => {
         clearTimeout(exposureTimer); exposureTimer = 0;
@@ -394,7 +452,8 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
           updateStatus(reduced.matches ? 'Без анимации · цепочка остановлена' : 'Статичный вариант');
           return;
         }
-        const hold = { slow: 5200, normal: 3600, fast: 2400 }[pace];
+        const baseHold = { slow: 5200, normal: 3600, fast: 2400 }[pace];
+        const hold = baseHold + (currentScenario.media?.mode === 'mosaic' && mediaAllowed(currentScenario.media) ? 820 : 0);
         if (!deckPlaying) {
           const chained = currentScenario.nextScenarioId ? deck.findIndex((item) => item.id === currentScenario.nextScenarioId) : -1;
           if (autoChainStep >= AUTO_CHAIN_LIMIT || chained < 0) {
@@ -460,6 +519,11 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       const pause = (reason, explicit = true) => {
         if (running) complete(reason, { remember: true });
         clearTimeout(advanceTimer); advanceTimer = 0;
+        if (currentScenario.media?.mode === 'mosaic' && mediaAllowed(currentScenario.media)) {
+          clearTimeout(mediaExitTimer); mediaExitTimer = 0;
+          mediaShell?.classList.remove('is-exiting');
+          mediaShell?.classList.add('is-present');
+        }
         setPendingCursor(false);
         if (reason === 'hover') hoverPaused = true;
         else if (reason === 'focus') focusPaused = true;
@@ -467,7 +531,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
         updatePause(); updateStatus('На паузе'); emit('briefing_pause', { reason });
       };
       const resume = (reason = 'manual') => {
-        explicitPaused = false; hoverPaused = false; focusPaused = false; updatePause(); updateStatus('Продолжаем'); emit('briefing_resume', { reason }); scheduleAdvance();
+        explicitPaused = false; hoverPaused = false; focusPaused = false; updatePause(); updateStatus('Продолжаем'); emit('briefing_resume', { reason }); scheduleMediaExit(); scheduleAdvance();
       };
       const move = (step, followChain = false) => {
         clearMotionTimers(); deckPlaying = false; completedDeckIndexes.clear();
@@ -526,7 +590,10 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       stage.addEventListener('pointerdown', (event) => {
         if (event.target.closest('button, select, summary')) return;
         if (event.target.closest('a')) { if (running) pause('link_pointer', true); return; }
-        (explicitPaused || hoverPaused || focusPaused) ? resume('blank_tap') : pause('blank_tap');
+        if (running || hoverPaused || focusPaused) {
+          hoverPaused = false; focusPaused = false; pause('blank_tap', true); return;
+        }
+        explicitPaused ? resume('blank_tap') : pause('blank_tap');
       });
       briefing.addEventListener('mouseenter', () => { if (running || deckPlaying || advanceTimer) pause('hover', false); });
       briefing.addEventListener('mouseleave', () => { if (!hoverPaused || explicitPaused || focusPaused) return; setTimeout(() => { if (hoverPaused && !explicitPaused && !focusPaused) resume('hover_leave'); }, 750); });
@@ -545,6 +612,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
       }, { threshold: [0, .5, 1] }).observe(stage);
       reduced.addEventListener?.('change', () => reduced.matches ? complete('reduced_motion') : undefined);
       desktopMedia.addEventListener?.('change', () => renderMedia());
+      mosaicMedia.addEventListener?.('change', () => renderMedia());
       lab.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
@@ -634,6 +702,23 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
     .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { max-width: 100%; }
     .briefing-stage[data-media-mode="wide"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .briefing-stage[data-media-mode="wide"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
+    .briefing-stage[data-media-mode="mosaic"] { box-sizing: border-box; width: 100vw; max-width: none; margin-left: calc(50% - 50vw); padding: 0 clamp(20px, 2.2vw, 32px); overflow: clip; background: transparent; }
+    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__brand-o { display: none; }
+    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__message { width: min(58vw, 56rem); max-width: min(58vw, 56rem); }
+    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__message h1 { max-width: 100%; font-size: clamp(2.8rem, 4vw, 3.35rem); line-height: 1.02; }
+    .briefing-stage[data-media-mode="mosaic"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
+    .briefing-stage__media[data-media-mode="mosaic"] { --mosaic-cell: min(112px, 8.25vw, calc((42svh - 20px) / 3)); top: 50%; right: calc(var(--mosaic-cell) * -.25); bottom: auto; width: calc(var(--mosaic-cell) * 8); height: calc(var(--mosaic-cell) * 3); overflow: visible; opacity: 1; transform: translateY(-50%); transition: none; pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"].is-present,
+    .briefing-stage__media[data-media-mode="mosaic"].is-exiting { opacity: 1; transform: translateY(-50%); pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"] a { width: 100%; height: 100%; pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"] img { display: none; }
+    .briefing-stage__mosaic { display: none; width: 100%; height: 100%; }
+    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 3px; }
+    .briefing-stage__mosaic-tile { display: block; min-width: 0; min-height: 0; background-repeat: no-repeat; background-size: 800% 300%; background-position: var(--tile-x) var(--tile-y); opacity: 0; transition: opacity 520ms cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
+    .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); }
+    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: 360ms; transition-delay: var(--tile-out-delay); }
+    [data-briefing-variant="static"] .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); transition: none; }
     [data-briefing-scenario-id="weather_water_demo"] .briefing-stage__message h1,
     [data-briefing-scenario-id^="storm_"] .briefing-stage__message h1,
     [data-briefing-scenario-id="festival_demo"] .briefing-stage__message h1,
@@ -654,5 +739,7 @@ const canonicalUrl = absoluteUrl('/lab/briefing/');
     .briefing-fragment { opacity: 1 !important; transform: none !important; filter: none !important; transition: none !important; }
     .briefing-fragment::after { display: none !important; animation: none !important; }
     .briefing-stage__media { transition: none !important; transform: none !important; }
+    .briefing-stage__media[data-media-mode="mosaic"] { transform: translateY(-50%) !important; }
+    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity) !important; transition: none !important; }
   }
 </style>

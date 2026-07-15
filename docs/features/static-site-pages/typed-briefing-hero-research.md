@@ -78,7 +78,7 @@ Final immutable review build:
 Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
 экрана:
 
-- selector раскрывает **18**, а не 8 сценариев; count/progress/play-all
+- selector раскрывает **19**, а не 8 сценариев; count/progress/play-all
   вычисляются из deck, а не захардкожены;
 - рядом с curiosity-teaser есть отдельный named-person формат с Татьяной
   Куртуковой и ссылкой на canonical fixture event `6020`;
@@ -97,6 +97,19 @@ Final immutable review build:
   — full-bleed wide-media easter egg: stage выходит из shared `max-width` на
   `100vw`, media занимает `66vw` до правой границы окна без frame/radius/shadow,
   text начинается в `20–32px` от левой границы; на mobile media не загружается;
+- отдельная редкая desktop-сцена `live_meeting_mosaic` проверяет предложенную
+  пользователем мозаику: одна непрерывная canonical photo события `6112`
+  проявляется через CSS-grid `8×3`: каждый квадрат показывает свой фрагмент одного cached raster, без 24 network request. Все 24
+  квадрата имеют square corners, детерминированный scatter-order и разные
+  конечные alpha; три левых столбца намеренно прозрачнее рядом с текстом;
+  правый столбец продолжается на четверть клетки за физическую границу окна и
+  crop-ится самим full-bleed hero без горизонтального scroll;
+- mosaic разрешена только при `(min-width:1024px) and (min-height:650px)`.
+  На mobile и коротком desktop она превращается в обычную text-only сцену и
+  URL изображения вообще не назначается. Variant B/reduced-motion показывают
+  итоговую матрицу сразу; Variant C использует `520ms` ease-in-out stagger и
+  обратный `360ms` stagger перед фактическим переходом, без randomness и
+  saturation. Hover/focus/pause фиксируют полностью проявленную композицию;
 - во время reveal работает scenario-driven bar/underscore; после законченной
   фразы horizontal underscore остаётся только при реально запланированном
   timed continuation, а в terminal state делает три blink и исчезает;
@@ -257,11 +270,11 @@ Variants:
 | `B · static` | весь короткий editorial briefing виден сразу | проверить ценность содержания |
 | `C · motion` | тот же текст проявляется 2–5 смысловыми фрагментами; bar/underscore сопровождает reveal, а horizontal underscore удерживает ожидание только при scheduled continuation | проверить исходную коммуникационную механику |
 
-Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface содержит только narrative, его смысловой CTA и terminal-only `Показать следующее`. Collapsed LAB-dock после ленты содержит A/B/C, selector всех 18 сцен, progress/demo/status, pace, Pause, `Повторить`, конечный `Показать все 18` и previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
+Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface содержит только narrative, его смысловой CTA и terminal-only `Показать следующее`. Collapsed LAB-dock после ленты содержит A/B/C, selector всех 19 сцен, progress/demo/status, pace, Pause, `Повторить`, конечный `Показать все 19` и previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
 
 ## Минимальная очередь нарративов
 
-Lab содержит 18 видимых scenario IDs и universal fallback. Это смешанная очередь: ориентиры, приветствия, обучение целевым действиям, social curiosity, named-event media и явно маркированные future-signal demos. Все доступны в selector; production eligibility и расширенная библиотека остаются backlog.
+Lab содержит 19 видимых scenario IDs и universal fallback. Это смешанная очередь: ориентиры, приветствия, обучение целевым действиям, social curiosity, named-event media и явно маркированные future-signal demos. Все доступны в selector; production eligibility и расширенная библиотека остаются backlog.
 
 | ID | Family / eligibility | Копирайт в lab | Cooldown |
 |---|---|---|---|
@@ -277,6 +290,7 @@ Lab содержит 18 видимых scenario IDs и universal fallback. Эт�
 | `frequently_forwarded` | bounded social signal, currently demo | `Часто пересылают «Планету Океан». Заглянем?` | 14 дней |
 | `anticipated_person` | grounded public-comment signal, currently demo | `В комментариях ждут гостя. Угадаете кого?` | 30 дней |
 | `anticipated_person_named` | grounded fixture person/event | `В Светлогорск едет Татьяна Куртукова. Пойдём?` | 30 дней |
+| `live_meeting_mosaic` | grounded future event + desktop mosaic | `Живая встреча. Алексей Мышкин. 13 августа.` | 30 дней |
 | `rare_event` | grounded fixture event, lab editorial framing | `Редкий формат: Вертинский. Идём?` | 30 дней |
 | `weather_water_demo` | fixed future-signal demo; no provider data | `Обещают ясные выходные. Махнём на море?` | 7 дней |
 | `storm_weekend_demo` | conditional storm premise demo; no live forecast claim | `Если прогнозируют шторм — может, в уют?` | 7 дней |
@@ -334,7 +348,7 @@ Contract:
 - no Gemini-generated output is admitted automatically.
 - optional `next_scenario_id` резолвится только в другой compiled eligible node;
 - optional media содержит canonical `event_id`, validated derivative и
-  `small|wide` mode; отсутствие/ошибка media не инвалидирует text/link;
+  `small|wide|mosaic` mode; отсутствие/ошибка media не инвалидирует text/link;
 - `next_scenario_id` задаёт automatic edge; runtime останавливает chain после
   третьей сцены даже при циклическом графе;
 - public `Показать следующее` доступен только после terminal stop и начинает
@@ -345,7 +359,7 @@ Contract:
 Исправленный lab проверяет коммуникацию, а не дизайн ещё не спроектированной главной ленты:
 
 - hero занимает `min(42svh, 250px)` на mobile и `min(42svh, 360px)` на desktop, всегда `≤50svh`;
-- сообщение имеет 1–3 визуальные строки во всех 18 сценариях на `320×568`, `375×667`, `390×844`, `1440×900`;
+- сообщение имеет 1–3 визуальные строки во всех 19 сценариях на `320×568`, `375×667`, `390×844`, `1440×900`;
 - mobile typography примерно `27–34px`, desktop `48–72px`, с отдельными терракотовыми фактами/ссылками;
 - пять категорий переносятся на две строки без скрытого горизонтального жеста и остаются видимыми сразу под hero;
 - начало контекстной ленты видно, но карточки не являются предметом оценки;
@@ -357,8 +371,13 @@ Contract:
   text находится не далее `32px` от левой границы, а каждый перекрывающий media
   fragment защищён клонированной paper stripe; reduced-motion показывает
   статичное изображение без auto-exit.
+- mosaic дополнительно требует высоту `≥650px`: full-bleed stage касается
+  `x=0` и правой границы viewport, CSS-grid содержит ровно `8×3` квадратных
+  cells с `3–5px` paper-gutters, media заканчивается за правым pixel окна, а
+  text/media действительно пересекаются и читаются за счёт stripe. Один raster
+  URL загружается один раз; decode/404 скрывает всю mosaic без пустого frame.
 
-Автоматическая матрица проверяет все 18 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
+Автоматическая матрица проверяет все 19 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
 
 ## Reproducible shareable-lab workflow
 
@@ -399,13 +418,13 @@ The earlier full static build failed because the host filesystem was at `99–10
   запланирован следующий timed scene, в terminal state исчезает после трёх
   циклов, а при pause/reduced/static скрыт;
 - `Повторить` intentionally restarts the current bounded chain in lab without reload;
-- `Показать все 18` в LAB-dock remains a separate QA mode that plays each representative scenario once and stops;
+- `Показать все 19` в LAB-dock remains a separate QA mode that plays each representative scenario once and stops;
 - обычный Variant C на desktop и mobile автоматически продолжает только
   2–3 compiled scenes, затем останавливается; public `Показать следующее`
   появляется лишь после stop;
-- Pause/Continue, pace, progress `N из 18`, DEMO/status, Previous/Replay и
+- Pause/Continue, pace, progress `N из 19`, DEMO/status, Previous/Replay и
   Play-all являются LAB-only и отсутствуют в hero;
-- hover, focus, blank-area pointer interaction, hidden tab and BFCache finish the complete sentence and pause; links remain stable and activate on the first tap;
+- hover, focus, blank-area pointer interaction, hidden tab and BFCache finish the complete sentence and pause; links remain stable and activate on the first tap. Если scroll подводит stage под уже неподвижный pointer и успевает создать hover-pause, следующий blank tap фиксирует explicit pause, а не неожиданно возобновляет chain;
 - `prefers-reduced-motion` shows the complete current scene with manual controls and no auto-advance;
 - B has the exact same current message fully static; A removes only the communication surface.
 
@@ -558,7 +577,7 @@ metric validation.
 |---|---|
 | R01 status/evidence | `GO_TO_PROTOTYPE_ONLY`; user/metric validation false |
 | R02 no Gemini/personalization MVP | excluded from V0; retained only in appendix |
-| R03 initial ≤8 scenarios + fallback | первоначально выполнено как 8+fallback; последующий явный user-review superseded этот showcase-limit, поэтому selector расширен до 18+fallback без изменения production gate |
+| R03 initial ≤8 scenarios + fallback | первоначально выполнено как 8+fallback; последующий явный user-review superseded этот showcase-limit, поэтому selector расширен до 19+fallback без изменения production gate |
 | R04 isolated A/B/C lab | `/lab/briefing/` |
 | R05 mobile visibility | hero `≤50svh`; categories and beginning of secondary feed visible; message remains 1–3 lines |
 | R06 no production/deploy | explicit lab-only scope |
