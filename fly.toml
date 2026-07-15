@@ -178,6 +178,21 @@ app = "events-bot-new-wngqia"
   EVENT_VECTOR_SYNC_CATALOG_LIMIT = "5000"
   EVENT_VECTOR_SYNC_MAX_PROVIDER_CALLS = "500"
   EVENT_VECTOR_SYNC_GOOGLE_KEY_ENV = "GOOGLE_API_KEY4"
+  # One immutable full-catalog build is coalesced for 15 minutes after the
+  # latest Smart Update. The Kaggle job refreshes pgvector related manifests
+  # and downloads a checked artifact; production-root promotion remains a
+  # separate release gate.
+  ENABLE_STATIC_SITE_KAGGLE_BUILDER = "1"
+  STATIC_SITE_BUILDER_LIMIT = "5000"
+  STATIC_SITE_RELATED_MODE = "pgvector"
+  STATIC_SITE_SYNC_PGVECTOR_VECTORS = "1"
+  STATIC_SITE_PGVECTOR_EMBEDDING_MODEL = "gemini-embedding-2"
+  STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV = "GOOGLE_API_KEY4"
+  STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS = "1000"
+  STATIC_SITE_ASSET_BASE_URL = "https://static.kenigevents.ru"
+  STATIC_SITE_ASTRO_ASSET_BASE_URL = "https://static.kenigevents.ru/{buildId}"
+  STATIC_SITE_ICS_BASE_URL = "https://static.kenigevents.ru/ics"
+  STATIC_SITE_KAGGLE_TIMEOUT_MINUTES = "90"
   ENABLE_EXHIBITION_DUPLICATE_AUDIT = "1"
   EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL = "07:45"
   EXHIBITION_DUPLICATE_AUDIT_TZ = "Europe/Kaliningrad"

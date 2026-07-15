@@ -20,7 +20,7 @@ interface Props {
   composition?: HeroComposition;
   headingTag?: 'h1' | 'h2' | 'h3';
   galleryCta?: HeroGalleryCta;
-  metaTreatment?: 'standard' | 'weekday-panel';
+  metaTreatment?: 'standard' | 'weekday-panel' | 'responsive-weekday-panel';
 }
 
 type HeroGalleryImage = {
@@ -205,7 +205,7 @@ const showTicketCta = Boolean(ctaHref);
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
     </div>
-    {metaTreatment === 'weekday-panel' ? (
+    {metaTreatment !== 'standard' && (
       <p class="event-hero__meta-line event-hero__meta-line--weekday-panel">
         <span class="event-hero__when">
           {weekdayLabel && <span class="event-hero__weekday">{weekdayLabel}</span>}
@@ -214,8 +214,9 @@ const showTicketCta = Boolean(ctaHref);
         </span>
         <span class="event-hero__where">{placeLabel}</span>
       </p>
-    ) : (
-      <p class="event-hero__meta-line">
+    )}
+    {metaTreatment !== 'weekday-panel' && (
+      <p class="event-hero__meta-line event-hero__meta-line--standard">
         <span class="event-hero__when">{dateTimeLabel}</span>
         <span class="event-hero__meta-separator" aria-hidden="true">·</span>
         <span class="event-hero__where">{placeLabel}</span>

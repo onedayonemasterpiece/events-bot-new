@@ -1,6 +1,7 @@
 # Mobile event UI lab — 2026-07-15
 
-Статус: **preview-эксперимент, не production contract**.
+Статус: **v4 принят и перенесён в общий production-integration preview;
+production-root promotion ещё не выполнен**.
 
 Решение владельца после проверки на реальном Android: **open prose принят**,
 graphite action dock принят как направление. Следующий `accepted-v2` candidate
@@ -126,7 +127,26 @@ V4:
 - задаёт не менее `12px` между hero decision и context/medallion surface и не менее
   `18px` между context surface и основным description block.
 
-V4 остаётся изолированным noindex preview; общий production hero-parallax не меняется.
+V4 сначала оставался изолированным noindex preview; после acceptance его
+мобильные правила перенесены в общий event-detail candidate. Desktop CSS
+ограничен desktop media queries и этим переносом не менялся.
+
+## Production integration
+
+Общий candidate
+`preview-20260715t-production-transport-mobile-real-events-v1` применяет v4 ко
+всем `282` экспортированным будущим/продолжающимся событиям и сохраняет
+desktop-композицию отдельной. Внутри event detail транспорт располагается
+после компактных фактов `Коротко`: железнодорожный и автобусный блоки
+возвращаются в естественный вертикальный mobile flow, сохраняют touch targets
+не менее `44px`, а sticky event CTA остаётся отдельным нижним действием.
+
+Публичный Playwright acceptance на `390×844` подтвердил:
+
+- `responsive-weekday-panel` видим, прежняя meta line скрыта;
+- rail и bus блоки не создают horizontal overflow;
+- переход из `Смотрите дальше` открывает следующую актуальную event page;
+- desktop layout и media motion не переопределяются mobile rules.
 
 ## Visual QA
 
@@ -209,7 +229,6 @@ receipt-only сообщения и обещания прислать резул�
 
 ## Acceptance gate
 
-До переноса в основную event page требуется принять либо отклонить v4 simplified
-active-like, сохранённые icons/container-aware labels/date-time, clipped no-zoom
-poster parallax и новый vertical rhythm. Discovery, brand tag и sticky CTA этим решением не
-переутверждаются.
+V4 перенесён в основную event page текущего integration preview. Оставшийся
+gate — пользовательская проверка массовой сборки и отдельная production-root
+promotion; Discovery, brand tag и sticky CTA этим решением не переутверждаются.

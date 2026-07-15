@@ -94,7 +94,7 @@ export function getStaticPaths() {
 
 const merged = new Map<number, PreviewEvent>();
 for (const event of previewData.events as PreviewEvent[]) merged.set(event.id, event);
-for (const event of examplesData.events as PreviewEvent[]) if (!merged.has(event.id)) merged.set(event.id, event);
+for (const event of examplesData.events as PreviewEvent[]) merged.set(event.id, event);
 const events = [...merged.values()];
 const scenario = scenarios.find((item) => item.slug === Astro.params.scenario);
 if (!scenario) throw new Error(`Unknown clean desktop event scenario: ${Astro.params.scenario}`);

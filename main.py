@@ -14273,7 +14273,8 @@ async def enqueue_job(
                 )
             if job.status == JobStatus.running:
                 age = (now - job.updated_at).total_seconds()
-                if age > 600:
+                stale_after = JOB_MAX_RUNTIME.get(task, DEFAULT_JOB_MAX_RUNTIME)
+                if age > stale_after:
                     job.status = JobStatus.error
                     job.last_error = "stale"
                     job.next_run_at = now
@@ -14349,8 +14350,8 @@ async def enqueue_job(
                 # Instead, ensure a single deferred *coalesced* follow-up exists and push its
                 # next_run_at further on every change (15 minutes after the last update).
                 if (
-                    task in {JobTask.month_pages, JobTask.weekend_pages, JobTask.event_vector_sync}
-                    and (job.event_id != event_id or task == JobTask.event_vector_sync)
+                    task in {JobTask.month_pages, JobTask.weekend_pages, JobTask.event_vector_sync, JobTask.static_site_build}
+                    and (job.event_id != event_id or task in {JobTask.event_vector_sync, JobTask.static_site_build})
                     and job.coalesce_key
                 ):
                     deferred_time = next_run_at

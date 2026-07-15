@@ -1,0 +1,1016 @@
+{
+  "schema_version": "event_bus_venue_access_v1",
+  "reviewed_at": "2026-07-11",
+  "storage": "static_json",
+  "route_directory": "busRouteDirectory.json",
+  "calculation": {
+    "pedestrian_router": "Valhalla public OSM instance",
+    "router_url": "https://valhalla1.openstreetmap.de/route",
+    "geocoder": "Photon / OpenStreetMap",
+    "geocoder_url": "https://photon.komoot.io/api/",
+    "rule": "Exact pedestrian figures are committed only when both stop and venue coordinates exist. Proxy/band estimates remain explicitly low or medium confidence.",
+    "blocked_rule": "No venue point means no numeric distance; locality centroids must never be presented as a venue walk.",
+    "homonym_rule": "Official ordered-stop corridor must match the venue locality; matching by stop name alone is forbidden."
+  },
+  "stops": [
+    {
+      "id": "baltiysk-10km",
+      "locality_id": "baltiysk",
+      "name": "10-й километр",
+      "route_numbers": [
+        "107"
+      ],
+      "coordinates": [
+        54.72406,
+        19.96757
+      ],
+      "coordinate_source": "openstreetmap_node_1594590743",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "gvardeysk-avtostantsiya",
+      "locality_id": "gvardeysk",
+      "name": "Автостанция Гвардейск",
+      "route_numbers": [
+        "111",
+        "211Э"
+      ],
+      "coordinates": [
+        54.6480084,
+        21.0727128
+      ],
+      "coordinate_source": "photon_osm",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "gurevsk-zarechnaya",
+      "locality_id": "gurevsk",
+      "name": "ул. Заречная",
+      "route_numbers": [
+        "103",
+        "104",
+        "152",
+        "245Э",
+        "345"
+      ],
+      "coordinates": [
+        54.7763879,
+        20.6190739
+      ],
+      "coordinate_source": "photon_osm_stop_proxy",
+      "coordinate_confidence": "medium"
+    },
+    {
+      "id": "gurevsk-poliklinika",
+      "locality_id": "gurevsk",
+      "name": "Поликлиника",
+      "route_numbers": [
+        "103",
+        "104",
+        "152",
+        "245Э"
+      ],
+      "coordinates": [
+        54.7702671,
+        20.6105367
+      ],
+      "coordinate_source": "photon_osm_poi_proxy",
+      "coordinate_confidence": "medium"
+    },
+    {
+      "id": "gusev-pobedy-square",
+      "locality_id": "gusev",
+      "name": "Площадь Победы",
+      "route_numbers": [
+        "680Э"
+      ],
+      "coordinates": [
+        54.5910743,
+        22.2015253
+      ],
+      "coordinate_source": "photon_osm_square",
+      "coordinate_confidence": "medium"
+    },
+    {
+      "id": "pionersky-terminal",
+      "locality_id": "pionersky",
+      "name": "Пионерский курорт",
+      "route_numbers": [
+        "119"
+      ],
+      "coordinates": [
+        54.9487825,
+        20.2248429
+      ],
+      "coordinate_source": "photon_osm_bus_stop",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "polessk-stop",
+      "locality_id": "polessk",
+      "name": "Полесск",
+      "route_numbers": [
+        "152",
+        "245Э",
+        "345"
+      ],
+      "coordinates": [
+        54.8629461,
+        21.1112568
+      ],
+      "coordinate_source": "photon_osm_bus_stop",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "primorye-stop",
+      "locality_id": "primorye",
+      "name": "Приморье",
+      "route_numbers": [
+        "125",
+        "125А"
+      ],
+      "coordinates": [
+        54.941463,
+        20.033976
+      ],
+      "coordinate_source": "photon_osm_place_proxy",
+      "coordinate_confidence": "low"
+    },
+    {
+      "id": "romanovo-stop",
+      "locality_id": "romanovo",
+      "name": "Романово",
+      "route_numbers": [
+        "119"
+      ],
+      "coordinates": [
+        54.8958609,
+        20.2759337
+      ],
+      "coordinate_source": "reviewed_existing_route",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "romanovo-turn",
+      "locality_id": "romanovo",
+      "name": "Романовский поворот",
+      "route_numbers": [
+        "118",
+        "118А",
+        "119"
+      ],
+      "coordinates": [
+        54.896,
+        20.235
+      ],
+      "coordinate_source": "existing_distance_contract_proxy",
+      "coordinate_confidence": "low"
+    },
+    {
+      "id": "sovetsk-avtovokzal",
+      "locality_id": "sovetsk",
+      "name": "Автовокзал Советск",
+      "route_numbers": [
+        "523",
+        "601Э"
+      ],
+      "coordinates": [
+        55.0817574,
+        21.8801737
+      ],
+      "coordinate_source": "photon_osm",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "ushakovo-stop",
+      "locality_id": "ushakovo",
+      "name": "Ушаково-1",
+      "route_numbers": [
+        "117"
+      ],
+      "coordinates": [
+        54.6142283,
+        20.2544653
+      ],
+      "coordinate_source": "openstreetmap_node_9035111122",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "yantarny-univermag",
+      "locality_id": "yantarny",
+      "name": "Универмаг",
+      "route_numbers": [
+        "120"
+      ],
+      "coordinates": [
+        54.8632594,
+        19.9396911
+      ],
+      "coordinate_source": "photon_osm_bus_stop",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "yantarny-memorial",
+      "locality_id": "yantarny",
+      "name": "Памятник советским воинам",
+      "route_numbers": [
+        "120"
+      ],
+      "coordinates": [
+        54.8686313,
+        19.9386541
+      ],
+      "coordinate_source": "photon_osm_bus_stop",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "donskoye-stop",
+      "locality_id": "donskoye",
+      "name": "Донское",
+      "route_numbers": [
+        "125",
+        "125А"
+      ],
+      "coordinates": [
+        54.9383894,
+        19.9685688
+      ],
+      "coordinate_source": "photon_osm_bus_stop",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "medvedevka-stop",
+      "locality_id": "medvedevka",
+      "name": "Медведевка",
+      "route_numbers": [
+        "116"
+      ],
+      "coordinates": [
+        54.8013126,
+        20.5381867
+      ],
+      "coordinate_source": "photon_osm_bus_stop",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "rybachy-stop",
+      "locality_id": "rybachy",
+      "name": "Рыбачий",
+      "route_numbers": [
+        "593"
+      ],
+      "coordinates": [
+        55.1537934,
+        20.8538079
+      ],
+      "coordinate_source": "photon_osm_place_proxy",
+      "coordinate_confidence": "low"
+    },
+    {
+      "id": "romanovo-2",
+      "locality_id": "romanovo",
+      "name": "Романово-2",
+      "route_numbers": [
+        "119"
+      ],
+      "coordinates": [
+        54.8839747,
+        20.2672997
+      ],
+      "coordinate_source": "openstreetmap_node_9038006120",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "chernyakhovsk-avtovokzal",
+      "locality_id": "chernyakhovsk",
+      "name": "Автовокзал Черняховск",
+      "route_numbers": [
+        "520А",
+        "566",
+        "567А",
+        "580",
+        "583",
+        "680Э"
+      ],
+      "coordinates": [
+        54.6312317,
+        21.8201927
+      ],
+      "coordinate_source": "photon_osm_way_154059919",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "zalesye-stop",
+      "locality_id": "zalesye",
+      "name": "пос. Залесье",
+      "route_numbers": [
+        "345"
+      ],
+      "coordinates": [
+        54.8431046,
+        21.5202821
+      ],
+      "coordinate_source": "openstreetmap_node_1615427635",
+      "coordinate_confidence": "high"
+    },
+    {
+      "id": "nekrasovo-stop",
+      "locality_id": "nekrasovo",
+      "name": "Некрасово",
+      "route_numbers": [
+        "116"
+      ],
+      "coordinates": [
+        54.902169,
+        20.6764144
+      ],
+      "coordinate_source": "openstreetmap_node_9035354017",
+      "coordinate_confidence": "high"
+    }
+  ],
+  "venues": [
+    {
+      "id": "baltiysk-territoriya-ya",
+      "locality_id": "baltiysk",
+      "name": "глэмпинг «Территория Я»",
+      "aliases": [
+        "Глемпинг Территории Я"
+      ],
+      "address": "10 км от Павлово 1",
+      "active_event_count": 2,
+      "sample_event_ids": [
+        6517,
+        5833
+      ],
+      "coordinates": [
+        54.716135,
+        19.940649
+      ],
+      "geocode_status": "exact_external_map_crosscheck",
+      "access": [
+        {
+          "stop_id": "baltiysk-10km",
+          "distance_m": 2611,
+          "walk_minutes": 32,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium",
+          "note": "Нужна проверка безопасного входа/пешеходного участка организатором; при отрицательной проверке показывать только трансфер/такси."
+        }
+      ]
+    },
+    {
+      "id": "gvardeysk-tapiau",
+      "locality_id": "gvardeysk",
+      "name": "Замок Тапиау",
+      "aliases": [],
+      "address": "Дзержинского 12",
+      "active_event_count": 2,
+      "sample_event_ids": [
+        6651,
+        6652
+      ],
+      "coordinates": [
+        54.6448264,
+        21.0736474
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "gvardeysk-avtostantsiya",
+          "distance_m": 421,
+          "walk_minutes": 6,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "gurevsk-neuhausen",
+      "locality_id": "gurevsk",
+      "name": "Замок Нойхаузен",
+      "aliases": [
+        "Замок Нойхаузен, Заречная 2А, Гурьевск"
+      ],
+      "address": "Заречная 2А",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6424
+      ],
+      "coordinates": [
+        54.7762122,
+        20.6192776
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "gurevsk-zarechnaya",
+          "distance_m": 17,
+          "walk_minutes": 1,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "gurevsk-culture",
+      "locality_id": "gurevsk",
+      "name": "Центр культуры и досуга",
+      "aliases": [],
+      "address": "Калининградское шоссе 4А",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6337
+      ],
+      "coordinates": [
+        54.7696156,
+        20.6119548
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "gurevsk-poliklinika",
+          "distance_m": 360,
+          "walk_minutes": 5,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "gusev-museum",
+      "locality_id": "gusev",
+      "name": "Гусевский музей",
+      "aliases": [
+        "Гусевский историко-краеведческий музей им. А.М. Иванова"
+      ],
+      "address": "Московская 36А",
+      "active_event_count": 3,
+      "sample_event_ids": [
+        6582,
+        6595,
+        6696
+      ],
+      "coordinates": [
+        54.5963287,
+        22.2062255
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "gusev-pobedy-square",
+          "distance_m": 737,
+          "walk_minutes": 10,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "gusev-gumbinnen",
+      "locality_id": "gusev",
+      "name": "Дизайн-резиденция Gumbinnen",
+      "aliases": [],
+      "address": "Ленина 29",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6093
+      ],
+      "coordinates": [
+        54.5915253,
+        22.2061774
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "gusev-pobedy-square",
+          "distance_m": 356,
+          "walk_minutes": 5,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "gusev-artefact",
+      "locality_id": "gusev",
+      "name": "кафе «АРТеФАКТ39»",
+      "aliases": [
+        "кафе АРТефАКТ39"
+      ],
+      "address": "Московская 36А",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6766
+      ],
+      "coordinates": [
+        54.5963287,
+        22.2062255
+      ],
+      "geocode_status": "same_building_as_museum",
+      "access": [
+        {
+          "stop_id": "gusev-pobedy-square",
+          "distance_m": 737,
+          "walk_minutes": 10,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "pionersky-park",
+      "locality_id": "pionersky",
+      "name": "Городской парк",
+      "aliases": [],
+      "address": null,
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6395
+      ],
+      "coordinates": [
+        54.9527135,
+        20.2229396
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "pionersky-terminal",
+          "distance_m": 517,
+          "walk_minutes": 7,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "pionersky-sea-stage",
+      "locality_id": "pionersky",
+      "name": "Сцена у моря",
+      "aliases": [],
+      "address": null,
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6801
+      ],
+      "coordinates": [
+        54.954533,
+        20.219357
+      ],
+      "geocode_status": "approximate_seafront",
+      "access": [
+        {
+          "stop_id": "pionersky-terminal",
+          "distance_m": 1004,
+          "walk_minutes": 12,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "low",
+          "note": "Точка сцены требует подтверждения организатором."
+        }
+      ]
+    },
+    {
+      "id": "polessk-labiau",
+      "locality_id": "polessk",
+      "name": "Замок Лабиау",
+      "aliases": [],
+      "address": "Калининградская 1",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6672
+      ],
+      "coordinates": [
+        54.862135,
+        21.1113379
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "polessk-stop",
+          "distance_m": 107,
+          "walk_minutes": 2,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "primorye-square",
+      "locality_id": "primorye",
+      "name": "сквер у озера",
+      "aliases": [],
+      "address": "Артиллерийская 9",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6729
+      ],
+      "coordinates": [
+        54.9427214,
+        20.0355871
+      ],
+      "geocode_status": "address_proxy",
+      "access": [
+        {
+          "stop_id": "primorye-stop",
+          "distance_m": 247,
+          "walk_minutes": 4,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "id": "romanovo-holmogorye",
+      "locality_id": "romanovo",
+      "name": "Сказочное Холмогорье",
+      "aliases": [
+        "Холмогорье"
+      ],
+      "address": "Озёрная 12А",
+      "active_event_count": 2,
+      "sample_event_ids": [
+        6710,
+        6365
+      ],
+      "coordinates": [
+        54.8817051,
+        20.2792613
+      ],
+      "geocode_status": "reviewed_existing",
+      "access": [
+        {
+          "stop_id": "romanovo-stop",
+          "distance_m": 2000,
+          "walk_minutes": 27,
+          "calculation_method": "reviewed_existing_route",
+          "confidence": "high"
+        },
+        {
+          "stop_id": "romanovo-turn",
+          "distance_m": 3900,
+          "walk_minutes": 52,
+          "calculation_method": "reviewed_existing_route",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "romanovo-kaup",
+      "locality_id": "romanovo",
+      "name": "Поселение викингов Кауп",
+      "aliases": [
+        "Деревня викингов Кауп"
+      ],
+      "address": "Романово",
+      "active_event_count": 3,
+      "sample_event_ids": [
+        4900,
+        5374,
+        6796
+      ],
+      "coordinates": [
+        54.8772324,
+        20.2789556
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "romanovo-2",
+          "distance_m": 4306,
+          "walk_minutes": 53,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "low",
+          "note": "OSM pedestrian graph gives a long detour; do not enable public guidance until the entrance/path is checked against a field or Yandex route."
+        }
+      ]
+    },
+    {
+      "id": "sovetsk-teploset",
+      "locality_id": "sovetsk",
+      "name": "ОЦК ТеплоСеть",
+      "aliases": [],
+      "address": "Победы 17А",
+      "active_event_count": 2,
+      "sample_event_ids": [
+        6560,
+        6799
+      ],
+      "coordinates": [
+        55.0819108,
+        21.8946396
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "sovetsk-avtovokzal",
+          "distance_m": 1056,
+          "walk_minutes": 13,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "ushakovo-brandenburg",
+      "locality_id": "ushakovo",
+      "name": "Замок Бранденбург",
+      "aliases": [
+        "Музейно-замковый комплекс «Бранденбург»"
+      ],
+      "address": "Победы 1А",
+      "active_event_count": 2,
+      "sample_event_ids": [
+        6749,
+        5733
+      ],
+      "coordinates": [
+        54.6137755,
+        20.2484696
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "ushakovo-stop",
+          "distance_m": 499,
+          "walk_minutes": 6,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high",
+          "note": "Коридор 117; маршрут 110 относится к другому Ушаково."
+        }
+      ]
+    },
+    {
+      "id": "yantarny-shtolnya",
+      "locality_id": "yantarny",
+      "name": "Музей «Штольня»",
+      "aliases": [],
+      "address": "Советская 63Б",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6088
+      ],
+      "coordinates": [
+        54.8662794,
+        19.9401167
+      ],
+      "geocode_status": "address_proxy_63",
+      "access": [
+        {
+          "stop_id": "yantarny-memorial",
+          "distance_m": 307,
+          "walk_minutes": 4,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "yantarny-governor",
+      "locality_id": "yantarny",
+      "name": "Общественная приёмная Губернатора",
+      "aliases": [],
+      "address": "Советская 76",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6759
+      ],
+      "coordinates": [
+        54.8652657,
+        19.9376712
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "yantarny-univermag",
+          "distance_m": 258,
+          "walk_minutes": 4,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "yantarny-stadium",
+      "locality_id": "yantarny",
+      "name": "Стадион им. А.А. Остренко",
+      "aliases": [],
+      "address": "пер. Спортивный",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6795
+      ],
+      "coordinates": [
+        54.8715117,
+        19.9358324
+      ],
+      "geocode_status": "exact",
+      "access": [
+        {
+          "stop_id": "yantarny-memorial",
+          "distance_m": 622,
+          "walk_minutes": 8,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "donskoye-youth",
+      "locality_id": "donskoye",
+      "name": "Молодёжный образовательно-досуговый центр",
+      "aliases": [],
+      "address": "Садовая 4А (address candidate)",
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6615
+      ],
+      "coordinates": [
+        54.9368703,
+        19.9688115
+      ],
+      "geocode_status": "address_candidate",
+      "access": [
+        {
+          "stop_id": "donskoye-stop",
+          "distance_m": 229,
+          "walk_minutes": 3,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "id": "medvedevka-settlement",
+      "locality_id": "medvedevka",
+      "name": "посёлок Медведевка",
+      "aliases": [],
+      "address": null,
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6579
+      ],
+      "coordinates": [
+        54.8011817,
+        20.5372068
+      ],
+      "geocode_status": "locality_proxy",
+      "access": [
+        {
+          "stop_id": "medvedevka-stop",
+          "distance_m": null,
+          "walk_minutes": null,
+          "calculation_method": "blocked_missing_venue_point",
+          "confidence": "blocked",
+          "note": "Маршрут 116 and остановка подтверждены, но событие содержит только название посёлка без точки площадки."
+        }
+      ]
+    },
+    {
+      "id": "rybachy-settlement",
+      "locality_id": "rybachy",
+      "name": "посёлок Рыбачий",
+      "aliases": [],
+      "address": null,
+      "active_event_count": 1,
+      "sample_event_ids": [
+        6782
+      ],
+      "coordinates": [
+        55.1537934,
+        20.8538079
+      ],
+      "geocode_status": "locality_only",
+      "access": [
+        {
+          "stop_id": "rybachy-stop",
+          "distance_range_m": [
+            0,
+            800
+          ],
+          "walk_minutes_range": [
+            0,
+            10
+          ],
+          "calculation_method": "locality_access_band",
+          "confidence": "low",
+          "note": "Точное место события отсутствует; маршрут 593 останавливается в Рыбачьем."
+        }
+      ]
+    },
+    {
+      "id": "chernyakhovsk-administration",
+      "locality_id": "chernyakhovsk",
+      "name": "Здание администрации",
+      "aliases": [],
+      "address": "Калинина 7",
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 1,
+      "sample_event_ids": [
+        6550
+      ],
+      "coordinates": null,
+      "geocode_status": "catalog_address_only",
+      "access": [
+        {
+          "stop_id": "chernyakhovsk-avtovokzal",
+          "distance_m": 1075,
+          "walk_minutes": 13,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "chernyakhovsk-insterburg",
+      "locality_id": "chernyakhovsk",
+      "name": "Замок Инстербург",
+      "aliases": [],
+      "address": "Замковая 1",
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 1,
+      "sample_event_ids": [
+        6612
+      ],
+      "coordinates": null,
+      "geocode_status": "osm_way_81028924",
+      "access": [
+        {
+          "stop_id": "chernyakhovsk-avtovokzal",
+          "distance_m": 1546,
+          "walk_minutes": 18,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "chernyakhovsk-kalina",
+      "locality_id": "chernyakhovsk",
+      "name": "КФХ «Калина»",
+      "aliases": [],
+      "address": "Калиновка, Черняховского 3",
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 1,
+      "sample_event_ids": [
+        6515
+      ],
+      "coordinates": [
+        54.801894,
+        21.780202
+      ],
+      "geocode_status": "corrected_outside_city",
+      "access": [],
+      "access_status": "blocked_transfer_required",
+      "note": "Площадка фактически в Калиновке; нужен двухэтапный Черняховск→Калиновка contract."
+    },
+    {
+      "id": "zalesye-melauken",
+      "locality_id": "zalesye",
+      "name": "Руины кирхи Меляукена",
+      "aliases": [],
+      "address": null,
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 1,
+      "sample_event_ids": [
+        6558
+      ],
+      "coordinates": null,
+      "geocode_status": "osm_way_331993330",
+      "access": [
+        {
+          "stop_id": "zalesye-stop",
+          "distance_m": 141,
+          "walk_minutes": 2,
+          "calculation_method": "valhalla_pedestrian",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "nekrasovo-agropark",
+      "locality_id": "nekrasovo",
+      "name": "АгроПарк «Некрасово поле»",
+      "aliases": [
+        "АгроПарк Некрасово поле"
+      ],
+      "address": "Центральная 42 стр. 3",
+      "active_event_count": 0,
+      "catalog_candidate_event_count": 2,
+      "sample_event_ids": [
+        6486,
+        6585
+      ],
+      "coordinates": null,
+      "geocode_status": "building_42_proxy",
+      "access": [
+        {
+          "stop_id": "nekrasovo-stop",
+          "distance_m": 750,
+          "walk_minutes": 10,
+          "calculation_method": "valhalla_pedestrian_to_building_proxy",
+          "confidence": "medium",
+          "note": "Перед enable подтвердить вход стр. 3 и использовать только маршрут 116."
+        }
+      ]
+    }
+  ]
+}

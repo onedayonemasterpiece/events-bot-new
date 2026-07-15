@@ -305,6 +305,9 @@ features:
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     event_desktop_media_families_2026_07_12: docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md
     event_mobile_ui_lab_2026_07_15: docs/features/static-site-pages/event-mobile-ui-lab-2026-07-15.md
+    event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
+    bus_transport_directory: docs/features/static-site-pages/bus-transport-directory.md
+    rail_multimodal_directory: docs/features/static-site-pages/rail-multimodal-directory.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py

@@ -10,6 +10,8 @@ import {
 } from '../../../../../lib/mobileEventReview';
 import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../../../lib/events';
 import { eventImageUrl } from '../../../../../lib/assets';
+import examplesData from '../../../../../data/desktop-event-examples.json';
+import type { PreviewEvent } from '../../../../../lib/types';
 
 interface Props {
   variant: MobileEventReviewVariant;
@@ -24,8 +26,11 @@ export function getStaticPaths() {
 }
 
 const { variant, scenario } = Astro.props;
-const events = getEvents();
-const event = events.find((item) => item.id === scenario.eventId);
+const mergedEvents = new Map<number, PreviewEvent>();
+for (const item of getEvents()) mergedEvents.set(item.id, item);
+for (const item of examplesData.events as PreviewEvent[]) mergedEvents.set(item.id, item);
+const events = [...mergedEvents.values()];
+const event = mergedEvents.get(scenario.eventId);
 if (!event) return Astro.redirect(withBase('/lab/event-mobile/'));
 const preferredRelatedIds = [5658, 6472, 4671, 5259, 5783, 5761, 5382, 5703, 6510, 5370, 5878];
 const eventById = new Map(events.map((item) => [item.id, item]));

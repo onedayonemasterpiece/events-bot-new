@@ -21,6 +21,10 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'assets/transport/kppk-lastochka.webp',
+  'assets/transport/bus-svgrepo-337651.svg',
+  'assets/transport/romanovo-holmogorye-route-square.png',
+  'assets/transport/romanovo-holmogorye-route-portrait.png',
   'brand/announcements-wordmark-ui.svg',
   'assets/icons/link-minimalistic-svgrepo.svg',
   'service-share/current/manifest.json',
@@ -52,6 +56,38 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+
+let transportEventCount = 0;
+let transportIcsTotal = 0;
+for (const event of eventsData.events) {
+  const eventHtmlPath = join(root, `sobytiya/${event.slug}/index.html`);
+  const html = readFileSync(eventHtmlPath, 'utf8');
+  if (!html.includes('data-mobile-event-production') || !html.includes('event-hero__meta-line--weekday-panel') || !html.includes('event-hero__meta-line--standard')) {
+    throw new Error(`Event ${event.id} misses the responsive accepted mobile-v4 production contract`);
+  }
+  const hasRail = html.includes('data-event-transport-schedule');
+  const hasBus = html.includes('data-event-bus-schedule');
+  if (hasRail || hasBus) {
+    transportEventCount += 1;
+    const factsAt = html.indexOf('>Коротко</h2>');
+    const transportAt = hasRail ? html.indexOf('data-event-transport-schedule') : html.indexOf('data-event-bus-schedule');
+    if (factsAt < 0 || transportAt < factsAt) throw new Error(`Event ${event.id} transport must follow compact event facts`);
+  }
+  if (String(event.city || '').toLocaleLowerCase('ru-RU') === 'калининград' && hasRail) {
+    throw new Error(`Kaliningrad event ${event.id} must not render a coastal rail schedule`);
+  }
+  const transportDir = join(root, `sobytiya/${event.slug}/transport`);
+  const files = existsSync(transportDir) ? readdirSync(transportDir).filter((name) => name.endsWith('.ics')).sort() : [];
+  const linked = [...html.matchAll(/href="[^"]*\/transport\/([^"?#]+\.ics)(?:[?#][^"]*)?"/gu)].map((match) => match[1]);
+  const linkedUnique = [...new Set(linked)].sort();
+  if (files.length > 6) throw new Error(`Event ${event.id} exceeds the six-file transport ICS ceiling: ${files.length}`);
+  if (files.join('\n') !== linkedUnique.join('\n')) throw new Error(`Event ${event.id} transport ICS files must match interactive calendar links exactly`);
+  for (const name of files) {
+    if (!/^rzd-[a-z0-9-]+-\d{8}-[a-z0-9-]+\.ics$/u.test(name)) throw new Error(`Transport ICS filename is not concise semantic ASCII: ${name}`);
+  }
+  transportIcsTotal += files.length;
+}
+if (transportEventCount === 0 || transportIcsTotal === 0) throw new Error('Preview must include at least one factual transport event and linked transport ICS file');
 
 const mobileReviewCases = {
   control: readFileSync(join(root, 'lab/event-mobile/examples/control/photo-paid/index.html'), 'utf8'),
@@ -291,7 +327,10 @@ if (controlVisibleHtml.includes('Telegraph')) throw new Error('Event pages must 
 if (controlVisibleHtml.includes('Просмотры в источниках') || controlVisibleHtml.includes('Источники')) throw new Error('Source count/views are gated and must not be shown in public compact facts');
 if (!controlVisibleHtml.includes('Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям')) throw new Error('Event page must show registered-user gate notice for sources/mentions/extended stats');
 if (!controlVisibleHtml.includes('event-info-block') || !controlVisibleHtml.includes('event-info-item__icon')) throw new Error('Compact facts must render icon-based event info block');
-if (!controlVisibleHtml.includes('event-source-gate--section') || !/<div class="event-info-block"[\s\S]*?<\/dl>\s*<\/div>\s*(?:<p class="event-description-meta"[^>]*>[\s\S]*?<\/p>\s*)?<\/div>\s*<p class="event-source-gate event-source-gate--section"/u.test(controlVisibleHtml)) throw new Error('Source/mentions auth gate must belong to the parent details section, not to the compact facts block');
+const detailsStart = controlVisibleHtml.indexOf('section-card--event-details');
+const factsStart = controlVisibleHtml.indexOf('class="event-info-block"', detailsStart);
+const sourceGateStart = controlVisibleHtml.indexOf('event-source-gate--section', detailsStart);
+if (detailsStart < 0 || factsStart < detailsStart || sourceGateStart < factsStart) throw new Error('Source/mentions auth gate must belong to the parent details section after compact facts and optional transport');
 if (controlVisibleHtml.includes('event-hero__facts')) throw new Error('Hero must not duplicate the compact facts block as a second info block');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');

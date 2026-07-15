@@ -1,0 +1,51 @@
+# Official site presentation release checklist
+
+> Status: active release gate. This is the canonical checklist for the first official KenigEvents static-site presentation. Generic repository/deploy rules remain in [`release-governance.md`](../../operations/release-governance.md); Kaggle build/publish mechanics remain in [`kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md).
+
+Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or run artifact to every completed item. The release owner freezes one `origin/main` SHA and one full-catalog build ID before the presentation.
+
+## 1. Release candidate
+
+- [ ] **Blocked** — presentation scope frozen and all candidate commits reachable from `origin/main`.
+- [ ] **Blocked** — clean full-catalog production export made on presentation day; fixture-only or hand-added canary data is not the production candidate.
+- [ ] **Blocked** — release manifest records repo SHA, event snapshot, schedule snapshot ID/hash/fetched time, asset prefix and rollback prefix.
+- [ ] **Blocked** — promotion and rollback commands rehearsed against the same candidate; production canonical remains unchanged until approval.
+
+## 2. Demonstration scenarios
+
+- [x] **Done in focus preview** — real Светлогорск event `6510`: compact whole-row calendar links for outbound/return trains, a 20–90 minute arrival window and no public schedule-verification links.
+- [x] **Done in focus preview** — each suggested train has its own `.ics` with departure/arrival and a 30-minute reminder.
+- [x] **Done in focus preview** — real late Светлогорск concert `6397`: no guessed duration; the page shows the factual last same-day train, absence of night service and first next-day train.
+- [x] **Done in focus preview** — real production event `6710` at Сказочное Холмогорье: compact outbound/return chips for `118/118А/119`, one verified shared corridor/Северный note, arrival-window-filtered outbound buses, returns after at least 1h15 on site plus the real walk, a large unboxed bus icon, a desktop schedules+map grid and responsive square/portrait route maps.
+- [ ] **Partial** — re-confirm event `6710` with the organizer before the official presentation: its direct 2026-07-06 post says `25 July`, while the venue site separately lists the Baba Yaga day on `26 July`.
+- [x] **Done in checks** — a Kaliningrad/unsupported-location event renders no transport block.
+
+## 3. Public UI and accessibility
+
+- [x] **Done in focus preview** — no `Партнёрский маршрут` and no prominent carrier promotion; only one terse carrier line below train options.
+- [ ] **Blocked** — final Pixel/desktop/keyboard/contrast review on the frozen presentation candidate.
+- [ ] **Blocked** — presentation copy/sign-off by product owner, including estimate, night-service and explicit no-return wording.
+
+## 4. Schedule freshness
+
+- [x] **Done in reference audit** — all 13 direction/product pages from the official КППК schedule index inventoried with effective dates, exact image URLs and SHA-256; current coastal, Балтийск, eastern, Багратионовск, Мамоново, Железнодорожный and Краснолесье matrices manually reviewed.
+- [x] **Done in policy directory** — Пионерский/Зеленоградск/Светлогорск are rail-primary, Балтийск is rail-primary while the current multi-pair table applies, sparse inland routes remain parallel with buses, and mixed-mode/transfer safety rules cover Ферма Тюниных and Бранденбург.
+- [x] **Done in static generator** — ICS names expose their artifact type from the first segment: `rzd-*` for trains, the prepared `bus-*` contract for buses and `event-*` for the event itself; transport files are generated only for rendered actions, preserve VEVENT UIDs and enforce 4-file standard / 6-file dual-origin per-event ceilings without orphan files.
+- [ ] **Partial** — export the prepared Пионерский, Балтийск and inland references into exact-date public service calendars and add real event regressions; directory presence alone must not enable a transport block.
+- [ ] **Partial** — add a real ДС «Янтарный» regression before enabling the venue-specific `Елизаветинская` option: one train row must offer separately clickable Южный/Северный boarding times, origin-qualified concise ICS names, no more than six ICS files total, the official `35 ₽` fare once, the 650 m / 8–10 min walk and exclusion of unrelated Калининград events.
+- [ ] **Blocked — P0:** close [`TD-STATIC-TRANSPORT-001`](event-transport-schedule.md#td-static-transport-001--automated-schedule-refresh-before-presentation).
+- [ ] **Blocked** — latest successful rail+bus refresh is within the approved max age; public build manifest points to it.
+- [ ] **Blocked** — last-known-good behavior, stale warning and admin alert verified by a failed/partial refresh drill.
+
+## 5. Build and public acceptance
+
+- [ ] **Blocked** — one real StaticSiteBuilder Kaggle CPU run completes with status-ledger heartbeats/report and `static_site:builder` lease.
+- [ ] **Blocked** — `npm run check:preview` passes against the frozen full catalog, including train/bus/ICS/unknown-end-cutoff/no-return regressions.
+- [ ] **Blocked** — public `200` and MIME checks pass for index, demo events, media, discovery JSON, event ICS and transport ICS.
+- [ ] **Blocked** — mobile/desktop Playwright screenshots and link checks attached to the release evidence.
+
+## 6. Promotion and post-presentation smoke
+
+- [ ] **Blocked** — approved candidate promoted from noindex prefix to production canonical.
+- [ ] **Blocked** — sitemap/robots/canonical/TLS/CDN cache checks pass after promotion.
+- [ ] **Blocked** — event detail, calendar, search, transport and rollback smoke completed; release SHA/build ID recorded.

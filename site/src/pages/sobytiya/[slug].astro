@@ -2,12 +2,15 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
+import EventTransportSchedule from '../../components/EventTransportSchedule.astro';
+import EventBusTransportSchedule from '../../components/EventBusTransportSchedule.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventMediaRail from '../../components/EventMediaRail.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import MobileEventProductionStyles from '../../components/MobileEventProductionStyles.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
 import type { EventImageAsset } from '../../lib/types';
@@ -44,6 +47,11 @@ const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = displayDateTime(event);
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const compactLabelAction = stickyCalendarPrimary && ctaHref
+  ? 'ticket'
+  : !stickyCalendarPrimary && isCalendarEligible(event)
+    ? (event.id % 2 === 0 ? 'calendar' : 'share')
+    : 'share';
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
@@ -103,13 +111,14 @@ const identityPosterIndex = identityPoster ? galleryImageAssets.findIndex((asset
 const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_media_role || (event.image_text_mode === 'visual_only' ? 'unknown_visual' : 'unknown_document'));
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
-  <main id="main">
+  <MobileEventProductionStyles />
+  <main id="main" data-mobile-event-production data-mobile-review-revision="v4" data-actions-treatment="dock" data-compact-label-action={compactLabelAction}>
     <div class="page-shell page-shell--event-impact">
       <div class="desktop-event-reading-shell" data-desktop-event-reading data-desktop-media-family={primaryIsPhoto ? 'editorial' : 'split'} data-has-identity-poster={identityPoster ? 'true' : 'false'}>
       <div class="event-grid">
         <article class="main-col section-card section-card--hero section-card--impact-hero">
           <div class="section-card__inner section-card__inner--hero">
-            <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} />
+            <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} metaTreatment="responsive-weekday-panel" />
           </div>
         </article>
         <div class="side-col">
@@ -140,14 +149,16 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
         {event.event_type && <span>{event.event_type}</span>}
       </nav>
 
-      <div class="desktop-reading-medallions"><EventTokenMedallions event={event} /></div>
+      <div class="desktop-reading-medallions mobile-event-production__medallions"><EventTokenMedallions event={event} /></div>
 
-      <section class="section-card section-card--quiet section-card--event-details" style="margin-top: 1rem;">
-        <div class="section-card__inner">
+      <section class="section-card section-card--quiet section-card--event-details mobile-event-production__details" style="margin-top: 1rem;">
+        <div class="section-card__inner mobile-event-production__prose">
           <h2>Описание</h2>
           <div class="prose" set:html={event.description_html} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
+          <EventTransportSchedule event={event} />
+          <EventBusTransportSchedule event={event} />
           {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
         </div>
         <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>

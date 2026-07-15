@@ -4003,7 +4003,7 @@ const HEADER_NAVIGATION = [
               const images = Array.from(visual.querySelectorAll('.event-hero__image'));
               if (!images.length) return;
               const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
-              const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"]'));
+              const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"], [data-mobile-event-production]'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;

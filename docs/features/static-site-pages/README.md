@@ -1,23 +1,57 @@
 # Static Site Event Pages
 
-> **Status:** Astro SSG production integration candidate locally verified; desktop continuous Editorial composition and media-role safety implemented, production promotion pending
+> **Status:** Astro SSG production integration candidate publicly verified; accepted desktop composition, mobile v4 and rail/bus transport are combined on a full current catalog, production-root promotion pending
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 
 ## Implementation status
 
-Mobile event-detail UI вынесен в контролируемый preview lab: четыре исходных
+### 2026-07-15 production integration candidate
+
+`preview-20260715t-production-transport-mobile-real-events-v1` is the current
+single review surface. It combines the accepted desktop Continuous
+Editorial/Split families, the accepted mobile v4 event UI, the shared
+announcement lockup/favicon and additive rail/bus transport blocks. The build
+was exported from a fresh production SQLite snapshot at the current
+Kaliningrad date/time and contains `282` public future or ongoing events. Lab
+routes keep their frozen real-event fixtures, so rotating production data can
+no longer silently change an accepted design scenario.
+
+- index: <https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/__preview/>;
+- desktop/media regression: [«Гараж»](https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/sobytiya/spektakl-garazh-kaliningrad-5658/);
+- rail: [JOE LYNN TURNER, Светлогорск](https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/sobytiya/joe-lynn-turner-i-j-l-t-band-svetlogorsk-5789/);
+- bus: [«Слёт бабок Ёжек», Романово](https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/sobytiya/slet-babok-ezhek-romanovo-6710/).
+
+The offline related graph is `event_pgvector_related_chain_v2_two_doc`: all
+`282` anchors have `40` current candidates, no dangling ids, and the refresh
+reused `564` unchanged embeddings with `0` provider calls. Browser page views
+still consume only same-origin static discovery JSON. Public Playwright checks
+passed at `1920×1080` and `390×844`: no horizontal overflow, mobile v4 date
+panel active, rail/bus blocks present, related-card navigation stays inside the
+same build, and event plus transport calendars return `200 text/calendar`.
+
+This is a prefix-only review release. It does not promote or delete the
+production root and does not modify stable `/p/` media or `/ics/` calendars.
+Automatic root promotion remains the release-protocol gate.
+
+Mobile event-detail UI был отработан в контролируемом preview lab: четыре исходных
 варианта образуют матрицу `current/open prose × current/grouped actions`,
 `accepted-v2` сохраняет первый исправленный проход, `accepted-v3` — первый
 Android feedback, а `accepted-v4` фиксирует поправку владельца: сохраняет
 принятую weekday/date/time hierarchy, возвращает OCR-parallax без zoom и
 layout gap, упрощает selected-like до терракотовой заливки и белого solid
 heart и вводит явный вертикальный ритм между информационными поверхностями.
-Бирка, discovery cards и sticky CTA намеренно зафиксированы. Канонический scope
+V4 перенесён в общий integration preview; бирка, discovery cards и sticky CTA
+намеренно зафиксированы. Канонический scope
 и acceptance gate:
 [`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).
 
-В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
+В `events-bot-new` есть **Astro SSG production-integration preview** в `site/`:
+он строит статические страницы полного текущего публичного каталога,
+`event.ics`, transport ICS, `sitemap.xml`, `robots.txt` и публикуется под
+noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout:
+canonical остаётся preview-safe, а корневые production URL
+`/sobytiya/<slug>/` не продвигаются автоматически.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
