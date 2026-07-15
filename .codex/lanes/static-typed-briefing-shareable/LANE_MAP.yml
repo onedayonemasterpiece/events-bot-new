@@ -1,0 +1,114 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: db98423ba739d6d4b5d2d40f663a67833f2abf1f
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: feature/static-typed-intro-prototype-20260715
+global_constraints:
+  - shareable lab preview only; no production homepage integration or rollout
+  - no Gemini, personalization, new scenarios, new motion variants, or content platform
+  - no remote telemetry; no production navigation link; noindex required
+  - preview publication may use a versioned preview prefix only, never the production root
+verification_owner: /root
+stop_conditions:
+  - publication target would overwrite production root or stable production assets
+  - real component reuse would couple lab to production writes or user data
+  - credentials are unavailable or public URL cannot be verified
+requirements:
+  - {id: R01, requirement: "One documented reproducible command builds/runs the lab preview.", primary_lane: lab_build}
+  - {id: R02, requirement: "Provide a verified preview URL or fully reproducible local preview.", primary_lane: publish_integration}
+  - {id: R03, requirement: "Support explicit ?variant=a, ?variant=b, ?variant=c selection.", primary_lane: lab_build}
+  - {id: R04, requirement: "All variants use identical events, categories, card sizes, shell, typography and spacing.", primary_lane: lab_build}
+  - {id: R05, requirement: "Reuse production components where safe or prove exact dimensional/token equivalence; do not shrink for viewport checks.", primary_lane: lab_build}
+  - {id: R06, requirement: "Check all eight scenarios at 320x568, 375x667, 390x844 and 1440x900.", primary_lane: lab_build}
+  - {id: R07, requirement: "Assert briefing.scrollHeight <= briefing.clientHeight for the longest scenario.", primary_lane: lab_build}
+  - {id: R08, requirement: "Preserve no-JS, reduced motion, pointer/focus/scroll interrupt and bounded local telemetry.", primary_lane: lab_build}
+  - {id: R09, requirement: "Keep noindex, no production navigation, no remote telemetry and no production deploy.", primary_lane: publish_integration}
+  - {id: R10, requirement: "Allow export of local telemetry log or expose it in moderated-session debug panel.", primary_lane: lab_build}
+  - {id: R11, requirement: "Do not add Gemini, personalization, scenarios, motion variants, production integration or platform scope.", primary_lane: publish_integration}
+  - {id: R12, requirement: "Document ENOSPC cause, successful lab build command and impact on ordinary production build.", primary_lane: publish_integration}
+  - {id: R13, requirement: "Deliver URL, viewport screenshots, launch commands and concise test report.", primary_lane: publish_integration}
+lanes:
+  - id: shell_audit
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Map production listing shell/header/category/card/token dimensions and safest lab reuse boundary.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Component/token comparison with concrete files and acceptance risks.
+    verification_scope: inspection_only
+    status: completed
+  - id: preview_ops_audit
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Map lab-only build, versioned preview publication, credentials and public URL verification without production rollout.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: Safe command/URL plan and ENOSPC diagnosis.
+    verification_scope: inspection_only
+    status: completed
+  - id: lab_build
+    role: worker
+    effort: high
+    requirement_ids: [R01, R03, R04, R05, R06, R07, R08, R10]
+    target: Implement reproducible lab-only build/preview, realistic shell, variant aliases, scenario matrix tests and telemetry export.
+    depends_on: [shell_audit, preview_ops_audit]
+    execution_mode: serial_after_dependency
+    branch: agent/static-typed-briefing/shareable-lab
+    worktree: /home/dev/.codex/worktrees/events-bot-new/typed-briefing-shareable
+    writable_files:
+      - .gitignore
+      - site/package.json
+      - site/astro.lab.config.mjs
+      - site/scripts/build-briefing-lab.mjs
+      - site/scripts/preview-briefing-lab.mjs
+      - site/scripts/check-briefing-lab.mjs
+      - site/src/lab-briefing/pages/lab/briefing/index.astro
+      - site/src/pages/lab/briefing/index.astro
+      - site/src/data/briefingLab.ts
+      - tests/playwright/static_briefing_lab.spec.ts
+      - .codex/lanes/static-typed-briefing-shareable/lab_build/RESULTS.md
+    forbidden_files:
+      - production listing/event pages
+      - deploy/publisher scripts
+      - docs/**
+      - CHANGELOG.md
+    expected_output: One clean committed implementation lane with targeted build/test evidence.
+    verification_scope: targeted
+    status: completed
+    commit: 1d43bb1dc32e5d71269eb963ed8b264144f9fee4
+    integrated_as: a807eae0
+  - id: publish_integration
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R02, R09, R11, R12, R13]
+    target: Integrate, document, build, publish only versioned preview, verify public URL and close all requirements.
+    depends_on: [lab_build]
+    execution_mode: serial_after_dependency
+    branch: feature/static-typed-intro-prototype-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files:
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/features/static-site-pages/astro-preview.md
+      - docs/features/static-site-pages/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - site/package.json
+      - site/scripts/deploy-briefing-lab-yc.mjs
+      - .codex/lanes/static-typed-briefing-shareable/**
+      - artifacts/codex/static-typed-briefing-shareable/**
+    forbidden_files:
+      - production homepage/listing/event-detail code
+      - production root publication
+    expected_output: Public preview URL or explicit reproducible-local fallback, screenshots, test report, commit and push.
+    verification_scope: full_local
+    status: in_progress

@@ -1,8 +1,8 @@
 # Городской обзор на главной: минимальный prototype gate
 
-> **Status:** desk-research synthesis complete; isolated lab prototype implemented on the feature branch.
-> **Implementation:** `/lab/briefing/` only; no production homepage integration.
-> **Production effect:** none.
+> **Status:** shareable isolated lab built and locally accepted on the feature branch; public versioned preview evidence is recorded below.
+> **Implementation:** dedicated one-route build for `/lab/briefing/`; no production homepage integration.
+> **Production effect:** none; the lab is not linked from production navigation and is published only under an immutable preview prefix.
 > **Decision:** `GO_TO_PROTOTYPE_ONLY`.
 > **Product desirability:** unvalidated.
 > **Validated by users:** false.
@@ -40,7 +40,7 @@ production export
 → только после выигрыша motion/personalization/platform work
 ```
 
-Lab-прототип допустим сейчас только как дешёвый research artifact: он не меняет production routes, не публикуется и не претендует на приоритет над data quality, export/canary или telemetry write path.
+Lab-прототип допустим сейчас только как дешёвый research artifact: он не меняет production routes, публикуется только в изолированном versioned preview prefix с `noindex` и не претендует на приоритет над data quality, export/canary или telemetry write path.
 
 ## Проверяемая гипотеза
 
@@ -137,9 +137,28 @@ CLS after first render: 0
 
 `12–18svh` and `160px` are test inputs, not acceptance mandates: at `320×568` they may be too short for useful copy. The measured lab with the real header, categories and first card determines whether either budget is viable; the first-event outcome remains the hard gate.
 
-The first visual QA confirmed that the original `15svh` challenger clipped useful briefing copy. The accepted lab correction uses `114px` (`≈20.1svh` at the measured `320×568` viewport), keeps the full copy visible and still leaves the entire first decision region visible (`322–414px`). This is prototype evidence about layout, not a production token.
+The shareable lab no longer imitates the product shell: it imports the actual `EventLayout`, `.page-shell`, `.source-links` and `EventListItem`, with stable production fixtures `6607`, `5373`, `6020`. The briefing is `150px` on mobile and `190px` on desktop; production cards retain their real minimum heights (`154px` mobile, `168px` desktop) and are never shrunk to manufacture a pass. At `320×568` the first production card continues below the fold; this is reported as an honest product finding, not hidden by custom compact cards.
 
-Control viewports: `320×568`, `360×800`, `390×844`, `1366×768`, `1440×900`. The approved header/lockup is never shrunk to make the lab pass.
+Required control viewports: `320×568`, `375×667`, `390×844`, `1440×900`. All eight scenarios plus neutral fallback are checked in B/C; the longest briefing must satisfy `scrollHeight <= clientHeight` and `scrollWidth <= clientWidth`. The approved header/lockup is never shrunk to make the lab pass.
+
+## Reproducible shareable-lab workflow
+
+The lab uses a separate Astro `srcDir` and output root, so it does not run or publish the full catalog build:
+
+```bash
+cd site
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run build:lab
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run check:lab
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run preview:lab
+```
+
+Local URL: `http://127.0.0.1:4177/<build-id>/lab/briefing/?variant=a`; replace `a` with `b` or `c`, and optionally add one of the documented `scenario` IDs. The build fails closed unless the artifact contains only the lab HTML, hashed Astro CSS, manifest, favicon and exact wordmark asset.
+
+Public publication is a distinct command and accepts only `preview-YYYYMMDDtHHMM-briefing-lab-<sha8>`. It performs recursive copy only into that new prefix, never `sync`, delete, cache purge, root write, stable ICS mutation or production navigation change. Local telemetry remains capped at 24 records in `window.__briefingTelemetry` and can be downloaded from the on-page debug panel; no beacon, XHR, POST, Supabase or analytics transport is created.
+
+### ENOSPC boundary
+
+The earlier full static build failed because the host filesystem was at `99–100%` capacity with only hundreds (and during tests tens) of MiB free; inode usage was about `16%`, so this was block-space exhaustion rather than inode exhaustion or a lab defect. The isolated one-route lab build succeeds under that constraint. This does **not** prove the ordinary full-catalog production build: that gate remains unproven on this host until space is reclaimed and the full build is rerun.
 
 ## Motion gate for Variant C
 

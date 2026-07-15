@@ -30,6 +30,8 @@
 
 ### Added
 
+- **Static homepage / shareable city-briefing lab**: added a dedicated one-route Astro build/check/preview/deploy path, real production listing shell and cards, `?variant=a|b|c` plus deterministic scenario selection, four-viewport overflow/geometry coverage, no-JS/reduced-motion/interruption/session-replay checks, bounded downloadable local telemetry, and a strict immutable noindex publication allowlist that cannot mutate production routes or stable ICS assets; recorded the host `ENOSPC` boundary without presenting the lab build as a full-catalog production build.
+
 - **Static homepage / city-briefing lab prototype**: replaced the over-broad conditional feature design with a `GO_TO_PROTOTYPE_ONLY` gate and added an isolated `/lab/briefing/` A/B/C research page with categories and deterministic feed fixtures; limited V0 to eight deterministic scenarios plus a neutral fallback, made first-event visibility the mobile gate (`12–18svh`/`160px` remain challenger hypotheses), deferred Gemini/personalization/pace systems to backlog, defined bounded local debug telemetry and future destination-confirmed `event_detail_open / eligible_session`, and committed the two-pass Gemini 3.1 Pro High prompts/outputs/checksums/decision trace for auditability.
 
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.

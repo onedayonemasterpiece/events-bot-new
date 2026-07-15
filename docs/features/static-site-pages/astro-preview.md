@@ -6,6 +6,19 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
+## Isolated typed-briefing research lab
+
+The typed briefing uses its own one-route build and deploy path; it must not use `build:preview` or `deploy:preview`, because the latter manage the full preview tree and stable ICS objects. Reproducible local launch:
+
+```bash
+cd site
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run build:lab
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run check:lab
+PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run preview:lab
+```
+
+For a reviewed public artifact, choose the strict immutable ID, source the repository `.env` into the current process without copying it into a linked worktree, then run `npm run deploy:lab`. The deploy allowlist is only `lab/briefing/index.html`, `_astro/**`, `lab-manifest.json`, `favicon.svg` and the exact announcement wordmark. The page is `noindex,nofollow,noarchive`; no production route or stable object is modified.
+
 ## Public URLs
 
 Required URLs for the current preview:

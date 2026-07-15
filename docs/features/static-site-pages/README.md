@@ -208,7 +208,7 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Merged implementation skeleton for the first page build: `docs/features/static-site-pages/event-page-merged-skeleton.md`.
 - Event-card UI A/B comparison and product hypothesis: `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`.
 - Event hero composition lab / mobile-first decision: `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`.
-- Homepage city-briefing minimal lab / `GO_TO_PROTOTYPE_ONLY` gate: `docs/features/static-site-pages/typed-briefing-hero-research.md`.
+- Homepage city-briefing shareable isolated lab / `GO_TO_PROTOTYPE_ONLY` gate: `docs/features/static-site-pages/typed-briefing-hero-research.md`.
 - Typed-briefing post-validation backlog (33 scenarios, pace, personalization and Gemini writer research; not MVP): `docs/backlog/features/static-typed-briefing/README.md`.
 - Gemini consultation prompts, full outputs, checksums and decision trace: `docs/reports/static-typed-briefing-consultation-2026-07-15/README.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
