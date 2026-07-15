@@ -754,4 +754,24 @@ manifest; event sharing remains a separate control and payload.
 
 Local gates: Astro production build, service-share controller `5/5`, preview
 contract, desktop/mobile Playwright visibility, zero overflow and zero console
-errors. Public v14 evidence is appended after prefix-only publication.
+errors.
+
+Public acceptance uses
+`preview-20260715t-desktop-v14-footer-release`. The index, all three desktop
+comparison pages, the service-share manifest and both versioned PNG/WebP assets
+return HTTP `200`; the manifest is `no-cache`, while the content-addressed
+images are served with their exact MIME type and one-year immutable caching.
+The deploy dry-run and real upload both remained below the versioned preview
+prefix; stable `/ics/*` objects were not modified.
+
+Public Chromium at `1536×864` measures the Continuous Editorial CTA release at
+scroll `2800`: CTA bottom `379.5px`, continuation top `451.1px`, visual gap
+`71.6px`. Garage activates five visible 256px thumbnails and leaves two
+placeholders; Split activates six visible 256px thumbnails, leaves five
+placeholders and centers the rendered group to `-0.01px`; the OCR companion
+activates one preview and leaves eight placeholders while retaining its one
+medallion. The footer exposes only the two accepted desktop clipboard intents.
+At `390×844` the desktop laboratory remains `display:none`, the mobile share
+button occupies the full `366px` content width, horizontal overflow is zero,
+and the desktop clipboard buttons are hidden. All checked pages report zero
+browser-console errors and warnings.

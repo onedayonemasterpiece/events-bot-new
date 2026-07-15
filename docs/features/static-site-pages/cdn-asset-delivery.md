@@ -45,7 +45,7 @@ PUBLIC_ICS_BASE_URL=https://static.kenigevents.ru/ics
 - `static.kenigevents.ru` resolves to Yandex Cloud CDN (`*.yccdn.ru`).
 - `https://static.kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/__preview/` and `https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/__preview/` returned `200` in the current focus preview.
 - Migration tool: `scripts/migrate_static_media_to_cdn_bucket.py` copies active legacy media objects from `s3://kenigevents/p/...` to `s3://kenigevents.ru/p/...` without mutating SQLite rows. Astro rewrites legacy raw URLs to CDN URLs at build time when `PUBLIC_ASSET_BASE_URL` is set.
-- Deploy script uploads generated `event.ics` both under the versioned preview path and to stable CDN keys `s3://kenigevents.ru/ics/<event_id>.ics`. v47 uploaded 70 stable ICS files and `https://static.kenigevents.ru/ics/5077.ics` returned `200 text/calendar`.
+- Preview deploy uploads generated `event.ics` only below the versioned preview prefix and explicitly refuses to mutate stable `s3://kenigevents.ru/ics/*` keys. Stable calendar promotion is a separate production operation. Historical v47 evidence below predates this safety boundary: that run uploaded 70 stable ICS files and `https://static.kenigevents.ru/ics/5077.ics` returned `200 text/calendar`.
 
 
 ## 2026-06-28 v47 media migration evidence
@@ -95,7 +95,7 @@ The deploy script uploads preview files with default short cache and then re-upl
 | `/<build_id>/*.html`, JSON, sitemap/robots | `public, max-age=300` | safe for focus-group preview; new build id for changes |
 | `/<build_id>/_astro/*` | `public, max-age=31536000, immutable` | content-hashed and build-prefixed |
 | `/<build_id>/event.ics` | `public, max-age=300` + `text/calendar` metadata | build-scoped fallback |
-| `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target |
+| `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target; never written by `deploy:preview` |
 | `/p/**` | object metadata, intended immutable for content-addressed keys | mirrored from legacy media bucket; safe for `PUBLIC_ASSET_BASE_URL` |
 | `/p/thumb/v1/**` | `public, max-age=31536000, immutable` | content-addressed 256/512 WebP derivatives used by rails/cards through `srcset` |
 
