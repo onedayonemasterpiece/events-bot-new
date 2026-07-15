@@ -109,7 +109,7 @@ Production must replace the same-page canvas fallback with a stable server/offli
 
 Admin backlog: add a one-click “prepare detailed event post” function that creates a richer ready-to-paste post package for Max/VK/Telegram (share image + caption + URL) for an operator, without changing public page SEO.
 
-Sharing KenigEvents itself is a separate mandatory release capability from sharing an event. The common mobile menu and footer share one centrally prerendered service-card WebP plus the service URL; the same desktop placements copy the service URL. It never uses the per-event canvas path or enters event media/JSON-LD. Canonical F18 contract: `docs/features/static-site-pages/service-sharing.md`.
+Sharing KenigEvents itself is a separate mandatory release capability from sharing an event. The common mobile menu and footer share one centrally prerendered service-card WebP plus the service URL; the same desktop placements use the accepted clipboard behavior. A preliminary footer-only implementation is open in [PR #44](https://github.com/onedayonemasterpiece/events-bot-new/pull/44) at `421d6bca`; the header/mobile-menu placement was intentionally not changed and remains required before release. It never uses the per-event canvas path or enters event media/JSON-LD. Canonical F18 contract: `docs/features/static-site-pages/service-sharing.md`.
 
 ## Event-page medallions
 

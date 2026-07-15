@@ -1,6 +1,6 @@
 # Карточка «Поделиться сервисом»
 
-> Статус: **F18 — обязательный блокер первого публичного релиза; mobile contract готов, desktop Windows/macOS rich-clipboard mode требует аналитики и тестирования, реализация и release evidence отсутствуют**.
+> Статус: **F18 — обязательный блокер первого публичного релиза; предварительный footer-only vertical slice находится в открытом PR #44 (`421d6bca`), но mobile-menu/header placement, native device matrix, merge в `main` и production activation ещё не закрыты**.
 
 ## Назначение и граница фичи
 
@@ -11,6 +11,32 @@
 - карточка сервиса не становится изображением события, не попадает в event gallery, hero, `Event.image[]` или карточку «Как добраться».
 
 Функция входит в общий shell всех публичных статических HTML-страниц и является release blocker, а не пострелизным экспериментом.
+
+## Предварительная реализация — PR #44
+
+Открытый [PR #44](https://github.com/onedayonemasterpiece/events-bot-new/pull/44), head
+[`421d6bca`](https://github.com/onedayonemasterpiece/events-bot-new/commit/421d6bcaf4252ebf267d3102c5614de3f6cb9f40),
+даёт проверяемый предварительный вариант F18 в общем footer:
+
+- mobile показывает одну action `Поделиться` и использует системный Web Share;
+- desktop показывает две явно разные операции: image-only PNG `Скопировать карточку`
+  и text+canonical URL `Скопировать текст и ссылку`; одна операция не подменяет
+  другую скрытым fallback;
+- общий controller, versioned manifest, daily deterministic renderer, WebP/PNG
+  assets, noindex lab и preview checks реализованы в одной integration branch;
+- финальный branch evidence сообщает controller `5/5`, renderer `23/23`, local
+  Playwright `14/14`, public Playwright `14/14`, Chromium clipboard readback и
+  сохранение высоты action row `44px → 44px` после success feedback;
+- последний опубликованный preview:
+  `https://kenigevents.ru/preview-20260715t1025z-f18-share-feedback/__preview/`.
+
+Это **Partial**, а не закрытие F18. По прямому решению owner шапка не менялась:
+placement под раскрытой мобильной биркой и любое изменение desktop navigation
+shell отложены на следующую UI-итерацию. Также отсутствуют полная native
+Android/iOS share-sheet проверка, Windows/macOS browser/target matrix, точная
+Pharmastaff source/SHA привязка, merge в `origin/main`, production schedule/publisher
+activation и final owner sign-off. До их закрытия PR/preview не являются
+production release truth.
 
 ## Точки входа и поведение по устройствам
 
@@ -30,7 +56,7 @@
 - если Clipboard API недоступен, показывается выделяемая ссылка с обычным `<a>` fallback;
 - breakpoint, accessible name, focus/keyboard semantics и analytics reason должны быть едиными для обеих точек входа, без двух расходящихся реализаций.
 
-Mobile-first поведение следует повторно использовать из уже оттестированного Pharmastaff organization-card share flow. На момент фиксации требований точный Pharmastaff repository/branch/SHA не найден ни в этом репозитории, ни в доступном списке репозиториев организации. До реализации нужно приложить точную ссылку/SHA и зафиксировать проверенный контракт: предварительная доступность файла, сохранение transient user activation, `navigator.canShare`, cancel/error handling и fallback. Без этой привязки нельзя заявлять parity с Pharmastaff.
+Mobile-first поведение следует повторно использовать из уже оттестированного Pharmastaff organization-card share flow. На момент фиксации требований точный Pharmastaff repository/branch/SHA не найден ни в этом репозитории, ни в доступном списке репозиториев организации. До release acceptance нужно приложить точную ссылку/SHA и зафиксировать проверенный контракт: предварительная доступность файла, сохранение transient user activation, `navigator.canShare`, cancel/error handling и fallback. Без этой привязки нельзя заявлять parity с Pharmastaff.
 
 ## Рекомендуемая карточка V1
 
@@ -136,7 +162,7 @@ Web Share не позволяет честно утверждать фактич
 - [ ] metrics manifest совпадает с accepted catalog hash; displayed floor никогда не превышает eligible count; city count воспроизводим;
 - [ ] content-addressed WebP возвращает `200 image/webp`, укладывается в byte budget и доступен через CDN; старый asset можно откатить вместе с release manifest;
 - [ ] superlative/comparative/reminder claims не публикуются без соответствующего evidence gate;
-- [ ] точный Pharmastaff reference/SHA и перенесённые browser-behavior checks приложены к implementation PR;
+- [ ] точный Pharmastaff reference/SHA и перенесённые browser-behavior checks приложены к implementation PR до его release acceptance;
 - [ ] owner подписывает точный copy/template/asset SHA и mobile/desktop screenshots в составе immutable UI release preview.
 
 F18 считается закрытой только когда код достижим из `origin/main`, public CDN asset и manifest опубликованы, mobile и Windows/macOS desktop проверки приложены к тому же RC SHA, desktop mode выбран по matrix, а обе обязательные точки входа работают на всех page families.
