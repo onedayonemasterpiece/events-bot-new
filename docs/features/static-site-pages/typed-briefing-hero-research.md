@@ -70,9 +70,9 @@ Route:
 
 Final immutable review build:
 
-- [чистый вход с автоматической цепочкой](https://kenigevents.ru/preview-20260715t1853-briefing-lab-d6bf2e1e/lab/briefing/?variant=c&scenario=greeting_day&pace=slow&replay=1);
-- [teaser → именованный гость + small desktop media](https://kenigevents.ru/preview-20260715t1853-briefing-lab-d6bf2e1e/lab/briefing/?variant=c&scenario=anticipated_person&pace=slow&replay=1);
-- [full-viewport wide-media easter egg](https://kenigevents.ru/preview-20260715t1853-briefing-lab-d6bf2e1e/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
+- [чистый вход с автоматической цепочкой](https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/?variant=c&scenario=greeting_day&pace=slow&replay=1);
+- [teaser → именованный гость + small desktop media](https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/?variant=c&scenario=anticipated_person&pace=slow&replay=1);
+- [full-viewport wide-media easter egg](https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
 
 Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
 экрана:
@@ -128,9 +128,10 @@ scene намеренно говорит `Допустим` и маркирует
 External gate прошёл последовательность `FAIL` → `PASS WITH CONDITIONS` →
 `PUBLISH PASS`; committed prompts/answers находятся в
 [consultation evidence](../../reports/static-typed-briefing-consultation-2026-07-15/README.md).
-Локальный candidate прошёл isolated build/check, `11/11` Playwright и `4/4`
-registry converter tests. Immutable URL и Telegram evidence фиксируются после
-публикации этого source commit.
+Candidate прошёл isolated build/check, `11/11` Playwright и `4/4` registry
+converter tests; опубликован как immutable build
+`preview-20260715t2005-briefing-lab-f7d99384` из source `f7d99384`. Telegram
+delivery/evidence verified в topic `6`, messages `#77–82`.
 
 Supplied workbook нормализован в
 [artist visit registry](../../reference/artist-visit-registry.md), но все 1 235
@@ -145,13 +146,17 @@ season-aware baseline, grounded adjudication и fail-closed public writer;
 фонарщиком — только типовые иллюстрации, не текущие факты.
 
 Техническая приёмка immutable build
-`preview-20260715t1853-briefing-lab-d6bf2e1e` (`source d6bf2e1e`): isolated build/check pass; Playwright
-`10/10` pass; geometry покрывает `17 scenes including fallback × B/C × 4
-viewports = 136`; mobile media хранит только `data-src` и не делает image
-request; desktop small/wide media, bounded exit, static/reduced-motion state и
-нулевой сдвиг categories при exit проверены отдельно. Public capture вернул
-HTTP 200, 1–3 строки, `bodyWidth == viewportWidth`, закрытый LAB-dock и нулевые
-page errors на `320×568`, `390×844`, `1440×900`.
+`preview-20260715t2005-briefing-lab-f7d99384` (`source f7d99384`): isolated
+build/check pass; Playwright `11/11` pass; geometry покрывает `17 scenes
+including fallback × B/C × 4 viewports = 136`, а named/weather acceptance
+отдельно покрывает `1366×768`, `1440×900`, `1920×900` и длинное русское имя.
+Mobile media хранит только `data-src` и не делает image request; desktop
+small/wide media, source-faithful 4:5 crop, bounded exit,
+static/reduced-motion state и нулевой сдвиг categories при exit проверены
+отдельно. Public capture вернул HTTP 200 для page/wordmark/wide-O,
+`noindex,nofollow,noarchive`, 1–3 строки, `bodyWidth == viewportWidth`, нулевые
+page errors/bad responses и видимые категории/начало ленты на `320×568`,
+`390×844`, `1366×768`, `1440×900`.
 
 Mobile review gate выполнен в Telegram topic `6`: прежние URL/screenshots/motion
 были доставлены как `#51–54`; пользовательские сообщения `#55–57` отвергли
@@ -160,7 +165,10 @@ frame-inside-frame. Комментарии и аннотированный scree
 правки; receipt `#58` подтвердил Gemini gate и scope коррекции. Immutable URL
 доставлен как `#66`, `320×568`/`390×844` phase/terminal screenshots — `#67–69`,
 desktop wide acceptance — `#70`, slow-chain WebM — `#71`; все send receipts
-верифицированы, повторное чтение не обнаружило новых входящих комментариев.
+верифицированы. Visual-harmony build и scope отправлены как `#77`, mobile
+`320×568`/`390×844` screenshots и slow-motion — `#78–80`, desktop
+1366 crop/1440 weather — `#81–82`; повторное чтение до `#82` не обнаружило
+новых входящих комментариев.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 
