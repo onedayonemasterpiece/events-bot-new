@@ -1,5 +1,5 @@
 export type MobileEventReviewVariant = {
-  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4' | 'accepted-v5' | 'accepted-v6';
+  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2' | 'accepted-v3' | 'accepted-v4' | 'accepted-v5' | 'accepted-v6' | 'accepted-v7';
   label: string;
   shortLabel: string;
   note: string;
@@ -96,6 +96,15 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     label: 'Accepted v6 · seamless rise + calendar state',
     shortLabel: 'Accepted v6',
     note: 'Поднимает прозрачный continuation-gradient до фотографии без прямоугольной линии у нижних скруглений и показывает единое состояние «Добавлено» после скачивания ICS на mobile и desktop.',
+    proseTreatment: 'open',
+    actionsTreatment: 'dock',
+    revision: 'v4',
+  },
+  {
+    slug: 'accepted-v7',
+    label: 'Accepted v7 · matched parallax velocity',
+    shortLabel: 'Accepted v7',
+    note: 'Сохраняет no-scale OCR framing и безопасный ход −travel→0, но нормализует скорость движения по обычному photo hero вместо полной высоты вертикальной афиши.',
     proseTreatment: 'open',
     actionsTreatment: 'dock',
     revision: 'v4',

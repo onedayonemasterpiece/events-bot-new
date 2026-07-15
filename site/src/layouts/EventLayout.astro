@@ -4144,7 +4144,8 @@ const HEADER_NAVIGATION = [
               if (!images.length) return;
               const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
               const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"]'));
-              const usesReverseGapSafePosterParallax = usesGapSafePosterParallax && Boolean(visual.closest('[data-mobile-review-variant="accepted-v5"], [data-mobile-review-variant="accepted-v6"]'));
+              const usesReverseGapSafePosterParallax = usesGapSafePosterParallax && Boolean(visual.closest('[data-mobile-review-variant="accepted-v5"], [data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"]'));
+              const usesPhotoVelocityMatchedPosterParallax = usesReverseGapSafePosterParallax && Boolean(visual.closest('[data-mobile-parallax-profile="photo-velocity-matched"]'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
@@ -4152,8 +4153,13 @@ const HEADER_NAVIGATION = [
               const maxOffset = isPosterStage
                 ? (usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56)
                 : 64;
+              const referencePhotoHeroHeight = Math.max(1, Math.min(viewport * 0.64, 560));
+              const referencePhotoVelocity = (64 * 2) / referencePhotoHeroHeight;
+              const matchedPosterProgress = Math.min(1, Math.max(0, -rect.top) * referencePhotoVelocity / maxOffset);
               const offset = usesGapSafePosterParallax
-                ? (usesReverseGapSafePosterParallax ? -maxOffset + progress * maxOffset : -progress * maxOffset)
+                ? (usesReverseGapSafePosterParallax
+                  ? -maxOffset + (usesPhotoVelocityMatchedPosterParallax ? matchedPosterProgress : progress) * maxOffset
+                  : -progress * maxOffset)
                 : -maxOffset + progress * maxOffset * 2;
               if (isPosterStage) {
                 if (usesGapSafePosterParallax) visual.style.setProperty('--hero-poster-travel', `${maxOffset.toFixed(1)}px`);

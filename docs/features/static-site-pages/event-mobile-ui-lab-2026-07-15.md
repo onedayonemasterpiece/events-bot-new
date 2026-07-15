@@ -16,7 +16,11 @@ OCR-parallax не в ту сторону, а один только gap не ус
 Проверка v5 на Android обнаружила, что собственный gradient-background wrapper
 всё ещё начинался жёсткой горизонтальной линией в нижних скруглениях decision.
 `accepted-v6` переносит градиент на прозрачный псевдослой, поднятый до фото, и
-добавляет одинаковое состояние скачанного ICS для mobile и desktop.
+добавляет одинаковое состояние скачанного ICS для mobile и desktop. Проверка
+движения выявила, что OCR-постер всё ещё шёл заметно медленнее photo hero:
+его прогресс делился на полную высоту вертикальной афиши. `accepted-v7`
+нормализует скорость относительно обычного mobile photo hero, не добавляя
+масштаб и не меняя безопасный диапазон `-travel → 0`.
 
 ## Решения после повторного аудита
 
@@ -46,6 +50,7 @@ OCR-parallax не в ту сторону, а один только gap не ус
 | `accepted-v4` | открытый canvas | container-aware графитовый dock | owner correction: параллакс, простой active like, vertical rhythm |
 | `accepted-v5` | единая gradient continuation surface + open prose | container-aware графитовый dock | owner correction: reverse parallax и seamless decision→context composition |
 | `accepted-v6` | gradient rise из-под photo + open prose | тот же dock + shared calendar state | без paint-edge у скруглений; `Добавлено` одинаково на mobile/desktop |
+| `accepted-v7` | тот же seamless/open surface | тот же dock + shared calendar state | одинаковая воспринимаемая скорость OCR/photo parallax без OCR zoom |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -58,7 +63,7 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 27 комбинаций в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 30 комбинаций в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
@@ -69,6 +74,7 @@ Preview builds:
 - owner-correction candidate: `preview-20260715t-mobile-ui-accepted-v4`.
 - reverse/continuation candidate: `preview-20260715t-mobile-ui-accepted-v5`.
 - seamless/calendar-state candidate: `preview-20260715t-mobile-ui-accepted-v6`.
+- matched-parallax-velocity candidate: `preview-20260715t-mobile-ui-accepted-v7`.
 
 ## Accepted v2 corrections
 
@@ -262,6 +268,21 @@ pages) и `check-preview.mjs` завершились успешно.
 Артефакты: `artifacts/codex/mobile-ui-v6-calendar-qa-20260715/`.
 Полный Astro build собрал `463` страницы.
 
+Для `accepted-v7` Playwright сравнил контрольный V6 OCR, V7 OCR и обычный
+photo hero при `360/390/430 × 844` и scroll `0/60/120/180px`:
+
+- за первые `120px` scroll V6 OCR проходил только `14.8px`, тогда как photo —
+  `28.4px`; это подтверждает замеченное владельцем замедление;
+- V7 OCR проходит те же `28.4px`, что photo, на всех трёх ширинах; relative
+  velocity error равен `0`;
+- OCR остаётся `object-fit:contain`, `scale=1`; на всех samples изображение
+  полностью перекрывает clip viewport и не открывает фон;
+- движение сохраняет направление `-travel → 0`, horizontal overflow нет;
+- при `prefers-reduced-motion:reduce` transform остаётся `0 → 0`.
+
+Артефакты: `artifacts/codex/mobile-ui-v7-parallax-qa-20260715/`.
+Полный Astro build собрал `466` страниц; `check-preview.mjs` прошёл.
+
 ## External consultation
 
 Консультация выполнена через `agy` моделью `Gemini 3.1 Pro (High)`. Gemini
@@ -282,6 +303,12 @@ V3 acceptance review выполнен через `agy` моделью `Gemini 3.
 визуальных регрессий не найдено; reviewer признал v3 готовым к отправке владельцу
 как отдельный prototype. Raw response:
 `artifacts/codex/mobile-ui-v3-qa-20260715/gemini-3.1-pro-high-review.raw.md`.
+
+V7 motion acceptance review выполнен через `agy` моделью
+`Gemini 3.1 Pro (High)`. Консультант подтвердил одинаковую активную скорость
+V7 OCR/photo, сохранение OCR-safe geometry и отсутствие P0/P1; итоговый verdict
+`PASS`. Raw response:
+`artifacts/codex/mobile-ui-v7-parallax-qa-20260715/gemini-review.raw.md`.
 
 Поправка v4 также обсуждена с `Gemini 3.1 Pro (High)`. Два первых print-mode
 вызова завершились пустым stdout; после проверки CLI log и точечного

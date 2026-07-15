@@ -32,7 +32,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -58,6 +58,7 @@ const mobileReviewCases = {
   acceptedV4: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/photo-paid/index.html'), 'utf8'),
   acceptedV5: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/photo-paid/index.html'), 'utf8'),
   acceptedV6: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/photo-paid/index.html'), 'utf8'),
+  acceptedV7: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v7/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -91,6 +92,12 @@ if (!mobileReviewCases.acceptedV6.includes('data-mobile-review-variant="accepted
 if (!mobileReviewCases.acceptedV6.includes('data-calendar-action') || !mobileReviewCases.acceptedV6.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV6.includes('data-calendar-label')) {
   throw new Error('Mobile event accepted v6 must expose the shared expiring calendar state contract');
 }
+if (!mobileReviewCases.acceptedV7.includes('data-mobile-review-variant="accepted-v7"') || !mobileReviewCases.acceptedV7.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV7.includes('data-mobile-parallax-profile="photo-velocity-matched"') || !mobileReviewCases.acceptedV7.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v7 must preserve v6 surfaces and expose the photo-velocity-matched parallax profile');
+}
+if (!mobileReviewCases.acceptedV7.includes('data-calendar-action') || !mobileReviewCases.acceptedV7.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV7.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v7 must preserve the shared expiring calendar state contract');
+}
 const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
@@ -110,6 +117,10 @@ if (!mobileAcceptedV5OcrOverride.includes('data-hero-mode="poster-stage"') || !m
 const mobileAcceptedV6OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV6OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV6OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v6 must preserve the no-zoom text-poster override');
+}
+const mobileAcceptedV7OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v7/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV7OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV7OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v7 must preserve the no-zoom text-poster override');
 }
 
 const desktopV12Pages = {
@@ -514,7 +525,9 @@ if (
   || !/--hero-poster-travel/iu.test(css)
   || !controlHtml.includes('usesGapSafePosterParallax')
   || !controlHtml.includes('usesReverseGapSafePosterParallax')
-  || !controlHtml.includes('-maxOffset + progress * maxOffset : -progress * maxOffset')
+  || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax')
+  || !controlHtml.includes('referencePhotoVelocity')
+  || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax ? matchedPosterProgress : progress')
   || !controlHtml.includes('usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56')
   || !controlHtml.includes(': -maxOffset + progress * maxOffset * 2')
   || controlHtml.includes('--hero-parallax-scale')
