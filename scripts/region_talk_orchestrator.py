@@ -561,8 +561,11 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"из уже отклонённых источников {value('text_vector_current_version_e5_without_bge_source_terminal_total')})"
         ),
         (
-            "Следующий BGE-запуск — надо посчитать / вместимость / загрузка / пропущено из отклонённых источников: "
+            "Следующий BGE-запуск — всего actionable / из них новые пары / stale-bank refresh / "
+            "вместимость / загрузка / пропущено из отклонённых источников: "
             f"{value('bge_pending_sample_total')}/"
+            f"{value('bge_missing_current_sample_total')}/"
+            f"{value('bge_existing_stale_rescore_sample_total')}/"
             f"{value('bge_capacity_rows')}/"
             f"{value('bge_backlog_capacity_percent')}%/"
             f"{value('bge_source_terminal_skipped_sample_total')}"
@@ -3556,7 +3559,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "bge_backlog_capacity_percent": int(round((len(bge_pending_rows) / bge_capacity_rows) * 100)),
         "bge_backlog_within_next_run_capacity": int(len(bge_pending_rows) <= bge_capacity_rows),
         "bge_source_terminal_skipped_sample_total": _safe_int(bge_collect_stats.get("source_terminal_skipped")),
+        "bge_missing_current_sample_total": _safe_int(bge_collect_stats.get("missing_current_bge")),
         "bge_existing_stale_rescore_sample_total": _safe_int(bge_collect_stats.get("existing_stale_rescore")),
+        "bge_selected_missing_current_sample_total": _safe_int(bge_collect_stats.get("selected_missing_current_bge")),
+        "bge_selected_stale_rescore_sample_total": _safe_int(bge_collect_stats.get("selected_stale_rescore")),
         **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
         **_heartbeat_metric_fields("bge", latest_rows.get("latest_business_heartbeat:bge_m3_enrichment")),
         **_heartbeat_metric_fields("image", latest_rows.get("latest_business_heartbeat:image_diagnostic")),

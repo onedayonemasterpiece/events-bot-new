@@ -697,7 +697,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "bge_source_terminal_skipped_sample_total": 9,
         })
         self.assertIn("100/70/25/5/12/8", message)
-        self.assertIn("36/48/75%/9", message)
+        self.assertIn("36/0/0/48/75%/9", message)
 
     def test_loop_goal_progress_tracks_delta_targets(self) -> None:
         mod = load_module()

@@ -100,6 +100,15 @@ model; the separate BGE-M3 notebook enriches the same text rows later. A
 transient Hugging Face download failure is not a reason to weaken or replace the
 dual-vector contract.
 
+The BGE worker has two distinct workloads: **missing live pairs**, which block
+CandidateReport fusion, and **stale semantic-bank refresh**, which is background
+maintenance for an already paired post. Every CPU batch must drain all
+selectable missing pairs before it spends remaining capacity on stale refresh;
+the exact/fast-check versus generic 80/20 reserve is applied independently
+inside each population. Operator metrics report these two populations
+separately so a large maintenance backlog cannot be mistaken for product
+throughput or starve fresh KO evidence.
+
 ### Kaggle static/offline discipline
 
 Related: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `kaggle_status.py`, `kaggle_registry.py`, `video_announce/kaggle_client.py`.

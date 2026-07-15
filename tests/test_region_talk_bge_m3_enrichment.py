@@ -174,6 +174,62 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual(current_rows, [])
         self.assertEqual(mod.LAST_COLLECT_STATS["existing_skipped"], 1)
 
+    def test_collect_text_rows_selects_missing_pairs_before_stale_bank_refresh(self) -> None:
+        mod = load_bge_module()
+        items = {"text_vector_enrichment_item": {}}
+        existing = {}
+
+        # The stale population is product-priority and much larger than the
+        # batch. It must not starve a newly discovered ordinary E5 row.
+        for index in range(6):
+            text = f"Старый точный пост {index} о поездке в Калининградскую область."
+            sha = mod.text_hash(text)
+            e5 = {
+                "post_id": f"stale-{index}",
+                "post_url": f"https://t.me/stale/{index}",
+                "model_id": "intfloat/multilingual-e5-base",
+                "model_short": "e5",
+                "text_hash": sha,
+                "text_excerpt": text,
+                "post_date": f"2026-07-{index + 1:02d}T00:00:00+00:00",
+                "post_link_priority": 0,
+                "priority_reason": "global_keyword_search_exact_post",
+            }
+            items["text_vector_enrichment_item"][f"e5:stale:{index}"] = e5
+            bge_pk = mod.enrichment_pk(e5["post_id"], e5["post_url"], sha)
+            existing[bge_pk] = {
+                "post_id": e5["post_id"],
+                "post_url": e5["post_url"],
+                "model_id": mod.MODEL_ID,
+                "model_short": mod.MODEL_SHORT,
+                "encoder_contract": mod.ENCODER_CONTRACT,
+                "text_hash": sha,
+                "semantic_bank_version": "semantic_bank_v1",
+                "semantic_bank_hash": "stale-bank-hash",
+                "semantic_scores_by_class": {"ko_visit_impression": 0.7},
+            }
+
+        missing_text = "Новый обычный пост о личной поездке на Куршскую косу."
+        missing = {
+            "post_id": "missing-live-pair",
+            "post_url": "https://t.me/new/1",
+            "model_id": "intfloat/multilingual-e5-base",
+            "model_short": "e5",
+            "text_hash": mod.text_hash(missing_text),
+            "text_excerpt": missing_text,
+            "post_date": "2026-07-14T00:00:00+00:00",
+        }
+        items["text_vector_enrichment_item"]["e5:missing"] = missing
+        items["text_vector_enrichment_item"].update(existing)
+
+        rows = mod.collect_text_rows(items, existing_pks=items["text_vector_enrichment_item"], limit=5)
+
+        self.assertEqual(rows[0]["post_id"], "missing-live-pair")
+        self.assertEqual(mod.LAST_COLLECT_STATS["missing_current_bge"], 1)
+        self.assertEqual(mod.LAST_COLLECT_STATS["existing_stale_rescore"], 6)
+        self.assertEqual(mod.LAST_COLLECT_STATS["selected_missing_current_bge"], 1)
+        self.assertEqual(mod.LAST_COLLECT_STATS["selected_stale_rescore"], 4)
+
     def test_collect_text_rows_skips_bge_vector_rows_by_default(self) -> None:
         mod = load_bge_module()
         text = "BGE result should not be re-embedded as BGE input."

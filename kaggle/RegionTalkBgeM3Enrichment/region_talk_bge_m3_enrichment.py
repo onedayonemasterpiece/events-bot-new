@@ -809,7 +809,10 @@ def collect_text_rows(
         "non_e5_skipped": 0,
         "short_text_skipped": 0,
         "existing_skipped": 0,
+        "missing_current_bge": 0,
         "existing_stale_rescore": 0,
+        "selected_missing_current_bge": 0,
+        "selected_stale_rescore": 0,
         "duplicate_skipped": 0,
         "eligible_rows": 0,
         "selected_rows": 0,
@@ -824,7 +827,12 @@ def collect_text_rows(
         "processed_post_item": 3,
         "post_live_item": 4,
     }
-    candidates: list[tuple[int, str, dict[str, Any]]] = []
+    # Tuple layout: (needs_stale_refresh, source_priority, post_date, row).
+    # A missing BGE pair blocks the live E5 -> BGE -> fusion funnel, while a
+    # stale semantic-bank row already has a usable historical pair and is
+    # maintenance work.  Keep both populations, but never let a large bank
+    # refresh consume a batch ahead of fresh missing pairs.
+    candidates: list[tuple[bool, int, str, dict[str, Any]]] = []
     for kind, items in items_by_kind.items():
         for _pk, row in items.items():
             if not isinstance(row, dict):
@@ -862,15 +870,24 @@ def collect_text_rows(
             source_text_hash = str(row.get("text_hash") or "").strip() if kind == "text_vector_enrichment_item" and _is_e5_text_vector_row(row) else ""
             sha = source_text_hash or text_hash(text)
             pk = enrichment_pk(post_id, post_url, sha)
-            if not include_existing and pk in existing_pks:
+            needs_stale_refresh = False
+            if pk in existing_pks:
                 # Legacy callers/tests may provide only a set. Preserve their
                 # historical meaning (present == current). Live YDB loading
                 # passes the payload mapping so model/bank drift is auditable.
                 existing_row = existing_pks.get(pk) if isinstance(existing_pks, dict) else None
-                if not isinstance(existing_pks, dict) or _existing_bge_row_is_current(existing_row, text_hash_value=sha):
+                if not include_existing and (
+                    not isinstance(existing_pks, dict)
+                    or _existing_bge_row_is_current(existing_row, text_hash_value=sha)
+                ):
                     stats["existing_skipped"] += 1
                     continue
+                # Explicit reprocessing and stale-bank repair are both
+                # maintenance work, never a reason to delay a missing pair.
                 stats["existing_stale_rescore"] += 1
+                needs_stale_refresh = True
+            else:
+                stats["missing_current_bge"] += 1
             dedupe_key = post_url or sha
             if dedupe_key in seen_text_or_url:
                 stats["duplicate_skipped"] += 1
@@ -885,14 +902,21 @@ def collect_text_rows(
                 rr["_paired_e5_text_hash"] = source_text_hash
                 rr["_paired_e5_enrichment_id"] = row.get("text_vector_enrichment_id") or str(row.get("_ydb_pk") or "").replace("text_vector_enrichment_item:", "")
             rr["_enrichment_pk"] = pk
-            candidates.append((priority.get(kind, 9), str(row.get("post_date") or row.get("published_at") or ""), rr))
+            candidates.append(
+                (
+                    needs_stale_refresh,
+                    priority.get(kind, 9),
+                    str(row.get("post_date") or row.get("published_at") or ""),
+                    rr,
+                )
+            )
     stats["eligible_rows"] = len(candidates)
 
-    def is_product_priority(item: tuple[int, str, dict[str, Any]]) -> bool:
-        return _is_product_priority_row(item[2])
+    def is_product_priority(item: tuple[bool, int, str, dict[str, Any]]) -> bool:
+        return _is_product_priority_row(item[3])
 
-    def post_timestamp(item: tuple[int, str, dict[str, Any]]) -> float:
-        raw = str(item[1] or "").strip()
+    def post_timestamp(item: tuple[bool, int, str, dict[str, Any]]) -> float:
+        raw = str(item[2] or "").strip()
         if not raw:
             return 0.0
         try:
@@ -903,23 +927,50 @@ def collect_text_rows(
         except (TypeError, ValueError):
             return 0.0
 
-    # High-confidence exact KO links should not sit behind an old generic E5
-    # backlog, but a FIFO reserve prevents continuous keyword inflow from
-    # starving ordinary discovery. Priority rows are fresh-first; the reserve
-    # remains oldest-first.
-    product = sorted((item for item in candidates if is_product_priority(item)), key=lambda item: (item[0], -post_timestamp(item)))
-    fifo = sorted((item for item in candidates if not is_product_priority(item)), key=lambda item: (item[0], post_timestamp(item)))
     target = max(1, limit)
     share = min(100, max(0, getenv_int("REGION_TALK_BGE_PRIORITY_SHARE_PERCENT", 80)))
-    product_cap = min(len(product), max(1, int(round(target * share / 100.0)))) if product else 0
-    fifo_cap = min(len(fifo), target - product_cap)
-    selected = product[:product_cap] + fifo[:fifo_cap]
+
+    def select_lane_population(
+        population: list[tuple[bool, int, str, dict[str, Any]]],
+        slots: int,
+    ) -> list[tuple[bool, int, str, dict[str, Any]]]:
+        if slots <= 0 or not population:
+            return []
+        # High-confidence exact KO links are fresh-first; the ordinary reserve
+        # is oldest-first. The reserve avoids starving generic discovery.
+        product = sorted(
+            (item for item in population if is_product_priority(item)),
+            key=lambda item: (item[1], -post_timestamp(item)),
+        )
+        fifo = sorted(
+            (item for item in population if not is_product_priority(item)),
+            key=lambda item: (item[1], post_timestamp(item)),
+        )
+        product_cap = min(len(product), max(1, int(round(slots * share / 100.0)))) if product else 0
+        fifo_cap = min(len(fifo), slots - product_cap)
+        chosen = product[:product_cap] + fifo[:fifo_cap]
+        if len(chosen) < slots:
+            chosen.extend(product[product_cap:product_cap + (slots - len(chosen))])
+        if len(chosen) < slots:
+            chosen.extend(fifo[fifo_cap:fifo_cap + (slots - len(chosen))])
+        return chosen
+
+    # Missing pairs are live funnel work. Stale semantic-bank refresh is
+    # maintenance and only fills capacity left after every selectable missing
+    # pair. This is intentionally stronger than merely sorting the already
+    # selected 80/20 population: a generic missing pair must beat an exact-link
+    # stale refresh when the batch is full.
+    missing_population = [item for item in candidates if not item[0]]
+    stale_population = [item for item in candidates if item[0]]
+    selected = select_lane_population(missing_population, target)
     if len(selected) < target:
-        selected.extend(product[product_cap:product_cap + (target - len(selected))])
-    if len(selected) < target:
-        selected.extend(fifo[fifo_cap:fifo_cap + (target - len(selected))])
-    for _priority, _date, row in selected:
+        selected.extend(select_lane_population(stale_population, target - len(selected)))
+    for needs_stale_refresh, _priority, _date, row in selected:
         rows.append(row)
+        if needs_stale_refresh:
+            stats["selected_stale_rescore"] += 1
+        else:
+            stats["selected_missing_current_bge"] += 1
     stats["selected_rows"] = len(rows)
     LAST_COLLECT_STATS = stats
     return rows
