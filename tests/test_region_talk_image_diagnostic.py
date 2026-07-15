@@ -199,6 +199,34 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_vk_read_prefers_service_token_for_remote_wall_fetch(self) -> None:
+        keys = (
+            "VK_SERVICE_TOKEN",
+            "VK_SERVICE_KEY",
+            "VK_TOKEN",
+            "VK_USER_TOKEN",
+            "VK_ACCESS_TOKEN4",
+            "VK_ACCESS_TOKEN5",
+            "VK_ACCESS_TOKEN",
+            "REGION_TALK_VK_READ_SERVICE_FIRST",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                for key in keys:
+                    os.environ.pop(key, None)
+                os.environ["VK_SERVICE_TOKEN"] = "service-token"
+                os.environ["VK_ACCESS_TOKEN"] = "ip-bound-user-token"
+                os.environ["REGION_TALK_VK_READ_SERVICE_FIRST"] = "1"
+                self.assertEqual(mod._vk_read_token(), ("service-token", "VK_SERVICE_TOKEN"))
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
     def test_vk_fetch_downloads_every_photo_attachment(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             mod = self._load_in_temp_output(td)

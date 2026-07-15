@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk VK album acquisition on Kaggle and in the server-side media prefetcher to prefer service read tokens over IP-bound user tokens, preventing `wall.getById` error 5 from leaving albums partially scored.
+
 - Fixed Region Talk CandidateReport product heartbeats so newly-created candidate-memory rows still waiting for BGE, actual media, or a downstream policy refresh are no longer reported as operator-reviewable candidates.
 - Fixed Region Talk BGE scheduling after a live parallel cycle exposed fresh E5 rows waiting behind hundreds of stale semantic-bank refreshes: every BGE CPU batch now drains missing E5→BGE pairs before maintenance rescores, retains the exact/fast-check versus FIFO reserve within each population, and reports missing versus stale work separately in the product scorecard.
 - Fixed Region Talk CandidateReport delivery after the self-contained worker crossed Kaggle's 1 MB script-source limit: the canonical launcher now uploads a deterministic `zlib+b85` wrapper for the exact reviewed worker bytes and fails locally at a 950 KB safety threshold, avoiding a new mutable code dataset or any pipeline/model change.

@@ -1275,6 +1275,41 @@ async def fetch_telegram(batch):
     finally:
         await client.disconnect()
 
+def _vk_read_token() -> tuple[str, str]:
+    """Choose a VK token that is safe for remote read-only wall requests.
+
+    User tokens can be bound to the IP where they were issued.  Kaggle must
+    therefore prefer a service token/key for public ``wall.getById`` reads,
+    matching CandidateReport's token-selection contract.  The selected name
+    is returned for diagnostics without ever logging the token value.
+    """
+    if _env_bool("REGION_TALK_VK_READ_SERVICE_FIRST", True):
+        names = (
+            "VK_SERVICE_TOKEN",
+            "VK_SERVICE_KEY",
+            "VK_TOKEN",
+            "VK_USER_TOKEN",
+            "VK_ACCESS_TOKEN4",
+            "VK_ACCESS_TOKEN5",
+            "VK_ACCESS_TOKEN",
+        )
+    else:
+        names = (
+            "VK_USER_TOKEN",
+            "VK_ACCESS_TOKEN4",
+            "VK_ACCESS_TOKEN5",
+            "VK_ACCESS_TOKEN",
+            "VK_SERVICE_TOKEN",
+            "VK_SERVICE_KEY",
+            "VK_TOKEN",
+        )
+    for name in names:
+        token = str(os.getenv(name) or "").strip()
+        if token:
+            return token, name
+    return "", ""
+
+
 def fetch_vk(r):
     t0 = time.monotonic()
     direct_refs = _row_direct_image_refs(r)
@@ -1290,7 +1325,9 @@ def fetch_vk(r):
             r["media_download_seconds"] = round(time.monotonic()-t0, 3)
         if status == "complete":
             return
-    token = os.getenv("VK_USER_TOKEN") or os.getenv("VK_ACCESS_TOKEN4") or os.getenv("VK_ACCESS_TOKEN5") or os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or ""
+    token, token_kind = _vk_read_token()
+    if token_kind:
+        r["vk_read_token_kind"] = token_kind
     owner, pid = parse_vk(r.get("post_url", ""))
     if not token or owner is None:
         prior_error = str(r.get("media_fetch_error") or "")

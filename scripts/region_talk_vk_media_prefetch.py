@@ -52,8 +52,15 @@ def photo_urls_from_post(post: dict[str, Any]) -> list[str]:
     return photos
 
 
+def vk_read_token_names() -> list[str]:
+    service_first = str(os.getenv("REGION_TALK_VK_READ_SERVICE_FIRST") or "1").strip().lower() in {"1", "true", "yes", "on"}
+    service = ["VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_TOKEN"]
+    user = ["VK_USER_TOKEN", "VK_ACCESS_TOKEN4", "VK_ACCESS_TOKEN5", "VK_ACCESS_TOKEN"]
+    return service + user if service_first else user + service
+
+
 def local_vk_posts(post_ids: list[str]) -> tuple[dict[str, dict[str, Any]], str]:
-    token = next((os.getenv(name) for name in ["VK_USER_TOKEN", "VK_ACCESS_TOKEN4", "VK_ACCESS_TOKEN5", "VK_ACCESS_TOKEN", "VK_SERVICE_TOKEN"] if os.getenv(name)), "")
+    token = next((os.getenv(name) for name in vk_read_token_names() if os.getenv(name)), "")
     if not token:
         return {}, "token_unavailable"
     try:
@@ -94,7 +101,7 @@ def fly_vk_posts(post_ids: list[str], app: str) -> tuple[dict[str, dict[str, Any
     code = """
 import os,json,urllib.parse,urllib.request
 ids=POST_IDS
-names=['VK_USER_TOKEN','VK_ACCESS_TOKEN4','VK_ACCESS_TOKEN5','VK_ACCESS_TOKEN','VK_SERVICE_TOKEN']
+names=['VK_SERVICE_TOKEN','VK_SERVICE_KEY','VK_TOKEN','VK_USER_TOKEN','VK_ACCESS_TOKEN4','VK_ACCESS_TOKEN5','VK_ACCESS_TOKEN']
 token=next((os.getenv(name) for name in names if os.getenv(name)),None)
 if not token: raise SystemExit('VK_TOKEN_UNAVAILABLE')
 q=urllib.parse.urlencode({'posts':','.join(ids),'access_token':token,'v':'5.199'})
