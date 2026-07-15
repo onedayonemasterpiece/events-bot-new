@@ -256,6 +256,20 @@ function status(root, message) {
   if (live) live.textContent = message;
 }
 
+function setActionState(button, state = '') {
+  if (!button) return;
+  if (!state) {
+    delete button.dataset.serviceShareState;
+    return;
+  }
+  button.dataset.serviceShareState = state;
+}
+
+function actionStatus(root, button, message, state = '') {
+  status(root, message);
+  setActionState(button, state);
+}
+
 function setButtonBusy(button, busy) {
   if (!button) return;
   button.disabled = busy;
@@ -272,23 +286,24 @@ function showFallback(root) {
 async function copyText(root, manifest, startedAt, options = {}) {
   const mode = options.mode || 'desktop_text';
   const attemptedReason = options.attemptedReason || 'direct';
+  const button = options.button;
   telemetry(root, 'service_copy_attempted', { transport: 'clipboard', mode, result: 'attempted', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
   try {
     if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('clipboard_unavailable');
     await navigator.clipboard.writeText(serviceSharePlainText(manifest));
-    status(root, options.successMessage || 'Текст и ссылка скопированы');
+    actionStatus(root, button, options.successMessage || 'Текст и ссылка скопированы', 'success');
     telemetry(root, 'service_link_copied', { transport: 'clipboard', mode, result: 'api_resolved', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
     telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'api_resolved', reason: attemptedReason, assetVersion: manifest.asset_version }, startedAt);
     return true;
   } catch (error) {
     showFallback(root);
-    status(root, options.errorMessage || 'Не удалось скопировать ссылку');
+    actionStatus(root, button, options.errorMessage || 'Не удалось скопировать ссылку', 'error');
     telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'fallback_link', reason: errorReason(error), assetVersion: manifest.asset_version }, startedAt);
     return false;
   }
 }
 
-async function imageCopy(root, manifest, pngPromise, startedAt) {
+async function imageCopy(root, manifest, pngPromise, startedAt, button) {
   const mode = 'desktop_image';
   telemetry(root, 'service_copy_attempted', { transport: 'clipboard', mode, result: 'attempted', reason: 'direct', assetVersion: manifest.asset_version }, startedAt);
   try {
@@ -297,25 +312,26 @@ async function imageCopy(root, manifest, pngPromise, startedAt) {
     if (typeof navigator.clipboard?.write !== 'function' || typeof globalThis.ClipboardItem !== 'function') throw new Error('clipboard_unavailable');
     const item = createImageClipboardItem(pngPromise, globalThis.ClipboardItem);
     await navigator.clipboard.write([item]);
-    status(root, 'Карточка скопирована в буфер');
+    actionStatus(root, button, 'Карточка скопирована в буфер', 'success');
     telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'api_resolved', reason: 'none', assetVersion: manifest.asset_version }, startedAt);
     return true;
   } catch (error) {
     // Do not turn the image intent into text: the adjacent text button remains
     // available and keeps the result of this action deterministic.
-    status(root, 'Не удалось скопировать картинку');
+    actionStatus(root, button, 'Не удалось скопировать картинку', 'error');
     telemetry(root, 'service_copy_result', { transport: 'clipboard', mode, result: 'api_rejected', reason: errorReason(error), assetVersion: manifest.asset_version }, startedAt);
     return false;
   }
 }
 
-async function mobileShare(root, prepared, startedAt) {
+async function mobileShare(root, prepared, startedAt, button) {
   const manifest = prepared.manifest;
   if (typeof navigator.share !== 'function') return copyText(root, manifest, startedAt, {
     mode: 'mobile_text',
     attemptedReason: 'share_unavailable',
     successMessage: 'Скопированы текст и ссылка',
     errorMessage: 'Не удалось скопировать. Ссылка доступна ниже',
+    button,
   });
   try {
     const webpBlob = prepared.webpBlob;
@@ -324,7 +340,7 @@ async function mobileShare(root, prepared, startedAt) {
       const filePayload = { files: [file], text: manifest.share_text, url: SERVICE_SHARE_CANONICAL_URL };
       if (navigator.canShare({ files: [file] })) {
         await navigator.share(filePayload);
-        status(root, 'Меню «Поделиться» закрыто');
+        actionStatus(root, button, 'Меню «Поделиться» закрыто', 'success');
         return true;
       }
       telemetry(root, 'share_file_unsupported', { transport: 'system_share', mode: 'mobile_text', result: 'fallback_text', reason: 'can_share_false', assetVersion: manifest.asset_version }, startedAt);
@@ -332,7 +348,7 @@ async function mobileShare(root, prepared, startedAt) {
       telemetry(root, 'share_file_unsupported', { transport: 'system_share', mode: 'mobile_text', result: 'fallback_text', reason: 'asset_not_ready', assetVersion: manifest.asset_version }, startedAt);
     }
     await navigator.share({ text: manifest.share_text, url: SERVICE_SHARE_CANONICAL_URL });
-    status(root, 'Меню «Поделиться» закрыто');
+    actionStatus(root, button, 'Меню «Поделиться» закрыто', 'success');
     return true;
   } catch (error) {
     const reason = errorReason(error);
@@ -347,6 +363,7 @@ async function mobileShare(root, prepared, startedAt) {
       attemptedReason: reason,
       successMessage: 'Скопированы текст и ссылка',
       errorMessage: 'Не удалось скопировать. Ссылка доступна ниже',
+      button,
     });
   }
 }
@@ -382,6 +399,7 @@ async function invoke(root, button) {
   const intent = isMobile ? 'mobile' : button?.dataset.serviceShareIntent;
   const mode = isMobile ? 'mobile_text' : intent === 'image' ? 'desktop_image' : 'desktop_text';
   status(root, '');
+  setActionState(button);
   setButtonBusy(button, true);
   telemetry(root, 'service_share_invoked', {
     transport: isMobile ? 'system_share' : 'clipboard',
@@ -394,12 +412,12 @@ async function invoke(root, button) {
     if (isMobile) {
       // Never wait for a network fetch in the activation path. A verified,
       // prefetched file is used only when it is already available.
-      await mobileShare(root, prepared, startedAt);
+      await mobileShare(root, prepared, startedAt, button);
       return;
     }
     if (intent === 'image') {
       if (!prepared.manifestReady || !prepared.pngPromise) {
-        status(root, 'Не удалось скопировать картинку');
+        actionStatus(root, button, 'Не удалось скопировать картинку', 'error');
         telemetry(root, 'service_copy_result', {
           transport: 'clipboard',
           mode: 'desktop_image',
@@ -408,10 +426,10 @@ async function invoke(root, button) {
           assetVersion: prepared.manifest.asset_version,
         }, startedAt);
       } else {
-        await imageCopy(root, prepared.manifest, prepared.pngPromise, startedAt);
+        await imageCopy(root, prepared.manifest, prepared.pngPromise, startedAt, button);
       }
     } else {
-      await copyText(root, prepared.manifest, startedAt, { mode: 'desktop_text' });
+      await copyText(root, prepared.manifest, startedAt, { mode: 'desktop_text', button });
     }
   } finally {
     setButtonBusy(button, false);

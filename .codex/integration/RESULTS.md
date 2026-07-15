@@ -76,3 +76,21 @@
   Public preview:
   `https://kenigevents.ru/preview-20260715t0940z-f18-share-refine/__preview/`;
   lab: `https://kenigevents.ru/preview-20260715t0940z-f18-share-refine/lab/service-share/`.
+
+## In-place feedback and link icon refinement — 2026-07-15
+
+- Copy success no longer creates a visible status row or changes footer height.
+  The invoked action keeps its dimensions and switches in place to a green
+  border/text/check state; the accessible announcement remains in the DOM as an
+  absolutely positioned clipped `1px × 1px` live region.
+- The text-and-link action now uses the exact CC0 SVG Repo asset
+  `svgrepo-528355-link-minimalistic`. The rounded monoline source was selected
+  after a three-candidate contact-sheet comparison because it remains legible at
+  the footer's 18–24 px icon size and matches the quiet outline controls. Source
+  and license metadata ship beside the SVG in `site/public/assets/icons/`.
+- Static prefix build `preview-20260715t1025z-f18-share-feedback` passed the
+  preview contract checker. Controller tests passed `5/5`; Playwright against
+  the final static output passed `14/14`. A real local Chromium check measured
+  the share row at `44px` both before and after success and confirmed the green
+  check plus the SVG Repo mask. Its inspected screenshot was sent to Telegram
+  Saved Messages as message `32272`.

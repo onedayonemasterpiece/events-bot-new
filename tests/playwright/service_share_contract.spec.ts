@@ -189,6 +189,11 @@ test.describe('F18 desktop footer with explicit clipboard intents', () => {
     await expect(root.getByRole('button', { name: 'Скопировать карточку KenigEvents' })).toBeVisible();
     await expect(root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' })).toBeVisible();
     await expect(root.getByRole('button', { name: 'Поделиться афишей KenigEvents' })).toBeHidden();
+    const linkIconMask = await root.locator('[data-service-share-intent="text"] [data-service-share-icon-default]').evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return computed.maskImage || (computed as any).webkitMaskImage || '';
+    });
+    expect(linkIconMask).toContain('link-minimalistic-svgrepo.svg');
     const styles = await root.evaluate((element) => {
       const computed = getComputedStyle(element);
       return {
@@ -204,8 +209,18 @@ test.describe('F18 desktop footer with explicit clipboard intents', () => {
   test('text action writes only plain text and canonical URL', async ({ page }) => {
     await open(page, '/__preview/');
     const root = footerRoot(page);
-    await root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' }).click();
+    const textButton = root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' });
+    const heightBefore = (await root.boundingBox())?.height;
+    await textButton.click();
     await expect(root.locator('[aria-live="polite"]')).toHaveText('Текст и ссылка скопированы');
+    await expect(textButton).toHaveAttribute('data-service-share-state', 'success');
+    await expect(textButton.locator('[data-service-share-icon-default]')).toBeHidden();
+    await expect(textButton.locator('[data-service-share-icon-success]')).toBeVisible();
+    expect(await textButton.evaluate((element) => getComputedStyle(element).color)).toBe('rgb(47, 116, 73)');
+    expect((await root.boundingBox())?.height).toBe(heightBefore);
+    await expect(root.locator('[aria-live="polite"]')).toHaveCSS('position', 'absolute');
+    await expect(root.locator('[aria-live="polite"]')).toHaveCSS('width', '1px');
+    await expect(root.locator('[aria-live="polite"]')).toHaveCSS('height', '1px');
     expect(await page.evaluate(() => (window as any).__serviceShareMocks.shareCalls.length)).toBe(0);
     expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls[0])).toContain(CANONICAL_URL);
     expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardWrites.length)).toBe(0);
@@ -234,6 +249,7 @@ test.describe('F18 desktop footer with explicit clipboard intents', () => {
     await expect(root).toHaveAttribute('data-service-share-ready', 'file');
     await root.getByRole('button', { name: 'Скопировать карточку KenigEvents' }).click();
     await expect(root.locator('[aria-live="polite"]')).toHaveText('Не удалось скопировать картинку');
+    await expect(root.getByRole('button', { name: 'Скопировать карточку KenigEvents' })).toHaveAttribute('data-service-share-state', 'error');
     expect(await page.evaluate(() => (window as any).__serviceShareMocks.clipboardTextCalls)).toHaveLength(0);
     await expect(root.getByRole('button', { name: 'Скопировать текст и ссылку KenigEvents' })).toBeEnabled();
   });

@@ -20,6 +20,13 @@ The accepted follow-up contract is explicit instead of format-priority based:
 - neither desktop action silently changes into the other intent;
 - both controls have equal outline/secondary weight; the footer component has
   no banner background, shadow or marketing question;
+- success remains inside the invoked control: its icon becomes a persistent
+  green check until the next invocation, while the `aria-live` copy is visually
+  hidden and occupies `1×1` px, so acknowledgement does not add a row or change
+  footer height;
+- the text-and-link control uses the unmodified geometry of SVG Repo library id
+  `svgrepo-528355-link-minimalistic` through a `currentColor` mask. The durable
+  source and CC0 metadata live under `site/public/assets/icons/`;
 - mobile keeps one **«Поделиться»** action and the verified WebP file → native
   text+URL → clipboard/link fallback chain.
 
