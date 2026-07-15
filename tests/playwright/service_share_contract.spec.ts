@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 
 const CANONICAL_URL = 'https://kenigevents.ru/';
+const PATH_PREFIX = `/${String(process.env.SERVICE_SHARE_PATH_PREFIX || '').replace(/^\/+|\/+$/gu, '')}`.replace(/^\/$/u, '');
+const withPathPrefix = (path: string) => `${PATH_PREFIX}${path}`;
 const webpBytes = Buffer.from('52494646080000005745425056503820', 'hex');
 const pngBytes = Buffer.from('89504e470d0a1a0a0000000049454e44ae426082', 'hex');
 const manifest = {
@@ -105,7 +107,7 @@ async function installBrowserMocks(page: Page, options: MockOptions = {}) {
 async function open(page: Page, path: string, options: MockOptions = {}) {
   await installRoutes(page);
   await installBrowserMocks(page, options);
-  await page.goto(path);
+  await page.goto(withPathPrefix(path));
 }
 
 const footerRoot = (page: Page) => page.locator('.site-footer [data-service-share-root][data-service-share-surface="footer"]');
@@ -240,7 +242,7 @@ test('common page families expose only the footer placement', async ({ page }) =
   await installRoutes(page);
   await installBrowserMocks(page);
   for (const path of ['/__preview/', '/segodnya/', '/poisk/', '/sobytiya/pesni-sssr-svetlogorsk-5878/']) {
-    await page.goto(path);
+    await page.goto(withPathPrefix(path));
     await expect(footerRoot(page), path).toHaveCount(1);
     await expect(page.locator('.site-header [data-service-share-root]'), path).toHaveCount(0);
   }

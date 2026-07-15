@@ -41,12 +41,20 @@ and `1440×900`.
 
 ## Preview-only publish safety gate
 
-**Do not run the historical `site/scripts/deploy-preview-yc.mjs` blindly.** Its
-current implementation uploads event calendars not only below the preview prefix,
-but also to stable `s3://<bucket>/ics/<event_id>.ics`. That is a production side
-effect and is forbidden for this task.
+`site/scripts/deploy-preview-yc.mjs` теперь является prefix-only командой для
+этого preview: она отклоняет build id без `preview-`, пишет только под
+`s3://<bucket>/<PREVIEW_BUILD_ID>/`, не обновляет stable `/ics/`, production
+pointer или production service-share manifest. Перед реальной загрузкой обязателен
+просмотр object plan через dry-run:
 
-The integrator may publish only through an implementation that:
+```bash
+PREVIEW_BUILD_ID=<PREVIEW_BUILD_ID> \
+KENIGEVENTS_SITE_DEPLOY_DRY_RUN=1 \
+npm --prefix site run deploy:preview
+```
+
+Реальная публикация использует ту же команду без
+`KENIGEVENTS_SITE_DEPLOY_DRY_RUN`. Реализация обязана:
 
 1. requires a unique `preview-*` build id;
 2. allowlists every destination key under `<PREVIEW_BUILD_ID>/`;
@@ -56,8 +64,9 @@ The integrator may publish only through an implementation that:
    `Content-Type` to WebP, PNG and JSON;
 6. records the exact command as `<PREVIEW_ONLY_DEPLOY_COMMAND>` in evidence.
 
-Until such a command exists and its object plan proves prefix-only writes,
-publication is **Blocked**, not permission to use `deploy:preview`.
+Если dry-run показывает хотя бы один key вне preview prefix, публикация
+**Blocked**. Строка о запрете stable ICS в stdout является обязательной частью
+evidence.
 
 ## Public verification
 

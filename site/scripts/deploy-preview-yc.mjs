@@ -29,6 +29,9 @@ const env = { ...fileEnv, ...process.env };
 const distDir = join(siteDir, 'dist');
 const buildId = env.PREVIEW_BUILD_ID || readdirSync(distDir).find((name) => name.startsWith('preview-'));
 if (!buildId) throw new Error('No PREVIEW_BUILD_ID and no dist/preview-* folder found');
+if (!/^preview-[a-z0-9][a-z0-9._-]*$/u.test(buildId)) {
+  throw new Error(`Preview deploy refuses a non-preview build id: ${buildId}`);
+}
 const sourceDir = join(distDir, buildId);
 if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) throw new Error(`Missing preview build folder: ${sourceDir}`);
 const bucket = env.KENIGEVENTS_SITE_YC_BUCKET;
@@ -45,10 +48,18 @@ const awsEnv = {
   AWS_SECRET_ACCESS_KEY: secretKey,
   AWS_DEFAULT_REGION: region,
 };
+const dryRun = ['1', 'true', 'yes', 'on'].includes(String(env.KENIGEVENTS_SITE_DEPLOY_DRY_RUN || '').toLowerCase());
+const dryRunArgs = dryRun ? ['--dryrun'] : [];
 const target = `s3://${bucket}/${buildId}/`;
-console.log(`Uploading ${sourceDir} -> ${target}`);
-const cp = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+console.log(`${dryRun ? 'Planning' : 'Uploading'} ${sourceDir} -> ${target}`);
+console.log(`Preview-only destination prefix: ${target}`);
+const cp = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive', '--cache-control', 'public, max-age=300', '--no-progress', ...dryRunArgs], { env: awsEnv, stdio: 'inherit' });
 if (cp.status !== 0) process.exit(cp.status || 1);
+if (dryRun) {
+  console.log('Preview-only safety: every planned object is below the preview build prefix');
+  console.log('Preview-only dry run complete; no objects were uploaded');
+  process.exit(0);
+}
 // Astro output filenames are content-hashed and the preview prefix is versioned,
 // so code assets are safe to cache aggressively through the CDN.
 const astroAssetsDir = join(sourceDir, '_astro');
@@ -56,7 +67,7 @@ if (existsSync(astroAssetsDir)) {
   const findAstroAssets = spawnSync('find', [astroAssetsDir, '-type', 'f'], { encoding: 'utf8' });
   for (const file of findAstroAssets.stdout.split(/\r?\n/).filter(Boolean)) {
     const rel = file.slice(sourceDir.length + 1);
-    const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+    const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress', ...dryRunArgs], { env: awsEnv, stdio: 'inherit' });
     if (put.status !== 0) process.exit(put.status || 1);
   }
 }
@@ -75,23 +86,27 @@ if (existsSync(serviceShareVersionsDir)) {
         : extension === 'json'
           ? 'application/json; charset=utf-8'
           : 'application/octet-stream';
-    const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', contentType, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+    const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', contentType, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress', ...dryRunArgs], { env: awsEnv, stdio: 'inherit' });
     if (put.status !== 0) process.exit(put.status || 1);
   }
 }
 const serviceShareCurrentManifest = join(sourceDir, 'service-share', 'current', 'manifest.json');
 if (existsSync(serviceShareCurrentManifest)) {
   const rel = serviceShareCurrentManifest.slice(sourceDir.length + 1);
-  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', serviceShareCurrentManifest, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'application/json; charset=utf-8', '--cache-control', 'no-cache, max-age=0', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', serviceShareCurrentManifest, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'application/json; charset=utf-8', '--cache-control', 'no-cache, max-age=0', '--no-progress', ...dryRunArgs], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
 }
-// Ensure calendar endpoints have the right metadata for clients that care about content-type.
-const find = spawnSync('find', [sourceDir, '-name', 'event.ics', '-type', 'f'], { encoding: 'utf8' });
-for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
-  const rel = file.slice(sourceDir.length + 1);
-  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'inline; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
-  if (put.status !== 0) process.exit(put.status || 1);
-}
+// Ensure calendar endpoints have the right metadata in one bounded AWS process.
+// Spawning one SDK process per event makes large previews exceed the launcher
+// lifetime even though every destination is the same accepted prefix.
+const icsPut = spawnSync('aws', [
+  '--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive',
+  '--exclude', '*', '--include', '*.ics',
+  '--content-type', 'text/calendar; charset=utf-8',
+  '--content-disposition', 'inline; filename="event.ics"',
+  '--cache-control', 'public, max-age=300', '--no-progress',
+], { env: awsEnv, stdio: 'inherit' });
+if (icsPut.status !== 0) process.exit(icsPut.status || 1);
 const publicBase = (env.KENIGEVENTS_SITE_PUBLIC_BASE_URL || `https://kenigevents.ru`).replace(/\/+$/u, '');
 console.log(`Preview URL: ${publicBase}/${buildId}/__preview/`);
 console.log(`Website endpoint fallback: http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`);
