@@ -149,6 +149,31 @@ def test_konb_selection_params_use_test_story_target_not_business():
     assert params["story_business_targets"] == ""
 
 
+def test_konb_selection_params_use_prod_vk_story_without_wall():
+    from video_announce import scenario as scenario_module
+
+    class _Stub:
+        db = None
+        _partner_track_story_targets = scenario_module.VideoAnnounceScenario._partner_track_story_targets
+
+    params = scenario_module.VideoAnnounceScenario._partner_track_selection_params(
+        _Stub(),
+        PARTNER_KONB_LIBRARY,
+        publish_mode="prod",
+    )
+
+    targets = params["story_targets_override"]
+    assert [(target["peer"], target.get("transport", "telethon")) for target in targets] == [
+        ("@kaliningradlibrary", "telethon"),
+        ("konb39", "vk_story"),
+    ]
+    assert not any(
+        target.get("transport") in {"vk_wall", "vk_wall_story"}
+        for target in targets
+    )
+    assert params["story_business_targets"] == ""
+
+
 def test_partner_modes_are_in_default_business_mode_whitelist():
     """Defence in depth: even if a future caller passes the partner profile_key
     as `mode`, business resolution must still be allowed."""

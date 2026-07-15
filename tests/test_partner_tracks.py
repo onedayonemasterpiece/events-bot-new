@@ -91,18 +91,19 @@ def test_konb_track_defaults_to_prod_story_targets():
     # targets (`@kaliningradlibrary` TG story + `konb39` VK story) are
     # independent best-effort — none has `required=True`, so a failure on one
     # transport does not fail the overall publish.
-    # Round-5 (2026-06-05): VK story is wall-first. The same video announce is
-    # published as a `vk_wall` post into `konb39`, then a `vk_wall_story` target
-    # links that wall post from the community story.
+    # Round-6 (2026-07-15): KОНБ keeps a direct VK community story but no
+    # longer publishes the video as a VK wall post.
     assert PARTNER_KONB_LIBRARY.default_publish_mode == "prod"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["peer"] == "@keniggpt"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["transport"] == "telegram_chat"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[0]["peer"] == "@kaliningradlibrary"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["peer"] == "konb39"
-    assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["transport"] == "vk_wall"
-    assert PARTNER_KONB_LIBRARY.prod_story_targets[2]["peer"] == "konb39"
-    assert PARTNER_KONB_LIBRARY.prod_story_targets[2]["transport"] == "vk_wall_story"
-    assert len(PARTNER_KONB_LIBRARY.prod_story_targets) == 3
+    assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["transport"] == "vk_story"
+    assert len(PARTNER_KONB_LIBRARY.prod_story_targets) == 2
+    assert not any(
+        target.get("transport") in {"vk_wall", "vk_wall_story"}
+        for target in PARTNER_KONB_LIBRARY.prod_story_targets
+    )
     for target in PARTNER_KONB_LIBRARY.prod_story_targets:
         assert target.get("required") is False, target
         assert target.get("blocking") is False, target

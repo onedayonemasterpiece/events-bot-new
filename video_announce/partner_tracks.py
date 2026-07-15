@@ -112,9 +112,10 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         # сообщества, вне зависимости от успеха публикации в какой-либо
         # из них».
         #
-        # Round-5 (2026-06-05): VK story is wall-first. The video is first
-        # published as a community wall clip, then the story target links that
-        # wall post into the same community story.
+        # Round-6 (2026-07-15): KОНБ keeps the VK community story, but
+        # no longer publishes the video as a community wall post. This is an
+        # explicit KОНБ-only exception to the shared wall-first CherryFlash
+        # contract, so the VK target uses the direct `vk_story` transport.
         {
             "peer": "@kaliningradlibrary",
             "label": "tg:@kaliningradlibrary:story",
@@ -125,19 +126,10 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         },
         {
             "peer": "konb39",
-            "label": "vk:konb39:wall",
-            "delay_seconds": 0,
-            "mode": "upload",
-            "transport": "vk_wall",
-            "blocking": False,
-            "required": False,
-        },
-        {
-            "peer": "konb39",
             "label": "vk:konb39:story",
             "delay_seconds": 0,
             "mode": "upload",
-            "transport": "vk_wall_story",
+            "transport": "vk_story",
             "blocking": False,
             "required": False,
         },
