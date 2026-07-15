@@ -38,6 +38,10 @@ Production file mirror **включён постоянно** и пишет root 
 
 Секреты, LLM thoughts и полные private payloads специально в лог не добавляются.
 
+### Kaggle run ledger isolation
+
+Каждый remote run получает отдельный private status dataset с callback-конфигурацией. Его slug содержит короткий читаемый prefix **и hash полного `run_id`**; простое обрезание длинного `run_id` запрещено, потому что параллельные/повторные запуски с одинаковым prefix иначе начинают versioning одного dataset и посылают heartbeat в чужую строку `kaggle_run_ledger`. При расследовании сверяйте одновременно полный `run_id`, status-dataset ref и kernel version.
+
 ## Environment
 
 - `ENABLE_RUNTIME_FILE_LOGGING` — включает mirror; production source of truth — `fly.toml`.
