@@ -865,6 +865,58 @@ async def update_event_full(
         return False
 
 
+async def reconcile_existing_event_age(
+    db: Database,
+    event_id: int,
+    theatre_event: TheatreEvent,
+) -> bool:
+    """Persist a parser's structured age field without another LLM request.
+
+    Existing parser URLs use a cheap ticket/media refresh path and therefore do
+    not revisit Smart Update.  Age is a structured source fact, so reconcile it
+    explicitly here; disagreements fail closed as ``conflict`` rather than
+    silently preferring either source.
+    """
+
+    from event_age_rating import (
+        age_input_hash,
+        apply_age_decision,
+        declared_structured_decision,
+        reconcile_age_decision,
+    )
+    from models import Event
+
+    if not theatre_event.age_restriction:
+        return False
+    input_hash = age_input_hash(
+        source_type=f"parser:{theatre_event.source_type}",
+        source_url=theatre_event.url,
+        source_text=str(theatre_event.age_restriction),
+    )
+    decision = declared_structured_decision(
+        theatre_event.age_restriction,
+        source_url=theatre_event.url,
+        source_type=f"parser:{theatre_event.source_type}",
+        input_hash=input_hash,
+    )
+    if decision is None:
+        return False
+    async with db.get_session() as session:
+        existing = await session.get(Event, event_id)
+        if existing is None:
+            return False
+        changed = apply_age_decision(existing, reconcile_age_decision(existing, decision))
+        if changed:
+            await session.commit()
+            logger.info(
+                "source_parsing: reconciled structured age event_id=%d status=%s value=%s",
+                event_id,
+                existing.age_restriction_status,
+                existing.age_restriction,
+            )
+        return changed
+
+
 async def update_linked_events(
     db: Database,
     event_id: int,
@@ -1158,6 +1210,8 @@ async def add_new_event_via_queue(
                 ticket_price_min=draft.ticket_price_min,
                 ticket_price_max=draft.ticket_price_max,
                 ticket_link=theatre_event.url,  # Always use parser URL, not LLM links
+                age_restriction=theatre_event.age_restriction or None,
+                age_restriction_is_structured=bool(theatre_event.age_restriction),
                 event_type=draft.event_type or None,
                 emoji=draft.emoji or None,
                 is_free=bool(draft.is_free),
@@ -2493,6 +2547,16 @@ async def process_source_events(
 
             if existing_id and parser_source_present:
                 event_id = existing_id
+                # The repeated-source fast path intentionally avoids the paid
+                # Smart Update call.  Preserve its newly available structured
+                # age fact separately so this optimisation cannot leave stale
+                # canonical data behind.
+                age_changed = await reconcile_existing_event_age(db, existing_id, event)
+                if age_changed:
+                    # Treat the canonical age change as effectful even when the
+                    # ticket status itself is unchanged; the shared scheduler
+                    # will debounce any duplicate call made below.
+                    await schedule_existing_event_update(db, existing_id)
                 if needs_full_update:
                     # Update the placeholder event fully
                     success = await update_event_full(db, existing_id, event)

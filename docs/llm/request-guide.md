@@ -38,6 +38,14 @@ events and incident prototypes select context for the LLM verifier, but vector
 similarity is not source evidence and cannot approve, merge, repair or publish a
 row. Missing vector/LLM/source coverage is `indeterminate` and fails closed.
 
+Event age rating follows the same boundary with an extra quota invariant:
+source-native declared values need no LLM, while text/OCR `age_decision` may be
+returned only inside an already-required Smart Update JSON request
+(`SMART_UPDATE_EVENT_AGE_LLM_MODE=piggyback_only`). The feature must not open a
+separate per-event request. CPU BGE retrieval cannot become a rating by nearest
+prototype; an assessed candidate needs the approved calibrated dual-head gate
+defined in `docs/features/event-age-rating/README.md`.
+
 Deterministic code must not replace an LLM-owned semantic decision with broad
 keyword logic. For example, do not decide that an event is free merely because no
 price was found, do not convert library/museum date lists into work-hours skips

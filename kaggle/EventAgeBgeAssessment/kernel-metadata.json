@@ -1,0 +1,13 @@
+{
+  "id": "zigomaro/event-age-bge-assessment",
+  "title": "Event Age BGE Assessment Shadow",
+  "code_file": "event_age_bge_assessment.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}

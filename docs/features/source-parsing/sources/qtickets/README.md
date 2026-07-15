@@ -99,7 +99,7 @@ Backend parser держит backward compatibility со старым форма�
 | `description` | `str` | исходник для LLM, влияет на `search_digest`/описание |
 | `photos[]` | `list[str]` | афиши для `EventPoster`/OCR и дальнейшего Smart Update |
 | `ticket_price_min/max` | `int` | диапазон цен |
-| `age_restriction` | `str` | добавляется в описание/карточку |
+| `age_restriction` | `0+|6+|12+|16+|18+` | source-native declared field; переносится в канонический `Event.age_restriction` с provenance |
 | `scene` | `str` | зал/сцена (входит в `normalize_location_name`) |
 | `location_address` | `str` | адрес из билетной страницы; передаётся в LLM/Smart Update как источник, а не восстанавливается из OCR |
 | `end_date` | `YYYY-MM-DD` | окончание диапазона из JSON-LD `endDate`; не должно теряться при многодневных билетных страницах |

@@ -4,6 +4,7 @@
 
 ### Changed
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
+- **Event age-rating semantics and LLM budget**: piggyback a strict evidence-grounded age decision on existing Smart Update facts/create/merge calls with zero additional requests per event, keep automatic assessments internal by default, and fail unresolved source conflicts closed instead of choosing a numeric maximum.
 - **Fly volume availability (INC-2026-07-15)**: provisioned production `/data` from 1 GiB to 2 GiB after the free-space readiness floor made `/healthz` critical, and added bounded `80%` automatic growth in 1 GiB increments up to 3 GiB while retaining the existing log, snapshot and disk-hygiene contracts.
 - **Static event pages / production desktop integration**: promoted the continuous Editorial desktop event composition with a full reading-shell boundary, delayed/sticky CTA and media rail, strict full-ratio poster companion, grouped multi-portrait viewer navigation, graphite continuation cards, and width-fit/vertical-only document normalization while leaving the established mobile event composition unchanged.
 - **Static preview staging**: replace the cross-filesystem temporary preview copy with same-filesystem atomic renames, preventing long builds from duplicating the complete output tree under `/tmp` and exhausting the builder disk.
@@ -30,6 +31,8 @@
 
 ### Added
 
+- **Event age-rating data path**: added declared/assessed canonical fields and migration, parser/Universal Festival preservation, declared-only static/vector projections, a reviewed hash-guarded resumable backfill, golden evaluator, and a CPU-only Kaggle BGE dual-head shadow worker using the existing status/heartbeat framework.
+
 - **Event media / semantic roles and responsive derivatives**: added LLM-first fail-closed classification for real event posters versus photos, attendee information, schedules, wayfinding and brand documents; added content-addressed 256/512 WebP derivatives, focal/crop evidence fields, an idempotent enrichment backfill and `srcset` media rails.
 
 - **Telegram Monitoring / КЛДскоп**: добавлен официальный `@kldscope_news` с `high` trust, source default и канонической площадкой `КЛДскоп, Земельная 12, 1 этаж, кабинет 3, Калининград`; официальные формулировки и склонения имени канонизируются через reference/alias layer.
@@ -44,6 +47,7 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+- **Parser age preservation**: carry Qtickets/Pyramida/Dom Iskusstv/Philharmonia structured restrictions through `EventCandidate`, reconcile them on the repeated-source fast path, preserve Universal Festival program ratings, and stop the Dom Iskusstv kernel from treating the first arbitrary `N+` in page HTML as the event rating.
 - **Static media enrichment scope**: restrict the operational derivative/LLM backfill to active, non-silent current-or-ongoing events, preventing cancelled, postponed and incident-tombstoned rows from consuming media budgets or re-entering public fanout; align the documented poster confidence environment name with runtime.
 - **Static event cards / poster framing and ticket copy**: removed horizontal document crop and side fields from desktop related cards, preserved source width while bounding height through vertical overflow only, and replaced invented `По билетам`/`Открыть условия` copy with `Билеты`/`Источник события` while making calendar the primary action for free no-registration events.
 - **Telegram Monitoring TBD child time / source cursor (INC-2026-07-14)**: keep an explicitly unknown programme-item start distinct from the enclosing festival window through the Gemma producer, Smart Update LLM review and a narrow fail-closed server rail; let the confirmed review clear an already-persisted wrong merge time; advance successfully scanned legitimate zero-event tails without re-running their media/LLM work; re-arm an existing managed VK projection after a real canonical merge while retaining no-change duplicate prevention; invalidate stale ICS storage/shortlinks/calendar-channel documents before rebuilding public projections when a confirmed repair removes the only valid time; track/edit Telegram calendar documents with an independent content hash so a storage update cannot leave an older attached ICS behind; and include ICS URL state in managed VK identity so stale calendar lines are removed.

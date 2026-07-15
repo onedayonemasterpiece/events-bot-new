@@ -68,6 +68,15 @@ export interface TicketInfo {
   price_label: string | null;
 }
 
+export type AgeRestriction = '0+' | '6+' | '12+' | '16+' | '18+';
+export type AgeRestrictionStatus =
+  | 'declared'
+  | 'assessed'
+  | 'conflict'
+  | 'insufficient_evidence'
+  | 'unknown'
+  | 'budget_deferred';
+
 export interface PreviewEvent {
   id: number;
   title: string;
@@ -90,6 +99,12 @@ export interface PreviewEvent {
   address: string | null;
   map_query: string | null;
   ticket: TicketInfo;
+  age_restriction: AgeRestriction | null;
+  age_restriction_status: AgeRestrictionStatus;
+  age_restriction_provenance: string | null;
+  age_restriction_decision_version: string | null;
+  age_recommendation: AgeRestriction | null;
+  age_recommendation_label: string | null;
   source_url: string | null;
   source_urls?: string[];
   source_count?: number;
@@ -134,6 +149,8 @@ export interface EventFeatureSummary {
   city: string | null;
   location_name: string | null;
   date: string;
+  age_restriction: AgeRestriction | null;
+  age_restriction_status: AgeRestrictionStatus;
 }
 
 export interface DiscoveryDisplayPayload {
@@ -157,6 +174,10 @@ export interface DiscoveryDisplayPayload {
   shares_count: number;
   calendar_href: string;
   calendar_eligible: boolean;
+  age_restriction: AgeRestriction | null;
+  age_restriction_status: AgeRestrictionStatus;
+  age_recommendation: AgeRestriction | null;
+  age_recommendation_label: string | null;
 }
 
 export interface RelatedManifestCandidate extends EventFeatureSummary {

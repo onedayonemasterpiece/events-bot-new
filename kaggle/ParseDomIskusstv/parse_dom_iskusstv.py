@@ -275,6 +275,29 @@ def extract_prices_resilient(content: str, body_text: str) -> tuple[Optional[int
     return None, None
 
 
+def extract_explicit_page_age(soup) -> str:
+    """Return one event-page rating only; arbitrary ``N+`` HTML is ignored."""
+
+    allowed = {"0+", "6+", "12+", "16+", "18+"}
+    values: set[str] = set()
+    for text_node in soup.find_all(string=True):
+        text = clean_text(str(text_node or ""))
+        if not text:
+            continue
+        compact = re.sub(r"\s+", "", text)
+        if compact in allowed:
+            values.add(compact)
+            continue
+        match = re.fullmatch(
+            r"(?:возраст(?:ное ограничение)?|маркировка)\s*[:\-]?\s*(0|6|12|16|18)\s*\+",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            values.add(f"{match.group(1)}+")
+    return next(iter(values)) if len(values) == 1 else ""
+
+
 async def parse_special_project_page(page, url: str) -> list[dict]:
     print(f"\n🏛 Загрузка: {url}")
 
@@ -300,10 +323,7 @@ async def parse_special_project_page(page, url: str) -> list[dict]:
         description = await extract_description_resilient(page)
         print(f"   📝 Описание: {len(description)} символов")
 
-        age_restriction = ""
-        age_match = re.search(r'(\d+)\s*\+', content)
-        if age_match:
-            age_restriction = f"{age_match.group(1)}+"
+        age_restriction = extract_explicit_page_age(soup)
 
         events: list[dict] = []
         date_pattern = re.compile(
