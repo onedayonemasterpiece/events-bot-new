@@ -1,0 +1,131 @@
+mode: read_only_parallel_then_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: 090daa3ed283639cdbfeb3e83624cea6b3ac710f
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-followup-20260715
+global_constraints:
+  - Read Telegram topic 6 before implementation and again after evidence publication.
+  - No paid OpenAI image generation; use existing assets and CSS only.
+  - Gemini consultant must be Pro class and must review the exact newly requested states.
+  - Do not generalize a visual verdict from named-person/weather states to unreviewed scenarios.
+  - Hero remains at most 50 percent of the initial viewport while categories/feed entry remain visible.
+  - Code changes require canonical docs and CHANGELOG synchronization.
+verification_owner: root integrator
+stop_conditions:
+  - Telegram E2E human session is unavailable for mandatory mobile review.
+  - Neither Gemini Pro nor Opus is available for the requested external visual consultation.
+requirements:
+  - id: R01
+    requirement: Add a 2-3-entry bad-weather narrative chain that recommends one or more concrete cozy lectures during forecast wind/storm conditions.
+    area: narrative scenarios
+    likely_files: [site/src/data/briefingLab.ts, docs/features/static-site-pages/typed-briefing-hero-research.md]
+    dependencies: []
+    conflict_risk: medium
+    lane: scenario-auditor
+    done_when: The chain has grounded weather wording, concrete linked events, bounded steps, and no invented certainty.
+  - id: R02
+    requirement: Remove the visible inner frame/background discontinuity so the hero reads as part of the page canvas rather than a boxed insert.
+    area: visual composition
+    likely_files: [site/src/pages/lab/briefing/index.astro]
+    dependencies: [R06]
+    conflict_risk: high
+    lane: ui-integrator
+    done_when: Desktop and mobile captures show one continuous background/canvas without an accidental rectangular seam.
+  - id: R03
+    requirement: Replace the awkward weather copy, remove "Допустим", and say "море" rather than "вода" for the Kaliningrad good-weather scenario.
+    area: narrative copy
+    likely_files: [site/src/data/briefingLab.ts]
+    dependencies: []
+    conflict_risk: low
+    lane: scenario-auditor
+    done_when: Copy is natural, regionally plausible, and grammatically direct.
+  - id: R04
+    requirement: Make event-bearing narrative phrases such as "Это событие часто пересылают" directly actionable instead of forcing users to find a separate link.
+    area: interaction/accessibility
+    likely_files: [site/src/data/briefingLab.ts, site/src/pages/lab/briefing/index.astro, tests/playwright/static_briefing_lab.spec.ts]
+    dependencies: []
+    conflict_risk: high
+    lane: ui-integrator
+    done_when: Meaningful phrase/link affordance opens the grounded event target, is keyboard accessible, and retains a clear CTA.
+  - id: R05
+    requirement: Replace the abstract festival narrative with a concrete named festival and a concrete link.
+    area: narrative grounding
+    likely_files: [site/src/data/briefingLab.ts]
+    dependencies: []
+    conflict_risk: medium
+    lane: scenario-auditor
+    done_when: The lab scenario names its demo festival, marks demo grounding correctly, and links to the matching target.
+  - id: R06
+    requirement: Obtain a fresh critical agy verdict on the exact weekend, good-weather, frequently-forwarded and festival states, including text vertical position.
+    area: external visual consultation
+    likely_files: [docs/reports/static-typed-briefing-consultation-2026-07-15]
+    dependencies: []
+    conflict_risk: low
+    lane: visual-consultant
+    done_when: Exact-state screenshots receive explicit FAIL/PASS findings for canvas continuity, vertical rhythm, typography, affordance and branding, followed by a post-fix gate.
+lanes:
+  - id: scenario-auditor
+    role: planner
+    effort: high
+    requirement_ids: [R01, R03, R05]
+    target: Inspect existing scenario data/contracts and propose concrete, grounded copy/link/chain changes without editing files.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-followup-20260715-integration
+    writable_files: []
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: File-level scenario findings, exact copy proposals, schema implications, and regression risks.
+    verification_scope: inspection_only
+    status: planned
+  - id: visual-consultant
+    role: planner
+    effort: extra-high
+    requirement_ids: [R06]
+    target: Capture exact current states and obtain a critical Gemini Pro visual verdict before any UI correction.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-followup-20260715-integration
+    writable_files: [artifacts/codex/static-typed-briefing-followup-20260715/**]
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Exact screenshots, prompt/response, model/status/time evidence, and actionable critique.
+    verification_scope: inspection_only
+    status: planned
+  - id: ui-integrator
+    role: worker
+    effort: extra-high
+    requirement_ids: [R02, R04]
+    target: Serially integrate all R01-R06 corrections after both read-only audits.
+    depends_on: [scenario-auditor, visual-consultant]
+    execution_mode: serial_after_dependency
+    branch: integration/typed-briefing-followup-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-followup-20260715-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/backlog/features/static-typed-briefing/**
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - docs/operations/mobile-ui-telegram-review.md
+      - CHANGELOG.md
+      - .codex/**
+    forbidden_files: []
+    expected_output: Corrected scenarios/composition/interactions, tests, immutable preview, Telegram evidence, documentation, changelog and closure audit.
+    verification_scope: full_local
+    status: planned
+  - id: merge-reviewer
+    role: merge_reviewer
+    effort: high
+    requirement_ids: []
+    target: Independently audit merged requirements, exact-state acceptance, tests, evidence and release boundaries.
+    depends_on: [ui-integrator]
+    execution_mode: serial_after_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-followup-20260715-integration
+    writable_files: [.codex/lanes/typed-briefing-followup-20260715/REVIEW.md]
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Done/Partial/Missing/Blocked audit for R01-R06 and publish recommendation.
+    verification_scope: full_local
+    status: planned
