@@ -70,6 +70,7 @@ Route:
 
 Final immutable review build:
 
+- [desktop `8×3` mosaic + text-only mobile](https://kenigevents.ru/preview-20260715t2306-briefing-lab-7c2b2a30/lab/briefing/?variant=c&scenario=live_meeting_mosaic&pace=slow&replay=1);
 - [conditional storm → future lecture + pending cursor](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=storm_weekend_demo&pace=slow&replay=1);
 - [конкретный forwarding signal](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1);
 - [конкретный Pianissimo](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=festival_demo&pace=slow&replay=1);
@@ -115,6 +116,18 @@ Final immutable review build:
   timed continuation, а в terminal state делает три blink и исчезает;
 - декоративная «О» — отдельный source-faithful asset; составной path всего
   `Анонсы` больше не crop-ится внутри hero.
+
+Mosaic immutable prefix
+`preview-20260715t2306-briefing-lab-7c2b2a30` построен из source
+`7c2b2a30`: isolated build/check pass; Playwright `15/15` pass плюс повтор
+pointer-interrupt `3/3`. Public verification на `1440×900`, `1366×768`,
+`390×844`, `320×568` вернул HTTP 200, exact noindex, нулевые page errors/bad
+responses и `bodyWidth == innerWidth`. Desktop делает ровно один request
+выбранного raster; mobile — ноль и `data-media-mode=none`. На 1440 stage
+`x=0..1440`, mosaic `x=572..1468`, на 1366 — `x=584.39..1391.2`; таким образом
+последний столбец реально crop-ится физическим viewport, а не shared shell.
+Gemini 3.1 Pro (High) exact screenshots/video gate: `MOSAIC LAB GATE: PASS`,
+`PUBLISH FOR USER REVIEW: YES`; это не production approval.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего
@@ -241,6 +254,10 @@ Telegram mobile gate: перед отправкой последний вход�
 `#82`; final scope/URL, `320×568`, `390×844`, exact WebM и desktop `1366×768`
 доставлены в topic `6` как `#92–96`. Receipts verified повторным чтением; новых
 входящих комментариев после `#96` на момент closure не было.
+Mosaic scope/URL, public `320×568`, `390×844`, desktop `1440×900` и full slow
+WebM отправлены как `#97–101`; все receipts verified. Повторное чтение topic с
+`top_message=101` не обнаружило новых пользовательских комментариев после
+отправки.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 

@@ -107,7 +107,7 @@ lanes:
     forbidden_files: []
     expected_output: Deterministic desktop mosaic prototype, mobile degradation, tests, exact review, immutable preview and Telegram evidence.
     verification_scope: full_local
-    status: in_progress
+    status: completed
   - id: merge-reviewer
     role: merge_reviewer
     effort: high
@@ -121,4 +121,4 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Done/Partial/Missing/Blocked matrix and publish recommendation.
     verification_scope: full_local
-    status: planned
+    status: completed
