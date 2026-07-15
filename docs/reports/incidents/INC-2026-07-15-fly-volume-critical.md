@@ -1,6 +1,6 @@
 # INC-2026-07-15 Fly `/data` crossed the critical readiness floor
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: Fly production `events-bot-new-wngqia` (`/data`, `/healthz`, `/webhook`)
 Opened: 2026-07-15
@@ -32,6 +32,8 @@ Related docs: `docs/operations/runtime-logs.md`, `docs/operations/release-govern
 - 2026-07-15 02:31 UTC — Fly checks локализовали отказ readiness до free-space floor; остальные readiness-компоненты были healthy.
 - 2026-07-15 02:35 UTC — `df`/`du`, volume metadata, snapshots и runtime mirror были проверены; разрушительная очистка не выполнялась.
 - 2026-07-15 02:40 UTC — planned static-site deploy поставлен на hold; выбран безопасный mitigation: extend 1→2 GiB и bounded auto-extension, а не удаление канонической DB/media/runtime evidence.
+- 2026-07-15 03:12 UTC — attached encrypted volume расширен 1→2 GiB без restart; Fly сохранил пять daily snapshots.
+- 2026-07-15 03:13 UTC — свободно `1223 MiB`, `PRAGMA quick_check=ok`, runtime mirror `39.58 MiB` и растёт; публичный `/healthz` вернулся к HTTP 200, Fly check `1/1 passing`, свежих disk-full/proxy ошибок после resize нет.
 
 ## Root Cause
 
@@ -83,11 +85,11 @@ Related docs: `docs/operations/runtime-logs.md`, `docs/operations/release-govern
 
 - planned deploy остановлен до восстановления readiness;
 - destructive cleanup не выполнялся: DB, media, monitoring и runtime evidence сохранены;
-- выбран irreversible-growth-only Fly operation 1→2 GiB, предварительно подтверждены encrypted volume и пять daily snapshots.
+- выполнен irreversible-growth-only Fly operation 1→2 GiB; restart не потребовался, encrypted volume и пять daily snapshots сохранены.
 
 ## Corrective Actions
 
-- [ ] расширить attached volume до 2 GiB;
+- [x] расширить attached volume до 2 GiB;
 - [x] добавить в `fly.toml` bounded automatic extension at 80%, +1 GiB, maximum 3 GiB;
 - [ ] выполнить exact-main deploy и обязательные post-resize/post-deploy checks.
 
@@ -100,8 +102,8 @@ Related docs: `docs/operations/runtime-logs.md`, `docs/operations/release-govern
 
 - deployed SHA: pending
 - deploy path: pending exact `origin/main`
-- regression checks: pending
-- post-deploy verification: pending
+- regression checks: `fly config validate` passed; post-resize `df` reports `1223 MiB` free; SQLite `quick_check=ok`; runtime mirror `39.58 MiB <= 64 MiB` and active mtime advanced; no fresh `Errno 28`, SQLite disk-full or webhook no-candidate match.
+- post-deploy verification: resize mitigation restored public `/healthz` HTTP 200 and Fly `1/1 passing`; config deploy remains pending.
 
 ## Prevention
 
