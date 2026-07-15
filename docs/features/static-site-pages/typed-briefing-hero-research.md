@@ -68,6 +68,12 @@ Route:
 
 ### Clean-home/media iteration — текущий source contract
 
+Final immutable review build:
+
+- [чистый вход с приветствием](https://kenigevents.ru/preview-20260715t1729-briefing-lab-3d11a474/lab/briefing/?variant=c&scenario=greeting_day&pace=slow&replay=1);
+- [teaser → именованный гость + small desktop media](https://kenigevents.ru/preview-20260715t1729-briefing-lab-3d11a474/lab/briefing/?variant=c&scenario=anticipated_person&pace=slow&replay=1);
+- [wide-media easter egg](https://kenigevents.ru/preview-20260715t1729-briefing-lab-3d11a474/lab/briefing/?variant=c&scenario=rare_event&pace=slow&replay=1).
+
 Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
 экрана:
 
@@ -94,6 +100,18 @@ Route:
 scene намеренно говорит `Допустим` и маркируется `DEMO-СИГНАЛ`; production
 границы описаны в
 [platform backlog](../../backlog/features/static-typed-briefing/README.md).
+
+Техническая приёмка final build: isolated build/check pass; Playwright
+`10/10` pass; geometry покрывает `17 scenes including fallback × B/C × 4
+viewports = 136`; mobile media хранит только `data-src` и не делает image
+request; desktop small/wide media, bounded exit, static/reduced-motion state и
+нулевой сдвиг categories при exit проверены отдельно. Public capture вернул
+HTTP 200, 1–3 строки, `bodyWidth == viewportWidth`, закрытый LAB-dock и нулевые
+page errors на `320×568`, `390×844`, `1440×900`.
+
+Mobile review gate выполнен в Telegram topic `6`: task card `#44`, final URL
+`#51`, реальные `320×568`/`390×844` screenshots `#52–53`, motion evidence
+`#54`; post-send inspection новых входящих комментариев не обнаружил.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 

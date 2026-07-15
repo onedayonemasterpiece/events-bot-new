@@ -88,4 +88,4 @@ lanes:
     forbidden_files: []
     expected_output: Integrated clean branch, full evidence, closure audit and pushed commit
     verification_scope: full_local
-    status: spawned
+    status: committed
