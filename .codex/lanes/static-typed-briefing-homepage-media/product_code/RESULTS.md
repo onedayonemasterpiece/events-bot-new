@@ -20,7 +20,7 @@ agent/static-typed-briefing-homepage-media/product-code
 /home/dev/.codex/worktrees/events-bot-new/product-code
 
 ## Base SHA
-23cbef7ff358e310843dc8a8bd656cc6a9e386f4
+23cbef7ff358b95346d5f29938213f6bff646166
 
 ## Head SHA
 SELF — exact commit SHA is reported in the worker handoff because this file is part of that commit.

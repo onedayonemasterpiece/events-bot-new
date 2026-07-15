@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static homepage / typed-briefing clean-home iteration**: expanded the isolated lab from 8 to 16 dynamically counted narratives, added explicit named-guest, polite/local, smart-search and clearly marked future-signal demos, moved LAB-only controls below the homepage-like hero/categories/feed surface, added public chain-aware `Показать следующее`, exact standalone wide-«О» geometry, and optional desktop-only grounded small/wide event media with no mobile download, no cursor linger, reduced-motion/static fallbacks and no layout shift.
 - **Static briefing/date discovery requirements**: expanded the future briefing library with rare, charity, smart-search, visiting-artist, festival, unusual-format and bounded most-discussed scenarios; rejected a blinking cursor after completed text unless a real next transition is pending; and specified deep-linkable concrete-date listings with bounded adjacent-date reveal, no-JS navigation, history/scroll restoration and SEO/a11y gates.
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
 - **Fly volume availability (INC-2026-07-15)**: provisioned production `/data` from 1 GiB to 2 GiB after the free-space readiness floor made `/healthz` critical, and added bounded `80%` automatic growth in 1 GiB increments up to 3 GiB while retaining the existing log, snapshot and disk-hygiene contracts.

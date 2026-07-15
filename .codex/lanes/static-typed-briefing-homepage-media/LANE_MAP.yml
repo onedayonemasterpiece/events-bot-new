@@ -1,0 +1,91 @@
+mode: full_fanout
+repo: /home/dev/projects/events-bot-new-typed-intro-prototype
+base_ref: 23cbef7ff358b95346d5f29938213f6bff646166
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: feature/static-typed-intro-prototype-20260715
+global_constraints:
+  - immutable noindex lab only; no production homepage integration
+  - no paid image generation; reuse existing grounded assets
+  - preserve mobile Telegram review gate in topic 6
+  - update canonical docs and CHANGELOG for behavior changes
+  - no live weather network call from the hero
+verification_owner: /root
+stop_conditions:
+  - worker touches forbidden files
+  - media claim cannot be grounded to the linked demo event
+  - approved Telegram E2E session becomes unavailable
+lanes:
+  - id: visual_media_audit
+    role: reviewer
+    effort: high
+    primary_requirement_ids: [R09]
+    advisory_requirement_ids: [R04, R07]
+    target: Exact brand-O extraction and feasible existing-asset media/motion contract
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Read-only report with exact paths/geometry and acceptance notes
+    verification_scope: inspection_only
+    status: merged
+  - id: weather_chain_audit
+    role: planner
+    effort: high
+    primary_requirement_ids: [R06, R10, R11]
+    advisory_requirement_ids: []
+    target: Inspect kotopogoda sources and design weather/chain/promo/LLM contracts
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Read-only source-backed architecture report
+    verification_scope: inspection_only
+    status: merged
+  - id: product_code
+    role: worker
+    effort: high
+    primary_requirement_ids: [R01, R02, R03, R04, R05, R07, R08, R12]
+    advisory_requirement_ids: []
+    target: Expanded narrative deck, clean lab shell, public next, desktop media and motion
+    depends_on: [visual_media_audit]
+    execution_mode: serial_after_dependency
+    branch: agent/static-typed-briefing-homepage-media/product-code
+    worktree: /home/dev/.codex/worktrees/events-bot-new/product-code
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - site/public/brand/announcements-wide-o-ui.svg
+      - site/scripts/build-briefing-lab.mjs
+      - site/scripts/check-briefing-lab.mjs
+      - tests/playwright/static_briefing_lab.spec.ts
+      - .codex/lanes/static-typed-briefing-homepage-media/product_code/RESULTS.md
+    forbidden_files:
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed scoped implementation with targeted tests
+    verification_scope: targeted
+    status: merged
+  - id: serial_integrator
+    role: merge_reviewer
+    effort: extra-high
+    primary_requirement_ids: []
+    advisory_requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12]
+    target: Integrate worker, update canonical docs/CHANGELOG, validate, publish and perform Telegram gate
+    depends_on: [visual_media_audit, weather_chain_audit, product_code]
+    execution_mode: serial_after_dependency
+    branch: feature/static-typed-intro-prototype-20260715
+    worktree: /home/dev/projects/events-bot-new-typed-intro-prototype
+    writable_files:
+      - docs/backlog/features/static-typed-briefing/README.md
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/operations/mobile-ui-telegram-review.md
+      - CHANGELOG.md
+      - .codex/lanes/static-typed-briefing-homepage-media/**
+    forbidden_files: []
+    expected_output: Integrated clean branch, full evidence, closure audit and pushed commit
+    verification_scope: full_local
+    status: spawned

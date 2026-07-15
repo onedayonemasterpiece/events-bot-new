@@ -1,6 +1,6 @@
 # Городской обзор на главной: минимальный prototype gate
 
-> **Status:** communication-first lab expanded into a curiosity/action narrative queue; immutable review build published and verified below.
+> **Status:** clean-home lab with an expanded narrative queue and optional desktop media; immutable review build is recorded below after each verified publication.
 > **Implementation:** dedicated one-route build for `/lab/briefing/`; no production homepage integration.
 > **Production effect:** none; the lab is not linked from production navigation and is published only under an immutable preview prefix.
 > **Decision:** `GO_TO_PROTOTYPE_ONLY`.
@@ -55,7 +55,7 @@ Lab-прототип допустим сейчас только как дешё�
 - Gemini Lite или другой LLM;
 - runtime API/manifest fetch;
 - runtime-генерация новых сценариев;
-- production-анимация wordmark; в lab используется точная обрезка буквы «о» из реального SVG, а не её текстовая имитация;
+- production-анимация wordmark; lab использует отдельный SVG только с точными двумя контурами широкой «О» из master wordmark, а не текстовую имитацию или crop всего слова;
 - production homepage integration.
 
 ## Изолированный lab
@@ -66,7 +66,36 @@ Route:
 /lab/briefing/
 ```
 
-### Текущая curiosity/action-итерация — что смотреть
+### Clean-home/media iteration — текущий source contract
+
+Эта итерация отвечает на продуктовую, а не лабораторную критику предыдущего
+экрана:
+
+- selector раскрывает **16**, а не 8 сценариев; count/progress/play-all
+  вычисляются из deck, а не захардкожены;
+- рядом с curiosity-teaser есть отдельный named-person формат с Татьяной
+  Куртуковой и ссылкой на canonical fixture event `6020`;
+- добавлены `Добрый день!`, local phrase с `«кеска»`, smart-search education,
+  grounded rare-event scene и явные `DEMO-СИГНАЛ` для погоды, фестиваля и
+  необычного формата;
+- верх страницы выглядит как обычная главная: hero → категории → начало ленты;
+  A/B/C, selector, replay, play-all, debug memory/telemetry вынесены в компактный
+  collapsed `LAB · управление` внизу;
+- публичная кнопка `Показать следующее` следует deck/скомпилированному
+  `nextScenarioId` и не смешивается с лабораторным управлением;
+- на desktop named-person scene может показать небольшую афишу, а редкая сцена
+  — bounded wide-media easter egg справа; на mobile media не загружается;
+- законченная фраза больше не оставляет blinking cursor: bar/underscore виден
+  только во время реального reveal;
+- декоративная «О» — отдельный source-faithful asset; составной path всего
+  `Анонсы` больше не crop-ится внутри hero.
+
+Реальная погода, promo overlay, runtime writer и video не включены. Weather
+scene намеренно говорит `Допустим` и маркируется `DEMO-СИГНАЛ`; production
+границы описаны в
+[platform backlog](../../backlog/features/static-typed-briefing/README.md).
+
+### Предыдущая curiosity/action-итерация — regression evidence
 
 Основной immutable review URL начинает с curiosity-сцены и принудит выбранный в текущем ревью темп `pace=slow`, но не делает его глобальным default:
 
@@ -92,24 +121,32 @@ Variants:
 |---|---|---|
 | `A · control` | briefing отсутствует; сразу категории и feed | baseline first-event discovery |
 | `B · static` | весь короткий editorial briefing виден сразу | проверить ценность содержания |
-| `C · motion` | тот же текст проявляется 3–4 смысловыми фрагментами; курсор бывает вертикальным или underscore и в части сцен остаётся мигать после фразы | проверить исходную коммуникационную механику |
+| `C · motion` | тот же текст проявляется 2–5 смысловыми фрагментами; курсор бывает вертикальным или underscore только во время reveal | проверить исходную коммуникационную механику |
 
-Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Панель над hero явно показывает A/B/C, все восемь сценариев, `Повторить`, конечный `Показать все 8`, `Пауза`, назад/дальше и три темпа. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента ниже подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
+Все варианты находятся на одной QA-странице и используют одинаковые сценарии, категории и feed-context. Public surface оставляет `Пауза`, `Показать следующее` и темп, а collapsed LAB-dock после ленты содержит A/B/C, selector всех 16 сцен, `Повторить`, конечный `Показать все 16` и lab-only previous/debug actions. Нельзя менять copy между B/C: иначе невозможно отделить motion от content value. Лента подписана как черновой пространственный контекст и не является предметом дизайн-приёмки.
 
 ## Минимальная очередь нарративов
 
-Lab содержит восемь видимых scenario IDs и universal fallback. Это не восемь вариантов одной счётной фразы, а смешанная очередь: ориентиры, обучение целевым действиям и социальные крючки любопытства. Все доступны в selector; расширенная библиотека остаётся backlog.
+Lab содержит 16 видимых scenario IDs и universal fallback. Это смешанная очередь: ориентиры, приветствия, обучение целевым действиям, social curiosity, named-event media и явно маркированные future-signal demos. Все доступны в selector; production eligibility и расширенная библиотека остаются backlog.
 
 | ID | Family / eligibility | Копирайт в lab | Cooldown |
 |---|---|---|---|
 | `today_count` | count/demo | `Сегодня — 18 идей. Какая зацепит вас?` | 1 день |
 | `tomorrow_count` | count/demo | `Завтра — 12 поводов выйти из дома.` | 1 день |
 | `weekend_count` | count/demo | `24 идеи на выходные. С чего начнём?` | 1 день |
+| `greeting_day` | polite welcome/demo | `Добрый день! Что сегодня вас удивит?` | 1 день |
+| `local_keska` | human-approved local tone | `Мы говорим по-калининградски. И скажем «кеска».` | 60 дней, не более 3 в год |
+| `smart_search_education` | route education | `Можно просто спросить: «Куда с ребёнком?»` | 30 дней, не более 3 в год |
 | `share_education` | action education | `Есть с кем пойти? Нажмите «Поделиться».` | 30 дней, не более 3 в год |
 | `like_education` | action education | `Событие понравилось? Отметьте сердцем.` | 30 дней, не более 3 в год |
 | `not_interested_education` | action education | `Не ваше? Нажмите «Не интересно».` | 30 дней, не более 3 в год |
 | `frequently_forwarded` | bounded social signal, currently demo | `Это событие часто пересылают. Что в нём нашли?` | 14 дней |
 | `anticipated_person` | grounded public-comment signal, currently demo | `В комментариях ждут гостя. Угадаете кого?` | 30 дней |
+| `anticipated_person_named` | grounded fixture person/event | `В Светлогорск едет Татьяна Куртукова. Пойдём?` | 30 дней |
+| `rare_event` | grounded fixture title/event, lab editorial framing | `Редкий фонд. Открывают редко. Заглянем?` | 30 дней |
+| `weather_water_demo` | fixed future-signal demo; no provider data | `Допустим, на выходных ясно. Может, на воду?` | 7 дней |
+| `festival_demo` | fixed future-signal demo | `Представим: фестиваль уже идёт. Что ещё успеем?` | 7 дней |
+| `unusual_format_demo` | fixed format demo | `Иногда лучший план — паблик-ток. Послушаем город?` | 14 дней |
 | `neutral_fallback` | нет eligible-сцен | `Город не ждёт. Что удивит сегодня?` | не запоминается |
 
 Для education-сцен один подтверждённый успех целевого действия **после квалифицированного показа этого нарратива** подавляет повтор на 90 дней. Более старый лайк/share/dislike не считается ответом на новый показ; обычный клик по CTA тоже не считается успехом.
@@ -127,7 +164,7 @@ Lab содержит восемь видимых scenario IDs и universal fallb
 
 Production-фраза «часто пересылают» допустима только из ограниченного метрикой окна успешных share-действий, а не кликов по кнопке. «В комментариях ждут гостя» требует публичных комментариев, нескольких уникальных авторов, явного ожидания, высокой confidence связи person/entity с этим событием и expiry. Имена авторов и цитаты в briefing не переносятся. Текущий lab не имеет этого data contract, поэтому оба сигнала явно `DEMO-СИГНАЛ`.
 
-В [platform backlog](../../backlog/features/static-typed-briefing/README.md) добавлены восемь future-gated families: редкое событие, благотворительное событие, обучение умному поиску, приезжий артист из другого региона России, зарубежный артист, открывающийся/идущий фестиваль, необычный формат и самое комментируемое в ограниченном окне публичных источников. Ни одна из этих families не включена в текущие восемь lab-сцен.
+В [platform backlog](../../backlog/features/static-typed-briefing/README.md) заданы future-gated families: редкое и благотворительное событие, smart-search education, named/visiting artists, festival window, unusual format, bounded discussion signal, polite/local tone и weather-event chain. Lab включает только безопасные fixed-copy демонстрации некоторых форматов. `anticipated_person_named` и `rare_event` ссылаются на реальные fixture events; weather/festival/unusual остаются явными `DEMO-СИГНАЛ`, не production facts. Благотворительность, происхождение артиста, live comment counts и юмористический факт не симулируются без provenance.
 
 ### Minimal manifest shape
 
@@ -135,6 +172,8 @@ Production-фраза «часто пересылают» допустима т�
 {
   "schema_version": "briefing-lab-v0",
   "id": "today_count",
+  "chain_id": null,
+  "next_scenario_id": null,
   "priority": 100,
   "eligible": true,
   "facts": {"count": 42},
@@ -157,19 +196,28 @@ Contract:
 - no network request in lab render;
 - stale, missing or invalid fact selects `neutral_fallback`;
 - no Gemini-generated output is admitted automatically.
+- optional `next_scenario_id` резолвится только в другой compiled eligible node;
+- optional media содержит canonical `event_id`, validated derivative и
+  `small|wide` mode; отсутствие/ошибка media не инвалидирует text/link;
+- public `Показать следующее` — переход по compiled edge/queue, а не успех
+  CTA/action.
 
 ## Layout gate
 
 Исправленный lab проверяет коммуникацию, а не дизайн ещё не спроектированной главной ленты:
 
 - hero занимает `min(42svh, 250px)` на mobile и `min(42svh, 380px)` на desktop, всегда `≤50svh`;
-- сообщение имеет 1–3 визуальные строки во всех восьми сценариях на `320×568`, `375×667`, `390×844`, `1440×900`;
+- сообщение имеет 1–3 визуальные строки во всех 16 сценариях на `320×568`, `375×667`, `390×844`, `1440×900`;
 - mobile typography примерно `27–34px`, desktop `48–72px`, с отдельными терракотовыми фактами/ссылками;
 - пять категорий переносятся на две строки без скрытого горизонтального жеста и остаются видимыми сразу под hero;
 - начало контекстной ленты видно, но карточки не являются предметом оценки;
 - production `EventLayout` и `EventListItem` оставлены только как масштабный фон, без уменьшения их размеров.
+- media существует только на desktop `≥1024px`, не меняет фиксированную
+  высоту stage/позицию categories/feed и не получает `src` на mobile;
+- wide media занимает `60–66%` stage справа, text остаётся в левой колонке с
+  paper stripe; reduced-motion показывает статичное изображение без auto-exit.
 
-Автоматическая матрица проверяет все восемь сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport.
+Автоматическая матрица проверяет все 16 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
 
 ## Reproducible shareable-lab workflow
 
@@ -180,7 +228,7 @@ cd site
 PREVIEW_BUILD_ID=briefing-lab-$(git rev-parse --short=12 HEAD) npm run lab
 ```
 
-That single command builds, checks and serves the lab. Local URL для просмотра механики: `http://127.0.0.1:4177/<build-id>/lab/briefing/?variant=c&replay=1`; A/B остаются сравнительными вариантами; выбранный сценарий задаётся через `scenario=<id>`. The build fails closed unless the artifact contains only the lab HTML, hashed Astro CSS, manifest, favicon and exact wordmark asset.
+That single command builds, checks and serves the lab. Local URL для просмотра механики: `http://127.0.0.1:4177/<build-id>/lab/briefing/?variant=c&replay=1`; A/B остаются сравнительными вариантами; выбранный сценарий задаётся через `scenario=<id>`. The build fails closed unless the artifact contains only the lab HTML, hashed Astro CSS, manifest, favicon and exact standalone wide-O asset.
 
 Public publication is a distinct command and accepts only `preview-YYYYMMDDtHHMM-briefing-lab-<sha8>`. It performs recursive copy only into that new prefix, never `sync`, delete, cache purge, root write, stable ICS mutation or production navigation change. Local telemetry remains capped at 24 records in `window.__briefingTelemetry` and can be downloaded from the on-page debug panel; no beacon, XHR, POST, Supabase or analytics transport is created.
 
@@ -205,15 +253,15 @@ The earlier full static build failed because the host filesystem was at `99–10
 - complete useful text exists in DOM; screen readers do not receive per-character updates;
 - 4–5 semantic fragments appear with deterministic ease-out, not one whole-card wipe and not slow literal typing;
 - first fragment is visible immediately; total formation is about `0.9–1.5s` depending on `Медленнее / Обычно / Быстрее`;
-- terracotta cursor имеет два scenario-driven вида — вертикальный bar и горизонтальный underscore; lab пока содержит blinking linger в части сцен, но user-review зафиксировал ложное ожидание продолжения; production-candidate обязан убирать курсор не позднее `600 ms` после последнего фрагмента, если следующая смена не запланирована и не обозначена явно; при reduced/static он скрыт;
+- terracotta cursor имеет два scenario-driven вида — вертикальный bar и горизонтальный underscore; после user-review blinking linger удалён: cursor исчезает вместе с active fragment при completion, а при reduced/static скрыт;
 - `Повторить` intentionally replays in lab without reload, while ordinary session reload shows `Уже показано · можно повторить`;
-- `Показать все 8` plays each representative scenario once and stops; mobile remains manual unless the user explicitly starts the deck;
-- Previous, Pause/Continue and Next remain visible; progress is textual `N из 8`;
+- `Показать все 16` в LAB-dock plays each representative scenario once and stops; mobile remains manual unless the user explicitly starts the deck;
+- public `Показать следующее` и Pause/Continue остаются в hero; LAB-only Previous/Replay не создают впечатление production controls; progress is textual `N из 16`;
 - hover, focus, blank-area pointer interaction, hidden tab and BFCache finish the complete sentence and pause; links remain stable and activate on the first tap;
 - `prefers-reduced-motion` shows the complete current scene with manual controls and no auto-advance;
 - B has the exact same current message fully static; A removes only the communication surface.
 
-The large decorative `о` is a separate `aria-hidden` `<use>` of the real announcement wordmark SVG, cropped with `viewBox="2571 410 1600 1104"`; текстовая подделка буквы удалена.
+The large decorative `о` is a separate `aria-hidden` image whose SVG contains only the exact two-contour O subpath from the master announcement wordmark (`viewBox="2571 410 1600 1104"`). `<use>` compound path всего слова и текстовая подделка удалены.
 
 ## Experiment sequence
 
@@ -351,7 +399,7 @@ The model was Antigravity/agy `Gemini 3.1 Pro (High)`, run twice as one correlat
 |---|---|
 | R01 status/evidence | `GO_TO_PROTOTYPE_ONLY`; user/metric validation false |
 | R02 no Gemini/personalization MVP | excluded from V0; retained only in appendix |
-| R03 ≤8 scenarios + fallback | eight deterministic IDs + one neutral fallback |
+| R03 initial ≤8 scenarios + fallback | первоначально выполнено как 8+fallback; последующий явный user-review superseded этот showcase-limit, поэтому selector расширен до 16+fallback без изменения production gate |
 | R04 isolated A/B/C lab | `/lab/briefing/` |
 | R05 mobile visibility | hero `≤50svh`; categories and beginning of secondary feed visible; message remains 1–3 lines |
 | R06 no production/deploy | explicit lab-only scope |

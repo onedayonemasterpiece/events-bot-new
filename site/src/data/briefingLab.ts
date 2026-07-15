@@ -70,7 +70,7 @@ export const briefingLabScenarios = [
     fragments: [
       { text: 'Мы говорим', breakAfter: true },
       { text: 'по-калининградски.', accent: true, breakAfter: true },
-      { text: 'Можем сказать' }, { text: '«кеска».' },
+      { text: 'И скажем' }, { text: '«кеска».' },
     ],
     ctaLabel: 'Найти повод выйти', ctaHref: '/segodnya/',
   },
@@ -131,7 +131,7 @@ export const briefingLabScenarios = [
     id: 'anticipated_person_named', label: 'Гость — называем имя', family: 'signal', cooldownDays: 30,
     cursor: 'bar',
     fragments: [
-      { text: 'В Светлогорск приезжает', breakAfter: true },
+      { text: 'В Светлогорск едет', breakAfter: true },
       { text: 'Татьяна Куртукова.', accent: true, eventId: 6020 },
       { text: 'Пойдём?' },
     ],

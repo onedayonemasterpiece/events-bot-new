@@ -41,4 +41,9 @@ if (html.includes(`"/${buildId}/sobytiya/`)) throw new Error('Production event l
 for (const asset of [`/${buildId}/_astro/`, `/${buildId}/favicon.svg`, `/${buildId}/brand/announcements-wide-o-ui.svg`]) {
   if (!html.includes(asset)) throw new Error(`Versioned lab asset URL missing: ${asset}`);
 }
+const wideO = readFileSync(path.join(buildRoot, 'brand/announcements-wide-o-ui.svg'), 'utf8');
+const pathCount = (wideO.match(/<path\b/gu) || []).length;
+if (!wideO.includes('viewBox="2571 410 1600 1104"') || pathCount !== 1 || !wideO.includes('M3371 410C3971 410') || wideO.includes('M33 1490')) {
+  throw new Error('Standalone wide-O asset is not the exact isolated wordmark contour');
+}
 console.log(`Briefing lab allowlist OK (${files.length} files): ${buildId}`);

@@ -352,8 +352,19 @@ test('selected media is desktop-only, wide media exits, and reduced motion stays
   await open(wide.page, 'c', 'rare_event', '&replay=1&pace=fast');
   await expect(wide.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  const categoriesTopWithMedia = (await wide.page.locator('[data-briefing-categories]').boundingBox())!.y;
   await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 5000 });
+  const categoriesTopAfterExit = (await wide.page.locator('[data-briefing-categories]').boundingBox())!.y;
+  expect(Math.abs(categoriesTopAfterExit - categoriesTopWithMedia)).toBeLessThanOrEqual(1);
   await wide.context.close();
+
+  const staticWide = await freshPage(browser, { width: 1440, height: 900 });
+  await staticWide.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(staticWide.page, 'b', 'rare_event');
+  await expect(staticWide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await staticWide.page.waitForTimeout(4300);
+  await expect(staticWide.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
+  await staticWide.context.close();
 
   const reduced = await freshPage(browser, { width: 1440, height: 900 }, 'reduce');
   await reduced.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));

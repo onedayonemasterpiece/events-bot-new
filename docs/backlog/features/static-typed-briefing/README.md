@@ -224,7 +224,37 @@ visible_feed_preview >= min(96px, 0.16 * small_viewport_height)
 - только `transform/opacity/clip-path`, без влияния на layout;
 - при reduced motion мотив статичен или отсутствует.
 
+Lab обязан использовать отдельный source-faithful asset только с двумя контурами
+буквы из master-path, а не `<use>` составного path всего слова с уменьшенным
+`viewBox`: такой crop всё равно рисует «Анонсы» и лишь обрезает его краями
+viewport. Канонический lab asset — `announcements-wide-o-ui.svg`, геометрия
+`viewBox="2571 410 1600 1104"`; растянутый шрифтовой символ и 16px optical
+favicon-адаптация не являются заменой.
+
 Если мотив принимается, это отдельное изменение design-system governance; исследование не даёт production-разрешения.
+
+### Narrative media на desktop
+
+Изображение — необязательное доказательство конкретного нарратива, а не фон по
+умолчанию. Допускаются только canonical event media или утверждённый обучающий
+UI-fragment с provenance. На mobile media не загружается; текст, link и CTA
+полностью работают без него.
+
+- `small`: афиша/иллюстрация до `180–210px` справа, когда текст называет
+  конкретное событие или человека;
+- `wide-easter-egg`: редкий режим, `60–66%` ширины stage справа, сильно
+  кропнутый по высоте; текст сдвигается в левую колонку примерно `42%`, а его
+  inline-fragments получают непрозрачную paper stripe через
+  `box-decoration-break: clone`;
+- слой абсолютный внутри заранее фиксированной высоты hero, поэтому появление
+  не меняет позиции категорий/feed и не создаёт CLS;
+- только `transform/opacity`, ease-in-out около `650ms`, bounded exit примерно
+  через 4 секунды; смена сценария отменяет timer;
+- `safe_crop=true` и hero-fit `cover` обязательны для wide-mode; ошибка media
+  деградирует в text-only;
+- `prefers-reduced-motion` оставляет статичное media без автоматического exit;
+  будущий video-вариант обязан иметь poster, жёсткий byte/duration budget,
+  без autoplay/audio на mobile и тот же text-only fallback.
 
 ## 4. Кинетика и взаимодействие
 
@@ -422,6 +452,11 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 | `rare_event` | active event has human `rare_format` flag or passes a versioned low-frequency format/occurrence baseline with provenance | later/manual; once/event/30d | можно «редко встречается в афише»; нельзя подразумевать дефицит билетов или уникальность без baseline | 1) «Такой формат редко появляется в афише: {{link:event:event_id|event_title}}.» 2) «Необычный для городской афиши формат — {{link:event:event_id|event_title}}.» |
 | `charity_event` | explicit canonical charity/benefit-purpose fact, beneficiary/donation mechanics grounded; active event | later/manual; once/event/14d | называть благотворительным только по source fact; не обещать, куда пойдут средства, если это не указано | 1) «В афише есть благотворительное событие — {{link:event:event_id|event_title}}.» 2) «Можно сходить и поддержать важное: {{link:event:event_id|event_title}}.» |
 | `smart_search_education` | `/poisk/` is enabled; for an action CTA the current user can actually authenticate/use it | education; until one successful search after exposure, then suppress 90d; max 3/year | объяснять natural-language input и простой путь; не заявлять безошибочность, «лучший» или «понимает всё» | 1) «Опишите обычными словами, куда хочется. {{link:route:search:q_all|Умный поиск}} соберёт варианты.» 2) ««Джаз вечером» или «с ребёнком в выходные» — {{link:route:search:q_all|поиску этого достаточно}}.» |
+| `polite_daypart` | local daypart computed in `Europe/Kaliningrad`; no event claim required | opening/diversity; max 1/session | приветствие не должно занимать отдельную долгую сцену или выдавать server UTC за local time | 1) «Добрый день! Что сегодня удивит?» 2) «Добрый вечер! Посмотрим, что ещё начинается сегодня?» |
+| `local_keska` | timeless human-approved local phrase bank | later/manual; once/30d | только editorial local tone; фигурные кавычки `«кеска»`; не приписывать слово конкретному пользователю | 1) «Мы говорим по-калининградски. И даже можем сказать «кеска».» 2) «По-калининградски? Конечно. «Кеска» тоже есть в словаре.» |
+| `anticipated_person_named` | canonical participant identity, active event and event link grounded; comment anticipation is optional and separately provenanced | scene 1/2; once/person/event/30d | имя можно показывать без teaser; нельзя добавлять «ждут», если comment gate не пройден | 1) «В Светлогорск приезжает {{person_name}}. {{link:event:event_id|Посмотреть событие}}.» 2) «Гость ближайшей афиши — {{person_name}}. {{link:event:event_id|Вот подробности}}.» |
+| `humorous_guest` | participant role/genre/humour fact explicitly grounded, active linked event | later/manual; once/person/event/30d | юмор — стиль, не источник факта; «любит шутить» запрещено без comedian/humour evidence | 1) «В Калининградскую область приедет гость, который любит шутить. {{link:event:event_id|Узнать кого}}.» 2) «Улыбнитесь, а мы пока покажем {{link:event:event_id|событие с юмором}}.» |
+| `weather_water_chain` | fresh licensed forecast envelope overlaps an eligible geolocated activity event; controlled activity/environment taxonomy | max 2-node manual chain; once/forecast hash | описывать прогноз, не безопасность; нельзя переносить sea wave signal на реку/лагуну или скрывать attribution | 1) «На выходных прогноз обещает солнце. Поедем к морю или откроем {{link:route:weekend|афишу выходных}}?» 2) «В афише есть {{link:event:event_id|сплав на байдарках}}. Условия и отмены уточняйте у организатора.» |
 | `visiting_artist_ru` | named participant identity and event are source-grounded; home city/region is in Russia and outside Kaliningrad Oblast; arrival/current participation is not inferred from a repost | later/manual; once/person/event/30d | «приезжает в Калининград», а не «из России»; не подменять артистом ведущего/запись | 1) «В Калининград приезжает {{person_name}} из {{home_city}}. {{link:event:event_id|Вот событие}}.» 2) «Гость из {{home_city}} — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
 | `visiting_artist_international` | named participant/event/country are source-grounded; home country is not Russia; participation remains active and inside expiry window | later/manual; once/person/event/30d | можно «зарубежный артист» или country; нельзя выводить nationality из имени или места публикации | 1) «В Калининграде выступит {{person_name}} из {{country_name}}. {{link:event:event_id|Узнать подробности}}.» 2) «Зарубежный гость на ближайшей неделе — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
 | `festival_window` | canonical festival entity with grounded start/end; starts within next 7 local calendar days or `start_date <= today <= end_date` | scene 1/2; once/festival/7d | чётко различать «откроется» и «продолжается»; не называть фестивалем одно событие | 1) «На этой неделе откроется {{festival_name}}. {{link:event:event_id|Начать с программы}}.» 2) «{{festival_name}} уже идёт. {{link:event:event_id|Что ещё можно успеть}}?» |
@@ -451,6 +486,91 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 7. Tie-breakers: higher provenance confidence → fewer previous impressions → fresher build → stable scenario ID.
 8. Never show both `return_zero` and `return_delta`, or `first_*` and returning personalization, in one session.
 9. Record exposure only after scene remained visible long enough to read; do not treat auto-created hidden scene as shown.
+
+### Compiled narrative chains
+
+Production engine компилирует bounded DAG на build/update stage; это не runtime
+agent. Входы: canonical event facts, ограниченные social/action aggregates,
+weather envelope, активные promo-campaigns, versioned phrase bank и route
+registry. Порядок неизменяем:
+
+1. hard eligibility, provenance, freshness и exact link validation;
+2. исключение past/inactive/dismissed/stale и time-bound конфликтов;
+3. deterministic candidates без LLM;
+4. promo overlay как ограниченный boost/pin только среди уже безопасных
+   candidates;
+5. diversity/cooldown/ranking; максимум 3 nodes в одной chain и максимум одна
+   активная chain в hero;
+6. offline writer, deterministic semantic/viewport validators;
+7. immutable manifest со статически готовым первым node.
+
+Node содержит `scenario_id`, optional `chain_id`, `node_id`, `family`, `tone`,
+`required_fact_ids`, `event_ids`, `link_tokens`, provenance/expiry, priority,
+cooldown/caps, viewport fragments и edges вида
+`after_read|public_next|action_success → node_id`. Клиентская state machine:
+`ready → entering → reading → stopped|exhausted`. В `stopped` при наличии
+скомпилированного edge всегда доступна публичная кнопка `Показать следующее`;
+она не относится к LAB-controls и фиксирует намерение, но не успех целевого
+действия.
+
+Local state хранит только bounded IDs/timestamps: последние scenario/node,
+qualified exposures, action successes, dismissals и explicit facets. Текст,
+weather coordinates, persona и raw comments не сохраняются. Вкладки
+координируются через `BroadcastChannel` с `storage` fallback. Успешное действие
+закрывает обучающий нарратив, только если произошло после его qualified
+exposure.
+
+### Promo-campaign overlay
+
+Для promo engine требуется отдельный activity/surface
+`homepage_briefing`. Кампания может выбрать безопасного кандидата, закрепить
+eligible chain, добавить bounded priority/slot/cap и disclosure. Она не может:
+
+- обходить provenance, expiry, weather, past-event, dismissal, dedupe или
+  viewport-fit gates;
+- внедрять raw URL или произвольный copy;
+- считать скрытый/созданный node показом;
+- привязывать festival/programme кампанию только к одному event ID, теряя
+  живую programme-сущность.
+
+`promo_exposure` появляется только после реальной квалифицированной видимости.
+
+### Weather adapter boundary (`kotopogoda`)
+
+Из соседнего `/home/dev/projects/kotopogoda/cat-weather-new` можно переиспользовать
+контрактные идеи, но не импортировать монолитный `main.py`. Полезные reference:
+land/marine fetch и retry/cache `main.py:3479-3900`, WMO mapping
+`main.py:19412-19445`, migrations `0002_weather.sql`,
+`0005_weather_period.sql`, `0023_sea_conditions.py`,
+`0024_sea_assets_shot.py`. У проекта нет weather HTTP route.
+
+Перед production нельзя копировать следующие дефекты reference:
+
+- land wind запрашивается в `km/h`, но позже подписывается/thresholded как
+  `м/с` (`main.py:3484,3608-3629,19460-19485`);
+- naive UTC «завтра» сравнивается с provider local timestamps
+  (`3639-3651`, `3801-3807`);
+- horizon два дня, нет precipitation probability/amount и forecast gusts;
+- current overwritten cache не является daily aggregate;
+- sea wave нельзя использовать как доказательство условий на реке/заливе.
+
+Новый независимый build-time artifact `briefing-weather-v1` обязан содержать
+provider/mode, `Europe/Kaliningrad`, typed units, `fetched_at`, `safe_until`,
+attribution и location periods с temperature, precipitation, weather codes,
+wind/gust и только уместными environment-specific wave facts. Page view не
+делает weather request. Expired/missing snapshot fail-closed выбирает timeless
+navigation.
+
+Weather-event chain допустима только при совпадении event interval, coordinates,
+controlled `activity_environment`, свежего forecast period и утверждённого
+`weather_policy_id`. Copy описывает прогноз, но не безопасность/идеальность;
+решение организатора об отмене остаётся главным. Open-Meteo data требует
+атрибуции; free endpoint заявлен как non-commercial, поэтому paid/self-hosted
+mode и право использования — отдельный release gate
+([terms](https://open-meteo.com/en/terms),
+[license](https://open-meteo.com/en/license),
+[pricing](https://open-meteo.com/en/pricing)). До этого lab использует только
+явный `DEMO-ПОГОДА`, без live provider claim.
 
 ## 6. Manifest и personal overlay
 
@@ -524,6 +644,21 @@ Do not store email, auth token, exact geolocation, raw search history, demograph
 
 ## 7. Gemini Lite offline copy pipeline
 
+### Phrase bank
+
+Большой банк — это versioned набор структурированных fragments по
+`family + tone + viewport + locale`, а не массив случайных готовых строк.
+Entity/fact/link values остаются opaque locked tokens до final render.
+Допустимые tones: `warm`, `polite`, `local_humour`; приветствие получает
+детерминированный local daypart, а `«кеска»` остаётся human-approved timeless
+editorial item. Юмор не создаёт факт: фраза «гость, который любит шутить»
+разрешена только при grounded role/genre/humour evidence.
+
+Вариант выбирается стабильным hash от copy-pack/scenario/event/session bucket,
+поэтому текст не мерцает на reload; ротация возможна только после qualified
+exposure и с cooldown. Размер банка оценивается не количеством строк, а
+coverage, duplication rate, semantic validity и viewport fit.
+
 ### Boundary
 
 Deterministic code owns:
@@ -543,6 +678,13 @@ Gemini Lite may own only:
 - grammatical agreement for supplied facts;
 - short/normal variants;
 - tone variation without semantic expansion.
+
+Writer получает allowlisted fact IDs, link tokens, tone, forbidden claims и
+character/line budget. Он не меняет eligibility, chain order, humour permission,
+event choice, dates, numbers, person identity или URL. Validators дополнительно
+запрещают unknown entity/digit/date/location, fake intimacy, superlatives и
+weather/safety claims; named-person fragment обязан сохранять canonical event
+link. Любой сбой возвращает handwritten variant.
 
 No runtime LLM call occurs in page view/hydration.
 
