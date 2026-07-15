@@ -2,6 +2,11 @@
 
 Статус: **preview-эксперимент, не production contract**.
 
+Решение владельца после проверки на реальном Android: **open prose принят**,
+graphite action dock принят как направление. Следующий `accepted-v2` candidate
+исправляет три обнаруженных на телефонных скриншотах дефекта, не переписывая
+исходную матрицу 2×2.
+
 ## Решения после повторного аудита
 
 Предыдущая формулировка про «перекрывающий контент lockup» снята: фиксированная
@@ -25,6 +30,7 @@
 | `open-prose` | открытый молочный canvas | текущие | только экономию ширины текста |
 | `action-dock` | текущая card | графитовый dock | только группировку действий |
 | `open-prose-action-dock` | открытый canvas | графитовый dock | совместный результат |
+| `accepted-v2` | открытый canvas | адаптивный графитовый dock | принятые решения + mobile corrections |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -40,7 +46,29 @@ icon-only вариант не принимается из-за неоднозн�
 Индекс lab публикует все 12 комбинаций в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
-Preview build: `preview-20260715t-mobile-ui-variants-v1`.
+Preview builds:
+
+- original matrix: `preview-20260715t-mobile-ui-variants-v1`;
+- accepted candidate: `preview-20260715t-mobile-ui-accepted-v2`.
+
+## Accepted v2 corrections
+
+Телефонные screenshots подтвердили:
+
+1. hero был шириной `100vw`, но начинался от левого padding родительского
+   `page-shell`, поэтому выходил вправо на `12px`; v2 центрирует full-bleed
+   относительно viewport через симметричные `calc(50% - 50vw)` margins;
+2. дата/время терялись после массивного action dock; v2 выделяет `when` и
+   `where` отдельными semantic spans и усиливает `when` цветом, размером и весом;
+3. квадратный текстовый poster event `5761` ошибочно имел fixture status
+   `visual_only` и получал photo cover/parallax zoom; v2 явным review override
+   проверяет `poster-stage + poster-billboard`, не меняя framing настоящей photo.
+
+На `<380px` accepted v2 оставляет label ровно у одного secondary action, а
+остальные сохраняет как `48px` icon controls. Выбор выполняется при статическом
+рендере без hydration shift: ticket label имеет приоритет; при calendar+share
+чётные event id показывают calendar, нечётные — share; если calendar отсутствует,
+label получает share. На `390px+` видны обе подписи.
 
 ## Visual QA
 
@@ -61,9 +89,15 @@ open prose, отдельно action dock или только их комбина
 в локальном, некоммитимом artifact
 `artifacts/codex/static-mobile-ui-variants-20260715/gemini-3.1-pro-high-variant-review.raw.md`.
 
+Повторный screenshot audit той же Pro-моделью подтвердил все три дефекта и
+рекомендовал viewport-centred full-bleed, контрастную semi-bold date/time строку,
+contain-oriented OCR policy и детерминированную server-rendered label priority.
+Первый расширенный вызов истёк по времени; успешный узкий повтор сохранён в
+`artifacts/codex/mobile-ui-telegram-review-20260715/gemini-3.1-pro-high-screenshot-audit-retry.raw.md`.
+
 ## Acceptance gate
 
-До переноса в основную event page требуется выбор владельца продукта по двум
-независимым вопросам: `open prose — да/нет`, `action dock — да/нет`. Discovery,
-brand tag, hero composition/media semantics и sticky CTA этим решением не
-переутверждаются.
+До переноса в основную event page требуется принять либо отклонить три v2 детали:
+усиленную date/time строку, OCR-safe override при ошибочной fixture classification
+и event-parity compact-label policy. Discovery, brand tag и sticky CTA этим
+решением не переутверждаются.

@@ -1,10 +1,11 @@
 export type MobileEventReviewVariant = {
-  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock';
+  slug: 'control' | 'open-prose' | 'action-dock' | 'open-prose-action-dock' | 'accepted-v2';
   label: string;
   shortLabel: string;
   note: string;
   proseTreatment: 'card' | 'open';
   actionsTreatment: 'current' | 'dock';
+  revision: 'v1' | 'v2';
 };
 
 export type MobileEventReviewScenario = {
@@ -13,6 +14,8 @@ export type MobileEventReviewScenario = {
   label: string;
   note: string;
   composition: 'photo-cinematic-sheet' | 'poster-billboard';
+  v2Composition?: 'photo-cinematic-sheet' | 'poster-billboard';
+  v2ModeOverride?: 'photo-cover' | 'poster-stage';
 };
 
 export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
@@ -23,6 +26,7 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     note: 'Текущий rounded description container и текущая раскладка действий. Нужен как честная точка сравнения.',
     proseTreatment: 'card',
     actionsTreatment: 'current',
+    revision: 'v1',
   },
   {
     slug: 'open-prose',
@@ -31,6 +35,7 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     note: 'Убирает внешний card у длинного текста и возвращает боковое пространство. Действия намеренно остаются текущими.',
     proseTreatment: 'open',
     actionsTreatment: 'current',
+    revision: 'v1',
   },
   {
     slug: 'action-dock',
@@ -39,6 +44,7 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     note: 'Сохраняет текущий description card, но собирает secondary actions в один тёплый графитовый узел.',
     proseTreatment: 'card',
     actionsTreatment: 'dock',
+    revision: 'v1',
   },
   {
     slug: 'open-prose-action-dock',
@@ -47,6 +53,16 @@ export const MOBILE_EVENT_REVIEW_VARIANTS: MobileEventReviewVariant[] = [
     note: 'Проверяет совместный результат двух независимых изменений без правок brand tag, media policy и discovery cards.',
     proseTreatment: 'open',
     actionsTreatment: 'dock',
+    revision: 'v1',
+  },
+  {
+    slug: 'accepted-v2',
+    label: 'Accepted v2 · исправленный candidate',
+    shortLabel: 'Accepted v2',
+    note: 'Open prose и graphite dock плюс исправленный full-bleed hero, усиленные дата/время, OCR-safe framing и детерминированная compact-label policy.',
+    proseTreatment: 'open',
+    actionsTreatment: 'dock',
+    revision: 'v2',
   },
 ];
 
@@ -64,6 +80,8 @@ export const MOBILE_EVENT_REVIEW_SCENARIOS: MobileEventReviewScenario[] = [
     label: 'Visual/free-like + меньше действий',
     note: '«Выставка фэнтези-картин» — проверка multi-day/free-like decision flow и длинной программы.',
     composition: 'photo-cinematic-sheet',
+    v2Composition: 'poster-billboard',
+    v2ModeOverride: 'poster-stage',
   },
   {
     slug: 'ocr-poster',

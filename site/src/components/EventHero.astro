@@ -199,7 +199,11 @@ const showTicketCta = Boolean(ctaHref);
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
     </div>
-    <p class="event-hero__meta-line">{[dateTimeLabel, placeLabel].filter(Boolean).join(' · ')}</p>
+    <p class="event-hero__meta-line">
+      <span class="event-hero__when">{dateTimeLabel}</span>
+      <span class="event-hero__meta-separator" aria-hidden="true">·</span>
+      <span class="event-hero__where">{placeLabel}</span>
+    </p>
     {event.summary && <p class="event-hero__summary">{event.summary}</p>}
   </div>
 </section>

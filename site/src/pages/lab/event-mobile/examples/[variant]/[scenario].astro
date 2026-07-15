@@ -1,7 +1,7 @@
 ---
 import EventLayout from '../../../../../layouts/EventLayout.astro';
 import MobileEventReviewPage from '../../../../../components/lab/MobileEventReviewPage.astro';
-import type { HeroComposition } from '../../../../../components/EventHero.astro';
+import type { HeroComposition, HeroMode } from '../../../../../components/EventHero.astro';
 import {
   MOBILE_EVENT_REVIEW_CASES,
   mobileEventReviewPath,
@@ -36,8 +36,10 @@ const related = preferredRelatedIds
 const canonicalUrl = absoluteUrl(mobileEventReviewPath(variant.slug, scenario.slug));
 const title = `${variant.shortLabel} · ${event.title} | ${SITE_NAME}`;
 const description = `${variant.note} ${scenario.note}`;
+const composition = variant.revision === 'v2' ? (scenario.v2Composition || scenario.composition) : scenario.composition;
+const modeOverride = variant.revision === 'v2' ? scenario.v2ModeOverride : undefined;
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={eventImageUrl(event.image_url)} structuredData={[]} heroChrome="immersive">
-  <MobileEventReviewPage event={event} related={related} variant={variant} composition={scenario.composition as HeroComposition} />
+  <MobileEventReviewPage event={event} related={related} variant={variant} composition={composition as HeroComposition} modeOverride={modeOverride as HeroMode | undefined} />
 </EventLayout>

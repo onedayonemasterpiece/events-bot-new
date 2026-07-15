@@ -32,7 +32,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -53,6 +53,7 @@ const mobileReviewCases = {
   openProse: readFileSync(join(root, 'lab/event-mobile/examples/open-prose/photo-paid/index.html'), 'utf8'),
   actionDock: readFileSync(join(root, 'lab/event-mobile/examples/action-dock/photo-paid/index.html'), 'utf8'),
   combined: readFileSync(join(root, 'lab/event-mobile/examples/open-prose-action-dock/photo-paid/index.html'), 'utf8'),
+  acceptedV2: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -67,6 +68,13 @@ if (!mobileReviewCases.openProse.includes('data-prose-treatment="open"') || !mob
 }
 if (!mobileReviewCases.combined.includes('data-prose-treatment="open"') || !mobileReviewCases.combined.includes('data-actions-treatment="dock"')) {
   throw new Error('Mobile event combined variant must enable both treatments');
+}
+if (!mobileReviewCases.acceptedV2.includes('data-mobile-review-revision="v2"') || !mobileReviewCases.acceptedV2.includes('data-compact-label-action=')) {
+  throw new Error('Mobile event accepted v2 must expose revision and deterministic compact-label markers');
+}
+const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
 }
 
 const desktopV12Pages = {
