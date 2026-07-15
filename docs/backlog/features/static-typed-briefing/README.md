@@ -336,15 +336,22 @@ Slider можно исследовать только если дискретн�
 
 ### Cursor completion semantics
 
-Мигающий курсор — не просто декор. Он обещает пользователю, что текст ещё вводится или скоро сменится. Поэтому:
+Мигающий курсор — не просто декор. Он обещает пользователю, что текст ещё
+вводится или скоро сменится. Поэтому:
 
-- vertical bar и underscore мигают только в `entering_next`, пока появляются смысловые фрагменты;
-- в `reading`, `manual`, `paused_user` и `exhausted` курсор исчезает не позднее чем через `600 ms` после последнего фрагмента;
-- оставлять его мигать можно только когда уже запланирован auto-advance и рядом есть явный status/progress, но такой режим не является baseline;
+- в `entering_next` используется scenario-driven vertical bar или underscore,
+  пока появляются смысловые фрагменты;
+- после завершения текста и при уже поставленном auto-advance остаётся
+  **горизонтальный underscore** до фактического перехода: это public-сигнал,
+  что цепочка жива, а не одноразово проиграна;
+- в `paused_user`/`manual` cursor исчезает сразу;
+- в `exhausted` underscore делает только три цикла (`≈2340 ms`) и исчезает,
+  потому что timed continuation больше нет;
 - в static/no-JS/reduced-motion cursor не мигает;
-- usability gate отдельно проверяет, не создаёт ли underscore ложного ожидания следующей фразы.
+- usability gate отдельно проверяет, что cursor присутствует ровно тогда, когда
+  обещание следующего состояния истинно.
 
-Постоянный blinking linger из research lab не переносится в production contract.
+Бесконечный blinking linger без запланированного перехода запрещён.
 
 ### State machine
 
@@ -354,11 +361,11 @@ Slider можно исследовать только если дискретн�
 | `hydrating` | JS available | тот же текст, без layout change | нет | `ready_static`, `error` |
 | `ready_static` | manifest/profile resolved | scene 1 готова | device-independent bounded schedule | `entering_next`, `paused_user`, `manual` |
 | `entering_next` | automatic edge or public Next | новая сцена в зарезервированной геометрии | entrance only | `reading`, interrupt |
-| `reading` | entrance complete | полностью статичный текст | readable hold | `entering_next`, `exhausted`, `paused_user` |
+| `reading` | entrance complete | полный текст + horizontal pending cursor | readable hold | `entering_next`, `exhausted`, `paused_user` |
 | `paused_pointer` | hover/pointer proximity | текущая сцена завершена | остановлен на время hover | `paused_user` or explicit resume |
 | `paused_user` | focusin, pointerdown or LAB Pause | полный текст; public chrome не добавляется | нет | explicit resume / terminal |
 | `manual` | Next/Previous | выбранная сцена | нет | `manual`, `exhausted` |
-| `exhausted` | max auto reached | последняя сцена + CTA | нет | `manual` |
+| `exhausted` | max auto reached | последняя сцена + CTA; cursor делает три terminal blink и исчезает | `≈2340 ms` только для cursor | `manual` |
 | `document_hidden` | visibility hidden | полный текст, no animation | нет | visible → remains paused |
 | `stale` | manifest outside safe TTL | non-time-sensitive fallback | нет | manual/static |
 | `error` | parse/fetch/profile error | SSG fallback | нет | static |
@@ -463,6 +470,7 @@ Renderer резолвит ID через allowlisted manifest. Не сущест�
 | `anticipated_person_named` | canonical participant identity, active event and event link grounded; comment anticipation is optional and separately provenanced | scene 1/2; once/person/event/30d | имя можно показывать без teaser; нельзя добавлять «ждут», если comment gate не пройден | 1) «В Светлогорск приезжает {{person_name}}. {{link:event:event_id|Посмотреть событие}}.» 2) «Гость ближайшей афиши — {{person_name}}. {{link:event:event_id|Вот подробности}}.» |
 | `humorous_guest` | participant role/genre/humour fact explicitly grounded, active linked event | later/manual; once/person/event/30d | юмор — стиль, не источник факта; «любит шутить» запрещено без comedian/humour evidence | 1) «В Калининградскую область приедет гость, который любит шутить. {{link:event:event_id|Узнать кого}}.» 2) «Улыбнитесь, а мы пока покажем {{link:event:event_id|событие с юмором}}.» |
 | `weather_water_chain` | fresh licensed forecast envelope overlaps an eligible geolocated activity event; controlled activity/environment taxonomy | max 2-node automatic chain; once/forecast hash | описывать прогноз, не безопасность; нельзя переносить sea wave signal на реку/лагуну или скрывать attribution | 1) «На выходных прогноз обещает солнце. Поедем к морю или откроем {{link:route:weekend|афишу выходных}}?» 2) «В афише есть {{link:event:event_id|сплав на байдарках}}. Условия и отмены уточняйте у организатора.» |
+| `weather_storm_indoor_chain` | fresh licensed local forecast contains a versioned wind/storm trigger for the weekend; two active indoor events overlap that interval | exactly 2–3 automatic scenes; once/forecast hash | premise describes forecast, not observed weather; every following scene has one concrete linked indoor event; no outdoor-safety advice or stale event | 1) «В выходные — ветер и шторм. Пойдём на лекцию?» 2) «Можно послушать {{link:event:event_id_1|lecture_1}}.» 3) «Или — {{link:event:event_id_2|lecture_2}}.» |
 | `visiting_artist_ru` | named participant identity and event are source-grounded; home city/region is in Russia and outside Kaliningrad Oblast; arrival/current participation is not inferred from a repost | later/manual; once/person/event/30d | «приезжает в Калининград», а не «из России»; не подменять артистом ведущего/запись | 1) «В Калининград приезжает {{person_name}} из {{home_city}}. {{link:event:event_id|Вот событие}}.» 2) «Гость из {{home_city}} — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
 | `visiting_artist_international` | named participant/event/country are source-grounded; home country is not Russia; participation remains active and inside expiry window | later/manual; once/person/event/30d | можно «зарубежный артист» или country; нельзя выводить nationality из имени или места публикации | 1) «В Калининграде выступит {{person_name}} из {{country_name}}. {{link:event:event_id|Узнать подробности}}.» 2) «Зарубежный гость на ближайшей неделе — {{person_name}}. {{link:event:event_id|Открыть событие}}.» |
 | `festival_window` | canonical festival entity with grounded start/end; starts within next 7 local calendar days or `start_date <= today <= end_date` | scene 1/2; once/festival/7d | чётко различать «откроется» и «продолжается»; не называть фестивалем одно событие | 1) «На этой неделе откроется {{festival_name}}. {{link:event:event_id|Начать с программы}}.» 2) «{{festival_name}} уже идёт. {{link:event:event_id|Что ещё можно успеть}}?» |
@@ -580,6 +588,14 @@ mode и право использования — отдельный release gat
 [license](https://open-meteo.com/en/license),
 [pricing](https://open-meteo.com/en/pricing)). До этого lab использует только
 явный `DEMO-ПОГОДА`, без live provider claim.
+
+Storm→indoor chain дополнительно требует versioned threshold/official-warning
+evidence, weekend overlap в `Europe/Kaliningrad`, `indoor=true` или отдельно
+подтверждённую крытую площадку и две рекомендации, даты которых попадают в тот
+же forecast window. Экран premise не ведёт в generic search вместо обещанных
+объектов: следующие 1–2 экрана называют события и дают canonical event links.
+Если прошёл только один event gate, цепочка сокращается до двух экранов; если
+не прошёл ни один, weather premise не публикуется.
 
 ## 6. Manifest и personal overlay
 

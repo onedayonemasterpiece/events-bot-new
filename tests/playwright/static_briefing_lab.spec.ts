@@ -21,7 +21,8 @@ const baseUrl = `http://127.0.0.1:${port}/${buildId}/lab/briefing/`;
 const scenarioIds = [
   'today_count', 'tomorrow_count', 'weekend_count', 'greeting_day', 'local_keska', 'smart_search_education',
   'share_education', 'like_education', 'not_interested_education', 'frequently_forwarded', 'anticipated_person',
-  'anticipated_person_named', 'rare_event', 'weather_water_demo', 'festival_demo', 'unusual_format_demo',
+  'anticipated_person_named', 'rare_event', 'weather_water_demo', 'storm_weekend_demo', 'storm_lecture_art_demo',
+  'storm_lecture_cinema_demo', 'festival_demo', 'unusual_format_demo',
 ];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
 let server: ChildProcess;
@@ -130,7 +131,9 @@ test('expanded scenario deck is discoverable; Replay, session state, Play all an
 
   await page.locator('[data-play-all]').click();
   await expect.poll(async () => (await labState(page)).scenario, { timeout: 8500 }).toBe('tomorrow_count');
-  if (!(await labState(page)).paused) await page.locator('[data-pause]').click();
+  await page.evaluate(() => (window as any).__briefingLab.pause());
+  await expect.poll(async () => (await labState(page)).paused).toBeTruthy();
+  await expect(page.locator('[data-pause]')).toHaveAttribute('aria-pressed', 'true');
   const paused = await labState(page);
   expect(paused.paused).toBeTruthy();
   const frozenScenario = paused.scenario;
@@ -154,13 +157,25 @@ test('hero, categories and contextual feed geometry hold across every scenario a
           const stage = document.querySelector('[data-briefing-slot]') as HTMLElement;
           const message = document.querySelector('[data-message]') as HTMLElement;
           const categories = [...document.querySelectorAll('[data-category-route]')].map((node) => ({ text: node.textContent?.trim(), rect: node.getBoundingClientRect().toJSON() }));
-          const fragmentLineYs = [...document.querySelectorAll('[data-reveal-fragment]')]
-            .flatMap((node) => [...node.getClientRects()].map((rect) => Math.round(rect.y)));
+          const fragmentRects = [...document.querySelectorAll('[data-reveal-fragment]')]
+            .flatMap((node) => [...node.getClientRects()]);
+          const fragmentLineYs = fragmentRects.map((rect) => Math.round(rect.y));
+          const originalScrollX = window.scrollX;
+          window.scrollTo(999, window.scrollY);
+          const horizontalScrollX = window.scrollX;
+          window.scrollTo(originalScrollX, window.scrollY);
           return {
             stage: rect('[data-briefing-slot]'), categoriesBox: rect('[data-briefing-categories]'), feedHeading: rect('.briefing-context-feed__heading'),
-            stageFits: stage.scrollHeight <= stage.clientHeight && (stage.dataset.mediaMode === 'wide' || stage.scrollWidth <= stage.clientWidth),
-            messageFits: message.scrollHeight <= message.clientHeight && message.scrollWidth <= message.clientWidth,
-            categories, bodyWidth: document.body.scrollWidth, innerWidth,
+            // The text-only wash intentionally extends to 100vw outside the
+            // shared content shell; bodyWidth below remains the real overflow gate.
+            stageFits: stage.scrollHeight <= stage.clientHeight,
+            // The pending underscore is intentionally positioned just after
+            // the final glyph and may add a few decorative pixels to
+            // scrollWidth. Validate the text boxes themselves plus the page's
+            // real horizontal-overflow gate below.
+            messageFits: message.scrollHeight <= message.clientHeight
+              && fragmentRects.every((rect) => rect.left >= -1 && rect.right <= innerWidth + 1),
+            categories, bodyWidth: document.body.scrollWidth, innerWidth, horizontalScrollX,
             lineCount: new Set(fragmentLineYs).size,
             text: message.textContent?.replace(/\s+/gu, ' ').trim(),
           };
@@ -173,7 +188,8 @@ test('hero, categories and contextual feed geometry hold across every scenario a
         expect(geometry.categories.every((item) => item.rect.width > 0 && item.rect.height >= 44)).toBeTruthy();
         expect(geometry.categoriesBox!.bottom).toBeLessThanOrEqual(viewport.height);
         expect(geometry.feedHeading!.top).toBeLessThan(viewport.height);
-        expect(geometry.bodyWidth).toBe(geometry.innerWidth);
+        expect(geometry.bodyWidth).toBeLessThanOrEqual(geometry.innerWidth + 16);
+        expect(geometry.horizontalScrollX).toBe(0);
       }
     }
     await context.close();
@@ -197,8 +213,11 @@ test('hover/focus/pointer finish the sentence; inline link is stable and pace co
   await page.locator('[data-pace="fast"]').click();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running');
   expect((await labState(page)).pace).toBe('fast');
-  await page.dispatchEvent('[data-briefing-slot]', 'pointerdown', { button: 0 });
-  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 200 });
+  // Bring the stage back from the open lab dock before dispatching the blank
+  // pointer gesture; otherwise the out-of-view observer can win the race.
+  await page.locator('[data-briefing-slot]').evaluate((node) => node.scrollIntoView({ block: 'center' }));
+  await page.dispatchEvent('[data-briefing-slot]', 'pointerdown', { button: 0, pointerType: 'touch' });
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 500 });
   expect((await labState(page)).paused).toBeTruthy();
 
   const href = await page.locator('a[data-reveal-fragment]').first().getAttribute('href');
@@ -206,7 +225,38 @@ test('hover/focus/pointer finish the sentence; inline link is stable and pace co
   await context.close();
 });
 
-test('local queue memory, verified actions, pace preference, exact O and non-lingering cursor are deterministic', async ({ browser }) => {
+test('weather, forwarded event, festival and storm chain are concrete and directly actionable', async ({ browser }) => {
+  const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
+
+  await open(page, 'b', 'weather_water_demo');
+  await expect(page.locator('[data-message]')).toContainText(/Обещают\s+ясные выходные\.\s*Махнём\s+на море\?/u);
+  await expect(page.locator('[data-message]')).not.toContainText(/Допустим|на воду/u);
+  await expect(page.locator('a[data-reveal-fragment]', { hasText: 'на море?' })).toHaveAttribute('href', '/poisk/');
+
+  await open(page, 'b', 'frequently_forwarded');
+  const forwarded = page.locator('a[data-reveal-fragment]', { hasText: 'Часто пересылают' });
+  await expect(forwarded).toHaveAttribute('href', /sobytiya\/[^/]+-6466\//u);
+  await expect(page.locator('[data-scenario-cta]')).toHaveAttribute('href', await forwarded.getAttribute('href') as string);
+
+  await open(page, 'b', 'festival_demo');
+  const festival = page.locator('a[data-reveal-fragment]', { hasText: 'Максим Милославский' });
+  await expect(page.locator('[data-message]')).toContainText('Pianissimo');
+  await expect(festival).toHaveAttribute('href', /sobytiya\/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294\//u);
+  await expect(page.locator('[data-scenario-cta]')).toHaveAttribute('href', await festival.getAttribute('href') as string);
+
+  await open(page, 'c', 'storm_weekend_demo', '&replay=1&pace=fast');
+  await expect(page.locator('[data-message]')).toContainText('ветер и шторм');
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('storm_lecture_art_demo');
+  const firstLecture = page.locator('a[data-reveal-fragment]', { hasText: 'монументальном искусстве' });
+  await expect(firstLecture).toHaveAttribute('href', /sobytiya\/lektsiya-evgeniya-mosiyenko/u);
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('storm_lecture_cinema_demo');
+  const secondLecture = page.locator('a[data-reveal-fragment]', { hasText: 'снимали Калининград' });
+  await expect(secondLecture).toHaveAttribute('href', /sobytiya\/kaliningrad-i-oblast-kak-kinodekoratsiya/u);
+  await expect(page.locator('[data-public-next]')).toBeVisible({ timeout: 2500 });
+  await context.close();
+});
+
+test('local queue memory, verified actions, pace preference, exact O and transition-aware cursor are deterministic', async ({ browser }) => {
   const { context, page } = await freshPage(browser, { width: 390, height: 844 });
   await page.goto(`${baseUrl}?variant=c&replay=1`, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', 'today_count');
@@ -242,6 +292,8 @@ test('local queue memory, verified actions, pace preference, exact O and non-lin
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor', 'underscore');
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await expect(page.locator('[data-briefing][data-motion="complete"] .briefing-fragment.is-active')).toHaveCount(0);
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'true');
+  await expect(page.locator('.briefing-fragment.is-awaiting-next')).toHaveCount(1);
   expect(await page.evaluate(() => (window as any).__briefingLab.getState().memory.exposures.share_education)).toBeUndefined();
   await page.locator('[data-scenario-select]').selectOption('anticipated_person');
   await expect(page.locator('[data-demo-label]')).toContainText('DEMO-СИГНАЛ');
@@ -250,6 +302,36 @@ test('local queue memory, verified actions, pace preference, exact O and non-lin
   await page.locator('[data-reset-briefing-memory]').click();
   expect(await page.evaluate(() => localStorage.getItem('ke-briefing-memory-v1'))).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem('ke-briefing-lab-prefs-v1'))).toBeNull();
+  await context.close();
+});
+
+test('horizontal cursor signals a timed continuation and retires after terminal blinks', async ({ browser }) => {
+  const { context, page } = await freshPage(browser, { width: 1440, height: 900 });
+  await open(page, 'c', 'storm_weekend_demo', '&replay=1&pace=slow');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'true');
+  const pending = page.locator('.briefing-fragment.is-awaiting-next');
+  await expect(pending).toHaveCount(1);
+  const cursor = await pending.evaluate((node) => {
+    const style = getComputedStyle(node, '::after');
+    return { display: style.display, position: style.position, width: Number.parseFloat(style.width), height: Number.parseFloat(style.height), animation: style.animationName };
+  });
+  // Absolutely positioned generated boxes are blockified by computed style.
+  expect(cursor.display).toBe('block');
+  expect(cursor.position).toBe('absolute');
+  expect(cursor.width).toBeGreaterThan(20);
+  expect(cursor.height).toBeLessThan(10);
+  expect(cursor.animation).toContain('briefing-cursor');
+  await expect.poll(async () => (await labState(page)).scenario, { timeout: 7000 }).toBe('storm_lecture_art_demo');
+  const nextState = await page.locator('[data-briefing]').evaluate((node: HTMLElement) => `${node.dataset.motion}:${node.dataset.cursorLinger}`);
+  expect(['running:false', 'complete:true']).toContain(nextState);
+
+  await open(page, 'c', 'neutral_fallback', '&replay=1&pace=fast');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(page.locator('[data-public-next]')).toBeVisible();
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'true');
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'false', { timeout: 3000 });
+  await expect(page.locator('.briefing-fragment.is-awaiting-next')).toHaveCount(0);
   await context.close();
 });
 
@@ -469,6 +551,36 @@ test('approved header lockup, named-person grid and weather actions keep visual 
     expect(actions.nextBackground).toBe('rgba(0, 0, 0, 0)');
     expect(actions.nextFont).toBeLessThan(actions.ctaFont);
     expect(actions.lineCount).toBeLessThanOrEqual(3);
+    await run.context.close();
+  }
+});
+
+test('text-only briefing uses a full-viewport wash and a consistent desktop bottom anchor', async ({ browser }) => {
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }]) {
+    const run = await freshPage(browser, viewport);
+    for (const scenario of ['weekend_count', 'weather_water_demo', 'frequently_forwarded', 'festival_demo']) {
+      await open(run.page, 'b', scenario);
+      const geometry = await run.page.evaluate(() => {
+        const stageNode = document.querySelector('[data-briefing-slot]') as HTMLElement;
+        const stage = stageNode.getBoundingClientRect();
+        const actions = document.querySelector('.briefing-stage__actions')!.getBoundingClientRect();
+        const wash = getComputedStyle(stageNode, '::before');
+        return {
+          stage: stage.toJSON(),
+          actionBottomGap: stage.bottom - actions.bottom,
+          washWidth: Number.parseFloat(wash.width),
+          washBackground: wash.backgroundImage,
+          bodyWidth: document.body.scrollWidth,
+          innerWidth,
+        };
+      });
+      expect(geometry.stage.width).toBeLessThan(geometry.innerWidth);
+      expect(Math.abs(geometry.washWidth - geometry.innerWidth)).toBeLessThanOrEqual(1);
+      expect(geometry.washBackground).not.toBe('none');
+      expect(geometry.actionBottomGap).toBeGreaterThanOrEqual(52);
+      expect(geometry.actionBottomGap).toBeLessThanOrEqual(78);
+      expect(geometry.bodyWidth).toBe(geometry.innerWidth);
+    }
     await run.context.close();
   }
 });

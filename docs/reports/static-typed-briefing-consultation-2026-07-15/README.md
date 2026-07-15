@@ -92,6 +92,39 @@ typography, keeps weather copy within the line budget and demotes terminal
 Operational screenshots, geometry JSON and run receipts remain ignored under
 `artifacts/codex/static-typed-briefing-artist-unusual/`.
 
+## Exact text-state continuity and cursor gate
+
+The exact `weekend_count`, `weather_water_demo`, `frequently_forwarded` and
+`festival_demo` states later challenged by the user received their own gate;
+the earlier named-person/poster pass was explicitly not reused:
+
+- initial exact-state review: `2026-07-15 20:49:50–20:50:58 UTC`, status `0`,
+  all four scenes `FAIL`, overall `FAIL`; the 1180px background seam was an
+  explicit publish blocker;
+- corrective continuation: `2026-07-15 20:51:42–20:52:08 UTC`, status `0`;
+  it corrected two inaccurate observations in the first response (the existing
+  muted ghost Next was not solid, and `24 идеи` was already linked) while
+  retaining the seam, grounding and bottom-anchor requirements;
+- post-fix review of five desktop states, two mobile states and the real cursor
+  motion recording: `2026-07-15 21:45:40–21:46:41 UTC`, status `0`, empty
+  stderr, all five scenes `PASS`, overall `PASS`, final verdict
+  `LAB PUBLISH PASS`.
+
+The post-fix gate confirms the full-viewport wash, desktop bottom anchor,
+specific forwarded/festival targets, regional weather copy, sequential
+storm-to-lecture chain and the horizontal pending-transition cursor with
+terminal retirement. It is acceptance of the isolated lab build only, not a
+production-home approval or product desirability result.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`visual-harmony-text-states-prompt.md`](visual-harmony-text-states-prompt.md) | Exact four-state failure gate. | `53e571df79242bc666d75d2319f0ed5ba768076b5cbc8ec350a1e07ff73b9d79` |
+| [`visual-harmony-text-states-gemini.md`](visual-harmony-text-states-gemini.md) | Initial four-scene `FAIL` response. | `54b6c13f6f0056ebd796b4f3f7a17822e69e2a940ae148abdc27770ab629cf10` |
+| [`visual-harmony-text-states-correction-prompt.md`](visual-harmony-text-states-correction-prompt.md) | DOM-fact correction and exact chain/CTA/vertical-rule request. | `fea445965f60d14ef0e1b2cd5c67b1c4b5dcea7fc8fe1fe08a174688052785cf` |
+| [`visual-harmony-text-states-correction-gemini.md`](visual-harmony-text-states-correction-gemini.md) | Corrective continuation. | `d08f2711177b198747702e1aa938432d54f83d085da5a47589261d2bf0a2a919` |
+| [`visual-harmony-text-states-postfix-prompt.md`](visual-harmony-text-states-postfix-prompt.md) | Five-state desktop, mobile and cursor post-fix gate. | `572889668af27393f5063628787f8f941b72c76151b4273554b7e86f70c15ade` |
+| [`visual-harmony-text-states-postfix-gemini.md`](visual-harmony-text-states-postfix-gemini.md) | Final `LAB PUBLISH PASS`. | `458fe2978e0a72fa36b4c5cd31b0485264474dbc0b072e0ce5ba874375cdb6dc` |
+
 ## Decision trace
 
 ### Accepted from Gemini

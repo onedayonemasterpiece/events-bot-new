@@ -111,12 +111,13 @@ export const briefingLabScenarios = [
   },
   {
     id: 'frequently_forwarded', label: 'Часто пересылают', family: 'signal', cooldownDays: 14,
-    demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'bar',
+    demoSignal: true, demoValidUntil: '2026-07-30T23:59:59+02:00', cursor: 'bar',
     fragments: [
-      { text: 'Это событие' }, { text: 'часто пересылают.', accent: true, breakAfter: true },
-      { text: 'Что в нём' }, { text: 'нашли?' },
+      { text: 'Часто пересылают', accent: true, eventId: 6466 },
+      { text: '«Планету Океан».', accent: true, breakAfter: true, eventId: 6466 },
+      { text: 'Заглянем?' },
     ],
-    ctaLabel: 'Узнать, что там', ctaHref: '/populyarnoe/', nextScenarioId: 'anticipated_person',
+    ctaLabel: 'Открыть «Планету Океан»', ctaEventId: 6466, nextScenarioId: 'anticipated_person',
   },
   {
     id: 'anticipated_person', label: 'Кого особенно ждут', family: 'signal', cooldownDays: 30,
@@ -148,22 +149,49 @@ export const briefingLabScenarios = [
     media: { eventId: 5373, mode: 'wide', assetSourceOrder: 3 },
   },
   {
-    id: 'weather_water_demo', label: 'Погода → вода', family: 'signal', cooldownDays: 7,
-    demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'bar', nextScenarioId: 'unusual_format_demo',
+    id: 'weather_water_demo', label: 'Погода → море', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-08-31T23:59:59+02:00', cursor: 'bar', nextScenarioId: 'unusual_format_demo',
     fragments: [
-      { text: 'Допустим, на выходных' }, { text: 'ясно.', accent: true, breakAfter: true },
-      { text: 'Может,' }, { text: 'на воду?' },
+      { text: 'Обещают' }, { text: 'ясные выходные.', accent: true, breakAfter: true },
+      { text: 'Махнём' }, { text: 'на море?', accent: true, href: '/poisk/' },
     ],
-    ctaLabel: 'Искать активный отдых', ctaHref: '/poisk/',
+    ctaLabel: 'Найти событие у моря', ctaHref: '/poisk/',
   },
   {
-    id: 'festival_demo', label: 'Фестиваль идёт', family: 'signal', cooldownDays: 7,
-    demoSignal: true, demoValidUntil: '2099-12-31T23:59:59Z', cursor: 'underscore',
+    id: 'storm_weekend_demo', label: 'Шторм → в уют', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-08-31T23:59:59+02:00', cursor: 'underscore', nextScenarioId: 'storm_lecture_art_demo',
     fragments: [
-      { text: 'Допустим:' }, { text: 'фестиваль идёт.', accent: true, breakAfter: true },
-      { text: 'Что ещё' }, { text: 'успеем?' },
+      { text: 'В выходные —' }, { text: 'ветер и шторм.', accent: true, breakAfter: true },
+      { text: 'Пойдём на лекцию?' },
     ],
-    ctaLabel: 'Посмотреть фестивали', ctaHref: '/poisk/', nextScenarioId: 'unusual_format_demo',
+    ctaLabel: 'Показать первую лекцию', ctaEventId: 3592,
+  },
+  {
+    id: 'storm_lecture_art_demo', label: 'Шторм → лекция 1', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-07-19T23:59:59+02:00', cursor: 'bar', nextScenarioId: 'storm_lecture_cinema_demo',
+    fragments: [
+      { text: 'Можно послушать', breakAfter: true },
+      { text: 'о монументальном искусстве.', accent: true, eventId: 3592 },
+    ],
+    ctaLabel: 'Открыть первую лекцию', ctaEventId: 3592,
+  },
+  {
+    id: 'storm_lecture_cinema_demo', label: 'Шторм → лекция 2', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-08-03T23:59:59+02:00', cursor: 'underscore', nextScenarioId: 'unusual_format_demo',
+    fragments: [
+      { text: 'Или —', breakAfter: true },
+      { text: 'как снимали Калининград.', accent: true, eventId: 5077 },
+    ],
+    ctaLabel: 'Открыть вторую лекцию', ctaEventId: 5077,
+  },
+  {
+    id: 'festival_demo', label: 'Pianissimo', family: 'signal', cooldownDays: 7,
+    demoSignal: true, demoValidUntil: '2026-07-16T23:59:59+02:00', cursor: 'underscore',
+    fragments: [
+      { text: 'Pianissimo.', accent: true, eventId: 5294, breakAfter: true },
+      { text: 'Максим Милославский.', accent: true, eventId: 5294 },
+    ],
+    ctaLabel: 'Посмотреть концерт', ctaEventId: 5294, nextScenarioId: 'unusual_format_demo',
   },
   {
     id: 'unusual_format_demo', label: 'Необычный формат', family: 'signal', cooldownDays: 14,
