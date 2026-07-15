@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed Region Talk confirmed-external source selection so a generic evidence-ingestion `fetch_attempted` flag no longer hides zero-post `pending_scan` bloggers behind the rescan cooldown.
+
 - Fixed Region Talk VK album acquisition on Kaggle and in the server-side media prefetcher to prefer service read tokens over IP-bound user tokens, and reopen nonterminal incomplete-album rows (including persisted `actual_scored` partial rows) for bounded acquisition repair instead of leaving them permanently stuck after `wall.getById` error 5.
 
 - Fixed Region Talk CandidateReport product heartbeats so newly-created candidate-memory rows still waiting for BGE, actual media, or a downstream policy refresh are no longer reported as operator-reviewable candidates.

@@ -948,10 +948,16 @@ def _source_has_primary_scan_evidence(qrow: dict[str, Any], cursor: dict[str, An
         return True
     if _source_row_is_non_primary_probe(qrow) or _source_row_is_non_primary_probe(cursor):
         return False
+    # ``fetch_attempted`` is intentionally not primary-scan evidence.  Queue
+    # admission/enrichment (notably confirmed-external evidence ingestion) can
+    # set that generic flag without reading any channel history.  Treating it
+    # as a completed first pass moved zero-post ``pending_scan`` bloggers into
+    # the rescan cooldown and made the high-probability backlog effectively
+    # invisible.  Successful history work is proved by the explicit timestamps
+    # above or by a positive durable post counter; access-level deferrals are
+    # covered by ``access_attempted``.
     return bool(
-        _rt_bool(qrow.get("fetch_attempted"))
-        or _rt_bool(cursor.get("fetch_attempted"))
-        or _positive_int(qrow.get("posts_scanned"))
+        _positive_int(qrow.get("posts_scanned"))
         or _positive_int(cursor.get("posts_scanned"))
     )
 

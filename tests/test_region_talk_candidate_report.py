@@ -347,6 +347,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_primary_selected_total"], 2)
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_rescan_selected_total"], 0)
 
+    def test_confirmed_pending_fetch_attempt_without_history_remains_primary_due(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="vk_confirmed_pending", platform="vk", source_title="Confirmed VK",
+            handle="@confirmedpending", url="https://vk.com/confirmedpending", source_kind="unit",
+            source_scope_guess="external", priority=0, discovered_from="external_blogger_evidence",
+            discovered_from_url="", why_seeded="confirmed evidence", expected_value="unit",
+            known_risks="", initial_status="pending_scan", monitoring_enabled=True,
+            rights_policy="unknown", notes="",
+        )
+        key = mod.canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": {key: {
+            "canonical_source_key": key,
+            "platform": "vk",
+            "handle": seed.handle,
+            "source_url": seed.canonical_url,
+            "source_queue_status": "pending_scan",
+            "queue_order": 1,
+            "external_blogger_evidence_status": "confirmed_external",
+            # Evidence admission used this generic flag even though no public
+            # history and no posts were read.
+            "fetch_attempted": "true",
+            "posts_scanned": 0,
+        }}}
+
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "1",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "4",
+        }, clear=False):
+            due = mod._seed_scan_due_state(seed, previous)
+            selected = mod.selected_sources_for_run([seed], 1, previous_state=previous)
+
+        self.assertTrue(due["due"])
+        self.assertFalse(due["is_rescan"])
+        self.assertEqual(due["reason"], "no_previous_scan_cursor")
+        self.assertEqual([item.canonical_url for item in selected], [seed.canonical_url])
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_primary_selected_total"], 1)
+
     def test_unified_queue_pool_exposes_one_uncached_confirmed_telegram_lane(self) -> None:
         mod = load_module()
         queue = {}

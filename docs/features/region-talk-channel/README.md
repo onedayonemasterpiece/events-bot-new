@@ -240,3 +240,12 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
 ## MVP-1.x strict selection update
 
 Пост должен быть содержательно про Калининградскую область. Можно несколько городов/посёлков/мест внутри области; нельзя брать мульти-региональные подборки, рекламу/промо/анонсы, прошлогодние посты или слабые по содержанию визуальные дампы. Image scoring запускается только после freshness, Kaliningrad-only, non-ad, substance and non-news/non-trash gates.
+### Confirmed-external first-scan evidence
+
+Generic `fetch_attempted` is not proof that a source history was scanned.  It
+may be set while a confirmed-external blogger is only admitted/enriched in the
+shared queue.  A first history pass is considered complete only when there is
+an explicit history timestamp, a positive durable `posts_scanned` counter, or
+a recorded access-level deferral such as cached-entity/cooldown handling.  This
+keeps zero-post `pending_scan` bloggers in the primary high-probability lane
+instead of incorrectly cooling them down as rescans.
