@@ -7,6 +7,8 @@
 | R03 — exact accepted mobile V8 | Done | exact `fd8766b1` lab/runtime source integrated into production route; three real mobile cases and related navigation pass |
 
 Integration order was mapping → shared implementation → full build → corpus
-browser gate. Public noindex deployment and its browser gate remain the final
-integrator step; temporary Playwright artifacts remain ignored under
+browser gate → public noindex deploy → public browser gate. The public target is
+`preview-20260715t-production-mobile-v8-related-transport-v3`; HTTP and
+Playwright passed without touching the production root. No writable worker was
+left outstanding; temporary Playwright artifacts remain ignored under
 `artifacts/codex/`.

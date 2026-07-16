@@ -56,4 +56,4 @@ lanes:
     expected_output: public v3 preview, corpus-wide checks, release evidence and Telegram handoff
     verification_scope: full_local_and_public
     effort: extra-high
-    status: in_progress
+    status: completed

@@ -1,10 +1,10 @@
 # INC-2026-07-15 Static production v2 secondary-surface regressions
 
-Status: open
+Status: closed
 Severity: sev2
 Service: KenigEvents static event preview
 Opened: 2026-07-15
-Closed: —
+Closed: 2026-07-15
 Owners: static-site integration
 Related incidents: `INC-2026-07-15-static-desktop-template-regression`
 Related docs: `docs/features/static-site-pages/`, `docs/operations/release-governance.md`
@@ -31,6 +31,10 @@ The v2 full-catalog preview preserved the accepted primary desktop shells, but i
 - 2026-07-15: v2 full-catalog preview published for review.
 - 2026-07-15: user reported variable recommendation geometry, missing train media and stale mobile UI.
 - 2026-07-15: incident opened and v3 serial integration repair started.
+- 2026-07-15: exact V8 source was integrated, desktop related rows were packed
+  by a measured OCR crop interval, and the train breakpoint was removed.
+- 2026-07-15: full local corpus and public noindex v3 acceptance passed; the
+  production root was intentionally not changed.
 
 ## Root Cause
 
@@ -91,15 +95,26 @@ The v2 full-catalog preview preserved the accepted primary desktop shells, but i
 
 ## Follow-up Actions
 
-- [ ] Add generated-page assertions for recommendation geometry, transport media and mobile revision markers.
-- [ ] Keep accepted UI revisions in shared production components rather than hand-copied approximations.
+- [x] Add generated-page assertions for recommendation geometry, transport media and mobile revision markers.
+- [x] Keep accepted UI revisions in shared production components rather than hand-copied approximations.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending noindex v3 preview
-- regression checks: pending
-- post-deploy verification: pending
+- deployed code SHA: `a6e99977` (acceptance-check tip: `0eb677bb`)
+- deploy path: `s3://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/`
+- public URL: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>
+- regression checks: Astro built `352` pages / `282` event routes; production
+  desktop router, rail directory and bus directory checks passed; local
+  Playwright covered all `282` routes, `1090` related rows and `21` rail pages
+  with `0` failures; three real mobile V8 cases plus related-card navigation
+  passed.
+- post-deploy verification: index, Garage, Pianissimo, OCR, rail, V8 lab and
+  train asset returned HTTP `200`; public Chromium checked four desktop routes,
+  `16` related rows and three mobile routes with zero console errors/overflow,
+  exact V8 markers and moving parallax. The decoded mobile train measured
+  `324×65.4px`; a related card navigated to its generated route in the same
+  prefix. Preview remains `noindex`; stable `/ics/*` and production root were
+  not modified.
 
 ## Prevention
 

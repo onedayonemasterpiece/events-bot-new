@@ -17,8 +17,8 @@ This is a release feature of the event page, not a standalone campaign. It is in
 
 ## 2026-07-15 integration evidence
 
-The full current-data candidate is
-<https://kenigevents.ru/preview-20260715t-production-transport-mobile-real-events-v1/__preview/>.
+The current accepted full-data candidate is
+<https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>.
 The rail regression is event `5789` in Светлогорск; the bus regression is event
 `6710` in Романово. Public Playwright acceptance covered `1920×1080` and
 `390×844`, both with zero horizontal overflow. The rail page rendered two
@@ -26,7 +26,9 @@ outbound rows, one return row and three transport calendar links; all three
 transport files and the event calendar returned `200 text/calendar`. Directory
 checks passed for `17` bus localities / `26` venues / `21` stops and `13`
 official rail pages / `9` routes / `17` locality policies / `10` service
-patterns.
+patterns. The v3 public gate additionally proves that the Lastochka image is
+visible in both responsive surfaces and that related-event navigation remains
+inside the same generated preview prefix.
 
 Gemini 3.1 Pro (High) reviewed the responsive composition. Applied decisions:
 keep transport after the compact facts, use container queries rather than a
