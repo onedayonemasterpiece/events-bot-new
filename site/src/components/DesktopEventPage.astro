@@ -225,6 +225,7 @@ const splitViewerImages = splitPortraitSourceIndexes.length > 0
   : indexedGalleryImages.filter(({ image }) => !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
 const companionPreviewCandidates = editorialRailCandidates.filter(({ galleryIndex }) => galleryIndex !== 0);
 const viewerRecommendation = related[0];
+const gallerySlideCount = photoCount + (viewerRecommendation ? 1 : 0);
 const viewerRecommendationImage = viewerRecommendation ? eventImageUrl(viewerRecommendation.image_url) || viewerRecommendation.image_url : null;
 const viewerRecommendationMeta = viewerRecommendation
   ? [displayDateTime(viewerRecommendation), viewerRecommendation.venue_name || viewerRecommendation.city].filter(Boolean).join(' · ')
@@ -597,11 +598,22 @@ const descriptionHtml = (event.description_html || '')
               <figcaption class="sr-only">Фото события: {event.title}</figcaption>
             </figure>
           ))}
+          {viewerRecommendation && (
+            <article class="hero-gallery__slide hero-gallery__slide--cta" data-hero-gallery-slide data-gallery-slide-kind="cta" data-gallery-index={galleryImages.length} aria-hidden="true">
+              {viewerRecommendationImage && <img class="hero-gallery__cta-image" data-gallery-src={viewerRecommendationImage} alt="" loading="lazy" decoding="async" />}
+              <div class="hero-gallery__cta-card">
+                <span>Дальше можно похожее</span>
+                <h2>{viewerRecommendation.title}</h2>
+                {viewerRecommendationMeta && <p>{viewerRecommendationMeta}</p>}
+                <a class="cta-button" href={eventHref(viewerRecommendation)}>Смотреть похожее</a>
+              </div>
+            </article>
+          )}
         </div>
       </div>
       <div class="hero-gallery__caption" aria-hidden="true"><span>Фото события</span><strong>{event.title}</strong></div>
-      {photoCount > 1 && <><button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button><button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото">›</button></>}
-      <div class="hero-gallery__counter" data-hero-gallery-counter>{`1 / ${photoCount}`}</div>
+      {gallerySlideCount > 1 && <><button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button><button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото или похожее событие">›</button></>}
+      <div class="hero-gallery__counter" data-hero-gallery-counter>{`1 / ${gallerySlideCount}`}</div>
     </div>
   )}
 
