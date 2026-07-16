@@ -1,0 +1,73 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 9973f60880debb992361e5d7eea7d111fcc7b077
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-mosaic-followup-20260716
+global_constraints:
+  - Reread Telegram topic 6 before implementation and after evidence publication.
+  - Preserve the established text anchor; media must not shift narrative text.
+  - Mosaic remains desktop-only; mobile loads no narrative raster and keeps hero at most 50vh.
+  - Use only existing grounded event media; no paid image generation.
+  - Preserve pending horizontal cursor behavior and text-first fallbacks.
+  - Code changes require canonical docs and CHANGELOG synchronization.
+verification_owner: root serial integrator
+stop_conditions:
+  - Fewer than half of eligible grounded scenarios have a safe existing media asset.
+  - Telegram E2E human session is unavailable for mandatory review publication.
+requirements:
+  - id: R01
+    requirement: Show a mosaic image under most current lab scenarios, not only one example.
+    area: scenario data and media eligibility
+    lane: ui-integrator
+    done_when: More than half of the selectable scenarios have grounded mosaic media on eligible desktop viewports.
+  - id: R02
+    requirement: Keep narrative text in its normal fixed position; stripe is the only text treatment change when media appears.
+    area: layout and typography
+    lane: ui-integrator
+    done_when: Text/CTA geometry is invariant between equivalent media and text-only scenes within measurement tolerance.
+  - id: R03
+    requirement: Make the mosaic visibly irregular between adjacent cells, trend more transparent near text, extend the visible image farther left, and retire it with a quick irregular reverse transition.
+    area: visual composition and motion
+    lane: ui-integrator
+    done_when: A denser deterministic square grid has conspicuous neighbor deltas, overall left attenuation, farther-left coverage, stable reveal, and reverse exit.
+  - id: R04
+    requirement: Publish screenshots and WebM to the existing mobile Telegram topic for phone review.
+    area: review evidence
+    lane: ui-integrator
+    done_when: Immutable URL, desktop screenshots, mobile screenshots and motion WebM are delivered and verified in topic 6.
+lanes:
+  - id: ui-integrator
+    role: worker
+    effort: extra-high
+    requirement_ids: [R01, R02, R03, R04]
+    target: Implement the coupled scenario-data, renderer, motion, test, documentation and evidence follow-up serially.
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: integration/typed-briefing-mosaic-followup-20260716
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-followup-20260716-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/operations/mobile-ui-telegram-review.md
+      - CHANGELOG.md
+      - .codex/**
+    forbidden_files: []
+    expected_output: Denser majority-media desktop mosaic with invariant text geometry, deterministic lifecycle, exact tests, immutable preview and Telegram evidence.
+    verification_scope: full_local
+    status: in_progress
+  - id: closure-review
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Audit R01-R04, screenshots/video, regressions and isolated-lab release boundary after implementation.
+    depends_on: [ui-integrator]
+    execution_mode: read_only_until_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-followup-20260716-integration
+    writable_files: []
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Done/Partial/Missing/Blocked matrix with publication recommendation.
+    verification_scope: full_local
+    status: planned
