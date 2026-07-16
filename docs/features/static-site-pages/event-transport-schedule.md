@@ -31,9 +31,20 @@ patterns.
 Gemini 3.1 Pro (High) reviewed the responsive composition. Applied decisions:
 keep transport after the compact facts, use container queries rather than a
 page-wide breakpoint, keep one-column mobile reading order, split rail columns
-only from `540px`, reveal the decorative train from `700px`, and split the bus
-schedule/map from `540px`. The raw review remains a local non-committed artifact
+only from `540px`, and split the bus schedule/map from `540px`. The original
+candidate delayed the decorative train until `700px`; production acceptance
+overrides that detail because the accepted desktop split column and phone
+viewport are both narrower. The Lastochka image is now visible at every block
+width (`max-height:76px`, then `92px` from `540px`) and remains `contain` rather
+than cropped. The raw review remains a local non-committed artifact
 under `artifacts/codex/static-site-production-integration-20260715/`.
+
+The 2026-07-15 v3 corpus gate rendered all `282` future/ongoing event pages,
+found `21` rail-enabled pages and verified the illustration has a non-zero
+painted rectangle on every one. A real `390×844` route additionally decoded the
+`500px` source and measured it at `324×65.4px`; the same component remains
+visible in the accepted desktop shell. This is a generated-page contract, not a
+laboratory-only rule.
 
 ## Matching contract
 

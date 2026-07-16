@@ -1,7 +1,6 @@
 # Mobile event UI lab — 2026-07-15
 
-Статус: **v4 принят и перенесён в общий production-integration preview;
-production-root promotion ещё не выполнен**.
+Статус: **preview-эксперимент, не production contract**.
 
 Решение владельца после проверки на реальном Android: **open prose принят**,
 graphite action dock принят как направление. Следующий `accepted-v2` candidate
@@ -10,7 +9,22 @@ graphite action dock принят как направление. Следующ�
 отвечает на следующий Android feedback по лайку, подписям, дню недели и OCR gap.
 `accepted-v4` сохраняет принятую дату/время и исправляет переусложнение v3:
 возвращает poster-parallax, убирает ring/check у лайка и чистит ритм между
-информационными поверхностями.
+информационными поверхностями. Проверка владельца показала, что v4 развернул
+OCR-parallax не в ту сторону, а один только gap не устранил оптический разрыв.
+`accepted-v5` поэтому инвертирует движение и вводит единое gradient-продолжение
+для medallions + description вместо ещё одной границы между блоками.
+Проверка v5 на Android обнаружила, что собственный gradient-background wrapper
+всё ещё начинался жёсткой горизонтальной линией в нижних скруглениях decision.
+`accepted-v6` переносит градиент на прозрачный псевдослой, поднятый до фото, и
+добавляет одинаковое состояние скачанного ICS для mobile и desktop. Проверка
+движения выявила, что OCR-постер всё ещё шёл заметно медленнее photo hero:
+его прогресс делился на полную высоту вертикальной афиши. `accepted-v7`
+нормализует скорость относительно обычного mobile photo hero, не добавляя
+масштаб и не меняя безопасный диапазон `-travel → 0`. Проверка владельца
+показала, что после достижения `0` V7 заметно останавливается ещё до ухода hero.
+`accepted-v8` поэтому продолжает движение через `0` к `+travel` с той же
+скоростью, что photo hero. Для безопасного движения в обе стороны используется
+симметричный crop по `10%` сверху/снизу текущего кадра без масштабирования.
 
 ## Решения после повторного аудита
 
@@ -38,6 +52,10 @@ graphite action dock принят как направление. Следующ�
 | `accepted-v2` | открытый canvas | адаптивный графитовый dock | принятые решения + mobile corrections |
 | `accepted-v3` | открытый canvas | container-aware графитовый dock | feedback по лайку, labels, weekday и OCR gap |
 | `accepted-v4` | открытый canvas | container-aware графитовый dock | owner correction: параллакс, простой active like, vertical rhythm |
+| `accepted-v5` | единая gradient continuation surface + open prose | container-aware графитовый dock | owner correction: reverse parallax и seamless decision→context composition |
+| `accepted-v6` | gradient rise из-под photo + open prose | тот же dock + shared calendar state | без paint-edge у скруглений; `Добавлено` одинаково на mobile/desktop |
+| `accepted-v7` | тот же seamless/open surface | тот же dock + shared calendar state | одинаковая воспринимаемая скорость OCR/photo parallax без OCR zoom |
+| `accepted-v8` | тот же seamless/open surface | тот же dock + shared calendar state | непрерывный OCR parallax всё время видимости hero, без остановки на `0` |
 
 Open prose убирает только фон, border, radius, shadow и лишний inner padding у
 описания. Source gate остаётся отдельным компактным объектом. Action dock
@@ -50,7 +68,7 @@ icon-only вариант не принимается из-за неоднозн�
 - event `5761`: visual/free-like и другой набор действий;
 - event `5878`: OCR poster в `contain`, без унификации с photo hero.
 
-Индекс lab публикует все 21 комбинации в `390×844` iframe и даёт отдельную
+Индекс lab публикует все 33 комбинации в `390×844` iframe и даёт отдельную
 ссылку каждой комбинации: `/lab/event-mobile/`.
 
 Preview builds:
@@ -59,6 +77,10 @@ Preview builds:
 - accepted candidate: `preview-20260715t-mobile-ui-accepted-v2`.
 - feedback candidate: `preview-20260715t-mobile-ui-accepted-v3`.
 - owner-correction candidate: `preview-20260715t-mobile-ui-accepted-v4`.
+- reverse/continuation candidate: `preview-20260715t-mobile-ui-accepted-v5`.
+- seamless/calendar-state candidate: `preview-20260715t-mobile-ui-accepted-v6`.
+- matched-parallax-velocity candidate: `preview-20260715t-mobile-ui-accepted-v7`.
+- continuous OCR-parallax candidate: `preview-20260715t-mobile-ui-accepted-v8`.
 
 ## Accepted v2 corrections
 
@@ -127,26 +149,54 @@ V4:
 - задаёт не менее `12px` между hero decision и context/medallion surface и не менее
   `18px` между context surface и основным description block.
 
-V4 сначала оставался изолированным noindex preview; после acceptance его
-мобильные правила перенесены в общий event-detail candidate. Desktop CSS
-ограничен desktop media queries и этим переносом не менялся.
+V4 остаётся изолированным noindex preview; общий production hero-parallax не меняется.
 
-## Production integration
+## Accepted v5 corrections
 
-Общий candidate
-`preview-20260715t-production-transport-mobile-real-events-v1` применяет v4 ко
-всем `282` экспортированным будущим/продолжающимся событиям и сохраняет
-desktop-композицию отдельной. Внутри event detail транспорт располагается
-после компактных фактов `Коротко`: железнодорожный и автобусный блоки
-возвращаются в естественный вертикальный mobile flow, сохраняют touch targets
-не менее `44px`, а sticky event CTA остаётся отдельным нижним действием.
+Владелец отклонил направление v4 parallax и отметил на Android screenshot
+«ложный подвал» между rounded decision card и первым medallion. V5 не лечит это
+ещё одним отступом или новой карточкой:
 
-Публичный Playwright acceptance на `390×844` подтвердил:
+- poster image остаётся `contain`/natural-width без `scale` и `cover`; на старте
+  он находится в `-travel`, а при scroll движется к `0` по формуле
+  `-maxOffset + progress * maxOffset` — то есть в сторону, обратную v4;
+- travel остаётся ограниченным `36–48px`, а clip viewport всегда покрыт image
+  bounds сверху и снизу;
+- crumbs, medallions и open description объединены одним DOM-wrapper
+  `.mobile-event-review__continuation`; для старых вариантов wrapper имеет
+  `display: contents`, поэтому их геометрия не меняется;
+- только v5 делает continuation full-bleed parent surface: `margin-top:-24px`
+  заводит её под rounded decision, компенсирующий top padding возвращает контент
+  в поток, а gradient от тёплого milk/taupe к transparent создаёт плавное
+  продолжение;
+- у continuation нет border, radius и shadow; у decision border прозрачен и
+  shadow отключён, но нижние rounded corners остаются видимы за счёт мягкого
+  тонального контраста parent gradient;
+- отдельная card surface вокруг prose не возвращается; medallions и description
+  воспринимаются содержимым одного родителя.
 
-- `responsive-weekday-panel` видим, прежняя meta line скрыта;
-- rail и bus блоки не создают horizontal overflow;
-- переход из `Смотрите дальше` открывает следующую актуальную event page;
-- desktop layout и media motion не переопределяются mobile rules.
+V5 также остаётся noindex preview и не меняет production mobile event template.
+
+## Accepted v6 corrections
+
+У v5 первый непрозрачный stop принадлежал прямоугольному paint-box continuation,
+который начинался на `24px` под decision. Центр перекрывался самой карточкой, но
+в её нижних rounded corners фон открывался как горизонтальная полка; на 390px
+pixel audit показал скачок до `26` RGB-уровней за одну строку.
+
+V6 сохраняет DOM, OCR framing и reverse parallax v5, но:
+
+- у continuation теперь `background:none`, поэтому на его top-coordinate нет
+  собственной линии отрисовки;
+- градиент рисует `::before`, поднятый на `clamp(28rem,110vw,32rem)` — прозрачная
+  часть начинается внутри фото, а тон набирается постепенно за decision;
+- у decision настоящий `border:0`, у обеих поверхностей нет shadow/radius/border;
+- medallions и prose остаются содержимым одного semantic continuation wrapper;
+- календарная ссылка после успешного fetch + запуска ICS download показывает
+  `Добавлено`; состояние синхронизируется на всех mobile/desktop controls этого
+  event id и автоматически удаляется на следующий день после события.
+
+V6 — отдельный noindex preview; production mobile template не продвигается.
 
 ## Visual QA
 
@@ -187,6 +237,75 @@ pages) и `check-preview.mjs` завершились успешно.
 Артефакты: `artifacts/codex/mobile-ui-v4-qa-20260715/`.
 Полный preview build собрал `457` страниц; обновлённый `check-preview.mjs` прошёл.
 
+Для `accepted-v5` проверены `360/390/430/768 × 3` scenarios:
+
+- на телефонах hero и continuation совпадают с viewport, horizontal overflow нет;
+- у OCR/poster на `360/390/430` initial transform равен
+  `-39.6/-42.9/-47.3px`, после scroll `180px` —
+  `-17.4/-20.7/-25.1px`: движение идёт к нулю и визуально вниз;
+- до и после scroll `image.top <= visual.top`, а
+  `image.bottom >= visual.bottom`, поэтому reverse parallax не открывает фон;
+- continuation начинается на `24px` за rounded decision, не имеет
+  border/radius/shadow; на phone medallions идут через `26.1–28px`, details —
+  через `17.6–19.8px` после medallions;
+- weekday/date/time, touch targets `>=52px`, container-aware labels и простой
+  terracotta active-like с reload/toggle-off persistence сохранены.
+
+Артефакты: `artifacts/codex/mobile-ui-v5-qa-20260715/`.
+Полный preview build собрал `460` страниц; обновлённый `check-preview.mjs` прошёл.
+
+Для `accepted-v6` проверены `360/390/430 × 3` scenarios:
+
+- continuation имеет `background-image:none`, а его `::before` поднимается на
+  `448–473px` внутрь hero/photo и содержит единственный gradient;
+- в бывшей точке top-edge на обоих viewport gutters максимальный one-row RGB
+  delta равен `1` (у v5 было до `26`), то есть жёсткая линия устранена;
+- decision и continuation имеют нулевые borders, без radius/shadow у
+  continuation; horizontal overflow отсутствует, targets остаются `>=52px`;
+- OCR сохраняет `contain`, покрытие clip viewport и принятое движение
+  `-travel → 0`: `-39.6/-42.9/-47.3px` при старте и
+  `-17.4/-20.7/-25.1px` после scroll `180px`;
+- реальный browser download event дал `kenigevents-event-5658.ics`; компактное
+  состояние пережило mobile reload, отобразилось `Добавлено` на desktop той же
+  страницы, повторный click не создал дубль;
+- cleanup удалил expired/corrupt values и ограничил синтетические `300` записей
+  до `256` ближайших будущих.
+
+Артефакты: `artifacts/codex/mobile-ui-v6-calendar-qa-20260715/`.
+Полный Astro build собрал `463` страницы.
+
+Для `accepted-v7` Playwright сравнил контрольный V6 OCR, V7 OCR и обычный
+photo hero при `360/390/430 × 844` и scroll `0/60/120/180px`:
+
+- за первые `120px` scroll V6 OCR проходил только `14.8px`, тогда как photo —
+  `28.4px`; это подтверждает замеченное владельцем замедление;
+- V7 OCR проходит те же `28.4px`, что photo, на всех трёх ширинах; relative
+  velocity error равен `0`;
+- OCR остаётся `object-fit:contain`, `scale=1`; на всех samples изображение
+  полностью перекрывает clip viewport и не открывает фон;
+- движение сохраняет направление `-travel → 0`, horizontal overflow нет;
+- при `prefers-reduced-motion:reduce` transform остаётся `0 → 0`.
+
+Артефакты: `artifacts/codex/mobile-ui-v7-parallax-qa-20260715/`.
+Полный Astro build собрал `466` страниц; `check-preview.mjs` прошёл.
+
+Для `accepted-v8` Playwright сравнил V7 OCR, V8 OCR и photo hero при
+`360/390/430 × 844` и scroll `0/60/120/180/240/300px`:
+
+- V7 после `180–240px` достигает `0` и остаётся неподвижным, хотя OCR visual
+  ещё виден; замечание владельца воспроизведено;
+- V8 на каждом шаге продолжает движение примерно на `14.2px`, как photo hero:
+  например, на `390px` значения идут
+  `-39/-24.8/-10.6/3.7/17.9/32.1px` без плато на `0`;
+- clipped visual имеет высоту `288/312/344px`, а расчётный конец движения
+  наступает позже его ухода из viewport, поэтому остановка не видна;
+- OCR остаётся `contain`, `scale=1`, суммарный crop ограничен `20%`, image
+  покрывает visual на всех samples, horizontal overflow отсутствует;
+- при `prefers-reduced-motion:reduce` transform остаётся `0 → 0`.
+
+Артефакты: `artifacts/codex/mobile-ui-v8-parallax-qa-20260715/`.
+Полный Astro build собрал `469` страниц; `check-preview.mjs` прошёл.
+
 ## External consultation
 
 Консультация выполнена через `agy` моделью `Gemini 3.1 Pro (High)`. Gemini
@@ -208,6 +327,18 @@ V3 acceptance review выполнен через `agy` моделью `Gemini 3.
 как отдельный prototype. Raw response:
 `artifacts/codex/mobile-ui-v3-qa-20260715/gemini-3.1-pro-high-review.raw.md`.
 
+V7 motion review через `Gemini 3.1 Pro (High)` проверил только активную скорость
+на первых `120px` и поэтому не заметил последующее плато на `0`; после owner
+feedback этот review не считается финальным acceptance. Raw response сохранён
+для аудита ошибки:
+`artifacts/codex/mobile-ui-v7-parallax-qa-20260715/gemini-review.raw.md`.
+
+V8 acceptance review выполнен той же `Gemini 3.1 Pro (High)`, но уже по всему
+видимому диапазону `0–300px`. Консультант подтвердил, что расчётная остановка
+наступает после ухода clipped visual из viewport, bounded `20%` crop оправдан
+запретом zoom, P0/P1 нет; итоговый verdict `PASS`. Raw response:
+`artifacts/codex/mobile-ui-v8-parallax-qa-20260715/gemini-review.raw.md`.
+
 Поправка v4 также обсуждена с `Gemini 3.1 Pro (High)`. Два первых print-mode
 вызова завершились пустым stdout; после проверки CLI log и точечного
 исследования известного silent-empty print-mode поведения успешный узкий повтор
@@ -219,6 +350,22 @@ V3 acceptance review выполнен через `agy` моделью `Gemini 3.
 Pro-модели дал `PASS` для parallax, like и vertical rhythm; P0/P1 не найдены. Raw
 response: `artifacts/codex/mobile-ui-v4-qa-20260715/gemini-v4-acceptance-review.raw.md`.
 
+Для v5 выполнены screenshot diagnosis и финальный gate через `agy` моделью
+`Gemini 3.1 Pro (High)`. Диагноз `false floor` принят: нижняя граница/shadow и
+мертвая молочная полоса заменены overlap + gradient continuation. Совет
+консультанта об общей bordered/shadowed outer card и `object-fit: cover`
+отклонён как противоречащий прямому feedback владельца, open-prose решению и
+OCR no-zoom contract. Финальный review дал `PASS` направлению reverse parallax,
+gap-safety и composition; P0/P1 blockers не найдено. Raw response:
+`artifacts/codex/mobile-ui-v5-qa-20260715/gemini-v5-acceptance-review.raw.md`.
+
+V6 финально проверен через `agy` моделью `Gemini 3.1 Pro (High)` по реальным
+mobile/desktop screenshots, pixel/geometric measurements и browser calendar
+E2E. Reviewer дал `PASS` seamless gradient, OCR regression safety и честному
+compact calendar acknowledgement; P0/P1 blockers для отдельного preview не
+найдено. Raw response:
+`artifacts/codex/mobile-ui-v6-calendar-qa-20260715/gemini-v6-acceptance-review.raw.md`.
+
 ## Task-channel workflow
 
 Telegram topic, назначенный пользователем каналом задачи/приёмки, не является
@@ -229,6 +376,47 @@ receipt-only сообщения и обещания прислать резул�
 
 ## Acceptance gate
 
-V4 перенесён в основную event page текущего integration preview. Оставшийся
-gate — пользовательская проверка массовой сборки и отдельная production-root
-promotion; Discovery, brand tag и sticky CTA этим решением не переутверждаются.
+До переноса в основную event page требуется принять либо отклонить v6 seamless
+gradient rise и shared mobile/desktop calendar acknowledgement. Reverse clipped
+no-zoom poster parallax уже принят владельцем и остаётся regression contract.
+Унаследованные simplified active-like, icons/container-aware labels/date-time
+также остаются видны в preview, но этой итерацией не переутверждаются. Discovery
+и brand tag не меняются.
+
+## Production integration v3 — accepted V8 is the generated mobile contract
+
+This section supersedes the earlier laboratory-only acceptance gate. The exact
+accepted V8 source line from commit `fd8766b1` is now integrated into the shared
+production event route rather than reimplemented “по мотивам”. Desktop and
+mobile remain separate responsive surfaces: below `1024px` only
+`[data-production-mobile-event]` is visible; at desktop widths only the accepted
+Continuous Editorial/Split surface is visible.
+
+Every one of the `282` future/ongoing generated event routes now carries these
+hard markers and behaviors:
+
+- `data-mobile-review-variant="accepted-v8"`;
+- `data-mobile-review-revision="v4"`;
+- `data-mobile-parallax-profile="photo-continuous-crop"`;
+- the accepted V8 weekday/date/time panel, compact action dock, continuation
+  gradient, open prose and calendar-added state;
+- photo continuous parallax and no-zoom clipped OCR motion from the accepted V8
+  implementation;
+- medallions, transport, description and discovery stay in the same long mobile
+  reading flow; transport is inserted after compact facts, not as a second event
+  layout.
+
+The production gate is generated-page evidence, not a consultant opinion:
+
+- Playwright loaded all `282` routes and asserted the exact V8 markers, hidden
+  desktop surface and zero horizontal overflow;
+- real `390×844` photo, OCR and rail routes showed continuous transform changes;
+- the rail route decoded and displayed the Lastochka illustration;
+- clicking a real `Смотрите дальше` card navigated to the generated related
+  event route;
+- `prefers-reduced-motion` behavior remains inherited from the accepted V8
+  runtime.
+
+Future mobile changes must start from this shared production contract. A lab
+prototype may not replace it until the accepted source and its browser checks
+are deliberately promoted together.

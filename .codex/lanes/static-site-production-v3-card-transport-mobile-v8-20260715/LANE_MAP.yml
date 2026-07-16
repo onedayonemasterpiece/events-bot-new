@@ -1,0 +1,59 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: 6e41b1e0c416289d500201bdd835127af90a75b7
+base_branch: fix/static-site-production-desktop-contract-20260715
+integration_branch: fix/static-site-production-desktop-contract-20260715
+global_constraints:
+  - preserve the accepted desktop Continuous Editorial and Split page contracts
+  - transfer the accepted mobile V8 implementation from fd8766b1 without approximation
+  - keep OCR crops at or below 20 percent and never introduce letterbox fields in related cards
+  - regenerate the complete future-event preview before closure
+verification_owner: codex-integrator
+stop_conditions:
+  - any generated desktop route falls back to the legacy desktop event grid
+  - any generated mobile route lacks the accepted V8 continuous poster behavior
+  - related desktop card rows have unequal media geometry or letterbox fields
+  - rail transport with a train asset renders without the train image
+lanes:
+  - id: integration-map
+    role: planner
+    requirement_ids: []
+    target: map accepted V8 commit and current shared production surfaces
+    depends_on: []
+    execution_mode: serial
+    branch: fix/static-site-production-desktop-contract-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: [.codex/lanes/static-site-production-v3-card-transport-mobile-v8-20260715, docs/reports/incidents]
+    forbidden_files: []
+    expected_output: exact file-level transfer and regression contract
+    verification_scope: inspection_only
+    effort: extra-high
+    status: completed
+  - id: shared-production-fix
+    role: worker
+    requirement_ids: [R01, R02, R03]
+    target: normalized desktop related cards, visible train media, exact accepted mobile V8 production integration
+    depends_on: [integration-map]
+    execution_mode: serial_after_dependency
+    branch: fix/static-site-production-desktop-contract-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: [site/src, site/scripts, docs, CHANGELOG.md]
+    forbidden_files: []
+    expected_output: one shared production implementation with no lab-only imitation
+    verification_scope: full_local
+    effort: extra-high
+    status: completed
+  - id: full-regeneration-acceptance
+    role: reviewer
+    requirement_ids: []
+    target: complete future-event build, public noindex preview, desktop and mobile Playwright matrix
+    depends_on: [shared-production-fix]
+    execution_mode: serial_after_dependency
+    branch: fix/static-site-production-desktop-contract-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: [artifacts, docs, .codex/lanes/static-site-production-v3-card-transport-mobile-v8-20260715, CHANGELOG.md]
+    forbidden_files: []
+    expected_output: public v3 preview, corpus-wide checks, release evidence and Telegram handoff
+    verification_scope: full_local_and_public
+    effort: extra-high
+    status: in_progress

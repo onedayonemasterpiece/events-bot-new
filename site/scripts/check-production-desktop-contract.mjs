@@ -30,6 +30,8 @@ for (const { slug, file } of eventFiles) {
   const reason = html.match(/data-presentation-reason="([^"]+)"/)?.[1];
   const surface = html.match(/data-event-surface="([^"]+)"/)?.[1];
   const mobileRevision = html.match(/data-mobile-review-revision="([^"]+)"/)?.[1];
+  const mobileVariant = html.match(/data-mobile-review-variant="([^"]+)"/)?.[1];
+  const mobileParallax = html.match(/data-mobile-parallax-profile="([^"]+)"/)?.[1];
   const key = `${family || 'missing'}:${reason || 'missing'}`;
   counts.set(key, (counts.get(key) || 0) + 1);
 
@@ -38,6 +40,9 @@ for (const { slug, file } of eventFiles) {
   if (surface !== 'production') failures.push(`${slug}: desktop surface is ${surface || 'missing'}, expected production`);
   if (!html.includes('data-production-mobile-event')) failures.push(`${slug}: accepted mobile fallback is missing`);
   if (mobileRevision !== 'v4') failures.push(`${slug}: mobile revision changed from v4 to ${mobileRevision || 'missing'}`);
+  if (mobileVariant !== 'accepted-v8') failures.push(`${slug}: mobile variant changed from accepted-v8 to ${mobileVariant || 'missing'}`);
+  if (mobileParallax !== 'photo-continuous-crop') failures.push(`${slug}: mobile parallax changed from photo-continuous-crop to ${mobileParallax || 'missing'}`);
+  if (html.includes('data-lab-media-treatment="document-natural"')) failures.push(`${slug}: related cards regressed to unequal document-natural media heights`);
   const expected = expectedSpecimens.get(slug);
   if (expected && (family !== expected[0] || reason !== expected[1])) {
     failures.push(`${slug}: routed to ${family}/${reason}, expected ${expected[0]}/${expected[1]}`);

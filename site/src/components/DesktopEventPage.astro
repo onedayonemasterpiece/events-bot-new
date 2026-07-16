@@ -97,9 +97,45 @@ const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
 const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
 // Historical review fixtures predate the LLM media-role export. Keep this fallback
 // inside the noindex desktop lab only; production routing remains role-first/fail-closed.
-const relatedForRender = surface === 'lab' ? related.map((item) => item.image_media_role
+const relatedWithRoles = surface === 'lab' ? related.map((item) => item.image_media_role
   ? item
   : ({ ...item, image_media_role:item.image_text_mode === 'visual_only' ? 'event_photo' : 'unknown_document' } as PreviewEvent)) : related;
+const relatedMediaGeometry = (item:PreviewEvent) => {
+  const documentMedia = item.image_text_mode !== 'visual_only';
+  const primaryUrl = eventImageUrl(item.image_url) || item.image_url;
+  const asset = (item.image_assets || []).find((candidate) => (eventImageUrl(candidate.src) || candidate.src) === primaryUrl)
+    || item.image_assets?.[0];
+  const ratio = asset?.width && asset?.height ? asset.width / asset.height : (documentMedia ? .8 : 1);
+  return { documentMedia, ratio:Number.isFinite(ratio) && ratio > 0 ? ratio : (documentMedia ? .8 : 1) };
+};
+const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
+  const remaining = items.map((item) => ({ item, ...relatedMediaGeometry(item) }));
+  const packed:PreviewEvent[] = [];
+  while (remaining.length && packed.length < limit) {
+    const row = [remaining.shift()!];
+    let safeLower = row[0].documentMedia ? row[0].ratio * .8 : 0;
+    let safeUpper = row[0].documentMedia ? row[0].ratio / .8 : Number.POSITIVE_INFINITY;
+    while (row.length < 3 && remaining.length && packed.length + row.length < limit) {
+      const candidateIndex = remaining.findIndex((candidate) => {
+        if (!candidate.documentMedia) return true;
+        return Math.max(safeLower, candidate.ratio * .8) <= Math.min(safeUpper, candidate.ratio / .8);
+      });
+      if (candidateIndex < 0) break;
+      const [candidate] = remaining.splice(candidateIndex, 1);
+      row.push(candidate);
+      if (candidate.documentMedia) {
+        safeLower = Math.max(safeLower, candidate.ratio * .8);
+        safeUpper = Math.min(safeUpper, candidate.ratio / .8);
+      }
+    }
+    packed.push(...row.map(({ item }) => item));
+    // Do not let an incompatible OCR family leak into the same CSS-grid row.
+    // A short final row is preferable to either fields or more than 20% crop.
+    if (row.length < 3) break;
+  }
+  return packed;
+};
+const relatedForRender = packRelatedRows(relatedWithRoles, 10);
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
@@ -500,7 +536,7 @@ const descriptionHtml = (event.description_html || '')
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
       <div class="cards-grid cards-grid--immersive desktop-clean-related__grid" data-lab-row-normalize>
-        {relatedForRender.map((item) => <EventCard event={item} variant="split-actions" />)}
+        {relatedForRender.map((item) => <EventCard event={item} variant="split-actions" desktopRelatedCrop />)}
       </div>
     </div>
   </section>
@@ -1483,9 +1519,8 @@ const descriptionHtml = (event.description_html || '')
             mode = 'document-pending-contained';
           }
           if (documentRatios.length > 0) {
-            // A shared OCR row is allowed to crop at most 20% of any poster area.
-            // When the aspect family cannot share such a frame, the individual
-            // document falls back to its natural ratio below instead of gaining fields.
+            // Server-side packing guarantees that every OCR family in this row has
+            // a shared frame whose cover crop is at most 20% of the poster area.
             const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
             const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
             if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
@@ -1495,14 +1530,12 @@ const descriptionHtml = (event.description_html || '')
             const imageRatio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
             const isDocument = card.dataset.labMediaKind === 'document';
             const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
-            let cardTreatment = 'visual-cover';
-            if (isDocument) cardTreatment = coverCrop <= .2 ? 'document-safe-cover' : 'document-natural';
-            const appliedRatio = cardTreatment === 'document-natural' ? imageRatio : targetRatio;
-            card.style.setProperty('--lab-row-media-ratio', appliedRatio.toFixed(5));
-            card.dataset.labRowMedia = cardTreatment === 'document-natural' ? 'document-natural-ratio' : mode;
+            const cardTreatment = isDocument ? 'document-safe-cover' : 'visual-cover';
+            card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
+            card.dataset.labRowMedia = mode;
             card.dataset.labRowIndex = String(rowIndex);
             card.dataset.labMediaTreatment = cardTreatment;
-            card.dataset.labCoverCrop = (cardTreatment === 'document-natural' ? 0 : Math.max(0, coverCrop)).toFixed(4);
+            card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
             card.dataset.labRowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
           });
         });
@@ -1682,7 +1715,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-clean-travel { grid-column:2; grid-row:5; width:auto; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(5rem,9vw,9rem); grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-prototype__media-rail { right:1rem; bottom:1rem; }
 
-    /* Lab-only related-card rows: normalized geometry with explicit cover/ambient/hybrid media contracts. */
+    /* Shared desktop related rows: one ratio per row, cover-only media and <=20% OCR crop. */
     .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
@@ -1690,8 +1723,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; object-fit:cover !important; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media),
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-natural"] .event-card__media) { object-fit:cover !important; object-position:center center !important; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) { object-fit:cover !important; object-position:center center !important; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }

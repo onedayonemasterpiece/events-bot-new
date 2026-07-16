@@ -810,3 +810,31 @@ At `390×844` the desktop laboratory remains `display:none`, the mobile share
 button occupies the full `366px` content width, horizontal overflow is zero,
 and the desktop clipboard buttons are hidden. All checked pages report zero
 browser-console errors and warnings.
+
+## Production v3: normalized discovery rows without media-policy escape hatches
+
+This production contract supersedes the earlier v11 experimental
+`12% + ambient contain` treatment for the generated desktop `Смотрите дальше`
+surface. It does not change the accepted primary Continuous Editorial/Split
+shells and does not alter the mobile breakpoint.
+
+The generator starts from a pool of up to `30` related candidates and emits up
+to `10` recommendations in safe rows:
+
+- every rendered row owns exactly one media ratio and one complete card height;
+- `image_text_mode=visual_only` is always `cover`, regardless of a conservative
+  legacy semantic role; non-OCR media never receives side/top fields;
+- OCR/document media is packed only with compatible document ratios; shared
+  `cover` is admitted when the measured lost area is `<=20%` for every document
+  in that row;
+- incompatible OCR documents are not forced into the same row; the old
+  `document-natural` and ambient/letterbox escape hatches are forbidden;
+- crop focus may later use a reviewed focal region, but absent that evidence the
+  document crop is centered and the hard `20%` budget remains authoritative.
+
+The v3 corpus Playwright gate covered all `282` future/ongoing pages and `1090`
+rendered related rows at `1536×864`. It found zero media-height deltas over one
+pixel, zero card-height deltas over one pixel, zero mixed row-ratio values, zero
+non-cover images, zero `document-natural` treatments and zero OCR crops over
+`20%`. The existing desktop routing contract and the real-event mobile V8 gate
+also remained green.

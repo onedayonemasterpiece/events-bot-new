@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-15-static-production-v2-secondary-surfaces.md`
+  - Scope: generated desktop recommendation geometry, rail transport media, exact accepted mobile V8 integration and full-catalog preview acceptance.
+  - Must not regress: recommendation rows use one media ratio without fields, OCR crops stay at or below 20%, rail examples retain the train image, and production mobile routes reuse the accepted V8 behavior from `fd8766b1` rather than an older approximation.
 - `INC-2026-07-15-static-desktop-template-regression.md`
   - Scope: exact accepted desktop event component, production media-family routing, full-catalog static generation and truthful consultant/release acceptance.
   - Must not regress: generated desktop pages must mount the accepted Continuous Editorial/Split component rather than a CSS imitation; portrait/low-resolution media must fail to Split; all-page and representative Playwright evidence must cover the actual generated preview URLs while mobile v4 stays unchanged.

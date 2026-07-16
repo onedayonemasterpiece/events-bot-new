@@ -41,7 +41,7 @@ const required = [
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
   'lab/event-mobile/index.html',
-  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4'].flatMap((variant) =>
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
       `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
     ),
@@ -62,8 +62,16 @@ let transportIcsTotal = 0;
 for (const event of eventsData.events) {
   const eventHtmlPath = join(root, `sobytiya/${event.slug}/index.html`);
   const html = readFileSync(eventHtmlPath, 'utf8');
-  if (!html.includes('data-mobile-event-production') || !html.includes('event-hero__meta-line--weekday-panel') || !html.includes('event-hero__meta-line--standard')) {
-    throw new Error(`Event ${event.id} misses the responsive accepted mobile-v4 production contract`);
+  if (
+    !html.includes('data-mobile-event-production')
+    || !html.includes('data-mobile-review-variant="accepted-v8"')
+    || !html.includes('data-mobile-review-revision="v4"')
+    || !html.includes('data-mobile-parallax-profile="photo-continuous-crop"')
+    || !html.includes('mobile-event-review__continuation')
+    || !html.includes('event-hero__meta-line--weekday-panel')
+    || !html.includes('event-hero__meta-line--standard')
+  ) {
+    throw new Error(`Event ${event.id} misses the responsive accepted mobile-v8 production contract`);
   }
   const hasRail = html.includes('data-event-transport-schedule');
   const hasBus = html.includes('data-event-bus-schedule');
@@ -79,6 +87,9 @@ for (const event of eventsData.events) {
     const factsAt = mobileHtml.indexOf('>Коротко</h2>');
     const transportAt = hasRail ? mobileHtml.indexOf('data-event-transport-schedule') : mobileHtml.indexOf('data-event-bus-schedule');
     if (factsAt < 0 || transportAt < factsAt) throw new Error(`Event ${event.id} transport must follow compact event facts`);
+    if (hasRail && (!mobileHtml.includes('event-transport__train') || !mobileHtml.includes('/assets/transport/kppk-lastochka.webp'))) {
+      throw new Error(`Rail event ${event.id} misses the visible train illustration in the accepted mobile surface`);
+    }
   }
   if (String(event.city || '').toLocaleLowerCase('ru-RU') === 'калининград' && hasRail) {
     throw new Error(`Kaliningrad event ${event.id} must not render a coastal rail schedule`);
@@ -104,6 +115,10 @@ const mobileReviewCases = {
   acceptedV2: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/photo-paid/index.html'), 'utf8'),
   acceptedV3: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/photo-paid/index.html'), 'utf8'),
   acceptedV4: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/photo-paid/index.html'), 'utf8'),
+  acceptedV5: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/photo-paid/index.html'), 'utf8'),
+  acceptedV6: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/photo-paid/index.html'), 'utf8'),
+  acceptedV7: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v7/photo-paid/index.html'), 'utf8'),
+  acceptedV8: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v8/photo-paid/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(mobileReviewCases)) {
   if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
@@ -128,6 +143,27 @@ if (!mobileReviewCases.acceptedV3.includes('data-mobile-review-revision="v3"') |
 if (!mobileReviewCases.acceptedV4.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV4.includes('event-hero__meta-line--weekday-panel') || !mobileReviewCases.acceptedV4.includes('event-hero__weekday')) {
   throw new Error('Mobile event accepted v4 must preserve the accepted weekday-first date/time panel');
 }
+if (!mobileReviewCases.acceptedV5.includes('data-mobile-review-variant="accepted-v5"') || !mobileReviewCases.acceptedV5.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV5.includes('event-hero__weekday') || !mobileReviewCases.acceptedV5.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v5 must preserve v4 controls and expose the gradient continuation surface');
+}
+if (!mobileReviewCases.acceptedV6.includes('data-mobile-review-variant="accepted-v6"') || !mobileReviewCases.acceptedV6.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV6.includes('event-hero__weekday') || !mobileReviewCases.acceptedV6.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v6 must preserve v5 controls and expose the seamless gradient continuation surface');
+}
+if (!mobileReviewCases.acceptedV6.includes('data-calendar-action') || !mobileReviewCases.acceptedV6.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV6.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v6 must expose the shared expiring calendar state contract');
+}
+if (!mobileReviewCases.acceptedV7.includes('data-mobile-review-variant="accepted-v7"') || !mobileReviewCases.acceptedV7.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV7.includes('data-mobile-parallax-profile="photo-velocity-matched"') || !mobileReviewCases.acceptedV7.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v7 must preserve v6 surfaces and expose the photo-velocity-matched parallax profile');
+}
+if (!mobileReviewCases.acceptedV7.includes('data-calendar-action') || !mobileReviewCases.acceptedV7.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV7.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v7 must preserve the shared expiring calendar state contract');
+}
+if (!mobileReviewCases.acceptedV8.includes('data-mobile-review-variant="accepted-v8"') || !mobileReviewCases.acceptedV8.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV8.includes('data-mobile-parallax-profile="photo-continuous-crop"') || !mobileReviewCases.acceptedV8.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v8 must preserve v7 surfaces and expose the continuous crop-safe parallax profile');
+}
+if (!mobileReviewCases.acceptedV8.includes('data-calendar-action') || !mobileReviewCases.acceptedV8.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV8.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v8 must preserve the shared expiring calendar state contract');
+}
 const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
@@ -139,6 +175,12 @@ if (!mobileAcceptedV3OcrOverride.includes('data-hero-mode="poster-stage"') || !m
 const mobileAcceptedV4OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/visual-free/index.html'), 'utf8');
 if (!mobileAcceptedV4OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV4OcrOverride.includes('data-hero-composition="poster-billboard"')) {
   throw new Error('Mobile event accepted v4 must preserve the no-zoom text-poster override');
+}
+for (const variant of ['accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8']) {
+  const html = readFileSync(join(root, `lab/event-mobile/examples/${variant}/visual-free/index.html`), 'utf8');
+  if (!html.includes('data-hero-mode="poster-stage"') || !html.includes('data-hero-composition="poster-billboard"')) {
+    throw new Error(`Mobile event ${variant} must preserve the no-zoom text-poster override`);
+  }
 }
 
 const desktopV12Pages = {
@@ -297,6 +339,9 @@ if (eventJsonLd?.offers?.validFrom && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\
   throw new Error(`Event JSON-LD offer validFrom must be ISO 8601 with timezone, got: ${eventJsonLd.offers.validFrom}`);
 }
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
+for (const runtimeMarker of ['ke_calendar_saved_v1', 'CALENDAR_STATE_LIMIT = 256', 'data-calendar-action', 'triggerCalendarDownload', 'syncCalendarControls']) {
+  if (!controlHtml.includes(runtimeMarker)) throw new Error(`Shared calendar acknowledgement runtime misses ${runtimeMarker}`);
+}
 if (!controlHtml.includes('data-reset-personalization') || !controlHtml.includes('Персонализация сброшена')) throw new Error('Control page misses technical local personalization reset button/handler');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
@@ -560,10 +605,17 @@ if (
   || !/--hero-poster-parallax-y/iu.test(css)
   || !/--hero-poster-travel/iu.test(css)
   || !controlHtml.includes('usesGapSafePosterParallax')
-  || !controlHtml.includes('usesGapSafePosterParallax ? Math.min(48, Math.max(36, window.innerWidth * 0.11)) : 56')
+  || !controlHtml.includes('usesReverseGapSafePosterParallax')
+  || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax')
+  || !controlHtml.includes('usesPhotoContinuousPosterParallax')
+  || !controlHtml.includes('referencePhotoVelocity')
+  || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax ? matchedPosterProgress : progress')
+  || !controlHtml.includes('continuousPosterProgress * maxOffset * 2')
+  || !controlHtml.includes('const gapSafePosterTravel = Math.min(48, Math.max(36, window.innerWidth * 0.11))')
+  || !controlHtml.includes('const continuousPosterTravel = Math.min(44, Math.max(32, window.innerWidth * 0.10))')
   || !controlHtml.includes(': -maxOffset + progress * maxOffset * 2')
   || controlHtml.includes('--hero-parallax-scale')
-) throw new Error('Hero parallax must preserve the production constant-scale motion while the v4 OCR lab moves a no-zoom poster inside a travel-clipped viewport without layout gaps');
+) throw new Error('Hero parallax must preserve the accepted v8 constant-scale, crop-safe continuous motion profiles without layout gaps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*height:\s*100%[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, full-height, controlled and preserve OCR/text images with the base contain mode');
 if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
 if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');
@@ -635,6 +687,9 @@ for (const event of eventsData.events) {
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
   if (calendarEligible && !hasOwnCalendarLink) throw new Error(`Short event ${event.id} misses own calendar link`);
   if (!calendarEligible && hasOwnCalendarLink) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
+  if (calendarEligible && (!html.includes(`data-calendar-event-id="${event.id}"`) || !html.includes('data-calendar-expiry-day=') || !html.includes('data-calendar-label'))) {
+    throw new Error(`Short event ${event.id} misses shared calendar state markers`);
+  }
   for (const [label, pattern] of badHtmlPatterns) {
     if (pattern.test(visibleHtml)) throw new Error(`Rendered page ${event.id} contains ${label}`);
   }
