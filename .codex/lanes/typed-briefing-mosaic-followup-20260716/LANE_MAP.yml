@@ -56,7 +56,7 @@ lanes:
     forbidden_files: []
     expected_output: Denser majority-media desktop mosaic with invariant text geometry, deterministic lifecycle, exact tests, immutable preview and Telegram evidence.
     verification_scope: full_local
-    status: in_progress
+    status: completed
   - id: closure-review
     role: reviewer
     effort: high
@@ -70,4 +70,4 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Done/Partial/Missing/Blocked matrix with publication recommendation.
     verification_scope: full_local
-    status: planned
+    status: completed

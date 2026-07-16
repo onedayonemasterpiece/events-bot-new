@@ -70,6 +70,7 @@ Route:
 
 Final immutable review build:
 
+- [desktop `12×4` majority-media chain + text-only mobile](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [desktop `8×3` mosaic + text-only mobile](https://kenigevents.ru/preview-20260715t2306-briefing-lab-7c2b2a30/lab/briefing/?variant=c&scenario=live_meeting_mosaic&pace=slow&replay=1);
 - [conditional storm → future lecture + pending cursor](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=storm_weekend_demo&pace=slow&replay=1);
 - [конкретный forwarding signal](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1);
@@ -139,6 +140,12 @@ Follow-up exact screenshots и `20.5s` WebM трёх последователь�
 `PUBLISH FOR USER REVIEW: YES`. Gate отдельно подтвердил неоднородность соседей,
 фиксированный text anchor и отсутствие dirty-checkerboard blocker; production
 rollout по-прежнему не входит в решение.
+
+Immutable prefix `preview-20260716t0544-briefing-lab-4c2caa60` построен из
+source `4c2caa60`: isolated build/check pass, Playwright `15/15`. Exact public
+captures на `1440×900`, `1366×768`, `390×844`, `320×568` вернули HTTP 200,
+нулевые page errors и `bodyWidth == innerWidth`; public `20.5s` WebM показывает
+три последовательных mosaic-сценария с reveal/hold/exit, а не один пример.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего
@@ -269,6 +276,11 @@ Mosaic scope/URL, public `320×568`, `390×844`, desktop `1440×900` и full slo
 WebM отправлены как `#97–101`; все receipts verified. Повторное чтение topic с
 `top_message=101` не обнаружило новых пользовательских комментариев после
 отправки.
+Follow-up scope/URL отправлен как `#105`; три final desktop-состояния —
+`#106–108`, partial reveal — `#109`, public mobile `320×568`/`390×844` —
+`#110–111`, exact `20.5s` desktop WebM — `#112`. Все receipts verified;
+post-send inspect вернул `top_message=112` без нового пользовательского
+комментария.
 
 ### Предыдущая curiosity/action-итерация — regression evidence
 
