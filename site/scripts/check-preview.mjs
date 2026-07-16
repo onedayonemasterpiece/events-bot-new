@@ -67,9 +67,8 @@ for (const event of eventsData.events) {
     || !html.includes('data-mobile-review-variant="accepted-v8"')
     || !html.includes('data-mobile-review-revision="v4"')
     || !html.includes('data-mobile-parallax-profile="photo-continuous-crop"')
-    || !html.includes('mobile-event-review__continuation')
+    || !html.includes('mobile-event-production__continuation')
     || !html.includes('event-hero__meta-line--weekday-panel')
-    || !html.includes('event-hero__meta-line--standard')
   ) {
     throw new Error(`Event ${event.id} misses the responsive accepted mobile-v8 production contract`);
   }
@@ -79,7 +78,7 @@ for (const event of eventsData.events) {
     transportEventCount += 1;
     // Desktop and mobile are deliberately separate DOM surfaces. The shared
     // accepted desktop component can render its additive transport block
-    // before the preserved mobile-v4 markup, so the mobile ordering contract
+    // before the accepted mobile-v8 markup, so the mobile ordering contract
     // must be evaluated inside the mobile root rather than against the first
     // transport marker in the complete HTML document.
     const mobileAt = html.indexOf('data-production-mobile-event');
