@@ -50,17 +50,19 @@ const scenarioCount = briefingLabScenarios.length;
 const title = `Живой городской обзор — lab | ${SITE_NAME}`;
 const description = 'Изолированный прототип короткой типографической коммуникации: сценарии, ссылки, пауза и повтор.';
 const canonicalUrl = absoluteUrl('/lab/briefing/');
-const mosaicColumns = 8;
-const mosaicRows = 3;
+const mosaicColumns = 12;
+const mosaicRows = 4;
 const mosaicOpacity = [
-  .16, .28, .44, .62, .78, .88, .94, .97,
-  .12, .24, .40, .58, .76, .90, .96, 1,
-  .18, .30, .48, .66, .80, .89, .93, .96,
+  .18, .38, .22, .52, .35, .70, .50, .84, .66, .94, .76, 1,
+  .34, .16, .46, .28, .60, .42, .78, .58, .91, .73, 1, .86,
+  .12, .42, .20, .48, .30, .66, .46, .88, .62, .97, .81, 1,
+  .30, .14, .40, .24, .56, .38, .74, .54, .86, .69, .96, .82,
 ];
 const mosaicRevealRank = [
-  9, 2, 17, 6, 21, 12, 4, 19,
-  14, 7, 0, 16, 10, 23, 5, 13,
-  3, 20, 11, 1, 18, 8, 22, 15,
+  41, 11, 40, 21, 33, 16, 22, 6, 4, 37, 0, 3,
+  2, 13, 36, 1, 14, 10, 44, 24, 15, 28, 32, 34,
+  45, 12, 46, 38, 31, 39, 27, 35, 29, 5, 30, 25,
+  43, 23, 20, 42, 47, 26, 8, 17, 19, 7, 9, 18,
 ];
 const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index) => {
   const column = index % mosaicColumns;
@@ -74,8 +76,8 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       `--tile-x:${column * (100 / (mosaicColumns - 1))}%`,
       `--tile-y:${row * (100 / (mosaicRows - 1))}%`,
       `--tile-opacity:${mosaicOpacity[index]}`,
-      `--tile-in-delay:${120 + rank * 34}ms`,
-      `--tile-out-delay:${(mosaicColumns * mosaicRows - 1 - rank) * 20}ms`,
+      `--tile-in-delay:${90 + rank * 24}ms`,
+      `--tile-out-delay:${(mosaicColumns * mosaicRows - 1 - rank) * 10}ms`,
     ].join(';'),
   };
 });
@@ -571,7 +573,10 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       lab.querySelector('[data-previous]')?.addEventListener('click', () => runFromDock(() => move(-1)));
       lab.querySelector('[data-public-next]')?.addEventListener('click', () => move(1, true));
       lab.querySelector('[data-pause]')?.addEventListener('click', () => {
-        if (explicitPaused) return resume();
+        if (explicitPaused) {
+          ignoreOutOfViewUntil = performance.now() + 800;
+          return resume();
+        }
         hoverPaused = false; focusPaused = false; pause('manual', true);
       });
       lab.querySelectorAll('[data-pace]').forEach((button) => button.addEventListener('click', () => {
@@ -674,7 +679,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
   @media (min-width: 760px) {
     .briefing-stage { height: min(42svh, 360px); min-height: 270px; padding: .8rem 0 .7rem; }
     .briefing-stage__brand-o { right: 2%; top: -22%; width: clamp(15rem, 34vw, 27rem); }
-    .briefing-stage[data-media-mode="none"] .briefing-stage__message { align-self: end; margin-bottom: clamp(2.75rem, 7vh, 4rem); }
+    .briefing-stage__message { align-self: end; margin-bottom: clamp(2.75rem, 7vh, 4rem); }
     .briefing-stage__message h1 { max-width: 24ch; min-height: 2em; font-size: clamp(3rem, 5vw, 4.5rem); line-height: .98; }
     .briefing-stage__cta { font-size: 1rem; }
     .briefing-stage__actions { column-gap: 1.5rem; }
@@ -702,27 +707,25 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
     .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { max-width: 100%; }
     .briefing-stage[data-media-mode="wide"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .briefing-stage[data-media-mode="wide"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
-    .briefing-stage[data-media-mode="mosaic"] { box-sizing: border-box; width: 100vw; max-width: none; margin-left: calc(50% - 50vw); padding: 0 clamp(20px, 2.2vw, 32px); overflow: clip; background: transparent; }
     .briefing-stage[data-media-mode="mosaic"] .briefing-stage__brand-o { display: none; }
-    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__message { width: min(58vw, 56rem); max-width: min(58vw, 56rem); }
-    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__message h1 { max-width: 100%; font-size: clamp(2.8rem, 4vw, 3.35rem); line-height: 1.02; }
     .briefing-stage[data-media-mode="mosaic"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .briefing-stage[data-media-mode="mosaic"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
-    .briefing-stage__media[data-media-mode="mosaic"] { --mosaic-cell: min(112px, 8.25vw, calc((42svh - 20px) / 3)); top: 50%; right: calc(var(--mosaic-cell) * -.25); bottom: auto; width: calc(var(--mosaic-cell) * 8); height: calc(var(--mosaic-cell) * 3); overflow: visible; opacity: 1; transform: translateY(-50%); transition: none; pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"] { --mosaic-cell: min(88px, 7.4vw, calc((42svh - 12px) / 4)); --mosaic-overshoot: calc(var(--mosaic-cell) * .25); top: 50%; right: calc(50% - 50vw); bottom: auto; width: calc(var(--mosaic-cell) * 12 - var(--mosaic-overshoot)); height: calc(var(--mosaic-cell) * 4); overflow: hidden; opacity: 1; transform: translateY(-50%); transition: none; pointer-events: none; }
     .briefing-stage__media[data-media-mode="mosaic"].is-present,
     .briefing-stage__media[data-media-mode="mosaic"].is-exiting { opacity: 1; transform: translateY(-50%); pointer-events: none; }
-    .briefing-stage__media[data-media-mode="mosaic"] a { width: 100%; height: 100%; pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"] a { width: calc(var(--mosaic-cell) * 12); height: 100%; pointer-events: none; }
     .briefing-stage__media[data-media-mode="mosaic"] img { display: none; }
     .briefing-stage__mosaic { display: none; width: 100%; height: 100%; }
-    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 3px; }
-    .briefing-stage__mosaic-tile { display: block; min-width: 0; min-height: 0; background-repeat: no-repeat; background-size: 800% 300%; background-position: var(--tile-x) var(--tile-y); opacity: 0; transition: opacity 520ms cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
+    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic { display: grid; width: calc(var(--mosaic-cell) * 12); height: calc(var(--mosaic-cell) * 4); grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 3px; }
+    .briefing-stage__mosaic-tile { display: block; min-width: 0; min-height: 0; background-repeat: no-repeat; background-size: 1200% 400%; background-position: var(--tile-x) var(--tile-y); opacity: 0; transition: opacity 600ms cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); }
-    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: 360ms; transition-delay: var(--tile-out-delay); }
+    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: 260ms; transition-delay: var(--tile-out-delay); }
     [data-briefing-variant="static"] .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); transition: none; }
     [data-briefing-scenario-id="weather_water_demo"] .briefing-stage__message h1,
     [data-briefing-scenario-id^="storm_"] .briefing-stage__message h1,
     [data-briefing-scenario-id="festival_demo"] .briefing-stage__message h1,
     [data-briefing-scenario-id="frequently_forwarded"] .briefing-stage__message h1 { max-width: 100%; font-size: clamp(3.1rem, 4.45vw, 4rem); line-height: 1.02; }
+    [data-briefing-scenario-id="anticipated_person_named"] .briefing-stage__message h1 { max-width: 100%; font-size: clamp(3.2rem, 4.1vw, 4rem); }
   }
   @media (max-width: 759px) {
     html:has([data-briefing-lab]) .site-nav { display: none; }

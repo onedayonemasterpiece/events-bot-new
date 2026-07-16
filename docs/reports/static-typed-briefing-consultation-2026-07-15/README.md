@@ -171,6 +171,25 @@ desktop spacing/gradient оставлены polish, потому что не и�
 | [`mosaic-acceptance-prompt.md`](mosaic-acceptance-prompt.md) | Exact screenshots/video, measurements and strict failure request. | `8b06ddba0471f23f48923f30f1f91b64b0f1f433651f69f940d79ff62ab98f2f` |
 | [`mosaic-acceptance-gemini.md`](mosaic-acceptance-gemini.md) | Final `MOSAIC LAB GATE: PASS`. | `5d5ad43ae83da05044bbdab2f72f23b5c01fcc28859d2e642bedbe6f9d90b87a` |
 
+### Mosaic majority/anchor/irregularity follow-up gate
+
+После пользовательского отклонения единственного `8×3` примера follow-up
+получил отдельный exact-state gate. Gemini **3.1 Pro (High)** проверил три
+fully-revealed desktop-сценария, partial entry, `20.5s` WebM трёх
+последовательных mosaic-сцен, mobile `320/390`, точную `12×4` alpha-матрицу,
+фиксированный text anchor и viewport crop. Финальный запуск после long-name
+типографического regression fix: `2026-07-16 05:38:42–05:39:26 UTC`, status
+`0`, stderr empty.
+
+Вердикт: `MOSAIC FOLLOW-UP GATE: PASS`, blockers отсутствуют,
+`PUBLISH FOR USER REVIEW: YES`. Это acceptance изолированного lab, не production
+rollout.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`mosaic-followup-acceptance-prompt.md`](mosaic-followup-acceptance-prompt.md) | Exact rejected requirements, screenshots/video and measured contract. | `7d49f3ffd066c4ce08e0305062329b95cc776450fcca02b0102b0210821ccd3a` |
+| [`mosaic-followup-acceptance-gemini.md`](mosaic-followup-acceptance-gemini.md) | Final `MOSAIC FOLLOW-UP GATE: PASS`. | `280d0e22c01d217f8e1a0a026b81889b7373809a3778acb7f1c3759d69159735` |
+
 ## Decision trace
 
 ### Accepted from Gemini

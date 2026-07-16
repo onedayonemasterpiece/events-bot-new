@@ -40,6 +40,7 @@ export const briefingLabScenarios = [
       { text: 'Какая' }, { text: 'зацепит вас?' },
     ],
     ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/', nextScenarioId: 'frequently_forwarded',
+    media: { eventId: 6607, mode: 'mosaic', assetSourceOrder: 0 },
   },
   {
     id: 'tomorrow_count', label: 'Завтра', family: 'count', cooldownDays: 1, cursor: 'underscore',
@@ -56,6 +57,7 @@ export const briefingLabScenarios = [
       { text: 'С чего' }, { text: 'начнём?' },
     ],
     ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/', nextScenarioId: 'weather_water_demo',
+    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 3 },
   },
   {
     id: 'greeting_day', label: 'Добрый день', family: 'welcome', cooldownDays: 1, cursor: 'bar',
@@ -64,6 +66,7 @@ export const briefingLabScenarios = [
       { text: 'Что сегодня' }, { text: 'вас удивит?' },
     ],
     ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/', nextScenarioId: 'today_count',
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0 },
   },
   {
     id: 'local_keska', label: 'По-калининградски', family: 'welcome', cooldownDays: 60, maxExposuresPerYear: 3, cursor: 'underscore',
@@ -81,6 +84,7 @@ export const briefingLabScenarios = [
       { text: '«Куда с ребёнком?»', accent: true, href: '/poisk/' },
     ],
     ctaLabel: 'Попробовать умный поиск', ctaHref: '/poisk/', nextScenarioId: 'share_education',
+    media: { eventId: 6607, mode: 'mosaic', assetSourceOrder: 0 },
   },
   {
     id: 'share_education', label: 'Как поделиться', family: 'education', cooldownDays: 30, maxExposuresPerYear: 3,
@@ -118,6 +122,7 @@ export const briefingLabScenarios = [
       { text: 'Заглянем?' },
     ],
     ctaLabel: 'Открыть «Планету Океан»', ctaEventId: 6466, nextScenarioId: 'anticipated_person',
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0 },
   },
   {
     id: 'anticipated_person', label: 'Кого особенно ждут', family: 'signal', cooldownDays: 30,
@@ -137,7 +142,7 @@ export const briefingLabScenarios = [
       { text: 'Пойдём?' },
     ],
     ctaLabel: 'Посмотреть концерт', ctaEventId: 6020,
-    media: { eventId: 6020, mode: 'small' }, nextScenarioId: 'live_meeting_mosaic',
+    media: { eventId: 6020, mode: 'mosaic', assetSourceOrder: 0 }, nextScenarioId: 'live_meeting_mosaic',
   },
   {
     id: 'live_meeting_mosaic', label: 'Живая встреча · мозаика', family: 'signal', cooldownDays: 30,
@@ -157,7 +162,7 @@ export const briefingLabScenarios = [
       { text: 'Вертинский.', accent: true, eventId: 5373 }, { text: 'Идём?' },
     ],
     ctaLabel: 'Открыть кабаре', ctaEventId: 5373, nextScenarioId: 'festival_demo',
-    media: { eventId: 5373, mode: 'wide', assetSourceOrder: 3 },
+    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 3 },
   },
   {
     id: 'weather_water_demo', label: 'Погода → море', family: 'signal', cooldownDays: 7,
@@ -167,6 +172,7 @@ export const briefingLabScenarios = [
       { text: 'Махнём' }, { text: 'на море?', accent: true, href: '/poisk/' },
     ],
     ctaLabel: 'Найти событие у моря', ctaHref: '/poisk/',
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0 },
   },
   {
     id: 'storm_weekend_demo', label: 'Если шторм → в уют', family: 'signal', cooldownDays: 7,
@@ -176,6 +182,7 @@ export const briefingLabScenarios = [
       { text: 'может, в уют?' },
     ],
     ctaLabel: 'Показать лекцию', ctaEventId: 5803,
+    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1 },
   },
   {
     id: 'storm_lecture_science_demo', label: 'Шторм → лекция', family: 'signal', cooldownDays: 7,
@@ -185,6 +192,7 @@ export const briefingLabScenarios = [
       { text: 'Суперспособности.', accent: true, eventId: 5803 },
     ],
     ctaLabel: 'Открыть лекцию', ctaEventId: 5803,
+    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1 },
   },
   {
     id: 'festival_demo', label: 'Pianissimo', family: 'signal', cooldownDays: 7,
@@ -194,6 +202,7 @@ export const briefingLabScenarios = [
       { text: 'Максим Милославский.', accent: true, eventId: 5294 },
     ],
     ctaLabel: 'Посмотреть концерт', ctaEventId: 5294, nextScenarioId: 'unusual_format_demo',
+    media: { eventId: 5294, mode: 'mosaic', assetSourceOrder: 0 },
   },
   {
     id: 'unusual_format_demo', label: 'Необычный формат', family: 'signal', cooldownDays: 14,
@@ -203,6 +212,7 @@ export const briefingLabScenarios = [
       { text: 'паблик-ток.', accent: true }, { text: 'Послушаем город?' },
     ],
     ctaLabel: 'Найти необычное', ctaHref: '/poisk/', nextScenarioId: 'weekend_count',
+    media: { eventId: 6112, mode: 'mosaic', assetSourceOrder: 0 },
   },
 ] as const satisfies readonly BriefingLabScenario[];
 

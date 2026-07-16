@@ -94,22 +94,27 @@ Final immutable review build:
 - Variant C сам проигрывает конечную цепочку максимум из трёх связанных сцен с
   readable hold; публичная кнопка `Показать следующее` скрыта во время цепочки и
   появляется только в terminal state;
-- на desktop named-person scene может показать небольшую афишу, а редкая сцена
-  — full-bleed wide-media easter egg: stage выходит из shared `max-width` на
-  `100vw`, media занимает `66vw` до правой границы окна без frame/radius/shadow,
-  text начинается в `20–32px` от левой границы; на mobile media не загружается;
-- отдельная редкая desktop-сцена `live_meeting_mosaic` проверяет предложенную
-  пользователем мозаику: одна непрерывная canonical photo события `6112`
-  проявляется через CSS-grid `8×3`: каждый квадрат показывает свой фрагмент одного cached raster, без 24 network request. Все 24
-  квадрата имеют square corners, детерминированный scatter-order и разные
-  конечные alpha; три левых столбца намеренно прозрачнее рядом с текстом;
-  правый столбец продолжается на четверть клетки за физическую границу окна и
-  crop-ится самим full-bleed hero без горизонтального scroll;
+- в follow-up `13/19` selectable-сцен используют существующую grounded media
+  события как desktop mosaic, поэтому эффект можно оценить на последовательной
+  цепочке, а не на единственном редком экране. Teaser и action-education сцены
+  остаются text-only, если изображение испортило бы смысл или раскрыло ответ;
+- mosaic — CSS-grid `12×4`: каждый из 48 квадратов показывает свой фрагмент
+  одного cached raster, без отдельных network requests. Все клетки имеют
+  square corners, `3px` gutters, детерминированный scatter-order и соседние
+  final-alpha с разницей не меньше `.14`; средняя alpha по столбцам растёт
+  слева направо от `.235` до `.920`, но отдельные соседи намеренно идут светлее
+  и темнее вместо ровного gradient;
+- текст остаётся на той же shared-shell позиции, что и text-only hero:
+  mosaic не меняет stage/message width, font или alignment, а добавляет только
+  cloned paper stripe фрагментам и CTA. Viewport-bound media shell начинается
+  примерно с `x=406` при 1440 и `x=454` при 1366; внутренний grid продолжается
+  на четверть клетки за правый край и crop-ится shell без horizontal scroll;
 - mosaic разрешена только при `(min-width:1024px) and (min-height:650px)`.
   На mobile и коротком desktop она превращается в обычную text-only сцену и
   URL изображения вообще не назначается. Variant B/reduced-motion показывают
-  итоговую матрицу сразу; Variant C использует `520ms` ease-in-out stagger и
-  обратный `360ms` stagger перед фактическим переходом, без randomness и
+  итоговую матрицу сразу; Variant C использует `600ms` ease-in-out с
+  разбросом задержек `90..1218ms` и быстрый обратный `260ms` exit с
+  `0..470ms` delays перед фактическим переходом, без runtime randomness и
   saturation. Hover/focus/pause фиксируют полностью проявленную композицию;
 - во время reveal работает scenario-driven bar/underscore; после законченной
   фразы horizontal underscore остаётся только при реально запланированном
@@ -117,7 +122,7 @@ Final immutable review build:
 - декоративная «О» — отдельный source-faithful asset; составной path всего
   `Анонсы` больше не crop-ится внутри hero.
 
-Mosaic immutable prefix
+Предыдущий mosaic baseline immutable prefix
 `preview-20260715t2306-briefing-lab-7c2b2a30` построен из source
 `7c2b2a30`: isolated build/check pass; Playwright `15/15` pass плюс повтор
 pointer-interrupt `3/3`. Public verification на `1440×900`, `1366×768`,
@@ -128,6 +133,12 @@ responses и `bodyWidth == innerWidth`. Desktop делает ровно один
 последний столбец реально crop-ится физическим viewport, а не shared shell.
 Gemini 3.1 Pro (High) exact screenshots/video gate: `MOSAIC LAB GATE: PASS`,
 `PUBLISH FOR USER REVIEW: YES`; это не production approval.
+
+Follow-up exact screenshots и `20.5s` WebM трёх последовательных mosaic-сцен
+прошли новый Gemini 3.1 Pro (High) gate: `MOSAIC FOLLOW-UP GATE: PASS`,
+`PUBLISH FOR USER REVIEW: YES`. Gate отдельно подтвердил неоднородность соседей,
+фиксированный text anchor и отсутствие dirty-checkerboard blocker; production
+rollout по-прежнему не входит в решение.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего
@@ -383,16 +394,13 @@ Contract:
 - production `EventLayout` и `EventListItem` оставлены только как масштабный фон, без уменьшения их размеров.
 - media существует только на desktop `≥1024px`, не меняет фиксированную
   высоту stage/позицию categories/feed и не получает `src` на mobile;
-- wide media выводит только hero из shared container на `100vw`, занимает
-  `66vw` справа до физической границы viewport, не имеет border/radius/shadow;
-  text находится не далее `32px` от левой границы, а каждый перекрывающий media
-  fragment защищён клонированной paper stripe; reduced-motion показывает
-  статичное изображение без auto-exit.
-- mosaic дополнительно требует высоту `≥650px`: full-bleed stage касается
-  `x=0` и правой границы viewport, CSS-grid содержит ровно `8×3` квадратных
-  cells с `3–5px` paper-gutters, media заканчивается за правым pixel окна, а
-  text/media действительно пересекаются и читаются за счёт stripe. Один raster
-  URL загружается один раз; decode/404 скрывает всю mosaic без пустого frame.
+- mosaic дополнительно требует высоту `≥650px`: CSS-grid содержит ровно
+  `12×4` квадратных cells с `3px` paper-gutters;
+  text остаётся на общей desktop-позиции, media пересекает его только визуально
+  и читается за счёт stripe. Viewport shell заканчивается точно на правом pixel,
+  внутренний grid продолжается за него и crop-ится без увеличения body width.
+  Один raster URL загружается один раз; decode/404 скрывает mosaic без пустого
+  frame.
 
 Автоматическая матрица проверяет все 19 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
 

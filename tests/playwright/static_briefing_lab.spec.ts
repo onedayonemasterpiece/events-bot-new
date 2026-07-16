@@ -442,87 +442,51 @@ test('page is clean, finite narrative chain advances automatically, and public N
   await context.close();
 });
 
-test('selected media is desktop-only, wide media belongs to viewport, exits, and reduced motion stays static', async ({ browser }) => {
-  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#b56b45"/></svg>';
+test('most scenarios use desktop mosaic media without moving the established text anchor', async ({ browser }) => {
+  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="450"><rect width="1200" height="450" fill="#705045"/><circle cx="830" cy="170" r="150" fill="#c58f82"/></svg>';
   const desktop = await freshPage(browser, { width: 1440, height: 900 });
-  await desktop.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
-  await open(desktop.page, 'c', 'anticipated_person_named', '&replay=1&pace=fast');
-  const desktopImage = desktop.page.locator('[data-media-image]');
-  await expect(desktopImage).toHaveAttribute('data-src', /https:\/\//u);
-  await expect(desktopImage).toHaveAttribute('src', /https:\/\//u);
-  await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'small');
-  await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
-  await expect.poll(() => desktop.page.locator('[data-narrative-media]').evaluate((node) => getComputedStyle(node).transform)).toBe('none');
-  const smallGeometry = await desktop.page.evaluate(() => {
-    const media = document.querySelector('[data-narrative-media]')!.getBoundingClientRect();
-    const message = document.querySelector('[data-briefing]')!.getBoundingClientRect();
-    const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
-    return { media: media.toJSON(), message: message.toJSON(), borderRadius: style.borderRadius, boxShadow: style.boxShadow };
+  await desktop.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com|kaliningrad\.tretyakovgallery\.ru)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(desktop.page, 'b', 'anticipated_person_named');
+
+  const mediaCoverage = await desktop.page.locator('#briefing-lab-scenarios').evaluate((node) => {
+    const deck = JSON.parse(node.textContent || '[]');
+    return { total: deck.filter((item: any) => item.id !== 'neutral_fallback').length, mosaic: deck.filter((item: any) => item.id !== 'neutral_fallback' && item.media?.mode === 'mosaic').length };
   });
-  expect(smallGeometry.media.width).toBeGreaterThanOrEqual(240);
-  expect(smallGeometry.media.right).toBeLessThanOrEqual(1311);
-  expect(smallGeometry.message.right).toBeLessThan(smallGeometry.media.left);
-  expect(smallGeometry.borderRadius).toBe('0px');
-  expect(smallGeometry.boxShadow).toBe('none');
+  expect(mediaCoverage.mosaic).toBeGreaterThan(mediaCoverage.total / 2);
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'mosaic');
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+
+  const mediaGeometry = await desktop.page.evaluate(() => {
+    const stage = document.querySelector('[data-briefing-slot]') as HTMLElement;
+    const message = document.querySelector('[data-briefing]') as HTMLElement;
+    const fragment = document.querySelector('[data-reveal-fragment]') as HTMLElement;
+    const initial = message.getBoundingClientRect().toJSON();
+    const stripe = getComputedStyle(fragment).backgroundColor;
+    stage.dataset.mediaMode = 'none';
+    const withoutMedia = message.getBoundingClientRect().toJSON();
+    const withoutStripe = getComputedStyle(fragment).backgroundColor;
+    stage.dataset.mediaMode = 'mosaic';
+    return { initial, withoutMedia, stripe, withoutStripe };
+  });
+  expect(Math.abs(mediaGeometry.initial.x - mediaGeometry.withoutMedia.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(mediaGeometry.initial.y - mediaGeometry.withoutMedia.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(mediaGeometry.initial.width - mediaGeometry.withoutMedia.width)).toBeLessThanOrEqual(1);
+  expect(mediaGeometry.stripe).not.toBe('rgba(0, 0, 0, 0)');
+  expect(mediaGeometry.withoutStripe).toBe('rgba(0, 0, 0, 0)');
   await desktop.context.close();
 
   const mobile = await freshPage(browser, { width: 390, height: 844 });
   await open(mobile.page, 'b', 'anticipated_person_named');
-  await expect(mobile.page.locator('.site-nav')).toBeHidden();
-  await expect(mobile.page.locator('[data-media-image]')).toHaveAttribute('data-src', /https:\/\//u);
+  await expect(mobile.page.locator('[data-briefing-slot]')).toHaveAttribute('data-media-mode', 'none');
   await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
+  await expect.poll(() => mobile.page.locator('[data-mosaic-tile]').first().evaluate((node) => getComputedStyle(node).backgroundImage)).toBe('none');
   await mobile.context.close();
-
-  const wide = await freshPage(browser, { width: 1440, height: 900 });
-  await wide.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
-  await open(wide.page, 'b', 'rare_event');
-  await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
-  const wideGeometry = await wide.page.evaluate(() => {
-    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-    const stage = box('[data-briefing-slot]');
-    const media = box('[data-narrative-media]');
-    const message = box('[data-briefing]');
-    const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
-    return { stage: stage.toJSON(), media: media.toJSON(), message: message.toJSON(), borderRadius: style.borderRadius, boxShadow: style.boxShadow, innerWidth, innerHeight };
-  });
-  expect(wideGeometry.stage.x).toBeLessThanOrEqual(1);
-  expect(Math.abs(wideGeometry.stage.right - wideGeometry.innerWidth)).toBeLessThanOrEqual(1);
-  expect(wideGeometry.stage.height).toBeLessThanOrEqual(wideGeometry.innerHeight * .5);
-  expect(wideGeometry.media.width).toBeGreaterThanOrEqual(wideGeometry.innerWidth * .6);
-  expect(Math.abs(wideGeometry.media.right - wideGeometry.innerWidth)).toBeLessThanOrEqual(1);
-  expect(wideGeometry.message.left).toBeLessThanOrEqual(32);
-  expect(wideGeometry.borderRadius).toBe('0px');
-  expect(wideGeometry.boxShadow).toBe('none');
-  await open(wide.page, 'c', 'rare_event', '&replay=1&pace=fast');
-  await expect(wide.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
-  await wide.page.evaluate(() => (window as any).__briefingLab.pause());
-  const categoriesTopWithMedia = (await wide.page.locator('[data-briefing-categories]').boundingBox())!.y;
-  await expect(wide.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 5000 });
-  const categoriesTopAfterExit = (await wide.page.locator('[data-briefing-categories]').boundingBox())!.y;
-  expect(Math.abs(categoriesTopAfterExit - categoriesTopWithMedia)).toBeLessThanOrEqual(1);
-  await wide.context.close();
-
-  const staticWide = await freshPage(browser, { width: 1440, height: 900 });
-  await staticWide.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
-  await open(staticWide.page, 'b', 'rare_event');
-  await expect(staticWide.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
-  await staticWide.page.waitForTimeout(4300);
-  await expect(staticWide.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
-  await staticWide.context.close();
-
-  const reduced = await freshPage(browser, { width: 1440, height: 900 }, 'reduce');
-  await reduced.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
-  await open(reduced.page, 'c', 'rare_event', '&replay=1');
-  await expect(reduced.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
-  await reduced.page.waitForTimeout(4300);
-  await expect(reduced.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
-  await reduced.context.close();
 });
 
-test('8×3 mosaic is deterministic, full-bleed, uneven, mobile-silent and fail-closed', async ({ browser }) => {
+test('12×4 mosaic is deterministic, visibly irregular, farther-left, mobile-silent and fail-closed', async ({ browser }) => {
   const mosaicAsset = /24126606666687270ba582a7e2cbc883400762266887e0936119618d618cb0a4\.webp/u;
   const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="450"><rect width="1200" height="450" fill="#705045"/><circle cx="830" cy="170" r="150" fill="#c58f82"/></svg>';
-  const expectedOpacity = [.16, .28, .44, .62, .78, .88, .94, .97, .12, .24, .4, .58, .76, .9, .96, 1, .18, .3, .48, .66, .8, .89, .93, .96];
+  const expectedOpacity = [.18, .38, .22, .52, .35, .7, .5, .84, .66, .94, .76, 1, .34, .16, .46, .28, .6, .42, .78, .58, .91, .73, 1, .86, .12, .42, .2, .48, .3, .66, .46, .88, .62, .97, .81, 1, .3, .14, .4, .24, .56, .38, .74, .54, .86, .69, .96, .82];
 
   const desktop = await freshPage(browser, { width: 1440, height: 900 });
   let mosaicRequests = 0;
@@ -532,11 +496,12 @@ test('8×3 mosaic is deterministic, full-bleed, uneven, mobile-silent and fail-c
   const shell = desktop.page.locator('[data-narrative-media]');
   await expect(shell).toHaveAttribute('data-media-mode', 'mosaic');
   await expect(shell).toHaveClass(/is-present/u);
-  await expect(desktop.page.locator('[data-mosaic-tile]')).toHaveCount(24);
+  await expect(desktop.page.locator('[data-mosaic-tile]')).toHaveCount(48);
   const geometry = await desktop.page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
     const stage = box('[data-briefing-slot]');
     const media = box('[data-narrative-media]');
+    const mosaic = box('[data-media-mosaic]');
     const message = box('[data-briefing]');
     const tiles = [...document.querySelectorAll('[data-mosaic-tile]')].map((node) => ({
       rect: node.getBoundingClientRect().toJSON(),
@@ -544,17 +509,27 @@ test('8×3 mosaic is deterministic, full-bleed, uneven, mobile-silent and fail-c
       delay: getComputedStyle(node).getPropertyValue('--tile-in-delay').trim(),
     }));
     const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
-    return { stage: stage.toJSON(), media: media.toJSON(), message: message.toJSON(), tiles, borderRadius: style.borderRadius, boxShadow: style.boxShadow, bodyWidth: document.body.scrollWidth, innerWidth };
+    return { stage: stage.toJSON(), media: media.toJSON(), mosaic: mosaic.toJSON(), message: message.toJSON(), tiles, borderRadius: style.borderRadius, boxShadow: style.boxShadow, bodyWidth: document.body.scrollWidth, innerWidth };
   });
-  expect(geometry.stage.left).toBeLessThanOrEqual(1);
-  expect(Math.abs(geometry.stage.right - geometry.innerWidth)).toBeLessThanOrEqual(1);
-  expect(geometry.media.right).toBeGreaterThan(geometry.innerWidth);
+  expect(Math.abs(geometry.stage.left - (geometry.innerWidth - geometry.stage.width) / 2)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.media.right - geometry.innerWidth)).toBeLessThanOrEqual(1);
+  expect(geometry.mosaic.right).toBeGreaterThan(geometry.innerWidth);
+  expect(geometry.media.left).toBeLessThan(geometry.innerWidth * .36);
   expect(geometry.media.left).toBeLessThan(geometry.message.right);
-  expect(Math.abs(geometry.media.width / geometry.media.height - 8 / 3)).toBeLessThan(.01);
+  expect(Math.abs(geometry.mosaic.width / geometry.mosaic.height - 12 / 4)).toBeLessThan(.01);
   expect(geometry.tiles.every((tile) => Math.abs(tile.rect.width - tile.rect.height) <= 1)).toBeTruthy();
   expect(geometry.tiles.map((tile) => tile.opacity)).toEqual(expectedOpacity);
-  expect(new Set(geometry.tiles.map((tile) => tile.delay)).size).toBe(24);
-  expect(geometry.tiles[0].opacity).toBeLessThan(geometry.tiles[7].opacity);
+  expect(new Set(geometry.tiles.map((tile) => tile.delay)).size).toBe(48);
+  const adjacentDeltas = geometry.tiles.flatMap((tile, index, tiles) => {
+    const column = index % 12; const row = Math.floor(index / 12); const deltas: number[] = [];
+    if (column < 11) deltas.push(Math.abs(tile.opacity - tiles[index + 1].opacity));
+    if (row < 3) deltas.push(Math.abs(tile.opacity - tiles[index + 12].opacity));
+    return deltas;
+  });
+  expect(Math.min(...adjacentDeltas)).toBeGreaterThanOrEqual(.139);
+  const columnAverages = Array.from({ length: 12 }, (_, column) => geometry.tiles.filter((_, index) => index % 12 === column).reduce((sum, tile) => sum + tile.opacity, 0) / 4);
+  expect(columnAverages[0]).toBeLessThan(columnAverages[5]);
+  expect(columnAverages[5]).toBeLessThan(columnAverages[11]);
   expect(geometry.borderRadius).toBe('0px');
   expect(geometry.boxShadow).toBe('none');
   expect(geometry.bodyWidth).toBe(geometry.innerWidth);
@@ -571,7 +546,7 @@ test('8×3 mosaic is deterministic, full-bleed, uneven, mobile-silent and fail-c
   await animated.page.waitForTimeout(250);
   const partial = await animated.page.locator('[data-mosaic-tile]').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) > .01).length);
   expect(partial).toBeGreaterThan(0);
-  expect(partial).toBeLessThan(24);
+  expect(partial).toBeLessThan(48);
   await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await expect(animated.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 4000 });
   await expect.poll(async () => (await labState(animated.page)).scenario, { timeout: 2000 }).toBe('rare_event');
@@ -608,7 +583,7 @@ test('8×3 mosaic is deterministic, full-bleed, uneven, mobile-silent and fail-c
   await reduced.context.close();
 });
 
-test('approved header lockup, named-person grid and weather actions keep visual hierarchy at desktop review widths', async ({ browser }) => {
+test('approved header lockup, overlapping mosaic stripe and weather actions keep visual hierarchy at desktop review widths', async ({ browser }) => {
   for (const viewport of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }, { width: 1920, height: 900 }]) {
     const run = await freshPage(browser, viewport);
     await open(run.page, 'b', 'anticipated_person_named');
@@ -627,11 +602,14 @@ test('approved header lockup, named-person grid and weather actions keep visual 
       const longName = document.querySelectorAll('[data-reveal-fragment]')[1] as HTMLElement;
       longName.textContent = 'Христофор Константинопольский.';
       const longMessage = document.querySelector('[data-message]')!.getBoundingClientRect();
-      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
+      const stripe = getComputedStyle(longName).backgroundColor;
+      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), stripe, scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
     });
     expect(geometry.stage.height).toBeLessThanOrEqual(viewport.height * .5);
-    expect(geometry.message.right).toBeLessThan(geometry.media.left);
-    expect(geometry.longMessage.right).toBeLessThan(geometry.media.left);
+    expect(Math.abs(geometry.message.left - geometry.stage.left)).toBeLessThanOrEqual(1);
+    expect(geometry.media.left).toBeLessThan(geometry.message.right);
+    expect(Math.abs(geometry.longMessage.left - geometry.message.left)).toBeLessThanOrEqual(1);
+    expect(geometry.stripe).not.toBe('rgba(0, 0, 0, 0)');
     expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
 
     await open(run.page, 'b', 'weather_water_demo');
