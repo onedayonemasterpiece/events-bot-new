@@ -39,6 +39,8 @@ _DEFAULT_ENV_CANDIDATE_CACHE: dict[tuple[str, tuple[str, ...]], tuple[str, ...] 
 # normalized alias tuple). Separate from the scoped default-env cache so the
 # two lookups never clobber each other.
 _OVERFLOW_ENV_CANDIDATE_CACHE: dict[tuple[str, ...], tuple[str, ...] | None] = {}
+_NORMAL_POOL_ENV_CANDIDATE_CACHE: dict[tuple[str, ...], tuple[str, ...] | None] = {}
+_NORMAL_POOL_CURSOR: dict[tuple[str, ...], int] = {}
 
 
 @dataclass
@@ -210,6 +212,7 @@ class GoogleAIClient:
         dry_run: bool = False,
         incident_notifier: Optional[IncidentNotifier] = None,
         reserve_overflow_key_envs: Optional[Any] = None,
+        reserve_key_envs: Optional[Any] = None,
     ):
         """Initialize the client.
         
@@ -268,6 +271,10 @@ class GoogleAIClient:
             if reserve_overflow_key_envs is not None
             else os.getenv(self.RESERVE_OVERFLOW_KEY_ENVS_ENV, "")
         )
+        # A normal pool participates from the first reservation.  It is not a
+        # fallback/overflow chain: every request starts at the next pool member
+        # and atomically probes only eligible members through the shared RPC.
+        self.reserve_key_envs = self._normalize_overflow_envs(reserve_key_envs)
 
         # Cache missing Supabase RPCs to avoid noisy per-request fallbacks when
         # the Supabase project hasn't been migrated yet (PGRST202).
@@ -458,6 +465,91 @@ class GoogleAIClient:
         exclude_set = set(exclude or [])
         out = [key_id for key_id in ids if key_id not in exclude_set]
         return out or None
+
+    def _resolve_normal_pool_candidate_key_ids(self) -> list[str] | None:
+        """Resolve the explicitly configured normal key pool.
+
+        Missing registry members never widen the request to all active keys.
+        A completely unresolved pool is represented as ``[]`` so strict
+        consumers can fail closed instead of silently using the default lane.
+        """
+
+        if self.supabase is None or not self.reserve_key_envs:
+            return None
+        env_names: list[str] = []
+        seen: set[str] = set()
+        for raw in self.reserve_key_envs:
+            for alias in self._default_env_aliases(raw):
+                if alias not in seen:
+                    seen.add(alias)
+                    env_names.append(alias)
+        env_tuple = tuple(env_names)
+        if not env_tuple:
+            return []
+        if env_tuple in _NORMAL_POOL_ENV_CANDIDATE_CACHE:
+            cached = _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple]
+            return [] if cached == () else (list(cached) if cached else None)
+        try:
+            result = (
+                self.supabase.table("google_ai_api_keys")
+                .select("id, env_var_name, priority")
+                .eq("is_active", True)
+                .in_("env_var_name", list(env_tuple))
+                .order("priority")
+                .order("id")
+                .execute()
+            )
+            rows = list(result.data or [])
+            by_env = {
+                str(row.get("env_var_name") or ""): str(row.get("id"))
+                for row in rows
+                if row.get("id")
+            }
+            # Preserve operator pool order, including compact/underscored aliases.
+            ids: list[str] = []
+            for configured in self.reserve_key_envs:
+                for alias in self._default_env_aliases(configured):
+                    key_id = by_env.get(alias)
+                    if key_id and key_id not in ids:
+                        ids.append(key_id)
+                        break
+            missing = [
+                name
+                for name in self.reserve_key_envs
+                if not any(alias in by_env for alias in self._default_env_aliases(name))
+            ]
+            if missing:
+                logger.warning(
+                    "google_ai.normal_pool_members_missing consumer=%s envs=%s",
+                    self.consumer,
+                    ",".join(missing),
+                )
+                # This is a declared normal allocation, not a best-effort
+                # fallback list. A partial pool would hide registry drift and
+                # defeat the promised rotation/capacity contract.
+                _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = ()
+                return []
+            cached_ids: tuple[str, ...] = tuple(ids)
+            _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = cached_ids
+            return list(cached_ids)
+        except Exception as exc:
+            logger.warning(
+                "google_ai.normal_pool_candidates_failed consumer=%s envs=%s err=%s",
+                self.consumer,
+                ",".join(env_tuple),
+                exc,
+            )
+            _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = None
+            return None
+
+    @staticmethod
+    def _rotated_normal_pool(candidate_key_ids: list[str]) -> list[str]:
+        if not candidate_key_ids:
+            return []
+        pool_key = tuple(candidate_key_ids)
+        cursor = int(_NORMAL_POOL_CURSOR.get(pool_key, 0)) % len(candidate_key_ids)
+        _NORMAL_POOL_CURSOR[pool_key] = (cursor + 1) % len(candidate_key_ids)
+        return candidate_key_ids[cursor:] + candidate_key_ids[:cursor]
 
     @staticmethod
     def _reserve_result_from_data(data: dict[str, Any]) -> "ReserveResult":
@@ -1109,6 +1201,16 @@ class GoogleAIClient:
     ) -> ReserveResult:
         """Reserve rate limit slot via Supabase RPC."""
         if not self.supabase:
+            if self.reserve_key_envs:
+                logger.error(
+                    "google_ai.normal_pool_limiter_unavailable consumer=%s envs=%s",
+                    ctx.consumer,
+                    ",".join(self.reserve_key_envs),
+                )
+                return ReserveResult(
+                    ok=False,
+                    blocked_reason="normal_pool_limiter_unavailable",
+                )
             # No Supabase still must not become an unlimited production bypass:
             # use the same process-local fail-fast limiter as the RPC-missing
             # fallback unless a local caller explicitly disables it.
@@ -1173,7 +1275,15 @@ class GoogleAIClient:
             )
         
         scoped_candidate_key_ids = candidate_key_ids
-        if scoped_candidate_key_ids is None:
+        normal_pool_active = scoped_candidate_key_ids is None and bool(self.reserve_key_envs)
+        if normal_pool_active:
+            scoped_candidate_key_ids = self._resolve_normal_pool_candidate_key_ids()
+            if not scoped_candidate_key_ids:
+                return ReserveResult(
+                    ok=False,
+                    blocked_reason="normal_pool_candidates_missing",
+                )
+        elif scoped_candidate_key_ids is None:
             scoped_candidate_key_ids = self._resolve_default_env_candidate_key_ids(
                 consumer=ctx.consumer,
             )
@@ -1209,6 +1319,31 @@ class GoogleAIClient:
         }
 
         try:
+            if normal_pool_active and isinstance(scoped_candidate_key_ids, list):
+                last_result = ReserveResult(ok=False, blocked_reason="no_keys")
+                for key_id in self._rotated_normal_pool(scoped_candidate_key_ids):
+                    pool_payload = dict(payload)
+                    pool_payload["p_candidate_key_ids"] = [key_id]
+                    pool_data = await self._run_reserve_rpc(pool_payload)
+                    pool_result = self._reserve_result_from_data(pool_data)
+                    last_result = pool_result
+                    if pool_result.ok:
+                        self._log_event(
+                            "google_ai.reserve_normal_pool_used",
+                            ctx,
+                            attempt_no=attempt_no,
+                            reserve=pool_result,
+                        )
+                        return pool_result
+                    if (pool_result.blocked_reason or "").strip().lower() not in {
+                        "rpm",
+                        "tpm",
+                        "rpd",
+                        "no_keys",
+                    }:
+                        return pool_result
+                return last_result
+
             data = await self._run_reserve_rpc(payload)
             result = self._reserve_result_from_data(data)
 

@@ -18608,6 +18608,7 @@ async def _apply_posters(
         REJECTED,
         UNAVAILABLE,
         ensure_event_media_reviews,
+        _enqueue_geometry_followup_if_needed,
         event_media_require_cdn,
         materialize_event_media_candidate_to_cdn,
         resolve_poster_display_url,
@@ -18762,6 +18763,9 @@ async def _apply_posters(
 
     await session.flush()
     await ensure_event_media_reviews(session, int(event_id))
+    # The VLM call is never made inline.  A single already-CDN-ready poster has
+    # no pair review to create, so explicitly arm the durable enrichment job.
+    await _enqueue_geometry_followup_if_needed(session, int(event_id))
     photo_urls_changed = await sync_event_gallery_projection(session, int(event_id))
     event = await session.get(Event, int(event_id))
     if event is not None:

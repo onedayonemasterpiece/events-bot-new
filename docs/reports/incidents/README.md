@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-03-smart-update-flash-lite-rpd.md`
+  - Scope: Google AI key registry/scoping, normal versus emergency pools, Smart Update quota exhaustion and bounded fallback behavior.
+  - Must not regress: every runtime key used by a pool is registered; image geometry rotates only across KEY4+KEY5 from its first reservation, fails closed without the shared limiter, and bulk work stays paced/capped rather than converting ledger exhaustion into provider 429 or unrelated-lane spend.
+
 - `INC-2026-07-15-tg-rich-medallion-rendering-gaps.md`
   - Scope: canonical `@kldevents` RichMessage publishing, manifest-backed graphical medallion strips, footer spacing and retirement of custom-emoji medallion placement.
   - Must not regress: event `6811` semantics resolve KОНБ + KGD80 + Znanie; every approved event image is preserved above one standalone bottom strip; `Подробнее` and `Max` retain a 12-space non-collapsing one-row gap; RichMessages never enqueue or receive legacy emoji medallions.

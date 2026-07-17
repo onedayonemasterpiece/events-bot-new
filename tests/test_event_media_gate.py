@@ -237,10 +237,19 @@ async def test_recovered_unavailable_poster_is_reopened_and_projected(
                 select(EventPoster).where(EventPoster.event_id == event.id)
             )
         ).scalar_one()
+        geometry_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event.id,
+                    JobOutbox.task == JobTask.event_media_review,
+                )
+            )
+        ).scalar_one_or_none()
 
     assert row.review_status == APPROVED
     assert row.supabase_url == cdn_url
     assert event.photo_urls == [cdn_url]
+    assert geometry_job is not None
 
 
 @pytest.mark.asyncio

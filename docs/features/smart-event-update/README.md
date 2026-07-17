@@ -13,6 +13,10 @@ paths и rollout: [Event media](../event-media/README.md).
 В production тот же gate до approval обязан materialize каждый source poster в
 `static.kenigevents.ru`; existing-event ticket-status fast path не является
 исключением и также передаёт текущие parser photos в `_apply_posters()`.
+Даже если поступило одно сразу approved изображение и pair-review не нужен,
+`_apply_posters()` явно ставит durable geometry follow-up. Worker асинхронно
+сохраняет bbox всех лиц и viewer-value region в versioned pixel cache; никакого
+provider-вызова и скачивания картинки внутри транзакции Smart Update нет.
 
 ## Fact-first (внедрено)
 

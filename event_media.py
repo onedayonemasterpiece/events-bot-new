@@ -9,10 +9,11 @@ import re
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
+from functools import lru_cache
 from typing import Any, Iterable, Sequence
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text, update
 
 from media_dedup import (
     ImageFingerprints,
@@ -22,6 +23,7 @@ from media_dedup import (
 )
 from models import (
     Event,
+    EventImageGeometry,
     EventMediaPairReview,
     EventPoster,
     JobOutbox,
@@ -40,6 +42,7 @@ PUBLIC_EVENT_POSTER_STATUSES = (APPROVED,)
 PAIR_POLICY_VERSION = "event-media-pair-v1"
 PAIR_PROMPT_VERSION = "event-media-vision-v1"
 MEDIA_ROLE_PROMPT_VERSION = "event-media-role-v1"
+IMAGE_GEOMETRY_PROMPT_VERSION = "event-image-geometry-v1"
 MEDIA_ROLES = {
     "event_identity_poster",
     "event_photo",
@@ -135,12 +138,52 @@ _MEDIA_ROLE_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+_IMAGE_GEOMETRY_SCHEMA: dict[str, Any] = {
+    # Keep to the compact provider Schema subset proven by the Gemma 4 vision
+    # smoke. Application validation below owns lengths, ordering and bounds;
+    # JSON-Schema-only keywords (minItems/additionalProperties/etc.) cause the
+    # hosted Gemma endpoint to reject the whole request with a generic 400.
+    "type": "OBJECT",
+    "properties": {
+        "face_boxes_yxyx": {
+            "type": "ARRAY",
+            "items": {
+                "type": "ARRAY",
+                "items": {"type": "INTEGER"},
+            },
+        },
+        "valuable_region_yxyx": {
+            "type": "ARRAY",
+            "items": {"type": "INTEGER"},
+        },
+        "valuable_region_confidence": {"type": "NUMBER"},
+        "reason_code": {"type": "STRING"},
+    },
+    "required": [
+        "face_boxes_yxyx",
+        "valuable_region_yxyx",
+        "valuable_region_confidence",
+        "reason_code",
+    ],
+}
+
 
 @dataclass(frozen=True, slots=True)
 class DownloadedPoster:
     data: bytes
     mime_type: str
     source_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class ImageGeometryOutcome:
+    status: str
+    poster_id: int
+    geometry_id: int | None = None
+    pixel_sha256: str | None = None
+    provider_called: bool = False
+    cache_hit: bool = False
+    error: str | None = None
 
 
 def _env_int(name: str, default: int, *, lo: int = 0, hi: int = 100000) -> int:
@@ -1017,6 +1060,351 @@ def _validated_media_role(value: dict[str, Any] | None) -> dict[str, Any] | None
     }
 
 
+def image_geometry_model() -> str:
+    return (os.getenv("EVENT_IMAGE_GEOMETRY_MODEL") or "gemma-4-31b-it").strip()
+
+
+def _normalize_yxyx_box(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    try:
+        ymin, xmin, ymax, xmax = [float(item) for item in value]
+    except Exception:
+        return None
+    if not all(0.0 <= item <= 1000.0 for item in (ymin, xmin, ymax, xmax)):
+        return None
+    if ymax <= ymin or xmax <= xmin:
+        return None
+    return [
+        round(ymin / 1000.0, 6),
+        round(xmin / 1000.0, 6),
+        round(ymax / 1000.0, 6),
+        round(xmax / 1000.0, 6),
+    ]
+
+
+def _validated_image_geometry(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    raw_faces = value.get("face_boxes_yxyx")
+    if not isinstance(raw_faces, list) or len(raw_faces) > 50:
+        return None
+    faces: list[list[float]] = []
+    for raw in raw_faces:
+        box = _normalize_yxyx_box(raw)
+        if box is None:
+            return None
+        faces.append(box)
+    valuable = _normalize_yxyx_box(value.get("valuable_region_yxyx"))
+    if valuable is None:
+        return None
+    try:
+        confidence = float(value.get("valuable_region_confidence"))
+    except Exception:
+        return None
+    if not 0.0 <= confidence <= 1.0:
+        return None
+    return {
+        "face_boxes_yxyx": faces,
+        "valuable_region_yxyx": valuable,
+        "valuable_region_confidence": round(confidence, 6),
+        "reason_code": str(value.get("reason_code") or "viewer_value_region")[:120],
+    }
+
+
+def _image_geometry_prompt() -> str:
+    return (
+        "Analyze ONE image for metadata used later by independent crop mechanisms. "
+        "Do not choose an aspect ratio and do not construct a final crop. "
+        "Coordinates are integers 0..1000, origin top-left. "
+        "face_boxes_yxyx: every clearly visible human face as a tight "
+        "[ymin,xmin,ymax,xmax] box; return [] when no face is visible. "
+        "valuable_region_yxyx: the smallest coherent rectangle containing the part with maximum "
+        "viewer value and meaning; prioritize principal people/faces, the main subject and essential "
+        "visual identity or key text. Use the full frame only when it is genuinely all essential. "
+        "valuable_region_confidence is 0..1. reason_code is a short stable snake_case label. "
+        "Return JSON only."
+    )
+
+
+@lru_cache(maxsize=4)
+def _get_image_geometry_client(pool_csv: str):
+    from google_ai import GoogleAIClient, SecretsProvider
+    from main import get_supabase_client
+
+    pool = [item.strip() for item in pool_csv.split(",") if item.strip()]
+    default_env = pool[0] if pool else "GOOGLE_API_KEY4"
+    client = GoogleAIClient(
+        supabase_client=get_supabase_client(),
+        secrets_provider=SecretsProvider(),
+        consumer="smart_update_image_geometry",
+        account_name="smart-update-image-geometry",
+        default_env_var_name=default_env,
+        reserve_key_envs=pool,
+        reserve_overflow_key_envs=[],
+    )
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    client.allow_local_limiter_on_reserve_error = False
+    client.fallback_models = []
+    # One provider attempt per item. The durable outbox/backfill runner owns
+    # retry timing so a single image can never turn into an unpaced burst.
+    client.max_retries = 1
+    client.provider_timeout_seconds = float(
+        _env_int("EVENT_IMAGE_GEOMETRY_PROVIDER_TIMEOUT_SEC", 45, lo=10, hi=120)
+    )
+    return client
+
+
+async def _call_image_geometry_provider(media: DownloadedPoster):
+    pool_csv = (
+        os.getenv("EVENT_IMAGE_GEOMETRY_GOOGLE_KEY_ENVS")
+        or "GOOGLE_API_KEY4,GOOGLE_API_KEY5"
+    ).strip()
+    client = _get_image_geometry_client(pool_csv)
+    raw, usage = await client.generate_content_async(
+        model=image_geometry_model(),
+        prompt=[
+            {"inline_data": {"mime_type": media.mime_type, "data": media.data}},
+            _image_geometry_prompt(),
+        ],
+        generation_config={
+            # Hosted Gemma 4's tested generation envelope. Determinism comes
+            # from the compact contract and strict validator, not temperature 0.
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 64,
+            "response_mime_type": "application/json",
+            "response_schema": _IMAGE_GEOMETRY_SCHEMA,
+            "thinking_config": {
+                "include_thoughts": False,
+                "thinking_level": "MINIMAL",
+            },
+        },
+        max_output_tokens=_env_int(
+            "EVENT_IMAGE_GEOMETRY_MAX_OUTPUT_TOKENS", 768, lo=192, hi=768
+        ),
+    )
+    return _validated_image_geometry(_parse_json_object(raw)), usage
+
+
+async def _current_geometry_for_poster(session: Any, poster: EventPoster):
+    if not poster.image_geometry_id:
+        return None
+    geometry = await session.get(EventImageGeometry, int(poster.image_geometry_id))
+    if (
+        geometry is not None
+        and geometry.status == "classified"
+        and geometry.model == image_geometry_model()
+        and geometry.prompt_version == IMAGE_GEOMETRY_PROMPT_VERSION
+    ):
+        return geometry
+    return None
+
+
+async def analyze_event_poster_geometry(
+    event_id: int,
+    poster_id: int,
+    db: Any,
+) -> ImageGeometryOutcome:
+    """Analyze or reuse geometry for one approved image; never choose a crop."""
+
+    async with db.get_session() as session:
+        poster = await session.get(EventPoster, int(poster_id))
+        if poster is None or int(poster.event_id) != int(event_id):
+            return ImageGeometryOutcome("missing", int(poster_id), error="poster_not_found")
+        current = await _current_geometry_for_poster(session, poster)
+        if current is not None:
+            return ImageGeometryOutcome(
+                "classified",
+                int(poster_id),
+                geometry_id=int(current.id or 0),
+                pixel_sha256=current.pixel_sha256,
+                cache_hit=True,
+            )
+        try:
+            media = await _download_poster(poster)
+        except Exception as exc:
+            # A stale/404 public object is an item-level failure, not a reason
+            # to abort a resumable external batch or the outbox worker.
+            return ImageGeometryOutcome(
+                "error",
+                int(poster_id),
+                error=f"image_download_failed:{type(exc).__name__}:{exc}"[:500],
+            )
+
+    fingerprints = await asyncio.to_thread(compute_image_fingerprints, media.data)
+    if fingerprints is None:
+        return ImageGeometryOutcome(
+            "error", int(poster_id), error="image_fingerprint_failed"
+        )
+    pixel_sha256 = str(fingerprints.pixel_sha256)
+    model = image_geometry_model()
+
+    async with db.get_session() as session:
+        poster = await session.get(EventPoster, int(poster_id))
+        if poster is None or int(poster.event_id) != int(event_id):
+            return ImageGeometryOutcome("missing", int(poster_id), error="poster_drifted")
+        poster.pixel_sha256 = pixel_sha256
+        poster.phash = fingerprints.dhash_hex
+        poster.perceptual_hash = fingerprints.phash_hex
+        poster.width = fingerprints.width
+        poster.height = fingerprints.height
+        poster.mime_type = fingerprints.mime_type
+        poster.updated_at = datetime.now(timezone.utc)
+        session.add(poster)
+        cached = (
+            await session.execute(
+                select(EventImageGeometry).where(
+                    EventImageGeometry.pixel_sha256 == pixel_sha256,
+                    EventImageGeometry.model == model,
+                    EventImageGeometry.prompt_version == IMAGE_GEOMETRY_PROMPT_VERSION,
+                    EventImageGeometry.status == "classified",
+                )
+            )
+        ).scalar_one_or_none()
+        if cached is not None:
+            await session.execute(
+                update(EventPoster)
+                .where(EventPoster.pixel_sha256 == pixel_sha256)
+                .values(image_geometry_id=int(cached.id or 0))
+            )
+            await session.commit()
+            return ImageGeometryOutcome(
+                "classified",
+                int(poster_id),
+                geometry_id=int(cached.id or 0),
+                pixel_sha256=pixel_sha256,
+                cache_hit=True,
+            )
+        if not await _claim_feature_budget(
+            session,
+            "image_geometry",
+            _env_int("EVENT_IMAGE_GEOMETRY_DAILY_CALLS", 100, lo=0, hi=1500),
+        ):
+            await session.commit()
+            return ImageGeometryOutcome(
+                "pending",
+                int(poster_id),
+                pixel_sha256=pixel_sha256,
+                error="daily_budget_exhausted",
+            )
+        await session.commit()
+
+    decision: dict[str, Any] | None = None
+    usage = None
+    error: str | None = None
+    try:
+        decision, usage = await _call_image_geometry_provider(media)
+        if decision is None:
+            error = "invalid_image_geometry_response"
+    except Exception as exc:
+        error = f"{type(exc).__name__}:{exc}"[:500]
+
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        geometry = (
+            await session.execute(
+                select(EventImageGeometry).where(
+                    EventImageGeometry.pixel_sha256 == pixel_sha256,
+                    EventImageGeometry.model == model,
+                    EventImageGeometry.prompt_version == IMAGE_GEOMETRY_PROMPT_VERSION,
+                )
+            )
+        ).scalar_one_or_none()
+        if geometry is None:
+            geometry = EventImageGeometry(
+                pixel_sha256=pixel_sha256,
+                model=model,
+                prompt_version=IMAGE_GEOMETRY_PROMPT_VERSION,
+            )
+        geometry.status = "classified" if decision is not None else "error"
+        geometry.source_width = int(fingerprints.width or 0) or None
+        geometry.source_height = int(fingerprints.height or 0) or None
+        geometry.face_boxes_yxyx_json = (
+            decision["face_boxes_yxyx"] if decision is not None else None
+        )
+        geometry.valuable_region_yxyx_json = (
+            decision["valuable_region_yxyx"] if decision is not None else None
+        )
+        geometry.valuable_region_confidence = (
+            float(decision["valuable_region_confidence"])
+            if decision is not None
+            else None
+        )
+        geometry.reason_code = decision["reason_code"] if decision is not None else error
+        geometry.prompt_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+        geometry.completion_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        geometry.total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+        geometry.analyzed_at = now
+        geometry.updated_at = now
+        session.add(geometry)
+        await session.flush()
+        await session.execute(
+            update(EventPoster)
+            .where(EventPoster.pixel_sha256 == pixel_sha256)
+            .values(image_geometry_id=int(geometry.id or 0))
+        )
+        await session.commit()
+        return ImageGeometryOutcome(
+            geometry.status,
+            int(poster_id),
+            geometry_id=int(geometry.id or 0),
+            pixel_sha256=pixel_sha256,
+            provider_called=True,
+            error=error,
+        )
+
+
+async def _next_geometry_candidate_id(session: Any, event_id: int) -> int | None:
+    model = image_geometry_model()
+    retry_before = datetime.now(timezone.utc) - timedelta(hours=20)
+    stmt = (
+        select(EventPoster.id)
+        .outerjoin(
+            EventImageGeometry,
+            EventPoster.image_geometry_id == EventImageGeometry.id,
+        )
+        .where(
+            EventPoster.event_id == int(event_id),
+            EventPoster.review_status == APPROVED,
+            or_(
+                EventPoster.image_geometry_id.is_(None),
+                EventImageGeometry.id.is_(None),
+                EventImageGeometry.model != model,
+                EventImageGeometry.prompt_version != IMAGE_GEOMETRY_PROMPT_VERSION,
+                and_(
+                    EventImageGeometry.status == "error",
+                    EventImageGeometry.updated_at <= retry_before,
+                ),
+            ),
+        )
+        .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _enqueue_geometry_followup_if_needed(
+    session: Any,
+    event_id: int,
+    *,
+    delay_seconds: int | None = None,
+) -> bool:
+    candidate_id = await _next_geometry_candidate_id(session, int(event_id))
+    if candidate_id is None:
+        return False
+    delay = delay_seconds
+    if delay is None:
+        delay = _env_int("EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS", 7, lo=5, hi=3600)
+    return await enqueue_event_media_review_job(
+        session,
+        int(event_id),
+        next_run_at=datetime.now(timezone.utc) + timedelta(seconds=int(delay)),
+        force_followup=True,
+    )
+
+
 def _media_role_prompt(event: Event, poster: EventPoster) -> str:
     evidence = {
         "event": _event_context(event),
@@ -1320,12 +1708,58 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                     .limit(1)
                 )
             ).scalar_one_or_none()
+            geometry_candidate_id = await _next_geometry_candidate_id(
+                session, int(event_id)
+            )
             await session.commit()
             if role_candidate_id is not None:
                 classified = await _classify_event_poster_role(
                     int(event_id), int(role_candidate_id), db
                 )
+                async with db.get_session() as followup_session:
+                    await _enqueue_geometry_followup_if_needed(
+                        followup_session, int(event_id)
+                    )
+                    await followup_session.commit()
                 return bool(projection_changed or classified)
+            if geometry_candidate_id is not None:
+                outcome = await analyze_event_poster_geometry(
+                    int(event_id), int(geometry_candidate_id), db
+                )
+                async with db.get_session() as followup_session:
+                    next_run_at = None
+                    if outcome.status == "pending":
+                        next_run_at = _next_utc_day()
+                    elif outcome.status == "error":
+                        # Match _next_geometry_candidate_id's stale-error
+                        # window. Scheduling only at the next UTC boundary can
+                        # wake too early, see no candidate, and lose the retry.
+                        next_run_at = datetime.now(timezone.utc) + timedelta(
+                            hours=20, minutes=1
+                        )
+                    remaining_id = await _next_geometry_candidate_id(
+                        followup_session, int(event_id)
+                    )
+                    if remaining_id is not None or outcome.status in {"pending", "error"}:
+                        await enqueue_event_media_review_job(
+                            followup_session,
+                            int(event_id),
+                            next_run_at=(
+                                next_run_at
+                                or datetime.now(timezone.utc)
+                                + timedelta(
+                                    seconds=_env_int(
+                                        "EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS",
+                                        7,
+                                        lo=5,
+                                        hi=3600,
+                                    )
+                                )
+                            ),
+                            force_followup=True,
+                        )
+                    await followup_session.commit()
+                return bool(projection_changed or outcome.status == "classified")
             return projection_changed
         left = await session.get(EventPoster, int(review.left_poster_id))
         right = await session.get(EventPoster, int(review.right_poster_id))

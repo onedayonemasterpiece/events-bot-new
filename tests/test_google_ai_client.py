@@ -7,6 +7,8 @@ import pytest
 
 from google_ai.client import (
     _DEFAULT_ENV_CANDIDATE_CACHE,
+    _NORMAL_POOL_CURSOR,
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE,
     _OVERFLOW_ENV_CANDIDATE_CACHE,
     GoogleAIClient,
     RequestContext,
@@ -552,6 +554,135 @@ def test_normalize_overflow_envs_parses_csv_and_list() -> None:
     assert GoogleAIClient._normalize_overflow_envs("") == []
     assert GoogleAIClient._normalize_overflow_envs(" A , B ,A, ") == ["A", "B"]
     assert GoogleAIClient._normalize_overflow_envs(["A", "B", "A"]) == ["A", "B"]
+
+
+class _NormalPoolSupabase:
+    rows = [
+        {"id": "id-key4", "env_var_name": "GOOGLE_API_KEY4", "priority": 2},
+        {"id": "id-key5", "env_var_name": "GOOGLE_API_KEY5", "priority": 4},
+    ]
+
+    def __init__(self, blocked: set[str] | None = None):
+        self.blocked = blocked or set()
+        self.rpc_calls: list[dict] = []
+
+    def table(self, _name: str):
+        return _FakeSupabaseQuery(self.rows)
+
+    def rpc(self, _name: str, payload: dict):
+        self.rpc_calls.append(dict(payload))
+        key_id = list(payload.get("p_candidate_key_ids") or [None])[0]
+        if key_id in self.blocked:
+            data = {"ok": False, "blocked_reason": "rpm", "retry_after_ms": 1000}
+        else:
+            env = "GOOGLE_API_KEY4" if key_id == "id-key4" else "GOOGLE_API_KEY5"
+            data = {"ok": True, "api_key_id": key_id, "env_var_name": env}
+        return SimpleNamespace(execute=lambda d=data: SimpleNamespace(data=d))
+
+
+def _normal_pool_ctx(uid: str) -> RequestContext:
+    return RequestContext(
+        request_uid=uid,
+        consumer="smart_update_image_geometry",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="gemma-4-31b-it",
+        reserved_tpm=100,
+    )
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_rotates_from_first_reservation_without_overflow() -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    supabase = _NormalPoolSupabase()
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update_image_geometry",
+        reserve_key_envs="GOOGLE_API_KEY4,GOOGLE_API_KEY5",
+        reserve_overflow_key_envs=[],
+    )
+
+    first = await client._reserve(_normal_pool_ctx("pool-1"), 1, None)
+    second = await client._reserve(_normal_pool_ctx("pool-2"), 1, None)
+
+    assert first.env_var_name == "GOOGLE_API_KEY4"
+    assert second.env_var_name == "GOOGLE_API_KEY5"
+    assert [call["p_candidate_key_ids"] for call in supabase.rpc_calls] == [
+        ["id-key4"],
+        ["id-key5"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_skips_minute_block_inside_same_allocation() -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    supabase = _NormalPoolSupabase(blocked={"id-key4"})
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update_image_geometry",
+        reserve_key_envs=["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"],
+        reserve_overflow_key_envs=[],
+    )
+
+    reserve = await client._reserve(_normal_pool_ctx("pool-block"), 1, None)
+
+    assert reserve.ok is True
+    assert reserve.env_var_name == "GOOGLE_API_KEY5"
+    assert [call["p_candidate_key_ids"] for call in supabase.rpc_calls] == [
+        ["id-key4"],
+        ["id-key5"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_missing_registry_fails_closed() -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    client = GoogleAIClient(
+        supabase_client=_FakeSupabaseClient(data=[]),
+        consumer="smart_update_image_geometry",
+        reserve_key_envs="GOOGLE_API_KEY4,GOOGLE_API_KEY5",
+    )
+
+    reserve = await client._reserve(_normal_pool_ctx("pool-missing"), 1, None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "normal_pool_candidates_missing"
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_partial_registry_does_not_silently_shrink() -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    supabase = _NormalPoolSupabase()
+    supabase.rows = [
+        {"id": "id-key4", "env_var_name": "GOOGLE_API_KEY4", "priority": 2}
+    ]
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update_image_geometry",
+        reserve_key_envs="GOOGLE_API_KEY4,GOOGLE_API_KEY5",
+    )
+
+    reserve = await client._reserve(_normal_pool_ctx("pool-partial"), 1, None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "normal_pool_candidates_missing"
+    assert supabase.rpc_calls == []
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_without_shared_limiter_fails_closed() -> None:
+    client = GoogleAIClient(
+        supabase_client=None,
+        consumer="smart_update_image_geometry",
+        reserve_key_envs="GOOGLE_API_KEY4,GOOGLE_API_KEY5",
+    )
+
+    reserve = await client._reserve(_normal_pool_ctx("pool-no-limiter"), 1, None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "normal_pool_limiter_unavailable"
 
 
 @pytest.mark.asyncio
