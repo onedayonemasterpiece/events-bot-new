@@ -89,7 +89,7 @@ for (const { slug, file } of eventFiles) {
     if (!(originIndex >= 0 && scheduleIndex > originIndex && lastMileIndex > scheduleIndex && returnWarningIndex > lastMileIndex && carIndex > returnWarningIndex)) {
       failures.push(`${slug}: KAUP travel flow is not ordered as origin → schedule → last mile → return warning → car`);
     }
-    for (const marker of ['data-kaup-compact', 'Трансфер · 600 ₽ туда и обратно', 'Точки посадки и условия', 'Северный вокзал · Калининград', 'Автобус № 119']) {
+    for (const marker of ['data-kaup-compact', 'Официальный трансфер · 600 ₽ туда и обратно', 'Точки посадки и условия', 'Северный вокзал · Калининград', 'Автобус № 119']) {
       if (!mobileHtml.includes(marker)) failures.push(`${slug}: compact mobile KAUP journey is missing ${marker}`);
     }
     for (const [surface, surfaceHtml] of [['desktop', desktopHtml], ['mobile', mobileHtml]]) {
@@ -97,7 +97,7 @@ for (const { slug, file } of eventFiles) {
         ['16:30', '16:45', '17:35', '18:28'],
         ['17:55', '18:10', '19:00', '19:53'],
       ]) {
-        const rowPattern = new RegExp(`data-terminal-departure="${terminal}"[^>]*>≈ ${north}<\\/strong>[\\s\\S]*?Романово[^<]*${romanovo}<\\/b>[\\s\\S]*?${venue}`, 'u');
+        const rowPattern = new RegExp(`data-terminal-departure="${terminal}"[^>]*>≈\\s*${north}<\\/strong>[\\s\\S]*?Романово[^<]*${romanovo}<\\/b>[\\s\\S]*?${venue}`, 'u');
         if (!rowPattern.test(surfaceHtml)) failures.push(`${slug}: ${surface} KAUP route must keep terminal ${terminal}, estimate North ${north}, Romanovo ${romanovo} and venue ${venue}`);
       }
       if (surfaceHtml.includes('Калининградский автовокзал') || surfaceHtml.includes('ул. Железнодорожная, 7')) {
@@ -125,7 +125,7 @@ for (const { slug, file } of eventFiles) {
     if (!desktopHtml.includes('Показаны 7 из 12 изображений в лучшем качестве')) failures.push(`${slug}: grouped viewer does not disclose quality filtering`);
   }
   if (slug === 'kinopokaz-fatalnaya-chechetka-kaliningrad-6851') {
-    if (!desktopHtml.includes('data-desktop-phone-copy') || !desktopHtml.includes('+7 911 868-89-55')) {
+    if (!desktopHtml.includes('data-ke-copy-action') || !desktopHtml.includes('data-desktop-phone-number') || !desktopHtml.includes('+7 911 868-89-55')) {
       failures.push(`${slug}: desktop phone CTA does not expose the copyable number`);
     }
     if (!desktopHtml.includes('data-desktop-action-panel') || !desktopHtml.includes('data-primary-action-kind="phone"')) {
@@ -134,6 +134,12 @@ for (const { slug, file } of eventFiles) {
     if (desktopHtml.includes('data-phone-copy-status')) {
       failures.push(`${slug}: phone action panel still contains the layout-shifting status row`);
     }
+    const phoneControl = desktopHtml.match(/data-desktop-phone-control[\s\S]*?<\/div>/u)?.[0] || '';
+    if (phoneControl.includes('icon--phone')) failures.push(`${slug}: recognizable desktop phone number still has a redundant phone icon`);
+    if (!phoneControl.includes('icon--copy') || !phoneControl.includes('data-ke-copy-status')) {
+      failures.push(`${slug}: desktop phone control lacks the icon-only shared CopyAction and its live status`);
+    }
+    if (phoneControl.includes('<small>Скопировать номер</small>')) failures.push(`${slug}: desktop phone control restored visible copy helper text`);
   }
   if (html.includes('Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.')) {
     failures.push(`${slug}: insufficient-feedback placeholder is still rendered`);

@@ -64,13 +64,16 @@ official-transfer boarding fine print hidden in a native disclosure.
   the UI does not invent a short pedestrian entrance;
 - the compact phone variant keeps the bus origin, departures, final walk and
   no-return warning open by default, uses bus/walk/car/pin SVG icons and removes
-  desktop-card shadow/weight instead of hiding the transport product entirely;
+  desktop-card shadow/weight instead of hiding the transport product entirely.
+  The full and compact surfaces share one flat hierarchy: no card-inside-card
+  schedule rows, one disclosure for transfer fine print, and `44×44` icon-only
+  pin actions for boarding, walking and car maps;
 - the independent-travel reading order is fixed: bus origin → suitable
   departures and approximate Romanovo arrival → final walking leg → warning
   about the absent evening public return → compact car alternative. The
-  walking link is named `Открыть пеший маршрут` and routes from the Romanovo
-  stop to KAUP (`rtt=pd`); the car link is named `Открыть маршрут` inside the
-  clearly labelled `На автомобиле` row (`rtt=auto`);
+  walking pin is accessibly named `Открыть пеший маршрут` and routes from the
+  Romanovo stop to KAUP (`rtt=pd`); the car pin is accessibly named `Открыть
+  маршрут` inside the clearly labelled `На автомобиле` row (`rtt=auto`);
 - raw coordinates, a decorative pseudo-map, route schematics and several
   competing text buttons are forbidden. They do not help a visitor decide
   where to board, which departure to take, how to cover the final leg or how

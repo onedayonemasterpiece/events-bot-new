@@ -43,6 +43,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: pre-handoff mobile browser QA found that v8 rendered the corrected KAUP journey only on the desktop surface, so the v8 links were deliberately not sent for mobile review. A compact phone variant and generated-page contract were added for v9 before Telegram handoff.
 - 2026-07-17: user acceptance rejected the v9 bus origin because route `119` serves `Северный вокзал` and the previously reviewed product rule plans from that stop. Investigation traced the regression to a compacting change that dropped the numeric North offset, followed by the exact-venue KAUP fork and v8/v9 gates hardening the terminal address instead of the preferred boarding stop.
 - 2026-07-17: mobile review of v9 found that some dynamically rendered event cards could navigate to an older preview/root event UI. A poisoned-cache Playwright reproduction isolated cross-build personal-feed URL reuse; v10 scopes the cache to the current base and rebases same-site dynamic event/search links at render time.
+- 2026-07-17: the v10 product pass restored North-derived route-119 times, flattened KAUP into one concise journey hierarchy after Gemini 3.1 Pro (High) critique, and aligned the desktop phone control with the parallel design-system CopyAction contract: standard-size number, no phone glyph/helper copy, fixed icon-only copy→check feedback.
 
 ## Root Cause
 
@@ -125,7 +126,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - event `4671` exposes that same factual journey on the established mobile surface as a flat compact block; only official-transfer boarding fine print starts collapsed, while origin, two departures, final walk, return risk and car remain visible; phone widths `320` and `390` have no horizontal overflow and every link/disclosure target is at least `44px` high;
 - event `3103` applies the 30-minute Янтарь-холл exit/walk/boarding buffer, shows `6726`/`6728`, excludes unsafe `6724`, and shows no next-morning wait inside the desktop renderer;
 - event `4783` opens the grouped multi-portrait viewer with the seven technically strong images, excludes five materially weak renditions while that strong set exists, and discloses `7 из 12`;
-- event `6851` exposes and copies the formatted telephone number with visible success feedback;
+- event `6851` exposes the formatted telephone number at standard body size, omits the redundant desktop phone glyph and visible copy-helper wording, and copies through a fixed `44×44` copy→check action with accessible live feedback;
 - event `6851` keeps admission, the one-line phone number and all action controls on the same visual row at `1536×864` and `1920×1080`; its calendar is icon-only and the panel height is stable after copy success;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
 - insufficient-feedback placeholder copy is absent.

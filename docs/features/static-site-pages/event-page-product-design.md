@@ -199,7 +199,7 @@ Primary CTA is selected by event facts:
 | registration link | `Зарегистрироваться` | “может потребоваться регистрация” |
 | free + explicit registration link | `Зарегистрироваться` | admission property must still say `Бесплатно · регистрация` |
 | free without registration requirement | `В календарь` | calendar save is also the service saved-event action; source remains secondary |
-| phone-only booking | `Позвонить` on mobile, visible number + copy on desktop | desktop click copies the number and confirms success without trying to open a dialer |
+| phone-only booking | `Позвонить` on mobile, visible number + icon-only copy on desktop | desktop click copies the number and confirms success without trying to open a dialer |
 | paid/ticketed, price unknown | `Билеты` | never invent `Узнать цену`, `Узнать условия` or `По билетам` |
 | source link only / unknown tickets | `Источник события` | honest secondary destination, no fake ticket CTA |
 | sold out | `Билеты закончились` as disabled/status | offer related events, not fake CTA |
@@ -353,9 +353,13 @@ viewport-responsive. A phone action is a stricter exception: admission,
 copyable phone number, calendar, share and like remain on one explicit grid row
 at both `1536×864` and `1920×1080`; it must never fall back to the generic
 stacked layout. The calendar is icon-only in this constrained phone panel even
-when bounded usage history would normally expand its wording. Copy success is
-rendered in place inside the phone button, with no additional live-status row
-and no change to panel height. Browser acceptance compares child vertical
+when bounded usage history would normally expand its wording. The recognizable
+desktop phone number uses standard body size without a redundant phone glyph or
+visible `Скопировать номер` helper; the adjacent shared design-system copy
+action is a fixed `44×44` copy icon with an accessible name. Copy success swaps
+copy for check in the same box, while a visually hidden polite live region
+announces the result with no additional layout row and no change to panel height.
+Browser acceptance compares child vertical
 centres/overlap and before/after-copy geometry; containment-only assertions are
 not sufficient.
 
@@ -365,9 +369,10 @@ actionable order: recommended official transfer, the reviewed `Северный 
 boarding point with estimated `terminal + 15 min` departures, Romanovo-to-venue walk, explicit no-return warning
 and the car alternative. Only transfer boarding fine print is collapsed into a
 native `details` disclosure; origin, departures and the return risk remain
-visible without a tap. This compact variant has no raw-coordinate label,
-pseudo-map decoration or button wall, and standard bus/walk/car/pin icons keep
-mode changes scannable.
+visible without a tap. Transfer, bus, last mile, warning and car are flat rows,
+not nested cards; map actions are icon-only `44×44` pins with accessible names.
+This compact variant has no raw-coordinate label, pseudo-map decoration or
+button wall, and standard bus/walk/car/pin icons keep mode changes scannable.
 
 ## 8. Related events and personalization placement
 
