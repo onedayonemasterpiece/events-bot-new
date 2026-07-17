@@ -641,7 +641,9 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
   expect(geometry.rows).toBe(5);
   expect(Math.abs(geometry.media.left / geometry.innerWidth - .25)).toBeLessThanOrEqual(.015);
   expect(Math.abs(geometry.media.right - geometry.innerWidth)).toBeLessThanOrEqual(1);
-  expect(Math.abs(geometry.mosaic.width / geometry.mosaic.height - geometry.columns / geometry.rows)).toBeLessThan(.02);
+  const firstTile = geometry.tiles[0].rect;
+  expect(Math.abs(geometry.mosaic.width - (firstTile.width * geometry.columns + 3 * (geometry.columns - 1)))).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.mosaic.height - firstTile.height * geometry.rows)).toBeLessThanOrEqual(1);
   expect(geometry.media.left).toBeLessThan(geometry.message.right);
   assertTopology(geometry);
   expect(Math.abs(geometry.coverWidth / geometry.naturalWidth - geometry.coverHeight / geometry.naturalHeight)).toBeLessThan(.001);
@@ -763,14 +765,8 @@ test('approved header lockup, lightweight mosaic stripe and weather actions keep
       longName.textContent = 'Христофор Константинопольский.';
       const longMessage = document.querySelector('[data-message]')!.getBoundingClientRect();
       const style = getComputedStyle(longName);
-      const firstColumn = [...document.querySelectorAll('[data-mosaic-tile]:not([hidden])')]
-        .filter((node: HTMLElement) => node.dataset.tileColumn === '0')
-        .map((node) => node.getBoundingClientRect())
-        .sort((a, b) => a.top - b.top);
-      const gutters = firstColumn.slice(1).map((rect, index) => ({ top: firstColumn[index].bottom, bottom: rect.top }));
-      const fragmentRects = [...document.querySelectorAll('[data-reveal-fragment]')].flatMap((node) => [...node.getClientRects()]);
-      const gutterTextIntersections = gutters.filter((gap) => fragmentRects.some((rect) => rect.bottom > gap.top && rect.top < gap.bottom)).length;
-      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), stripe: style.backgroundImage, stripeColor: style.backgroundColor, stripeShadow: style.boxShadow, paddingInline: Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight), gutterTextIntersections, scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
+      const mosaicStyle = getComputedStyle(document.querySelector('[data-media-mosaic]')!);
+      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), stripe: style.backgroundImage, stripeColor: style.backgroundColor, stripeShadow: style.boxShadow, paddingInline: Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight), rowGap: mosaicStyle.rowGap, columnGap: mosaicStyle.columnGap, scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
     });
     expect(geometry.stage.height).toBeLessThanOrEqual(viewport.height * .5);
     expect(Math.abs(geometry.message.left - geometry.stage.left)).toBeLessThanOrEqual(1);
@@ -781,7 +777,8 @@ test('approved header lockup, lightweight mosaic stripe and weather actions keep
     expect(geometry.stripeColor).toBe('rgba(0, 0, 0, 0)');
     expect(geometry.stripeShadow).toBe('none');
     expect(geometry.paddingInline).toBeLessThan(3);
-    expect(geometry.gutterTextIntersections).toBe(0);
+    expect(geometry.rowGap).toBe('0px');
+    expect(geometry.columnGap).toBe('3px');
     expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
 
     await open(run.page, 'b', 'weather_water_demo');
