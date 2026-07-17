@@ -66,6 +66,39 @@ ENABLE_STATIC_SITE_SECRET_PUBLISH=0
 root promotion flag отсутствуют. Это закрывает candidate isolation, но не
 `ADD-BUILD-10 reader-atomic root promotion`.
 
+### Controlled evidence 2026-07-17
+
+Финальный контролируемый CPU-run выполнен на pushed implementation SHA
+`bb34a89540e707a1580fd31b75f6b8e680a86505`:
+
+- build `production-20260717t-controlled-kaggle-final`, run
+  `static-site:controlled-kaggle:20260717-final`;
+- snapshot `snapshot-20260717t-controlled-secret`, SHA-256
+  `78905f8e4b8c36c925a6a5611fd418380b85f48b55785b8ce1f1b7d5459d1ca8`,
+  `quick_check=ok`, `263331840` bytes;
+- `307` eligible events, `307` event pages, `993` files; production and secret
+  checks green, sparse related state explicitly `optional_degraded`;
+- bounded result SHA-256
+  `f976ee86eaf2a98dcbbcb81c325863bb40a01ab16488752310167ed25db1ecc9`,
+  secret artifact SHA-256
+  `84af8bca9b1dc271b5f3bb4ae342d5fa7e0c248b472e864adccaf485cfebe822`,
+  published manifest SHA-256
+  `a20ebb3f748b3961204cc5cd8cb2ff29795e8f698e529e37f8c118498a2ffdc7`;
+- anonymous ListObjects changed from `200` to `403`, while anonymous object read
+  and the existing root stayed `200`;
+- authenticated upload/readback verified all `994` candidate objects; Playwright
+  verified all three forced timetable arms at `320/390/768/1366`, one visible arm,
+  zero horizontal overflow/console errors and boarding at `Северный вокзал`;
+- protected root body SHA-256 remained
+  `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`,
+  stable `ics/4671.ics` remained
+  `7b6ccebab5f4ff3c53fcdedcd06279a94236709902544b19b828a17e812041f5`.
+
+Bearer URL/token are deliberately absent from Git. Ссылка передана только в
+Telegram Saved Messages; первая candidate, на которой browser gate обнаружил
+unresolved external Astro asset prefix, отозвана полностью (`994` objects,
+remaining `0`) до handoff. Production root/current promotion не выполнялась.
+
 
 На базе среза до этой реализации общий event-page контур был preview-only. Ниже
 сохранён исходный audit gap как regression context:
