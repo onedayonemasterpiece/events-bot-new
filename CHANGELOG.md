@@ -6,6 +6,7 @@
 - **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
 
 ### Changed
+- **Static listing visual lab workflow**: define the 20–30-card personalization target as a cumulative cross-surface journey budget with success by touch 30, and require every visual proposal to carry a visible stable ID/name through screenshots, filenames, captions and acceptance tables.
 - **Popular feed / all owned channels and compact VK resolution**: connected the
   exact single-event repost ledger for the second managed VK community
   `231828790`, moved postponed-to-live VK resolution into the existing Kaggle
