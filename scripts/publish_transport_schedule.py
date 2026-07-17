@@ -40,6 +40,8 @@ def main() -> int:
         args.provider, candidate, failure_reason=args.failure_reason, enqueue=enqueue,
     )
     print(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2))
+    if report.get("rebuild_pending"):
+        return 3
     return 0 if report["provider_accepted"] else 2
 
 

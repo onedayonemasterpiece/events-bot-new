@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import copy
+import json
+import sys
+import types
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -99,6 +102,10 @@ def test_provider_specific_mode_empty_and_stale_are_rejected() -> None:
         validate_provider_manifest(empty, now=NOW)
     with pytest.raises(ManifestValidationError, match="source_stale"):
         validate_provider_manifest(manifest("bus", fetched_at=NOW - timedelta(days=4)), now=NOW)
+    stale_document = manifest("bus")
+    stale_document["source"]["fetched_at"] = (NOW - timedelta(days=4)).isoformat()
+    with pytest.raises(ManifestValidationError, match="source_document_stale"):
+        validate_provider_manifest(stale_document, now=NOW)
 
 
 def test_provider_job_accepts_controlled_adapter_payload_and_emits_bounded_outputs(tmp_path: Path) -> None:
@@ -116,6 +123,18 @@ def test_provider_job_accepts_controlled_adapter_payload_and_emits_bounded_outpu
     assert sorted(item.name for item in output.iterdir()) == [
         "transport-kppk-manifest.json", "transport_provider_result.json",
     ]
+
+
+def test_kaggle_runtime_package_manifest_is_allowlisted_and_hash_complete(tmp_path: Path) -> None:
+    from scripts.run_transport_schedule_kaggle import TRANSPORT_PACKAGE_FILES, _copy_transport_package
+
+    names = _copy_transport_package(tmp_path)
+    manifest_value = json.loads((tmp_path / names[0]).read_text(encoding="utf-8"))
+    assert manifest_value["schema_version"] == "kenigevents.transport_runtime_package.v1"
+    assert set(manifest_value["files"]) == {f"transport_refresh/{name}" for name in TRANSPORT_PACKAGE_FILES}
+    for relative, expected_hash in manifest_value["files"].items():
+        import hashlib
+        assert hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest() == expected_hash
 
 
 def test_fan_in_is_deterministic_changed_once_unchanged_zero(tmp_path: Path) -> None:
@@ -141,6 +160,52 @@ def test_fan_in_is_deterministic_changed_once_unchanged_zero(tmp_path: Path) -> 
     assert changed["combined_hash"] != combined_hash
     assert len(queued) == 2
     assert len(list((tmp_path / "combined" / "manifests").glob("*.json"))) == 3
+    assert store.combined_manifest()["content_hash"] == changed["combined_hash"]
+
+
+def test_enqueue_failure_keeps_durable_pending_intent_and_unchanged_retry_enqueues(tmp_path: Path) -> None:
+    store = TransportManifestStore(tmp_path)
+    store.publish("kppk", manifest("kppk"), now=NOW)
+
+    def fail_enqueue(_key: str, _payload: dict) -> None:
+        raise OSError("sqlite unavailable")
+
+    failed = store.publish("bus", manifest("bus"), now=NOW, enqueue=fail_enqueue)
+    assert failed["status"] == "published_changed_rebuild_pending"
+    assert failed["rebuild_pending"] is True
+    assert store.combined_pointer()["content_hash"] == failed["combined_hash"]
+    assert store.rebuild_state()["status"] == "pending"
+
+    queued: list[tuple[str, dict]] = []
+    same = manifest("bus", fetched_at=NOW + timedelta(hours=1))
+    same["snapshot_id"] = "bus-retry-same-services"
+    retried = store.publish(
+        "bus",
+        same,
+        now=NOW + timedelta(hours=1),
+        enqueue=lambda key, payload: queued.append((key, payload)),
+    )
+    assert retried["status"] == "published_unchanged"
+    assert retried["rebuild_enqueued"] is True
+    assert retried["rebuild_pending"] is False
+    assert [key for key, _payload in queued] == ["static_site_build:prod"]
+    assert store.rebuild_state()["acknowledged_hash"] == failed["combined_hash"]
+
+
+def test_current_pointer_fails_closed_for_tampered_or_escaping_manifest(tmp_path: Path) -> None:
+    store = TransportManifestStore(tmp_path)
+    store.publish("kppk", manifest("kppk"), now=NOW)
+    store.publish("bus", manifest("bus"), now=NOW)
+    combined_path = tmp_path / store.combined_pointer()["manifest_path"]
+    original = combined_path.read_text(encoding="utf-8")
+    combined_path.write_text(original.replace("2026-07-18", "2026-07-19", 1), encoding="utf-8")
+    assert store.combined_manifest() is None
+
+    pointer_path = tmp_path / "combined" / "current.json"
+    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+    pointer["manifest_path"] = "../outside.json"
+    pointer_path.write_text(json.dumps(pointer), encoding="utf-8")
+    assert store.combined_manifest() is None
 
 
 def test_timeout_and_invalid_partial_failure_preserve_last_good(tmp_path: Path) -> None:
@@ -155,12 +220,31 @@ def test_timeout_and_invalid_partial_failure_preserve_last_good(tmp_path: Path) 
     assert timed_out["freshness"]["bus"] == {"status": "last_good", "reasons": ["provider:timeout"]}
     assert store.provider_pointer("bus") == provider_before
     assert store.combined_pointer()["content_hash"] == current_before["content_hash"] == complete["combined_hash"]
+    assert store.provider_status("bus")["attempt_status"] == "failed"
+    assert store.provider_status("bus")["serving_status"] == "last_good"
+    assert store.provider_status("bus")["reasons"] == ["provider:timeout"]
+    assert store.fan_in_status()["status"] == "complete"
 
     invalid = manifest("kppk", fetched_at=NOW + timedelta(hours=1))
     invalid["services"] = []
     rejected = store.publish("kppk", invalid, now=NOW + timedelta(hours=1))
     assert rejected["provider_accepted"] is False
     assert store.provider_pointer("kppk")["content_hash"]
+    assert store.provider_status("kppk")["attempt_status"] == "partial"
+    assert len(list((tmp_path / "providers" / "kppk" / "attempts").glob("*.json"))) == 2
+
+
+def test_initial_invalid_provider_records_partial_health_without_pointer(tmp_path: Path) -> None:
+    store = TransportManifestStore(tmp_path)
+    invalid = manifest("bus")
+    invalid["services"][0]["mode"] = "rail"
+    report = store.publish("bus", invalid, now=NOW)
+    assert report["published"] is False
+    assert report["attempt_status"] == "invalid"
+    assert store.provider_pointer("bus") is None
+    assert store.provider_status("bus")["serving_status"] == "missing"
+    assert store.provider_status("bus")["fan_in_status"] == "partial"
+    assert store.fan_in_status()["provider_freshness"]["kppk"]["status"] == "missing"
 
 
 def test_stale_last_good_blocks_publication_until_both_providers_recover(tmp_path: Path) -> None:
@@ -171,6 +255,8 @@ def test_stale_last_good_blocks_publication_until_both_providers_recover(tmp_pat
     blocked = store.publish("kppk", manifest("kppk", fetched_at=stale_time, suffix="changed"), now=stale_time)
     assert blocked["published"] is False
     assert blocked["freshness"]["bus"]["status"] == "stale"
+    assert store.fan_in_status()["status"] == "partial"
+    assert store.fan_in_status()["provider_freshness"]["bus"]["status"] == "stale"
     recovered = store.publish("bus", manifest("bus", fetched_at=stale_time), now=stale_time)
     assert recovered["published"] is True
     assert recovered["freshness"]["kppk"]["status"] == "fresh"
@@ -212,3 +298,142 @@ def test_kaggle_provider_kernels_use_existing_status_heartbeat_and_lease_contrac
     runner = Path("scripts/run_transport_schedule_kaggle.py").read_text(encoding="utf-8")
     assert "transport_schedule:{args.provider}:refresh" in runner
     assert "TransportKppkRefresh" in runner and "TransportBusRefresh" in runner
+    assert "delete_dataset" in runner and "keep_input_datasets" in runner
+    assert "transport_refresh_package_manifest.json" in runner
+    assert 'metadata["id"] = kernel_ref' in runner
+    for provider in ("TransportKppkRefresh", "TransportBusRefresh"):
+        metadata = json.loads(Path("kaggle", provider, "kernel-metadata.json").read_text(encoding="utf-8"))
+        assert metadata["events_bot_disable_status_instrumentation"] is True
+        wrapper = next(Path("kaggle", provider).glob("transport_*_refresh.py")).read_text(encoding="utf-8")
+        assert "EXPECTED_FILES" in wrapper
+        assert "hashlib.sha256(path.read_bytes()).hexdigest()" in wrapper
+        assert "path.relative_to(root)" in wrapper
+    activation = Path("scheduling.py").read_text(encoding="utf-8") + Path("fly.toml").read_text(encoding="utf-8")
+    assert "TransportKppkRefresh" not in activation
+    assert "TransportBusRefresh" not in activation
+    assert "ENABLE_TRANSPORT_REFRESH" not in activation
+
+
+def test_kernel_emits_status_heartbeat_report_and_releases_lease(tmp_path: Path, monkeypatch) -> None:
+    import transport_refresh.kernel as kernel
+
+    source = tmp_path / "source.json"
+    candidate = manifest("kppk")
+    source.write_text(json.dumps({
+        "validity": candidate["validity"],
+        "timezone": candidate["timezone"],
+        "services": candidate["services"],
+    }), encoding="utf-8")
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+    (input_dir / "transport_refresh_config.json").write_text(json.dumps({
+        "provider": "kppk",
+        "source_url": "https://www.kppk39.ru/raspisanie/",
+        "source_payload_filename": "source.json",
+    }), encoding="utf-8")
+    (input_dir / "source.json").write_bytes(source.read_bytes())
+
+    class FakeStatus:
+        enabled = True
+        config = {"resource_leases": ["transport_schedule:kppk:refresh"]}
+
+        def __init__(self):
+            self.events = []
+            self.acquired = []
+            self.released = []
+            self.alive = False
+
+        def event(self, event, **kwargs):
+            self.events.append((event, kwargs))
+
+        def acquire_resource(self, key, **_kwargs):
+            self.acquired.append(key)
+            return True
+
+        def release_resource(self, key):
+            self.released.append(key)
+
+        def start_alive(self, **_kwargs):
+            self.alive = True
+
+        def stop_alive(self):
+            self.alive = False
+
+    status = FakeStatus()
+    monkeypatch.setitem(sys.modules, "kaggle_status_client", types.SimpleNamespace(load_status_client=lambda **_kwargs: status))
+    monkeypatch.setattr(kernel, "INPUT", input_dir)
+    monkeypatch.setattr(kernel, "WORKING", output_dir)
+    monkeypatch.setattr(kernel, "STATUS", None)
+    monkeypatch.setattr(kernel, "RESOURCES", [])
+    assert kernel.kernel_main("kppk") == 0
+    assert [name for name, _kwargs in status.events] == [
+        "kernel_started", "preflight_ok", "alive", "alive", "report_written",
+    ]
+    assert status.acquired == status.released == ["transport_schedule:kppk:refresh"]
+    assert status.alive is False
+
+
+@pytest.mark.asyncio
+async def test_multiple_transport_hash_updates_merge_into_one_pending_static_build(tmp_path: Path) -> None:
+    import main
+    from models import JobOutbox, JobStatus, JobTask
+
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    results = []
+    for content_hash in ("hash-1", "hash-2", "hash-2"):
+        results.append(await main.enqueue_job(
+            db, 0, JobTask.static_site_build,
+            payload={"transport_content_hash": content_hash},
+            coalesce_key="static_site_build:prod", requeue_done=True,
+        ))
+    assert results == ["new", "merged-rearmed", "merged-rearmed"]
+    async with db.get_session() as session:
+        rows = (await session.execute(
+            main.select(JobOutbox).where(JobOutbox.coalesce_key == "static_site_build:prod")
+        )).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].status == JobStatus.pending
+    assert rows[0].payload == {"transport_content_hash": "hash-2"}
+
+
+@pytest.mark.asyncio
+async def test_running_static_build_gets_exactly_one_coalesced_followup(tmp_path: Path) -> None:
+    import main
+    from models import JobOutbox, JobStatus, JobTask
+
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(JobOutbox(
+            event_id=0,
+            task=JobTask.static_site_build,
+            status=JobStatus.running,
+            coalesce_key="static_site_build:prod",
+            payload={"transport_content_hash": "old"},
+            updated_at=main.datetime.now(main.timezone.utc),
+        ))
+        await session.commit()
+
+    first = await main.enqueue_job(
+        db, 0, JobTask.static_site_build,
+        payload={"transport_content_hash": "new-1"},
+        coalesce_key="static_site_build:prod", requeue_done=True,
+    )
+    second = await main.enqueue_job(
+        db, 0, JobTask.static_site_build,
+        payload={"transport_content_hash": "new-2"},
+        coalesce_key="static_site_build:prod", requeue_done=True,
+    )
+    assert first == "merged"
+    assert second == "merged-rearmed"
+    async with db.get_session() as session:
+        rows = (await session.execute(
+            main.select(JobOutbox)
+            .where(JobOutbox.coalesce_key == "static_site_build:prod")
+            .order_by(JobOutbox.id)
+        )).scalars().all()
+    assert len(rows) == 2
+    assert [row.status for row in rows] == [JobStatus.running, JobStatus.pending]
+    assert rows[1].payload == {"transport_content_hash": "new-2"}

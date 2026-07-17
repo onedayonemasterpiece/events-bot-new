@@ -142,4 +142,10 @@ Transport source refresh is a separate upstream CPU workload, not part of the As
 
 The provider runners reuse the same unique private input dataset, `create_kaggle_run_config`, status dataset, heartbeat and terminal report protocol as the static builder. With `--state-root` a waited run validates/fans in its output server-side; with `--publish-db` a changed combined semantic hash enqueues the existing `static_site_build:prod` coalesce key. An unchanged hash does not enqueue.
 
+The fan-in first persists `combined/rebuild.json` as pending, then atomically moves the validated combined pointer, then acknowledges the desired hash only after the SQLite outbox enqueue succeeds. A later unchanged refresh retries an unacknowledged hash. `enqueue_job` also gives a running `static_site_build:prod` owner exactly one deferred coalesced follow-up, so two provider updates cannot be lost or fan out into identical builds.
+
+Waited terminal transport runs delete their unique private input and status datasets by default. `--no-wait`, a nonterminal timeout, or explicit `--keep-input-datasets` retains them and transfers cleanup ownership to the operator. Official provider HTML/PDF adapters are not implemented by the generic JSON-normalization kernel; production/canary remains off until those concrete adapters and source rights are reviewed.
+
+The transport script imports the shared package only from its unique private input after checking the `kenigevents.transport_runtime_package.v1` allowlist and every file SHA-256. Do not depend on sibling files in the pushed kernel folder: the Kaggle script contract reliably exposes the declared `code_file`, while additional runtime code belongs in a declared `dataset_source`.
+
 The proposed nightly times and production-off canary gate are canonical in [the static transport schedule contract](../features/static-site-pages/event-transport-schedule.md). Do not activate cron merely because both kernels can be pushed successfully; first verify real provider output, last-good/failure recovery and a changed/unchanged rebuild pair.

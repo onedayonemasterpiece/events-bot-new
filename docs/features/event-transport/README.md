@@ -1,6 +1,6 @@
 # Event transport guidance
 
-> Status: automated refresh foundation implemented; **production schedule is not activated**. A controlled KPPK and bus canary, source-adapter review and static presentation integration are still release gates.
+> Status: validated JSON-adapter refresh foundation implemented; **official-provider ingestion and the production schedule are not activated**. A controlled KPPK and bus canary, concrete official-source adapter review and static presentation integration are still release gates.
 
 ## Product contract
 
@@ -25,13 +25,17 @@ There are two independently runnable Kaggle CPU lanes:
 - `scripts/run_kppk_transport_refresh_kaggle.py` / `kaggle/TransportKppkRefresh`;
 - `scripts/run_bus_transport_refresh_kaggle.py` / `kaggle/TransportBusRefresh`.
 
-Both use the shared `transport_refresh` package and versioned `kenigevents.transport_provider.v1` contract. A provider kernel fetches or reads a controlled-canary JSON adapter output, validates it, and emits only:
+Both use the shared `transport_refresh` package and versioned `kenigevents.transport_provider.v1` contract. A provider kernel fetches or reads a controlled-canary **JSON adapter output**, validates it, and emits only:
 
 - `transport-<provider>-manifest.json`;
 - `transport_provider_result.json`;
 - Kaggle status/log evidence.
 
 Each status-aware run uses the existing `kaggle_run_ledger`, heartbeat client and a provider-specific resource lease (`transport_schedule:kppk:refresh` or `transport_schedule:bus:refresh`). Separate leases make the two providers independently runnable; server fan-in remains serialized.
+
+The public KPPK and regional-bus pages currently expose HTML/PDF, not this JSON contract. The generic job intentionally refuses to infer schedule semantics from either format. Therefore TR-1/TR-2 job isolation is implemented, but real provider ingestion remains **Partial/Blocked** until separately reviewed KPPK and bus adapters produce explicit dated JSON with source provenance. Supplying an official page URL directly is not a valid canary and must fail JSON decoding rather than silently scrape it.
+
+Kaggle runs only the declared script file; sibling Python packages are not a reliable kernel-code boundary. The runner therefore places the shared `transport_refresh` package in the same unique private input dataset as the config, together with `kenigevents.transport_runtime_package.v1`. The script accepts exactly the allowlisted module paths and verifies every SHA-256 before adding that dataset root to `sys.path`. Staged metadata is rewritten to the authenticated `${KAGGLE_USERNAME}` owner before push.
 
 ## Schema contract
 
@@ -62,13 +66,19 @@ Two hashes have different purposes:
 ```text
 providers/{kppk,bus}/manifests/<snapshot_hash>.json
 providers/{kppk,bus}/current.json
+providers/{kppk,bus}/attempts/<attempt_id>.json
+providers/{kppk,bus}/status.json
 combined/manifests/<snapshot_hash>.json
 combined/current.json
+combined/status.json
+combined/rebuild.json
 ```
 
-Writes use a local lock, fsync and atomic rename. Provider validation happens before its `current.json` is moved. Timeout, empty, invalid and stale candidates do not replace provider last-good. Fan-in uses both fresh provider last-good manifests; if either is missing/stale, combined current is not advanced. Status reports expose `fresh`, `missing` or `stale` plus machine-readable reasons such as `provider:timeout`, `services:empty`, `freshness:source_stale` and `freshness:validity_expired`.
+Writes use a local lock, file+directory fsync and atomic rename. Provider validation happens before its `current.json` is moved. Timeout, empty, invalid and stale candidates do not replace provider last-good. Every attempt is nevertheless immutable in `attempts/` and projected into `status.json`; it distinguishes `attempt_status` (`fresh|failed|invalid|partial|stale`), `serving_status` (`fresh|last_good|missing|stale`) and fan-in `complete|partial`. Fan-in uses both fresh provider last-good manifests; if either is missing/stale, combined current is not advanced. Status reports expose machine-readable reasons such as `provider:timeout`, `services:empty`, `freshness:source_stale`, `freshness:source_document_stale` and `freshness:validity_expired`.
 
-The combined manifest is deterministic for the same provider inputs. A new immutable combined snapshot/current pointer may record fresher source retrieval, but the existing outbox receives exactly one `static_site_build:prod` coalesced task only when the accepted **combined semantic content hash** changes. An unchanged run enqueues zero.
+The combined manifest is deterministic for the same provider inputs. The current pointer is accepted only when it stays under `combined/manifests/` and its immutable snapshot hash matches. A new immutable combined snapshot/current pointer may record fresher source retrieval, but the existing outbox receives exactly one `static_site_build:prod` coalesced task only when the accepted **combined semantic content hash** changes. An unchanged run enqueues zero unless it is retrying a previously failed handoff.
+
+`combined/rebuild.json` is a durable outbox-intent handshake. The desired hash is fsynced before `combined/current.json` moves. Only a successful `enqueue_job(..., coalesce_key="static_site_build:prod")` acknowledges it; an enqueue failure leaves it `pending`, and even an unchanged later provider check retries it. If a static build already owns the key in `running`, `enqueue_job` creates exactly one deferred coalesced follow-up and later updates merge into that row. This closes both the pointer-before-enqueue loss window and the update-during-long-build loss window.
 
 Server-side import is available directly after a waited runner (`--state-root`, optionally `--publish-db`) or separately:
 
@@ -97,6 +107,14 @@ Production activation is intentionally absent from `scheduling.py`/`fly.toml`. S
 4. fan in without a publish DB, review the immutable combined artifact;
 5. repeat with publish DB and confirm one changed build / zero unchanged builds;
 6. validate generated event and transport ICS plus representative outside-city pages.
+
+Waited terminal runs delete their unique private input/status datasets in `finally` by default; `--keep-input-datasets` is evidence/debug-only. `--no-wait` cannot delete mounted inputs and therefore leaves explicit operator-owned retention items. Timeouts do not delete inputs while a potentially live kernel may still need them.
+
+### Controlled mechanics canary — 2026-07-17
+
+After local contracts passed, private CPU runs `controlled-20260717-kppk-v3` and `controlled-20260717-bus-v1` completed under `zigomaro/kenigevents-transport-{kppk,bus}-refresh`, each producing one validated service and a provider manifest. Controlled fan-in produced semantic hash `28b103cec10c768ed5c49a962956982cfb159e7248720b3a382bdfda0f4d191a`; no DB was supplied, so the rebuild handshake correctly remained pending and no static build was created. Both unique inputs were deleted.
+
+This is **synthetic JSON-payload mechanics evidence only**. Status DB/callback were absent, and neither official-source adapter exists, so it is not provider-data, production ledger, heartbeat/lease callback, activation or production readiness evidence.
 
 Rollback is pointer-based: restore the previous reviewed `combined/current.json` target and enqueue one coalesced static rebuild. Never delete immutable manifests or repoint a provider to a rejected snapshot.
 
