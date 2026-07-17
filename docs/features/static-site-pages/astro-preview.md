@@ -485,3 +485,30 @@ Related/discovery data in this preview uses the two-document pgvector chain `eve
 ## Counter freshness plan
 
 Counter freshness is documented in [Event reaction counters](reaction-counters.md). The decision is manifest-first: static HTML keeps a build-time baseline for SEO/no-JS, while a small same-origin counter manifest should patch counters after first paint. Full page rebuilds are for event content/lifecycle changes, not for every like tick.
+
+## Verified on 2026-07-17 — `TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9`
+
+Public desktop preview:
+<https://kenigevents.ru/preview-20260717-today-hour-flow-v9/segodnya/>.
+
+The page was exported from a fresh read-only production Fly SQLite snapshot for
+2026-07-17. The preview contains 220 real active events overall; `/segodnya/`
+renders 17 unique same-day cards after one exact title/time/venue duplicate is
+removed. Events are grouped by exact start time (`18:00` and `18:30` remain
+separate). Each group uses intrinsic-width `flex-wrap` rather than an equal
+column grid, horizontal scroller or stretched row. Long-running exhibitions do
+not enter the primary Today flow, while already-finished events remain available
+inside the collapsed `Ранее сегодня` section.
+
+The approved location overlay is deliberately fail-closed. A bottom-right
+medallion is rendered only on a curated venue match whose primary image is a
+semantically classified `event_photo`/`photo` and is `visual_only` at both event
+and asset levels. `safe_crop` is not an OCR proxy. In this real-data build only
+event `4783`, «Мюзикл „Алые паруса“», passed the gate; short-text/poster-like
+images were rejected.
+
+Post-deploy browser QA passed at `1920×1080` and `1440×1000`: 17 visible cards,
+9 time groups, 10 distinct rendered card widths, `display:flex`,
+`flex-wrap:wrap`, card `flex-grow:0`, no horizontal overflow, no broken or
+pending images after a full lazy-load scroll, and exactly one eligible venue
+medallion. `npm run check:preview` passed for the 242-page/220-event build.

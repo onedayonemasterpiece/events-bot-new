@@ -3,12 +3,14 @@
 ## [Unreleased]
 
 ### Changed
+- **Static Today / intrinsic hour flow**: replaced the equal-column Today listing with an intrinsic-width exact-time flow, keeping earlier starts collapsed, excluding long-running exhibitions from the primary flow and removing exact title/time/venue duplicates.
 - **Static site / design-system copy action**: added a reusable tokenized icon-only `CopyAction` with exact Clipboard API/fallback behavior, fixed 44px secondary/inverse controls, copy-to-check success, non-colour-only error recovery and hidden live announcements, plus runtime catalog fixtures and regression contracts.
 - **Static site / design-system governance**: require the project-local design-system skill for every static UI change, version material component redesigns explicitly, render deprecated/replacement versions in the runtime registry, and block release until production consumers complete the migration or have a documented flagged rollout.
 - **Static site / design system**: centralized semantic UI tokens and approved Astro primitives, added a noindex runtime catalog with foundations, complete interaction/data states and real event product components, registered the split-actions card baseline and deprecated overlay variant, and added contrast/state/build regression checks plus release-documentation gates.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
+- **Static Today / gated venue medallion overlay**: added a curated bottom-right location medallion for Today cards only when both event and primary asset are visual-only and the asset is a semantically classified event photo; unknown and poster-like media fail closed.
 - **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
 
 ### Changed

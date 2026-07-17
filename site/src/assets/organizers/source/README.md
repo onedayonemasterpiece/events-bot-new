@@ -19,3 +19,7 @@ These files are official/source-faithful inputs for the first event-page organiz
 | `kantata-festival` | Фестиваль «Кантата» | https://kantatafest.ru/obrazovatelnaya-programma | `Kantata_logo_Black_R.png` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | Используется официальный wordmark «КАНТАТА»; source raster, поэтому runtime WebP-first. |
 
 No OpenAI image generation/editing was used. The medallions were produced by local SVG rendering/vectorization, source cropping/recomposition, embedded-source SVG where needed, and PNG fallback export. If no SVG source/vector-safe source exists, browser-facing runtime assets should be WebP-first, with PNG only as fallback/QA.
+
+## Listing overlay reuse
+
+`muzteatr39` reuses the accepted official-source asset from `origin/feature/static-site-venue-medallions-20260703`. On listing cards it is rendered only when the selected primary image is a classified `event_photo` with `image_text_mode=visual_only`; poster/mixed/pending/error media fail closed.

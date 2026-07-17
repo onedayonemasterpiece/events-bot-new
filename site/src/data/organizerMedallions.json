@@ -321,6 +321,35 @@
       "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
       "retrievedAt": "2026-07-02",
       "assetFormat": "webp-source-only"
+    },
+    {
+      "slug": "muzteatr39",
+      "name": "Калининградский музыкальный театр",
+      "shortName": "Музыкальный театр",
+      "aliases": [
+        "Музыкальный театр",
+        "Калининградский музыкальный театр",
+        "Калининградский областной музыкальный театр",
+        "muzteatr39",
+        "muztear39"
+      ],
+      "sourcePage": "https://muzteatr39.ru/",
+      "sourceUrl": "https://muzteatr39.ru/wp-content/uploads/image_theme/logo2.png",
+      "sourceFile": "muzteatr39.logo2.png",
+      "background": "#5B4427",
+      "ring": "#D8B982",
+      "logoCrop": "official-square-logo",
+      "fitBox": [
+        336,
+        336
+      ],
+      "ariaLabel": "Площадка: Калининградский музыкальный театр",
+      "renderNote": "Официальный квадратный PNG-логотип пересобран как WebP-primary медальон с PNG fallback; трассировка не используется.",
+      "avatarUrl": "/assets/organizers/muzteatr39.webp",
+      "sourcePath": "site/src/assets/organizers/source/muzteatr39.logo2.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/muzteatr39.png"
     }
   ]
 }

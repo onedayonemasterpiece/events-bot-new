@@ -364,10 +364,19 @@ const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
-if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');
-if (!todayHtml.includes('listing-daypart--continuing') || !todayHtml.includes('Идут сейчас')) throw new Error('Today listing must separate continuing multi-day exhibitions when they would overcrowd the fast daypart list');
+const todayVisibleHtml = stripGeneratedCode(todayHtml);
+if (/Мосийенко|Мосиенко/u.test(todayVisibleHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');
+if (!todayVisibleHtml.includes('TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9') || !todayVisibleHtml.includes('today-hour-timeline') || !todayVisibleHtml.includes('today-hour-flow')) throw new Error('Today listing must render the approved V9 intrinsic exact-time flow');
+if (todayVisibleHtml.includes('listing-daypart') || todayVisibleHtml.includes('listing-stack')) throw new Error('Today V9 must not regress to the old daypart/equal-column listing');
+if (!todayVisibleHtml.includes('href="/') || !todayVisibleHtml.includes('/vystavki/')) throw new Error('Today V9 must keep the dedicated exhibitions route instead of mixing continuing exhibitions into the primary flow');
+const todayArticles = [...todayHtml.matchAll(/<article class="today-hour-card"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
+if (!todayArticles.length) throw new Error('Today V9 has no intrinsic hour cards');
+if (todayArticles.some((article) => !article.includes('data-today-hour-card') || !article.includes('data-event-id=') || !article.includes('data-image-text-mode='))) throw new Error('Today V9 cards must expose compact QA/event/media attributes');
+const todayEventIds = todayArticles.map((article) => article.match(/data-event-id="?([^"\s>]+)/u)?.[1]).filter(Boolean);
+if (new Set(todayEventIds).size !== todayEventIds.length) throw new Error('Today V9 must remove exact duplicate cards before rendering');
+if (todayArticles.some((article) => article.includes('data-venue-medallion=') && !article.includes('data-image-text-mode="visual_only"'))) throw new Error('Today V9 must never overlay a venue medallion on OCR/unknown media');
 const tomorrowHtml = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
-for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml]]) {
+for (const [name, html] of [['tomorrow', tomorrowHtml]]) {
   for (const label of ['Утро', 'День', 'Вечер', 'Ночь']) {
     if (!html.includes(`>${label}</h3>`)) throw new Error(`${name} listing misses daypart section ${label}`);
   }
