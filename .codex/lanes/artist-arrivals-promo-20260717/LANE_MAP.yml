@@ -1,0 +1,113 @@
+mode: full_fanout_read_only_discovery_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_sha: 100892d8
+base_branch: main
+integration_branch: integration/artist-arrivals-promo-20260717
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/artist-arrivals-promo-20260717
+global_constraints:
+  - Preserve the dirty primary checkout; all writes happen in the integration worktree.
+  - LLM-first semantic decisions; deterministic matching is candidate recall and safety validation only.
+  - Public locality and physical-arrival claims require row-level source evidence.
+  - No production mutation, publication, deployment, or paid image generation without an explicit later release gate.
+  - Store research/run outputs under artifacts/codex and never commit them.
+verification_owner: root integrator, followed by an independent merge-review lane
+stop_conditions:
+  - A locality claim cannot be grounded in current row-level evidence.
+  - Production schema or publisher changes cannot be isolated from unrelated dirty work.
+  - A public card would need an unlicensed or unrelated person image.
+requirements:
+  R01: Decide compact/ecological JSON versus YDB storage and document the decision.
+  R02: Discover and evidence Kaliningrad-region artists/celebrities from existing events so local people never trigger visiting-artist promotion.
+  R03: Identify current future foreign and non-local Russian arrivals and provide a preliminary evidence-backed list.
+  R04: Build a once-daily, idempotent artist-arrivals manifest with entity/project dedupe and cancellation/source-revision invalidation.
+  R05: Release a digest only above a configurable threshold, defaulting to at least 3 distinct artists and 2 distinct projects/visit clusters.
+  R06: Produce Telegram RichMessage and VK carousel-ready cards with artist photo, project/date copy, and footer metadata.
+  R07: Expose eligible arrivals to the static homepage and Hero Talk without highlighting local artists.
+  R08: Model artist-arrival digest and Hero Talk exposure as promo-campaign activity types with independent cooldowns.
+lanes:
+  - id: storage_architecture
+    role: planner
+    effort: high
+    requirement_ids: [R01, R04, R05]
+    target: Existing JSON, SQLite/YDB, scheduler, idempotency and compact storage patterns.
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Architecture recommendation with exact reusable code paths, schema proposal and operational trade-offs.
+    verification_scope: inspection_only
+    status: planned
+  - id: event_evidence
+    role: planner
+    effort: extra-high
+    requirement_ids: [R02, R03]
+    target: Production future events, source evidence, local/non-local/international identity and visit candidates.
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Evidence ledger with confidence, exclusions, local registry candidates and preliminary arrival list.
+    verification_scope: inspection_only
+    status: planned
+  - id: surface_mapping
+    role: planner
+    effort: high
+    requirement_ids: [R06, R07, R08]
+    target: Telegram RichMessage, VK carousel, static homepage/Hero Talk and promo-campaign extension points.
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Concrete integration map, media/copy contracts and test seams.
+    verification_scope: inspection_only
+    status: planned
+  - id: serial_integrator
+    role: worker
+    effort: extra-high
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: Canonical docs, registry/evidence data, models, manifest builder, render payloads, static export and promo integration.
+    depends_on: [storage_architecture, event_evidence, surface_mapping]
+    execution_mode: serial_after_dependency
+    branch: integration/artist-arrivals-promo-20260717
+    worktree: /home/dev/.codex/worktrees/events-bot-new/artist-arrivals-promo-20260717
+    writable_files:
+      - artist_arrivals/**
+      - alembic/versions/**
+      - db.py
+      - models.py
+      - scheduling.py
+      - promo.py
+      - static_site_public_projection.py
+      - site/**
+      - tests/**
+      - docs/**
+      - CHANGELOG.md
+      - .env.example
+      - .codex/**
+    forbidden_files:
+      - artifacts/**
+      - .env
+    expected_output: Committed implementation and targeted/full validation evidence.
+    verification_scope: full_local
+    status: planned
+  - id: merge_review
+    role: merge_reviewer
+    effort: extra-high
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: Independent requirement, safety, evidence and regression audit.
+    depends_on: [serial_integrator]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: PASS/FAIL review with missing requirements and exact remediation.
+    verification_scope: full_local
+    status: planned
