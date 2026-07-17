@@ -638,7 +638,7 @@ def test_scheduler_registers_one_batch_job_not_one_job_per_publication(monkeypat
     monkeypatch.setattr(scheduling, "AsyncIOScheduler", DummyScheduler)
     monkeypatch.setattr(scheduling, "_scheduler", None)
     monkeypatch.setenv("ENABLE_CORE_SCHEDULERS", "0")
-    monkeypatch.setenv("ENABLE_SOCIAL_METRICS_BATCH", "1")
+    monkeypatch.setenv("ENABLE_SOCIAL_METRICS_KAGGLE", "1")
     monkeypatch.delenv("ENABLE_NIGHTLY_PAGE_SYNC", raising=False)
     monkeypatch.setitem(
         sys.modules,

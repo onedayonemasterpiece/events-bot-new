@@ -1,0 +1,15 @@
+{
+  "id": "eventsbot/kenigevents-social-metrics-collector",
+  "title": "KenigEvents social metrics collector",
+  "code_file": "social_metrics_collector.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "events_bot_disable_status_instrumentation": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

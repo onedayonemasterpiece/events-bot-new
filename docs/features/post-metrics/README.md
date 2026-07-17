@@ -34,15 +34,20 @@
 
 ## Пакетный сбор для статического «Популярного»
 
-Канонический runner: `social_metrics_batch.py::run_social_metrics_batch`.
+Канонический production runner: `social_metrics_kaggle.py::run_social_metrics_kaggle_batch`.
 
-- Один interval-job загружает все актуальные публикации и определяет due-бакеты
-  по `post_ts`; отдельные APScheduler jobs на каждый пост не создаются.
+- Fly выполняет только DB-планирование точных post/message ID, запуск одного
+  приватного Kaggle CPU kernel, строгую проверку результата и импорт. Все
+  Telegram/VK API-чтения выполняются в
+  `kaggle/SocialMetricsCollector/social_metrics_collector.py`; отдельные jobs на
+  каждый пост не создаются. Manifest содержит только точные публикации, а
+  Telegram читает их через `get_messages(ids=...)` без сканирования истории.
 - Запросы группируются по платформе и издателю. VK `wall.getById` вызывается
   чанками максимум по 100 ID, после чего весь чанк записывается одной SQLite
   транзакцией.
-- Перед VK-сбором unresolved собственные `source_vk_post_url` пакетно
-  разрешаются в live wall ID; результат сохраняется в `event_publication`.
+- MVP собирает только уже разрешённые live VK ID. Сетевой resolver отложенных
+  VK ID не запускается на Fly: это сохраняет границу «тонкого бота»; raw-evidence
+  resolver позже можно добавить в тот же Kaggle kernel без выдачи ему DB.
 - При пропущенном окне один поздний counter не копируется в несколько прошлых
   точек: самый свежий due-бакет сохраняется, более ранние получают
   `skipped_late`.
@@ -67,10 +72,9 @@
 
 Флаги запуска:
 
-- `ENABLE_SOCIAL_METRICS_BATCH=1` — зарегистрировать единый interval-job;
+- `ENABLE_SOCIAL_METRICS_KAGGLE=1` — зарегистрировать единый remote interval-job;
 - `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES=30`;
-- `SOCIAL_METRICS_VK_ENABLED=1`;
-- `SOCIAL_METRICS_TG_ENABLED=0` до явного включения reader;
+- `SOCIAL_METRICS_KAGGLE_TIMEOUT_SECONDS=1800`;
 - `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR` — единственная допустимая user-session;
 - `SOCIAL_METRICS_TG_STARTUP_DELAY_SECONDS=4,12`,
   `SOCIAL_METRICS_TG_BETWEEN_REQUESTS_SECONDS=2,5`,
@@ -78,6 +82,13 @@
 - `SOCIAL_METRICS_TG_FLOOD_SLEEP_SECONDS=60` — короткий FloodWait можно
   переждать внутри job, длинный завершает попытку и повторяется следующим
   interval-run, не удерживая role-scoped session на много минут.
+
+Kaggle получает bundle и provider tokens только в раздельных приватных
+encrypted/key datasets. Runtime обязан получить status leases
+`job:social_metrics_batch` и
+`telegram_session:telegram_auth_bundle_check_popular` до расшифровки и
+подключения; fallback на E2E/S22/`TELEGRAM_SESSION` запрещён. По завершении
+временные datasets удаляются.
 
 Static exporter добавляет к событию объяснимые reason codes:
 `fast_growth`, `frequently_shared`, `discussed`, `multi_source`. Лента остаётся

@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Changed
+- **Popular feed / thin-bot collection boundary**: moved scheduled Telegram and
+  VK metric API reads into one private Kaggle CPU batch with exact-ID manifests,
+  split encrypted secrets, human-like sequential Telegram pacing, status/resource
+  leases and a strictly validated Fly-side import; the bot no longer performs
+  scheduled provider reads locally.
 - **Telegram event graphical medallions (INC-2026-07-15)**: moved curated organizer/venue/festival/source/program/Pushkin identities from delayed custom-emoji mosaics into a deterministic `1300×330` bottom strip in Bot API RichMessage, versioned publication hashes with asset digests, preserved every approved poster and calendar button, edit existing RichMessages in place, skip stale emoji-editor jobs after migration, and keep legacy albums intact unless their complete message-id ledger is available for an audited replacement.
 - **Event age-rating acceptance and source repair**: distinguish terminal-state completeness from the owner's literal 100% numeric fill-rate gate; the full 291-event sweep plus source-by-source repair ended with 64 declared, 11 assessed-only and 216 terminal nonnumeric outcomes, including correction of two live BGE/source disagreements, so the approved high-confidence cascade is not described as completion of no-missing calibration.
 - **Kaggle run status isolation**: preserve a hash of the complete run id in every status-dataset slug, preventing concurrent/retried runs with the same long prefix from versioning one shared callback config and corrupting each other's ledger heartbeats.
