@@ -407,6 +407,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         const columns = mosaicColumnsForViewport();
         const activeCount = columns * MOSAIC_ROWS;
         const phase = hashUnit(currentScenario.id, 'phase') * Math.PI * 2;
+        const copyRects = fragments().flatMap((node) => [...node.getClientRects()]);
         mediaShell.style.setProperty('--mosaic-columns', String(columns));
         mosaicRoot.style.setProperty('--mosaic-columns', String(columns));
         mosaicRoot.style.setProperty('--mosaic-image', `url(${JSON.stringify(media.src)})`);
@@ -435,6 +436,9 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           else if (column < columns - 3 && contrastRoll >= .91) { opacity = .96; contrastAccent = 'bright'; }
           if (column === columns - 3) opacity = Math.max(.74, opacity);
           if (column >= columns - 2) opacity = 1;
+          const tileRect = tile.getBoundingClientRect();
+          const copyShield = copyRects.some((rect) => tileRect.right > rect.left - 4 && tileRect.left < rect.right + 4 && tileRect.bottom > rect.top - 3 && tileRect.top < rect.bottom + 3);
+          if (copyShield) opacity = Math.min(opacity, .24);
           const beat = column >= columns - 2 ? 2 : Math.floor(hashUnit(currentScenario.id, 'entry-beat', Math.floor(row / 2), Math.floor(column / 4)) * 3);
           const entryDelay = 40 + beat * 260 + Math.floor(hashUnit(currentScenario.id, 'entry-delay', row, column) * 140);
           const entryDuration = 360 + Math.floor(hashUnit(currentScenario.id, 'entry-duration', row, column) * 400);
@@ -446,6 +450,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           tile.dataset.entryBeat = String(beat);
           tile.dataset.exitBeat = String(exitBeat);
           tile.dataset.contrastAccent = contrastAccent;
+          tile.dataset.copyShield = String(copyShield);
           tile.style.setProperty('--tile-opacity', String(opacity));
           tile.style.setProperty('--tile-in-delay', `${entryDelay}ms`);
           tile.style.setProperty('--tile-in-duration', `${entryDuration}ms`);
@@ -867,6 +872,8 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
     .briefing-stage__mosaic-tile { position: relative; display: block; min-width: 0; min-height: 0; overflow: hidden; opacity: 0; transition-property: opacity; transition-duration: var(--tile-in-duration); transition-timing-function: cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
     .briefing-stage__mosaic-tile::before { content: ""; position: absolute; left: var(--tile-image-left); top: var(--tile-image-top); width: var(--mosaic-render-width); height: var(--mosaic-render-height); background-image: var(--mosaic-image); background-repeat: no-repeat; background-size: cover; background-position: var(--mosaic-focus-x, 50%) var(--mosaic-focus-y, 50%); }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); }
+    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile[data-copy-shield="true"] { transition: none !important; }
+    .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile[data-copy-shield="true"] { opacity: min(var(--tile-opacity), .24); }
     .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: var(--tile-out-duration); transition-delay: var(--tile-out-delay); }
     [data-briefing-variant="static"] .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); transition: none; }
     [data-briefing-scenario-id="weather_water_demo"] .briefing-stage__message h1,
@@ -878,7 +885,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
   @media (max-width: 759px) {
     html:has([data-briefing-lab]) .site-nav { display: none; }
     .media-review-controls { grid-template-columns: 1fr; gap: .45rem; }
-    .media-review-controls__rail { justify-content: flex-start; overflow-x: auto; padding-bottom: .2rem; }
+    .media-review-controls__rail { justify-content: flex-start; flex-wrap: wrap; overflow: visible; padding-bottom: .2rem; }
     .media-review-controls__actions { justify-content: space-between; }
     .media-review-controls__actions button { min-height: 44px; }
     [data-briefing-scenario-id="local_keska"] .briefing-stage__message h1 { max-width: 100%; font-size: 1.4rem; }

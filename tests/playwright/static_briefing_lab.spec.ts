@@ -556,6 +556,9 @@ test('manual media-review deck exposes twelve distinct, admitted images and neve
     await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
     await expect(desktop.page.locator('[data-media-image]')).toHaveAttribute('src', contract[index].src);
     await expect(desktop.page.locator('[data-media-review-progress]')).toHaveText(`${index + 1} из ${mediaReviewScenarioIds.length}`);
+    const copyShield = await desktop.page.locator('[data-mosaic-tile][data-copy-shield="true"]:not([hidden])').evaluateAll((tiles) => tiles.map((tile) => Number.parseFloat(getComputedStyle(tile).opacity)));
+    expect(copyShield.length).toBeGreaterThan(0);
+    expect(Math.max(...copyShield)).toBeLessThanOrEqual(.24);
   }
   await desktop.page.locator('[data-media-review-previous]').click();
   await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds.at(-2)!);
@@ -567,10 +570,12 @@ test('manual media-review deck exposes twelve distinct, admitted images and neve
   const mobile = await freshPage(browser, { width: 390, height: 844 });
   await open(mobile.page, 'b', mediaReviewScenarioIds[0], '&review=media');
   await expect(mobile.page.locator('[data-media-review-controls]')).toBeVisible();
+  await expect(mobile.page.locator('[data-media-review-scenario]').last()).toBeInViewport();
   await expect(mobile.page.locator('[data-briefing-slot]')).toHaveAttribute('data-media-mode', 'none');
   await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
   await expect(mobile.page.locator('[data-briefing-categories]')).toBeVisible();
   await expect(mobile.page.locator('[data-briefing-feed]')).toBeVisible();
+  expect(await mobile.page.evaluate(() => document.body.scrollWidth)).toBe(390);
   await mobile.context.close();
 });
 
