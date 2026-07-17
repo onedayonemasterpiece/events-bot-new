@@ -56,6 +56,20 @@ incident-record overlap when integrating the two implementation lanes.
 
 ## Release state
 
-The immutable noindex preview is the only release target. Production-root
-promotion remains blocked on explicit product acceptance, and the transport
-infographic remains a product choice rather than an implemented change.
+Published immutable noindex preview:
+
+`https://kenigevents.ru/preview-20260717t-static-event-v11-phone-carousel/__preview/`
+
+- public HTTP returned `200` plus `noindex,nofollow,noarchive` for the index,
+  phone event, wide-photo event and portrait-carousel example;
+- public phone Playwright passed `3/3` desktop viewports;
+- public wide-photo, portrait-series and accepted-mobile checks returned no
+  failures or console errors;
+- public current-prefix mobile gate passed `36/36` event pages at both 320 and
+  390 plus five transitions and the poisoned-cache scenario;
+- fixed-page links were delivered and read back in the existing Telegram topic
+  as message `268`.
+
+Production-root promotion remains blocked on explicit product acceptance. The
+transport infographic remains a product choice rather than an implemented
+change.
