@@ -69,3 +69,24 @@ def test_static_site_build_kaggle_command_rejects_unknown_related_mode(monkeypat
             script_path="/repo/scripts/run_static_site_builder_kaggle.py",
             status_callback_url="https://events-bot.example/internal/kaggle/run-event",
         )
+
+
+def test_add_build_08_command_separates_snapshot_from_live_status_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import main
+
+    monkeypatch.delenv("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES", raising=False)
+    cmd = main._static_site_build_kaggle_command(
+        db_path="/data/static_site_snapshots/request.sqlite",
+        status_db_path="/data/db.sqlite",
+        build_id="preview-secret-test",
+        limit=5000,
+        current_date="2026-07-17",
+        script_path="/repo/scripts/run_static_site_builder_kaggle.py",
+        status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+    )
+    assert _arg_after(cmd, "--db") == "/data/static_site_snapshots/request.sqlite"
+    assert _arg_after(cmd, "--status-db") == "/data/db.sqlite"
+    assert _arg_after(cmd, "--timeout-minutes") == "90"
+    assert main.JOB_MAX_RUNTIME[main.JobTask.static_site_build] == 5400

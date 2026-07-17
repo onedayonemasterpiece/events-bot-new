@@ -161,6 +161,7 @@ import socket
 from difflib import SequenceMatcher
 import json
 import re
+from pathlib import Path
 import httpx
 import hashlib
 import unicodedata
@@ -258,6 +259,20 @@ from sections import (
     dedup_same_date,
 )
 from db import Database
+from static_site_release import (
+    StaticSitePermanentError,
+    StaticSiteRetryableError,
+    classify_failure as classify_static_site_failure,
+    create_immutable_snapshot,
+    event_public_revision,
+    freshness_state as static_site_freshness_state,
+    iso_utc as static_site_iso_utc,
+    make_request_payload as make_static_site_request_payload,
+    max_attempts as static_site_max_attempts,
+    merge_request_payload as merge_static_site_request_payload,
+    validate_snapshot,
+    validate_vector_barrier,
+)
 from shortlinks import (
     ensure_vk_short_ics_link,
     ensure_vk_short_ticket_link,
@@ -14290,7 +14305,13 @@ async def enqueue_job(
         if job:
             if job.status == JobStatus.pending:
                 if payload is not None:
-                    job.payload = payload
+                    # ADD-BUILD-01: a static build is the union of all effects
+                    # observed during the debounce window, not the last writer.
+                    job.payload = (
+                        merge_static_site_request_payload(job.payload, payload)
+                        if task == JobTask.static_site_build
+                        else payload
+                    )
                 if depends_on:
                     if replace_depends_on:
                         job.depends_on = ",".join(depends_on)
@@ -14304,6 +14325,15 @@ async def enqueue_job(
                 # stale tomorrow slots.
                 job_next_run = _ensure_utc(job.next_run_at)
                 if next_run_at and task == JobTask.tg_event_publish:
+                    job.next_run_at = next_run_at
+                elif (
+                    next_run_at
+                    and task == JobTask.static_site_build
+                    and isinstance(payload, dict)
+                    and payload.get("trigger") == "operator_request"
+                ):
+                    # An explicit generation request is immediate even when it
+                    # merges into an automatic debounce window.
                     job.next_run_at = next_run_at
                 elif next_run_at and next_run_at > job_next_run:
                     job.next_run_at = next_run_at
@@ -14328,7 +14358,9 @@ async def enqueue_job(
                 return "merged-rearmed"
             if job.status == JobStatus.running:
                 updated = False
-                if payload is not None:
+                # Never change the immutable request currently being built. A
+                # later static effect belongs to exactly one pending follow-up.
+                if payload is not None and task != JobTask.static_site_build:
                     job.payload = payload
                     updated = True
                 if depends_on:
@@ -14358,6 +14390,7 @@ async def enqueue_job(
                         JobTask.weekend_pages,
                         JobTask.event_vector_sync,
                         JobTask.event_age_bge_assessment,
+                        JobTask.static_site_build,
                     }
                     and (
                         job.event_id != event_id
@@ -14365,6 +14398,7 @@ async def enqueue_job(
                         in {
                             JobTask.event_vector_sync,
                             JobTask.event_age_bge_assessment,
+                            JobTask.static_site_build,
                         }
                     )
                     and job.coalesce_key
@@ -14383,26 +14417,48 @@ async def enqueue_job(
                                     ),
                                 )
                             )
+                        elif (
+                            task == JobTask.static_site_build
+                            and isinstance(payload, dict)
+                            and payload.get("trigger") == "operator_request"
+                        ):
+                            delay = timedelta(seconds=1)
                         else:
                             delay = timedelta(minutes=15)
                         deferred_time = datetime.now(timezone.utc) + delay
 
+                    followup_stmt = select(JobOutbox).where(
+                        JobOutbox.coalesce_key == job.coalesce_key,
+                        JobOutbox.status == JobStatus.pending,
+                    )
+                    if task != JobTask.static_site_build:
+                        followup_stmt = followup_stmt.where(JobOutbox.next_run_at > now)
                     existing_followup = (
                         await session.execute(
-                            select(JobOutbox)
-                            .where(
-                                JobOutbox.coalesce_key == job.coalesce_key,
-                                JobOutbox.status == JobStatus.pending,
-                                JobOutbox.next_run_at > now,
-                            )
-                            .order_by(JobOutbox.id.desc())
-                            .limit(1)
+                            followup_stmt.order_by(JobOutbox.id.desc()).limit(1)
                         )
                     ).scalar_one_or_none()
                     if existing_followup:
                         follow_next = _ensure_utc(existing_followup.next_run_at)
-                        if deferred_time > follow_next:
+                        follow_changed = False
+                        if task == JobTask.static_site_build and payload is not None:
+                            existing_followup.payload = merge_static_site_request_payload(
+                                existing_followup.payload, payload
+                            )
+                            follow_changed = True
+                        if (
+                            task == JobTask.static_site_build
+                            and isinstance(payload, dict)
+                            and payload.get("trigger") == "operator_request"
+                            and deferred_time < follow_next
+                        ):
                             existing_followup.next_run_at = deferred_time
+                            follow_changed = True
+                        elif deferred_time > follow_next:
+                            existing_followup.next_run_at = deferred_time
+                            existing_followup.updated_at = now
+                            follow_changed = True
+                        if follow_changed:
                             existing_followup.updated_at = now
                             session.add(existing_followup)
                             await session.commit()
@@ -15495,6 +15551,56 @@ async def _should_skip_ticket_giveaway_publication(db: Database, event: Event) -
     return await _has_non_giveaway_tg_publication_alternative(db, event)
 
 
+async def enqueue_static_site_build_request(
+    db: Database,
+    *,
+    reason: str,
+    event_ids: Iterable[int] = (),
+    event_revisions: Mapping[int | str, str] | None = None,
+    correlation_id: str | None = None,
+    delay_seconds: int = 0,
+    trigger: str = "operator_request",
+) -> str:
+    """Durably enqueue an on-demand secret-preview build in the same outbox.
+
+    There is deliberately no option here for publishing into the site root.
+    Automatic and operator requests therefore share coalescing, observability
+    and failure semantics while the rollout remains secret-link-only.
+    """
+
+    ids: list[int] = []
+    for value in event_ids:
+        try:
+            event_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if event_id > 0:
+            ids.append(event_id)
+    payload = make_static_site_request_payload(
+        reason=reason,
+        event_ids=ids,
+        event_revisions=event_revisions,
+        correlation_id=correlation_id,
+        effect_at=datetime.now(timezone.utc),
+        trigger=trigger,
+        require_vector_barrier=(
+            _env_flag("STATIC_SITE_REQUIRE_VECTOR_BARRIER")
+            and (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() == "pgvector"
+        ),
+        expected_search_v3_hash=(os.getenv("STATIC_SITE_EXPECTED_SEARCH_V3_HASH") or "").strip() or None,
+        expected_related_v1_hash=(os.getenv("STATIC_SITE_EXPECTED_RELATED_V1_HASH") or "").strip() or None,
+    )
+    owner_event_id = ids[0] if ids else 0
+    return await enqueue_job(
+        db,
+        owner_event_id,
+        JobTask.static_site_build,
+        payload=payload,
+        coalesce_key="static_site_build:prod",
+        next_run_at=datetime.now(timezone.utc) + timedelta(seconds=max(0, int(delay_seconds))),
+    )
+
+
 async def schedule_event_update_tasks(
     db: Database,
     ev: Event,
@@ -15724,13 +15830,15 @@ async def schedule_event_update_tasks(
                 db, eid, JobTask.festival_pages
             )
         if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {"1", "true", "yes", "on"}:
-            results[JobTask.static_site_build] = await enqueue_job(
+            revision = event_public_revision(ev)
+            results[JobTask.static_site_build] = await enqueue_static_site_build_request(
                 db,
-                eid,
-                JobTask.static_site_build,
-                payload={"reason": "smart_update", "event_id": eid},
-                coalesce_key="static_site_build:prod",
-                next_run_at=deferred_time,
+                reason="smart_update",
+                event_ids=[eid],
+                event_revisions={eid: revision},
+                correlation_id=f"smart-update:{eid}:{uuid.uuid4().hex}",
+                delay_seconds=15 * 60,
+                trigger="smart_update",
             )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
@@ -17736,7 +17844,24 @@ async def _run_due_jobs_once_locked(
                 rjob.status = JobStatus.error
                 rjob.last_error = "stale"
                 rjob.updated_at = now
-                if retry_event_pipeline:
+                if rjob.task == JobTask.static_site_build:
+                    rjob.attempts += 1
+                    payload = dict(rjob.payload or {})
+                    payload["failure"] = {
+                        "class": "retryable_external",
+                        "retryable": True,
+                        "message": "stale_running_lease",
+                        "failed_at": static_site_iso_utc(now),
+                    }
+                    rjob.payload = payload
+                    if rjob.attempts < static_site_max_attempts():
+                        delay = BACKOFF_SCHEDULE[
+                            min(rjob.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
+                        ]
+                        rjob.next_run_at = now + timedelta(seconds=delay)
+                    else:
+                        rjob.next_run_at = now + timedelta(days=3650)
+                elif retry_event_pipeline:
                     rjob.attempts += 1
                     delay = BACKOFF_SCHEDULE[
                         min(rjob.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
@@ -17866,6 +17991,14 @@ async def _run_due_jobs_once_locked(
                 # Regular task: age from updated_at
                 age = (now - obj.updated_at).total_seconds()
             if age > ttl:
+                if obj.task == JobTask.static_site_build and obj.status == JobStatus.pending:
+                    # ADD-BUILD-13: a missed debounced build is catch-up work,
+                    # not disposable TTL noise. Preserve its effect watermark.
+                    obj.updated_at = now
+                    session.add(obj)
+                    await session.commit()
+                    logging.info("STATIC_SITE_PENDING_CATCHUP job_id=%s age=%s", obj.id, int(age))
+                    age = 0
                 if (
                     obj.status == JobStatus.pending
                     and obj.event_id is not None
@@ -18135,6 +18268,7 @@ async def _run_due_jobs_once_locked(
         changed = True
         handler = JOB_HANDLERS.get(obj.task.value)
         pause = False
+        static_failure = None
         if not handler:
             status = JobStatus.done
             err = None
@@ -18201,6 +18335,8 @@ async def _run_due_jobs_once_locked(
                 err = f"timeout ({runtime_limit:.0f}s)"
                 status = JobStatus.error
                 retry = True
+                if obj.task == JobTask.static_site_build:
+                    static_failure = classify_static_site_failure(TimeoutError(err))
                 link = None
                 logline(
                     "RUN",
@@ -18250,6 +18386,9 @@ async def _run_due_jobs_once_locked(
                     retry = not (
                         uncertain_cls is not None and isinstance(exc, uncertain_cls)
                     )
+                    if obj.task == JobTask.static_site_build:
+                        static_failure = classify_static_site_failure(exc)
+                        retry = static_failure.retryable
                 logline(
                     "RUN",
                     obj.event_id,
@@ -18282,8 +18421,30 @@ async def _run_due_jobs_once_locked(
                     obj.last_result = cur_res
                     obj.next_run_at = datetime.now(timezone.utc)
                 else:
+                    if obj.task == JobTask.static_site_build:
+                        disposition = static_failure or classify_static_site_failure(
+                            RuntimeError(err or "static_site_build_failed")
+                        )
+                        next_attempt = obj.attempts + 1
+                        retry = bool(
+                            retry
+                            and disposition.retryable
+                            and next_attempt < static_site_max_attempts()
+                        )
+                        payload = dict(obj.payload or {})
+                        payload["failure"] = {
+                            "class": disposition.failure_class,
+                            "retryable": disposition.retryable,
+                            "message": (err or "static_site_build_failed")[:1000],
+                            "failed_at": static_site_iso_utc(),
+                            "attempt": next_attempt,
+                            "max_attempts": static_site_max_attempts(),
+                        }
+                        obj.payload = payload
+                        obj.attempts = next_attempt
                     if retry:
-                        obj.attempts += 1
+                        if obj.task != JobTask.static_site_build:
+                            obj.attempts += 1
                         delay = BACKOFF_SCHEDULE[
                             min(obj.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
                         ]
@@ -18333,6 +18494,14 @@ async def _log_job_outbox_stats(db: Database) -> None:
             )
         )
         next_run = _ensure_utc(lag_res.scalar())
+        static_rows = (
+            await session.execute(
+                select(JobOutbox.status, JobOutbox.payload)
+                .where(JobOutbox.task == JobTask.static_site_build)
+                .order_by(JobOutbox.id.desc())
+                .limit(100)
+            )
+        ).all()
     lag = (now - next_run).total_seconds() if next_run else 0
     if lag < 0:
         lag = 0
@@ -18343,6 +18512,41 @@ async def _log_job_outbox_stats(db: Database) -> None:
         counts.get(JobStatus.error, 0),
         avg_age,
         lag,
+    )
+    # ADD-OBS-01: report whether every known effect watermark is covered by a
+    # successful secret-preview receipt. This is deliberately a health signal,
+    # not another scheduler that could reset the bounded retry counter.
+    latest_effect_at = max(
+        (
+            str((payload or {}).get("latest_effect_at") or "")
+            for _status, payload in static_rows
+            if isinstance(payload, dict) and (payload or {}).get("latest_effect_at")
+        ),
+        default=None,
+    )
+    latest_success_at = max(
+        (
+            str((payload or {}).get("last_success_at") or "")
+            for _status, payload in static_rows
+            if isinstance(payload, dict) and (payload or {}).get("last_success_at")
+        ),
+        default=None,
+    )
+    freshness = static_site_freshness_state(
+        latest_effect_at=latest_effect_at,
+        latest_success_at=latest_success_at,
+        has_active_request=any(
+            status in {JobStatus.pending, JobStatus.running} for status, _payload in static_rows
+        ),
+    )
+    logging.info(
+        "STATIC_SITE_FRESHNESS status=%s stale=%s age_s=%s active=%s latest_effect_at=%s latest_success_at=%s release_channel=secret_preview",
+        freshness["status"],
+        freshness["stale"],
+        freshness["age_seconds"],
+        freshness["active"],
+        latest_effect_at,
+        latest_success_at,
     )
 
 
@@ -21767,6 +21971,7 @@ def _first_env(*names: str, default: str = "") -> str:
 def _static_site_build_kaggle_command(
     *,
     db_path: str,
+    status_db_path: str | None = None,
     build_id: str,
     limit: int,
     current_date: str,
@@ -21782,7 +21987,7 @@ def _static_site_build_kaggle_command(
         "--db",
         db_path,
         "--status-db",
-        db_path,
+        status_db_path or db_path,
         "--status-callback-url",
         status_callback_url,
         "--limit",
@@ -21831,7 +22036,7 @@ def _static_site_build_kaggle_command(
         "--gemma-related-max-anchors",
         str(_env_int("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS", 0)),
         "--timeout-minutes",
-        str(_env_int("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES", 60)),
+        str(_env_int("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES", 90)),
         "--poll-interval",
         str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
         "--download-output",
@@ -21843,6 +22048,40 @@ def _static_site_build_kaggle_command(
     if _env_flag("STATIC_SITE_KEEP_SECRET_DATASETS"):
         cmd.append("--keep-secret-datasets")
     return cmd
+
+
+async def _static_site_running_request(db: Database, event_id: int) -> tuple[int, dict[str, Any]]:
+    async with db.get_session() as session:
+        row = (
+            await session.execute(
+                select(JobOutbox)
+                .where(
+                    JobOutbox.task == JobTask.static_site_build,
+                    JobOutbox.status == JobStatus.running,
+                    JobOutbox.event_id == event_id,
+                )
+                .order_by(JobOutbox.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            raise StaticSitePermanentError("running_static_site_request_missing")
+        return int(row.id), dict(row.payload or {})
+
+
+async def _patch_static_site_request_payload(
+    db: Database, job_id: int, evidence: Mapping[str, Any]
+) -> None:
+    async with db.get_session() as session:
+        row = await session.get(JobOutbox, job_id)
+        if row is None:
+            raise StaticSitePermanentError("static_site_request_missing_during_run")
+        payload = dict(row.payload or {})
+        payload.update(dict(evidence))
+        row.payload = payload
+        row.updated_at = datetime.now(timezone.utc)
+        session.add(row)
+        await session.commit()
 
 
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool:
@@ -21863,18 +22102,57 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     if not enabled:
         logging.info("static_site_build: skipped because ENABLE_STATIC_SITE_KAGGLE_BUILDER is off")
         return False
+    job_id, request_payload = await _static_site_running_request(db, event_id)
+    if request_payload.get("release_channel") not in {None, "secret_preview"}:
+        raise StaticSitePermanentError("root_release_channel_is_disabled")
+    vector_evidence = await asyncio.to_thread(
+        validate_vector_barrier,
+        request_payload,
+        (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None,
+    )
+    # ADD-BUILD-08: the runner only ever receives an immutable online-backup
+    # snapshot. The live DB remains a separate status-ledger connection.
+    snapshot_root = Path(
+        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
+        or str(Path(db.path).resolve().parent / "static_site_snapshots")
+    )
+    snapshot_id = f"snapshot-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:10]}"
+    snapshot_path, manifest_path, snapshot_metadata = await asyncio.to_thread(
+        create_immutable_snapshot,
+        db.path,
+        snapshot_root,
+        request_payload=request_payload,
+        snapshot_id=snapshot_id,
+    )
+    await asyncio.to_thread(validate_snapshot, snapshot_path, manifest_path)
+    await _patch_static_site_request_payload(
+        db,
+        job_id,
+        {
+            "snapshot": {
+                "snapshot_id": snapshot_metadata.snapshot_id,
+                "sqlite_path": str(snapshot_path),
+                "manifest_path": str(manifest_path),
+                "sha256": snapshot_metadata.sha256,
+                "size_bytes": snapshot_metadata.size_bytes,
+                "quick_check": snapshot_metadata.quick_check,
+                "target_watermark": snapshot_metadata.target_watermark,
+            },
+            "vector_barrier_result": vector_evidence,
+        },
+    )
     # Production builds own the whole actionable catalog; bounded preview
     # canaries must opt into a smaller limit explicitly.
     limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
     now_local = datetime.now(LOCAL_TZ)
     current_date = (os.getenv("STATIC_SITE_CURRENT_DATE") or now_local.date().isoformat()).strip()
-    build_id = (
-        os.getenv("STATIC_SITE_BUILD_ID")
-        or f"preview-{now_local.strftime('%Y%m%d%H%M')}-event-pages-prod{limit}-kaggle"
-    ).strip()
+    configured_label = (os.getenv("STATIC_SITE_BUILD_ID") or "preview-secret").strip()
+    safe_label = re.sub(r"[^a-zA-Z0-9._-]+", "-", configured_label).strip("-._") or "preview-secret"
+    build_id = f"{safe_label}-{now_local.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
     script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
     cmd = _static_site_build_kaggle_command(
-        db_path=db.path,
+        db_path=str(snapshot_path),
+        status_db_path=db.path,
         build_id=build_id,
         limit=limit,
         current_date=current_date,
@@ -21911,9 +22189,34 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 tail.pop(0)
     code = await proc.wait()
     if code != 0:
-        raise RuntimeError(
+        raise StaticSiteRetryableError(
             f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
         )
+    output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{build_id}"
+    result_path = output_dir / "static_site_build_result.json"
+    if not result_path.is_file():
+        raise StaticSitePermanentError("static_site_result_receipt_missing")
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise StaticSitePermanentError(f"static_site_result_receipt_invalid:{exc}") from exc
+    archive_path = output_dir / str(result.get("archive") or "")
+    if result.get("ok") is not True or result.get("build_id") != build_id or not archive_path.is_file():
+        raise StaticSitePermanentError("static_site_result_receipt_mismatch")
+    await _patch_static_site_request_payload(
+        db,
+        job_id,
+        {
+            "build_receipt": {
+                "build_id": build_id,
+                "event_count": int(result.get("event_count") or 0),
+                "archive": str(archive_path),
+                "finished_at": result.get("finished_at") or static_site_iso_utc(),
+                "release_channel": "secret_preview",
+            },
+            "last_success_at": static_site_iso_utc(),
+        },
+    )
     logging.info("static_site_build: done build_id=%s", build_id)
     return True
 
