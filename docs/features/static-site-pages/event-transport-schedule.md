@@ -53,18 +53,25 @@ and does not change the accepted mobile transport surface.
 - pickup points shown from the venue are Дом Советов in Kaliningrad, Lenina 10
   by the Zelenogradsk bus terminal and Lenina 33 by Svetlogorsk-2;
 - the booking CTA uses the current Radario destination linked by KAUP;
-- public bus `119` is shown separately. Arrival uses the reviewed 65-minute
-  ride plus about `4 km / 53 min` on foot from Romanovo; the UI does not invent
-  a short pedestrian entrance;
-- the `4 km` last-mile warning is shown before the bus options. The pedestrian
-  CTA is explicitly named `Маршрут от остановки до Кауп` and routes from the
-  Romanovo stop to the venue (`rtt=pd`); the separate car CTA is named
-  `Маршрут на авто из Калининграда`. A generic `Построить маршрут` label is
-  forbidden here because it hides both the starting point and travel mode;
+- public bus `119` is shown separately and always starts with the exact origin:
+  `Калининградский автовокзал · ул. Железнодорожная, 7`, plus one conventional
+  pin link to that point. Arrival uses the reviewed 65-minute ride plus about
+  `4 km / 53 min` on foot from Romanovo; the UI does not invent a short
+  pedestrian entrance;
+- the independent-travel reading order is fixed: bus origin → suitable
+  departures and approximate Romanovo arrival → final walking leg → warning
+  about the absent evening public return → compact car alternative. The
+  walking link is named `Открыть пеший маршрут` and routes from the Romanovo
+  stop to KAUP (`rtt=pd`); the car link is named `Открыть маршрут` inside the
+  clearly labelled `На автомобиле` row (`rtt=auto`);
+- raw coordinates, a decorative pseudo-map, route schematics and several
+  competing text buttons are forbidden. They do not help a visitor decide
+  where to board, which departure to take, how to cover the final leg or how
+  to return;
 - for the evening Epidemia regression there is no confirmed public-bus return,
   so the block recommends the official transfer or a car;
-- the visible route diagram and map links point to KAUP and a route from
-  Kaliningrad.
+- standard bus/walk/car/pin icons identify modes, but exact origin/destination
+  wording remains visible and cannot be replaced by icon-only navigation.
 
 Primary source: [official KAUP site](https://www.kaup39.ru/). Bus timetable:
 [АО «Автовокзал» route table](https://avl39.ru/routes/reg/kaliningrad/).

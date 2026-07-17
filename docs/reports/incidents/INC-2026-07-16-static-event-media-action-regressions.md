@@ -53,6 +53,14 @@ The full-catalog static preview exposed several user-visible regressions around 
 10. Desktop telephone CTA reused a mobile `tel:` action instead of a visible copyable number.
 11. The v6 acceptance script asserted phone copy content but not child geometry at the user's effective `1536×864` viewport; CSS grids remained viewport-responsive while the action component's actual container was narrower.
 12. Return selection filtered directly from event end and omitted venue exit/walk/boarding time. Media grouping tested orientation/count but ignored imported technical quality when strong alternatives existed.
+13. The v7 phone panel still relied on CSS-grid auto-placement. Its empty
+    live-status paragraph consumed a grid cell and moved the metrics row below
+    the phone CTA; the browser gate asserted only containment/no overflow, not
+    same-row centres or height stability after copying.
+14. The v7 KAUP renderer exposed correct routes but organized them as a
+    decorative pseudo-map and multiple button-like labels. It omitted the exact
+    Kaliningrad bus-terminal address and put the final walking action before
+    the departures, so correct source data did not form an actionable journey.
 
 ## Contributing Factors
 
@@ -61,6 +69,9 @@ The full-catalog static preview exposed several user-visible regressions around 
 - lab/production iteration introduced event-specific presentation behavior without a user-state or product rule;
 - browser acceptance focused on initially rendered cards, not delayed/failed media.
 - consultant review covered the component concept, while the automated gate did not replay the exact constrained phone specimen or assert bounding rectangles; this allowed a conceptually valid adaptive label to pass with invalid geometry.
+- source-backed transport facts were accepted independently from information
+  architecture; no gate asserted the journey order or rejected decorative raw
+  coordinates/pseudo-map chrome.
 
 ## Automation Contract
 
@@ -88,10 +99,11 @@ The full-catalog static preview exposed several user-visible regressions around 
 - previous desktop template, related-card crop, transport and mobile V8 regression contracts remain green across the full future-event catalog.
 - event `5756` uses Editorial with a classified safe horizontal photo while its non-identity document remains contained in fullscreen;
 - event `4671` shows exact-venue KAUP transfer, bus and map guidance sourced from KAUP/Автовокзал and distinguishes the pedestrian route from the Romanovo stop from the separate Kaliningrad car route;
+- event `4671` names `Калининградский автовокзал · ул. Железнодорожная, 7`, orders the independent flow as origin → schedule → final walking leg → no-return warning → car, uses standard mode/pin icons, and exposes neither raw coordinates nor the rejected pseudo-map/route schematic;
 - event `3103` applies the 30-minute Янтарь-холл exit/walk/boarding buffer, shows `6726`/`6728`, excludes unsafe `6724`, and shows no next-morning wait inside the desktop renderer;
 - event `4783` opens the grouped multi-portrait viewer with the seven technically strong images, excludes five materially weak renditions while that strong set exists, and discloses `7 из 12`;
 - event `6851` exposes and copies the formatted telephone number with visible success feedback;
-- event `6851` keeps the phone number on one line and all action controls inside the graphite panel at `1536×864` and `1920×1080`;
+- event `6851` keeps admission, the one-line phone number and all action controls on the same visual row at `1536×864` and `1920×1080`; its calendar is icon-only and the panel height is stable after copy success;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
 - insufficient-feedback placeholder copy is absent.
 

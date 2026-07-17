@@ -3,7 +3,8 @@ import type { PreviewEvent } from './types';
 
 export interface KaupBusOption {
   departure: string;
-  estimatedArrival: string;
+  estimatedStopArrival: string;
+  estimatedVenueArrival: string;
   arrivalLeadMinutes: number;
   tight: boolean;
 }
@@ -18,6 +19,9 @@ export interface KaupTransportSuggestion {
   transferPriceLabel: string;
   transferBoardingPoints: string[];
   busRoute: string;
+  busOriginName: string;
+  busOriginAddress: string;
+  busOriginMapUrl: string;
   busArrivalStop: string;
   walkDistanceLabel: string;
   walkEstimateLabel: string;
@@ -63,7 +67,8 @@ export function getKaupTransportSuggestion(event: Pick<PreviewEvent, 'venue_name
       const arrivalLeadMinutes = eventStart - estimatedArrivalMinutes;
       return {
         departure,
-        estimatedArrival:clock(estimatedArrivalMinutes),
+        estimatedStopArrival:clock(departureMinutes + rideMinutes),
+        estimatedVenueArrival:clock(estimatedArrivalMinutes),
         arrivalLeadMinutes,
         tight:arrivalLeadMinutes < 20,
       };
@@ -88,6 +93,9 @@ export function getKaupTransportSuggestion(event: Pick<PreviewEvent, 'venue_name
       'Светлогорск-2 · Ленина, 33, у вокзала',
     ],
     busRoute:'119',
+    busOriginName:'Калининградский автовокзал',
+    busOriginAddress:'ул. Железнодорожная, 7',
+    busOriginMapUrl:'https://yandex.ru/maps/?text=%D0%9A%D0%B0%D0%BB%D0%B8%D0%BD%D0%B8%D0%BD%D0%B3%D1%80%D0%B0%D0%B4%2C%20%D1%83%D0%BB.%20%D0%96%D0%B5%D0%BB%D0%B5%D0%B7%D0%BD%D0%BE%D0%B4%D0%BE%D1%80%D0%BE%D0%B6%D0%BD%D0%B0%D1%8F%2C%207',
     busArrivalStop:'Романово',
     walkDistanceLabel:'около 4 км',
     walkEstimateLabel:'около 53 минут пешком',

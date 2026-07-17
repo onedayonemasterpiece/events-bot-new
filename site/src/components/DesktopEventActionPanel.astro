@@ -51,7 +51,7 @@ const shareFileName = `kenigevents-${event.slug}`;
     <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
   ) : ctaIsTelephone && phoneValue ? (
     <button type="button" class="desktop-prototype__primary-action desktop-prototype__phone-copy" data-desktop-phone-copy data-phone-copy-value={phoneValue} aria-label={`Скопировать номер организатора ${phoneDisplay}`}>
-      <Icon name="phone" /><span><strong>{phoneDisplay}</strong><small data-phone-copy-label>Скопировать номер</small></span>
+      <Icon name="phone" /><span><strong>{phoneDisplay}</strong><small data-phone-copy-label aria-live="polite">Скопировать номер</small></span>
     </button>
   ) : ctaHref ? (
     <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
@@ -64,7 +64,6 @@ const shareFileName = `kenigevents-${event.slug}`;
   ) : (
     <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
   )}
-  {ctaIsTelephone && phoneValue && <p class="desktop-prototype__phone-status" data-phone-copy-status aria-live="polite"></p>}
   <div class="desktop-prototype__action-row event-hero__metric-row">
     {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
     <button
@@ -143,7 +142,6 @@ const shareFileName = `kenigevents-${event.slug}`;
   .desktop-prototype__phone-copy strong { display:block; white-space:nowrap; font-size:clamp(.86rem,1.18cqi,1.02rem); font-variant-numeric:tabular-nums; user-select:all; }
   .desktop-prototype__phone-copy small { color:rgba(255,255,255,.82); font-size:.72rem; font-weight:800; }
   .desktop-prototype__phone-copy.is-copied { background:#2d6f58; box-shadow:0 12px 24px rgba(26,88,67,.24); }
-  .desktop-prototype__phone-status { min-height:1.1rem; margin:-.35rem 0 0 !important; color:#d7c9bc; font-size:.72rem; line-height:1.2; }
   :global(.desktop-prototype__primary-action.is-disabled) { opacity: .7; }
   .desktop-prototype__action-row { display: flex; gap: .45rem; }
   :global(.desktop-prototype__icon-action) {
@@ -189,4 +187,39 @@ const shareFileName = `kenigevents-${event.slug}`;
   :global(.desktop-prototype__icon-action strong) { font-size: .92rem; font-variant-numeric: tabular-nums; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:52px; min-width:52px; padding-inline:.3rem; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { max-width:0; opacity:0; }
+
+  /* A telephone is useful on desktop only when it remains visible and
+     copyable. Keep the whole action surface on one explicit row instead of
+     relying on CSS grid auto-placement, which previously pushed the metrics
+     to a second line when the empty live-status node occupied a grid cell. */
+  .desktop-prototype__action[data-primary-action-kind="phone"] {
+    grid-template-columns:minmax(76px,auto) minmax(190px,1fr) auto;
+    grid-template-rows:auto;
+    align-items:center;
+    column-gap:.7rem;
+    row-gap:0;
+  }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { grid-column:1; grid-row:1; min-width:4.75rem; }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-copy { grid-column:2; grid-row:1; min-width:0; overflow:hidden; }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__action-row { grid-column:3; grid-row:1; justify-self:end; }
+  :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) {
+    width:52px;
+    min-width:52px;
+    padding-inline:.3rem;
+  }
+  :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
+    max-width:0;
+    opacity:0;
+  }
+  @container desktop-actions (max-width:480px) {
+    .desktop-prototype__action[data-primary-action-kind="phone"] {
+      grid-template-columns:minmax(68px,auto) minmax(178px,1fr) auto;
+      column-gap:.5rem;
+      padding-inline:.9rem;
+    }
+    .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { min-width:4.25rem; }
+    .desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__action-row { gap:.32rem; }
+    :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action) { min-width:48px; min-height:48px; }
+    :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:48px; min-width:48px; }
+  }
 </style>

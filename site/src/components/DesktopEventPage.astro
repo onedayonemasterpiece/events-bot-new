@@ -652,85 +652,27 @@ const descriptionHtml = (event.description_html || '')
       cleanRoot.querySelectorAll<HTMLButtonElement>('[data-desktop-phone-copy]').forEach((button) => {
         button.addEventListener('click', async () => {
           const value = button.dataset.phoneCopyValue || '';
-          const panel = button.closest<HTMLElement>('.desktop-prototype__action');
-          const status = panel?.querySelector<HTMLElement>('[data-phone-copy-status]');
           const label = button.querySelector<HTMLElement>('[data-phone-copy-label]');
           try {
             await copyPlainText(value);
             button.classList.add('is-copied');
             if (label) label.textContent = 'Номер скопирован';
-            if (status) status.textContent = 'Номер скопирован в буфер обмена';
             window.setTimeout(() => {
               button.classList.remove('is-copied');
               if (label) label.textContent = 'Скопировать номер';
-              if (status) status.textContent = '';
             }, 2600);
           } catch {
             if (label) label.textContent = 'Выделите номер вручную';
-            if (status) status.textContent = 'Не удалось скопировать — номер виден на кнопке.';
           }
         });
       });
       const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
-      const actionPanelFitTokens = new WeakMap<HTMLElement, number>();
       const fitActionPanel = (panel:HTMLElement) => {
-        const primary = panel.querySelector<HTMLElement>('.desktop-prototype__primary-action');
-        const actionRow = panel.querySelector<HTMLElement>('.desktop-prototype__action-row');
-        const phoneNumber = panel.querySelector<HTMLElement>('.desktop-prototype__phone-copy strong');
         const phonePanel = panel.dataset.primaryActionKind === 'phone';
-        const fitToken = (actionPanelFitTokens.get(panel) || 0) + 1;
-        actionPanelFitTokens.set(panel, fitToken);
         panel.dataset.actionLayout = 'inline';
-        panel.dataset.actionDensity = 'comfortable';
-        const stillCurrent = () => actionPanelFitTokens.get(panel) === fitToken;
-        const hasInlineGeometryIssue = () => {
-          const panelRect = panel.getBoundingClientRect();
-          const styles = getComputedStyle(panel);
-          const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
-          const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
-          const children = [
-            panel.querySelector<HTMLElement>(':scope > p:first-child'),
-            primary,
-            actionRow,
-          ].filter((item): item is HTMLElement => Boolean(item));
-          const outside = children.some((item) => {
-            const rect = item.getBoundingClientRect();
-            return rect.left < leftLimit || rect.right > rightLimit;
-          });
-          const overlaps = children.some((item, index) => children.slice(index + 1).some((other) => {
-            const first = item.getBoundingClientRect();
-            const second = other.getBoundingClientRect();
-            const sharesRow = Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 4;
-            return sharesRow && Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
-          }));
-          const primaryOverflow = Boolean(primary && primary.scrollWidth > primary.clientWidth + 2);
-          const phoneOverflow = Boolean(phoneNumber && phoneNumber.scrollWidth > phoneNumber.clientWidth + 2);
-          return outside || overlaps || primaryOverflow || phoneOverflow;
-        };
-        requestAnimationFrame(() => {
-          if (!stillCurrent()) return;
-          if (phonePanel && hasInlineGeometryIssue()) panel.dataset.actionDensity = 'compact';
-          requestAnimationFrame(() => {
-            if (!stillCurrent()) return;
-            if (phonePanel && hasInlineGeometryIssue()) panel.dataset.actionLayout = 'stacked';
-            requestAnimationFrame(() => {
-              if (!stillCurrent()) return;
-              const styles = getComputedStyle(panel);
-              const usableWidth = panel.clientWidth
-                - (Number.parseFloat(styles.paddingLeft) || 0)
-                - (Number.parseFloat(styles.paddingRight) || 0);
-              const actionOverflow = Boolean(actionRow && actionRow.scrollWidth > usableWidth + 2);
-              if (panel.dataset.actionLayout === 'stacked') {
-                panel.dataset.actionDensity = actionOverflow || panel.clientWidth < 390 ? 'compact' : 'comfortable';
-              }
-            });
-          });
-        });
+        panel.dataset.actionDensity = phonePanel ? 'compact' : 'comfortable';
       };
-      actionPanels.forEach((panel) => {
-        fitActionPanel(panel);
-        new ResizeObserver(() => fitActionPanel(panel)).observe(panel);
-      });
+      actionPanels.forEach(fitActionPanel);
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
@@ -2507,7 +2449,6 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] > p:first-child) { grid-column:1; grid-row:1; }
     .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__primary-action) { grid-column:1/-1 !important; grid-row:2 !important; min-width:0; }
     .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__action-row) { grid-column:2 !important; grid-row:1 !important; justify-self:end; }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__phone-status) { grid-column:1/-1; grid-row:3; }
     .desktop-clean-event :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__primary-action) { overflow:hidden; }
   }
 

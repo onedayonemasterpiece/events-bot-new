@@ -66,11 +66,27 @@ for (const { slug, file } of eventFiles) {
       'data-kaup-official-transfer',
       'data-kaup-public-bus',
       '600 ₽ туда и обратно',
-      'Маршрут от остановки до Кауп',
-      'Маршрут на авто из Калининграда',
+      'data-kaup-bus-origin',
+      'Калининградский автовокзал',
+      'ул. Железнодорожная, 7',
+      'data-kaup-last-mile',
+      'Открыть пеший маршрут',
+      'data-kaup-car-route',
+      'Открыть маршрут',
       'rtt=pd',
     ]) {
       if (!desktopHtml.includes(marker)) failures.push(`${slug}: KAUP desktop transport is missing ${marker}`);
+    }
+    for (const rejectedMarker of ['kaup-transport__map-mark', 'kaup-transport__route', '>54.8781']) {
+      if (desktopHtml.includes(rejectedMarker)) failures.push(`${slug}: KAUP transport still exposes rejected map decoration ${rejectedMarker}`);
+    }
+    const originIndex = desktopHtml.indexOf('data-kaup-bus-origin');
+    const scheduleIndex = desktopHtml.indexOf('<ol', originIndex);
+    const lastMileIndex = desktopHtml.indexOf('data-kaup-last-mile');
+    const returnWarningIndex = desktopHtml.indexOf('kaup-transport__warning--strong');
+    const carIndex = desktopHtml.indexOf('data-kaup-car-route');
+    if (!(originIndex >= 0 && scheduleIndex > originIndex && lastMileIndex > scheduleIndex && returnWarningIndex > lastMileIndex && carIndex > returnWarningIndex)) {
+      failures.push(`${slug}: KAUP travel flow is not ordered as origin → schedule → last mile → return warning → car`);
     }
   }
   if (slug === '15-avgusta-v-yantar-holl-spektakl-papa-svetlogorsk-3103') {
@@ -95,6 +111,9 @@ for (const { slug, file } of eventFiles) {
     }
     if (!desktopHtml.includes('data-desktop-action-panel') || !desktopHtml.includes('data-primary-action-kind="phone"')) {
       failures.push(`${slug}: phone action panel lacks the component-responsive geometry contract`);
+    }
+    if (desktopHtml.includes('data-phone-copy-status')) {
+      failures.push(`${slug}: phone action panel still contains the layout-shifting status row`);
     }
   }
   if (html.includes('Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.')) {

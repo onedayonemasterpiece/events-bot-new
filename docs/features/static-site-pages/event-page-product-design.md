@@ -349,11 +349,15 @@ right, exact-listing active state only, and no selected item on event details.
 Keyboard navigation and visible focus remain required.
 
 The graphite desktop action panel is component-responsive, not only
-viewport-responsive. The phone number is a single selectable/copyable line and
-the panel may stack its primary CTA when the actual container is constrained.
-Calendar wording still follows bounded per-user usage history, but collapses
-to the icon before it can wrap the phone CTA or push share/like controls beyond
-the panel. A visible in-place success state confirms number copying.
+viewport-responsive. A phone action is a stricter exception: admission,
+copyable phone number, calendar, share and like remain on one explicit grid row
+at both `1536×864` and `1920×1080`; it must never fall back to the generic
+stacked layout. The calendar is icon-only in this constrained phone panel even
+when bounded usage history would normally expand its wording. Copy success is
+rendered in place inside the phone button, with no additional live-status row
+and no change to panel height. Browser acceptance compares child vertical
+centres/overlap and before/after-copy geometry; containment-only assertions are
+not sufficient.
 
 ## 8. Related events and personalization placement
 
