@@ -483,10 +483,111 @@ test('most scenarios use desktop mosaic media without moving the established tex
   await mobile.context.close();
 });
 
-test('12×4 mosaic is deterministic, visibly irregular, farther-left, mobile-silent and fail-closed', async ({ browser }) => {
+test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful, mobile-silent and fail-closed', async ({ browser }) => {
   const mosaicAsset = /24126606666687270ba582a7e2cbc883400762266887e0936119618d618cb0a4\.webp/u;
   const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="450"><rect width="1200" height="450" fill="#705045"/><circle cx="830" cy="170" r="150" fill="#c58f82"/></svg>';
-  const expectedOpacity = [.18, .38, .22, .52, .35, .7, .5, .84, .66, .94, .76, 1, .34, .16, .46, .28, .6, .42, .78, .58, .91, .73, 1, .86, .12, .42, .2, .48, .3, .66, .46, .88, .62, .97, .81, 1, .3, .14, .4, .24, .56, .38, .74, .54, .86, .69, .96, .82];
+
+  const inspectMosaic = async (page: Page) => page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const root = document.querySelector('[data-media-mosaic]') as HTMLElement;
+    const allTiles = [...document.querySelectorAll('[data-mosaic-tile]')] as HTMLElement[];
+    const tiles = allTiles.filter((node) => !node.hidden).map((node) => ({
+      rect: node.getBoundingClientRect().toJSON(),
+      opacity: Number.parseFloat(getComputedStyle(node).opacity),
+      entryDelay: getComputedStyle(node).getPropertyValue('--tile-in-delay').trim(),
+      entryDuration: getComputedStyle(node).getPropertyValue('--tile-in-duration').trim(),
+      exitDelay: getComputedStyle(node).getPropertyValue('--tile-out-delay').trim(),
+      exitDuration: getComputedStyle(node).getPropertyValue('--tile-out-duration').trim(),
+      entryBeat: node.dataset.entryBeat,
+      exitBeat: node.dataset.exitBeat,
+    }));
+    const mediaStyle = getComputedStyle(document.querySelector('[data-narrative-media]')!);
+    const pseudoStyle = getComputedStyle(tiles.length ? allTiles.find((node) => !node.hidden)! : allTiles[0], '::before');
+    return {
+      stage: box('[data-briefing-slot]').toJSON(),
+      media: box('[data-narrative-media]').toJSON(),
+      mosaic: box('[data-media-mosaic]').toJSON(),
+      message: box('[data-briefing]').toJSON(),
+      tiles,
+      totalTiles: allTiles.length,
+      columns: Number(root.dataset.columns),
+      rows: Number(root.dataset.rows),
+      naturalWidth: Number(root.dataset.naturalWidth),
+      naturalHeight: Number(root.dataset.naturalHeight),
+      coverWidth: Number(root.dataset.coverWidth),
+      coverHeight: Number(root.dataset.coverHeight),
+      focusX: getComputedStyle(root).getPropertyValue('--mosaic-focus-x').trim(),
+      focusY: getComputedStyle(root).getPropertyValue('--mosaic-focus-y').trim(),
+      pseudoBackgroundSize: pseudoStyle.backgroundSize,
+      pseudoBackgroundImage: pseudoStyle.backgroundImage,
+      borderRadius: mediaStyle.borderRadius,
+      boxShadow: mediaStyle.boxShadow,
+      bodyWidth: document.body.scrollWidth,
+      innerWidth,
+    };
+  });
+
+  const assertTopology = (geometry: Awaited<ReturnType<typeof inspectMosaic>>) => {
+    const { tiles, columns, rows } = geometry;
+    expect(tiles).toHaveLength(columns * rows);
+    expect(geometry.totalTiles).toBe(100);
+    expect(tiles.every((tile) => Math.abs(tile.rect.width - tile.rect.height) <= 1)).toBeTruthy();
+    const values = tiles.map((tile) => tile.opacity);
+    const lastColumn = values.filter((_, index) => index % columns === columns - 1);
+    const penultimateColumn = values.filter((_, index) => index % columns === columns - 2);
+    expect(lastColumn).toEqual(Array(rows).fill(1));
+    expect(penultimateColumn).toEqual(Array(rows).fill(1));
+    expect(new Set(values).size).toBeGreaterThanOrEqual(6);
+
+    const parity = [0, 1].map((target) => values.filter((_, index) => (Math.floor(index / columns) + index % columns) % 2 === target));
+    const parityMean = parity.map((group) => group.reduce((sum, value) => sum + value, 0) / group.length);
+    expect(Math.abs(parityMean[0] - parityMean[1])).toBeLessThanOrEqual(.08);
+
+    const deltas: number[] = [];
+    let checkerBlocks = 0;
+    let blocks = 0;
+    for (let row = 0; row < rows; row += 1) {
+      const signs: number[] = [];
+      for (let column = 0; column < columns; column += 1) {
+        const index = row * columns + column;
+        if (column < columns - 1) {
+          const delta = values[index + 1] - values[index];
+          deltas.push(Math.abs(delta));
+          signs.push(Math.sign(delta));
+        }
+        if (row < rows - 1) deltas.push(Math.abs(values[index + columns] - values[index]));
+        if (row < rows - 1 && column < columns - 1) {
+          const a = values[index]; const b = values[index + 1]; const c = values[index + columns]; const d = values[index + columns + 1];
+          if (Math.abs(a - d) < .08 && Math.abs(b - c) < .08 && Math.abs((a + d - b - c) / 2) > .2) checkerBlocks += 1;
+          blocks += 1;
+        }
+      }
+      let alternatingRun = 1; let longestAlternatingRun = 1;
+      for (let index = 1; index < signs.length; index += 1) {
+        alternatingRun = signs[index] && signs[index - 1] && signs[index] !== signs[index - 1] ? alternatingRun + 1 : 1;
+        longestAlternatingRun = Math.max(longestAlternatingRun, alternatingRun);
+      }
+      expect(longestAlternatingRun).toBeLessThan(columns - 2);
+    }
+    expect(checkerBlocks / blocks).toBeLessThan(.25);
+    expect(deltas.filter((delta) => delta > .25).length / deltas.length).toBeGreaterThanOrEqual(.15);
+    expect(deltas.filter((delta) => delta < .08).length / deltas.length).toBeGreaterThanOrEqual(.1);
+
+    const columnAverages = Array.from({ length: columns }, (_, column) => values.filter((_, index) => index % columns === column).reduce((sum, value) => sum + value, 0) / rows);
+    const direction = columnAverages.slice(1).map((value, index) => Math.sign(value - columnAverages[index]));
+    const reversals = direction.slice(1).filter((sign, index) => sign && direction[index] && sign !== direction[index]).length;
+    expect(reversals).toBeGreaterThanOrEqual(3);
+    const macroAverages = Array.from({ length: 4 }, (_, zone) => {
+      const start = Math.round(zone * columns / 4); const end = Math.round((zone + 1) * columns / 4);
+      const zoneValues = values.filter((_, index) => index % columns >= start && index % columns < end);
+      return zoneValues.reduce((sum, value) => sum + value, 0) / zoneValues.length;
+    });
+    expect(macroAverages[1] - macroAverages[0]).toBeGreaterThan(.06);
+    // The middle field may plateau or nearly reverse: requiring a large step
+    // here recreates the smooth gradient the user rejected.
+    expect(macroAverages[2] - macroAverages[1]).toBeGreaterThan(.02);
+    expect(macroAverages[3] - macroAverages[2]).toBeGreaterThan(.06);
+  };
 
   const desktop = await freshPage(browser, { width: 1440, height: 900 });
   let mosaicRequests = 0;
@@ -496,59 +597,59 @@ test('12×4 mosaic is deterministic, visibly irregular, farther-left, mobile-sil
   const shell = desktop.page.locator('[data-narrative-media]');
   await expect(shell).toHaveAttribute('data-media-mode', 'mosaic');
   await expect(shell).toHaveClass(/is-present/u);
-  await expect(desktop.page.locator('[data-mosaic-tile]')).toHaveCount(48);
-  const geometry = await desktop.page.evaluate(() => {
-    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-    const stage = box('[data-briefing-slot]');
-    const media = box('[data-narrative-media]');
-    const mosaic = box('[data-media-mosaic]');
-    const message = box('[data-briefing]');
-    const tiles = [...document.querySelectorAll('[data-mosaic-tile]')].map((node) => ({
-      rect: node.getBoundingClientRect().toJSON(),
-      opacity: Number.parseFloat(getComputedStyle(node).opacity),
-      delay: getComputedStyle(node).getPropertyValue('--tile-in-delay').trim(),
-    }));
-    const style = getComputedStyle(document.querySelector('[data-narrative-media]')!);
-    return { stage: stage.toJSON(), media: media.toJSON(), mosaic: mosaic.toJSON(), message: message.toJSON(), tiles, borderRadius: style.borderRadius, boxShadow: style.boxShadow, bodyWidth: document.body.scrollWidth, innerWidth };
-  });
-  expect(Math.abs(geometry.stage.left - (geometry.innerWidth - geometry.stage.width) / 2)).toBeLessThanOrEqual(1);
+  const geometry = await inspectMosaic(desktop.page);
+  expect(geometry.columns).toBe(16);
+  expect(geometry.rows).toBe(5);
+  expect(Math.abs(geometry.media.left / geometry.innerWidth - .25)).toBeLessThanOrEqual(.015);
   expect(Math.abs(geometry.media.right - geometry.innerWidth)).toBeLessThanOrEqual(1);
-  expect(geometry.mosaic.right).toBeGreaterThan(geometry.innerWidth);
-  expect(geometry.media.left).toBeLessThan(geometry.innerWidth * .36);
+  expect(Math.abs(geometry.mosaic.width / geometry.mosaic.height - geometry.columns / geometry.rows)).toBeLessThan(.02);
   expect(geometry.media.left).toBeLessThan(geometry.message.right);
-  expect(Math.abs(geometry.mosaic.width / geometry.mosaic.height - 12 / 4)).toBeLessThan(.01);
-  expect(geometry.tiles.every((tile) => Math.abs(tile.rect.width - tile.rect.height) <= 1)).toBeTruthy();
-  expect(geometry.tiles.map((tile) => tile.opacity)).toEqual(expectedOpacity);
-  expect(new Set(geometry.tiles.map((tile) => tile.delay)).size).toBe(48);
-  const adjacentDeltas = geometry.tiles.flatMap((tile, index, tiles) => {
-    const column = index % 12; const row = Math.floor(index / 12); const deltas: number[] = [];
-    if (column < 11) deltas.push(Math.abs(tile.opacity - tiles[index + 1].opacity));
-    if (row < 3) deltas.push(Math.abs(tile.opacity - tiles[index + 12].opacity));
-    return deltas;
-  });
-  expect(Math.min(...adjacentDeltas)).toBeGreaterThanOrEqual(.139);
-  const columnAverages = Array.from({ length: 12 }, (_, column) => geometry.tiles.filter((_, index) => index % 12 === column).reduce((sum, tile) => sum + tile.opacity, 0) / 4);
-  expect(columnAverages[0]).toBeLessThan(columnAverages[5]);
-  expect(columnAverages[5]).toBeLessThan(columnAverages[11]);
+  assertTopology(geometry);
+  expect(Math.abs(geometry.coverWidth / geometry.naturalWidth - geometry.coverHeight / geometry.naturalHeight)).toBeLessThan(.001);
+  expect(geometry.coverWidth).toBeGreaterThanOrEqual(geometry.mosaic.width - 1);
+  expect(geometry.coverHeight).toBeGreaterThanOrEqual(geometry.mosaic.height - 1);
+  expect(geometry.pseudoBackgroundSize).toBe('cover');
+  expect(geometry.pseudoBackgroundImage).toContain('24126606666687270ba582a7e2cbc883400762266887e0936119618d618cb0a4.webp');
+  expect(geometry.focusX).toBe('61%');
+  expect(geometry.focusY).toBe('48%');
   expect(geometry.borderRadius).toBe('0px');
   expect(geometry.boxShadow).toBe('none');
   expect(geometry.bodyWidth).toBe(geometry.innerWidth);
   expect(mosaicRequests).toBe(1);
-  const delaysBeforeReload = geometry.tiles.map((tile) => tile.delay);
+  const timingBeforeReload = geometry.tiles.map((tile) => [tile.entryDelay, tile.entryDuration, tile.exitDelay, tile.exitDuration, tile.entryBeat, tile.exitBeat]);
+  expect(new Set(geometry.tiles.map((tile) => `${tile.entryDelay}/${tile.entryDuration}`)).size).toBeGreaterThan(60);
+  expect(new Set(geometry.tiles.map((tile) => `${tile.exitDelay}/${tile.exitDuration}`)).size).toBeGreaterThan(60);
+  expect(geometry.tiles.map((tile) => tile.exitBeat)).not.toEqual(geometry.tiles.map((tile) => tile.entryBeat).reverse());
   await desktop.page.reload({ waitUntil: 'networkidle' });
-  const delaysAfterReload = await desktop.page.locator('[data-mosaic-tile]').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).getPropertyValue('--tile-in-delay').trim()));
-  expect(delaysAfterReload).toEqual(delaysBeforeReload);
+  const timingAfterReload = (await inspectMosaic(desktop.page)).tiles.map((tile) => [tile.entryDelay, tile.entryDuration, tile.exitDelay, tile.exitDuration, tile.entryBeat, tile.exitBeat]);
+  expect(timingAfterReload).toEqual(timingBeforeReload);
   await desktop.context.close();
+
+  for (const viewport of [{ width: 1366, height: 768, columns: 16 }, { width: 1600, height: 900, columns: 18 }, { width: 1920, height: 900, columns: 20 }]) {
+    const wide = await freshPage(browser, viewport);
+    await wide.page.route(mosaicAsset, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+    await open(wide.page, 'b', 'live_meeting_mosaic');
+    const wideGeometry = await inspectMosaic(wide.page);
+    expect(wideGeometry.columns).toBe(viewport.columns);
+    expect(Math.abs(wideGeometry.media.left / viewport.width - .25)).toBeLessThanOrEqual(.015);
+    expect(Math.abs(wideGeometry.media.right - viewport.width)).toBeLessThanOrEqual(1);
+    expect(wideGeometry.bodyWidth).toBe(viewport.width);
+    assertTopology(wideGeometry);
+    await wide.context.close();
+  }
 
   const animated = await freshPage(browser, { width: 1366, height: 768 });
   await animated.page.route(mosaicAsset, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
   await open(animated.page, 'c', 'live_meeting_mosaic', '&replay=1&pace=fast');
   await animated.page.waitForTimeout(250);
-  const partial = await animated.page.locator('[data-mosaic-tile]').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) > .01).length);
+  const partial = await animated.page.locator('[data-mosaic-tile]:not([hidden])').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) > .01).length);
   expect(partial).toBeGreaterThan(0);
-  expect(partial).toBeLessThan(48);
+  expect(partial).toBeLessThan(80);
   await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await expect(animated.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 4000 });
+  await animated.page.waitForTimeout(150);
+  const exiting = await animated.page.locator('[data-mosaic-tile]:not([hidden])').evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).opacity)));
+  expect(exiting.some((opacity) => opacity < .02)).toBeTruthy();
   await expect.poll(async () => (await labState(animated.page)).scenario, { timeout: 2000 }).toBe('rare_event');
   await animated.context.close();
 
@@ -560,7 +661,7 @@ test('12×4 mosaic is deterministic, visibly irregular, farther-left, mobile-sil
     await mobile.page.waitForTimeout(250);
     await expect(mobile.page.locator('[data-briefing-slot]')).toHaveAttribute('data-media-mode', 'none');
     await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
-    await expect.poll(() => mobile.page.locator('[data-mosaic-tile]').first().evaluate((node) => getComputedStyle(node).backgroundImage)).toBe('none');
+    await expect.poll(() => mobile.page.locator('[data-media-mosaic]').evaluate((node: HTMLElement) => getComputedStyle(node).getPropertyValue('--mosaic-image').trim())).toBe('');
     expect(requested).toBe(0);
     expect(await mobile.page.evaluate(() => document.body.scrollWidth)).toBe(viewport.width);
     await mobile.context.close();

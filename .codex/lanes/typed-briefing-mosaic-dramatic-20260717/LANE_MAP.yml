@@ -59,7 +59,7 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Root causes, concrete visual strategy, measurable acceptance criteria and risks.
     verification_scope: inspection_only
-    status: spawned
+    status: committed
   - id: ui-integrator
     role: worker
     effort: extra-high
@@ -81,7 +81,7 @@ lanes:
     forbidden_files: []
     expected_output: Dramatic source-faithful 16x5 mosaic with exact local/public evidence and critical consultant gate.
     verification_scope: full_local
-    status: planned
+    status: spawned
   - id: closure-review
     role: merge_reviewer
     effort: high

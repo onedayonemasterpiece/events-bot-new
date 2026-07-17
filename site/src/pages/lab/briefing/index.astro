@@ -50,37 +50,9 @@ const scenarioCount = briefingLabScenarios.length;
 const title = `Живой городской обзор — lab | ${SITE_NAME}`;
 const description = 'Изолированный прототип короткой типографической коммуникации: сценарии, ссылки, пауза и повтор.';
 const canonicalUrl = absoluteUrl('/lab/briefing/');
-const mosaicColumns = 12;
-const mosaicRows = 4;
-const mosaicOpacity = [
-  .18, .38, .22, .52, .35, .70, .50, .84, .66, .94, .76, 1,
-  .34, .16, .46, .28, .60, .42, .78, .58, .91, .73, 1, .86,
-  .12, .42, .20, .48, .30, .66, .46, .88, .62, .97, .81, 1,
-  .30, .14, .40, .24, .56, .38, .74, .54, .86, .69, .96, .82,
-];
-const mosaicRevealRank = [
-  41, 11, 40, 21, 33, 16, 22, 6, 4, 37, 0, 3,
-  2, 13, 36, 1, 14, 10, 44, 24, 15, 28, 32, 34,
-  45, 12, 46, 38, 31, 39, 27, 35, 29, 5, 30, 25,
-  43, 23, 20, 42, 47, 26, 8, 17, 19, 7, 9, 18,
-];
-const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index) => {
-  const column = index % mosaicColumns;
-  const row = Math.floor(index / mosaicColumns);
-  const rank = mosaicRevealRank[index];
-  return {
-    index,
-    column,
-    row,
-    style: [
-      `--tile-x:${column * (100 / (mosaicColumns - 1))}%`,
-      `--tile-y:${row * (100 / (mosaicRows - 1))}%`,
-      `--tile-opacity:${mosaicOpacity[index]}`,
-      `--tile-in-delay:${90 + rank * 24}ms`,
-      `--tile-out-delay:${(mosaicColumns * mosaicRows - 1 - rank) * 10}ms`,
-    ].join(';'),
-  };
-});
+const mosaicColumns = 20;
+const mosaicRows = 5;
+const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index) => ({ index }));
 ---
 <EventLayout {title} {description} {canonicalUrl} structuredData={[]}>
   <main id="main" data-briefing-lab data-briefing-variant="static" data-briefing-scenario-id={scenario.id} data-fixture-ids={briefingLabFixtureIds.join(',')}>
@@ -96,9 +68,6 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
                   class="briefing-stage__mosaic-tile"
                   data-mosaic-tile
                   data-tile-index={tile.index}
-                  data-tile-column={tile.column}
-                  data-tile-row={tile.row}
-                  style={tile.style}
                 />
               ))}
             </span>
@@ -281,6 +250,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       let advanceTimer = 0;
       let cursorLingerTimer = 0;
       let mediaExitTimer = 0;
+      let mosaicResizeFrame = 0;
       let ignoreOutOfViewUntil = 0;
       let running = false;
       let deckPlaying = params.get('autoplay') === '1';
@@ -372,11 +342,89 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       const mediaShell = lab.querySelector('[data-narrative-media]');
       const mediaLink = lab.querySelector('[data-media-link]');
       const mediaImage = lab.querySelector('[data-media-image]');
+      const mosaicRoot = lab.querySelector('[data-media-mosaic]');
       const mosaicTiles = [...lab.querySelectorAll('[data-mosaic-tile]')];
       const mosaicMedia = matchMedia('(min-width: 1024px) and (min-height: 650px)');
       const mediaAllowed = (media) => media?.mode === 'mosaic' ? mosaicMedia.matches : desktopMedia.matches;
-      const clearMosaicSource = () => mosaicTiles.forEach((tile) => { tile.style.backgroundImage = ''; });
-      const setMosaicSource = (src) => mosaicTiles.forEach((tile) => { tile.style.backgroundImage = `url(${JSON.stringify(src)})`; });
+      const MOSAIC_ROWS = 5;
+      const MOSAIC_LEVELS = [.04, .12, .26, .48, .74, .94];
+      const mosaicColumnsForViewport = () => innerWidth >= 1792 ? 20 : innerWidth >= 1536 ? 18 : 16;
+      const hashUnit = (...parts) => {
+        const input = parts.join('|');
+        let hash = 2166136261;
+        for (let index = 0; index < input.length; index += 1) hash = Math.imul(hash ^ input.charCodeAt(index), 16777619);
+        hash ^= hash >>> 16;
+        hash = Math.imul(hash, 2246822507);
+        hash ^= hash >>> 13;
+        hash = Math.imul(hash, 3266489909);
+        hash ^= hash >>> 16;
+        return (hash >>> 0) / 4294967295;
+      };
+      const nearestMosaicLevel = (value) => MOSAIC_LEVELS.reduce((best, level) => Math.abs(level - value) < Math.abs(best - value) ? level : best, MOSAIC_LEVELS[0]);
+      const configureMosaic = (media, image) => {
+        if (!mosaicRoot || !mediaShell || !image?.naturalWidth || !image?.naturalHeight) return;
+        const columns = mosaicColumnsForViewport();
+        const activeCount = columns * MOSAIC_ROWS;
+        const phase = hashUnit(currentScenario.id, 'phase') * Math.PI * 2;
+        mediaShell.style.setProperty('--mosaic-columns', String(columns));
+        mosaicRoot.style.setProperty('--mosaic-columns', String(columns));
+        mosaicRoot.style.setProperty('--mosaic-image', `url(${JSON.stringify(media.src)})`);
+        mosaicRoot.style.setProperty('--mosaic-focus-x', `${Number(media.focusX ?? 50)}%`);
+        mosaicRoot.style.setProperty('--mosaic-focus-y', `${Number(media.focusY ?? 50)}%`);
+        mosaicRoot.dataset.columns = String(columns);
+        mosaicRoot.dataset.rows = String(MOSAIC_ROWS);
+        mosaicRoot.dataset.naturalWidth = String(image.naturalWidth);
+        mosaicRoot.dataset.naturalHeight = String(image.naturalHeight);
+        mosaicTiles.forEach((tile, index) => {
+          const active = index < activeCount;
+          tile.hidden = !active;
+          if (!active) return;
+          const column = index % columns;
+          const row = Math.floor(index / columns);
+          const progress = column / (columns - 1);
+          const base = .04 + .82 * (progress ** .82);
+          const cellNoise = (hashUnit(currentScenario.id, 'cell', row, column) - .5) * .38;
+          const clusterNoise = (hashUnit(currentScenario.id, 'cluster', Math.floor(row / 2), Math.floor(column / 3)) - .5) * .44;
+          const wave = Math.sin(column * .83 + row * 1.47 + phase) * .08;
+          const rawOpacity = Math.max(.02, Math.min(.97, base + cellNoise + clusterNoise + wave));
+          let opacity = nearestMosaicLevel(rawOpacity);
+          if (column === columns - 3) opacity = Math.max(.74, opacity);
+          if (column >= columns - 2) opacity = 1;
+          const beat = column >= columns - 2 ? 2 : Math.floor(hashUnit(currentScenario.id, 'entry-beat', Math.floor(row / 2), Math.floor(column / 4)) * 3);
+          const entryDelay = 40 + beat * 260 + Math.floor(hashUnit(currentScenario.id, 'entry-delay', row, column) * 140);
+          const entryDuration = 360 + Math.floor(hashUnit(currentScenario.id, 'entry-duration', row, column) * 400);
+          const exitBeat = Math.floor(hashUnit(currentScenario.id, 'exit-beat', Math.floor(row / 2), Math.floor(column / 3)) * 3);
+          const exitDelay = exitBeat * 100 + Math.floor(hashUnit(currentScenario.id, 'exit-delay', row, column) * 80);
+          const exitDuration = 180 + Math.floor(hashUnit(currentScenario.id, 'exit-duration', row, column) * 180);
+          tile.dataset.tileColumn = String(column);
+          tile.dataset.tileRow = String(row);
+          tile.dataset.entryBeat = String(beat);
+          tile.dataset.exitBeat = String(exitBeat);
+          tile.style.setProperty('--tile-opacity', String(opacity));
+          tile.style.setProperty('--tile-in-delay', `${entryDelay}ms`);
+          tile.style.setProperty('--tile-in-duration', `${entryDuration}ms`);
+          tile.style.setProperty('--tile-out-delay', `${exitDelay}ms`);
+          tile.style.setProperty('--tile-out-duration', `${exitDuration}ms`);
+        });
+        const rootRect = mosaicRoot.getBoundingClientRect();
+        mosaicRoot.style.setProperty('--mosaic-render-width', `${rootRect.width}px`);
+        mosaicRoot.style.setProperty('--mosaic-render-height', `${rootRect.height}px`);
+        const sourceRatio = image.naturalWidth / image.naturalHeight;
+        const rootRatio = rootRect.width / rootRect.height;
+        const coverWidth = sourceRatio >= rootRatio ? rootRect.height * sourceRatio : rootRect.width;
+        const coverHeight = sourceRatio >= rootRatio ? rootRect.height : rootRect.width / sourceRatio;
+        mosaicRoot.dataset.coverWidth = coverWidth.toFixed(3);
+        mosaicRoot.dataset.coverHeight = coverHeight.toFixed(3);
+        mosaicTiles.slice(0, activeCount).forEach((tile) => {
+          const tileRect = tile.getBoundingClientRect();
+          tile.style.setProperty('--tile-image-left', `${(rootRect.left - tileRect.left).toFixed(3)}px`);
+          tile.style.setProperty('--tile-image-top', `${(rootRect.top - tileRect.top).toFixed(3)}px`);
+        });
+      };
+      const clearMosaicSource = () => {
+        mosaicRoot?.style.removeProperty('--mosaic-image');
+        if (mosaicRoot) ['naturalWidth', 'naturalHeight', 'coverWidth', 'coverHeight'].forEach((key) => delete mosaicRoot.dataset[key]);
+      };
       const hideMedia = ({ removeSource = false } = {}) => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
         mediaShell?.classList.remove('is-present');
@@ -408,10 +456,10 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         mediaImage.onerror = revealFailed;
         if (media.mode === 'mosaic') {
           clearMosaicSource();
-          mediaImage.onload = () => { setMosaicSource(media.src); revealLoaded(); };
+          mediaImage.onload = () => { configureMosaic(media, mediaImage); revealLoaded(); };
         } else clearMosaicSource();
         if (mediaImage.getAttribute('src') !== media.src) mediaImage.src = media.src;
-        if (mediaImage.complete && mediaImage.naturalWidth) { if (media.mode === 'mosaic') setMosaicSource(media.src); revealLoaded(); }
+        if (mediaImage.complete && mediaImage.naturalWidth) { if (media.mode === 'mosaic') configureMosaic(media, mediaImage); revealLoaded(); }
       };
       const scheduleMediaExit = () => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
@@ -618,6 +666,12 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       reduced.addEventListener?.('change', () => reduced.matches ? complete('reduced_motion') : undefined);
       desktopMedia.addEventListener?.('change', () => renderMedia());
       mosaicMedia.addEventListener?.('change', () => renderMedia());
+      window.addEventListener('resize', () => {
+        cancelAnimationFrame(mosaicResizeFrame);
+        mosaicResizeFrame = requestAnimationFrame(() => {
+          if (currentScenario.media?.mode === 'mosaic' && mediaAllowed(currentScenario.media) && mediaImage?.naturalWidth) configureMosaic(currentScenario.media, mediaImage);
+        });
+      }, { passive: true });
       lab.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
@@ -710,16 +764,17 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
     .briefing-stage[data-media-mode="mosaic"] .briefing-stage__brand-o { display: none; }
     .briefing-stage[data-media-mode="mosaic"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .briefing-stage[data-media-mode="mosaic"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
-    .briefing-stage__media[data-media-mode="mosaic"] { --mosaic-cell: min(88px, 7.4vw, calc((42svh - 12px) / 4)); --mosaic-overshoot: calc(var(--mosaic-cell) * .25); top: 50%; right: calc(50% - 50vw); bottom: auto; width: calc(var(--mosaic-cell) * 12 - var(--mosaic-overshoot)); height: calc(var(--mosaic-cell) * 4); overflow: hidden; opacity: 1; transform: translateY(-50%); transition: none; pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"] { --mosaic-columns: 16; top: 50%; right: calc(50% - 50vw); bottom: auto; width: 75vw; height: calc(75vw * 5 / var(--mosaic-columns)); max-height: 100%; overflow: hidden; opacity: 1; transform: translateY(-50%); transition: none; pointer-events: none; }
     .briefing-stage__media[data-media-mode="mosaic"].is-present,
     .briefing-stage__media[data-media-mode="mosaic"].is-exiting { opacity: 1; transform: translateY(-50%); pointer-events: none; }
-    .briefing-stage__media[data-media-mode="mosaic"] a { width: calc(var(--mosaic-cell) * 12); height: 100%; pointer-events: none; }
+    .briefing-stage__media[data-media-mode="mosaic"] a { width: 100%; height: 100%; pointer-events: none; }
     .briefing-stage__media[data-media-mode="mosaic"] img { display: none; }
     .briefing-stage__mosaic { display: none; width: 100%; height: 100%; }
-    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic { display: grid; width: calc(var(--mosaic-cell) * 12); height: calc(var(--mosaic-cell) * 4); grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 3px; }
-    .briefing-stage__mosaic-tile { display: block; min-width: 0; min-height: 0; background-repeat: no-repeat; background-size: 1200% 400%; background-position: var(--tile-x) var(--tile-y); opacity: 0; transition: opacity 600ms cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
+    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic { display: grid; grid-template-columns: repeat(var(--mosaic-columns), minmax(0, 1fr)); grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 3px; }
+    .briefing-stage__mosaic-tile { position: relative; display: block; min-width: 0; min-height: 0; overflow: hidden; opacity: 0; transition-property: opacity; transition-duration: var(--tile-in-duration); transition-timing-function: cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
+    .briefing-stage__mosaic-tile::before { content: ""; position: absolute; left: var(--tile-image-left); top: var(--tile-image-top); width: var(--mosaic-render-width); height: var(--mosaic-render-height); background-image: var(--mosaic-image); background-repeat: no-repeat; background-size: cover; background-position: var(--mosaic-focus-x, 50%) var(--mosaic-focus-y, 50%); }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); }
-    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: 260ms; transition-delay: var(--tile-out-delay); }
+    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: var(--tile-out-duration); transition-delay: var(--tile-out-delay); }
     [data-briefing-variant="static"] .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); transition: none; }
     [data-briefing-scenario-id="weather_water_demo"] .briefing-stage__message h1,
     [data-briefing-scenario-id^="storm_"] .briefing-stage__message h1,

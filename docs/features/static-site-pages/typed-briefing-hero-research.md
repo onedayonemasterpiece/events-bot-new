@@ -70,7 +70,7 @@ Route:
 
 Final immutable review build:
 
-- [desktop `12×4` majority-media chain + text-only mobile](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
+- [superseded: rejected `12×4` checkerboard/distorted crop](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [desktop `8×3` mosaic + text-only mobile](https://kenigevents.ru/preview-20260715t2306-briefing-lab-7c2b2a30/lab/briefing/?variant=c&scenario=live_meeting_mosaic&pace=slow&replay=1);
 - [conditional storm → future lecture + pending cursor](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=storm_weekend_demo&pace=slow&replay=1);
 - [конкретный forwarding signal](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=frequently_forwarded&pace=slow&replay=1);
@@ -99,24 +99,33 @@ Final immutable review build:
   события как desktop mosaic, поэтому эффект можно оценить на последовательной
   цепочке, а не на единственном редком экране. Teaser и action-education сцены
   остаются text-only, если изображение испортило бы смысл или раскрыло ответ;
-- mosaic — CSS-grid `12×4`: каждый из 48 квадратов показывает свой фрагмент
-  одного cached raster, без отдельных network requests. Все клетки имеют
-  square corners, `3px` gutters, детерминированный scatter-order и соседние
-  final-alpha с разницей не меньше `.14`; средняя alpha по столбцам растёт
-  слева направо от `.235` до `.920`, но отдельные соседи намеренно идут светлее
-  и темнее вместо ровного gradient;
+- актуальная mosaic — адаптивная CSS-grid `16×5` / `18×5` / `20×5` для
+  `1024–1535` / `1536–1791` / `≥1792px`. Она занимает правые `75vw` на любой
+  desktop review-width, поэтому больше не сжимается до половины экрана из-за
+  `88px` cell-cap. Square cells, `3px` gutters и один cached raster сохранены;
+- final alpha выбирается из семи заметных bands через scenario-seeded,
+  deterministic cell/cluster field. Последние два столбца всегда `1`, внутри
+  есть длинные острова, локальные reversals, резкие провалы и вспышки; запрещены
+  parity-gap/checkerboard и требование «каждый сосед обязан отличаться», которое
+  и породило предыдущую шахматную доску;
 - текст остаётся на той же shared-shell позиции, что и text-only hero:
   mosaic не меняет stage/message width, font или alignment, а добавляет только
   cloned paper stripe фрагментам и CTA. Viewport-bound media shell начинается
-  примерно с `x=406` при 1440 и `x=454` при 1366; внутренний grid продолжается
-  на четверть клетки за правый край и crop-ится shell без horizontal scroll;
+  ровно около `25vw` (`x=360` при 1440, `x=480` при 1920) и заканчивается на
+  физическом правом pixel без horizontal scroll;
+- каждая клетка клипует один общий виртуальный image-layer с `background-size:
+  cover`; исходный aspect ratio больше не приводится к grid ratio. Для каждого
+  lab media указана ручная focal position, а runtime фиксирует natural и cover
+  dimensions для regression-проверки равного X/Y scale;
 - mosaic разрешена только при `(min-width:1024px) and (min-height:650px)`.
   На mobile и коротком desktop она превращается в обычную text-only сцену и
   URL изображения вообще не назначается. Variant B/reduced-motion показывают
-  итоговую матрицу сразу; Variant C использует `600ms` ease-in-out с
-  разбросом задержек `90..1218ms` и быстрый обратный `260ms` exit с
-  `0..470ms` delays перед фактическим переходом, без runtime randomness и
-  saturation. Hover/focus/pause фиксируют полностью проявленную композицию;
+  итоговую матрицу сразу; Variant C использует три irregular entry-beat:
+  `40..700ms` delay и индивидуальные `360..759ms` durations. Exit строится из
+  независимого, а не reverse-entry seed: `0..279ms` delay и `180..359ms`
+  duration. Runtime randomness и saturation не используются; один
+  scenario/viewport воспроизводится одинаково. Hover/focus/pause фиксируют
+  полностью проявленную композицию;
 - во время reveal работает scenario-driven bar/underscore; после законченной
   фразы horizontal underscore остаётся только при реально запланированном
   timed continuation, а в terminal state делает три blink и исчезает;
@@ -135,17 +144,21 @@ responses и `bodyWidth == innerWidth`. Desktop делает ровно один
 Gemini 3.1 Pro (High) exact screenshots/video gate: `MOSAIC LAB GATE: PASS`,
 `PUBLISH FOR USER REVIEW: YES`; это не production approval.
 
-Follow-up exact screenshots и `20.5s` WebM трёх последовательных mosaic-сцен
-прошли новый Gemini 3.1 Pro (High) gate: `MOSAIC FOLLOW-UP GATE: PASS`,
-`PUBLISH FOR USER REVIEW: YES`. Gate отдельно подтвердил неоднородность соседей,
-фиксированный text anchor и отсутствие dirty-checkerboard blocker; production
-rollout по-прежнему не входит в решение.
+Предыдущий follow-up Gemini 3.1 Pro (High) verdict `MOSAIC FOLLOW-UP GATE:
+PASS` признан **невалидным и superseded**. Prompt заранее сообщил модели
+ошибочные success-метрики; ответ повторил их и не заметил, что все 11
+горизонтальных переходов каждой строки чередовались, parity means отличались на
+`.2367`, правый край содержал `.76/.81/.82/.86`, а `background-size:1200%
+400%` растягивал портрет `360×450` в grid ratio `3:1`. Этот ответ нельзя
+использовать как visual acceptance evidence.
 
 Immutable prefix `preview-20260716t0544-briefing-lab-4c2caa60` построен из
 source `4c2caa60`: isolated build/check pass, Playwright `15/15`. Exact public
 captures на `1440×900`, `1366×768`, `390×844`, `320×568` вернули HTTP 200,
 нулевые page errors и `bodyWidth == innerWidth`; public `20.5s` WebM показывает
 три последовательных mosaic-сценария с reveal/hold/exit, а не один пример.
+Build сохраняется только как rejected regression evidence и больше не является
+рекомендуемым URL для пользовательского просмотра.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего
@@ -406,13 +419,14 @@ Contract:
 - production `EventLayout` и `EventListItem` оставлены только как масштабный фон, без уменьшения их размеров.
 - media существует только на desktop `≥1024px`, не меняет фиксированную
   высоту stage/позицию categories/feed и не получает `src` на mobile;
-- mosaic дополнительно требует высоту `≥650px`: CSS-grid содержит ровно
-  `12×4` квадратных cells с `3px` paper-gutters;
+- mosaic дополнительно требует высоту `≥650px`: CSS-grid содержит `16×5`,
+  `18×5` или `20×5` квадратных cells с `3px` paper-gutters и занимает правые
+  `75vw` при `1366`, `1440`, `1600` и `1920px`;
   text остаётся на общей desktop-позиции, media пересекает его только визуально
   и читается за счёт stripe. Viewport shell заканчивается точно на правом pixel,
-  внутренний grid продолжается за него и crop-ится без увеличения body width.
-  Один raster URL загружается один раз; decode/404 скрывает mosaic без пустого
-  frame.
+  body width не увеличивается. Каждая cell клипует общий source-faithful
+  `cover` layer с ручным focal point; один raster URL загружается один раз,
+  decode/404 скрывает mosaic без пустого frame.
 
 Автоматическая матрица проверяет все 19 сценариев плюс fallback в B/C: hero и message не переполняются, `scrollHeight <= clientHeight`, строк не более трёх, категории и начало feed находятся в initial viewport. Отдельные проверки фиксируют отсутствие media request на mobile, отсутствие CLS при enter/exit и text-only degradation.
 

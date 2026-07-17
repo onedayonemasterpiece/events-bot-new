@@ -181,14 +181,42 @@ fully-revealed desktop-сценария, partial entry, `20.5s` WebM трёх
 типографического regression fix: `2026-07-16 05:38:42–05:39:26 UTC`, status
 `0`, stderr empty.
 
-Вердикт: `MOSAIC FOLLOW-UP GATE: PASS`, blockers отсутствуют,
-`PUBLISH FOR USER REVIEW: YES`. Это acceptance изолированного lab, не production
-rollout.
+Первоначальный вердикт был `MOSAIC FOLLOW-UP GATE: PASS`, но последующий
+пользовательский screenshot review доказал, что этот gate **невалиден и
+superseded**. Prompt заранее сообщил reviewer ошибочные success-метрики и
+требовал отличия каждого соседа; ответ повторил эти числа, но не заметил
+идеальный parity-checkerboard, тусклый правый край и принудительное растяжение
+каждого source raster до `3:1`. Этот ответ сохраняется только как provenance
+failed-review-process, а не acceptance evidence.
 
 | File | Role | SHA-256 |
 |---|---|---|
 | [`mosaic-followup-acceptance-prompt.md`](mosaic-followup-acceptance-prompt.md) | Exact rejected requirements, screenshots/video and measured contract. | `7d49f3ffd066c4ce08e0305062329b95cc776450fcca02b0102b0210821ccd3a` |
 | [`mosaic-followup-acceptance-gemini.md`](mosaic-followup-acceptance-gemini.md) | Final `MOSAIC FOLLOW-UP GATE: PASS`. | `280d0e22c01d217f8e1a0a026b81889b7373809a3778acb7f1c3759d69159735` |
+
+### Dramatic mosaic corrective gate
+
+Коррекция получила blind-first exact visual gate: Gemini **3.1 Pro (High)**
+сначала сравнил rejected/candidate pixels, затем отдельно проверил right edge,
+checkerboard/parity, локальные reversals, portrait/horizontal crop, шесть
+entry/exit фаз, `20.5s` WebM и text-only mobile. Prompt намеренно не сообщил
+модели ни alpha-матрицу, ни результаты Playwright, ни утверждение о готовности.
+
+Запуск `2026-07-17 07:49:21–07:50:27 UTC`; consultant response complete,
+stderr empty. После полного сохранения response локальный wrapper не смог
+записать metadata из-за host `ENOSPC`; очищен только npm `_npx` cache, metadata
+реконструирована, сам consultant output не повторялся и не изменялся.
+
+Вердикт: `MOSAIC DRAMATIC CORRECTION: PASS`; все шесть требований `PASS`;
+`PUBLISH FOR USER REVIEW: YES` для isolated lab. Reviewer визуально подтвердил
+непрозрачный правый anchor, отсутствие шахматности, драматичные острова,
+покрытие правых 3/4, source-faithful face/object geometry и независимый
+entry/exit rhythm. Это не production approval и не desirability evidence.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`mosaic-dramatic-correction-acceptance-prompt.md`](mosaic-dramatic-correction-acceptance-prompt.md) | Blind-first rejected/candidate screenshot and motion gate. | `cea95059edd10870a257d36c681626d811e9aa517d256b3cb001bbe5c7f8b35e` |
+| [`mosaic-dramatic-correction-acceptance-gemini.md`](mosaic-dramatic-correction-acceptance-gemini.md) | Final `MOSAIC DRAMATIC CORRECTION: PASS`. | `3f9042ff0402189c4594f17527b106dbcefb1605387ec770dd1563a3c2e7ca2f` |
 
 ## Decision trace
 
