@@ -20,6 +20,8 @@
 - обязательный version/migration contract: материальная переработка создаёт `vN+1`, а release блокируется до полного перехода production consumers;
 - `EventCard split-actions` зафиксирован как `v2` baseline, `overlay-controls v1` помечен deprecated/regression-only с явной заменой.
 
+Публичный immutable review candidate опубликован из SHA `867f1328`: <https://kenigevents.ru/preview-design-system-867f1328/lab/design-system/>. Для него прошли full preview build (`424` pages), `check:design-system` (`20` versioned registry rows) и `check:preview`; это review evidence, но ещё не owner sign-off и не production release.
+
 Это закрывает архитектурную основу унификации UI, но **не переводит F5 в Done**: до release freeze всё ещё нужны merge в `origin/main`, immutable preview build id, visual baselines на acceptance matrix, real-device/a11y evidence и явный product/design sign-off SHA. Общий verdict полного релиза остаётся **NO-GO**.
 
 ## 1. Как читать статусы
