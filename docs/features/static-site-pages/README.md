@@ -45,6 +45,15 @@ and historical ПК/favicon variants are rejected. Canonical geometry and usage:
 
 Static-site generation is now prepared as a Kaggle CPU job reusing the existing CherryFlash/TelegramMonitor infrastructure: per-run private input dataset, `KaggleClient.push_kernel(...)`, optional `kaggle_run.json` status dataset, `kaggle_status_client` heartbeat/progress from inside the kernel, and a `static_site:builder` resource lease. The first verified 50-event production-snapshot Kaggle build is `preview-20260628-event-pages-prod50-kaggle-v44` (artifact only, not bucket-published): it produced a tar.gz static site archive, `static_site_build_result.json`, and passed `check:preview`. Production Smart Update handoff is a coalesced `static_site_build` outbox job 15 minutes after the last event update, gated by `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`; object-storage/CDN publication is now available for preview/focus-group builds after the media mirror gate; production promotion still requires a separate release gate. Operational publisher protocol: `docs/operations/kaggle-static-site-builder.md`; build notes: `docs/features/static-site-pages/astro-preview.md#kaggle-cpu-builder--smart-update-handoff`.
 
+Interest-club pages are an additional versioned consumer of this checked build,
+not a second publisher.  Only the accepted club projection may create
+`/kluby-po-interesam/` index/detail routes; non-public review states must never
+enter the manifest.  Club projection changes coalesce into the same static
+build lifecycle, preserve last-good output, and require relation/manifest
+parity before promotion.  Canonical identity and staged production gates:
+[Interest clubs](../interest-clubs/README.md) and its
+[release plan](../interest-clubs/release-plan.md).
+
 ## Текущий публичный preview
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.

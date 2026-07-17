@@ -15,14 +15,13 @@
 - Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
 - Poll to Repost (опрос в TG -> репост события): `docs/backlog/features/poll-to-forward/README.md`
 - Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
-- Interest clubs (post-release read-only catalog research first, then an evidence-gated auto-growing static section): `docs/backlog/features/interest-clubs/README.md`
-  - copy-ready research/code-agent prompt: `docs/backlog/features/interest-clubs/research-prompt.md`
 
 ## Implemented (для ориентира)
 
 - Telegram Monitoring (каноника): `docs/features/telegram-monitoring/README.md`
 - Telegram Monitoring videos (Supabase): `docs/backlog/features/telegram-monitoring-videos/README.md`
 - Smart Event Update (каноника): `docs/features/smart-event-update/README.md`
+- Interest clubs (research завершён, implementation RC): `docs/features/interest-clubs/README.md`
 
 ## Дополнительно
 

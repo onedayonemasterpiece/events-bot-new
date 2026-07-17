@@ -86,8 +86,6 @@ sections:
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
-      interest_clubs: docs/backlog/features/interest-clubs/README.md
-      interest_clubs_research_prompt: docs/backlog/features/interest-clubs/research-prompt.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
       poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
@@ -158,6 +156,19 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  interest_clubs:
+    status: implementation_rc
+    docs: docs/features/interest-clubs/README.md
+    adr: docs/features/interest-clubs/adr-001-identity-pipeline.md
+    release_plan: docs/features/interest-clubs/release-plan.md
+    research_report: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
+    legacy_redirect: docs/backlog/features/interest-clubs/README.md
+    dependencies:
+      - docs/features/smart-event-update/README.md
+      - docs/features/static-site-pages/README.md
+      - docs/features/linked-events/README.md
+      - docs/features/festivals/README.md
+
   static_personal_announcements:
     status: release_planning
     docs: docs/features/static-personal-announcements/README.md

@@ -345,7 +345,7 @@ git diff --check
 
 ## 14. Источники
 
-- Canonical feature contract: `docs/backlog/features/interest-clubs/README.md` и `research-prompt.md`.
+- Current canonical feature contract: `docs/features/interest-clubs/README.md`; staged rollout: `docs/features/interest-clubs/release-plan.md`. Старый backlog path — redirect.
 - Linked occurrences: `docs/features/linked-events/README.md`.
 - Festival semantics: `docs/features/festivals/README.md` (путь `static-site-release.md` из prompt устарел и отсутствует на base SHA).
 - Smart Update / LLM-first: `docs/features/smart-event-update/README.md`, `docs/llm/request-guide.md`.
