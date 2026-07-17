@@ -13,6 +13,7 @@ global_constraints:
   - quota-aware KEY4+KEY5 pool from first reservation, not fallback
   - paced queue, RPD reserve floor, checkpointing
 verification_owner: /root
+status: complete
 stop_conditions:
   - provider 429 or unexpected quota-group collision
   - invalid schema/empty response rate above smoke allowance
@@ -40,4 +41,5 @@ lanes:
     worktree: /home/dev/.codex/worktrees/events-bot-new/image-geometry-20260717
     writable_files: schema/models/smart-update/google-ai/scripts/kaggle/tests/docs/changelog
     verification_scope: full_local+live_smoke+bounded_backfill
+    result: completed
 ```
