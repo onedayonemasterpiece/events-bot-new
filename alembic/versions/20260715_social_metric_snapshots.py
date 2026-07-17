@@ -21,6 +21,12 @@ def upgrade() -> None:
         sa.Column("publisher_id", sa.Text(), nullable=False),
         sa.Column("post_id", sa.Integer(), nullable=False),
         sa.Column("age_bucket", sa.Text(), nullable=False),
+        sa.Column(
+            "publication_kind",
+            sa.Text(),
+            nullable=False,
+            server_default="external_event_source",
+        ),
         sa.Column("source_url", sa.Text(), nullable=True),
         sa.Column("post_ts", sa.Integer(), nullable=True),
         sa.Column("collected_ts", sa.Integer(), nullable=False),

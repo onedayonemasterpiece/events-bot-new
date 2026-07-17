@@ -35,6 +35,13 @@
 
 ### Added
 
+- **Popular feed / dedicated human-like Telegram reader**: the batch collector
+  now accepts only `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR`, reads exact event
+  announcements from `@kldevents` and ledger-backed event forwards from
+  `@kenigevents` in sequential jittered batches, and persists an auditable
+  publication kind while structurally excluding digests, polls, replies and
+  arbitrary channel messages.
+
 - **Static popular feed / batch social metrics**: added one feature-gated
   platform-batched collector for own and already-known VK/Telegram publications,
   four compact `1h/6h/24h/72h` snapshots, postponed-to-live VK resolution,
@@ -58,6 +65,12 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+
+- **Popular feed / Telegram due work and owned-source attribution**: reuse the
+  stored event-post timestamp after the first read instead of polling every
+  30 minutes, map promo/poll event-forward URLs back into static export, and
+  collapse the two managed Telegram channels into one publisher family so an
+  internal forward cannot become a false `multi_source` signal.
 
 - **Static popular feed / Telegram metric export**: query Telegram `forwards`
   separately from VK `reposts` instead of selecting the nonexistent Telegram

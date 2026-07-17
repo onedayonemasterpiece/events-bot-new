@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import os
+import random
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -22,6 +23,7 @@ BUCKETS: tuple[tuple[str, int], ...] = (
 )
 TERMINAL_STATUSES = {"collected", "not_found", "skipped_late"}
 OWN_TG_USERNAME = "kldevents"
+OWN_TG_AFISHA_USERNAME = "kenigevents"
 OWN_VK_TARGET = "klgdevents"
 
 
@@ -34,6 +36,7 @@ class SocialPostTarget:
     post_ts: int | None = None
     legacy_source_id: int | None = None
     owned: bool = False
+    publication_kind: str = "external_event_source"
 
     @property
     def key(self) -> tuple[str, str, int]:
@@ -105,6 +108,68 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _env_seconds_range(name: str, default: tuple[float, float]) -> tuple[float, float]:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        left, right = (float(part.strip()) for part in raw.split(",", 1))
+    except (TypeError, ValueError):
+        logging.warning("invalid %s=%r; using %s,%s", name, raw, *default)
+        return default
+    return max(0.0, min(left, right)), max(0.0, max(left, right))
+
+
+async def _human_pause(name: str, default: tuple[float, float]) -> float:
+    lower, upper = _env_seconds_range(name, default)
+    delay = random.SystemRandom().uniform(lower, upper) if upper > lower else lower
+    if delay > 0:
+        await asyncio.sleep(delay)
+    return delay
+
+
+def _popular_tg_auth_raw() -> str:
+    """Return only the dedicated popularity-reader session.
+
+    E2E, S22, TELEGRAM_SESSION, the old generic SOCIAL_METRICS name and
+    publishing/editor sessions are intentionally excluded.
+    """
+    return _first_env("TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR")
+
+
+def _published_at_ts(value: Any) -> int | None:
+    if isinstance(value, (int, float)) and value > 0:
+        return int(value)
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp())
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(str(value or "{}"))
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _parse_vk_url(value: str | None) -> tuple[int, int] | None:
     match = re.search(r"wall(-?\d+)_(\d+)", str(value or ""))
     if not match:
@@ -113,10 +178,25 @@ def _parse_vk_url(value: str | None) -> tuple[int, int] | None:
 
 
 def _parse_tg_url(value: str | None) -> tuple[str, int] | None:
-    match = re.search(r"(?:https?://)?t\.me/(?:s/)?([A-Za-z0-9_]+)/([0-9]+)", str(value or ""))
+    raw = str(value or "")
+    # Private channel links are t.me/c/<internal-chat-id>/<message-id>; "c"
+    # is not a username. Callers with a canonical event message id must use
+    # their known channel role instead.
+    if re.search(r"(?:https?://)?t\.me/c/\d+/\d+", raw, flags=re.IGNORECASE):
+        return None
+    match = re.search(r"(?:https?://)?t\.me/(?:s/)?([A-Za-z0-9_]+)/([0-9]+)", raw)
     if not match:
         return None
     return match.group(1).lower(), int(match.group(2))
+
+
+def _private_tg_message_id(value: str | None) -> int | None:
+    match = re.search(
+        r"(?:https?://)?t\.me/c/\d+/(\d+)(?:[/?#].*)?$",
+        str(value or ""),
+        flags=re.IGNORECASE,
+    )
+    return int(match.group(1)) if match else None
 
 
 def _legacy_age_day(*, post_ts: int | None, collected_ts: int) -> int | None:
@@ -185,6 +265,11 @@ def _merge_targets(targets: Iterable[SocialPostTarget]) -> list[SocialPostTarget
             post_ts=target.post_ts or previous.post_ts,
             legacy_source_id=target.legacy_source_id or previous.legacy_source_id,
             owned=target.owned or previous.owned,
+            publication_kind=(
+                target.publication_kind
+                if target.publication_kind != "external_event_source"
+                else previous.publication_kind
+            ),
         )
     return sorted(merged.values(), key=lambda item: item.key)
 
@@ -226,22 +311,32 @@ async def load_social_post_targets(
     now = now_utc or datetime.now(timezone.utc)
     today = now.astimezone(ZoneInfo("Europe/Kaliningrad")).date().isoformat()
     active_sql, active_params = _active_event_sql(today)
+    event_channel = (
+        os.getenv("SOCIAL_METRICS_TG_EVENT_CHANNEL") or OWN_TG_USERNAME
+    ).strip().lstrip("@").lower()
+    afisha_channel = (
+        os.getenv("SOCIAL_METRICS_TG_AFISHA_CHANNEL") or OWN_TG_AFISHA_USERNAME
+    ).strip().lstrip("@").lower()
     targets: list[SocialPostTarget] = []
     async with db.raw_conn() as conn:
         # Own Telegram publications remain discoverable even before the dedicated
         # session is configured. Their post date is bootstrapped by Telegram later.
         cur = await conn.execute(
             f"""
-            SELECT DISTINCT e.tg_event_post_url, e.tg_event_post_id
+            SELECT e.tg_event_post_url, e.tg_event_post_id, MAX(m.message_ts)
             FROM event e
+            LEFT JOIN telegram_source ts ON LOWER(ts.username)=LOWER(?)
+            LEFT JOIN telegram_post_metric m
+              ON m.source_id=ts.id AND m.message_id=e.tg_event_post_id
             WHERE {active_sql}
               AND e.tg_event_post_id IS NOT NULL
+            GROUP BY e.tg_event_post_url, e.tg_event_post_id
             """,
-            active_params,
+            (event_channel, *active_params),
         )
-        for url, message_id in await cur.fetchall():
+        for url, message_id, message_ts in await cur.fetchall():
             parsed = _parse_tg_url(str(url or ""))
-            username = parsed[0] if parsed else OWN_TG_USERNAME
+            username = parsed[0] if parsed else event_channel
             post_id = parsed[1] if parsed else int(message_id or 0)
             if post_id > 0:
                 targets.append(
@@ -250,9 +345,96 @@ async def load_social_post_targets(
                         publisher_id=username,
                         post_id=post_id,
                         source_url=str(url or f"https://t.me/{username}/{post_id}"),
+                        post_ts=int(message_ts) if isinstance(message_ts, int) else None,
                         owned=True,
+                        publication_kind="event_announcement",
                     )
                 )
+
+        # The broad @kenigevents channel also contains digests, stories and
+        # editorial/service posts. Only Bot-API forwards that already carry an
+        # exact promo_exposure.event_id + source_url + target_url contract are
+        # eligible here. This deliberately avoids text/hashtag guessing and
+        # prevents a digest counter from being attributed to every event in it.
+        cur = await conn.execute(
+            f"""
+            SELECT pe.details_json, pe.published_at,
+                   e.tg_event_post_id, e.tg_event_post_url
+            FROM promo_exposure pe
+            JOIN event e ON e.id=pe.event_id
+            WHERE {active_sql}
+              AND pe.surface='tg_repost'
+              AND pe.publish_status='TG_FORWARDED'
+            """,
+            active_params,
+        )
+        for details_json, published_at, event_message_id, event_post_url in await cur.fetchall():
+            details = _json_object(details_json)
+            source_url = str(details.get("source_url") or "")
+            source = _parse_tg_url(source_url)
+            target = _parse_tg_url(str(details.get("target_url") or ""))
+            if not target or target[0] != afisha_channel:
+                continue
+            canonical_message_id = int(event_message_id or 0)
+            if source:
+                source_matches_event = (
+                    source[0] == event_channel
+                    and canonical_message_id > 0
+                    and source[1] == canonical_message_id
+                )
+            else:
+                private_message_id = _private_tg_message_id(source_url)
+                canonical_private_id = _private_tg_message_id(str(event_post_url or ""))
+                source_matches_event = (
+                    canonical_message_id > 0
+                    and private_message_id == canonical_message_id
+                    and canonical_private_id == canonical_message_id
+                )
+            if not source_matches_event:
+                continue
+            targets.append(
+                SocialPostTarget(
+                    platform="telegram",
+                    publisher_id=afisha_channel,
+                    post_id=target[1],
+                    source_url=f"https://t.me/{afisha_channel}/{target[1]}",
+                    post_ts=_published_at_ts(published_at),
+                    owned=True,
+                    publication_kind="event_forward",
+                )
+            )
+
+        # Poll winners are another exact event-forward ledger for @kenigevents.
+        # poll_message_id and reply_message_id are intentionally not selected.
+        cur = await conn.execute(
+            f"""
+            SELECT r.poll_chat_id, r.forwarded_message_id, r.updated_at
+            FROM poll_repost_run r
+            JOIN event e ON e.id=r.chosen_event_id
+            WHERE {active_sql}
+              AND r.status='forwarded'
+              AND r.forwarded_message_id IS NOT NULL
+            """,
+            active_params,
+        )
+        for poll_chat_id, forwarded_message_id, updated_at in await cur.fetchall():
+            username = str(poll_chat_id or "").strip().lstrip("@").lower()
+            if username != afisha_channel:
+                continue
+            post_id = int(forwarded_message_id or 0)
+            if post_id <= 0:
+                continue
+            targets.append(
+                SocialPostTarget(
+                    platform="telegram",
+                    publisher_id=afisha_channel,
+                    post_id=post_id,
+                    source_url=f"https://t.me/{afisha_channel}/{post_id}",
+                    post_ts=_published_at_ts(updated_at),
+                    owned=True,
+                    publication_kind="event_forward",
+                )
+            )
 
         # Resolved own VK publications. post_ts comes from the compatibility table
         # when available; missing dates are bootstrapped by the first API batch.
@@ -280,6 +462,7 @@ async def load_social_post_targets(
                     source_url=str(url or f"https://vk.com/wall-{group_id}_{int(post_id)}"),
                     post_ts=int(post_ts) if isinstance(post_ts, int) else None,
                     owned=True,
+                    publication_kind="event_announcement",
                 )
             )
 
@@ -303,6 +486,14 @@ async def load_social_post_targets(
             (*active_params, *active_params),
         )
         for platform, publisher_id, post_id, source_url, post_ts, legacy_source_id in await cur.fetchall():
+            if platform == "telegram" and not _env_enabled(
+                "SOCIAL_METRICS_TG_INCLUDE_EXTERNAL",
+                default=False,
+            ):
+                # External Telegram posts already receive age_day metrics from
+                # the monitoring pipeline. Keep this dedicated human-like
+                # session bounded to our two managed channels by default.
+                continue
             targets.append(
                 SocialPostTarget(
                     platform=str(platform),
@@ -311,6 +502,7 @@ async def load_social_post_targets(
                     source_url=str(source_url or ""),
                     post_ts=int(post_ts) if isinstance(post_ts, int) else None,
                     legacy_source_id=int(legacy_source_id) if isinstance(legacy_source_id, int) else None,
+                    publication_kind="external_event_source",
                 )
             )
     return _merge_targets(targets)
@@ -550,17 +742,17 @@ async def resolve_owned_vk_publications_batch(
     }
 
 
-def _auth_bundle(env_key: str) -> dict[str, Any]:
-    raw = (os.getenv(env_key) or "").strip()
+def _popular_tg_auth_bundle() -> dict[str, Any]:
+    raw = _popular_tg_auth_raw()
     if not raw:
-        raise RuntimeError(f"{env_key} is missing")
+        raise RuntimeError("TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR is missing")
     try:
         padded = raw + "=" * (-len(raw) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
     except Exception as exc:
-        raise RuntimeError(f"invalid {env_key}: {exc}") from exc
+        raise RuntimeError(f"invalid TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR: {exc}") from exc
     if not isinstance(payload, dict) or not str(payload.get("session") or "").strip():
-        raise RuntimeError(f"{env_key} missing session")
+        raise RuntimeError("TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR missing session")
     return payload
 
 
@@ -570,11 +762,11 @@ async def _default_tg_fetcher(
     from telethon import TelegramClient
     from telethon.sessions import StringSession
 
-    bundle = _auth_bundle("SOCIAL_METRICS_TG_AUTH_BUNDLE")
-    api_id = int((os.getenv("SOCIAL_METRICS_TG_API_ID") or "").strip())
-    api_hash = (os.getenv("SOCIAL_METRICS_TG_API_HASH") or "").strip()
+    bundle = _popular_tg_auth_bundle()
+    api_id = int(_first_env("SOCIAL_METRICS_TG_API_ID", "TG_API_ID") or "0")
+    api_hash = _first_env("SOCIAL_METRICS_TG_API_HASH", "TG_API_HASH")
     if not api_id or not api_hash:
-        raise RuntimeError("SOCIAL_METRICS_TG_API_ID/HASH are missing")
+        raise RuntimeError("SOCIAL_METRICS_TG_API_ID/HASH or TG_API_ID/HASH are missing")
     device_kwargs = {
         key: bundle[key]
         for key in (
@@ -587,23 +779,34 @@ async def _default_tg_fetcher(
         if bundle.get(key)
     }
     out: dict[tuple[str, int], MetricPayload] = {}
+    # A scheduled reader should not reconnect at a perfectly fixed wall-clock
+    # instant or hammer several channel history requests back-to-back. The
+    # pauses are deliberately bounded and configurable; no read receipts,
+    # typing actions or fake interactions are generated.
+    await _human_pause("SOCIAL_METRICS_TG_STARTUP_DELAY_SECONDS", (4.0, 12.0))
     client = TelegramClient(
         StringSession(str(bundle["session"])),
         api_id,
         api_hash,
-        flood_sleep_threshold=max(1, _env_int("SOCIAL_METRICS_TG_FLOOD_SLEEP_SECONDS", 30)),
+        flood_sleep_threshold=max(1, _env_int("SOCIAL_METRICS_TG_FLOOD_SLEEP_SECONDS", 60)),
         **device_kwargs,
     )
     async with client:
         by_channel: dict[str, list[SocialPostTarget]] = {}
         for target in targets:
             by_channel.setdefault(target.publisher_id, []).append(target)
-        batch_size = max(1, min(100, _env_int("SOCIAL_METRICS_TG_BATCH_SIZE", 100)))
-        for username, channel_targets in sorted(by_channel.items()):
+        batch_size = max(1, min(100, _env_int("SOCIAL_METRICS_TG_BATCH_SIZE", 50)))
+        made_request = False
+        for channel_index, (username, channel_targets) in enumerate(sorted(by_channel.items())):
+            if channel_index:
+                await _human_pause("SOCIAL_METRICS_TG_BETWEEN_CHANNELS_SECONDS", (5.0, 15.0))
             entity = await client.get_input_entity(username)
             for start in range(0, len(channel_targets), batch_size):
+                if made_request:
+                    await _human_pause("SOCIAL_METRICS_TG_BETWEEN_REQUESTS_SECONDS", (2.0, 5.0))
                 chunk = channel_targets[start : start + batch_size]
                 messages = await client.get_messages(entity, ids=[item.post_id for item in chunk])
+                made_request = True
                 for message in messages or []:
                     if message is None or not getattr(message, "id", None):
                         continue
@@ -642,11 +845,12 @@ async def _write_snapshot_chunk(db: Database, writes: Sequence[SnapshotWrite]) -
                 await conn.execute(
                     """
                     INSERT INTO social_metric_snapshot(
-                        platform, publisher_id, post_id, age_bucket, source_url, post_ts,
+                        platform, publisher_id, post_id, age_bucket, publication_kind, source_url, post_ts,
                         collected_ts, views, likes, comments, shares, reactions_json,
                         status, error_code
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(platform, publisher_id, post_id, age_bucket) DO UPDATE SET
+                        publication_kind=excluded.publication_kind,
                         source_url=COALESCE(excluded.source_url, social_metric_snapshot.source_url),
                         post_ts=COALESCE(excluded.post_ts, social_metric_snapshot.post_ts),
                         collected_ts=excluded.collected_ts,
@@ -667,6 +871,7 @@ async def _write_snapshot_chunk(db: Database, writes: Sequence[SnapshotWrite]) -
                         write.target.publisher_id,
                         int(write.target.post_id),
                         write.age_bucket,
+                        write.target.publication_kind,
                         write.target.source_url or None,
                         int(payload.post_ts) if payload and isinstance(payload.post_ts, int) else write.target.post_ts,
                         int(write.collected_ts),
@@ -908,7 +1113,7 @@ async def run_social_metrics_batch(
     ]
     if not tg_enabled:
         diag.telegram = {"enabled": False, "targets_ready": len(tg_targets)}
-    elif not (os.getenv("SOCIAL_METRICS_TG_AUTH_BUNDLE") or "").strip():
+    elif not _popular_tg_auth_raw():
         # Never fall back to TELEGRAM_AUTH_BUNDLE_E2E/S22/TELEGRAM_SESSION.
         diag.telegram = {"enabled": False, "reason": "missing_dedicated_bundle", "targets_ready": len(tg_targets)}
     elif tg_targets:

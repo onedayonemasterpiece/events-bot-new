@@ -1186,6 +1186,7 @@ class SocialMetricSnapshot(SQLModel, table=True):
     publisher_id: str
     post_id: int
     age_bucket: str
+    publication_kind: str = "external_event_source"
     source_url: Optional[str] = None
     post_ts: Optional[int] = None
     collected_ts: int = Field(default_factory=lambda: int(utc_now().timestamp()))

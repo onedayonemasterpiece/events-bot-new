@@ -960,6 +960,48 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
             add(publication["live_url"])
     except sqlite3.OperationalError:
         pass
+    # @kenigevents also contains digests, polls and editorial posts. Include
+    # only exact event-forward ledgers, never arbitrary channel messages.
+    try:
+        for exposure in con.execute(
+            """
+            select details_json, public_targets_json
+            from promo_exposure
+            where event_id=? and surface='tg_repost' and publish_status='TG_FORWARDED'
+            """,
+            (event_id,),
+        ):
+            try:
+                details = json.loads(str(exposure["details_json"] or "{}"))
+            except (TypeError, ValueError):
+                details = {}
+            target_url = str(details.get("target_url") or "") if isinstance(details, dict) else ""
+            if re.search(r"(?:https?://)?t\.me/kenigevents/\d+", target_url, flags=re.I):
+                add(target_url)
+                continue
+            try:
+                public_targets = json.loads(str(exposure["public_targets_json"] or "[]"))
+            except (TypeError, ValueError):
+                public_targets = []
+            for target in public_targets if isinstance(public_targets, list) else []:
+                target_url = str(target.get("url") or "") if isinstance(target, dict) else ""
+                if re.search(r"(?:https?://)?t\.me/kenigevents/\d+", target_url, flags=re.I):
+                    add(target_url)
+    except sqlite3.OperationalError:
+        pass
+    try:
+        for forwarded in con.execute(
+            """
+            select poll_chat_id, forwarded_message_id
+            from poll_repost_run
+            where chosen_event_id=? and status='forwarded' and forwarded_message_id is not null
+            """,
+            (event_id,),
+        ):
+            if str(forwarded["poll_chat_id"] or "").strip().lstrip("@").lower() == "kenigevents":
+                add(f"https://t.me/kenigevents/{int(forwarded['forwarded_message_id'])}")
+    except sqlite3.OperationalError:
+        pass
     return urls
 
 
@@ -1016,6 +1058,7 @@ def popularity_signals(
 
     by_url: dict[str, dict[str, sqlite3.Row]] = defaultdict(dict)
     publishers: set[str] = set()
+    row_families: dict[tuple[str, str], str] = {}
     for row in rows:
         url = str(row["source_url"] or "")
         if not url:
@@ -1023,12 +1066,14 @@ def popularity_signals(
         by_url[url][str(row["age_bucket"])] = row
         platform = str(row["platform"] or "")
         publisher = str(row["publisher_id"] or "").lower()
-        if (platform == "telegram" and publisher == "kldevents") or (
-            platform == "vk" and publisher == "231920894"
+        if (platform == "telegram" and publisher in {"kldevents", "kenigevents"}) or (
+            platform == "vk" and publisher in {"231920894", "231828790"}
         ):
-            publishers.add("owned:kenigevents")
+            family = "owned:kenigevents"
         else:
-            publishers.add(f"{platform}:{publisher}")
+            family = f"{platform}:{publisher}"
+        publishers.add(family)
+        row_families[(url, str(row["age_bucket"]))] = family
 
     fast_growth = False
     latest_rows: list[sqlite3.Row] = []
@@ -1043,9 +1088,23 @@ def popularity_signals(
                 fast_growth = True
         latest_rows.append(max(bucket_rows.values(), key=lambda item: int(item["collected_ts"] or 0)))
 
-    total_views = sum(int(row["views"] or 0) for row in latest_rows)
-    total_shares = sum(int(row["shares"] or 0) for row in latest_rows)
-    total_comments = sum(int(row["comments"] or 0) for row in latest_rows)
+    # Original @kldevents post and its managed @kenigevents forward are one
+    # owned publisher family, not two independent sources. Use the strongest
+    # current counter in that family for reason thresholds instead of blindly
+    # summing an internally forwarded message twice.
+    family_totals: dict[str, dict[str, int]] = {}
+    for row in latest_rows:
+        family = row_families.get(
+            (str(row["source_url"] or ""), str(row["age_bucket"])),
+            f"{row['platform']}:{row['publisher_id']}",
+        )
+        current = family_totals.setdefault(family, {"views": 0, "shares": 0, "comments": 0})
+        current["views"] = max(current["views"], int(row["views"] or 0))
+        current["shares"] = max(current["shares"], int(row["shares"] or 0))
+        current["comments"] = max(current["comments"], int(row["comments"] or 0))
+    total_views = sum(item["views"] for item in family_totals.values())
+    total_shares = sum(item["shares"] for item in family_totals.values())
+    total_comments = sum(item["comments"] for item in family_totals.values())
     frequently_shared = total_shares >= 2 and (
         total_shares >= 5 or total_views <= 0 or total_shares / max(1, total_views) >= 0.003
     )

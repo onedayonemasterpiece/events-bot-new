@@ -1126,6 +1126,7 @@ class Database:
                     publisher_id TEXT NOT NULL,
                     post_id INTEGER NOT NULL,
                     age_bucket TEXT NOT NULL,
+                    publication_kind TEXT NOT NULL DEFAULT 'external_event_source',
                     source_url TEXT,
                     post_ts INTEGER,
                     collected_ts INTEGER NOT NULL,
@@ -1145,6 +1146,11 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_social_metric_url ON social_metric_snapshot(source_url, collected_ts)"
+            )
+            await _add_column(
+                conn,
+                "social_metric_snapshot",
+                "publication_kind TEXT NOT NULL DEFAULT 'external_event_source'",
             )
 
             dbg("guide_profile")

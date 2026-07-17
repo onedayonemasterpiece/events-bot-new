@@ -62,7 +62,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   `ENABLE_SOCIAL_METRICS_BATCH=1`, каждые
   `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES` (default `30`) собирает все due
   публикации пакетами. VK запросы идут по издателю чанками до 100 ID; Telegram
-  остаётся выключен, пока не заданы отдельные `SOCIAL_METRICS_TG_*` credentials.
+  остаётся выключен, пока не задана отдельная role-scoped сессия
+  `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR`. Reader использует bounded human-like
+  jitter, последовательные channel batches и не обращается к E2E/S22 sessions.
   Job не создаёт расписание на каждый пост и после простоя сам подбирает свежую
   допустимую точку `1h|6h|24h|72h`. Каноника данных и флагов:
   `docs/features/post-metrics/README.md`.

@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -209,7 +209,8 @@ async def test_telegram_requires_only_dedicated_bundle_and_never_borrows_other_s
     monkeypatch.setenv("ENABLE_SOCIAL_METRICS_BATCH", "1")
     monkeypatch.setenv("SOCIAL_METRICS_VK_ENABLED", "0")
     monkeypatch.setenv("SOCIAL_METRICS_TG_ENABLED", "1")
-    monkeypatch.delenv("SOCIAL_METRICS_TG_AUTH_BUNDLE", raising=False)
+    monkeypatch.delenv("TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR", raising=False)
+    monkeypatch.setenv("SOCIAL_METRICS_TG_AUTH_BUNDLE", "old-generic-must-not-be-used")
     monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_E2E", "must-not-be-used")
     monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_S22", "must-not-be-used")
 
@@ -257,7 +258,7 @@ async def test_telegram_batch_preserves_null_zero_forwards_and_reactions(tmp_pat
     monkeypatch.setenv("ENABLE_SOCIAL_METRICS_BATCH", "1")
     monkeypatch.setenv("SOCIAL_METRICS_VK_ENABLED", "0")
     monkeypatch.setenv("SOCIAL_METRICS_TG_ENABLED", "1")
-    monkeypatch.setenv("SOCIAL_METRICS_TG_AUTH_BUNDLE", bundle)
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR", bundle)
     result = await smb.run_social_metrics_batch(
         db,
         now_utc=NOW,
@@ -288,7 +289,138 @@ async def test_telegram_batch_preserves_null_zero_forwards_and_reactions(tmp_pat
     assert json.loads(snapshot[3]) == {}
     assert tuple(legacy[:3]) == (0, None, 4)
     assert json.loads(legacy[3]) == {}
+
+    called_again = False
+
+    async def too_early_fetcher(_targets):
+        nonlocal called_again
+        called_again = True
+        return {}
+
+    repeat = await smb.run_social_metrics_batch(
+        db,
+        now_utc=NOW + timedelta(minutes=30),
+        tg_fetcher=too_early_fetcher,
+        resolve_vk=False,
+    )
+    assert called_again is False
+    assert repeat["telegram"] == {"enabled": True, "targets": 0}
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_owned_telegram_targets_use_exact_event_forward_ledgers_only(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    message_ts = int(NOW.timestamp()) - 90 * 60
+    event = _event(1, tg_post_id=778)
+    event.tg_event_post_url = "https://t.me/c/3954607218/778"
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+    async with db.raw_conn() as conn:
+        await conn.execute("INSERT INTO telegram_source(username, title, enabled) VALUES('kldevents','Events',1)")
+        source_id = int((await (await conn.execute("SELECT id FROM telegram_source WHERE username='kldevents'")).fetchone())[0])
+        await conn.execute(
+            """
+            INSERT INTO telegram_post_metric(
+                source_id,message_id,age_day,source_url,message_ts,collected_ts,views,likes
+            ) VALUES(?,778,0,'https://t.me/kldevents/778',?,?,10,1)
+            """,
+            (source_id, message_ts, message_ts + 60),
+        )
+        await conn.execute("INSERT INTO promo_campaign(id,title,status) VALUES(1,'test','active')")
+        await conn.execute(
+            "INSERT INTO promo_activity(id,campaign_id,surface,enabled) VALUES(1,1,'tg_repost',1)"
+        )
+        await conn.execute(
+            """
+            INSERT INTO promo_exposure(
+                campaign_id,activity_id,event_id,surface,placement_kind,publish_status,
+                published_at,details_json
+            ) VALUES(1,1,1,'tg_repost','rolling_window_repost','TG_FORWARDED',?,?)
+            """,
+            (
+                (NOW - timedelta(minutes=80)).isoformat(),
+                json.dumps(
+                    {
+                        "source_url": "https://t.me/c/3954607218/778",
+                        "target_url": "https://t.me/kenigevents/900",
+                    }
+                ),
+            ),
+        )
+        await conn.execute(
+            """
+            INSERT INTO promo_exposure(
+                campaign_id,activity_id,event_id,surface,placement_kind,publish_status,
+                published_at,details_json
+            ) VALUES(1,1,1,'tg_repost','rolling_window_repost','TG_FORWARDED',?,?)
+            """,
+            (
+                NOW.isoformat(),
+                json.dumps(
+                    {
+                        "source_url": "https://t.me/c/3954607218/779",
+                        "target_url": "https://t.me/kenigevents/998",
+                    }
+                ),
+            ),
+        )
+        # A channel message with no exact kldevents -> kenigevents event-forward
+        # contract must not enter the metric target set.
+        await conn.execute(
+            """
+            INSERT INTO promo_exposure(
+                campaign_id,activity_id,event_id,surface,placement_kind,publish_status,
+                published_at,details_json
+            ) VALUES(1,1,1,'tg_repost','rolling_window_repost','TG_FORWARDED',?,?)
+            """,
+            (
+                NOW.isoformat(),
+                json.dumps(
+                    {
+                        "source_url": "https://t.me/another_channel/5",
+                        "target_url": "https://t.me/kenigevents/999",
+                    }
+                ),
+            ),
+        )
+        await conn.execute(
+            """
+            INSERT INTO poll_repost_run(
+                profile_key,run_key,status,target_event_date,poll_chat_id,poll_message_id,
+                chosen_event_id,reply_message_id,forwarded_message_id,updated_at
+            ) VALUES('popular','run-1','forwarded','2026-07-20','@kenigevents',800,1,850,901,?)
+            """,
+            ((NOW - timedelta(minutes=70)).isoformat(),),
+        )
+        await conn.commit()
+
+    targets = await smb.load_social_post_targets(db, now_utc=NOW)
+    own_tg = [target for target in targets if target.platform == "telegram" and target.owned]
+    assert [(target.publisher_id, target.post_id, target.publication_kind) for target in own_tg] == [
+        ("kenigevents", 900, "event_forward"),
+        ("kenigevents", 901, "event_forward"),
+        ("kldevents", 778, "event_announcement"),
+    ]
+    assert next(target for target in own_tg if target.post_id == 778).post_ts == message_ts
+    assert {target.post_id for target in own_tg}.isdisjoint({800, 850, 998, 999})
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_human_pause_uses_bounded_config_without_fake_actions(monkeypatch):
+    delays: list[float] = []
+
+    async def fake_sleep(seconds: float):
+        delays.append(seconds)
+
+    monkeypatch.setattr(smb.asyncio, "sleep", fake_sleep)
+    monkeypatch.setenv("SOCIAL_METRICS_TG_BETWEEN_REQUESTS_SECONDS", "1.25,1.25")
+    actual = await smb._human_pause("SOCIAL_METRICS_TG_BETWEEN_REQUESTS_SECONDS", (2.0, 5.0))
+    assert actual == 1.25
+    assert delays == [1.25]
 
 
 @pytest.mark.asyncio
@@ -406,6 +538,65 @@ def test_exporter_reads_telegram_forwards_and_builds_explainable_signals(tmp_pat
     reasons, score = exporter.popularity_signals(con, urls)
     assert reasons == ["fast_growth", "frequently_shared", "discussed", "multi_source"]
     assert score == 8.5
+    con.close()
+
+
+def test_exporter_maps_only_exact_managed_event_forwards_and_collapses_owned_family(tmp_path):
+    exporter = _load_exporter()
+    con = sqlite3.connect(tmp_path / "forward-export.sqlite")
+    con.row_factory = sqlite3.Row
+    con.executescript(
+        """
+        create table event_source(event_id integer, source_url text);
+        create table event_publication(
+            event_id integer, stored_url text, live_url text, status text
+        );
+        create table promo_exposure(
+            event_id integer, surface text, publish_status text,
+            details_json text, public_targets_json text
+        );
+        create table poll_repost_run(
+            chosen_event_id integer, status text, poll_chat_id text,
+            forwarded_message_id integer
+        );
+        create table social_metric_snapshot(
+            platform text, publisher_id text, post_id integer, age_bucket text,
+            source_url text, views integer, likes integer, comments integer,
+            shares integer, collected_ts integer, status text
+        );
+        insert into promo_exposure values(
+            1,'tg_repost','TG_FORWARDED',
+            '{"source_url":"https://t.me/kldevents/7","target_url":"https://t.me/kenigevents/70"}',
+            '[]'
+        );
+        insert into promo_exposure values(
+            1,'tg_repost','TG_FORWARDED',
+            '{"source_url":"https://t.me/other/8","target_url":"https://t.me/other/80"}',
+            '[]'
+        );
+        insert into poll_repost_run values(1,'forwarded','@kenigevents',71);
+        insert into poll_repost_run values(1,'forwarded','@other',72);
+        insert into social_metric_snapshot values(
+            'telegram','kldevents',7,'6h','https://t.me/kldevents/7',500,12,4,8,20,'collected'
+        );
+        insert into social_metric_snapshot values(
+            'telegram','kenigevents',70,'6h','https://t.me/kenigevents/70',450,10,3,7,20,'collected'
+        );
+        """
+    )
+    row = {
+        "source_post_url": None,
+        "source_vk_post_url": None,
+        "tg_event_post_url": "https://t.me/kldevents/7",
+    }
+    urls = exporter.collect_source_urls(con, 1, row)
+    assert urls == [
+        "https://t.me/kldevents/7",
+        "https://t.me/kenigevents/70",
+        "https://t.me/kenigevents/71",
+    ]
+    reasons, _score = exporter.popularity_signals(con, urls)
+    assert "multi_source" not in reasons
     con.close()
 
 
