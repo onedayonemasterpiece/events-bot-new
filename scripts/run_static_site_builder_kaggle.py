@@ -115,6 +115,15 @@ def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> 
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
 
 
+def resolve_build_template(value: str | None, build_id: str) -> str | None:
+    if not value:
+        return None
+    resolved = str(value).replace('{buildId}', build_id)
+    if '{' in resolved or '}' in resolved:
+        raise ValueError(f'unresolved build template: {value}')
+    return resolved
+
+
 def tar_site_source(site_dir: Path, archive_path: Path) -> None:
     def tar_filter(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
         parts = Path(info.name).parts
@@ -486,7 +495,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'limit': args.limit,
         'public_site_origin': args.public_site_origin,
         'asset_base_url': args.asset_base_url or None,
-        'astro_asset_base_url': args.astro_asset_base_url or None,
+        'astro_asset_base_url': resolve_build_template(args.astro_asset_base_url, build_id),
         'ics_base_url': args.ics_base_url or None,
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
         'public_personalization_supabase_publishable_key': args.public_personalization_supabase_publishable_key or None,

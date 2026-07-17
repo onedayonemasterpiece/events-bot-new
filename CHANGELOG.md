@@ -15,6 +15,9 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Secret candidate Astro assets**: keep candidate CSS/JS under the immutable
+  bearer prefix and resolve `{buildId}` for production asset templates; release
+  checks now reject unresolved or external candidate `_astro` references.
 - **Static event occurrence graph**: filter exported `other_date_ids` to mutual
   links inside the eligible immutable catalog, so past/ineligible occurrences
   cannot create dangling production-manifest edges.

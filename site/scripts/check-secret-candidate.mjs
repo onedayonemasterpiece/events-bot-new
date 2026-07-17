@@ -33,6 +33,7 @@ for (const event of eventsData.events) {
 }
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const html = source(file.key);
+  if (html.includes('{buildId}') || /https:\/\/static\.kenigevents\.ru\/[^"']*\/_astro\//u.test(html)) fail(`external or unresolved Astro asset prefix in ${file.key}`);
   if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive,nosnippet"/iu.test(html)) fail(`noindex policy missing ${file.key}`);
   if (!/<meta\s+name="referrer"\s+content="no-referrer"/iu.test(html)) fail(`no-referrer policy missing ${file.key}`);
   const internalAttributes = [...html.matchAll(/(?:href|src|data-card-href|data-share-url)="(\/[^"]*)"/gu)].map((match) => match[1]);
@@ -42,6 +43,8 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   }
   if (html.includes('https://static.kenigevents.ru/ics/') || /href="\/ics\//u.test(html)) fail(`stable ICS leaked ${file.key}`);
 }
+const eventHtml = source(`sobytiya/${eventsData.events[0].slug}/index.html`);
+if (!eventHtml.includes(`${basePath}/_astro/`)) fail('candidate Astro assets are not self-contained under the bearer prefix');
 if (!source('index.html').includes('data-secret-candidate-root-listing')) fail('candidate root is not production-family listing');
 const robots = source('robots.txt');
 if (robots !== 'User-agent: *\nDisallow: /\n') fail('candidate robots artifact must remain disallow');

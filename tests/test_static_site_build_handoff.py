@@ -115,3 +115,13 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
     assert _arg_after(cmd, "--repo-sha") == "a" * 40
     assert _arg_after(cmd, "--run-id").startswith("static-site:")
     assert _arg_after(cmd, "--candidate-token") == "A" * 43
+
+
+def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
+    from scripts.run_static_site_builder_kaggle import resolve_build_template
+
+    assert resolve_build_template(
+        "https://static.kenigevents.ru/{buildId}", "production-tested-1"
+    ) == "https://static.kenigevents.ru/production-tested-1"
+    with pytest.raises(ValueError, match="unresolved build template"):
+        resolve_build_template("https://static.kenigevents.ru/{unknown}", "production-tested-1")
