@@ -360,16 +360,20 @@ async def load_social_post_targets(
         # session is configured. Their post date is bootstrapped by Telegram later.
         cur = await conn.execute(
             f"""
-            SELECT e.tg_event_post_url, e.tg_event_post_id, MAX(m.message_ts)
+            SELECT e.tg_event_post_url, e.tg_event_post_id,
+                   COALESCE(MAX(m.message_ts), MAX(sm.post_ts))
             FROM event e
             LEFT JOIN telegram_source ts ON LOWER(ts.username)=LOWER(?)
             LEFT JOIN telegram_post_metric m
               ON m.source_id=ts.id AND m.message_id=e.tg_event_post_id
+            LEFT JOIN social_metric_snapshot sm
+              ON sm.platform='telegram' AND LOWER(sm.publisher_id)=LOWER(?)
+             AND sm.post_id=e.tg_event_post_id
             WHERE {active_sql}
               AND e.tg_event_post_id IS NOT NULL
             GROUP BY e.tg_event_post_url, e.tg_event_post_id
             """,
-            (event_channel, *active_params),
+            (event_channel, event_channel, *active_params),
         )
         for url, message_id, message_ts in await cur.fetchall():
             parsed = _parse_tg_url(str(url or ""))
@@ -475,21 +479,25 @@ async def load_social_post_targets(
 
         # Resolved own VK publications. post_ts comes from the compatibility table
         # when available; missing dates are bootstrapped by the first API batch.
+        group_id = abs(_env_int("VK_EVENTS_GROUP_ID", 231920894))
         cur = await conn.execute(
             f"""
-            SELECT p.live_url, p.live_post_id, MAX(m.post_ts)
+            SELECT p.live_url, p.live_post_id,
+                   COALESCE(MAX(m.post_ts), MAX(sm.post_ts))
             FROM event_publication p
             JOIN event e ON e.id=p.event_id
             LEFT JOIN vk_post_metric m
               ON m.group_id=? AND m.post_id=p.live_post_id
+            LEFT JOIN social_metric_snapshot sm
+              ON sm.platform='vk' AND sm.publisher_id=?
+             AND sm.post_id=p.live_post_id
             WHERE {active_sql}
               AND p.platform='vk' AND p.target=? AND p.status='published'
               AND p.live_post_id IS NOT NULL
             GROUP BY p.live_post_id
             """,
-            (abs(_env_int("VK_EVENTS_GROUP_ID", 231920894)), *active_params, OWN_VK_TARGET),
+            (group_id, str(group_id), *active_params, OWN_VK_TARGET),
         )
-        group_id = abs(_env_int("VK_EVENTS_GROUP_ID", 231920894))
         for url, post_id, post_ts in await cur.fetchall():
             targets.append(
                 SocialPostTarget(
@@ -1173,13 +1181,15 @@ async def build_social_metrics_manifest(
     targets = await load_social_post_targets(db, now_utc=now)
     rows: list[dict[str, Any]] = []
     for target in targets:
+        terminal = terminal_map.get(target.key, set())
         bucket, _ = _due_plan(
             post_ts=target.post_ts,
             now_ts=now_ts,
-            terminal_buckets=terminal_map.get(target.key, set()),
+            terminal_buckets=terminal,
         )
-        # Unknown provider timestamps need one exact-ID read to bootstrap age.
-        if bucket or target.post_ts is None:
+        # Unknown provider timestamps need one exact-ID read to bootstrap age,
+        # but a target with any terminal snapshot has already been observed.
+        if bucket or (target.post_ts is None and not terminal):
             rows.append(_target_manifest_row(target))
     rows.sort(key=lambda row: (row["platform"], row["publisher_id"], row["post_id"]))
     candidates = await load_owned_vk_resolution_candidates(db, now_utc=now)

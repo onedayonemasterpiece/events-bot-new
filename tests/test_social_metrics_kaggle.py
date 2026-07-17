@@ -93,6 +93,12 @@ async def test_manifest_is_exact_id_only_and_import_recomputes_buckets(tmp_path)
     # Re-importing a downloaded artifact performs no second bucket write.
     repeated = await smb.import_social_metrics_result(db, manifest=manifest, result=result)
     assert repeated == {"collected": 0, "not_found": 0, "error": 0, "skipped_late": 0}
+    settled = await smb.build_social_metrics_manifest(
+        db,
+        run_id="social-metrics:settled",
+        now_utc=datetime.fromtimestamp(observed, tz=timezone.utc),
+    )
+    assert settled["targets"] == []
     await db.close()
 
 
