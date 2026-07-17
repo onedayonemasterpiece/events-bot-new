@@ -314,6 +314,10 @@ features:
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
+    service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
+    service_sharing_desktop_clipboard_manual_matrix: docs/features/static-site-pages/service-sharing-desktop-clipboard-manual-matrix.md
+    service_sharing_preview_runbook: docs/operations/service-sharing-preview.md
     image_framing: docs/features/static-site-pages/image-framing.md
     event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
     bus_transport_directory: docs/features/static-site-pages/bus-transport-directory.md
@@ -326,6 +330,11 @@ features:
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
+    event_desktop_media_families_2026_07_12: docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md
+    event_mobile_ui_lab_2026_07_15: docs/features/static-site-pages/event-mobile-ui-lab-2026-07-15.md
+    event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
+    bus_transport_directory: docs/features/static-site-pages/bus-transport-directory.md
+    rail_multimodal_directory: docs/features/static-site-pages/rail-multimodal-directory.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py

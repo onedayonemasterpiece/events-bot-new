@@ -1,6 +1,6 @@
 {
   "schemaVersion": "organizer_medallion_assets_v1",
-  "generatedAt": "2026-07-02T00:00:00Z",
+  "generatedAt": "2026-07-16T00:00:00Z",
   "usage": "Event-detail organizer medallions. SVG is preferred when source/vectorization allows; WebP is the browser primary for raster-only sources, with PNG fallback for QA/older clients.",
   "items": [
     {
@@ -321,6 +321,59 @@
       "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
       "retrievedAt": "2026-07-02",
       "assetFormat": "webp-source-only"
+    },
+    {
+      "slug": "kaup",
+      "name": "Поселение викингов «Кауп»",
+      "shortName": "Кауп",
+      "aliases": [
+        "Поселение викингов Кауп",
+        "поселение викингов «Кауп»",
+        "Кауп",
+        "kaup39.ru",
+        "nightkaup.ru"
+      ],
+      "sourcePage": "https://www.kaup39.ru/",
+      "sourceUrl": "https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg",
+      "sourceFile": "kaup-logo.svg",
+      "background": "#26372D",
+      "ring": "#B9A06A",
+      "ariaLabel": "Локация и бренд: поселение викингов «Кауп»",
+      "renderNote": "Официальный знак площадки «Кауп» возвращён в общий runtime-манифест как venue-brand; совпадение выполняется по нормализованным алиасам площадки/источника.",
+      "avatarUrl": "/assets/festivals/kaup.svg",
+      "sourcePath": "site/src/assets/organizers/source/kaup-logo.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg",
+      "category": "venue_brand"
+    },
+    {
+      "slug": "dramteatr39",
+      "name": "Калининградский драматический театр",
+      "shortName": "Драмтеатр",
+      "aliases": [
+        "Драматический театр",
+        "Драмтеатр",
+        "Калининградский драматический театр",
+        "Калининградский областной драматический театр",
+        "dramteatr39",
+        "dramteatr39.ru"
+      ],
+      "sourcePage": "https://dramteatr39.ru/",
+      "sourceUrl": "https://dramteatr39.ru/img/logo.svg?v=2",
+      "sourceFile": "dramteatr39.logo.svg",
+      "background": "#8F151B",
+      "ring": "#F4EEE4",
+      "logoCrop": "left-emblem-from-official-horizontal-svg",
+      "fitBox": [
+        370,
+        370
+      ],
+      "ariaLabel": "Площадка: Калининградский драматический театр",
+      "renderNote": "Официальный горизонтальный SVG-логотип масштабирован и кругом обрезан до левого театрального знака, чтобы медальон был читаемым на мобильном размере; текстовая часть намеренно выведена за круг.",
+      "avatarUrl": "/assets/organizers/dramteatr39.svg",
+      "sourcePath": "site/src/assets/organizers/source/dramteatr39.logo.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-svg-cropped"
     }
   ]
 }

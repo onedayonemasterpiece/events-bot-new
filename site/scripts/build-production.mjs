@@ -13,6 +13,7 @@ const distDir = join(siteDir, 'dist');
 const catalogPath = join(siteDir, 'src/data/production-catalog.json');
 const eventsPath = join(siteDir, 'src/data/preview-events.json');
 const relatedPath = join(siteDir, 'src/data/preview-related.json');
+const templateContractPath = join(siteDir, 'src/data/eventTemplateContract.json');
 const manifestPath = join(distDir, 'static-release-manifest.json');
 const buildPath = join(distDir, 'production-build.json');
 
@@ -71,6 +72,9 @@ writeFileSync(join(distDir, 'index.html'), rootHtml);
 
 const eventsData = JSON.parse(readFileSync(eventsPath, 'utf8'));
 const relatedData = JSON.parse(readFileSync(relatedPath, 'utf8'));
+const templateContract = JSON.parse(readFileSync(templateContractPath, 'utf8'));
+const desktopContract = spawnSync(process.execPath, [join(siteDir, 'scripts/check-production-desktop-contract.mjs')], { cwd: siteDir, env, stdio: 'inherit' });
+if (desktopContract.status !== 0) process.exit(desktopContract.status || 1);
 const buildMetadata = {
   schema_version: 'static_production_build_v2', site_mode: 'production', publication_mode: 'artifact_only',
   build_id: buildId, run_id: runId, repo_sha: repoSha, generated_at: new Date().toISOString(),
@@ -99,7 +103,10 @@ const manifest = {
     sha256: sha256(readFileSync(catalogPath)), eligible_count: catalog.eligible_count, excluded_count: catalog.excluded_count,
   },
   versions: {
-    exporter: 'prod-sqlite-static-site-export-v2', template: 'astro-static-event-v2',
+    exporter: 'prod-sqlite-static-site-export-v2',
+    template: templateContract.contract_id,
+    template_source_sha: templateContract.accepted_source_sha,
+    template_contract_schema: templateContract.schema_version,
     related: relatedData.schema_version || relatedData.algorithm || null,
     transport: 'event-transport-projection-v1', media: 'event-media-role-v1', age: 'event-age-projection-v1', occurrence: 'linked-event-ids-v1',
     transport_timetable_experiment: {
@@ -111,7 +118,7 @@ const manifest = {
   },
   counts, tree_sha256: treeHash(files), files, stable_ics: stableIcs,
   checks: {
-    astro_build: 'ok', production_contract: 'pending', catalog_parity: 'pending', fixture_isolation: 'pending',
+    astro_build: 'ok', template_matrix: 'ok', production_contract: 'pending', catalog_parity: 'pending', fixture_isolation: 'pending',
     canonical_and_indexing: 'pending', tree_hashes: 'pending', related_freshness: relatedData.strict_verified_related ? 'verified' : 'optional_degraded',
   },
   intended_immutable_release_prefix: `_static/releases/${buildId}/root`, previous_release: null, rollback_release: null,

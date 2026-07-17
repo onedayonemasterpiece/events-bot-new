@@ -99,6 +99,20 @@ Telegram Saved Messages; первая candidate, на которой browser gat
 unresolved external Astro asset prefix, отозвана полностью (`994` objects,
 remaining `0`) до handoff. Production root/current promotion не выполнялась.
 
+Replacement template-parity run on 2026-07-17 uses pushed SHA
+`0fcc92223790f293b2f12137f3a99754ba2f30e1`, snapshot
+`snapshot-20260717t-template-parity-v11` (`quick_check=ok`, SHA-256
+`3105191211ed79a3e34284c8d4c01a4e5631b6adbb62512035b0f00ef120d443`,
+`263548928` bytes) and build
+`production-20260717t-template-parity-v11-kaggle-v2`. It generated `307`
+event pages / `1119` files, pinned `static-event-detail-v11`, passed production
+and secret checks, and published `1120` create-only candidate objects. Public
+Playwright passed `30/30` representative page/viewport combinations covering
+all production media families plus phone CTA and three transport treatments.
+The obsolete wrong-template candidate was revoked (`994` objects, remaining
+`0`, public HTTP `404`). The replacement bearer token remains outside Git;
+production root stayed byte-identical and root promotion remained disabled.
+
 
 На базе среза до этой реализации общий event-page контур был preview-only. Ниже
 сохранён исходный audit gap как regression context:

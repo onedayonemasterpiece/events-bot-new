@@ -1,11 +1,22 @@
 # Static Site Event Pages
 
-> **Status:** checked production/root-form and immutable secret-candidate pipeline implemented; production-root promotion remains blocked/disabled
+> **Status:** accepted v11 event-page template matrix integrated with the checked Smart Update/Kaggle secret-candidate pipeline; root promotion remains blocked/disabled
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
 ## Implementation status
+
+`static-event-detail-v11` is the mandatory event-detail template contract for
+automatic and on-demand builds. Its accepted baseline is source SHA
+`3b17e536e4dffa9c9fcebab6e641a7cd4ba99b6a`; the current build SHA may advance,
+but every event HTML and release manifest must retain that contract identity.
+The gate covers the complete desktop lab matrix, not three hand-picked pages:
+horizontal photo, horizontal photo plus OCR companion, OCR/document contain,
+portrait series, low-resolution and quality-fallback combinations. The same
+`buildDesktopEventPresentation()` router is used for preview, checked
+production artifacts and secret candidates. A build that falls back to the
+legacy `EventHero + event-grid` desktop DOM fails closed.
 
 В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит
 статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
@@ -22,6 +33,79 @@ checked root-form artifact, загружается create-only и никогда
 после отключения anonymous bucket listing; она не является авторизацией и может
 быть переслана получателем.
 
+### 2026-07-15 replacement production integration candidate
+
+`preview-20260715t-production-desktop-contract-v2` is the replacement noindex
+review surface. Unlike the rejected v1 build, every generated desktop event
+route mounts the **same** `DesktopEventPage.astro` implementation used by the
+accepted laboratory scenarios; there is no legacy `EventHero + event-grid`
+desktop imitation. A geometry- and semantic-state-aware router selects only
+the accepted Continuous Editorial or Split family. Portrait and
+resolution-constrained media fail to Split; only a classified
+`event_identity_poster` can create an OCR companion. The unchanged mobile v4
+DOM is retained as a separate breakpoint surface. Rail/bus transport is added
+inside the accepted long reading flow rather than replacing its composition.
+
+The source snapshot contains `282` public future or ongoing events. The
+mandatory gate checks all `282` generated routes and pins four real specimens:
+Pianissimo `5294` (low-resolution Split), Blogger bus `6815` (portrait Split),
+«Гараж» `5658` (Continuous Editorial) and «Эпидемия» `4671` (Editorial with a
+classified poster companion).
+
+- index: <https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/__preview/>;
+- [Pianissimo](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294/);
+- [Блогерский автобус](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815/);
+- [«Гараж»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/spektakl-garazh-kaliningrad-5658/);
+- [«Эпидемия. Огненная рукопись»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/epidemiya-ognennaya-rukopis-kaliningrad-4671/).
+
+`preview-20260715t-production-transport-mobile-real-events-v1` is rejected by
+`INC-2026-07-15-static-desktop-template-regression`: it rendered the legacy
+production desktop DOM with approximation CSS, routed a `180×320` image into a
+full-width hero, and was never reviewed by Gemini against the mass-generated
+URLs. It must not be cited as desktop acceptance evidence.
+
+The offline related graph is `event_pgvector_related_chain_v2_two_doc`: all
+`282` anchors have `40` current candidates, no dangling ids, and the refresh
+reused `564` unchanged embeddings with `0` provider calls. Browser page views
+still consume only same-origin static discovery JSON. The replacement local
+acceptance covers the whole `282/282` catalog with no page errors, plus a
+`4 events × 3 viewports` (`1536×864`, `1920×1080`, `1440×650`) matrix with
+visible H1/CTA, action-panel child geometry and zero horizontal overflow.
+Phone variants must prove a one-line number and every calendar/share/like
+control inside the graphite panel; text presence alone is not acceptance.
+Interaction checks cover exact
+gallery indices, classified-poster opening, idle autorotation, CTA safe
+release, immutable thumbnail derivatives and both transport types. Public HTTP
+is `200` for the preview index, four pinned events and both transport examples;
+the public `4 × 3` matrix is `12/12` and the exact interaction suite has no
+failures. Gemini 3.1 Pro's direct browser attempt was correctly recorded as
+`BLOCKED` after its isolated Chromium crashed. It was not mislabeled as a pass;
+the follow-up screenshot-based review inspected exact public Playwright
+captures and evidence JSON and returned `ACCEPT`.
+
+This is a prefix-only review release. It does not promote or delete the
+production root and does not modify stable `/p/` media or `/ics/` calendars.
+Automatic root promotion remains the release-protocol gate.
+
+Mobile event-detail UI был отработан в контролируемом preview lab: четыре исходных
+варианта образуют матрицу `current/open prose × current/grouped actions`,
+`accepted-v2` сохраняет первый исправленный проход, `accepted-v3` — первый
+Android feedback, а `accepted-v4` фиксирует поправку владельца: сохраняет
+принятую weekday/date/time hierarchy, возвращает OCR-parallax без zoom и
+layout gap, упрощает selected-like до терракотовой заливки и белого solid
+heart и вводит явный вертикальный ритм между информационными поверхностями.
+V4 перенесён в общий integration preview; бирка, discovery cards и sticky CTA
+намеренно зафиксированы. Канонический scope
+и acceptance gate:
+[`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).
+
+В `events-bot-new` есть **Astro SSG production-integration preview** в `site/`:
+он строит статические страницы полного текущего публичного каталога,
+`event.ics`, transport ICS, `sitemap.xml`, `robots.txt` и публикуется под
+noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout:
+canonical остаётся preview-safe, а корневые production URL
+`/sobytiya/<slug>/` не продвигаются автоматически.
+
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
 `media_role`, semantic status/confidence, dimensions, focal metadata и
@@ -36,6 +120,13 @@ Event gallery media имеет отдельный fail-closed CDN contract: expo
 не откатывается к `catbox_url`, source CDN, Supabase или legacy bucket. Silent
 rows исключаются тем же static predicate; продолжающиеся события остаются
 eligible по `end_date`.
+
+Footer service share использует отдельный от event-share контракт: на mobile —
+одна system-share action, на desktop — независимые `image/png` и plain-text +
+canonical URL intents. Каноника: [service-sharing.md](service-sharing.md),
+[desktop clipboard research](service-sharing-desktop-clipboard-research.md),
+[manual matrix](service-sharing-desktop-clipboard-manual-matrix.md) и
+[preview runbook](../../operations/service-sharing-preview.md).
 
 
 
@@ -116,9 +207,16 @@ Current v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 product
 - media CDN verification: `957` active legacy `/p/...` keys from `kenigevents` are present in `kenigevents.ru`; sample CDN image and `https://static.kenigevents.ru/ics/5878.ics` return `200`; rendered v44 HTML contains CDN `/p/...` and stable `/ics/...` links, not raw legacy image URLs.
 - media CDN verification: `957` active legacy `/p/...` keys from `kenigevents` are present in `kenigevents.ru`, sample CDN image and `https://static.kenigevents.ru/ics/5878.ics` return `200`; rendered v44 HTML contains CDN `/p/...` and stable `/ics/...` links, not raw legacy image URLs.
 
-Preview `v39` keeps the consultant P0 hardening, explicit discovery feedback and feed-card comparison, and adds the current UI/data refinements: the mobile brand tag removes the rejected icon and keeps only a subtle periodic title sway; the fullscreen gallery uses a slower/farther `38%→64%` pan and advances before the pan fully stops; `Фото события` and the event title are forced onto separate caption lines; `Пушкинская карта` is rendered as a green check property, not a text value; admission/free states use compact property labels instead of bare `Бесплатно`; and the desktop event nav no longer exposes `Sitemap`. It also keeps date-listing/navigation refinements: `/segodnya/` is grouped into `Утро / День / Вечер / Ночь`, `/zavtra/` exists as a separate tomorrow page with the same sections, date-listing cards use a compact mobile plaque with a cropped left photo column and a straight separator to the text column, and list cards no longer expose mass external ticket/source links; users go through the internal event page first. The mobile discovery drawer handle no longer shows the icon; it uses only a subtle title sway in the site palette. Preview `v39` also hardens the event hero into a stronger mobile-first surface: the hero **image itself** is guarded by preview checks at bbox-style full-width contract (`x=0,width=viewport`) with no layout side gutters; the normal mobile header is replaced over the hero by a TASS-like terracotta drawer handle (`Полюбить Калининград / Анонсы`). Tapping it opens a no-JS `<details>` discovery drawer implemented as one monolithic sliding object: the full-width navigation rail and handle move together, overlap by a few pixels, have no transitional gap, no chevron/up-down icon, no rounded dropdown panel and no pill-buttons inside the rail. Visual-only hero variants use stable `svh` sizing plus constant-scale vertical parallax so mobile browser chrome changes should not cause a post-scroll scale jump. The current event page itself exposes first-party like/unlike with the honest aggregate like count, and share counters are present but stay empty when the total is zero. Feed cards use `split-actions` as the baseline, not an A/B on normal event pages: `Поделиться` is clustered near the right-thumb like action below the card, while `Не интересно` is demoted to a quieter utility action. The fullscreen hero viewer now uses a visible on-image photo CTA (`Фото N` when multiple images exist), lazy-hydrates gallery images from `data-gallery-src` only after opening/navigating, uses full-viewport-height `cover` + one-way right-to-left auto-pan for `visual_only` photos to avoid black side fields, auto-advances to the next photo after the pan, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in the base `contain` mode, keeps the service tag visible in the gallery, and places the event title in a readable bottom stripe. JSON-LD offer `validFrom` is emitted as ISO 8601 with timezone and JSON-LD `image[]` includes the event gallery assets so lazy images remain connected to the event for SEO/GEO. The historical comparison is in `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`; hero decisions are in `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`. The inherited v32 interaction/SEO hardening remains: in fullscreen gallery the service tag is a real top-flush navigation link, not a floating label; visual-photo pan starts at `38%` and moves to `64%` over `17.9s`, which gives a slower/farther right-to-left image motion; manual backward motion uses `64% → 38%`; the event title in the fullscreen viewer uses inline/subline stripes via `box-decoration-break`, not a full-width bottom slab. Event cards now place the title before time/status meta because the feed scan task starts from “what is this?”, then date/conditions; service controls (`Не интересно`, share, like/undo plate) are marked `data-nosnippet` and remain buttons, not crawlable links. Phone-only CTAs use a selected SVG Repo handset-with-ringing-arcs phone icon (`533283/phone-call`) adapted into the shared inline icon system.
+Preview `v39` keeps the consultant P0 hardening, explicit discovery feedback and feed-card comparison, and adds the current UI/data refinements: the mobile brand tag removes the rejected icon and keeps only a subtle periodic title sway; the fullscreen gallery uses a slower/farther `38%→64%` pan and advances before the pan fully stops; `Фото события` and the event title are forced onto separate caption lines; `Пушкинская карта` is rendered as a green check property, not a text value; admission/free states use compact property labels instead of bare `Бесплатно`; and the desktop event nav no longer exposes `Sitemap`. It also keeps date-listing/navigation refinements: `/segodnya/` is grouped into `Утро / День / Вечер / Ночь`, `/zavtra/` exists as a separate tomorrow page with the same sections, date-listing cards use a compact mobile plaque with a cropped left photo column and a straight separator to the text column, and list cards no longer expose mass external ticket/source links; users go through the internal event page first. The mobile discovery drawer handle no longer shows the icon; it uses only a subtle title sway in the site palette. Preview `v39` also hardens the event hero into a stronger mobile-first surface: the hero **image itself** is guarded by preview checks at bbox-style full-width contract (`x=0,width=viewport`) with no layout side gutters; the normal mobile header is replaced over the hero by a TASS-like terracotta drawer handle (`Полюбить Калининград / Анонсы`). Tapping it opens a no-JS `<details>` discovery drawer implemented as one monolithic sliding object: the full-width navigation rail and handle move together, overlap by a few pixels, have no transitional gap, no chevron/up-down icon, no rounded dropdown panel and no pill-buttons inside the rail. Visual-only hero variants use stable `svh` sizing plus constant-scale vertical parallax so mobile browser chrome changes should not cause a post-scroll scale jump. The current event page itself exposes first-party like/unlike with the honest aggregate like count, and share counters are present but stay empty when the total is zero. Feed cards use `split-actions` as the baseline, not an A/B on normal event pages: `Поделиться` is clustered near the right-thumb like action below the card, while `Не интересно` is demoted to a quieter utility action. The fullscreen hero viewer now uses a visible on-image photo CTA (`Фото N` when multiple images exist), lazy-hydrates gallery images from `data-gallery-src` only after opening/navigating, uses full-viewport-height `cover` + one-way right-to-left auto-pan for `visual_only` photos to avoid black side fields, auto-advances to the next photo after the pan, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in the base `contain` mode, keeps the service tag visible in the gallery, and places the event title in a readable bottom stripe. JSON-LD offer `validFrom` is emitted as ISO 8601 with timezone and JSON-LD `image[]` includes the event gallery assets so lazy images remain connected to the event for SEO/GEO. The historical comparison is in `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`; hero decisions are in `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`. The inherited v32 interaction/SEO hardening remains: in fullscreen gallery the service tag is a real top-flush navigation link, not a floating label; visual-photo pan starts at `38%` and moves to `64%` over `17.9s`, which gives a slower/farther right-to-left image motion; manual backward motion uses `64% → 38%`; the event title in the fullscreen viewer uses inline/subline stripes via `box-decoration-break`, not a full-width bottom slab. Event cards now place the title before time/status meta because the feed scan task starts from “what is this?”, then date/conditions; service controls (`Не интересно`, share, like/undo plate) are marked `data-nosnippet` and remain buttons, not crawlable links. Phone-only desktop CTAs keep the branded primary button, use the shared copy icon instead of a redundant phone pictogram, reveal the number on click, copy it to the clipboard and announce success without adding a layout-shifting helper row.
 
-Other v39 contracts remain: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, native-share-first button, transparent terracotta wide-«о» tag favicon, prefetch for static links, and sticky CTA hiding while the hero is visible and again when the user reaches the feed. The after-hero drawer handle remains visible when closed so navigation is never lost while scrolling; the monolithic root transform keeps the panel off-screen and only the handle protrudes. Current media rule: only the explicit LLM-authored `event_photo` role may use a cover frame in discovery cards; OCR, missing/unknown roles and legacy `visual_only` render width-fit without horizontal crop. Compact date-listing thumbnails remain a separate navigation-preview exception. Desktop event detail uses the continuous Editorial composition for a classified photo hero and a split/contained fallback for documents; a dedicated companion is reserved for strict `event_identity_poster`. There is no crop for OCR, no duplicate underlay, no blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
+Other v39 contracts remain: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, native-share-first button, transparent terracotta wide-«о» tag favicon, prefetch for static links, and sticky CTA hiding while the hero is visible and again when the user reaches the feed. The after-hero drawer handle remains visible when closed so navigation is never lost while scrolling; the monolithic root transform keeps the panel off-screen and only the handle protrudes. Current media rule: only the explicit LLM-authored `event_photo` role may use a cover frame in discovery cards; OCR, missing/unknown roles and legacy `visual_only` render width-fit without horizontal crop. Compact date-listing thumbnails remain a separate navigation-preview exception. Desktop event detail uses the continuous Editorial composition for a strong
+`visual_only` landscape and a split/contained fallback for documents; a
+dedicated companion remains reserved for strict `event_identity_poster`.
+Within the detail hero/fullscreen gallery a positive `visual_only` result is
+the display crop boundary even while asynchronous `media_role` enrichment is
+pending: ordinary photos use bounded `cover`, while OCR/unknown-text documents
+and positively classified non-photo documents use `contain`. There is no crop for OCR, no duplicate underlay, no
+blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
 
 Preview `v40` closes the share experiment: temporary `Поделиться эксперимент`, `Поделиться эксперимент 2` and rich-clipboard controls are not production UI. The single visible `Поделиться` button is now the production baseline: it attempts Web Share with image file + plain text + URL, then falls back to generated 1080×1350 image + text + URL, and finally to text/URL copy when the browser or target app cannot accept files. Rich hidden hyperlinks inside share text are documented as impossible to guarantee from a mobile browser.
 
@@ -204,7 +302,13 @@ Smart Update / image preparation must enrich image assets in batch/offline, not 
 - `focal_point` / `recommended_object_position` in normalized 0..1 coordinates or CSS object-position form;
 - `safe_crop` / crop guards: do not crop OCR text, and do not cut detected faces, especially top face bounds.
 
-Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, with face/focal metadata when available. `ocr_text`, missing roles, `unknown_document`, `unknown_visual`, and legacy `visual_only` remain contain/natural/width-fit with no horizontal crop. If safe face-aware cover is impossible, renderer falls back to contain/natural presentation rather than cutting heads or important text.
+Runtime policy is surface-specific. Discovery cards remain role-first: only an
+explicit LLM-authored `event_photo` may use cover there. The event-detail hero
+and fullscreen gallery also have direct OCR evidence, so `visual_only` is a
+positive permission for bounded photo cover even if `media_role` is still
+pending; `ocr_text`/`unknown` and a positively classified non-photo document remain contain. Reviewed focal metadata controls
+`object-position` when present. If OCR or face/crop evidence makes cover unsafe,
+the renderer falls back to contain/natural rather than cutting text or faces.
 
 ## Цель продукта
 

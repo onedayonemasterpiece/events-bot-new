@@ -8,6 +8,16 @@
 2. Для “быстрого роутинга” используй `docs/routes.yml` (машиночитаемая карта).
 3. Для задач по E2E всегда сверяйся с `docs/operations/e2e-scenarios.md` и поддерживай этот индекс актуальным при изменении сценариев.
 4. Для задач по инцидентам или при упоминании `INC-*` сразу открывай `docs/operations/incident-management.md` и `docs/reports/incidents/README.md`.
+
+## Task-channel execution contract (critical)
+
+- Если пользователь назначил Telegram topic/chat или другой внешний канал каналом задачи, обратной связи или приёмки, новый actionable-комментарий в нём считается продолжением текущей задачи, а не запросом на подтверждение получения.
+- Нельзя отправлять acknowledgement-only/status-only сообщения и завершать ход после чтения неблокирующего feedback. В том же активном ходе нужно довести итерацию по цепочке: `прочитать feedback → обновить acceptance checklist → реализовать → проверить → опубликовать запрошенный preview/artifact → отправить один acceptance handoff`.
+- Acceptance handoff должен содержать проверенные публичные ссылки/артефакты, краткое соответствие изменениям из feedback, результат проверок и только вопросы, требующие продуктового решения. Обещание «следующую версию отправлю» не является результатом и не может быть terminal response.
+- Промежуточное сообщение допустимо только при реальном blocker, требующем действия/согласия пользователя: отсутствующее разрешение/секрет, destructive или paid step, либо неустранимая неоднозначность, меняющая scope. В одном сообщении укажи blocker evidence и точное требуемое действие; не проси пользователя отдельно «запустить» продолжение после неблокирующего checkpoint.
+- Когда активный ход читает следующую порцию corrective feedback после handoff, он запускает следующую полную итерацию; подтверждение получения включается в новый результат, а не отправляется отдельно.
+- Это правило не означает фоновый polling: не обещай always-on мониторинг внешнего канала, если отдельный watcher действительно не настроен.
+- Для preview-задач `publish` означает новый изолированный noindex preview/artifact, а не production promotion. Production/destructive публикация остаётся под release/consent gates.
 5. Для задач про фестивальный мониторинг, фестивальную очередь, `/start` → «Добавить событие» в связке с публикациями, или VK-посты фестивалей сразу открывай `docs/backlog/features/festival-monitoring-debt/README.md` и regression record `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
 6. Для production Telegram UI E2E (`@events_love39_bot`, `/tg`, `/vk_auto_import`, `/fest_queue`, live button checks) используй project skill `prod-telegram-e2e` и секцию `Production Telegram UI E2E` в `docs/operations/e2e-testing.md`.
 7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.

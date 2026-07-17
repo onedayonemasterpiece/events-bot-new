@@ -46,6 +46,23 @@ CDN, Supabase и legacy bucket не могут быть renderer fallback.
 решения. Это и есть prevention contract; обещание «в БД никогда не появится
 вторая строка» было бы неверным и уничтожало бы provenance.
 
+### Legacy approved-versus-approved debt
+
+The automatic frontier compares a new/pending candidate with approved media; it
+does not silently reconsider every historical approved pair on each Smart
+Update. Event `4671` exposed why this distinction matters: rows `7824` and
+`8622` were both approved before the current pair-review gate, although `8622`
+is a cropped/overlay variant of the canonical poster `7824`. Renderers only
+collapse identical URLs and correctly refused to make a new semantic decision.
+
+The narrow incident repair therefore backed up both the event and EventPoster
+rows, marked `8622` as `duplicate` of `7824`, rebuilt the approved projection and
+verified the Telegraph page. Prevention requires a bounded, auditable
+approved-versus-approved historical reconciliation batch through the same VLM
+pair schema; adding a broad pHash threshold or renderer-side crop heuristic is
+explicitly forbidden. Regression contract:
+`INC-2026-07-16-static-event-media-action-regressions`.
+
 ## Где поступают новые изображения
 
 Все production paths сходятся в `_apply_posters()` Smart Update или его тонкий

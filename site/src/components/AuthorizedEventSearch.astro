@@ -390,6 +390,11 @@ const HeadingTag = headingLevel;
       return 'Поиск сейчас не сработал. Попробуйте ещё раз чуть позже.';
     }
 
+    function currentPreviewEventUrl(value, absolute = false) {
+      const normalize = window.KenigEventsNormalizeInternalEventUrl;
+      return typeof normalize === 'function' ? normalize(value, { absolute }) : value;
+    }
+
     function renderCards(items, rankBase = offset) {
       const renderer = window.KenigEventsRenderEventCard;
       if (typeof renderer === 'function') {
@@ -397,7 +402,7 @@ const HeadingTag = headingLevel;
       }
       return items.map((candidate) => {
         const display = candidate.display || candidate;
-        const href = display.href || candidate.href || '#';
+        const href = currentPreviewEventUrl(display.href || candidate.href || '#');
         const title = display.title || candidate.title || 'Событие';
         return `<article class="event-card event-card--split-actions" data-event-card data-event-id="${String(candidate.event_id || candidate.id || '')}" data-event-title="${escapeHtml(title)}" data-card-href="${escapeHtml(href)}" tabindex="0"><div class="event-card__body"><a class="event-card__title" href="${escapeHtml(href)}">${escapeHtml(title)}</a><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(display.display_date_time || '')}</span></div></div></article>`;
       }).join('');
@@ -408,7 +413,7 @@ const HeadingTag = headingLevel;
       return {
         id: candidate?.event_id || candidate?.id || display.event_id || display.id || '',
         title: display.title || candidate?.title || 'Событие',
-        href: display.href || candidate?.href || '#',
+        href: currentPreviewEventUrl(display.href || candidate?.href || '#'),
         date: display.display_date_time || display.display_date || candidate?.display_date_time || '',
         place: display.place || display.venue_name || candidate?.venue_name || candidate?.city || '',
         type: display.event_type || candidate?.event_type || candidate?.category || 'вариант',

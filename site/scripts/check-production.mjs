@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
+import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
@@ -24,6 +25,12 @@ if (manifest.build_id !== build.build_id || manifest.run_id !== build.run_id || 
 if (process.env.PRODUCTION_BUILD_ID && manifest.build_id !== process.env.PRODUCTION_BUILD_ID) fail('build id differs from requested id');
 validateCatalogLedger(catalogData, { repo_sha: manifest.repo_sha, run_id: manifest.run_id, build_id: manifest.build_id, 'snapshot.sha256': manifest.snapshot.sha256 });
 if (manifest.catalog.sha256 !== sha256(readFileSync(join(siteDir, 'src/data/production-catalog.json')))) fail('catalog ledger hash mismatch');
+if (
+  manifest.versions?.template !== templateContract.contract_id
+  || manifest.versions?.template_source_sha !== templateContract.accepted_source_sha
+  || manifest.versions?.template_contract_schema !== templateContract.schema_version
+  || manifest.checks?.template_matrix !== 'ok'
+) fail('accepted v11 template contract is not pinned in the checked manifest');
 
 const files = fileInventory(root, { exclude: ['static-release-manifest.json'] });
 const manifestByKey = new Map(manifest.files.map((file) => [file.key, file]));
@@ -47,6 +54,10 @@ for (const event of eventsData.events) {
   required(`sobytiya/${event.slug}/index.html`);
   required(`sobytiya/${event.slug}/event.ics`);
   required(`data/discovery/${event.id}.json`);
+  const eventSource = html(`sobytiya/${event.slug}/index.html`);
+  if (!eventSource.includes(`data-event-template-contract="${templateContract.contract_id}"`)) fail(`event ${event.id} misses accepted template contract marker`);
+  if (!eventSource.includes(`data-event-template-source="${templateContract.accepted_source_sha}"`)) fail(`event ${event.id} misses accepted template source marker`);
+  if (!/data-desktop-family="(?:editorial|split)"/u.test(eventSource)) fail(`event ${event.id} bypasses the accepted desktop family router`);
   const source = catalogData.eligible.find((item) => Number(item.event_id) === Number(event.id));
   if ((source?.age_restriction || null) !== (event.age_restriction || null)) fail(`accepted age lost for event ${event.id}`);
   const linked = [...new Set((event.other_date_ids || []).map(Number))];

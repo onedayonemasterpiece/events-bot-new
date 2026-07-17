@@ -190,6 +190,12 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   подтверждённое declared значение `0+|6+|12+|16+|18+`; assessed-only/unknown не
   превращается в выдуманное ограничение, а видимый факт совпадает с export и
   structured data.
+- **ADD-RECENT-05 — Полная матрица event-detail v11.** Preview обязан собрать
+  каждый сценарий из `eventTemplateContract.json`: горизонтальное фото,
+  горизонтальное фото с отдельной OCR-афишей, OCR/document contain,
+  одиночные/серийные вертикальные изображения, low-resolution и
+  quality-fallback. Все сценарии и реальные event pages используют один
+  `DesktopEventPage`/`buildDesktopEventPresentation`, а не legacy desktop DOM.
 
 ### Статическая публикация, CDN и устойчивость
 
@@ -201,7 +207,9 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-BUILD-06 — Cache/back/version transition.** После публикации новой версии reload/back/forward/service cache не возвращают несовместимые JS/data или состояние старого пользователя.
 - **ADD-BUILD-07 — Preview/production/secret isolation.** Preview и secret
   candidate остаются `noindex`; production profile формирует root canonical,
-  indexable robots/sitemap и не включает preview/lab/fixture routes.
+  indexable robots/sitemap и не включает preview/lab/fixture routes. Ссылка
+  бренда внутри fullscreen hero-gallery также ведёт в home текущего профиля, а
+  не возвращает production-пользователя в `__preview`.
 - **ADD-BUILD-08 — Immutable Kaggle handoff.** Kaggle получает отдельный
   read-only SQLite snapshot с `quick_check`, SHA-256, размером, max revision и
   уникальными `snapshot_id/run_id/build_id`; неверный hash/manifest останавливает
@@ -224,6 +232,15 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   секунд; retry bounded и классифицирован, stale/missed/deferred request после
   restart получает ровно один catch-up, а update во время running build — ровно
   один follow-up с более новым snapshot.
+- **ADD-BUILD-14 — Template provenance.** Production и secret manifest фиксируют
+  `static-event-detail-v11` и accepted source SHA `3b17e536…`; каждая страница
+  несёт те же markers и один из разрешённых `editorial|split` результатов.
+  Real-event specimens привязаны к стабильному event id, а не к изменяемому
+  после Smart Update slug/title.
+  Отсутствие хотя бы одного marker, lab-сценария или real-event family
+  останавливает build до Kaggle artifact publication.
+  Production-profile check всегда читает root-form `dist/sobytiya`, даже если
+  Kaggle runtime унаследовал исторический `PREVIEW_BUILD_ID`.
 
 ### Related/vector barrier
 
@@ -275,6 +292,11 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-A11Y-04 — No-JS.** Основные страницы, факты, ссылки, похожий static fallback, navigation и SEO-content остаются доступными без JS; enhancement не оставляет пустые обязательные блоки.
 - **ADD-UI-03 — Длинный и экстремальный контент.** Проверить длинные названия, площадки/адреса, несколько медальонов, отсутствие цены, пять возрастных вариантов, много дат и 1/10+ изображений.
 - **ADD-UI-04 — Browser/device matrix.** Финальный RC проверить минимум в актуальных Chrome/Edge/Firefox на Windows, Safari/Chrome/Firefox на macOS и Safari iOS/Chrome Android; native share/clipboard/calendar проверять на реальных ОС, не только Playwright mocks.
+- **ADD-UI-05 — CTA по фактической геометрии компонента.** Desktop action panel
+  измеряет собственную inline-композицию после рендера и при изменении ширины
+  или текста; если цена/основной CTA/calendar/share/like не помещаются, panel
+  переходит в stacked layout до появления horizontal overflow. Решение не
+  привязано только к viewport breakpoint.
 
 ### SEO/GEO, безопасность и наблюдаемость
 

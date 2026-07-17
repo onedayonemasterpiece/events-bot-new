@@ -45,7 +45,7 @@ PUBLIC_ICS_BASE_URL=https://static.kenigevents.ru/ics
 - `static.kenigevents.ru` resolves to Yandex Cloud CDN (`*.yccdn.ru`).
 - `https://static.kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/__preview/` and `https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/__preview/` returned `200` in the current focus preview.
 - Migration tool: `scripts/migrate_static_media_to_cdn_bucket.py` copies active legacy media objects from `s3://kenigevents/p/...` to `s3://kenigevents.ru/p/...` without mutating SQLite rows. Astro rewrites legacy raw URLs to CDN URLs at build time when `PUBLIC_ASSET_BASE_URL` is set.
-- Deploy script uploads generated `event.ics` both under the versioned preview path and to stable CDN keys `s3://kenigevents.ru/ics/<event_id>.ics`. v47 uploaded 70 stable ICS files and `https://static.kenigevents.ru/ics/5077.ics` returned `200 text/calendar`.
+- Preview deploy uploads generated `event.ics` only below the versioned preview prefix and explicitly refuses to mutate stable `s3://kenigevents.ru/ics/*` keys. Stable calendar promotion is a separate production operation. Historical v47 evidence below predates this safety boundary: that run uploaded 70 stable ICS files and `https://static.kenigevents.ru/ics/5077.ics` returned `200 text/calendar`.
 
 
 ## 2026-06-28 v47 media migration evidence
@@ -95,7 +95,7 @@ The deploy script uploads preview files with default short cache and then re-upl
 | `/<build_id>/*.html`, JSON, sitemap/robots | `public, max-age=300` | safe for focus-group preview; new build id for changes |
 | `/<build_id>/_astro/*` | `public, max-age=31536000, immutable` | content-hashed and build-prefixed |
 | `/<build_id>/event.ics` | `public, max-age=300` + `text/calendar` metadata | build-scoped fallback |
-| `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target |
+| `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target; never written by `deploy:preview` |
 | `/p/**` | object metadata, intended immutable for content-addressed keys | mirrored from legacy media bucket; safe for `PUBLIC_ASSET_BASE_URL` |
 | `/p/thumb/v1/**` | `public, max-age=31536000, immutable` | content-addressed 256/512 WebP derivatives used by rails/cards through `srcset` |
 
@@ -124,6 +124,61 @@ slot. Do not replace this with a single sprite/contact sheet unless a measured
 experiment demonstrates lower transferred **and decoded** bytes on the real
 gallery distribution; the current production decision is independent immutable
 objects because the rail may show a variable subset and opens images by index.
+
+### 2026-07-15 sprite decision: keep independent responsive objects
+
+The decision above is now measured rather than assumed. Three real desktop
+gallery families were re-encoded both as independent cells and as one exact-size
+WebP contact sheet at the same quality (`q=82`, method `6`). Decoded RGBA volume
+was identical for equal cell dimensions; transferred-byte differences stayed
+within about two percent:
+
+| Gallery | Cells / rendered slot | Independent 1x | Sprite 1x | Independent 2x | Sprite 2x |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Garage `5658` | 7 / `80×52` | 8,462 B | 7,862 B | 23,264 B | 22,604 B |
+| Split `5761` | 12 / `112×112` | 45,196 B | 44,636 B | 122,692 B | 122,930 B |
+| Mixed portrait `4671` | 12 / `128×153` | 70,930 B | 69,662 B | 163,518 B | 166,790 B |
+
+The sprite therefore saves requests, not meaningful payload. It also forces one
+resolution for every cell, downloads hidden/unneeded cells, invalidates the
+whole sheet when one image changes and complicates exact-index semantics. Under
+HTTP/2/3 the request-count advantage is smaller, while independent URLs retain
+granular immutable caching and native `srcset` selection. This matches
+[MDN's sprite guidance](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Images/Implementing_image_sprites)
+and the [web.dev responsive image contract](https://web.dev/learn/images/responsive-images).
+
+Request overhead is not zero, but it is not one operating-system thread per
+image: HTTP/2/3 multiplexes many request streams over a small number of
+connections. A sprite can still win under high latency when **every** cell is
+needed at one resolution. That is not this first-paint rail. Counting only the
+visible subset makes independent objects materially smaller even before cache
+reuse: Garage 1x is `6,634 B` across five requests versus a `7,862 B` complete
+sprite; Split 1x is `22,184 B` across six requests versus `44,636 B`. At 2x the
+same comparisons are `18,508 B` versus `22,604 B` and `61,066 B` versus
+`122,930 B`. The remaining cells are fetched only if navigation makes them
+visible.
+
+The accepted optimization is therefore:
+
+1. keep one immutable CDN WebP per media index with 256/512 `srcset`;
+2. emit the measured slot width in `sizes` (not a conservative maximum);
+3. assign `src/srcset` only to the subset actually visible in the rail;
+4. keep hidden cells as a transparent placeholder until layout exposes them;
+5. add a 128 derivative only after a production trace shows at least
+   `100–150 KiB` initial-load savings on common DPR/viewport combinations.
+
+At the Full-HD/125% CSS viewport (`1536×864`, DPR 1), the Split cells are
+`88–112px`; the previous hard-coded `sizes="196px"` incorrectly selected 512
+objects. Exact sizes select 256, and only six visible cells are requested instead
+of all eleven image cells. Garage requests five visible thumbnails instead of
+seven; the OCR companion requests its one visible preview rather than every
+candidate.
+
+Antigravity **Gemini 3.1 Pro (High)** independently reviewed the same measured
+table and selected **INDEPENDENT**. It recommended fixing `sizes` and the visible
+subset before adding formats or a third derivative. The reproducible report,
+exact WebPs, prompt and review remain under ignored
+`artifacts/codex/static-desktop-v14-20260715/`.
 
 ## Current/new media write policy
 

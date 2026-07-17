@@ -51,6 +51,11 @@ The prior slow side-to-side title sway is removed. A permanent identity should r
 ## Clear space and prohibited changes
 
 - Keep at least `12px` clear space at the mobile sides and `24px` at desktop sides.
+- On desktop the approved `240×88` hanging tag uses the viewport gutter
+  `clamp(24px, 3vw, 48px)`, rather than the centered content container. This
+  keeps it near the viewport frame at `1536–1920px` while the menu remains
+  aligned to the same right gutter. Do not move the tag to the `1440px`
+  content max-width: at Full HD that would push it inward to `x=240px`.
 - Keep `4–5px` vertical separation between endorsement architecture and service wordmark.
 - Do not add a separate PK monogram inside the full-name tag.
 - Do not use gradient, bevel, inner cream tile, stroke or outline around the wordmark.
