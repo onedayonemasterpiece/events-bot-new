@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
+import re
 import shutil
+import sqlite3
 import subprocess
 import tarfile
 from datetime import datetime, timezone
@@ -18,6 +21,31 @@ CONFIG_PATH = ROOT / 'build_config.json'
 RESULT_PATH = WORKING / 'static_site_build_result.json'
 EMBEDDED_SITE_SOURCE_B64 = ''
 EMBEDDED_BUILD_CONFIG_JSON = ''
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_snapshot_input(db_path: Path, config: dict) -> dict:
+    snapshot = config.get('snapshot') if isinstance(config.get('snapshot'), dict) else {}
+    expected_sha = str(snapshot.get('sha256') or '').strip().lower()
+    expected_size = int(snapshot.get('size') or 0)
+    if config.get('profile') == 'production-candidate':
+        if not snapshot.get('snapshot_id') or not re.fullmatch(r'[0-9a-f]{64}', expected_sha):
+            raise RuntimeError('production snapshot identity/hash is missing')
+        actual_sha = sha256_file(db_path)
+        if actual_sha != expected_sha or (expected_size and db_path.stat().st_size != expected_size):
+            raise RuntimeError('mounted production snapshot hash/size mismatch')
+        with sqlite3.connect(str(db_path)) as con:
+            quick_check = str(con.execute('pragma quick_check').fetchone()[0]).lower()
+        if quick_check != 'ok':
+            raise RuntimeError(f'mounted production snapshot quick_check failed: {quick_check}')
+    return snapshot
 
 try:
     from kaggle_status_client import load_status_client
@@ -212,6 +240,7 @@ def export_preview_data_if_configured(config: dict) -> None:
     if not working_db_path.exists():
         shutil.copy2(db_path, working_db_path)
     db_path = working_db_path
+    snapshot = validate_snapshot_input(db_path, config)
     exporter = SITE_DIR / 'scripts' / 'export-production-preview-data.py'
     if not exporter.exists():
         raise FileNotFoundError(f'preview exporter missing: {exporter}')
@@ -235,6 +264,7 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--limit', str(config.get('limit') or 50),
         '--current-date', str(config.get('current_date') or os.environ.get('STATIC_SITE_CURRENT_DATE') or '2026-06-28'),
         '--output-dir', str(SITE_DIR / 'src/data'),
+        '--catalog-mode', str(config.get('catalog_mode') or 'slice'),
         '--related-cache', str(cache_path),
         '--related-mode', str(config.get('related_mode') or 'sparse'),
         '--pgvector-embedding-model', str(config.get('pgvector_embedding_model') or 'gemini-embedding-2'),
@@ -247,6 +277,15 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--gemma-related-key-env', key_env,
         '--gemma-related-max-anchors', str(config.get('gemma_related_max_anchors') or 0),
     ]
+    if config.get('profile') == 'production-candidate':
+        cmd.extend([
+            '--repo-sha', str(config.get('repo_sha') or ''),
+            '--run-id', str(config.get('run_id') or ''),
+            '--build-id', str(config.get('build_id') or ''),
+            '--snapshot-id', str(snapshot.get('snapshot_id') or ''),
+            '--snapshot-sha256', str(snapshot.get('sha256') or ''),
+            '--snapshot-size', str(snapshot.get('size') or 0),
+        ])
     if config.get('current_datetime'):
         cmd.extend(['--current-datetime', str(config.get('current_datetime'))])
     if config.get('focus_date_from'):
@@ -348,27 +387,76 @@ def main() -> int:
         status_event('alive', phase='install', status='alive', progress={'phase': 'install', 'progress_percent': 25, 'progress_label': 'установка npm зависимостей'})
         install_cmd = ['npm', 'ci', '--no-audit', '--no-fund'] if (SITE_DIR / 'package-lock.json').exists() else ['npm', 'install', '--no-audit', '--no-fund']
         run(install_cmd, cwd=SITE_DIR, env=env)
-        status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 45, 'progress_label': 'Astro build'})
-        run(['npm', 'run', 'build:preview'], cwd=SITE_DIR, env=env)
-        status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 75, 'progress_label': 'проверка preview'})
-        run(['npm', 'run', 'check:preview'], cwd=SITE_DIR, env=env)
-
-        dist_dir = SITE_DIR / 'dist' / build_id
-        if not dist_dir.exists():
-            raise FileNotFoundError(f"build output missing: {dist_dir}")
-        status_event('alive', phase='archive', status='alive', progress={'phase': 'archive', 'progress_percent': 90, 'progress_label': 'архивация результата'})
-        archive_path = WORKING / f'{build_id}.tar.gz'
-        with tarfile.open(archive_path, 'w:gz') as tar:
-            tar.add(dist_dir, arcname=build_id)
         event_count = len(json.loads((SITE_DIR / 'src/data/preview-events.json').read_text(encoding='utf-8')).get('events', []))
+        profile = str(config.get('profile') or 'preview')
+        artifacts: list[dict] = []
+        result_details: dict = {}
+        if profile == 'production-candidate':
+            repo_sha = str(config.get('repo_sha') or '')
+            run_id = str(config.get('run_id') or '')
+            token = str(config.get('candidate_token') or '')
+            if not re.fullmatch(r'[0-9a-f]{40}', repo_sha) or not run_id or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
+                raise RuntimeError('production build identity/candidate token is invalid')
+            env.update({
+                'STATIC_SITE_REPO_SHA': repo_sha,
+                'STATIC_SITE_RUN_ID': run_id,
+                'PRODUCTION_BUILD_ID': str(build_id),
+                'SECRET_CANDIDATE_TOKEN': token,
+            })
+            status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 42, 'progress_label': 'production root-form build'})
+            run(['npm', 'run', 'build:production'], cwd=SITE_DIR, env=env)
+            root_dist = SITE_DIR / 'dist'
+            root_manifest = json.loads((root_dist / 'static-release-manifest.json').read_text(encoding='utf-8'))
+            root_archive = WORKING / f'{build_id}-root.tar.gz'
+            with tarfile.open(root_archive, 'w:gz') as tar:
+                tar.add(root_dist, arcname=f'{build_id}-root')
+            artifacts.append({'kind': 'production_root', 'filename': root_archive.name, 'sha256': sha256_file(root_archive), 'size': root_archive.stat().st_size})
+
+            status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 68, 'progress_label': 'noindex secret candidate build'})
+            run(['npm', 'run', 'build:secret-candidate'], cwd=SITE_DIR, env=env)
+            candidate_dist = SITE_DIR / 'dist' / '_review' / token
+            candidate_manifest = json.loads((candidate_dist / 'secret-candidate-manifest.json').read_text(encoding='utf-8'))
+            candidate_archive = WORKING / f'{build_id}-secret-candidate.tar.gz'
+            with tarfile.open(candidate_archive, 'w:gz') as tar:
+                tar.add(candidate_dist, arcname=f'_review/{token}')
+            artifacts.append({'kind': 'secret_candidate', 'filename': candidate_archive.name, 'sha256': sha256_file(candidate_archive), 'size': candidate_archive.stat().st_size})
+            result_details = {
+                'repo_sha': repo_sha,
+                'run_id': run_id,
+                'snapshot': {
+                    'snapshot_id': str((config.get('snapshot') or {}).get('snapshot_id') or ''),
+                    'snapshot_sha256': str((config.get('snapshot') or {}).get('sha256') or ''),
+                    'size': int((config.get('snapshot') or {}).get('size') or 0),
+                    'max_event_revision': root_manifest.get('snapshot', {}).get('max_event_revision'),
+                },
+                'candidate': {'token': token, 'token_sha256': candidate_manifest.get('token_sha256'), 'base_path': candidate_manifest.get('base_path')},
+                'counts': root_manifest.get('counts'),
+                'checks': {'production': root_manifest.get('checks'), 'secret_candidate': candidate_manifest.get('checks')},
+                'related_revision': root_manifest.get('versions', {}).get('related'),
+                'tree_sha256': {'production': root_manifest.get('tree_sha256'), 'secret_candidate': candidate_manifest.get('tree_sha256')},
+            }
+        else:
+            status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 45, 'progress_label': 'Astro preview build'})
+            run(['npm', 'run', 'build:preview'], cwd=SITE_DIR, env=env)
+            status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 75, 'progress_label': 'проверка preview'})
+            run(['npm', 'run', 'check:preview'], cwd=SITE_DIR, env=env)
+            dist_dir = SITE_DIR / 'dist' / build_id
+            if not dist_dir.exists():
+                raise FileNotFoundError(f"build output missing: {dist_dir}")
+            archive_path = WORKING / f'{build_id}.tar.gz'
+            with tarfile.open(archive_path, 'w:gz') as tar:
+                tar.add(dist_dir, arcname=build_id)
+            artifacts.append({'kind': 'preview', 'filename': archive_path.name, 'sha256': sha256_file(archive_path), 'size': archive_path.stat().st_size})
+            # Preserve the v1 preview handoff fields while the richer v2
+            # artifact list is adopted by downstream consumers.
+            result_details = {'archive': archive_path.name, 'dist_root': str(dist_dir)}
+        status_event('alive', phase='archive', status='alive', progress={'phase': 'archive', 'progress_percent': 92, 'progress_label': 'артефакты проверены'})
         result = {
-            'ok': True,
-            'build_id': build_id,
-            'started_at': started,
-            'finished_at': datetime.now(timezone.utc).isoformat(),
-            'archive': archive_path.name,
-            'dist_root': str(dist_dir),
-            'event_count': event_count,
+            'schema_version': 'static_site_build_result_v2',
+            'ok': True, 'profile': profile, 'build_id': build_id,
+            'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
+            'event_count': event_count, 'artifacts': artifacts, 'failure_class': None,
+            **result_details,
         }
         RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
@@ -376,6 +464,18 @@ def main() -> int:
         finish_status(ok=True, message=f"static site build ready: {build_id}, events={event_count}")
         return 0
     except Exception as exc:
+        failure = {
+            'schema_version': 'static_site_build_result_v2', 'ok': False,
+            'build_id': locals().get('build_id'), 'profile': str(locals().get('config', {}).get('profile') or 'preview'),
+            'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
+            'failure_class': 'permanent_input' if isinstance(exc, (ValueError, FileNotFoundError)) else 'retryable_build',
+            'error_type': exc.__class__.__name__, 'error': str(exc)[:1000],
+        }
+        try:
+            WORKING.mkdir(parents=True, exist_ok=True)
+            RESULT_PATH.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        except Exception:
+            pass
         cleanup_transient_workspace()
         finish_status(ok=False, message=f"{exc.__class__.__name__}: {exc}")
         raise

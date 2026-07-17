@@ -14,6 +14,14 @@ import type {
 export const SITE_NAME = 'Полюбить Калининград Анонсы';
 export const SITE_ORIGIN = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 export const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/u, '');
+export type SiteMode = 'preview' | 'production' | 'secret_candidate';
+const requestedSiteMode = String(import.meta.env.PUBLIC_SITE_MODE || 'preview');
+export const SITE_MODE: SiteMode = requestedSiteMode === 'production'
+  ? 'production'
+  : (requestedSiteMode === 'secret_candidate' ? 'secret_candidate' : 'preview');
+export const IS_PRODUCTION = SITE_MODE === 'production';
+export const IS_SECRET_CANDIDATE = SITE_MODE === 'secret_candidate';
+export const IS_PRODUCTION_FAMILY = IS_PRODUCTION || IS_SECRET_CANDIDATE;
 export const PREVIEW_BUILD_ID = import.meta.env.PUBLIC_PREVIEW_BUILD_ID || 'local';
 export const ICS_BASE_URL = (
   import.meta.env.PUBLIC_ICS_BASE_URL ||
@@ -158,6 +166,14 @@ export function withBase(path: string): string {
   return `${BASE_PATH}${normalized}`;
 }
 
+export function siteHomeHref(query = ''): string {
+  return withBase(`${IS_PRODUCTION_FAMILY ? '/' : '/__preview/'}${query}`);
+}
+
+export function siteHomeAbsoluteUrl(query = ''): string {
+  return new URL(siteHomeHref(query), `${SITE_ORIGIN}/`).toString();
+}
+
 export function absoluteUrl(path: string): string {
   return new URL(withBase(path), `${SITE_ORIGIN}/`).toString();
 }
@@ -175,6 +191,9 @@ export function eventAbsoluteUrl(event: Pick<PreviewEvent, 'slug'>): string {
 }
 
 export function eventCalendarHref(event: Pick<PreviewEvent, 'id' | 'slug'>): string {
+  // A bearer-link candidate must be self-contained.  It may never mutate or
+  // point at stable production /ics keys while it is under review.
+  if (IS_SECRET_CANDIDATE) return withBase(`/sobytiya/${event.slug}/event.ics`);
   if (ICS_BASE_URL) return `${ICS_BASE_URL}/${event.id}.ics`;
   return withBase(`/sobytiya/${event.slug}/event.ics`);
 }

@@ -1,7 +1,7 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
-import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
@@ -20,7 +20,7 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
-const robots = 'noindex,nofollow,noarchive';
+const robots = IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive');
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
@@ -51,6 +51,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content={robots} />
+    {IS_SECRET_CANDIDATE && <meta name="referrer" content="no-referrer" />}
     <title>{title}</title>
     <meta name="description" content={safeDescription} />
     <link rel="canonical" href={canonicalUrl} />
@@ -2117,7 +2118,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
-        <a class="site-header__brand-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+        <a class="site-header__brand-tag" href={siteHomeHref()} aria-label="Полюбить Калининград Анонсы — на главную">
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
@@ -2135,7 +2136,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
                 {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы</a>}
                 <a href={withBase('/poisk/')}>Поиск</a>
                 <a href={withBase('/partners/')}>Инфопартнёры</a>
-                <a href={withBase('/__preview/')}>Все анонсы</a>
+                <a href={siteHomeHref()}>Все анонсы</a>
               </div>
             </nav>
           </div>
@@ -2161,7 +2162,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>}
             <a href={withBase('/poisk/')}>Поиск</a>
             <a href={withBase('/partners/')}>Инфопартнёры</a>
-            <a href={withBase('/__preview/')}>Все анонсы</a>
+            <a href={siteHomeHref()}>Все анонсы</a>
             <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
           </nav>
         </div>
@@ -2185,7 +2186,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
           <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
         </div>
-        <p class="site-footer__note">Preview · noindex · {SITE_ORIGIN}</p>
+        <p class="site-footer__note">{IS_PRODUCTION ? SITE_ORIGIN : <>Preview · noindex · {SITE_ORIGIN}</>}</p>
       </div>
     </footer>
 

@@ -1,6 +1,13 @@
 # Kaggle static-site builder
 
-Status: implementation spike / production-publish gate pending.
+Status: immutable secret-candidate pipeline implemented; production-root
+promotion is blocked pending a reader-atomic origin switch and remains disabled.
+
+Current event-page release sequencing, top-five platform backlog and the planned
+10-day Telegraph coexistence/cutover are canonical in
+[`docs/features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md).
+The mode names described there are a required implementation contract, not
+already-existing production env flags.
 
 ## Position
 
@@ -15,10 +22,9 @@ It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user
 ```text
 immutable Fly SQLite snapshot
   -> one Kaggle CPU build with status ledger
-  -> staging/release prefix
-  -> checks + release manifest
-  -> promotion to current release
-  -> rollback target retained
+  -> checked production-form artifact + release manifest
+  -> create-only unlisted secret prefix (current phase)
+  -X-> production current/root (separate reader-atomic redesign and GO)
 ```
 
 Rules:
@@ -27,9 +33,15 @@ Rules:
 - one immutable snapshot per build; new updates during a build queue a later build, they do not mutate the running build;
 - resource lease: `static_site:builder`; two production builds must not publish concurrently;
 - Kaggle writes only to a unique staging/release prefix, never directly to production root with `--delete`;
-- promotion requires machine-readable release manifest and passed checks;
+- secret publication requires the bounded result, machine-readable release
+  manifest and all production/secret checks to pass;
 - failed Kaggle jobs must not alter production;
 - secrets must be least-privileged for the target bucket/prefix and never printed.
+- anonymous Object Storage listing must be disabled before treating an unlisted
+  token as a bearer link; `noindex` is not access control;
+- the publisher refuses every root/current/stable-ICS key and uses create-only
+  writes (`If-None-Match: *`) below one immutable `secret-candidates/<token>/`
+  prefix.
 
 ## Current implementation path
 
@@ -39,13 +51,78 @@ Rules:
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.
 
-The current verified path produces a checked tarball artifact. CDN host `static.kenigevents.ru` is now configured for the static-site bucket and also serves mirrored event media `/p/...` plus stable calendar files `/ics/<event_id>.ics`. Production promotion is still a separate gate: build into a unique prefix, verify the release manifest, then upload/promote. For preview/focus-group builds pass:
+The current path produces a checked tarball artifact and can publish it only as
+an immutable secret candidate. CDN host `static.kenigevents.ru` is configured for
+the static-site bucket and also serves mirrored event media `/p/...` plus stable
+calendar files `/ics/<event_id>.ics`. Production root/current promotion is not
+implemented: the existing website origin cannot resolve an object pointer
+atomically, while sequential root copies expose a mixed tree. For
+preview/focus-group builds pass:
 
 - `PUBLIC_ASTRO_ASSET_BASE_URL=https://static.kenigevents.ru/{buildId}` or runner `--astro-asset-base-url`;
 - `PUBLIC_ASSET_BASE_URL=https://static.kenigevents.ru` or runner `--asset-base-url`;
 - `PUBLIC_ICS_BASE_URL=https://static.kenigevents.ru/ics` when building locally; the default page logic also derives it from `PUBLIC_ASSET_BASE_URL`.
 
 Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_bucket.py --db <snapshot> --active-on <date> --apply` so legacy `s3://kenigevents/p/...` objects referenced by active events exist in `s3://kenigevents.ru/p/...`.
+
+## Implemented automatic and on-demand flow
+
+`effectful Smart Update` coalesces one `static_site_build` request for 15 minutes
+after the last public change. A change arriving during a running build records a
+deferred marker; completion schedules exactly one follow-up. The worker creates
+an online SQLite backup, runs `quick_check`, records SHA-256/size/max event
+revision and submits that immutable file as a unique Kaggle input. Retries,
+missed-build reconciliation and the feature-specific 5400-second runtime are
+bounded in `static_site_release.py`/`main.py`.
+
+The same durable request can be made manually without bypassing debounce or the
+outbox state machine:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite \
+  --reason operator_secret_candidate \
+  --correlation-id static-site:manual:<ticket>
+```
+
+Automatic execution and upload are deliberately opt-in. Required identity and
+flags are documented in `.env.example`; defaults stay off:
+
+```text
+ENABLE_STATIC_SITE_BUILD_AFTER_SMART_UPDATE=0
+ENABLE_STATIC_SITE_KAGGLE_BUILD=0
+ENABLE_STATIC_SITE_SECRET_PUBLISH=0
+STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
+```
+
+The Kaggle production-candidate invocation must include
+`--profile production-candidate --catalog-mode full --snapshot-manifest ...
+--repo-sha ... --run-id ... --build-id production-... --candidate-token ...
+--export-in-kaggle`. The kernel runs Node 22, full export,
+`build:production/check:production`, then
+`build:secret-candidate/check:secret-candidate`, and returns the bounded v2
+result. Local gates are:
+
+```bash
+pytest -q tests/test_static_site_release.py \
+  tests/test_static_site_build_handoff.py tests/test_static_site_public_gate.py
+npm --prefix site run test:static-release
+npm --prefix site run build:preview
+npm --prefix site run check:preview
+# With full exported catalog + immutable snapshot identity env:
+npm --prefix site run build:production
+npm --prefix site run check:production
+npm --prefix site run build:secret-candidate
+npm --prefix site run check:secret-candidate
+```
+
+The Python Fly-side publisher validates/extracts the tar safely, checks the
+production-candidate result and manifest identity, rejects a bucket that still
+allows anonymous ListObjects, uploads create-only, then verifies every object
+hash/MIME plus a public `index.html` probe. It returns a receipt containing the
+bearer URL and tree hash. Never put the URL/token in public docs, sitemap,
+canonical, Telegram public channels or logs. Revocation in this phase means
+deleting that complete immutable prefix; root/current remain untouched.
 
 
 ## Current v59 strict pgvector evidence and open gate
@@ -67,7 +144,10 @@ Static related publication policy:
 - same-day events that already started, past events and cancelled/deleted/duplicate rows are excluded at export/generation time;
 - static related generation retries Gemma 4 26B with backoff and does not fall back to Gemini/Flash-Lite, preserving Lite quota for runtime flows.
 
-This still does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
+This still does **not** mean Smart Update publishes the production root. With all
+three flags enabled it can build and publish only a checked unlisted candidate.
+Root activation remains a separate NO-GO until a reader-atomic resolver/origin
+design, retained last-good pointer and rollback acceptance are implemented.
 
 ## Static-site Gemma/related secrets
 

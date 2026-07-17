@@ -2,7 +2,7 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import { INFO_PARTNERS } from '../../data/info-partners';
 import type { InfoPartner } from '../../data/info-partners';
-import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
+import { siteHomeHref, absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
 const title = `Информационные партнёры | ${SITE_NAME}`;
 const description = 'Полюбить Калининград Анонсы выступает информационным партнёром организаций: компактная сетка партнёрских логотипов.';
@@ -14,7 +14,7 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
   <main id="main" class="partners-page">
     <div class="page-shell page-shell--compact">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Информационные партнёры</span>
       </nav>

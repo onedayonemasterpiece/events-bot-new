@@ -1228,7 +1228,7 @@ def event_active_where(
 
 def fetch_rows(
     con: sqlite3.Connection,
-    limit: int,
+    limit: int | None,
     current_date: str,
     include_ids: list[int],
     *,
@@ -1236,6 +1236,14 @@ def fetch_rows(
     focus_date_from: str | None = None,
     focus_date_to: str | None = None,
 ) -> list[sqlite3.Row]:
+    """Return the public projection in deterministic order.
+
+    ``limit=None`` is the only accepted full-catalog mode.  Keeping it distinct
+    from ``0`` prevents a production build from silently turning an accidental
+    zero into an empty but otherwise valid artifact.
+    """
+    if limit is not None and limit <= 0:
+        raise ValueError("preview limit must be positive; use catalog_mode=full")
     rows_by_id: dict[int, sqlite3.Row] = {}
     ordered_rows: list[sqlite3.Row] = []
 
@@ -1254,7 +1262,7 @@ def fetch_rows(
     def add_query(query: str, params: tuple[Any, ...] = ()) -> None:
         for row in con.execute(query, params):
             add_row(row)
-            if len(ordered_rows) >= limit:
+            if limit is not None and len(ordered_rows) >= limit:
                 break
 
     event_columns = {
@@ -1276,6 +1284,13 @@ def fetch_rows(
         if "end_date" in event_columns
         else ""
     )
+    if limit is None:
+        for row in con.execute(
+            f"select * from event where {active} order by date asc, {time_order}id asc"
+        ):
+            add_row(row)
+        return ordered_rows
+
     focus_from = normalize_date(focus_date_from)
     focus_to = normalize_date(focus_date_to)
     if focus_from and focus_to:
@@ -1340,6 +1355,117 @@ def fetch_rows(
             (max(limit * 3, limit + len(include_ids) + 20),),
         )
     return ordered_rows[:limit]
+
+
+CATALOG_LEDGER_SCHEMA_VERSION = "static_event_catalog_ledger_v1"
+ELIGIBILITY_PREDICATE_VERSION = "static_event_public_projection_v2"
+
+
+def _candidate_catalog_rows(
+    con: sqlite3.Connection,
+    current_date: str,
+    current_time: str | None,
+) -> list[sqlite3.Row]:
+    """Return date-relevant rows before public eligibility filtering."""
+    columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
+    start_not_elapsed = f"date >= '{current_date}'"
+    if current_time and "time" in columns:
+        start_not_elapsed = (
+            f"(date > '{current_date}' or (date = '{current_date}' and "
+            f"(time is null or trim(time) = '' or substr(time, 1, 5) >= '{current_time}')))"
+        )
+    if "end_date" in columns:
+        date_clause = (
+            f"({start_not_elapsed} or "
+            f"(end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
+        )
+    else:
+        date_clause = start_not_elapsed
+    return list(con.execute(f"select * from event where {date_clause} order by id asc"))
+
+
+def catalog_exclusion_reason(row: sqlite3.Row) -> str | None:
+    """Return one bounded reason code for a date-relevant non-public row."""
+    if row_has_key(row, "silent") and bool(row_get(row, "silent")):
+        return "silent"
+    if row_has_key(row, "lifecycle_status"):
+        # Match ``event_active_where`` exactly.  The source contract stores the
+        # canonical lowercase value; accepting a differently-cased value only
+        # in the ledger would make eligible/export parity impossible to prove.
+        lifecycle = clean_text(row_get(row, "lifecycle_status")) or "active"
+        if lifecycle != "active":
+            return "lifecycle:not_active"
+    reason = public_projection_gate_reason(row)
+    if reason:
+        return reason
+    if title_looks_prompt_leak(row_get(row, "title")):
+        return "title:prompt_leakage"
+    return None
+
+
+def build_catalog_ledger(
+    con: sqlite3.Connection,
+    exported_rows: list[sqlite3.Row],
+    *,
+    current_date: str,
+    current_time: str | None,
+    generated_at: str,
+    repo_sha: str,
+    run_id: str,
+    build_id: str,
+    snapshot_id: str,
+    snapshot_sha256: str,
+    snapshot_size: int | None,
+) -> dict[str, Any]:
+    exported_by_id = {int(row["id"]): row for row in exported_rows}
+    eligible: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    for row in _candidate_catalog_rows(con, current_date, current_time):
+        event_id = int(row["id"])
+        reason = catalog_exclusion_reason(row)
+        if reason is None:
+            if event_id not in exported_by_id:
+                raise RuntimeError(f"eligible event {event_id} missing from full-catalog export")
+            eligible.append({
+                "event_id": event_id,
+                "source_revision": clean_text(row_get(row, "revision")) or None,
+                "updated_at": clean_text(row_get(row, "updated_at")) or clean_text(row_get(row, "added_at")) or None,
+                # Record the accepted public projection, not an unaccepted raw
+                # candidate whose status is still unknown/review.
+                "age_restriction": event_age_projection(row)["age_restriction"],
+            })
+        else:
+            excluded.append({"event_id": event_id, "reason": reason})
+    extra = sorted(set(exported_by_id) - {item["event_id"] for item in eligible})
+    if extra:
+        raise RuntimeError(f"ineligible events leaked into full-catalog export: {extra[:20]}")
+    max_updated_at = max((str(item["updated_at"]) for item in eligible if item["updated_at"]), default=None)
+    numeric_revisions = [
+        int(item["source_revision"])
+        for item in eligible
+        if str(item.get("source_revision") or "").isdigit()
+    ]
+    return {
+        "schema_version": CATALOG_LEDGER_SCHEMA_VERSION,
+        "eligibility_predicate_version": ELIGIBILITY_PREDICATE_VERSION,
+        "generated_at": generated_at,
+        "current_date": current_date,
+        "current_time": current_time,
+        "repo_sha": repo_sha,
+        "run_id": run_id,
+        "build_id": build_id,
+        "snapshot": {
+            "snapshot_id": snapshot_id,
+            "sha256": snapshot_sha256,
+            "size": snapshot_size,
+            "max_event_revision": max(numeric_revisions, default=None),
+            "max_event_updated_at": max_updated_at,
+        },
+        "eligible_count": len(eligible),
+        "excluded_count": len(excluded),
+        "eligible": eligible,
+        "excluded": excluded,
+    }
 
 
 def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
@@ -1414,7 +1540,11 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",
         "topics": topics,
         "pushkin_card": bool(row["pushkin_card"]),
-        "other_date_ids": [],
+        "other_date_ids": sorted({
+            int(item)
+            for item in read_json(row_get(row, "linked_event_ids"), [])
+            if str(item).isdigit() and int(item) != event_id
+        }),
         "data_quality_notes": [],
         "updated_at": clean_text(row_get(row, "updated_at")) or clean_text(row_get(row, "added_at")) or None,
         "likes_count": source_likes,
@@ -2920,11 +3050,37 @@ def build_related(
     }
 
 
+def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
+    """Keep only mutual links inside the exported eligible catalog.
+
+    Canonical rows may retain links to past/ineligible occurrences.  Those
+    source links remain in SQLite, but a static release must not emit dangling
+    or one-way graph edges that point outside its immutable catalog.
+    """
+
+    by_id = {int(event["id"]): event for event in events}
+    raw_links = {
+        event_id: {
+            int(value)
+            for value in (event.get("other_date_ids") or [])
+            if str(value).isdigit() and int(value) != event_id
+        }
+        for event_id, event in by_id.items()
+    }
+    for event_id, event in by_id.items():
+        event["other_date_ids"] = sorted(
+            linked_id
+            for linked_id in raw_links[event_id]
+            if linked_id in by_id and event_id in raw_links.get(linked_id, set())
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
     parser.add_argument("--output-dir", default="site/src/data")
     parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--catalog-mode", choices=["slice", "full"], default="slice")
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
     parser.add_argument("--current-datetime", default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""), help="Optional local YYYY-MM-DDTHH:MM cutoff; same-day events that already started are excluded")
     parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
@@ -2939,6 +3095,12 @@ def main() -> int:
     parser.add_argument("--site-origin", default=os.getenv("PUBLIC_SITE_ORIGIN", "https://kenigevents.ru"))
     parser.add_argument("--base-path", default=os.getenv("PUBLIC_PREVIEW_BUILD_ID", ""))
     parser.add_argument("--ics-base-url", default=os.getenv("PUBLIC_ICS_BASE_URL", ""))
+    parser.add_argument("--repo-sha", default=os.getenv("STATIC_SITE_REPO_SHA", ""))
+    parser.add_argument("--run-id", default=os.getenv("STATIC_SITE_RUN_ID", ""))
+    parser.add_argument("--build-id", default=os.getenv("STATIC_SITE_BUILD_ID", ""))
+    parser.add_argument("--snapshot-id", default=os.getenv("STATIC_SITE_SNAPSHOT_ID", ""))
+    parser.add_argument("--snapshot-sha256", default=os.getenv("STATIC_SITE_SNAPSHOT_SHA256", ""))
+    parser.add_argument("--snapshot-size", type=int, default=int(os.getenv("STATIC_SITE_SNAPSHOT_SIZE", "0") or "0"))
     parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
@@ -2961,10 +3123,29 @@ def main() -> int:
     con = sqlite3.connect(args.db)
     con.row_factory = sqlite3.Row
     include_ids = [int(part) for part in args.include_ids.split(",") if part.strip().isdigit()]
+    if args.catalog_mode == "full":
+        # Full production export is a single deterministic catalog query; the
+        # preview-only control-event priority must not affect its ordering.
+        include_ids = []
     effective_date, effective_time = split_current_datetime(args.current_datetime, args.current_date)
+    if args.catalog_mode == "full":
+        required_metadata = {
+            "repo_sha": args.repo_sha,
+            "run_id": args.run_id,
+            "build_id": args.build_id,
+            "snapshot_id": args.snapshot_id,
+            "snapshot_sha256": args.snapshot_sha256,
+        }
+        missing = [key for key, value in required_metadata.items() if not str(value or "").strip()]
+        if missing:
+            raise SystemExit(f"full catalog export requires metadata: {', '.join(missing)}")
+        if not re.fullmatch(r"[0-9a-f]{40}", args.repo_sha):
+            raise SystemExit("full catalog export requires a full 40-character repo SHA")
+        if not re.fullmatch(r"[0-9a-f]{64}", args.snapshot_sha256):
+            raise SystemExit("full catalog export requires a 64-character snapshot SHA-256")
     rows = fetch_rows(
         con,
-        args.limit,
+        None if args.catalog_mode == "full" else args.limit,
         effective_date,
         include_ids,
         current_time=effective_time,
@@ -2972,6 +3153,7 @@ def main() -> int:
         focus_date_to=args.focus_date_to,
     )
     events = [build_event(con, row, effective_date) for row in rows]
+    normalize_linked_occurrences(events)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -2985,8 +3167,13 @@ def main() -> int:
             "effective_current_time": effective_time,
             "focus_date_from": args.focus_date_from or None,
             "focus_date_to": args.focus_date_to or None,
+            "catalog_mode": args.catalog_mode,
             "notes": [
-                f"bounded production slice: {len(events)} real events",
+                (
+                    f"full eligible production catalog: {len(events)} real events"
+                    if args.catalog_mode == "full"
+                    else f"bounded production slice: {len(events)} real events"
+                ),
                 "source social likes/views are compact latest-metric aggregates",
                 "service likes remain 0 until first-party backend ingest is enabled",
             ],
@@ -2995,6 +3182,24 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.catalog_mode == "full":
+        ledger = build_catalog_ledger(
+            con,
+            rows,
+            current_date=effective_date,
+            current_time=effective_time,
+            generated_at=generated_at,
+            repo_sha=args.repo_sha,
+            run_id=args.run_id,
+            build_id=args.build_id,
+            snapshot_id=args.snapshot_id,
+            snapshot_sha256=args.snapshot_sha256,
+            snapshot_size=args.snapshot_size or None,
+        )
+        (out_dir / "production-catalog.json").write_text(
+            json.dumps(ledger, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     clubs_projection = build_interest_clubs_projection(
         con,
         current_date=effective_date,

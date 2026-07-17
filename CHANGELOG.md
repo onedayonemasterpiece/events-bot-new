@@ -2,7 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- **Static event-page secret release pipeline**: add effect-only 15-minute Smart
+  Update coalescing, exactly-one running-build follow-up, durable manual requests,
+  immutable SQLite backup manifests, checked full-catalog production and noindex
+  secret-candidate Kaggle artifacts, and a create-only prefix publisher that can
+  never address root/current/stable-ICS keys.
+- **Transport timetable A/B/C**: add three source-parity KAUP timetable
+  treatments, stable browser-subject SHA-256 allocation, QA/focus/live controls,
+  consent-gated exposure/action RPC contracts and fail-closed Supabase migration;
+  production root defaults to the unchanged baseline.
+- **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
+
 ### Fixed
+- **Secret candidate Astro assets**: keep candidate CSS/JS under the immutable
+  bearer prefix and resolve `{buildId}` for production asset templates; release
+  checks now reject unresolved or external candidate `_astro` references.
+- **Static event occurrence graph**: filter exported `other_date_ids` to mutual
+  links inside the eligible immutable catalog, so past/ineligible occurrences
+  cannot create dangling production-manifest edges.
 - **VK auto-import provider-quota false reject (INC-2026-07-17)**: allocate
   Smart Update requests across the registered KEY1–KEY5 normal pool from the
   first reserve and rotate to another pool member on provider-side `429`
@@ -13,11 +31,15 @@
   graphical-medallion strips while retaining source-grounded organizer, venue,
   festival, program and Pushkin-card marks; the MEOW badge remains available on
   static event-detail pages only.
+- **KAUP boarding origin**: calculate route 119 guidance from
+  `Калининград-Северный` when the trip calls there, while retaining the terminal
+  departure as source provenance instead of sending the visitor to the terminal.
 - **Smart Update image geometry queue starvation**: let the independent Gemma
   geometry stage proceed when the earlier semantic-role stage remains pending
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
   truncating the structured JSON at the bounded 768-token output ceiling.

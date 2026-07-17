@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { HERO_REVIEW_CASES } from '../lib/heroReview';
-import { absoluteUrl, eventPath, getEvents } from '../lib/events';
+import { absoluteUrl, eventPath, getEvents, IS_PRODUCTION_FAMILY } from '../lib/events';
 import { getInterestClubs, interestClubPath, INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 
 function normalizeLastmod(value: string | null | undefined, fallback: string): string {
@@ -12,20 +12,27 @@ function normalizeLastmod(value: string | null | undefined, fallback: string): s
 
 export const GET: APIRoute = () => {
   const now = new Date().toISOString();
-  const entries = [
-    { loc: absoluteUrl('/__preview/'), lastmod: now },
+  const publicEntries = [
+    { loc: absoluteUrl('/'), lastmod: now },
     { loc: absoluteUrl('/segodnya/'), lastmod: now },
     { loc: absoluteUrl('/zavtra/'), lastmod: now },
     { loc: absoluteUrl('/vyhodnye/'), lastmod: now },
     { loc: absoluteUrl('/vystavki/'), lastmod: now },
     { loc: absoluteUrl('/populyarnoe/'), lastmod: now },
     { loc: absoluteUrl('/poisk/'), lastmod: now },
-    { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     { loc: absoluteUrl('/partners/'), lastmod: now },
     ...(INTEREST_CLUBS_PUBLIC_ENABLED ? [{ loc: absoluteUrl('/kluby-po-interesam/'), lastmod: now }] : []),
+  ];
+  const previewOnlyEntries = [
+    { loc: absoluteUrl('/__preview/'), lastmod: now },
+    ...publicEntries.slice(1),
+    { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
     ...HERO_REVIEW_CASES.map((item) => ({ loc: absoluteUrl(`/lab/hero/review/${item.caseId}/`), lastmod: now })),
+  ];
+  const entries = [
+    ...(IS_PRODUCTION_FAMILY ? publicEntries : previewOnlyEntries),
     ...getInterestClubs().map((club) => ({ loc: absoluteUrl(interestClubPath(club)), lastmod: normalizeLastmod(club.updated_at, now) })),
     ...getEvents().map((event) => ({ loc: absoluteUrl(eventPath(event)), lastmod: normalizeLastmod(event.updated_at, now) })),
   ];
