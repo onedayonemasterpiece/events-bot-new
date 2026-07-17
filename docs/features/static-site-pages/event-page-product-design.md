@@ -199,7 +199,7 @@ Primary CTA is selected by event facts:
 | registration link | `Зарегистрироваться` | “может потребоваться регистрация” |
 | free + explicit registration link | `Зарегистрироваться` | admission property must still say `Бесплатно · регистрация` |
 | free without registration requirement | `В календарь` | calendar save is also the service saved-event action; source remains secondary |
-| phone-only booking | `Позвонить` on mobile, visible number + icon-only copy on desktop | desktop click copies the number and confirms success without trying to open a dialer |
+| phone-only booking | `Позвонить` on mobile, branded `Показать телефон` on desktop | the desktop copy-icon CTA reveals and copies the normalized number in one click, then confirms success without trying to open a dialer |
 | paid/ticketed, price unknown | `Билеты` | never invent `Узнать цену`, `Узнать условия` or `По билетам` |
 | source link only / unknown tickets | `Источник события` | honest secondary destination, no fake ticket CTA |
 | sold out | `Билеты закончились` as disabled/status | offer related events, not fake CTA |
@@ -350,15 +350,17 @@ Keyboard navigation and visible focus remain required.
 
 The graphite desktop action panel is component-responsive, not only
 viewport-responsive. A phone action is a stricter exception: admission,
-copyable phone number, calendar, share and like remain on one explicit grid row
-at both `1536×864` and `1920×1080`; it must never fall back to the generic
+branded phone CTA, calendar, share and like remain on one explicit grid row at
+`1366×768`, `1536×864` and `1920×1080`; it must never fall back to the generic
 stacked layout. The calendar is icon-only in this constrained phone panel even
-when bounded usage history would normally expand its wording. The recognizable
-desktop phone number uses standard body size without a redundant phone glyph or
-visible `Скопировать номер` helper; the adjacent shared design-system copy
-action is a fixed `44×44` copy icon with an accessible name. Copy success swaps
-copy for check in the same box, while a visually hidden polite live region
-announces the result with no additional layout row and no change to panel height.
+when bounded usage history would normally expand its wording. The desktop phone
+journey keeps the established branded primary CTA instead of plain contact text
+plus a detached utility icon. Its initial label is `Показать телефон`; the
+leading glyph is the standard copy icon, not a redundant handset. One click
+reveals the standard-size formatted number inside the same CTA and copies its
+normalized value. A transient non-layout toast says `Номер скопирован`, while a
+polite live region announces the same result. Subsequent clicks copy again. The
+outer CTA and graphite panel retain their dimensions through reveal and success.
 Browser acceptance compares child vertical
 centres/overlap and before/after-copy geometry; containment-only assertions are
 not sufficient.
@@ -516,10 +518,10 @@ Product/UI:
 
 - 375px: no horizontal scroll; primary CTA visible; touch targets >=44px;
 - desktop 1366px: two-column layout, not stretched mobile feed;
-- desktop phone/action regressions are additionally measured at `1536×864`
-  and `1920×1080`: every action rectangle must remain inside the graphite
-  panel, the phone number must stay on one line and the document width must not
-  exceed the viewport;
+- desktop phone/action regressions are additionally measured at `1366×768`,
+  `1536×864` and `1920×1080`: every action rectangle must remain inside the
+  graphite panel, both the initial label and revealed number must stay on one
+  line, and the document width must not exceed the viewport;
 - share works on phone via Web Share API or copy fallback;
 - calendar ICS works;
 - ticket/registration/source CTA matches event facts;

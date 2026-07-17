@@ -44,6 +44,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: user acceptance rejected the v9 bus origin because route `119` serves `Северный вокзал` and the previously reviewed product rule plans from that stop. Investigation traced the regression to a compacting change that dropped the numeric North offset, followed by the exact-venue KAUP fork and v8/v9 gates hardening the terminal address instead of the preferred boarding stop.
 - 2026-07-17: mobile review of v9 found that some dynamically rendered event cards could navigate to an older preview/root event UI. A poisoned-cache Playwright reproduction isolated cross-build personal-feed URL reuse; v10 scopes the cache to the current base and rebases same-site dynamic event/search links at render time.
 - 2026-07-17: the v10 product pass restored North-derived route-119 times, flattened KAUP into one concise journey hierarchy after Gemini 3.1 Pro (High) critique, and aligned the desktop phone control with the parallel design-system CopyAction contract: standard-size number, no phone glyph/helper copy, fixed icon-only copy→check feedback.
+- 2026-07-17: follow-up product review rejected v10's plain number plus detached copy utility as a loss of primary-action hierarchy. The correction restores the existing branded CTA styling: `Показать телефон` with a copy icon reveals and copies the normalized number in one click and reports `Номер скопирован` without moving the panel.
 
 ## Root Cause
 
@@ -83,6 +84,10 @@ The full-catalog static preview exposed several user-visible regressions around 
     Authorized Search and discovery hydration shared the same trust boundary:
     they rendered build-specific hrefs from remote/persisted manifests without
     rebasing same-site event navigation to the currently open preview.
+18. The v10 telephone correction optimized the copy affordance in isolation
+    and replaced the already accepted primary CTA with plain number text plus a
+    detached icon action. Although its geometry passed, it weakened the
+    booking hierarchy and exposed the contact before the visitor expressed intent.
 
 ## Contributing Factors
 
@@ -126,8 +131,8 @@ The full-catalog static preview exposed several user-visible regressions around 
 - event `4671` exposes that same factual journey on the established mobile surface as a flat compact block; only official-transfer boarding fine print starts collapsed, while origin, two departures, final walk, return risk and car remain visible; phone widths `320` and `390` have no horizontal overflow and every link/disclosure target is at least `44px` high;
 - event `3103` applies the 30-minute Янтарь-холл exit/walk/boarding buffer, shows `6726`/`6728`, excludes unsafe `6724`, and shows no next-morning wait inside the desktop renderer;
 - event `4783` opens the grouped multi-portrait viewer with the seven technically strong images, excludes five materially weak renditions while that strong set exists, and discloses `7 из 12`;
-- event `6851` exposes the formatted telephone number at standard body size, omits the redundant desktop phone glyph and visible copy-helper wording, and copies through a fixed `44×44` copy→check action with accessible live feedback;
-- event `6851` keeps admission, the one-line phone number and all action controls on the same visual row at `1536×864` and `1920×1080`; its calendar is icon-only and the panel height is stable after copy success;
+- event `6851` initially exposes the established branded primary CTA `Показать телефон` with a copy icon and no handset/helper line; one click reveals the standard-size formatted number inside that same CTA, copies the normalized value and shows both transient `Номер скопирован` toast and polite live feedback;
+- event `6851` keeps admission, the one-line branded CTA and all action controls on the same visual row at `1366×768`, `1536×864` and `1920×1080`; its calendar is icon-only and the CTA/panel rectangles are stable before and after reveal/copy success;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
 - insufficient-feedback placeholder copy is absent.
 - at phone widths `320` and `390`, a crawl of at least 36 event pages preserves the exact current preview prefix and the accepted mobile hero/action surface; actual hero-related, other-date, initial/load-more discovery and personal-feed clicks must be exercised;
@@ -156,6 +161,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - reserve dynamic-card media geometry and add desktop gallery recommendation parity.
 - scope personal-feed caches by preview base and normalize same-site dynamic event URLs at the shared renderer boundary rather than trusting persisted/remote href projections.
 - require venue-access buffers after exact event ends, separate ambiguous multimodal route CTAs, apply quality admission with a weak-only fallback, and accept action panels by measured component geometry rather than content assertions alone.
+- preserve primary-action hierarchy when changing an icon or feedback behavior: interaction-only corrections must not demote an accepted branded CTA into detached utility controls.
 
 ## Follow-up Actions
 

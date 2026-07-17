@@ -1,7 +1,6 @@
 ---
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
-import CopyAction from './design-system/CopyAction.astro';
 import type { PreviewEvent } from '../lib/types';
 import {
   displayDateTime,
@@ -30,8 +29,14 @@ const ctaIsExternal = isExternalHttpUrl(ctaHref);
 const ctaIsTelephone = isTelephoneUrl(ctaHref);
 const phoneValue = ctaIsTelephone ? String(ctaHref || '').replace(/^tel:/iu, '').trim() : '';
 const phoneDigits = phoneValue.replace(/\D/gu, '');
-const phoneDisplay = phoneDigits.length === 11 && phoneDigits.startsWith('7')
-  ? `+7 ${phoneDigits.slice(1, 4)} ${phoneDigits.slice(4, 7)}-${phoneDigits.slice(7, 9)}-${phoneDigits.slice(9, 11)}`
+const normalizedPhoneDigits = phoneDigits.length === 11 && phoneDigits.startsWith('8')
+  ? `7${phoneDigits.slice(1)}`
+  : phoneDigits;
+const phoneCopyValue = normalizedPhoneDigits.length === 11 && normalizedPhoneDigits.startsWith('7')
+  ? `+${normalizedPhoneDigits}`
+  : phoneValue;
+const phoneDisplay = normalizedPhoneDigits.length === 11 && normalizedPhoneDigits.startsWith('7')
+  ? `+7 ${normalizedPhoneDigits.slice(1, 4)} ${normalizedPhoneDigits.slice(4, 7)}-${normalizedPhoneDigits.slice(7, 9)}-${normalizedPhoneDigits.slice(9, 11)}`
   : phoneValue;
 const soldOut = isTicketSoldOut(event);
 const canAddToCalendar = isCalendarEligible(event);
@@ -51,10 +56,20 @@ const shareFileName = `kenigevents-${event.slug}`;
   {calendarPrimary ? (
     <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
   ) : ctaIsTelephone && phoneValue ? (
-    <div class="desktop-prototype__phone-control" data-desktop-phone-control>
-      <strong data-desktop-phone-number>{phoneDisplay}</strong>
-      <CopyAction value={phoneValue} ariaLabel={`Скопировать номер организатора ${phoneDisplay}`} successLabel="Номер скопирован" variant="inverse" className="desktop-prototype__phone-copy" />
-    </div>
+    <button
+      type="button"
+      class="desktop-prototype__primary-action desktop-prototype__phone-copy"
+      data-desktop-phone-copy
+      data-phone-copy-value={phoneCopyValue}
+      data-phone-display={phoneDisplay}
+      aria-label={`Показать и скопировать номер организатора ${phoneDisplay}`}
+      title="Показать телефон"
+    >
+      <Icon name="copy" />
+      <span class="desktop-prototype__phone-label" data-desktop-phone-label>Показать телефон</span>
+      <span class="desktop-prototype__phone-toast" data-desktop-phone-toast aria-hidden="true">Номер скопирован</span>
+      <span class="sr-only" data-desktop-phone-status role="status" aria-live="polite" aria-atomic="true"></span>
+    </button>
   ) : ctaHref ? (
     <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
       <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
@@ -103,6 +118,75 @@ const shareFileName = `kenigevents-${event.slug}`;
   </div>
 </aside>
 
+<script>
+  const fallbackCopyPhone = (value:string) => {
+    const fallback = document.createElement('textarea');
+    fallback.value = value;
+    fallback.setAttribute('readonly', '');
+    fallback.style.position = 'fixed';
+    fallback.style.opacity = '0';
+    document.body.appendChild(fallback);
+    fallback.select();
+    const copied = document.execCommand('copy');
+    fallback.remove();
+    if (!copied) throw new Error('clipboard unavailable');
+  };
+
+  const copyPhone = async (value:string) => {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return;
+      } catch {
+        // Embedded browsers can expose Clipboard API while rejecting writes.
+      }
+    }
+    fallbackCopyPhone(value);
+  };
+
+  if (!document.documentElement.dataset.desktopPhoneCopyBound) {
+    document.documentElement.dataset.desktopPhoneCopyBound = 'true';
+    const resetTimers = new WeakMap<HTMLButtonElement, number>();
+    document.addEventListener('click', async (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest<HTMLButtonElement>('[data-desktop-phone-copy]')
+        : null;
+      if (!button || button.getAttribute('aria-busy') === 'true') return;
+      const value = button.dataset.phoneCopyValue || '';
+      const phoneDisplay = button.dataset.phoneDisplay || value;
+      const label = button.querySelector<HTMLElement>('[data-desktop-phone-label]');
+      const toast = button.querySelector<HTMLElement>('[data-desktop-phone-toast]');
+      const status = button.querySelector<HTMLElement>('[data-desktop-phone-status]');
+      const currentTimer = resetTimers.get(button);
+      if (currentTimer) window.clearTimeout(currentTimer);
+
+      button.dataset.phoneRevealed = 'true';
+      if (label) label.textContent = phoneDisplay;
+      button.setAttribute('aria-label', `Скопировать номер организатора ${phoneDisplay}`);
+      button.title = `Скопировать ${phoneDisplay}`;
+      button.setAttribute('aria-busy', 'true');
+      try {
+        await copyPhone(value);
+        button.dataset.copyState = 'success';
+        if (toast) toast.textContent = 'Номер скопирован';
+        if (status) status.textContent = 'Номер скопирован';
+      } catch {
+        button.dataset.copyState = 'error';
+        if (toast) toast.textContent = 'Не удалось скопировать';
+        if (status) status.textContent = `Не удалось скопировать. Номер: ${phoneDisplay}`;
+      } finally {
+        button.removeAttribute('aria-busy');
+      }
+
+      const timer = window.setTimeout(() => {
+        delete button.dataset.copyState;
+        if (status) status.textContent = '';
+      }, 2400);
+      resetTimers.set(button, timer);
+    });
+  }
+</script>
+
 <style>
   .desktop-prototype__action {
     z-index: 3;
@@ -140,9 +224,36 @@ const shareFileName = `kenigevents-${event.slug}`;
   }
   :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }
   :global(button.desktop-prototype__primary-action) { border:0; font:inherit; cursor:pointer; }
-  .desktop-prototype__phone-control { min-width:0; display:flex; align-items:center; justify-content:flex-start; gap:.5rem; }
-  .desktop-prototype__phone-control>strong { min-width:0; display:block; overflow:hidden; white-space:nowrap; color:#fffaf2; font-size:var(--ke-font-size-300,1rem); font-variant-numeric:tabular-nums; text-overflow:clip; user-select:all; }
-  .desktop-prototype__phone-control :global(.desktop-prototype__phone-copy) { flex:0 0 auto; }
+  /* The success toast intentionally escapes the rounded CTA; a later page-level
+     primary-action rule otherwise clips it even though it does not affect layout. */
+  .desktop-prototype__phone-copy { position:relative; width:100%; min-width:0; overflow:visible !important; white-space:nowrap; }
+  .desktop-prototype__phone-copy:active { box-shadow:0 6px 14px rgba(124,49,20,.22); }
+  .desktop-prototype__phone-copy:focus-visible { outline:3px solid var(--ke-focus-ring,#f1ae79); outline-offset:3px; }
+  .desktop-prototype__phone-label { min-width:0; overflow:hidden; font-size:var(--ke-font-size-300,1rem); font-variant-numeric:tabular-nums; text-overflow:ellipsis; }
+  .desktop-prototype__phone-copy[data-phone-revealed="true"] .desktop-prototype__phone-label { user-select:all; }
+  .desktop-prototype__phone-toast {
+    position:absolute;
+    left:50%;
+    bottom:calc(100% + .5rem);
+    z-index:5;
+    padding:.42rem .65rem;
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:10px;
+    color:#fff;
+    background:#2d6f58;
+    box-shadow:0 8px 18px rgba(20,52,41,.28);
+    font-size:.76rem;
+    font-weight:850;
+    line-height:1;
+    opacity:0;
+    pointer-events:none;
+    transform:translate(-50%,.3rem);
+  }
+  .desktop-prototype__phone-copy[data-copy-state="success"] .desktop-prototype__phone-toast { opacity:1; transform:translate(-50%,0); }
+  .desktop-prototype__phone-copy[data-copy-state="error"] .desktop-prototype__phone-toast { opacity:1; transform:translate(-50%,0); background:#8c3327; }
+  @media (prefers-reduced-motion:no-preference) {
+    .desktop-prototype__phone-toast { transition:opacity .16s ease, transform .16s ease; }
+  }
   :global(.desktop-prototype__primary-action.is-disabled) { opacity: .7; }
   .desktop-prototype__action-row { display: flex; gap: .45rem; }
   :global(.desktop-prototype__icon-action) {
@@ -189,8 +300,8 @@ const shareFileName = `kenigevents-${event.slug}`;
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:52px; min-width:52px; padding-inline:.3rem; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { max-width:0; opacity:0; }
 
-  /* A telephone is useful on desktop only when it remains visible and
-     copyable. Keep the whole action surface on one explicit row instead of
+  /* The branded phone CTA must remain one compact, copyable primary action.
+     Keep the whole action surface on one explicit row instead of
      relying on CSS grid auto-placement, which previously pushed the metrics
      to a second line when the empty live-status node occupied a grid cell. */
   .desktop-prototype__action[data-primary-action-kind="phone"] {
@@ -201,7 +312,7 @@ const shareFileName = `kenigevents-${event.slug}`;
     row-gap:0;
   }
   .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { grid-column:1; grid-row:1; min-width:4.75rem; }
-  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-control { grid-column:2; grid-row:1; min-width:0; overflow:hidden; }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-copy { grid-column:2; grid-row:1; min-width:0; }
   .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__action-row { grid-column:3; grid-row:1; justify-self:end; }
   :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) {
     width:52px;

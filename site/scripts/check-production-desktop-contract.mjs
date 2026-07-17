@@ -125,8 +125,8 @@ for (const { slug, file } of eventFiles) {
     if (!desktopHtml.includes('Показаны 7 из 12 изображений в лучшем качестве')) failures.push(`${slug}: grouped viewer does not disclose quality filtering`);
   }
   if (slug === 'kinopokaz-fatalnaya-chechetka-kaliningrad-6851') {
-    if (!desktopHtml.includes('data-ke-copy-action') || !desktopHtml.includes('data-desktop-phone-number') || !desktopHtml.includes('+7 911 868-89-55')) {
-      failures.push(`${slug}: desktop phone CTA does not expose the copyable number`);
+    if (!desktopHtml.includes('data-desktop-phone-copy') || !desktopHtml.includes('data-phone-display="+7 911 868-89-55"') || !desktopHtml.includes('>Показать телефон</span>')) {
+      failures.push(`${slug}: desktop phone CTA does not preserve branded reveal-and-copy semantics`);
     }
     if (!desktopHtml.includes('data-desktop-action-panel') || !desktopHtml.includes('data-primary-action-kind="phone"')) {
       failures.push(`${slug}: phone action panel lacks the component-responsive geometry contract`);
@@ -134,12 +134,12 @@ for (const { slug, file } of eventFiles) {
     if (desktopHtml.includes('data-phone-copy-status')) {
       failures.push(`${slug}: phone action panel still contains the layout-shifting status row`);
     }
-    const phoneControl = desktopHtml.match(/data-desktop-phone-control[\s\S]*?<\/div>/u)?.[0] || '';
-    if (phoneControl.includes('icon--phone')) failures.push(`${slug}: recognizable desktop phone number still has a redundant phone icon`);
-    if (!phoneControl.includes('icon--copy') || !phoneControl.includes('data-ke-copy-status')) {
-      failures.push(`${slug}: desktop phone control lacks the icon-only shared CopyAction and its live status`);
+    const phoneControl = desktopHtml.match(/<button[^>]*data-desktop-phone-copy[\s\S]*?<\/button>/u)?.[0] || '';
+    if (phoneControl.includes('icon--phone')) failures.push(`${slug}: branded desktop phone CTA still has the rejected phone icon`);
+    if (!phoneControl.includes('icon--copy') || !phoneControl.includes('data-desktop-phone-status') || !phoneControl.includes('data-desktop-phone-toast')) {
+      failures.push(`${slug}: branded desktop phone CTA lacks copy icon plus visible and live feedback`);
     }
-    if (phoneControl.includes('<small>Скопировать номер</small>')) failures.push(`${slug}: desktop phone control restored visible copy helper text`);
+    if (phoneControl.includes('Скопировать номер</small>')) failures.push(`${slug}: desktop phone CTA restored the rejected helper line`);
   }
   if (html.includes('Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.')) {
     failures.push(`${slug}: insufficient-feedback placeholder is still rendered`);
