@@ -55,11 +55,13 @@ official-transfer boarding fine print hidden in a native disclosure.
 - pickup points shown from the venue are Дом Советов in Kaliningrad, Lenina 10
   by the Zelenogradsk bus terminal and Lenina 33 by Svetlogorsk-2;
 - the booking CTA uses the current Radario destination linked by KAUP;
-- public bus `119` is shown separately and always starts with the exact origin:
-  `Калининградский автовокзал · ул. Железнодорожная, 7`, plus one conventional
-  pin link to that point. Arrival uses the reviewed 65-minute ride plus about
-  `4 km / 53 min` on foot from Romanovo; the UI does not invent a short
-  pedestrian entrance;
+- public bus `119` is shown separately and uses `Северный вокзал` as the
+  practical Kaliningrad boarding point because the reviewed route serves that
+  stop. The official source snapshot remains stored as terminal departures;
+  the UI derives estimated North times at `terminal + 15 min` and subtracts the
+  same offset from the remaining ride, so Romanovo/venue arrival estimates do
+  not drift. The final leg remains about `4 km / 53 min` on foot from Romanovo;
+  the UI does not invent a short pedestrian entrance;
 - the compact phone variant keeps the bus origin, departures, final walk and
   no-return warning open by default, uses bus/walk/car/pin SVG icons and removes
   desktop-card shadow/weight instead of hiding the transport product entirely;
@@ -173,7 +175,7 @@ The build-time coverage/topology and venue last-mile reference is maintained sep
 
 `site/src/data/busTransportSchedules.json` and `site/src/lib/eventBusTransport.ts` activate only for a source-backed `11:00–16:00` event at `Холмогорье / Сказочное Холмогорье`, Романово:
 
-- the official route registry shows that `118`, `118А` and `119` share the same corridor from the Kaliningrad bus terminal through `Северный вокзал` and up to `Романовский поворот`; the public UI therefore uses one shared `около 1 часа в автобусе` estimate and one shared `Северный — примерно через 10–15 минут` note instead of different per-route or per-chip estimates;
+- the official route registry shows that `118`, `118А` and `119` share the same corridor from the Kaliningrad bus terminal through `Северный вокзал` and up to `Романовский поворот`; the static data therefore preserves the official terminal timetable as raw provenance but selects `Северный вокзал` for public boarding. Each displayed North time is explicitly estimated at `terminal + 15 min`; remaining ride time is reduced by the same offset so destination estimates are invariant;
 - OSM/Valhalla checks give `3.47km / 8.7m` free-flow to Северный, `30.22km / 46.5m` to the turn and `32.66km / 49.3m` to central Romanovo. These are map-model driving times, not a bus timetable; the public one-hour band includes stops, boarding and traffic;
 - `119` enters the settlement and leaves about `2km / 27m` on foot; `118/118А` stop at `Романовский поворот` and leave about `3.9km / 52m`. The paths are not identical, but the UI keeps one preferred interactive walking link from central Romanovo and leaves the different walk legs as text;
 - the decorative SVG bus icon is large and unboxed. Outbound and return departures use one-line rounded time chips;

@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
+import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -105,6 +106,33 @@ for (const event of eventsData.events) {
   transportIcsTotal += files.length;
 }
 if (transportEventCount === 0 || transportIcsTotal === 0) throw new Error('Preview must include at least one factual transport event and linked transport ICS file');
+
+const romanovoRoute = busData.routes.find((route) => route.id === 'romanovo-holmogorye');
+const route119 = romanovoRoute?.outbound_groups.find((group) => group.routes === '119');
+if (!romanovoRoute || !route119) throw new Error('Romanovo route 119 transport source is missing');
+if (romanovoRoute.origin_stop !== 'Автовокзал Калининград' || route119.departure_stop !== 'Автовокзал Калининград') {
+  throw new Error('Route 119 must preserve the official raw terminal departure provenance');
+}
+if (!route119.departures.includes('16:30') || !route119.departures.includes('17:55')) {
+  throw new Error('Route 119 must preserve the raw 16:30/17:55 terminal departures used by the KAUP regression');
+}
+if (
+  romanovoRoute.preferred_boarding?.stop_name !== 'Северный вокзал'
+  || romanovoRoute.preferred_boarding?.offset_from_terminal_minutes !== 15
+  || romanovoRoute.preferred_boarding?.time_is_estimated !== true
+) throw new Error('Romanovo buses that serve North must prefer the estimated terminal +15 minute North boarding contract');
+
+const busDemoEvent = eventsData.events.find((event) => event.id === 6710);
+if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regression event');
+const busDemoHtml = readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8');
+for (const marker of [
+  'Северный вокзал → Сказочное Холмогорье',
+  'data-terminal-departure="08:10"',
+  'data-boarding-stop="Северный вокзал"',
+  '>≈ 08:25</time>',
+]) {
+  if (!busDemoHtml.includes(marker)) throw new Error(`Event 6710 preferred North boarding contract is missing ${marker}`);
+}
 
 const mobileReviewCases = {
   control: readFileSync(join(root, 'lab/event-mobile/examples/control/photo-paid/index.html'), 'utf8'),

@@ -1,13 +1,23 @@
 import data from '../data/busTransportSchedules.json';
+import { busClockToMinutes, busMinutesToClock, resolveBusBoarding } from './busBoarding';
 import type { PreviewEvent } from './types';
+
+export interface EventBusDeparture {
+  terminal: string;
+  boarding: string;
+  boardingEstimated: boolean;
+  estimatedStopArrival: string;
+}
 
 export interface EventBusOutboundGroup {
   routes: string;
   departureStop: string;
+  terminalDepartureStop: string;
+  boardingOffsetMinutes: number;
   arrivalStop: string;
   walkEstimateMinutes: number;
   walkDistanceKm: number;
-  departures: string[];
+  departures: EventBusDeparture[];
 }
 
 export interface EventBusReturnGroup {
@@ -47,9 +57,7 @@ function normalize(value: string | null | undefined): string {
 }
 
 function timeToMinutes(value: string | null | undefined): number | null {
-  const match = /^(\d{2}):(\d{2})$/u.exec(String(value || ''));
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
+  return busClockToMinutes(value);
 }
 
 export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_name' | 'start_time' | 'time_range_end'>): EventBusSuggestion | null {
@@ -62,9 +70,10 @@ export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_
     && candidate.event_end === event.time_range_end,
   );
   if (!route) return null;
+  const preferredBoarding = route.preferred_boarding;
   return {
     id: route.id,
-    originStop: route.origin_stop,
+    originStop: preferredBoarding?.stop_name || route.origin_stop,
     venueName: route.venue_name,
     venueMapUrl: route.venue_map_url,
     mapSquareImageUrl: route.map_square_image_url,
@@ -75,21 +84,37 @@ export function getEventBusSuggestion(event: Pick<PreviewEvent, 'city' | 'venue_
     venueHoursLabel: route.venue_hours_label,
     sharedRideEstimateLabel: route.shared_ride_estimate_label,
     minimumVisitMinutes: route.return_min_visit_minutes,
-    outboundGroups: route.outbound_groups.map((group) => ({
-      routes: group.routes,
-      departureStop: group.departure_stop,
-      arrivalStop: group.arrival_stop,
-      walkEstimateMinutes: group.walk_estimate_minutes,
-      walkDistanceKm: group.walk_distance_km,
-      departures: group.departures.filter((departure) => {
+    outboundGroups: route.outbound_groups.map((group) => {
+      const departures = group.departures.map((departure) => {
         const eventStart = timeToMinutes(event.start_time);
-        const departureMinutes = timeToMinutes(departure);
-        if (eventStart === null || departureMinutes === null) return false;
-        const venueArrival = departureMinutes + group.ride_estimate_minutes + group.walk_estimate_minutes;
+        const boarding = resolveBusBoarding({
+          terminalDeparture:departure,
+          terminalStop:group.departure_stop,
+          terminalRideEstimateMinutes:group.ride_estimate_minutes,
+          preferredBoarding,
+        });
+        if (eventStart === null || !boarding) return null;
+        const venueArrival = boarding.destinationArrivalMinutes + group.walk_estimate_minutes;
         const arrivalLead = eventStart - venueArrival;
-        return arrivalLead >= route.outbound_min_arrival_lead_minutes && arrivalLead <= route.outbound_max_arrival_lead_minutes;
-      }),
-    })).filter((group) => group.departures.length > 0),
+        if (arrivalLead < route.outbound_min_arrival_lead_minutes || arrivalLead > route.outbound_max_arrival_lead_minutes) return null;
+        return {
+          terminal:departure,
+          boarding:boarding.boardingDeparture,
+          boardingEstimated:boarding.boardingTimeEstimated,
+          estimatedStopArrival:busMinutesToClock(boarding.destinationArrivalMinutes),
+        };
+      }).filter((departure): departure is EventBusDeparture => Boolean(departure));
+      return {
+        routes:group.routes,
+        departureStop:preferredBoarding?.stop_name || group.departure_stop,
+        terminalDepartureStop:group.departure_stop,
+        boardingOffsetMinutes:Number(preferredBoarding?.offset_from_terminal_minutes || 0),
+        arrivalStop:group.arrival_stop,
+        walkEstimateMinutes:group.walk_estimate_minutes,
+        walkDistanceKm:group.walk_distance_km,
+        departures,
+      };
+    }).filter((group) => group.departures.length > 0),
     returnGroups: route.return_groups.map((group) => {
       const eventStart = timeToMinutes(event.start_time);
       const eventEnd = timeToMinutes(event.time_range_end);

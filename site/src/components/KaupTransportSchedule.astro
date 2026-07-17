@@ -51,7 +51,7 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
         <ol aria-label={`Подходящие рейсы автобуса № ${suggestion.busRoute} до остановки ${suggestion.busArrivalStop}`}>
           {suggestion.outbound.map((option) => (
             <li class:list={[option.tight && 'is-tight']}>
-              <strong>{option.departure}</strong>
+              <strong data-terminal-departure={option.terminalDeparture}>{option.departureEstimated ? '≈ ' : ''}{option.departure}</strong>
               <span><b>ост. «{suggestion.busArrivalStop}» ≈ {option.estimatedStopArrival}</b><small>пешком до Кауп ≈ {option.estimatedVenueArrival}</small></span>
               {option.tight && <em>Небольшой запас — лучше выбрать более ранний рейс.</em>}
             </li>

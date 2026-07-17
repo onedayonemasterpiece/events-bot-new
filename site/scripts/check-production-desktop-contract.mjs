@@ -68,8 +68,8 @@ for (const { slug, file } of eventFiles) {
       'data-kaup-public-bus',
       '600 ₽ туда и обратно',
       'data-kaup-bus-origin',
-      'Калининградский автовокзал',
-      'ул. Железнодорожная, 7',
+      'Северный вокзал',
+      'Северный вокзал · Калининград',
       'data-kaup-last-mile',
       'Открыть пеший маршрут',
       'data-kaup-car-route',
@@ -78,7 +78,7 @@ for (const { slug, file } of eventFiles) {
     ]) {
       if (!desktopHtml.includes(marker)) failures.push(`${slug}: KAUP desktop transport is missing ${marker}`);
     }
-    for (const rejectedMarker of ['kaup-transport__map-mark', 'kaup-transport__route', '>54.8781']) {
+    for (const rejectedMarker of ['kaup-transport__map-mark', 'kaup-transport__route', '>54.8781', 'Калининградский автовокзал', 'ул. Железнодорожная, 7']) {
       if (desktopHtml.includes(rejectedMarker)) failures.push(`${slug}: KAUP transport still exposes rejected map decoration ${rejectedMarker}`);
     }
     const originIndex = desktopHtml.indexOf('data-kaup-bus-origin');
@@ -89,8 +89,20 @@ for (const { slug, file } of eventFiles) {
     if (!(originIndex >= 0 && scheduleIndex > originIndex && lastMileIndex > scheduleIndex && returnWarningIndex > lastMileIndex && carIndex > returnWarningIndex)) {
       failures.push(`${slug}: KAUP travel flow is not ordered as origin → schedule → last mile → return warning → car`);
     }
-    for (const marker of ['data-kaup-compact', 'Трансфер · 600 ₽ туда и обратно', 'Точки посадки и условия', 'Калининградский автовокзал', 'ул. Железнодорожная, 7', 'Автобус № 119']) {
+    for (const marker of ['data-kaup-compact', 'Трансфер · 600 ₽ туда и обратно', 'Точки посадки и условия', 'Северный вокзал · Калининград', 'Автобус № 119']) {
       if (!mobileHtml.includes(marker)) failures.push(`${slug}: compact mobile KAUP journey is missing ${marker}`);
+    }
+    for (const [surface, surfaceHtml] of [['desktop', desktopHtml], ['mobile', mobileHtml]]) {
+      for (const [terminal, north, romanovo, venue] of [
+        ['16:30', '16:45', '17:35', '18:28'],
+        ['17:55', '18:10', '19:00', '19:53'],
+      ]) {
+        const rowPattern = new RegExp(`data-terminal-departure="${terminal}"[^>]*>≈ ${north}<\\/strong>[\\s\\S]*?Романово[^<]*${romanovo}<\\/b>[\\s\\S]*?${venue}`, 'u');
+        if (!rowPattern.test(surfaceHtml)) failures.push(`${slug}: ${surface} KAUP route must keep terminal ${terminal}, estimate North ${north}, Romanovo ${romanovo} and venue ${venue}`);
+      }
+      if (surfaceHtml.includes('Калининградский автовокзал') || surfaceHtml.includes('ул. Железнодорожная, 7')) {
+        failures.push(`${slug}: ${surface} KAUP route regressed from North boarding to the bus terminal`);
+      }
     }
     if (!mobileHtml.includes('<details class="kaup-transport__transfer-details"')) {
       failures.push(`${slug}: compact mobile KAUP transfer details are not progressively disclosed`);

@@ -41,6 +41,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: user acceptance rejected v7 because the KAUP information architecture still obscured the bus origin/journey order and the telephone panel's real child geometry still broke despite the earlier browser claim; the stored `a-opus` output contained no final verdict and is not valid acceptance evidence.
 - 2026-07-17: published v8 desktop correction with an explicit terminal-address-first bus journey and a height-stable one-row telephone CTA; repeated public Playwright geometry and Gemini 3.1 Pro (High) visual review passed without material blockers.
 - 2026-07-17: pre-handoff mobile browser QA found that v8 rendered the corrected KAUP journey only on the desktop surface, so the v8 links were deliberately not sent for mobile review. A compact phone variant and generated-page contract were added for v9 before Telegram handoff.
+- 2026-07-17: user acceptance rejected the v9 bus origin because route `119` serves `Северный вокзал` and the previously reviewed product rule plans from that stop. Investigation traced the regression to a compacting change that dropped the numeric North offset, followed by the exact-venue KAUP fork and v8/v9 gates hardening the terminal address instead of the preferred boarding stop.
 
 ## Root Cause
 
@@ -68,6 +69,12 @@ The full-catalog static preview exposed several user-visible regressions around 
     established mobile renderer did not invoke the exact-venue component, and
     the v8 gate checked desktop KAUP plus generic mobile transport rather than
     asserting that event `4671` exposed the exact journey on the phone surface.
+16. The earlier bus contract stored terminal departures plus a reviewed
+    `Северный вокзал +15 min` boarding calculation. Compacting removed the
+    numeric offset in favour of shared prose, and the later KAUP-specific
+    resolver read raw terminal times directly. The v8 generated-page gate then
+    asserted the resulting terminal address, converting a semantic regression
+    into a false-green acceptance condition.
 
 ## Contributing Factors
 
@@ -106,7 +113,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - previous desktop template, related-card crop, transport and mobile V8 regression contracts remain green across the full future-event catalog.
 - event `5756` uses Editorial with a classified safe horizontal photo while its non-identity document remains contained in fullscreen;
 - event `4671` shows exact-venue KAUP transfer, bus and map guidance sourced from KAUP/Автовокзал and distinguishes the pedestrian route from the Romanovo stop from the separate Kaliningrad car route;
-- event `4671` names `Калининградский автовокзал · ул. Железнодорожная, 7`, orders the independent flow as origin → schedule → final walking leg → no-return warning → car, uses standard mode/pin icons, and exposes neither raw coordinates nor the rejected pseudo-map/route schematic;
+- event `4671` uses `Северный вокзал` as the practical route-119 boarding point, renders the reviewed estimated North departures at raw terminal time `+15 min`, keeps Romanovo and venue arrival estimates unchanged, orders the independent flow as origin → schedule → final walking leg → no-return warning → car, uses standard mode/pin icons, and exposes neither raw coordinates nor the rejected pseudo-map/route schematic;
 - event `4671` exposes that same factual journey on the established mobile surface as a flat compact block; only official-transfer boarding fine print starts collapsed, while origin, two departures, final walk, return risk and car remain visible; phone widths `320` and `390` have no horizontal overflow and every link/disclosure target is at least `44px` high;
 - event `3103` applies the 30-minute Янтарь-холл exit/walk/boarding buffer, shows `6726`/`6728`, excludes unsafe `6724`, and shows no next-morning wait inside the desktop renderer;
 - event `4783` opens the grouped multi-portrait viewer with the seven technically strong images, excludes five materially weak renditions while that strong set exists, and discloses `7 из 12`;

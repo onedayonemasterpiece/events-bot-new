@@ -1,8 +1,11 @@
 import busData from '../data/busTransportSchedules.json';
+import { busClockToMinutes, busMinutesToClock, resolveBusBoarding } from './busBoarding';
 import type { PreviewEvent } from './types';
 
 export interface KaupBusOption {
+  terminalDeparture: string;
   departure: string;
+  departureEstimated: boolean;
   estimatedStopArrival: string;
   estimatedVenueArrival: string;
   arrivalLeadMinutes: number;
@@ -40,12 +43,11 @@ function normalize(value: string | null | undefined): string {
 }
 
 function minutes(value: string | null | undefined): number | null {
-  const match = /^(\d{2}):(\d{2})$/u.exec(String(value || ''));
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+  return busClockToMinutes(value);
 }
 
 function clock(value: number): string {
-  return `${String(Math.floor(value / 60) % 24).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+  return busMinutesToClock(value);
 }
 
 export function getKaupTransportSuggestion(event: Pick<PreviewEvent, 'venue_name' | 'start_time' | 'time_range_end'>): KaupTransportSuggestion | null {
@@ -55,19 +57,27 @@ export function getKaupTransportSuggestion(event: Pick<PreviewEvent, 'venue_name
   if (eventStart === null) return null;
   const publicRoute = busData.routes.find((route) => route.id === 'romanovo-holmogorye');
   const route119 = publicRoute?.outbound_groups.find((group) => group.routes === '119');
+  const preferredBoarding = publicRoute?.preferred_boarding;
   const rideMinutes = Number(route119?.ride_estimate_minutes || 65);
   // The reviewed Kaup venue access record is 4.306 km / about 53 minutes from
   // the public stop. It is presented as a caution, never as an accessible walk.
   const walkMinutes = 53;
   const outbound = (route119?.departures || [])
     .map((departure) => {
-      const departureMinutes = minutes(departure);
-      if (departureMinutes === null) return null;
-      const estimatedArrivalMinutes = departureMinutes + rideMinutes + walkMinutes;
+      const boarding = resolveBusBoarding({
+        terminalDeparture:departure,
+        terminalStop:route119?.departure_stop || publicRoute?.origin_stop || 'Автовокзал Калининград',
+        terminalRideEstimateMinutes:rideMinutes,
+        preferredBoarding,
+      });
+      if (!boarding) return null;
+      const estimatedArrivalMinutes = boarding.destinationArrivalMinutes + walkMinutes;
       const arrivalLeadMinutes = eventStart - estimatedArrivalMinutes;
       return {
-        departure,
-        estimatedStopArrival:clock(departureMinutes + rideMinutes),
+        terminalDeparture:departure,
+        departure:boarding.boardingDeparture,
+        departureEstimated:boarding.boardingTimeEstimated,
+        estimatedStopArrival:clock(boarding.destinationArrivalMinutes),
         estimatedVenueArrival:clock(estimatedArrivalMinutes),
         arrivalLeadMinutes,
         tight:arrivalLeadMinutes < 20,
@@ -93,9 +103,9 @@ export function getKaupTransportSuggestion(event: Pick<PreviewEvent, 'venue_name
       'Светлогорск-2 · Ленина, 33, у вокзала',
     ],
     busRoute:'119',
-    busOriginName:'Калининградский автовокзал',
-    busOriginAddress:'ул. Железнодорожная, 7',
-    busOriginMapUrl:'https://yandex.ru/maps/?text=%D0%9A%D0%B0%D0%BB%D0%B8%D0%BD%D0%B8%D0%BD%D0%B3%D1%80%D0%B0%D0%B4%2C%20%D1%83%D0%BB.%20%D0%96%D0%B5%D0%BB%D0%B5%D0%B7%D0%BD%D0%BE%D0%B4%D0%BE%D1%80%D0%BE%D0%B6%D0%BD%D0%B0%D1%8F%2C%207',
+    busOriginName:preferredBoarding?.stop_name || route119?.departure_stop || 'Автовокзал Калининград',
+    busOriginAddress:preferredBoarding?.locality_label || 'Калининград',
+    busOriginMapUrl:preferredBoarding?.map_url || 'https://yandex.ru/maps/?text=%D0%90%D0%B2%D1%82%D0%BE%D0%B2%D0%BE%D0%BA%D0%B7%D0%B0%D0%BB%20%D0%9A%D0%B0%D0%BB%D0%B8%D0%BD%D0%B8%D0%BD%D0%B3%D1%80%D0%B0%D0%B4',
     busArrivalStop:'Романово',
     walkDistanceLabel:'около 4 км',
     walkEstimateLabel:'около 53 минут пешком',

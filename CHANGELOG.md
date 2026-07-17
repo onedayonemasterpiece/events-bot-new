@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static event bus preferred boarding (INC-2026-07-16)**: restored the reviewed rule that Romanovo buses serving `Северный вокзал` are planned from that stop, preserving official terminal timetable values as provenance while deriving estimated North departures at `terminal + 15 minutes` and keeping downstream Romanovo/venue arrival estimates invariant.
 - **Static KAUP mobile handoff (INC-2026-07-16)**: carried the accepted factual KAUP journey into the phone event page as a flat compact block after `Коротко`, keeping origin → departures → Romanovo walk → return warning → car visible while folding only official-transfer boarding fine print into a native disclosure.
 - **Static desktop KAUP/telephone acceptance correction (INC-2026-07-16)**: flattened the KAUP travel block into an explicit origin → bus timetable → Romanovo-to-venue walk → return warning → car flow with standard mode/location icons and no raw-coordinate pseudo-map, and made desktop phone actions a strict one-row geometry whose calendar is icon-only and whose copy confirmation cannot shift layout.
 - **Static desktop event product polish (INC-2026-07-16)**: separated the KAUP stop-to-venue walking route from the Kaliningrad car route, added venue-access time to exact-duration return-train selection, quality-filtered the efficient multi-portrait viewer with an honest fallback/disclosure, and made phone action panels component-responsive so adaptive calendar copy cannot force overflow; mobile rendering remains unchanged.

@@ -32,7 +32,13 @@ const formatVisitDuration = (minutes: number) => `${Math.floor(minutes / 60)} ч
                 <p>до «{group.arrivalStop}» · затем {group.walkDistanceKm.toLocaleString('ru-RU')} км / {group.walkEstimateMinutes} мин пешком</p>
               </div>
               <div class="event-bus__times" aria-label={`Отправления автобуса ${group.routes}`}>
-                {group.departures.map((departure) => <time class="event-bus__time-chip">{departure}</time>)}
+                {group.departures.map((departure) => (
+                  <time
+                    class="event-bus__time-chip"
+                    data-terminal-departure={departure.terminal}
+                    data-boarding-stop={group.departureStop}
+                  >{departure.boardingEstimated ? '≈ ' : ''}{departure.boarding}</time>
+                ))}
               </div>
             </div>
           ))}
