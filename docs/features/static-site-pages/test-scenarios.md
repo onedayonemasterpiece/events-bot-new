@@ -233,6 +233,8 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-BUILD-14 — Template provenance.** Production и secret manifest фиксируют
   `static-event-detail-v11` и accepted source SHA `3b17e536…`; каждая страница
   несёт те же markers и один из разрешённых `editorial|split` результатов.
+  Real-event specimens привязаны к стабильному event id, а не к изменяемому
+  после Smart Update slug/title.
   Отсутствие хотя бы одного marker, lab-сценария или real-event family
   останавливает build до Kaggle artifact publication.
 

@@ -15,11 +15,13 @@ const eventFiles = fs.readdirSync(distRoot)
   .map((slug) => ({ slug, file:path.join(distRoot, slug, 'index.html') }))
   .filter(({ file }) => fs.existsSync(file));
 
+// Slugs are editorial data and may change after Smart Update. Event ids are the
+// stable identities for the accepted real-event specimens.
 const expectedSpecimens = new Map([
-  ['blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815', ['split', 'split-portrait-or-square-visual']],
-  ['spektakl-garazh-kaliningrad-5658', ['editorial', 'editorial-primary-qualified-landscape']],
-  ['epidemiya-ognennaya-rukopis-kaliningrad-4671', ['editorial', 'editorial-with-classified-identity-poster']],
-  ['zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756', ['editorial', 'editorial-replaces-non-identity-document-with-classified-photo']],
+  [6815, ['split', 'split-portrait-or-square-visual']],
+  [5658, ['editorial', 'editorial-primary-qualified-landscape']],
+  [4671, ['editorial', 'editorial-with-classified-identity-poster']],
+  [5756, ['editorial', 'editorial-replaces-non-identity-document-with-classified-photo']],
 ]);
 
 const requiredRoutingFamilies = new Set([
@@ -31,6 +33,7 @@ const templateContract = JSON.parse(fs.readFileSync(path.resolve('src/data/event
 const counts = new Map();
 const failures = [];
 for (const { slug, file } of eventFiles) {
+  const eventId = Number(slug.match(/-(\d+)$/u)?.[1] || 0);
   const html = fs.readFileSync(file, 'utf8');
   const family = html.match(/data-desktop-family="([^"]+)"/)?.[1];
   const reason = html.match(/data-presentation-reason="([^"]+)"/)?.[1];
@@ -51,11 +54,11 @@ for (const { slug, file } of eventFiles) {
   if (mobileVariant !== 'accepted-v8') failures.push(`${slug}: mobile variant changed from accepted-v8 to ${mobileVariant || 'missing'}`);
   if (mobileParallax !== 'photo-continuous-crop') failures.push(`${slug}: mobile parallax changed from photo-continuous-crop to ${mobileParallax || 'missing'}`);
   if (html.includes('data-lab-media-treatment="document-natural"')) failures.push(`${slug}: related cards regressed to unequal document-natural media heights`);
-  const expected = expectedSpecimens.get(slug);
+  const expected = expectedSpecimens.get(eventId);
   if (expected && (family !== expected[0] || reason !== expected[1])) {
     failures.push(`${slug}: routed to ${family}/${reason}, expected ${expected[0]}/${expected[1]}`);
   }
-  if (slug === 'spektakl-garazh-kaliningrad-5658' && !html.includes('/p/thumb/v1/')) {
+  if (eventId === 5658 && !html.includes('/p/thumb/v1/')) {
     failures.push(`${slug}: accepted compact rail lost its immutable thumbnail derivatives`);
   }
   const desktopHtml = html.slice(html.indexOf('<main class="desktop-clean-event'), html.indexOf('</main>', html.indexOf('<main class="desktop-clean-event')) + 7);
@@ -74,14 +77,14 @@ for (const { slug, file } of eventFiles) {
   const heroFit = desktopHtml.match(/data-hero-render-fit="([^"]+)"/u)?.[1];
   const expectedHeroFit = selectedMode === 'visual_only' && !(selectedSemanticStatus === 'classified' && selectedRole !== 'event_photo') ? 'cover' : 'contain';
   if (heroFit !== expectedHeroFit) failures.push(`${slug}: selected ${selectedMode || 'missing'} hero uses ${heroFit || 'missing'}, expected ${expectedHeroFit}`);
-  if (slug === 'spektakl-garazh-kaliningrad-5658' && (!desktopHtml.includes('data-editorial-crop="bounded-cover"') || heroFit !== 'cover')) {
+  if (eventId === 5658 && (!desktopHtml.includes('data-editorial-crop="bounded-cover"') || heroFit !== 'cover')) {
     failures.push(`${slug}: wide no-OCR photograph must use the bounded cover hero contract`);
   }
-  if (slug === 'zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756') {
+  if (eventId === 5756) {
     if (!desktopHtml.includes('data-selected-media-policy="visual_only"')) failures.push(`${slug}: classified horizontal photo was not selected as the desktop hero`);
     if (!desktopHtml.includes('data-desktop-gallery-fit="contain"')) failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);
   }
-  if (slug === 'epidemiya-ognennaya-rukopis-kaliningrad-4671') {
+  if (eventId === 4671) {
     for (const marker of [
       'data-kaup-transport',
       'data-kaup-official-transfer',
@@ -128,7 +131,7 @@ for (const { slug, file } of eventFiles) {
       failures.push(`${slug}: compact mobile KAUP transfer details are not progressively disclosed`);
     }
   }
-  if (slug === '15-avgusta-v-yantar-holl-spektakl-papa-svetlogorsk-3103') {
+  if (eventId === 3103) {
     for (const train of ['data-train-number="6726"', 'data-train-number="6728"']) {
       if (!desktopHtml.includes(train)) failures.push(`${slug}: safe explicit-duration evening return is missing ${train}`);
     }
@@ -137,14 +140,14 @@ for (const { slug, file } of eventFiles) {
     if (!desktopHtml.includes('около 15 минут пешком до Светлогорска-2')) failures.push(`${slug}: Yantar Hall walk/exit rationale is missing`);
     if (desktopHtml.includes('Первый поезд 16 августа')) failures.push(`${slug}: desktop still suggests waiting for a next-morning train despite evening returns`);
   }
-  if (slug === 'myuzikl-alye-parusa-kaliningrad-4783') {
+  if (eventId === 4783) {
     const efficientItems = desktopHtml.match(/data-efficient-viewer-item/g)?.length || 0;
     if (!desktopHtml.includes('data-split-efficient-viewer="true"') || efficientItems !== 7) {
       failures.push(`${slug}: quality-admitted grouped multi-portrait viewer should contain 7 items, got ${efficientItems}`);
     }
     if (!desktopHtml.includes('Показаны 7 из 12 изображений в лучшем качестве')) failures.push(`${slug}: grouped viewer does not disclose quality filtering`);
   }
-  if (slug === 'kinopokaz-fatalnaya-chechetka-kaliningrad-6851') {
+  if (eventId === 6851) {
     if (!desktopHtml.includes('data-desktop-phone-copy') || !desktopHtml.includes('data-phone-display="+7 911 868-89-55"') || !desktopHtml.includes('>Показать телефон</span>')) {
       failures.push(`${slug}: desktop phone CTA does not preserve branded reveal-and-copy semantics`);
     }
@@ -169,8 +172,10 @@ for (const { slug, file } of eventFiles) {
   }
 }
 
-for (const slug of expectedSpecimens.keys()) {
-  if (!eventFiles.some((item) => item.slug === slug)) failures.push(`${slug}: required real-event specimen is absent`);
+for (const eventId of expectedSpecimens.keys()) {
+  if (!eventFiles.some((item) => Number(item.slug.match(/-(\d+)$/u)?.[1] || 0) === eventId)) {
+    failures.push(`event ${eventId}: required real-event specimen is absent`);
+  }
 }
 
 for (const key of requiredRoutingFamilies) {
