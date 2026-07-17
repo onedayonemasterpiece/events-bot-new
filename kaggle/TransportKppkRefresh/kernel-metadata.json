@@ -1,0 +1,11 @@
+{
+  "id": "onedayonemasterpiece/kenigevents-transport-kppk-refresh",
+  "title": "KenigEvents transport KPPK refresh",
+  "code_file": "transport_kppk_refresh.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": []
+}
