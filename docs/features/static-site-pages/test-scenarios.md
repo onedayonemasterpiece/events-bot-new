@@ -207,7 +207,9 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-BUILD-06 — Cache/back/version transition.** После публикации новой версии reload/back/forward/service cache не возвращают несовместимые JS/data или состояние старого пользователя.
 - **ADD-BUILD-07 — Preview/production/secret isolation.** Preview и secret
   candidate остаются `noindex`; production profile формирует root canonical,
-  indexable robots/sitemap и не включает preview/lab/fixture routes.
+  indexable robots/sitemap и не включает preview/lab/fixture routes. Ссылка
+  бренда внутри fullscreen hero-gallery также ведёт в home текущего профиля, а
+  не возвращает production-пользователя в `__preview`.
 - **ADD-BUILD-08 — Immutable Kaggle handoff.** Kaggle получает отдельный
   read-only SQLite snapshot с `quick_check`, SHA-256, размером, max revision и
   уникальными `snapshot_id/run_id/build_id`; неверный hash/manifest останавливает

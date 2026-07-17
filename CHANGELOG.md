@@ -21,7 +21,9 @@
   page and release manifest, and fail preview/production/secret checks unless
   the complete horizontal, OCR-companion, document, portrait-series and
   quality-fallback matrix is rendered by the accepted family router; identify
-  real-event acceptance specimens by stable event id instead of mutable slug.
+  real-event acceptance specimens by stable event id instead of mutable slug,
+  and keep the fullscreen gallery brand link on the active site profile instead
+  of leaking production users into `__preview`.
 - **Secret candidate Astro assets**: keep candidate CSS/JS under the immutable
   bearer prefix and resolve `{buildId}` for production asset templates; release
   checks now reject unresolved or external candidate `_astro` references.

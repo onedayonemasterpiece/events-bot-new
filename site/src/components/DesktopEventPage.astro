@@ -13,7 +13,7 @@ import {
   displayDate,
   displayDateTime,
   eventHref,
-  withBase,
+  siteHomeHref,
 } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
@@ -606,7 +606,7 @@ const descriptionHtml = (event.description_html || '')
     <div class="hero-gallery" id={galleryId} data-hero-gallery data-desktop-gallery-dismiss="true" data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
       <div class="hero-gallery__chrome" aria-hidden="true"></div>
       <div class="hero-gallery__topbar">
-        <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы"><AnnouncementsLockup variant="desktop" class="hero-gallery__lockup" /></a>
+        <a class="hero-gallery__brand" href={siteHomeHref()} aria-label="Перейти к афише Полюбить Калининград Анонсы"><AnnouncementsLockup variant="desktop" class="hero-gallery__lockup" /></a>
         <h2 id={galleryTitleId} class="sr-only">Фото события: {event.title}</h2>
         <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
       </div>
