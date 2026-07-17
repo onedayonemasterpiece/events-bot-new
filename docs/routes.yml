@@ -84,6 +84,8 @@ sections:
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
+      interest_clubs: docs/backlog/features/interest-clubs/README.md
+      interest_clubs_research_prompt: docs/backlog/features/interest-clubs/research-prompt.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
       poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
