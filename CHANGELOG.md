@@ -6,6 +6,9 @@
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
   truncating the structured JSON at the bounded 768-token output ceiling.
+- **Smart Update image geometry deadline**: raise the single-attempt hosted
+  vision deadline from 45 to 90 seconds while keeping retries durable and paced
+  outside the item call, avoiding false failures without introducing bursts.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added

@@ -1152,7 +1152,7 @@ def _get_image_geometry_client(pool_csv: str):
     # retry timing so a single image can never turn into an unpaced burst.
     client.max_retries = 1
     client.provider_timeout_seconds = float(
-        _env_int("EVENT_IMAGE_GEOMETRY_PROVIDER_TIMEOUT_SEC", 45, lo=10, hi=120)
+        _env_int("EVENT_IMAGE_GEOMETRY_PROVIDER_TIMEOUT_SEC", 90, lo=10, hi=120)
     )
     return client
 

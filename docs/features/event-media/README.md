@@ -186,6 +186,10 @@ tokens не дают задаче уходить в длинное reasoning. Д
 endpoint не принимает. Лимит 25 лиц задаётся одновременно коротким prompt
 contract и application validator: это сохраняет полезные для crop лица и не
 позволяет массовой сцене оборвать structured JSON по `MAX_TOKENS`.
+Provider deadline по умолчанию равен `90` секундам: hosted vision inference
+иногда законно дольше прежних 45 секунд. Внутри одного item по-прежнему только
+одна попытка; timeout сохраняется как item-level error, а повтор выполняет
+durable worker/backfill отдельным paced запуском, без retry burst.
 
 `event_image_geometry` — глобальный versioned cache по точному
 `pixel_sha256 + model + prompt_version`; `EventPoster.image_geometry_id`
