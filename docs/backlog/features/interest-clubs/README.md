@@ -4,7 +4,9 @@
 
 **R0 catalog audit delivered; owner/BGE gates open.** Это отдельная пострелизная продуктовая фича, а не блокер первой публичной презентации статического сайта.
 
-Read-only аудит на production-снимке 2026-07-17 сформировал [воспроизводимый отчёт](../../../reports/interest-clubs-catalog-audit-2026-07-17.md): 52 reviewed candidate clusters, из них 19 `confirmed`, 14 `probable`, 8 `needs_evidence` и 11 `rejected`. `confirmed + probable` покрывают 198 уникальных surviving canonical event ids (193 past, 5 future), но это число относится к текущему reviewed pool, а не доказывает полный региональный каталог. Blind discovery-only freeze дал strict exact-name coverage 24/56 post-cutoff events и 0/5 future, name/source candidate coverage 36/56 и 2/5 future; это proxy на researcher labels, не owner-approved population recall. Paired BGE/Gemini quality benchmark на одном frozen corpus и owner review ещё не выполнены, поэтому production/UI GO отсутствует.
+Read-only аудит на production-снимке 2026-07-17 сформировал [воспроизводимый отчёт](../../../reports/interest-clubs-catalog-audit-2026-07-17.md): 52 reviewed candidate clusters, из них 20 `confirmed`, 14 `probable`, 8 `needs_evidence` и 10 `rejected`. `confirmed + probable` покрывают 203 уникальных surviving canonical event ids (198 past, 5 future), но это число относится к текущему reviewed pool, а не доказывает полный региональный каталог. Blind discovery-only freeze дал strict exact-name coverage 24/56 post-cutoff events и 0/5 future, name/source candidate coverage 36/56 и 2/5 future; это proxy на researcher labels, не owner-approved population recall. Paired BGE/Gemini quality benchmark на одном frozen corpus и owner review ещё не выполнены, поэтому production/UI GO отсутствует.
+
+После owner feedback СИНЕМАНГО исправлен на `confirmed`. Live-стенд bounded matcher на 8 известных real-post cases дал `gemma-4-31b-it` **8/8** correct с exact source quote и median/max `1.519/1.671 s`; `gemini-3.1-flash-lite` на тех же packets дал только **5/8**. Поэтому Gemma 4 31B — текущий primary candidate, а Lite не может автоматически подтверждать relation при fallback: provider failure должен стать `deferred`/retry, либо Lite используется только fail-closed. Это ещё не production Smart Update rollout и не заменяет owner-approved larger gold.
 
 Каноническая ветка для исследования и последующей консолидации решений:
 
@@ -83,6 +85,8 @@ Embeddings, cadence и детерминированная нормализаци
 - merge/rename/split policy для identity и стабильных URL;
 - автоматическое исключение завершившихся/протухших клубов из актуальной выдачи при сохранении контролируемой истории;
 - отсутствие персональных списков участников и недоказанных характеристик аудитории.
+
+Для incremental relation matcher предварительно принят только shadow contract: deterministic name/source слой формирует shortlist одного-трёх известных clubs, затем `gemma-4-31b-it` с `thinking=minimal` проверяет каждый candidate по короткому source-bound prompt и возвращает `yes/no/unclear` + точную цитату. Timeout/provider error не переключается в широкий writer и не создаёт relation через Lite; пакет уходит в deferred retry/review.
 
 Публичный UI, схема и URL не считаются утверждёнными до результатов исследования и отдельного product/technology решения.
 

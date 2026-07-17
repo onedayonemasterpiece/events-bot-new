@@ -1,6 +1,6 @@
 {
   "schema_version": "interest_clubs_review_fixture_v1",
-  "fixture_version": "2026-07-17.2",
+  "fixture_version": "2026-07-17.3",
   "timezone": "Europe/Kaliningrad",
   "discovery_cutoff_exclusive": "2026-06-01",
   "future_cutoff_inclusive": "2026-07-17",
@@ -367,11 +367,11 @@
       "rationale": "Club обозначает ночную площадку, а не клуб по интересам."
     },
     {
-      "candidate_id": "cinemango_programme",
-      "normalized_name": "СИНЕМАНГО / «Путешествие по Азии»",
-      "verdict": "rejected",
-      "confidence": "low",
-      "interest_category": "кинопрограмма",
+      "candidate_id": "cinemango",
+      "normalized_name": "СИНЕМАНГО",
+      "verdict": "confirmed",
+      "confidence": "high",
+      "interest_category": "киноклуб",
       "event_examples": [
         {
           "event_id": 577,
@@ -402,9 +402,9 @@
         }
       ],
       "confounders": [
-        "programme-series false positive"
+        "same library hosts unrelated screenings; match only explicit СИНЕМАНГО/club evidence"
       ],
-      "rationale": "Брендированная библиотечная программа повторяется, но evidence постоянного сообщества/участников нет."
+      "rationale": "Пять встреч прямо описаны как встречи клуба любителей азиатского кино/киноклуба СИНЕМАНГО; фильмы меняются, а community identity и обсуждение сохраняются."
     },
     {
       "candidate_id": "linked_occurrence_series",

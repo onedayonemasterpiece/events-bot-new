@@ -4,19 +4,19 @@
 
 **Read-only каталог-аудит выполнен, но owner и технологический BGE gates остаются незакрытыми.** На замороженном production-каталоге вручную проверено **52 candidate clusters**:
 
-- **19 `confirmed`**;
+- **20 `confirmed`**;
 - **14 `probable`**;
 - **8 `needs_evidence`**;
-- **11 `rejected`**.
+- **10 `rejected`**.
 
-`confirmed + probable` дают **33 club identities** и **198 уникальных surviving canonical event ids**: **193 прошлых** и **5 будущих** относительно 17 июля 2026 года. В ledger 199 memberships: одно событие может принадлежать двум совместно проводящим identities. Все 33 принятые identities имеют минимум две атомарные даты; 16 имеют не менее трёх, 12 — не менее пяти. Это **не означает, что в регионе доказано ровно 33 клуба**: независимо замороженная discovery-only проверка уже нашла пропуски первой ручной версии pool, после чего семь identities и шесть event memberships были source-проверены и добавлены. Полная семантическая полнота всё ещё не доказана; paired BGE/Gemini head-to-head на одном frozen corpus не выполнен.
+`confirmed + probable` дают **34 club identities** и **203 уникальных surviving canonical event ids**: **198 прошлых** и **5 будущих** относительно 17 июля 2026 года. В ledger 204 memberships: одно событие может принадлежать двум совместно проводящим identities. Все 34 принятые identities имеют минимум две атомарные даты; 17 имеют не менее трёх, 13 — не менее пяти. Это **не означает, что в регионе доказано ровно 34 клуба**: независимо замороженная discovery-only проверка уже нашла пропуски первой ручной версии pool, после чего семь identities и шесть event memberships были source-проверены и добавлены. Полная семантическая полнота всё ещё не доказана; paired BGE/Gemini head-to-head на одном frozen corpus не выполнен.
 
 Для owner review безопасный shortlist сейчас таков:
 
-- **19 confirmed** можно обсуждать как основу shadow-каталога;
+- **20 confirmed** можно обсуждать как основу shadow-каталога;
 - **14 probable** нельзя публиковать без дополнительной source-проверки;
 - **8 needs_evidence** должны fail closed;
-- **11 rejected clusters** фиксируют основные false-positive классы.
+- **10 rejected clusters** фиксируют основные false-positive классы.
 
 Текущий product/technology вывод: **GO только на следующий offline shadow benchmark и owner review; NO-GO на публичные страницы, DB schema, scheduler, Smart Update integration и выбор BGE как production architecture.**
 
@@ -74,7 +74,7 @@ First-class organizer relation нет. Source/venue нельзя автомат�
 - 986/6,527 events (**15.1%**) имеют `festival` text;
 - 1,298/6,527 (**19.9%**) несут непустой `linked_event_ids`;
 - SQL `min(date)/max(date)` по строке оказался ненадёжным из-за mixed legacy formats и повреждённой строки; после schema-aware parsing фактические atomic bounds: `2023-03-16`…`2027-04-23`;
-- в принятом club ledger public source URL присутствует у 197/199 event memberships (**99.0%**); один canonical event участвует в co-hosted identities, поэтому memberships больше 198 unique ids.
+- в принятом club ledger public source URL присутствует у 202/204 event memberships (**99.0%**); один canonical event участвует в co-hosted identities, поэтому memberships больше 203 unique ids.
 
 В таблицах `events_total` означает число retained canonical event memberships в кандидате, а не число встреч после схлопывания. `distinct_dates` считается отдельно; строки одной даты не объявляются ни независимыми встречами, ни дублями без source/slot adjudication.
 
@@ -123,6 +123,7 @@ Raw recall дал:
 | Speaking Club в Bar Sovetov | разговорный языковой клуб | `confirmed` / high | 2/2/0; 2 дат | 2025-10-29…2026-04-01; observed gaps 154–154 days; median 154 days | Калининград; Бар Sovetov, Бар Советов, Мира 118, Калининград | public URLs only | IDs `1127,3510`; [#1127 2025-10-29 🗣️ Speaking club](https://vk.com/wall-223666016_357)<br>[#3510 2026-04-01 Speaking club в БАР SOVETOV](https://vk.com/wall-223666016_408) | Явно повторяющийся разговорный клуб с одинаковой площадкой/source и языковой практикой.<br>Риски: only two captured dates; do not merge with Beer-Lingual or English Cafe | нет future-row |
 | Литературное сообщество «ПоэтиКа» | поэзия | `confirmed` / high | 3/3/0; 3 дат | 2025-09-07…2026-05-23; observed gaps 35–223 days; median 223 days | Калининград; Библиотека им. космонавта А. А. Леонова, Библиотека имени космонавта А. А. Леонова, У памятника Высоцкому | public URLs only | IDs `586,957,5143`; [#586 2025-09-07 🎤 Творческая встреча «ПоэтиКА опен эйр»](https://telegra.ph/Tvorcheskaya-vstrecha-PoehtiKA-open-ehjr-09-06)<br>[#5143 2026-05-23 📖 Встреча «Презентация альманаха «ПоэтиКа»»](https://vk.com/wall-32547811_10800) | Именованное литературное сообщество проводит собственные творческие встречи и презентацию альманаха.<br>Риски: generic common-noun “поэтика” is not an identity match | нет future-row |
 | Клуб «Наше кино» | киноклуб | `confirmed` / high | 2/2/0; 2 дат | 2026-04-10…2026-05-08; observed gaps 28–28 days; median 28 days | Калининград, Черняховск; Библиотека, Библиротека им. Лунина, Калинина 4, Черняховск | public URLs only | IDs `3652,4548`; [#3652 2026-04-10 Наследница Ники](https://vk.com/wall-38920007_14434)<br>[#4548 2026-05-08 На войне как на войне](https://vk.com/wall-38920007_14564) | Два явных показа с обсуждением проходят под одним названием библиотечного клуба.<br>Риски: only two dates; generic Russian-film screenings excluded | нет future-row |
+| СИНЕМАНГО | киноклуб | `confirmed` / high | 5/5/0; 5 дат | 2025-09-13…2026-03-28; observed gaps 1–91 days; median 77 days | Калининград; Калининградская областная научная библиотека, Научная библиотека, Научная библиотека, Мира 9, Калининград | public URLs only | IDs `577,1694,2170,2189,3393`; [#577 2025-09-13 🎬 СИНЕМАНГО: Путешествие по Азии - Станция "Сеул"](https://telegra.ph/SINEMANGO-Puteshestvie-po-Azii---Stanciya-Seul-09-05)<br>[#3393 2026-03-28 СИНЕМАНГО: Путешествие по Азии — «Маленький лес»](https://vk.com/wall-30777579_14867) | Пять встреч прямо описаны как встречи «клуба любителей азиатского кино»/киноклуба СИНЕМАНГО; фильмы меняются, а community identity и обсуждение сохраняются.<br>Риски: same library hosts unrelated screenings; match only explicit СИНЕМАНГО/club evidence | нет future-row |
 
 ## 5. Полный shortlist `probable`
 
@@ -144,8 +145,8 @@ Raw recall дал:
 | Клуб достаточно хороших родителей | родительство | `probable` / medium | 2/2/0; 2 дат | 2025-10-10…2026-06-04; observed gaps 237–237 days; median 237 days | Калининград; Городское пространство для молодых семей, Дом семьи | molod_kld | IDs `881,5219`; [#881 2025-10-10 Клуб достаточно хороших родителей с Милой Дружининой](https://vk.com/wall-231920894_535)<br>[#5219 2026-06-04 Встреча для родителей о травле среди школьников](https://t.me/molod_kld/3675) | Две source-grounded психологические встречи одного явно названного клуба прошли на разных датах.<br>Риски: no dedicated club source; host/venue changed | нет future-row |
 
 ## 6. `needs_evidence`
-
 Эти кандидаты fail closed и не входят в accepted counts.
+
 
 | Кандидат | Интерес | Verdict/confidence | events total/past/future; dates | Период/cadence | Города; площадки | Sources/aliases | Event evidence | Rationale / confounders | Blind future recognition |
 |---|---|---|---:|---|---|---|---|---|---|
@@ -159,15 +160,14 @@ Raw recall дал:
 | Летний клуб «СветлоУмка» | детское развитие | `needs_evidence` / low | 1/1/0; 1 дат | 2026-05-21…2026-05-21; insufficient atomic dates | Светлогорск; Телеграф | public URLs only | IDs `5196`; [#5196 2026-05-21 Летний клуб «СветлоУмка»](https://vk.com/wall-171050617_1752) | Явное название летнего клуба.<br>Риски: could be fixed-term camp/programme; one event only | нет future-row |
 
 ## 7. Rejected clusters и confounders
-
 Эти строки — проверенные confounder-классы, а не клубы.
+
 
 | Кандидат | Интерес | Verdict/confidence | events total/past/future; dates | Период/cadence | Города; площадки | Sources/aliases | Event evidence | Rationale / confounders | Blind future recognition |
 |---|---|---|---:|---|---|---|---|---|---|
 | Шоу «Клуб знакомств» | комедийное шоу | `rejected` / low | 13/12/1; 10 дат | 2026-02-17…2026-07-19; observed gaps 1–29 days; median 16 days | Калининград; Винный факультет, Стендап клуб Локация, Топ-3 факта, которые поднимут настроение:, Форма пицца-бар, Гаражная 2б, Калининград | locostandup, terkatalk | IDs `2438,3040,3109,3111,3231,3490,3520,3957,4509,4575,5233,6078,6866`; [#2438 2026-02-17 🎭 Клуб знакомств](https://vk.com/wall-214027639_10579)<br>[#6866 2026-07-19 Клуб знакомств](https://t.me/locostandup/3670) | Повторяется коммерческий сценический формат, а не identity сообщества участников.<br>Риски: commercial-series false positive | past-only identity отсутствовала: 0/1 |
 | «Стендап клуб Локация» как venue | стендап | `rejected` / low | 10/8/2; 9 дат | 2026-04-09…2026-07-24; observed gaps 2–28 days; median 13 days | Калининград; Калининградский Стендап Клуб, Стендап клуб Локация | locostandup | IDs `3619,4574,4850,4854,5445,5487,5858,6670,6731,6856`; [#3619 2026-04-09 Калининградский Стендап Клуб](https://vk.com/wall-78172842_7342)<br>[#6856 2026-07-24 Алексей Полубояров](https://vk.com/wall-214027639_11589) | Слово club является частью названия площадки/продюсера; события — разные концерты.<br>Риски: venue leakage | past-only identity отсутствовала: 0/2 |
 | YALTA / Вагонка / Склад / Universal как club venues | ночная музыка | `rejected` / low | 13/12/1; 11 дат | 2025-09-27…2026-07-25; observed gaps 7–122 days; median 25 days | Калининград; UNIVERSAL, YALTA, Yalta Club, Вагонка (клуб), Вагонка (клуб), Станочная 12, Калининград, Заря, Клуб "iO", Клуб "Склад", СКЛАD, Универсал (пространство), Мира 41-43, Калининград | kulturnaya_chaika, meowafisha, zaryakinoteatr | IDs `290,637,2773,2813,3079,3095,3117,3245,3434,4055,4587,4957,5836`; [#290 2025-09-27 🎸 ROCK PRIVET в клубе 'YALTA'](https://telegra.ph/ROCK-PRIVET-v-klube-YALTA-07-27)<br>[#5836 2026-06-26 Drum'N'Bass](https://kaliningrad.qtickets.events/239308-drumnbass-for-mass-06-26) | Club обозначает ночную площадку, а не клуб по интересам.<br>Риски: venue/nightlife leakage; excluded by scope: #5239 (lifecycle_not_active/silent) | past-only identity отсутствовала: 0/1 |
-| СИНЕМАНГО / «Путешествие по Азии» | кинопрограмма | `rejected` / low | 5/5/0; 5 дат | 2025-09-13…2026-03-28; observed gaps 1–91 days; median 77 days | Калининград; Калининградская областная научная библиотека, Научная библиотека, Научная библиотека, Мира 9, Калининград | public URLs only | IDs `577,1694,2170,2189,3393`; [#577 2025-09-13 🎬 СИНЕМАНГО: Путешествие по Азии - Станция "Сеул"](https://telegra.ph/SINEMANGO-Puteshestvie-po-Azii---Stanciya-Seul-09-05)<br>[#3393 2026-03-28 СИНЕМАНГО: Путешествие по Азии — «Маленький лес»](https://vk.com/wall-30777579_14867) | Брендированная библиотечная программа повторяется, но evidence постоянного сообщества/участников нет.<br>Риски: programme-series false positive | нет future-row |
 | Музейный лекторий/кинолекторий | просветительская программа | `rejected` / low | 2/2/0; 2 дат | 2025-11-05…2025-11-11; observed gaps 6–6 days; median 6 days | Гусев; Гусевский музей | public URLs only | IDs `1194,1195`; [#1194 2025-11-05 📚 Первый штурм Гумбиннена. Октябрь 1944-го](https://vk.com/wall-168966993_19336)<br>[#1195 2025-11-11 📚 В Компьенском лесу](https://vk.com/wall-168966993_19336) | Это программная линия учреждения/месячный schedule, а не доказанная club identity.<br>Риски: venue-programme leakage; range-date leakage; excluded by scope: #1602 (date_not_atomic),#2469 (date_not_atomic),#2472 (date_not_atomic) | нет future-row |
 | Одна программа в нескольких датах | театры/показы | `rejected` / low | 11/11/0; 10 дат | 2025-08-07…2026-05-16; observed gaps 1–246 days; median 6 days | Зеленоградск, Калининград, Некрасово; Остановка "Рыбная деревня", Остров Канта, Театральная гостиная Солёная ворона, замок Шаакен | public URLs only | IDs `89,90,147,148,174,175,4205,4206,4207,4208,4210`; [#89 2025-08-08 🎙🎭🤘 Та самая рок-опера «Моцарт»](https://t.me/kenigevents/869)<br>[#4210 2026-05-16 Кинопоказ калининградских фильмов на Острове Канта](https://vk.com/wall-182104060_6924) | Повторы одной программы/слота относятся к linked occurrences, не к club identity.<br>Риски: linked-occurrence leakage | нет future-row |
 | Фестиваль и его программа | фестивали | `rejected` / low | 2/2/0; 2 дат | 2026-06-26…2026-07-12; observed gaps 16–16 days; median 16 days | Калининград; Железнодорожные ворота, Закхаймские ворота | terkatalk | IDs `6314,6742`; [#6314 2026-06-26 🥳 Детский фестиваль «Матушка-земля»](https://vk.com/wall-190663987_8934)<br>[#6742 2026-07-12 однодневный фестиваль фотографических сообществ Калининграда](https://t.me/terkatalk/5122) | Festival identity и programme rows не являются клубом.<br>Риски: festival leakage; corrupt/future duplicate date example; excluded by scope: #107 (lifecycle_not_active/silent/date_not_atomic),#6743 (identity_not_canonical/merged_into_event/lifecycle_not_active/silent) | нет future-row |
@@ -182,31 +182,31 @@ Raw recall дал:
 
 | Метрика | Значение | Denominator / смысл |
 |---|---:|---|
-| Confirmed | 19 | из 52 reviewed candidate clusters |
+| Confirmed | 20 | из 52 reviewed candidate clusters |
 | Probable | 14 | из 52 |
 | Needs evidence | 8 | из 52 |
-| Rejected | 11 | из 52 |
-| Confirmed + probable | 33 | publishable не автоматически; owner review обязателен |
-| Unique accepted canonical events | 198 | union event ids; 193 past, 5 future |
-| Accepted с ≥2 distinct dates | 33 | из 33 |
-| Accepted с ≥3 distinct dates | 16 | из 33 |
-| Accepted с ≥5 distinct dates | 12 | из 33 |
+| Rejected | 10 | из 52 |
+| Confirmed + probable | 34 | publishable не автоматически; owner review обязателен |
+| Unique accepted canonical events | 203 | union event ids; 198 past, 5 future |
+| Accepted с ≥2 distinct dates | 34 | из 34 |
+| Accepted с ≥3 distinct dates | 17 | из 34 |
+| Accepted с ≥5 distinct dates | 13 | из 34 |
 | Candidates, зависящие от одного слабого evidence | 15 | из 52; probable/needs, ≤1 alias и ≤2 dates |
 
-Самые крупные тематические сегменты: пять киноклубов, три книжных клуба, три поэтических сообщества и три разговорных языковых формата. Остальные identities распределены по настольным играм, шахматам, ИИ, электронике, отношениям, психологии, городским исследованиям, ретроавтомобилям, фотографии и интеллектуальным играм. 31/33 accepted identities имеют хотя бы один event city `Калининград`; также представлены Советск, Черняховск, Гусев, Зеленоградск, Полесск, Янтарный и Медведевка. Нормализация city требует отдельной работы (`Kaliningrad` и settlement/venue drift присутствуют).
+Самые крупные тематические сегменты: шесть киноклубов, три книжных клуба, три поэтических сообщества и три разговорных языковых формата. Остальные identities распределены по настольным играм, шахматам, ИИ, электронике, отношениям, психологии, городским исследованиям, ретроавтомобилям, фотографии и интеллектуальным играм. 32/34 accepted identities имеют хотя бы один event city `Калининград`; также представлены Советск, Черняховск, Гусев, Зеленоградск, Полесск, Янтарный и Медведевка. Нормализация city требует отдельной работы (`Kaliningrad` и settlement/venue drift присутствуют).
 
 Свежесть:
 
 - 4 identities имеют future event;
 - 14 без будущей встречи, но наблюдались с 1 июня;
-- 15 последний раз наблюдались до 1 июня и не должны автоматически попадать в «актуальные» без stale policy.
+- 16 последний раз наблюдались до 1 июня и не должны автоматически попадать в «актуальные» без stale policy.
 
 ### Leakage и ошибки
 
 - **Same-date leakage proxy:** 18 candidate/date groups, 20 surplus event memberships. Это смесь surviving cross-source duplicates и допустимых same-day sessions; до подсчёта meetings нужно adjudicate/collapse.
-- **Linked-occurrence leakage proxy:** 40/199 accepted memberships имеют непустой `linked_event_ids`. Сам факт link не отменяет club membership, но linked siblings нельзя считать независимыми доказательствами клуба.
-- **Festival leakage proxy:** 11/199 accepted memberships имеют festival text. Они остаются только там, где независимая club/source identity доказана; festival identity не переносится на club.
-- **False merge:** 11 rejected candidate clusters представляют измеренный candidate-pool count, не population rate. Классы: venue, organizer/source, commercial show, nightclub, festival, museum programme, linked occurrence, generic topic и lexical substring.
+- **Linked-occurrence leakage proxy:** 40/204 accepted memberships имеют непустой `linked_event_ids`. Сам факт link не отменяет club membership, но linked siblings нельзя считать независимыми доказательствами клуба.
+- **Festival leakage proxy:** 11/204 accepted memberships имеют festival text. Они остаются только там, где независимая club/source identity доказана; festival identity не переносится на club.
+- **False merge:** 10 rejected candidate clusters представляют измеренный candidate-pool count, не population rate. Классы: venue, organizer/source, commercial show, nightclub, festival, museum programme, linked occurrence, generic topic и lexical substring.
 - **False split:** честный population rate невозможен без независимо полного gold denominator. В ledger сохранены alias reconciliations для Westside, Game Vibes, Rep Chess, `С тобой всё в порядке`, AutoRetroClub и других identities.
 
 ## 9. Split-safe time-split proxy
@@ -230,13 +230,38 @@ Source lane намеренно не является verdict: generic venue/libr
 | Lane | Фактический результат | Ограничение | Решение |
 |---|---|---|---|
 | Frozen source/name policy | blind discovery-only freeze; exact-name 24/56, name/source candidate 36/56; future 0/5 strict и 2/5 candidate | partial policy; aliases и новые clubs; generic source anchors дают 66 ambiguities | оставить identity-anchor baseline, но не semantic verdict |
-| Existing `gemini-embedding-2 related_v1` | live sidecar: 298 vectors; accepted-ledger coverage 5/198 (**2.5%**) | zero covered same-club peer, поэтому recall@K математически не определён; sidecar prunes history | нельзя использовать как historical comparator без frozen re-embed |
+| Existing `gemini-embedding-2 related_v1` | live sidecar: 298 vectors; accepted-ledger coverage 5/203 (**2.5%**) | zero covered same-club peer, поэтому recall@K математически не определён; sidecar prunes history | нельзя использовать как historical comparator без frozen re-embed |
 | BGE-M3 on Kaggle CPU | repository feasibility уже доказана внешними BGE canaries: 12 events/191.2 s, 15 events/162.1 s; model revision pinned | в этом аудите **нет interest-club quality run**, peak RSS и catalog throughput не измерены на frozen corpus | GO только на отдельный measured benchmark; NO-GO architecture |
 | Evidence-grounded semantic adjudication | 52 source-grounded clusters просмотрены исследовательским агентом, ordinal fail-closed verdict сохранён | это не отдельный калиброванный production-LLM run; owner/human gold ещё не подписан | owner-approved fixture и LLM-first adjudication нужны до автоматизации |
 
 Existing vector baseline нельзя объявлять «хуже»: его историческое покрытие недостаточно для сравнения. У 5 покрытых accepted events не было ни одной пары same-club peer, поэтому `recall@5/10/20/40` имеет denominator 0. Future Game Vibes/AutoRetro vectors также не имели retained discovery member в sidecar. Это storage/scope gap, не quality verdict модели.
 
 Единственный обоснованный BGE candidate: [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3) на revision `5617a9f61b028005a4858fdac845db406aefb181`, dense-only 1024d, FP32, `FlagEmbedding==1.4.0`. Официальный model repo около 4.59 GB, PyTorch weights около 2.27 GB; raw vector — 4 KiB/event, на 33.3% больше Gemini 768d. Репозиторий уже имеет CPU Kaggle bootstrap/status/checkpoint pattern, но age-assessment vectors не переиспользуются: другой text contract и задача.
+
+### Стенд известного клуба: Gemma 4 31B → Gemini 3.1 Flash-Lite
+
+После owner feedback СИНЕМАНГО исправлен с `rejected` на `confirmed`: пять исходных постов прямо называют его киноклубом/клубом любителей азиатского кино, а не только библиотечной кинопрограммой. Все приведённые выше counts и fixture пересчитаны.
+
+Для предполагаемого Smart Update matcher выполнен отдельный direct-REST live-стенд на том же runtime key lane `GOOGLE_API_KEY`, без записи в production, без gateway limiter и без изменения Smart Update. Candidate retrieval считался уже выполненным: на вход LLM давался **один известный CLUB** и один реальный post packet. Проверены 8 постов: 4 positive (`СИНЕМАНГО #1694`, `Game Vibes #6929`, `English Cafe #6572`, `АвтоРетроКлуб #6853`) и 4 hard negative (упоминание организатора `Поэты39 #6027`, внешняя лекция инициатора EEE `#6573`, одноимённое комедийное шоу `#6866`, фестиваль фотосообществ `#6742`).
+
+Максимально короткая system instruction — **165 символов**, native JSON schema имеет только `v` и `q`:
+
+```text
+v=yes, только если INPUT явно сообщает о событии именно CLUB. Упоминание, площадка, фестиваль или шоу ≠ yes; сомнение=unclear. q=точная цитата из INPUT до 60 знаков.
+```
+
+Обе модели вызывались с `thinkingLevel=minimal`, `temperature=0`, `maxOutputTokens=96`; input составил 302–757 tokens, медиана 489. Итог финального прогона:
+
+| Модель | Provider/schema | Correct + exact grounded quote | Latency median/max | Ошибки |
+|---|---:|---:|---:|---|
+| `gemma-4-31b-it` | 8/8 | **8/8** | **1.519 / 1.671 s** | 0 |
+| `gemini-3.1-flash-lite` shadow | 8/8 | **5/8** | **0.569 / 0.621 s** | false positive `#6027`; false negatives `#6929`, `#6853` |
+
+На этом маленьком стенде Gemma не показала длинного хвоста, но 8 вызовов не доказывают production p95/p99. Естественный fallback не сработал ни разу, потому что primary завершил все 8 запросов; Lite был вызван shadow на тех же packet/prompt и поэтому измеряет качество возможного fallback, а не transport recovery.
+
+**Вывод:** `gemma-4-31b-it` подходит как primary для bounded verifier известного клуба. `gemini-3.1-flash-lite` **не подходит как автоматический positive fallback**: он пропустил два настоящих события и один раз привязал чужой open mic к клубу только из-за упоминания организатора. Безопасный provider-failure contract: `deferred` + повтор Gemma; Lite можно использовать только fail-closed (`no/unclear` или очередь review), но его `yes` не создаёт relation. Это также сохраняет regression contract `INC-2026-05-05-smart-update-gemma3-fallback-hallucination`: fallback получает тот же source-bound packet и не переходит в широкий writer prompt.
+
+Raw runner/result: `artifacts/codex/interest-clubs-audit-20260717/benchmarks/run_known_club_llm_stand.py` и `known-club-llm-stand-20260717.json` (не коммитятся).
 
 Честный следующий benchmark обязан:
 
@@ -266,7 +291,7 @@ Owner должен явно утвердить:
 
 ### Предлагаемый R1-shadow slice
 
-- owner review 19 confirmed + 14 probable;
+- owner review 20 confirmed + 14 probable;
 - исправить/подтвердить 8 needs-evidence identities;
 - превратить `interest_clubs_review_fixture_v1` в независимый owner-approved split-safe gold с hard negatives;
 - frozen paired Gemini/BGE-M3 Kaggle CPU run через существующий unique run id/status/heartbeat contract;
@@ -284,6 +309,7 @@ Machine-readable, не коммитятся:
 - `analysis/dataset_profile.json`, `candidate_ledger.json{,l}`, `candidate_ledger.csv`, `aggregates.json`, `quality_metrics.json`;
 - `analysis/past_only_frozen_policy.json`, `past_only_holdout_evaluation.json`;
 - `benchmarks/existing_gemini_vector_evaluation.json`, `existing_gemini_vector_top10.json`;
+- `benchmarks/run_known_club_llm_stand.py`, `known-club-llm-stand-20260717.json`;
 - `lanes/R0-repo-data-map.md`, `lanes/R3-past-only-freeze.md`, `lanes/R4-bge-feasibility.md`, `lanes/R5-closure-review.md`.
 
 Коммитится минимальный safe review fixture: `tests/fixtures/interest_clubs_review_fixture_v1.json`. Он содержит только bounded public event facts/URLs и **не** является independent/owner-approved gold или production dump.
@@ -306,5 +332,6 @@ git diff --check
 - Linked occurrences: `docs/features/linked-events/README.md`.
 - Festival semantics: `docs/features/festivals/README.md` (путь `static-site-release.md` из prompt устарел и отсутствует на base SHA).
 - Smart Update / LLM-first: `docs/features/smart-event-update/README.md`, `docs/llm/request-guide.md`.
+- Google AI: [Gemma 4 через Gemini API](https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api), [Gemini 3.1 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite), [structured outputs](https://ai.google.dev/gemini-api/docs/structured-output).
 - Vector sidecar: `docs/features/unsigned-personalization/authorized-event-search.md`, `semantic-vector-retrieval.md`, `scripts/inspect/audit_future_event_vectors.py`.
 - BGE official: [model card](https://huggingface.co/BAAI/bge-m3), [pinned files](https://huggingface.co/BAAI/bge-m3/tree/5617a9f61b028005a4858fdac845db406aefb181), [FlagEmbedding v1.4.0](https://github.com/FlagOpen/FlagEmbedding/releases/tag/v1.4.0).
