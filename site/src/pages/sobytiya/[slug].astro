@@ -5,6 +5,7 @@ import EventFacts from '../../components/EventFacts.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventMediaRail from '../../components/EventMediaRail.astro';
+import KaupTransportSchedule from '../../components/KaupTransportSchedule.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
@@ -148,6 +149,7 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
           <div class="prose" set:html={event.description_html} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
+          <KaupTransportSchedule event={event} />
           {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
         </div>
         <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
