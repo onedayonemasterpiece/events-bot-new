@@ -8,13 +8,13 @@ Owner GO 2026-07-17 разрешает собрать implementation RC из res
 
 ## Flags и rollback handles
 
-Имена должны быть сверены с RC-кодом до merge; независимо от конкретных env names нужны три отдельные fail-closed switches:
+RC фиксирует три отдельные fail-closed switches:
 
-1. relation evaluation/write;
-2. club projection/static build;
-3. public navigation/promotion.
+1. `ENABLE_INTEREST_CLUB_PIPELINE=0` — relation evaluation/write и неблокирующий Smart Update handoff;
+2. `ENABLE_INTEREST_CLUB_STATIC_PROJECTION=0` — чтение accepted rows в `interest-clubs-static-v1`;
+3. `PUBLIC_INTEREST_CLUBS_ENABLED=0` — detail paths, sitemap и navigation/public promotion.
 
-Их production default — OFF. Public flag нельзя связать с migration или shadow flag. Static publisher обязан хранить last-good manifest/tree и уметь атомарно вернуть его без DB downgrade.
+Все production defaults — OFF. Дополнительные bounded controls: `INTEREST_CLUB_PROVIDER_TIMEOUT_SECONDS=30` и `INTEREST_CLUB_STATIC_DEBOUNCE_SECONDS=90`. Public flag нельзя связывать с migration или shadow flag. `site/scripts/build-preview.mjs` включает projection/public gates только для noindex preview; это не production enablement. Static publisher обязан хранить last-good manifest/tree и уметь атомарно вернуть его без DB downgrade.
 
 ## Stage 0 — RC freeze и owner gold
 

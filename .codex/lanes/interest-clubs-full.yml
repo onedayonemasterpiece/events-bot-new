@@ -29,7 +29,7 @@ lanes:
     forbidden_files: [site/, docs/, CHANGELOG.md, .env]
     expected_output: committed implementation and lane results
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L2-static-ui
     role: worker
     effort: high
@@ -43,7 +43,7 @@ lanes:
     forbidden_files: [db.py, models.py, smart_event_update.py, scheduling.py, docs/, CHANGELOG.md, .env]
     expected_output: committed static slice and lane results
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L3-release-docs
     role: worker
     effort: high
@@ -57,7 +57,7 @@ lanes:
     forbidden_files: [site/, '*.py', CHANGELOG.md, .env]
     expected_output: committed documentation and lane results
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: L4-integrator
     role: merge_reviewer
     effort: extra-high
@@ -71,4 +71,4 @@ lanes:
     forbidden_files: [.env]
     expected_output: integrated clean branch and closure report
     verification_scope: full_local
-    status: planned
+    status: merged

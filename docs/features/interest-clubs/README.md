@@ -77,6 +77,24 @@ Reviewer получает candidate identity, proposed relation, normalized anch
 
 Автоматика может добавлять grounded meetings к уже approved identity, но любой conflict, invalidation или identity drift возвращает relation в review и сохраняет last-good public projection до следующего принятого решения.
 
+## Реализованные RC surfaces
+
+- additive migration: `alembic/versions/20260717_interest_clubs.py`;
+- canonical models/bootstrap: `models.py`, `db.py`;
+- explicit shadow importer and relation evaluator: `interest_clubs.py`;
+- disabled-by-default Smart Update handoff: `smart_event_update.py`;
+- disposable static projection: `site/scripts/export-production-preview-data.py` → `site/src/data/interest-clubs.json`;
+- gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
+- release gates: `ENABLE_INTEREST_CLUB_PIPELINE`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION`, `PUBLIC_INTEREST_CLUBS_ENABLED` (все OFF по умолчанию).
+
+Команда bootstrap без публичного approval:
+
+```bash
+python interest_clubs.py --db /path/to/db.sqlite
+```
+
+`--approve-confirmed` запрещён до owner-approved gold и соответствующего rollout gate.
+
 ## Privacy и storage
 
 - Fly SQLite владеет canonical club identity, relation, bounded provenance, review/audit state и projection version; Supabase не становится второй canonical базой клубов.
