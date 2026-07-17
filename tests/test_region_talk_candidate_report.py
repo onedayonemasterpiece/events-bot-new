@@ -38,6 +38,84 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_stack_watchdog_is_single_shot_by_default(self) -> None:
+        mod = load_module()
+        old_started = mod._REGION_TALK_STACK_WATCHDOG_STARTED
+        old_repeat = os.environ.get("REGION_TALK_STACK_WATCHDOG_REPEAT")
+        old_enabled = os.environ.get("REGION_TALK_ENABLE_STACK_WATCHDOG")
+        old_seconds = os.environ.get("REGION_TALK_STACK_WATCHDOG_SECONDS")
+        try:
+            mod._REGION_TALK_STACK_WATCHDOG_STARTED = False
+            os.environ["REGION_TALK_ENABLE_STACK_WATCHDOG"] = "1"
+            os.environ["REGION_TALK_STACK_WATCHDOG_SECONDS"] = "300"
+            os.environ.pop("REGION_TALK_STACK_WATCHDOG_REPEAT", None)
+            with (
+                mock.patch.object(mod.faulthandler, "enable") as enable,
+                mock.patch.object(mod.faulthandler, "dump_traceback_later") as dump,
+                mock.patch.object(mod.atexit, "register"),
+            ):
+                mod.start_region_talk_stack_watchdog()
+            enable.assert_called_once()
+            dump.assert_called_once_with(300, repeat=False, file=mod.sys.stderr)
+        finally:
+            mod._REGION_TALK_STACK_WATCHDOG_STARTED = old_started
+            for name, value in [
+                ("REGION_TALK_STACK_WATCHDOG_REPEAT", old_repeat),
+                ("REGION_TALK_ENABLE_STACK_WATCHDOG", old_enabled),
+                ("REGION_TALK_STACK_WATCHDOG_SECONDS", old_seconds),
+            ]:
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_source_queue_reuses_unchanged_backlog_and_reports_bounded_progress(self) -> None:
+        mod = load_module()
+        previous_rows = {}
+        for index in range(1, 1001):
+            handle = f"travel{index:04d}"
+            key = f"telegram:{handle}"
+            previous_rows[key] = {
+                "canonical_source_key": key,
+                "platform": "telegram",
+                "source_url": f"https://t.me/{handle}",
+                "canonical_url": f"https://t.me/{handle}",
+                "queue_seq": index,
+                "queue_order": index,
+                "source_queue_status": "pending_scan",
+            }
+        events = []
+        old_full = os.environ.get("REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL")
+        old_every = os.environ.get("REGION_TALK_SOURCE_QUEUE_PROGRESS_EVERY_ROWS")
+        try:
+            os.environ["REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL"] = "0"
+            os.environ["REGION_TALK_SOURCE_QUEUE_PROGRESS_EVERY_ROWS"] = "200"
+            with mock.patch.object(mod, "source_local_region_terminal_fields") as classify:
+                rows, metrics = mod.build_unified_source_queue(
+                    {"unified_source_queue": previous_rows},
+                    [], [], [], [], [], [], {},
+                    "run-bounded-source-queue",
+                    "2026-07-17T19:00:00+00:00",
+                    progress_callback=lambda name, **payload: events.append((name, payload)),
+                )
+            classify.assert_not_called()
+            self.assertEqual(len(rows), 1000)
+            self.assertEqual(metrics["source_queue_rows_recomputed_this_run"], 0)
+            self.assertEqual(metrics["source_queue_rows_reused_unchanged_this_run"], 1000)
+            self.assertEqual(
+                [payload["source_queue_rows_done"] for name, payload in events if name == "source_queue_build_progress"],
+                [0, 199, 399, 599, 799, 999],
+            )
+        finally:
+            for name, value in [
+                ("REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL", old_full),
+                ("REGION_TALK_SOURCE_QUEUE_PROGRESS_EVERY_ROWS", old_every),
+            ]:
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
     def test_single_critical_post_does_not_starve_high_probability_acquisition(self) -> None:
         mod = load_module()
         old_enabled = os.environ.get("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK")

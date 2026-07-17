@@ -719,6 +719,12 @@ Important invariants:
   production runs: live evidence showed that exiting right after source-queue
   handoff also skips the post-fusion `build_image_candidate_queue(...)`, so
   BGE-promoted candidate-memory rows never reach ImageDiagnostic.
+  The same child profile keeps `REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL=0`,
+  indexes image evidence once, and reuses unchanged durable queue rows. It
+  emits bounded 500-row progress events and uses a one-shot stack watchdog
+  (`REGION_TALK_STACK_WATCHDOG_REPEAT=0`), avoiding the second native
+  all-thread dump that coincided with the supervised Python 3.12 crash while
+  retaining stage-level observability and all queue self-repair contracts.
 - `RegionTalkBgeM3Enrichment` keeps row count and in-memory batch size separate.
   The orchestrator default is `--batch-limit 48 --batch-size 4` after the live
   YDB backlog showed E5 production outpacing 24-row BGE batches; operators can

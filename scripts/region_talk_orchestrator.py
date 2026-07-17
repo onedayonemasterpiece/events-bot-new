@@ -84,6 +84,9 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # publication queue assembly and its row-level YDB writes.
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "0",
+    "REGION_TALK_STACK_WATCHDOG_REPEAT": "0",
+    "REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL": "0",
+    "REGION_TALK_SOURCE_QUEUE_PROGRESS_EVERY_ROWS": "500",
     "REGION_TALK_BUILD_IMAGE_QUEUE_BEFORE_SOURCE_QUEUE": "1",
     # Full queue state is already durable in YDB. Keep per-run artifacts to the
     # lightweight product/debug shortlist for explicit manual runs. Automated

@@ -712,11 +712,25 @@ Heartbeat stdout is quiet by default
 (`REGION_TALK_STDOUT_HEARTBEATS=0`,
 `REGION_TALK_KAGGLE_STATUS_STDOUT=0`) so Kaggle Logs remain readable. Events are
 still persisted immediately to `/kaggle/working/region_talk_run_events_live.jsonl`
-and YDB, and `REGION_TALK_ENABLE_STACK_WATCHDOG=1` emits periodic Python stack
-traces during opaque stalls. The default watchdog interval is intentionally
-longer than normal model materialization
-(`REGION_TALK_STACK_WATCHDOG_SECONDS=300`), and Hugging Face/tqdm progress bars
-are disabled by default so model loading does not drown the stage logs.
+and YDB. `REGION_TALK_ENABLE_STACK_WATCHDOG=1` emits one all-thread Python stack
+trace after the default 300-second interval during an opaque startup/stall;
+repeated native dumps are opt-in through
+`REGION_TALK_STACK_WATCHDOG_REPEAT=1`. A live Python 3.12 Kaggle run crashed at
+the second watchdog boundary while inside C `re.search`, after the first dump
+had already supplied the useful diagnostic stack. Queue assembly therefore
+uses structured `source_queue_build_progress` events every 500 rows instead of
+repeated signal-driven dumps. Hugging Face/tqdm progress bars remain disabled
+by default so model loading does not drown the stage logs.
+
+The ordinary CandidateReport hot path does not reclassify all ~7.6k durable
+source rows on every run. It recomputes rows touched by the current source,
+confirmed-blogger/frontier/keyword inputs, current image evidence, or a narrow
+legacy repair; unchanged backlog rows are reused from the authoritative YDB
+snapshot. Image evidence is indexed once by source id/URL rather than scanned
+for every source. Metrics expose `source_queue_rows_recomputed_this_run` and
+`source_queue_rows_reused_unchanged_this_run`. A deliberate maintenance sweep
+may set `REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL=1`; automated product cycles
+must leave it disabled.
 
 CandidateReport discovery tail is budget-gated before report assembly:
 `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` (default `420`)

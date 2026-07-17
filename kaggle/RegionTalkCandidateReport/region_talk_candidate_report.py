@@ -426,10 +426,20 @@ def start_region_talk_stack_watchdog() -> None:
         return
     try:
         faulthandler.enable(file=sys.stderr, all_threads=True)
-        faulthandler.dump_traceback_later(interval, repeat=True, file=sys.stderr)
+        # One all-thread dump is enough to diagnose an opaque startup/stall.
+        # Repeating the dump while CPython is executing a C regex after the E5
+        # native runtime has been loaded/unloaded coincided with a hard Kaggle
+        # interpreter crash at the second watchdog boundary.  Keep the useful
+        # first dump, but make repeated native signal activity opt-in.  The
+        # source-queue stage has its own structured progress events below.
+        repeat = getenv_bool("REGION_TALK_STACK_WATCHDOG_REPEAT", False)
+        faulthandler.dump_traceback_later(interval, repeat=repeat, file=sys.stderr)
         atexit.register(lambda: faulthandler.cancel_dump_traceback_later())
         _REGION_TALK_STACK_WATCHDOG_STARTED = True
-        print(f"[region-talk] stack_watchdog_enabled interval_seconds={interval}", flush=True)
+        print(
+            f"[region-talk] stack_watchdog_enabled interval_seconds={interval} repeat={str(repeat).lower()}",
+            flush=True,
+        )
     except Exception as exc:
         print(f"[region-talk] stack_watchdog_enable_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
@@ -8110,6 +8120,7 @@ def build_unified_source_queue(
     posts_by_source: dict[str, list[dict[str, Any]]],
     run_id: str,
     run_now: str,
+    progress_callback: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Build the single human-visible source URL queue.
 
@@ -8123,6 +8134,7 @@ def build_unified_source_queue(
     external_blogger_rows = external_blogger_evidence_source_rows(previous_state, run_id, run_now)
     prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     entries: dict[str, dict[str, Any]] = {}
+    touched_keys: set[str] = set()
     skipped_non_target_queue_rows = 0
     stale_commercial_spam_reopened = 0
 
@@ -8172,6 +8184,7 @@ def build_unified_source_queue(
     queue_seq_duplicate_repaired = 0
     used_queue_seqs: set[int] = set()
     max_queue_seq = max([queue_positive_int(rec.get("queue_seq")) for rec in entries.values()] or [0])
+    max_queue_order = max([queue_positive_int(rec.get("queue_order")) for rec in entries.values()] or [0])
     for key, rec in sorted(entries.items(), key=lambda item: (queue_positive_int(item[1].get("queue_order")) or 999999999, item[0])):
         seq = queue_positive_int(rec.get("queue_seq"))
         if seq > 0 and seq not in used_queue_seqs:
@@ -8211,13 +8224,14 @@ def build_unified_source_queue(
         return max_queue_seq
 
     def append_or_update(row: dict[str, Any], *, added_from: str) -> bool:
-        nonlocal skipped_non_target_queue_rows
+        nonlocal skipped_non_target_queue_rows, max_queue_order
         seed = _source_queue_seed_from_row(row, default_added_from=added_from)
         if not seed:
             if _source_queue_seed_rejection_reason(row) != "missing_source_url":
                 skipped_non_target_queue_rows += 1
             return False
         key = seed["canonical_source_key"]
+        touched_keys.add(key)
         if key in entries:
             existing = entries[key]
             evidence_was_attached = str(existing.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
@@ -8277,7 +8291,8 @@ def build_unified_source_queue(
                     "priority_updated_at": run_now,
                 })
             return False
-        next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
+        max_queue_order += 1
+        next_order = max_queue_order
         entries[key] = {
             **seed,
             "source_queue_id": "srcq_" + stable_hash(key),
@@ -8351,7 +8366,8 @@ def build_unified_source_queue(
             keyword_priority.append((seed, True, evidence_fields))
         else:
             if source_terminal_rejected_status(surface_fields.get("source_queue_status")):
-                next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
+                max_queue_order += 1
+                next_order = max_queue_order
                 entries[key] = {
                     **seed,
                     **surface_fields,
@@ -8374,6 +8390,7 @@ def build_unified_source_queue(
     if keyword_priority:
         for seed, existed, evidence_fields in keyword_priority:
             key = seed["canonical_source_key"]
+            touched_keys.add(key)
             previous_order = int(entries.get(key, {}).get("queue_order") or 0) if existed else 0
             if existed:
                 entries[key].update({
@@ -8393,7 +8410,8 @@ def build_unified_source_queue(
                 })
                 keyword_existing_promoted += 1
             else:
-                next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
+                max_queue_order += 1
+                next_order = max_queue_order
                 entries[key] = {
                     **seed,
                     **evidence_fields,
@@ -8424,10 +8442,86 @@ def build_unified_source_queue(
         seed = _source_queue_seed_from_row(srow)
         if seed:
             source_by_key[seed["canonical_source_key"]] = srow
+            touched_keys.add(seed["canonical_source_key"])
+
+    # Avoid scanning the whole image queue once for every source.  More
+    # importantly, this gives the hot-path a small set of sources whose
+    # diagnostic image aggregates may actually have changed.
+    image_rows_by_source_id: dict[str, list[dict[str, Any]]] = {}
+    image_rows_by_source_url: dict[str, list[dict[str, Any]]] = {}
+    for image_row in previous_image_queue_rows:
+        image_source_id = str(image_row.get("source_id") or "").strip()
+        image_source_url = str(image_row.get("source_url") or "").strip().rstrip("/")
+        if image_source_id:
+            image_rows_by_source_id.setdefault(image_source_id, []).append(image_row)
+        if image_source_url:
+            image_rows_by_source_url.setdefault(image_source_url, []).append(image_row)
+
+    progress_every = max(100, getenv_int("REGION_TALK_SOURCE_QUEUE_PROGRESS_EVERY_ROWS", 500))
+    full_reclassify = getenv_bool("REGION_TALK_SOURCE_QUEUE_RECLASSIFY_FULL", False)
     processed_orders: list[int] = []
     out: list[dict[str, Any]] = []
-    for key, rec in entries.items():
+    entries_total = len(entries)
+    reused_unchanged_rows = 0
+    recomputed_rows = 0
+    for entry_index, (key, rec) in enumerate(entries.items(), start=1):
+        if progress_callback is not None and (entry_index == 1 or entry_index % progress_every == 0):
+            progress_callback(
+                "source_queue_build_progress",
+                phase="queue_assembly",
+                status="running",
+                source_queue_rows_done=entry_index - 1,
+                source_queue_rows_total=entries_total,
+                source_queue_rows_recomputed=recomputed_rows,
+                source_queue_rows_reused=reused_unchanged_rows,
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
         srow = source_by_key.get(key) or {}
+        sid = str(srow.get("source_id") or rec.get("source_id") or "")
+        source_urls = {
+            str(rec.get("source_url") or "").rstrip("/"),
+            str(rec.get("canonical_url") or "").rstrip("/"),
+            str(srow.get("source_url") or "").rstrip("/"),
+            str(srow.get("canonical_url") or "").rstrip("/"),
+        }
+        source_urls.discard("")
+        has_image_evidence = bool(
+            (sid and sid in image_rows_by_source_id)
+            or any(url in image_rows_by_source_url for url in source_urls)
+        )
+        existing_status = str(rec.get("source_queue_status") or rec.get("fetch_status") or "")
+        existing_scan_evidence = _source_has_primary_scan_evidence(rec, {}, existing_status)
+        needs_legacy_repair = bool(
+            existing_status == SPAM_SOURCE_STATUS
+            or str(rec.get("fake_processed_without_scan_evidence") or "").lower() == "true"
+            or not existing_status
+            # Preserve the queue self-repair contracts on the bounded path:
+            # processed rows may need scan/locality repair, while a durable
+            # successful source-status observation can repair an older
+            # pending queue row without pretending it was scanned now.
+            or existing_status.startswith("processed")
+            or (existing_status == "pending_scan" and existing_scan_evidence)
+        )
+        # The durable row is authoritative for an unchanged backlog item.
+        # Re-running dozens of regex/surface checks and image scans over every
+        # one of ~7.6k rows on every CandidateReport adds no product value and
+        # exposed the process to a native crash after the E5 runtime.  Rebuild
+        # only rows touched by this run, image evidence, or a narrow legacy
+        # repair condition.  A full maintenance sweep remains opt-in.
+        should_recompute = bool(
+            full_reclassify
+            or key in touched_keys
+            or srow
+            or has_image_evidence
+            or needs_legacy_repair
+        )
+        if not should_recompute:
+            reused_unchanged_rows += 1
+            if existing_status.startswith("processed") or existing_status == "needs_rescan_or_retry" or source_terminal_rejected_status(existing_status):
+                processed_orders.append(int(rec.get("queue_order") or 0))
+            out.append(dict(rec))
+            continue
+        recomputed_rows += 1
         pre_reopen_queue_status = str(
             srow.get("source_queue_status")
             or srow.get("fetch_status")
@@ -8440,7 +8534,6 @@ def build_unified_source_queue(
             stale_commercial_spam_reopened += 1
             rec.update(reopen_fields)
             srow = {**srow, **reopen_fields}
-        sid = str(srow.get("source_id") or rec.get("source_id") or "")
         sampled = posts_by_source.get(sid, []) if sid else []
         ko_posts = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
         candidate_posts = sum(1 for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES)
@@ -8453,15 +8546,16 @@ def build_unified_source_queue(
             r for r in sampled
             if r.get("kaliningrad_oblast_only_scope") and not r.get("is_ad_or_promo") and r.get("current_stage") in CANDIDATE_MEMORY_STAGES
         ]
-        source_urls = {str(rec.get("source_url") or ""), str(rec.get("canonical_url") or ""), str(srow.get("source_url") or ""), str(srow.get("canonical_url") or "")}
-        source_urls = {u.rstrip("/") for u in source_urls if u}
-        previous_visual_rows = []
-        for ir in previous_image_queue_rows:
-            ir_source_url = str(ir.get("source_url") or "").rstrip("/")
-            if sid and str(ir.get("source_id") or "") == sid:
-                previous_visual_rows.append(ir)
-            elif ir_source_url and ir_source_url in source_urls:
-                previous_visual_rows.append(ir)
+        previous_visual_rows: list[dict[str, Any]] = []
+        seen_previous_visual_ids: set[int] = set()
+        if sid:
+            for ir in image_rows_by_source_id.get(sid, []):
+                if id(ir) not in seen_previous_visual_ids:
+                    seen_previous_visual_ids.add(id(ir)); previous_visual_rows.append(ir)
+        for source_url in source_urls:
+            for ir in image_rows_by_source_url.get(source_url, []):
+                if id(ir) not in seen_previous_visual_ids:
+                    seen_previous_visual_ids.add(id(ir)); previous_visual_rows.append(ir)
         visual_rows_all = visual_rows + [r for r in previous_visual_rows if image_queue_text_region_confirmed(r)]
         actual_scores: list[float] = []
         seen_score_rows: set[str] = set()
@@ -8729,6 +8823,8 @@ def build_unified_source_queue(
         "source_queue_seq_missing_repaired_this_run": queue_seq_missing_repaired,
         "source_queue_seq_duplicate_repaired_this_run": queue_seq_duplicate_repaired,
         "source_queue_seq_max": max_queue_seq,
+        "source_queue_rows_recomputed_this_run": recomputed_rows,
+        "source_queue_rows_reused_unchanged_this_run": reused_unchanged_rows,
         "source_queue_seq_duplicate_total": len([s for s in [queue_positive_int(r.get("queue_seq")) for r in out] if s > 0]) - len({s for s in [queue_positive_int(r.get("queue_seq")) for r in out] if s > 0}),
         "source_queue_seq_missing_total": sum(1 for r in out if queue_positive_int(r.get("queue_seq")) == 0),
         "source_queue_historical_keyword_sources_total": len(historical_keyword_rows),
@@ -17008,6 +17104,7 @@ def build_report(
     unified_source_queue_sheet, unified_source_queue_metrics = build_unified_source_queue(
         previous_state, seeds, source_rows, source_frontier_unique, public_blogger_rows,
         keyword_discovery_rows, early_keyword_post_hit_rows, posts_by_source, run_id, run_now,
+        progress_callback=report_event,
     )
     queue_seq_repairs = int(unified_source_queue_metrics.get("source_queue_seq_missing_repaired_this_run") or 0) + int(
         unified_source_queue_metrics.get("source_queue_seq_duplicate_repaired_this_run") or 0
