@@ -472,6 +472,97 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_unchanged_historical_eligibility_row_is_not_rewritten(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_id": "already-blocked",
+                "image_queue_status": "rejected_publication_eligibility",
+                "publication_eligibility_decision": "reject",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "publication_eligibility_reason": "source_local",
+                "image_eligibility_decision": "reject",
+                "image_eligibility_gate_version": "publication-gate-test-v1",
+                "image_eligibility_expected_gate_version": "publication-gate-test-v1",
+                "image_eligibility_reason": "publication_eligibility_decision_not_accept:reject",
+                "image_eligibility_status": "blocked",
+                "next_action": "skip_publication_eligibility_rejected",
+                "last_image_diag_run_id": "older-run",
+                "last_image_diag_stage": "blocked_publication_eligibility",
+                "last_image_diag_at": "2026-07-16T00:00:00+00:00",
+                "queue_item_updated_at": "2026-07-16T00:00:00+00:00",
+            }
+
+            eligible, blocked = mod.partition_publication_eligible_rows([row])
+
+            self.assertEqual(eligible, [])
+            self.assertEqual(len(blocked), 1)
+            self.assertEqual(blocked[0]["_image_diag_material_change"], "false")
+            self.assertEqual(
+                mod.image_rows_for_stage_persist(
+                    blocked, stage="blocked_publication_eligibility"
+                ),
+                [],
+            )
+            with mock.patch.object(mod, "ydb_connect") as connect:
+                mod.ydb_upsert_image_rows(
+                    blocked, stage="blocked_publication_eligibility"
+                )
+            connect.assert_not_called()
+
+    def test_real_eligibility_transition_is_selected_for_persistence(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "image_queue_id": "newly-blocked",
+                "image_queue_status": "needs_actual_image_fetch",
+                "publication_eligibility_decision": "reject",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "publication_eligibility_reason": "source_local",
+            }
+
+            _eligible, blocked = mod.partition_publication_eligible_rows([row])
+
+            self.assertEqual(blocked[0]["_image_diag_material_change"], "true")
+            selected = mod.image_rows_for_stage_persist(
+                blocked, stage="blocked_publication_eligibility"
+            )
+            self.assertEqual([item["image_queue_id"] for item in selected], ["newly-blocked"])
+
+    def test_vlm_backlog_heartbeat_counts_unique_rows_across_repolls(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "post_url": "https://t.me/travelcase/album",
+                "image_queue_id": "travelcase-album",
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+                "image_quality_decision": "needs_visual_review",
+                "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "kaliningrad_oblast_only_scope": "true",
+                "kaliningrad_mention_role": "main_subject",
+                "image_acquisition_status": "complete",
+                "expected_image_count": 3,
+                "fetched_image_count": 3,
+                "image_component_bundle_complete": "true",
+                "input_media_manifest_hash": "album-hash",
+                "overall_media_score": 0.61,
+                "postcardness_score": 0.93,
+                "shadow_best_frame_score": 0.68,
+            }
+            mod.ydb_select_image_queue = lambda _limit: [dict(row)]
+            mod.ydb_upsert_image_rows = lambda _batch, *, stage: None
+
+            mod.ydb_rows_for_diagnostic(10)
+            mod.ydb_rows_for_diagnostic(10)
+
+            self.assertEqual(mod.IMAGE_VLM_STATS["backlog_seen"], 1)
+            self.assertEqual(mod.IMAGE_VLM_BACKLOG_KEYS, {"travelcase-album"})
+
     def test_partial_album_visual_review_is_reopened_for_acquisition_repair(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             mod = self._load_in_temp_output(td)

@@ -209,6 +209,12 @@ errors remain retryable under the original reservation. The scorecard exposes
 `image_vlm_accept_total`, `image_vlm_reject_nonterminal_total`,
 `image_vlm_review_total` and
 `image_vlm_error_or_budget_deferred_total` without hiding the legacy counters.
+The per-run VLM heartbeat counts unique image work keys, not repeated polls of
+the same row. ImageDiagnostic may inspect the complete historical image ledger
+to calculate current eligibility, but it must write an already blocked row only
+when its material eligibility/status/evidence changed. Audit timestamps and
+run-lineage fields alone never trigger a YDB UPSERT; this keeps a two-item image
+run bounded instead of rewriting the historical ledger.
 
 A producer gate-version bump is not a quality rejection. Missing/stale
 attestations are written as `deferred_refresh`; existing actual-image evidence

@@ -47,6 +47,7 @@ LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS = {
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
+IMAGE_VLM_BACKLOG_KEYS: set[str] = set()
 IMAGE_VLM_RUNTIME: dict = {}
 IMAGE_VLM_STATS = {
     "backlog_seen": 0,
@@ -803,12 +804,47 @@ def partition_publication_eligible_rows(batch: list[dict]) -> tuple[list[dict], 
     eligible: list[dict] = []
     blocked: list[dict] = []
     for row in batch:
+        material_before = _image_eligibility_material_snapshot(row)
         reason = publication_eligibility_gate_reason(row)
         if reason:
-            blocked.append(mark_publication_eligibility_blocked(row, reason))
+            audited = mark_publication_eligibility_blocked(row, reason)
+            audited["_image_diag_material_change"] = str(
+                material_before != _image_eligibility_material_snapshot(audited)
+            ).lower()
+            blocked.append(audited)
         else:
             eligible.append(apply_publication_eligibility_audit(row, reason=""))
     return eligible, blocked
+
+
+_IMAGE_ELIGIBILITY_VOLATILE_FIELDS = {
+    "_ydb_pk",
+    "_image_diag_material_change",
+    "image_eligibility_checked_at",
+    "last_image_diag_run_id",
+    "last_image_diag_stage",
+    "last_image_diag_at",
+    "queue_item_updated_at",
+    "status_changed_this_run",
+    "last_status_changed_at",
+    "previous_image_queue_status",
+}
+
+
+def _image_eligibility_material_snapshot(row: dict) -> str:
+    """Return stable eligibility state without audit/run timestamps.
+
+    ImageDiagnostic reads the complete historical image ledger on every poll.
+    Rechecking an already blocked row must not turn that read into a write only
+    because ``checked_at`` or run lineage changed.  Semantic/status/evidence
+    transitions remain part of this snapshot and are therefore persisted.
+    """
+    material = {
+        str(key): value
+        for key, value in row.items()
+        if str(key) not in _IMAGE_ELIGIBILITY_VOLATILE_FIELDS
+    }
+    return json.dumps(material, ensure_ascii=False, sort_keys=True, default=str)
 
 
 def expose_publication_eligibility_counters(
@@ -1326,7 +1362,20 @@ def image_row_needs_auth_strategy_retry_reset(row: dict) -> bool:
     _token, token_name = _vk_read_token()
     return token_name in {"VK_SERVICE_TOKEN", "VK_SERVICE_KEY"}
 
+def image_rows_for_stage_persist(batch, *, stage: str) -> list[dict]:
+    if stage == "blocked_publication_eligibility":
+        # The queue reader audits the whole historical ledger.  Persist only a
+        # real eligibility/status/evidence transition, never a fresh audit
+        # timestamp or run id for an otherwise unchanged historical row.
+        return [
+            row for row in batch
+            if str(row.get("_image_diag_material_change") or "").lower() == "true"
+        ]
+    return list(batch)
+
+
 def ydb_upsert_image_rows(batch, *, stage: str):
+    batch = image_rows_for_stage_persist(batch, stage=stage)
     if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
     def op(session):
@@ -1346,7 +1395,7 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'im
             # Kaggle-local paths are transient and unusable after the notebook
             # exits. Persist compact manifest hashes/scores, not filesystem
             # names or duplicated path lists.
-            for transient_key in ("actual_media_path", "actual_media_paths", "thumbnail_path", "unsupported_media_path", "vlm_revisit_requested"):
+            for transient_key in ("actual_media_path", "actual_media_paths", "thumbnail_path", "unsupported_media_path", "vlm_revisit_requested", "_image_diag_material_change"):
                 payload.pop(transient_key, None)
             tx.execute(query,{"$pk":"image_queue_item:"+key.replace("image_queue_item:",""),"$payload_json":json.dumps(payload,ensure_ascii=False),"$updated_at":now},commit_tx=False)
         tx.commit()
@@ -1481,7 +1530,8 @@ def ydb_rows_for_diagnostic(limit_n: int):
         needs_acquisition_repair = image_row_needs_acquisition_repair(r)
         needs_vlm_review = image_row_needs_vlm_review(r)
         if needs_vlm_review:
-            IMAGE_VLM_STATS["backlog_seen"] += 1
+            IMAGE_VLM_BACKLOG_KEYS.add(image_work_key(r))
+            IMAGE_VLM_STATS["backlog_seen"] = len(IMAGE_VLM_BACKLOG_KEYS)
             r["previous_image_queue_status"] = status
             r["image_queue_status"] = "needs_actual_image_fetch"
             r["media_acquisition_status"] = "needs_actual_image_fetch"

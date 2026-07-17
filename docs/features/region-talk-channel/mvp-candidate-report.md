@@ -582,6 +582,11 @@ consistent versioned `accept` can recover the row as `vlm_visual_accept`;
 for operator/calibration review. Calls share the finalizer's durable <=100
 Region Talk budget and are capped at two new requests per image run by default.
 Completed unchanged requests are replayed by fingerprint and never paid twice.
+Repeated YDB polls of the same VLM-review row count once in the run heartbeat.
+The ImageDiagnostic eligibility audit also separates inspection from mutation:
+historical blocked rows are persisted only for a material status, eligibility
+or retained-evidence transition. A changed `checked_at`, current run id or
+queue update timestamp is not a reason to rewrite the image ledger.
 
 `build_report(...)` may still be the historical function name around the
 bounded scoring code, but product completion must be judged from live YDB rows:
