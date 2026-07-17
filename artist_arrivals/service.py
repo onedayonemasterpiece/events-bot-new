@@ -15,6 +15,8 @@ from sqlalchemy import select
 from db import Database
 from models import (
     ArtistDigestIssue,
+    ArtistMediaAsset,
+    ArtistMediaProvenance,
     ArtistPublicationLedger,
     ArtistRegistryEntity,
     Event,
@@ -26,6 +28,10 @@ from models import (
 
 ARTIST_ARRIVAL_SCHEMA_VERSION = "kenigevents.artist_arrivals.v1"
 CURATED_DATA_PATH = Path(__file__).with_name("data") / "curated_artist_evidence.json"
+CURATED_MEDIA_PATH = (
+    Path(__file__).with_name("data")
+    / "curated_artist_media_candidates_batch_001.json"
+)
 ELIGIBLE_LOCALITIES = frozenset(
     {"non_local_ru_verified", "non_local_international_verified"}
 )
@@ -42,6 +48,7 @@ PHOTO_ALLOWED_STATUSES = frozenset(
 )
 PUBLICATION_SUCCESS_STATUSES = frozenset({"published", "scheduled", "tg_published", "vk_scheduled"})
 PROFILE_SAFETY_HOLD_STATUSES = frozenset({"review", "manual_hold", "rejected", "needs_review"})
+MEDIA_OPERATIONAL_STATUSES = frozenset({"ready", "hold", "rejected", "takedown", "unavailable"})
 
 
 def _utc(value: str | datetime | None) -> datetime | None:
@@ -97,11 +104,17 @@ def photo_publication_metadata(
         parsed = urlsplit(source_url)
         if parsed.scheme != "https" or not parsed.hostname:
             continue
+        service = str(item.get("service") or item.get("source_platform") or "").strip()
+        account = str(
+            item.get("account_handle") or item.get("source_account") or ""
+        ).strip().lstrip("@")
+        if not service or not account:
+            continue
         credit = str(
             item.get("credit_text")
             or item.get("author_or_rightsholder")
             or item.get("source_name")
-            or parsed.hostname
+            or f"{service} · @{account}"
         ).strip()
         if not credit:
             continue
@@ -120,6 +133,8 @@ def photo_publication_metadata(
         return {
             "credit_text": credit[:180],
             "source_url": source_url,
+            "source_service": service[:80],
+            "source_account": account[:120],
         }
     return None
 
@@ -137,6 +152,124 @@ def load_curated_artist_data(path: Path | str = CURATED_DATA_PATH) -> dict[str, 
     if not isinstance(payload.get("profiles"), list) or not isinstance(payload.get("appearances"), list):
         raise ValueError("curated artist-arrivals payload is incomplete")
     return payload
+
+
+def load_curated_artist_media_candidates(
+    path: Path | str = CURATED_MEDIA_PATH,
+) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("schema_version") != "kenigevents.artist_media_candidates.v1":
+        raise ValueError("unsupported curated artist-media schema")
+    if not isinstance(payload.get("candidates"), list):
+        raise ValueError("curated artist-media payload is incomplete")
+    for item in payload["candidates"]:
+        source = dict(item.get("source") or {})
+        required = (
+            item.get("candidate_key"),
+            item.get("artist_id"),
+            source.get("service"),
+            source.get("account_handle"),
+            source.get("source_page_url"),
+        )
+        if not all(str(value or "").strip() for value in required):
+            raise ValueError("artist-media candidate requires service, account and source page")
+    return payload
+
+
+async def ensure_curated_artist_media_candidates(
+    db: Database,
+    *,
+    path: Path | str = CURATED_MEDIA_PATH,
+) -> dict[str, int]:
+    """Store reviewed discovery links without making remote images public.
+
+    The seed is deliberately candidate-only. An operator/materializer must
+    verify identity and rights, create an immutable object, and set a managed
+    CDN URL before the selector can expose the asset to a digest or the site.
+    """
+
+    payload = load_curated_artist_media_candidates(path)
+    now = datetime.now(timezone.utc)
+    asset_upserts = provenance_upserts = missing_artists = 0
+    async with db.get_session() as session:
+        for item in payload["candidates"]:
+            artist_id = str(item["artist_id"])
+            if await session.get(ArtistRegistryEntity, artist_id) is None:
+                missing_artists += 1
+                continue
+            candidate_key = str(item["candidate_key"])
+            asset = (
+                await session.execute(
+                    select(ArtistMediaAsset).where(
+                        ArtistMediaAsset.candidate_key == candidate_key
+                    )
+                )
+            ).scalars().first()
+            values = {
+                "artist_id": artist_id,
+                "media_role": str(item.get("media_role") or "portrait"),
+                "lifecycle_status": str(item.get("lifecycle_status") or "candidate"),
+                "identity_status": str(item.get("identity_status") or "unverified"),
+                "identity_confidence": item.get("identity_confidence"),
+                "quality_status": str(item.get("quality_status") or "review"),
+                "rights_status": str(item.get("rights_status") or "review"),
+                "storage_status": str(item.get("storage_status") or "remote_candidate"),
+                "preferred": bool(item.get("preferred")),
+                "priority": int(item.get("priority") or 100),
+                "updated_at": now,
+            }
+            if asset is None:
+                asset = ArtistMediaAsset(candidate_key=candidate_key, **values)
+                session.add(asset)
+                await session.flush()
+            elif asset.lifecycle_status not in MEDIA_OPERATIONAL_STATUSES:
+                for key, value in values.items():
+                    setattr(asset, key, value)
+            asset_upserts += 1
+
+            source = dict(item["source"])
+            observation_key = candidate_key
+            provenance = (
+                await session.execute(
+                    select(ArtistMediaProvenance).where(
+                        ArtistMediaProvenance.observation_key == observation_key
+                    )
+                )
+            ).scalars().first()
+            provenance_values = {
+                "asset_id": int(asset.id),
+                "source_kind": "pinterest_curated_discovery",
+                "service": str(source["service"]),
+                "account_handle": str(source["account_handle"]),
+                "account_name": source.get("account_name"),
+                "account_url": source.get("account_url"),
+                "source_page_url": str(source["source_page_url"]),
+                "source_media_url": source.get("source_media_url"),
+                "original_source_url": source.get("original_source_url"),
+                "credit_text": str(
+                    source.get("credit_text")
+                    or f"{source['service']} · @{source['account_handle']}"
+                ),
+                "review_status": "candidate",
+                "updated_at": now,
+            }
+            if provenance is None:
+                session.add(
+                    ArtistMediaProvenance(
+                        observation_key=observation_key,
+                        **provenance_values,
+                    )
+                )
+            elif provenance.review_status not in {"approved", "rejected", "takedown"}:
+                for key, value in provenance_values.items():
+                    setattr(provenance, key, value)
+            provenance_upserts += 1
+        await session.commit()
+    return {
+        "assets": asset_upserts,
+        "provenance": provenance_upserts,
+        "missing_artists": missing_artists,
+    }
 
 
 async def ensure_curated_artist_data(
@@ -471,6 +604,85 @@ def event_artist_source_revision(event: Event) -> str:
     )
 
 
+def _artist_media_public_candidate(
+    asset: ArtistMediaAsset,
+    provenances: Iterable[ArtistMediaProvenance],
+    *,
+    event_id: int,
+    selected_asset_id: int | None,
+) -> tuple[int, dict[str, Any]] | None:
+    """Return a ranked, fail-closed managed media candidate."""
+
+    if (
+        asset.lifecycle_status != "ready"
+        or asset.storage_status != "ready"
+        or asset.identity_status != "verified"
+        or asset.rights_status not in PHOTO_ALLOWED_STATUSES
+        or asset.quality_status not in {"approved", "verified"}
+        or asset.taken_down_at is not None
+    ):
+        return None
+    cdn_url = str(asset.cdn_url or "").strip()
+    parsed = urlsplit(cdn_url)
+    allowed_hosts = {
+        value.strip().casefold()
+        for value in os.getenv(
+            "ARTIST_MEDIA_CDN_HOSTS", "static.kenigevents.ru"
+        ).split(",")
+        if value.strip()
+    }
+    if parsed.scheme != "https" or str(parsed.hostname or "").casefold() not in allowed_hosts:
+        return None
+
+    source_priority = {
+        "manual_preferred": 0,
+        "press_kit": 10,
+        "official_artist": 20,
+        "event_announcement": 30,
+        "organizer_or_venue": 40,
+        "informational_citation": 50,
+        "pinterest_curated_discovery": 80,
+    }
+    usable: list[tuple[int, ArtistMediaProvenance]] = []
+    for provenance in provenances:
+        if provenance.review_status != "approved":
+            continue
+        if not all(
+            str(value or "").strip()
+            for value in (
+                provenance.service,
+                provenance.account_handle,
+                provenance.source_page_url,
+                provenance.credit_text,
+            )
+        ):
+            continue
+        rank = source_priority.get(provenance.source_kind, 70)
+        if provenance.event_id == event_id:
+            rank -= 25
+        usable.append((rank, provenance))
+    if not usable:
+        return None
+    usable.sort(key=lambda item: (item[0], int(item[1].id or 0)))
+    provenance_rank, provenance = usable[0]
+    rank = int(asset.priority or 100) + provenance_rank
+    if asset.id == selected_asset_id:
+        rank -= 1000
+    elif asset.preferred:
+        rank -= 100
+    return rank, {
+        "artist_media_asset_id": asset.id,
+        "photo_url": cdn_url,
+        "photo_rights_status": asset.rights_status,
+        "media_identity_status": asset.identity_status,
+        "media_ready": True,
+        "photo_credit_text": provenance.credit_text,
+        "photo_source_url": provenance.source_page_url,
+        "photo_source_service": provenance.service,
+        "photo_source_account": provenance.account_handle,
+    }
+
+
 async def build_artist_arrival_issue(
     db: Database,
     *,
@@ -509,6 +721,29 @@ async def build_artist_arrival_issue(
                 .join(Event, Event.id == EventArtistAppearance.event_id)
             )
         ).all()
+        artist_ids = sorted({str(row[0].artist_id) for row in rows})
+        media_assets = (
+            await session.execute(
+                select(ArtistMediaAsset).where(
+                    ArtistMediaAsset.artist_id.in_(artist_ids)
+                )
+            )
+        ).scalars().all() if artist_ids else []
+        asset_ids = [int(asset.id) for asset in media_assets if asset.id is not None]
+        media_provenance_rows = (
+            await session.execute(
+                select(ArtistMediaProvenance).where(
+                    ArtistMediaProvenance.asset_id.in_(asset_ids)
+                )
+            )
+        ).scalars().all() if asset_ids else []
+
+    assets_by_artist: dict[str, list[ArtistMediaAsset]] = {}
+    for asset in media_assets:
+        assets_by_artist.setdefault(str(asset.artist_id), []).append(asset)
+    provenance_by_asset: dict[int, list[ArtistMediaProvenance]] = {}
+    for provenance in media_provenance_rows:
+        provenance_by_asset.setdefault(int(provenance.asset_id), []).append(provenance)
 
     excluded: Counter[str] = Counter()
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
@@ -555,6 +790,48 @@ async def build_artist_arrival_issue(
             artist.photo_rights_status,
             artist.photo_rights_evidence_json,
         )
+        selected_media: tuple[int, dict[str, Any]] | None = None
+        for asset in assets_by_artist.get(str(artist.artist_id), []):
+            candidate = _artist_media_public_candidate(
+                asset,
+                provenance_by_asset.get(int(asset.id or 0), []),
+                event_id=int(event.id),
+                selected_asset_id=appearance.selected_artist_media_asset_id,
+            )
+            if candidate is not None and (
+                selected_media is None or candidate[0] < selected_media[0]
+            ):
+                selected_media = candidate
+        legacy_media = None
+        legacy_photo_parsed = urlsplit(str(artist.photo_url or "").strip())
+        legacy_allowed_hosts = {
+            value.strip().casefold()
+            for value in os.getenv(
+                "ARTIST_MEDIA_CDN_HOSTS", "static.kenigevents.ru"
+            ).split(",")
+            if value.strip()
+        }
+        if (
+            artist.photo_url
+            and photo_meta
+            and appearance.media_identity_status == "verified"
+            and legacy_photo_parsed.scheme == "https"
+            and str(legacy_photo_parsed.hostname or "").casefold()
+            in legacy_allowed_hosts
+        ):
+            legacy_media = {
+                "artist_media_asset_id": None,
+                "photo_url": artist.photo_url,
+                "photo_rights_status": artist.photo_rights_status,
+                "media_identity_status": "verified",
+                "media_ready": True,
+                "photo_credit_text": photo_meta["credit_text"],
+                "photo_source_url": photo_meta["source_url"],
+                "photo_source_service": photo_meta["source_service"],
+                "photo_source_account": photo_meta["source_account"],
+            }
+        active_media = selected_media[1] if selected_media else legacy_media
+        active_media_rank = selected_media[0] if selected_media else (10_000 if legacy_media else None)
         item = grouped.setdefault(
             key,
             {
@@ -573,24 +850,23 @@ async def build_artist_arrival_issue(
                 "venues": [],
                 "municipalities": [],
                 "event_url": None,
-                "photo_url": (
-                    artist.photo_url
-                    if photo_meta
-                    and appearance.media_identity_status == "verified"
-                    else None
+                "photo_url": active_media["photo_url"] if active_media else None,
+                "photo_rights_status": (
+                    active_media["photo_rights_status"] if active_media else artist.photo_rights_status
                 ),
-                "photo_rights_status": artist.photo_rights_status,
-                "media_identity_status": appearance.media_identity_status,
+                "media_identity_status": (
+                    active_media["media_identity_status"] if active_media else appearance.media_identity_status
+                ),
                 "photo_rights_evidence_ids": [
                     _hash(e)[:20] for e in artist.photo_rights_evidence_json
                 ],
-                "photo_credit_text": photo_meta["credit_text"] if photo_meta else None,
-                "photo_source_url": photo_meta["source_url"] if photo_meta else None,
-                "media_ready": bool(
-                    artist.photo_url
-                    and photo_meta
-                    and appearance.media_identity_status == "verified"
-                ),
+                "photo_credit_text": active_media["photo_credit_text"] if active_media else None,
+                "photo_source_url": active_media["photo_source_url"] if active_media else None,
+                "photo_source_service": active_media.get("photo_source_service") if active_media else None,
+                "photo_source_account": active_media.get("photo_source_account") if active_media else None,
+                "artist_media_asset_id": active_media.get("artist_media_asset_id") if active_media else None,
+                "media_ready": bool(active_media),
+                "_media_selection_rank": active_media_rank,
                 "source_revisions": [],
                 "participant_evidence_ids": [
                     _hash(e)[:20] for e in appearance.participant_evidence_json
@@ -601,17 +877,13 @@ async def build_artist_arrival_issue(
         )
         item["event_ids"].append(int(event.id))
         item["dates"].append(event_date.isoformat())
-        if (
-            artist.photo_url
-            and photo_meta
-            and appearance.media_identity_status == "verified"
+        if active_media and (
+            item.get("_media_selection_rank") is None
+            or active_media_rank is not None
+            and active_media_rank < item["_media_selection_rank"]
         ):
-            item["photo_url"] = artist.photo_url
-            item["photo_rights_status"] = artist.photo_rights_status
-            item["media_identity_status"] = "verified"
-            item["media_ready"] = True
-            item["photo_credit_text"] = photo_meta["credit_text"]
-            item["photo_source_url"] = photo_meta["source_url"]
+            item.update(active_media)
+            item["_media_selection_rank"] = active_media_rank
         if event.location_name and event.location_name not in item["venues"]:
             item["venues"].append(event.location_name)
         if event.city and event.city not in item["municipalities"]:
@@ -624,6 +896,7 @@ async def build_artist_arrival_issue(
         item["event_ids"] = sorted(set(item["event_ids"]))
         item["dates"] = sorted(set(item["dates"]))
         item["source_revisions"] = sorted(set(item["source_revisions"]))
+        item.pop("_media_selection_rank", None)
     items.sort(key=lambda x: (x["dates"][0], x["arrival_kind"], x["artist_name"].casefold()))
     digest_items = [item for item in items if not item["digest_previously_published"]][:max_items]
     selected_keys = {item["item_key"] for item in digest_items}
@@ -774,6 +1047,9 @@ def public_artist_arrival_projection(issue: ArtistDigestIssue | None) -> dict[st
                     "photo_url",
                     "photo_credit_text",
                     "photo_source_url",
+                    "photo_source_service",
+                    "photo_source_account",
+                    "artist_media_asset_id",
                     "media_ready",
                 )
             }

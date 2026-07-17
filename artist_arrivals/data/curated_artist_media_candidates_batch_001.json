@@ -1,0 +1,253 @@
+{
+  "schema_version": "kenigevents.artist_media_candidates.v1",
+  "generated_at": "2026-07-17T12:00:00Z",
+  "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+  "policy": {
+    "bytes_included": false,
+    "remote_urls_are_provenance_only": true,
+    "public_ready_requires": [
+      "identity_status=verified",
+      "rights_status in allowed set",
+      "storage_status=ready",
+      "cdn_url on managed domain"
+    ],
+    "credit_requires": [
+      "service",
+      "account_handle",
+      "source_page_url"
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_key": "pinterest:71213237844232627",
+      "artist_id": "RUART-0480",
+      "artist_name": "Максим Аверин",
+      "media_role": "portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "visual_reviewed_candidate",
+      "identity_confidence": 0.96,
+      "quality_status": "clean_but_low_resolution",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "natalileschenko",
+        "account_name": "nataliya leschencko",
+        "account_url": "https://www.pinterest.com/natalileschenko/",
+        "source_page_url": "https://www.pinterest.com/pin/71213237844232627/",
+        "source_media_url": "https://i.pinimg.com/originals/ec/c2/8b/ecc28bcb878e935161c356ed0bb4da9f.jpg",
+        "original_source_url": null,
+        "credit_text": "Pinterest · @natalileschenko",
+        "observed_width": 502,
+        "observed_height": 602,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 2
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Максим Аверин; чистый портрет. Разрешение ниже целевого 1080 px, только кандидат до поиска первоисточника/лучшего файла."
+      }
+    },
+    {
+      "candidate_key": "pinterest:811422057881491206",
+      "artist_id": "RUART-0480",
+      "artist_name": "Максим Аверин",
+      "media_role": "portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "conditional_candidate",
+      "identity_confidence": 0.9,
+      "quality_status": "watermark_needs_clean_original",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "mulkirx",
+        "account_name": "частичка любви! ☕️",
+        "account_url": "https://www.pinterest.com/mulkirx/",
+        "source_page_url": "https://www.pinterest.com/pin/811422057881491206/",
+        "source_media_url": "https://i.pinimg.com/originals/96/c1/ab/96c1abcf387e6996ef9798c6e0ab859a.jpg",
+        "original_source_url": null,
+        "credit_text": "Pinterest · @mulkirx",
+        "observed_width": 1016,
+        "observed_height": 1200,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 3
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Максим Аверин; identity и разрешение хорошие, но виден небольшой авторский watermark — не использовать как «фото без надписей», пока не найден чистый оригинал."
+      }
+    },
+    {
+      "candidate_key": "pinterest:301178293852100607",
+      "artist_id": "RUART-0480",
+      "artist_name": "Максим Аверин",
+      "media_role": "portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "visual_reviewed_candidate",
+      "identity_confidence": 0.96,
+      "quality_status": "clean_candidate",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "starhit",
+        "account_name": "StarHit",
+        "account_url": "https://www.pinterest.com/starhit/",
+        "source_page_url": "https://www.pinterest.com/pin/301178293852100607/",
+        "source_media_url": "https://i.pinimg.com/originals/d9/7b/8b/d97b8b9637f3bd67577c2f3515f2b230.jpg",
+        "original_source_url": "http://www.starhit.ru/interview/maksim-averin-ya-shodil-s-uma-ot-nevzaimnoy-lyubvi-137670/",
+        "credit_text": "Pinterest · @starhit",
+        "observed_width": 900,
+        "observed_height": 866,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 4
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Максим Аверин; чистый сценический портрет, подходящий кадр без текстовой плашки."
+      }
+    },
+    {
+      "candidate_key": "pinterest:698058011016918664",
+      "artist_id": "RUART-0480",
+      "artist_name": "Максим Аверин",
+      "media_role": "portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "visual_reviewed_candidate",
+      "identity_confidence": 0.96,
+      "quality_status": "clean_candidate",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "liiwrm",
+        "account_name": "mul.tisoul",
+        "account_url": "https://www.pinterest.com/liiwrm/",
+        "source_page_url": "https://www.pinterest.com/pin/698058011016918664/",
+        "source_media_url": "https://i.pinimg.com/originals/c1/1f/5e/c11f5e88ccf8eabc0a4b67b29a493f72.jpg",
+        "original_source_url": null,
+        "credit_text": "Pinterest · @liiwrm",
+        "observed_width": 956,
+        "observed_height": 919,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 5
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Максим Аверин; чистый портрет/selfie, без текстовой плашки."
+      }
+    },
+    {
+      "candidate_key": "pinterest:578571883415942584",
+      "artist_id": "RUART-0061",
+      "artist_name": "Елена Ваенга",
+      "media_role": "portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "visual_reviewed_candidate",
+      "identity_confidence": 0.96,
+      "quality_status": "clean_but_low_resolution",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "joinfonews",
+        "account_name": "Joinfo.com",
+        "account_url": "https://www.pinterest.com/joinfonews/",
+        "source_page_url": "https://www.pinterest.com/pin/578571883415942584/",
+        "source_media_url": "https://i.pinimg.com/originals/7c/25/2a/7c252a0015e0ec499e87adb7508f690a.jpg",
+        "original_source_url": "https://joinfo.ua/showbiz/1245623_Elena-Vaenga-otmechaet-42-goda-tvorcheskie.html",
+        "credit_text": "Pinterest · @joinfonews",
+        "observed_width": 620,
+        "observed_height": 620,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 7
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Елена Ваенга; чистый сценический кадр, identity визуально совпадает."
+      }
+    },
+    {
+      "candidate_key": "pinterest:576460821077696746",
+      "artist_id": "RUART-0061",
+      "artist_name": "Елена Ваенга",
+      "media_role": "portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "visual_reviewed_candidate",
+      "identity_confidence": 0.96,
+      "quality_status": "clean_candidate",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "hodunko75",
+        "account_name": "Sofism",
+        "account_url": "https://www.pinterest.com/hodunko75/",
+        "source_page_url": "https://www.pinterest.com/pin/576460821077696746/",
+        "source_media_url": "https://i.pinimg.com/originals/92/a5/b1/92a5b11c2bdc877500f07242bf20c80e.jpg",
+        "original_source_url": null,
+        "credit_text": "Pinterest · @hodunko75",
+        "observed_width": 1064,
+        "observed_height": 1200,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 8
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Елена Ваенга; чистый постановочный портрет, identity визуально совпадает."
+      }
+    },
+    {
+      "candidate_key": "pinterest:892064638702744695",
+      "artist_id": "KEART-DD59939F9015",
+      "artist_name": "Сергей Жилин и Фонограф-Джаз-Трио",
+      "media_role": "performer_portrait",
+      "lifecycle_status": "candidate",
+      "identity_status": "conditional_candidate",
+      "identity_confidence": 0.9,
+      "quality_status": "below_digest_resolution",
+      "rights_status": "review",
+      "storage_status": "remote_candidate",
+      "preferred": false,
+      "priority": 80,
+      "source": {
+        "service": "Pinterest",
+        "account_handle": "natalasinilo34",
+        "account_name": "Наталья",
+        "account_url": "https://www.pinterest.com/natalasinilo34/",
+        "source_page_url": "https://www.pinterest.com/pin/892064638702744695/",
+        "source_media_url": "https://i.pinimg.com/originals/d7/c5/1e/d7c51e4c8ec78e114099c9d30af7e1d6.jpg",
+        "original_source_url": null,
+        "credit_text": "Pinterest · @natalasinilo34",
+        "observed_width": 320,
+        "observed_height": 320,
+        "collection_id": "20260717-kenigevents-artist-celebrity-photo-bank-batch-001",
+        "collection_index": 23
+      },
+      "review": {
+        "status": "candidate_only",
+        "reviewed_at": "2026-07-17T12:00:00Z",
+        "notes": "Сергей Жилин; identity визуально совпадает, но оригинал Pinterest всего 320×320 — недостаточно для 1080×1350 дайджеста."
+      }
+    }
+  ]
+}

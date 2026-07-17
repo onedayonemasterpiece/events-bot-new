@@ -5,6 +5,7 @@ from .service import (
     build_artist_arrival_issue,
     ensure_artist_arrivals_promo_campaign,
     ensure_curated_artist_data,
+    ensure_curated_artist_media_candidates,
     public_artist_arrival_projection,
 )
 from .publisher import reconcile_artist_arrival_delivery
@@ -14,6 +15,7 @@ __all__ = [
     "build_artist_arrival_issue",
     "ensure_artist_arrivals_promo_campaign",
     "ensure_curated_artist_data",
+    "ensure_curated_artist_media_candidates",
     "public_artist_arrival_projection",
     "reconcile_artist_arrival_delivery",
 ]

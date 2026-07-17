@@ -2571,6 +2571,76 @@ class Database:
                 CREATE INDEX IF NOT EXISTS ix_artist_registry_locality_valid
                     ON artist_registry_entity(locality_status, valid_until);
 
+                CREATE TABLE IF NOT EXISTS artist_media_asset(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    candidate_key TEXT NOT NULL UNIQUE,
+                    artist_id TEXT NOT NULL,
+                    media_role TEXT NOT NULL DEFAULT 'portrait',
+                    lifecycle_status TEXT NOT NULL DEFAULT 'candidate',
+                    identity_status TEXT NOT NULL DEFAULT 'unverified',
+                    identity_confidence REAL,
+                    quality_status TEXT NOT NULL DEFAULT 'review',
+                    rights_status TEXT NOT NULL DEFAULT 'review',
+                    rights_scope TEXT,
+                    storage_status TEXT NOT NULL DEFAULT 'remote_candidate',
+                    object_path TEXT,
+                    cdn_url TEXT,
+                    raw_sha256 TEXT,
+                    pixel_sha256 TEXT,
+                    encoded_sha256 TEXT,
+                    perceptual_hash TEXT,
+                    width INTEGER,
+                    height INTEGER,
+                    focal_x REAL,
+                    focal_y REAL,
+                    safe_crop BOOLEAN,
+                    preferred BOOLEAN NOT NULL DEFAULT 0,
+                    priority INTEGER NOT NULL DEFAULT 100,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    verified_at TIMESTAMP,
+                    taken_down_at TIMESTAMP,
+                    FOREIGN KEY(artist_id) REFERENCES artist_registry_entity(artist_id),
+                    UNIQUE(artist_id, pixel_sha256)
+                );
+                CREATE INDEX IF NOT EXISTS ix_artist_media_asset_selection
+                    ON artist_media_asset(
+                        artist_id, lifecycle_status, storage_status, preferred, priority
+                    );
+
+                CREATE TABLE IF NOT EXISTS artist_media_provenance(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    asset_id INTEGER NOT NULL,
+                    event_id INTEGER,
+                    event_poster_id INTEGER,
+                    source_kind TEXT NOT NULL DEFAULT 'curated_discovery',
+                    service TEXT NOT NULL,
+                    account_handle TEXT NOT NULL,
+                    account_name TEXT,
+                    account_url TEXT,
+                    source_page_url TEXT NOT NULL,
+                    source_media_url TEXT,
+                    original_source_url TEXT,
+                    credit_text TEXT NOT NULL,
+                    author_or_rightsholder TEXT,
+                    rights_basis TEXT,
+                    purpose TEXT,
+                    review_status TEXT NOT NULL DEFAULT 'candidate',
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    observation_key TEXT NOT NULL UNIQUE,
+                    observed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(asset_id) REFERENCES artist_media_asset(id) ON DELETE CASCADE,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(event_poster_id) REFERENCES eventposter(id) ON DELETE SET NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_artist_media_provenance_asset
+                    ON artist_media_provenance(asset_id, source_kind);
+                CREATE INDEX IF NOT EXISTS ix_artist_media_provenance_event
+                    ON artist_media_provenance(event_id, event_poster_id);
+
                 CREATE TABLE IF NOT EXISTS event_artist_appearance(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_id INTEGER NOT NULL,
@@ -2592,6 +2662,7 @@ class Database:
                     eligibility_status TEXT NOT NULL DEFAULT 'review',
                     exclusion_reason TEXT,
                     media_event_poster_id INTEGER,
+                    selected_artist_media_asset_id INTEGER,
                     media_identity_status TEXT NOT NULL DEFAULT 'unverified',
                     media_rights_status TEXT NOT NULL DEFAULT 'event_source',
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2599,6 +2670,7 @@ class Database:
                     cancelled_at TIMESTAMP,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
                     FOREIGN KEY(artist_id) REFERENCES artist_registry_entity(artist_id),
+                    FOREIGN KEY(selected_artist_media_asset_id) REFERENCES artist_media_asset(id),
                     UNIQUE(event_id, artist_id, project_key, role)
                 );
                 CREATE INDEX IF NOT EXISTS ix_event_artist_appearance_event
@@ -2653,6 +2725,11 @@ class Database:
                 CREATE INDEX IF NOT EXISTS ix_artist_publication_issue
                     ON artist_publication_ledger(issue_id, surface);
                 """
+            )
+            await _add_column(
+                conn,
+                "event_artist_appearance",
+                "selected_artist_media_asset_id INTEGER REFERENCES artist_media_asset(id)",
             )
 
             await conn.execute(

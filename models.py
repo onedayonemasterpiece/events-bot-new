@@ -641,6 +641,90 @@ class ArtistRegistryEntity(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
 
 
+class ArtistMediaAsset(SQLModel, table=True):
+    """Managed artist/participant media; remote URLs are provenance, not delivery."""
+
+    __tablename__ = "artist_media_asset"
+    __table_args__ = (
+        UniqueConstraint("candidate_key", name="ux_artist_media_asset_candidate"),
+        UniqueConstraint("artist_id", "pixel_sha256", name="ux_artist_media_asset_pixel"),
+        Index(
+            "ix_artist_media_asset_selection",
+            "artist_id",
+            "lifecycle_status",
+            "storage_status",
+            "preferred",
+            "priority",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    candidate_key: str
+    artist_id: str = Field(foreign_key="artist_registry_entity.artist_id")
+    media_role: str = "portrait"
+    lifecycle_status: str = "candidate"
+    identity_status: str = "unverified"
+    identity_confidence: Optional[float] = None
+    quality_status: str = "review"
+    rights_status: str = "review"
+    rights_scope: Optional[str] = None
+    storage_status: str = "remote_candidate"
+    object_path: Optional[str] = None
+    cdn_url: Optional[str] = None
+    raw_sha256: Optional[str] = None
+    pixel_sha256: Optional[str] = None
+    encoded_sha256: Optional[str] = None
+    perceptual_hash: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    focal_x: Optional[float] = None
+    focal_y: Optional[float] = None
+    safe_crop: Optional[bool] = None
+    preferred: bool = False
+    priority: int = 100
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    verified_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    taken_down_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+
+class ArtistMediaProvenance(SQLModel, table=True):
+    """Source/account/rights ledger for one artist media asset."""
+
+    __tablename__ = "artist_media_provenance"
+    __table_args__ = (
+        UniqueConstraint("observation_key", name="ux_artist_media_provenance_observation"),
+        Index("ix_artist_media_provenance_asset", "asset_id", "source_kind"),
+        Index("ix_artist_media_provenance_event", "event_id", "event_poster_id"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    asset_id: int = Field(foreign_key="artist_media_asset.id")
+    event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    event_poster_id: Optional[int] = Field(default=None, foreign_key="eventposter.id")
+    source_kind: str = "curated_discovery"
+    service: str
+    account_handle: str
+    account_name: Optional[str] = None
+    account_url: Optional[str] = None
+    source_page_url: str
+    source_media_url: Optional[str] = None
+    original_source_url: Optional[str] = None
+    credit_text: str
+    author_or_rightsholder: Optional[str] = None
+    rights_basis: Optional[str] = None
+    purpose: Optional[str] = None
+    review_status: str = "candidate"
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    observation_key: str
+    observed_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
 class EventArtistAppearance(SQLModel, table=True):
     __tablename__ = "event_artist_appearance"
     __table_args__ = (
@@ -670,6 +754,9 @@ class EventArtistAppearance(SQLModel, table=True):
     eligibility_status: str = "review"
     exclusion_reason: Optional[str] = None
     media_event_poster_id: Optional[int] = None
+    selected_artist_media_asset_id: Optional[int] = Field(
+        default=None, foreign_key="artist_media_asset.id"
+    )
     media_identity_status: str = "unverified"
     media_rights_status: str = "event_source"
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))

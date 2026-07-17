@@ -20,6 +20,7 @@ from artist_arrivals.service import (
     build_artist_arrival_issue,
     ensure_artist_arrivals_promo_campaign,
     ensure_curated_artist_data,
+    ensure_curated_artist_media_candidates,
     event_artist_source_revision,
     photo_publication_metadata,
     prune_artist_arrival_shadow_issues,
@@ -28,6 +29,8 @@ from artist_arrivals.service import (
 from db import Database
 from models import (
     ArtistDigestIssue,
+    ArtistMediaAsset,
+    ArtistMediaProvenance,
     ArtistPublicationLedger,
     ArtistRegistryEntity,
     Event,
@@ -91,7 +94,12 @@ async def _appearance(
                     photo_url=photo_url,
                     photo_rights_status=photo_rights_status,
                     photo_rights_evidence_json=(
-                        [{"source_url": "https://artist.test/press-kit", "license": "press-kit"}]
+                        [{
+                            "source_url": "https://artist.test/press-kit",
+                            "license": "press-kit",
+                            "service": "Official site",
+                            "account_handle": "artist",
+                        }]
                         if photo_url
                         else []
                     ),
@@ -175,6 +183,97 @@ async def test_db_init_and_curated_seed_are_idempotent(tmp_path):
         assert held_appearance.eligibility_status == "ineligible"
         assert held_appearance.cancelled_at is not None
         assert held_appearance.media_identity_status == "verified"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_curated_artist_media_seed_is_link_only_and_idempotent(tmp_path):
+    db = await _db(tmp_path)
+    try:
+        await ensure_curated_artist_data(db)
+        first = await ensure_curated_artist_media_candidates(db)
+        second = await ensure_curated_artist_media_candidates(db)
+        async with db.get_session() as session:
+            assets = (await session.execute(select(ArtistMediaAsset))).scalars().all()
+            provenance = (
+                await session.execute(select(ArtistMediaProvenance))
+            ).scalars().all()
+        assert first == second == {"assets": 7, "provenance": 7, "missing_artists": 0}
+        assert len(assets) == len(provenance) == 7
+        assert all(item.storage_status == "remote_candidate" for item in assets)
+        assert all(item.cdn_url is None and item.object_path is None for item in assets)
+        assert all(item.service == "Pinterest" for item in provenance)
+        assert all(item.account_handle and item.source_page_url for item in provenance)
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_managed_event_artist_media_precedes_legacy_profile_photo(tmp_path):
+    db = await _db(tmp_path)
+    try:
+        await _appearance(
+            db,
+            event_id=176,
+            artist_id="media-artist",
+            name="Media Artist",
+            day=18,
+            project="Media Project",
+            media_identity_status="verified",
+            photo_url="https://legacy.example/photo.jpg",
+            photo_rights_status="press_kit_verified",
+        )
+        async with db.get_session() as session:
+            asset = ArtistMediaAsset(
+                candidate_key="eventposter:176:1",
+                artist_id="media-artist",
+                media_role="event_identity_photo",
+                lifecycle_status="ready",
+                identity_status="verified",
+                quality_status="approved",
+                rights_status="event_artist_verified",
+                storage_status="ready",
+                cdn_url="https://static.kenigevents.ru/artist/v1/sha256/aa/test.webp",
+                preferred=True,
+                priority=20,
+            )
+            session.add(asset)
+            await session.flush()
+            session.add(
+                ArtistMediaProvenance(
+                    asset_id=int(asset.id),
+                    event_id=176,
+                    source_kind="event_announcement",
+                    service="Telegram",
+                    account_handle="event_organizer",
+                    account_name="Event Organizer",
+                    account_url="https://t.me/event_organizer",
+                    source_page_url="https://t.me/event_organizer/176",
+                    source_media_url="https://static.kenigevents.ru/artist/v1/sha256/aa/test.webp",
+                    credit_text="Telegram · @event_organizer",
+                    review_status="approved",
+                    observation_key="eventposter:176:1",
+                )
+            )
+            appearance = (
+                await session.execute(
+                    select(EventArtistAppearance).where(
+                        EventArtistAppearance.event_id == 176
+                    )
+                )
+            ).scalars().one()
+            appearance.selected_artist_media_asset_id = int(asset.id)
+            await session.commit()
+        issue = await build_artist_arrival_issue(
+            db, now_utc=NOW, min_artists=1, persist=False
+        )
+        item = issue.items_json[0]
+        assert item["photo_url"].startswith("https://static.kenigevents.ru/")
+        assert item["photo_source_service"] == "Telegram"
+        assert item["photo_source_account"] == "event_organizer"
+        assert item["photo_credit_text"] == "Telegram · @event_organizer"
+        assert item["artist_media_asset_id"] == asset.id
     finally:
         await db.close()
 
@@ -407,6 +506,8 @@ def test_informational_photo_requires_reviewed_provenance_and_exports_credit():
                 "source_url": "https://artist.example/news/tour-photo",
                 "discovery_url": "https://www.pinterest.com/pin/123",
                 "author_or_rightsholder": "Официальный аккаунт артиста",
+                "service": "Official site",
+                "account_handle": "artist",
                 "lawfully_published_confirmed": True,
                 "review_status": "approved",
                 "basis": "gc_rf_1274_informational_citation",
@@ -420,6 +521,8 @@ def test_informational_photo_requires_reviewed_provenance_and_exports_credit():
     assert approved == {
         "credit_text": "Официальный аккаунт артиста",
         "source_url": "https://artist.example/news/tour-photo",
+        "source_service": "Official site",
+        "source_account": "artist",
     }
 
 
@@ -488,7 +591,7 @@ async def test_auto_publish_uses_one_frozen_issue_and_writes_cross_surface_ledge
                 day=18 + index,
                 project=f"Project {index}",
                 media_identity_status="verified",
-                photo_url=f"https://images.test/{index}.jpg",
+                photo_url=f"https://static.kenigevents.ru/artist/test/{index}.jpg",
                 photo_rights_status="press_kit_verified",
             )
         issue = await build_artist_arrival_issue(db, now_utc=NOW)

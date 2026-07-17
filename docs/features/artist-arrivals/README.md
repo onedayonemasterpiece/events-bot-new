@@ -1,6 +1,7 @@
 # Приезды артистов: реестр, дайджест и Hero Talk
 
-Статус: **реализован foundation + shadow rollout; public delivery выключен**.
+Статус: **реализован foundation + shadow rollout + candidate media bank;
+public delivery выключен**.
 
 Фича находит подтверждённые очные приезды артистов из других регионов России
 и из-за рубежа в Калининградскую область. Один замороженный daily manifest
@@ -24,7 +25,10 @@
 - Fly SQLite — только изменяемая sparse overlay: row-level locality evidence,
   appearances, замороженные issues и delivery ledger;
 - `site/src/data/artist-arrivals.json` — очищенная read-only проекция для SSG;
-- Object Storage/CDN — будущие проверенные изображения, но не байты в БД.
+- `artist_arrivals/data/curated_artist_media_candidates_batch_001.json` —
+  лёгкий reviewed seed ссылок/атрибуции, без байтов;
+- Object Storage/CDN — проверенные и материализованные изображения, но не
+  байты в БД.
 
 Размер полного seed: около 1,49 MiB minified / 76 KiB gzip; identity-only
 проекция — около 411 KiB / 24 KiB gzip. YDB не даёт здесь выигрыша: данные
@@ -35,14 +39,124 @@
 Operational tables:
 
 - `artist_registry_entity` — sparse verified profile, freshness, evidence IDs,
-  photo/rights state и отдельное rights-evidence;
+  locality state и legacy single-photo compatibility;
+- `artist_media_asset` — несколько изображений на артиста/участника,
+  identity/quality/rights/storage state, content hashes и выбор preferred;
+- `artist_media_provenance` — обязательные сервис, аккаунт, source page,
+  original/discovery link, credit и rights-review для каждого изображения;
 - `event_artist_appearance` — artist↔event↔project, роль, visit/cancellation
-  evidence, eligibility и media identity;
+  evidence, eligibility, media identity и optional selected media asset;
 - `artist_digest_issue` — один frozen manifest и threshold audit;
 - `artist_publication_ledger` — dedupe по surface/target/artist/project.
 
 Миграция: `alembic/versions/20260717_artist_arrivals.py`; тот же idempotent
-SQLite DDL присутствует в `Database.init()`.
+SQLite DDL присутствует в `Database.init()`. Media bank добавляется следующей
+миграцией `alembic/versions/20260717_artist_media_bank.py`.
+
+## Продуктовое решение: банк изображений и атрибуция людей
+
+### Где хранить ссылку и где хранить изображение
+
+Выбран **hybrid**, а не link-only и не BLOB в SQLite:
+
+1. remote URL хранится как discovery/provenance и позволяет доказать, где и у
+   какого аккаунта найдено изображение;
+2. candidate metadata компактно хранится в Fly SQLite рядом с event-domain;
+3. только после identity + quality + rights review байты один раз
+   материализуются по immutable SHA-пути в Yandex Object Storage и выдаются
+   через `static.kenigevents.ru`;
+4. public digest/site никогда не читают Pinterest/social hotlink напрямую.
+
+Так ссылка не теряется при удалении/замене pin, внешний CDN не определяет
+доступность нашего дайджеста, SQLite не раздувается изображениями, а YDB не
+получает ещё один сетевой join. YDB для этого контура нецелесообразна: это
+небольшая изменяемая метаинформация, непосредственно связанная с event/artist
+rows и daily transaction. Perceptual hash используется только для review
+near-duplicates; exact raw/pixel SHA — для безопасной дедупликации. Takedown
+оставляет tombstone/hash block, чтобы спорный файл не вернулся повторно.
+
+### Обязательная атрибуция
+
+У каждого asset provenance обязательны:
+
+- `service`;
+- `account_handle` и, если доступно, display name/account URL;
+- `source_page_url`;
+- публичный `credit_text` вида `Telegram · @organizer` или
+  `Pinterest · @pinner`.
+
+Указывается именно сервис и аккаунт, **откуда взяты используемые байты**. Если
+Pinterest помог найти официальный оригинал, но в bucket положен файл из
+официального аккаунта/press kit, публично указывается этот оригинальный
+сервис+аккаунт; Pinterest pin остаётся внутренним `discovery_url`. Если взяты
+байты самого pin, credit содержит `Pinterest · @pinner`, а original link/author,
+когда они известны, сохраняются дополнительно. Наличие attribution не заменяет
+rights review.
+
+### Автоматический выбор
+
+Public selector уже fail-closed выбирает только asset, где одновременно:
+
+- `lifecycle_status=ready`, `storage_status=ready`;
+- identity и quality `verified/approved`;
+- rights status входит в разрешённый список;
+- provenance `approved` и содержит service+account+source page+credit;
+- URL находится на managed HTTPS CDN.
+
+Default public host contract — `ARTIST_MEDIA_CDN_HOSTS=static.kenigevents.ru`;
+это отдельный allowlist от discovery/download allowlist.
+
+Приоритет: явно выбранный asset конкретной appearance → проверенное чистое
+фото из точного event announcement → preferred press kit/official artist →
+organizer/venue → reviewed informational-use asset → curated Pinterest bank →
+legacy profile fallback → text-only. В daily manifest сохраняются asset id,
+service, account, credit и source link. Remote candidate никогда не становится
+public из-за одного совпадения имени.
+
+Producer для event announcement должен брать только уже approved CDN
+`EventPoster`, LLM/VLM-first подтверждать, что изображён именно участник и что
+это чистое фото без редакционной плашки, затем создавать/reuse
+`artist_media_asset` с event provenance. Этим же контуром event-фото расширяет
+банк для будущих проектов. **Data model и selector реализованы; автоматический
+producer/materializer event-poster → artist bank ещё не подключён**, поэтому до
+его canary пополнение из событий остаётся reviewed operation.
+
+### Артисты, селебрити, спикеры и медальоны
+
+`celebrity` — не entity type и не факт события, а редакционный признак
+привлекательности. Базовая сущность должна обобщаться до
+`person | collective | organization`, а связь с событием обязана хранить роль
+и presence semantics: live performer/speaker/host, creative credit,
+recorded cast или subject reference. Автор произведения/актёр в фильме не
+считается приехавшим без отдельного подтверждения очного участия.
+
+Людей **не нужно помещать в существующий ряд event-медальонов**. По
+[контракту event token medallions](../static-site-pages/event-token-medallions.md)
+медальоны
+остаются быстрыми event-level фактами/брендами (организатор, площадка,
+фестиваль, Пушкинская карта, доступность). Лицо без видимого имени и роли плохо
+идентифицируется, а roster вытеснит факты из лимита 4–6 токенов. Для людей нужен
+отдельный identity attribution:
+
+- на event detail — видимые `имя + роль`, optional portrait 56–72 px, секции
+  «Участники», «Спикеры», «Авторы и создатели», «В фильме/записи»;
+- на главной и в social — отдельные narrative cards/«К нам едут»;
+- позже — profile/follow surface по стабильному entity id.
+
+Круглая фотография внутри identity card визуально может напоминать медальон,
+но остаётся другим продуктовым объектом.
+
+### Продуктовые acceptance-метрики
+
+- 100% public images имеют service + account + кликабельный source page;
+- 0 remote hotlinks и 0 candidate/review assets в public projection;
+- identity precision проверяется отдельно от rights decision;
+- arrival precision не смешивает live participation с author/tribute/recording;
+- `media_ready coverage` считается по eligible arrivals, но отсутствие фото
+  ведёт к честной text-only карточке, а не к неверному лицу;
+- Pinterest funnel измеряется как collected → reviewed → identity keep →
+  rights approved → bucket ready, чтобы большой search result не выдавался за
+  реальное покрытие.
 
 ## Решение о приезде
 
@@ -154,22 +268,24 @@ Telegram собирается как `InputRichMessage` с `<tg-slideshow>` и �
 3. `informational_citation_reviewed` для правомерно опубликованного фото,
    непосредственно необходимого для сообщения «кто, с каким проектом и когда
    приезжает»;
-4. Pinterest и другие платформы как discovery-кандидат, пока не установлен
-   исходный автор/аккаунт/публикация.
+4. Pinterest и другие платформы как discovery-кандидат с обязательным
+   platform account; до отдельного identity/rights/storage review он не public.
 
 Для третьей ступени gate требует в evidence: HTTPS `source_url`, автора или
-правообладателя/точный `credit_text`, подтверждение правомерного обнародования,
+правообладателя/точный `credit_text`, `service` + `account_handle`, подтверждение правомерного обнародования,
 `basis=gc_rf_1274_informational_citation`,
 `purpose=artist_arrival_information`, ручной `approved`, reviewer и timestamp.
-`discovery_url` Pinterest можно хранить для аудита, но он не заменяет источник.
-Если исходник найден через кнопку `Visit`, публично указывается исходник, а не
-Pinterest.
+`discovery_url` Pinterest хранится для аудита, но сам по себе не заменяет
+rights basis. Публичная атрибуция всегда следует фактическим байтам: для файла
+из найденного оригинального аккаунта — сервис+аккаунт оригинала, для файла из
+pin — `Pinterest · @pinner`; оба URL можно сохранить в audit trail.
 
-На карточке выводится нейтральное `Фото: <автор/источник>`, а в тексте TG/VK —
-точная кликабельная ссылка. Логотип Pinterest, Pinterest badge, формулировки
+На карточке выводится нейтральное `Фото: <сервис> · @<аккаунт>`, а в тексте
+TG/VK — точная кликабельная ссылка. Логотип Pinterest, Pinterest badge, формулировки
 «при поддержке»/«партнёр» и стилизация под Pinterest не используются: так не
-создаётся впечатление аффилированности. Если установлен только pin, но не автор
-и не правомерный первоисточник, карточка остаётся text-only.
+создаётся впечатление аффилированности. Если установлен только pin/account, но
+не пройден отдельный rights review и не создан managed asset, карточка остаётся
+text-only.
 
 Публичная политика должна дополнительно содержать понятный канал обращения
 правообладателя, оперативный takedown/correction, сохранение source URL и
@@ -276,6 +392,37 @@ Linkin Park tribute, tribute festival, author/composer-only mentions и общи
 Pianissimo container. Неуверенные local club acts остаются `review/unknown`,
 а не получают автоматическую arrival-метку.
 
+### Pinterest photo-bank batch 001
+
+Operator-run collection:
+
+`/home/dev/projects/pinterest-idea-library/collections/20260717-kenigevents-artist-celebrity-photo-bank-batch-001/pins.json`
+
+- 12 exact-name query families;
+- 353 search candidates → balanced 60 downloaded thumbnails;
+- Codex self-review: 5 `keep`, 2 `maybe`, 53 `reject`;
+- external Gemini/Opus review не использовался;
+- в project seed записаны 7 candidate links с Pinterest service, pinner account,
+  pin URL, original link (когда Pinterest его сообщает), observed dimensions и
+  quality blocker.
+
+Первый банк покрывает кандидатами:
+
+- Максим Аверин — `@natalileschenko`, `@starhit`, `@liiwrm`; отдельно
+  `@mulkirx` требует clean original без небольшого watermark;
+- Елена Ваенга — `@joinfonews`, `@hodunko75`;
+- Сергей Жилин — `@natalasinilo34`, но доступный original всего `320×320` и не
+  проходит digest quality gate.
+
+Ни один из семи assets не public-ready: они остаются
+`remote_candidate/rights=review`, без `cdn_url` и без сохранённых Pinterest
+bytes. Для КВАТРО, ЭПИДЕМИИ, PUPO, Can Saraç, Артура Беркута/Сергея Маврина,
+Марии Макаровой, Константина Хачикяна, Teresa Voskanyan и Даниила Саямова
+exact-name Pinterest выдача оказалась визуально нерелевантной. Это важный
+продуктовый результат: name search хорошо работает как ручной discovery для
+части известных лиц, но непригоден как automatic identity resolver для групп,
+нишевых и транслитерированных имён.
+
 ## Проверки
 
 ```bash
@@ -284,7 +431,8 @@ python -m py_compile artist_arrivals/*.py models.py db.py scheduling.py promo.py
 cd site && npm run build
 ```
 
-Тесты покрывают idempotent seed, threshold matrix, local/unknown suppression,
+Тесты покрывают idempotent artist/media seed, link-only candidate state,
+managed-CDN event-photo priority with service/account attribution, threshold matrix, local/unknown suppression,
 artist+stable-project grouping, target-aware ledger dedupe и reconciliation,
 полную source-revision invalidation, photo-rights gate, RichMessage HTML,
 draft promo activities, network-safe shadow mode и public projection.

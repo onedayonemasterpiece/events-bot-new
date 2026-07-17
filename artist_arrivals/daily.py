@@ -15,6 +15,7 @@ from .service import (
     build_artist_arrival_issue,
     ensure_artist_arrivals_promo_campaign,
     ensure_curated_artist_data,
+    ensure_curated_artist_media_candidates,
     prune_artist_arrival_shadow_issues,
 )
 
@@ -46,6 +47,7 @@ async def run_artist_arrivals_daily(
         ).scalars().first()
     try:
         seed_stats = await ensure_curated_artist_data(db)
+        media_seed_stats = await ensure_curated_artist_media_candidates(db)
         campaign_stats = await ensure_artist_arrivals_promo_campaign(db)
         issue = await build_artist_arrival_issue(db)
         delivery = await publish_artist_arrival_issue(db, issue, bot)
@@ -81,6 +83,7 @@ async def run_artist_arrivals_daily(
                 "issue_id": issue.id,
                 "manifest_hash": issue.manifest_hash,
                 "seed": seed_stats,
+                "media_seed": media_seed_stats,
                 "campaign": campaign_stats,
                 "delivery": {
                     "mode": delivery.mode,
