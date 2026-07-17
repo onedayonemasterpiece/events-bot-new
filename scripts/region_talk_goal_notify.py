@@ -75,6 +75,13 @@ def ydb_database_name() -> str:
     return (os.getenv("REGION_TALK_YDB_DATABASE_NAME") or "events-bot-acq-discovery").strip() or "events-bot-acq-discovery"
 
 
+def yc_cli_timeout_seconds() -> int:
+    try:
+        return max(5, int(os.getenv("REGION_TALK_YC_CLI_TIMEOUT_SECONDS") or "20"))
+    except (TypeError, ValueError):
+        return 20
+
+
 def ydb_endpoint_database(*, allow_yc_fallback: bool = True) -> tuple[str, str]:
     endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
     database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
@@ -83,11 +90,22 @@ def ydb_endpoint_database(*, allow_yc_fallback: bool = True) -> tuple[str, str]:
     yc = "/home/dev/yandex-cloud/bin/yc"
     if allow_yc_fallback and Path(yc).exists():
         try:
-            raw = subprocess.check_output([yc, "ydb", "database", "get", ydb_database_name(), "--format", "json"], text=True, stderr=subprocess.DEVNULL)
+            raw = subprocess.check_output(
+                [yc, "ydb", "database", "get", ydb_database_name(), "--format", "json"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=yc_cli_timeout_seconds(),
+            )
             data = json.loads(raw)
             import urllib.parse
             url = data["endpoint"]
             return url.split("?")[0].rstrip("/"), urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["database"][0]
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Yandex Cloud CLI timed out while resolving Region Talk YDB; "
+                "authenticate the existing yc profile or provide direct "
+                "REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE"
+            ) from exc
         except Exception:
             pass
     raise RuntimeError("REGION_TALK_YDB_ENDPOINT and REGION_TALK_YDB_DATABASE are required")
@@ -107,7 +125,19 @@ def ydb_token(*, allow_yc_fallback: bool = True) -> str:
         return token
     yc = "/home/dev/yandex-cloud/bin/yc"
     if allow_yc_fallback and Path(yc).exists():
-        return subprocess.check_output([yc, "iam", "create-token"], text=True, stderr=subprocess.DEVNULL).strip()
+        try:
+            return subprocess.check_output(
+                [yc, "iam", "create-token"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=yc_cli_timeout_seconds(),
+            ).strip()
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Yandex Cloud CLI timed out while minting an IAM token; "
+                "interactive browser authentication is required or configure "
+                "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON"
+            ) from exc
     raise RuntimeError("REGION_TALK_YDB_IAM_TOKEN/YC_IAM_TOKEN/YDB_ACCESS_TOKEN is required")
 
 

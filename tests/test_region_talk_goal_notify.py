@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +23,47 @@ def load_module():
 
 
 class RegionTalkGoalNotifyTests(unittest.TestCase):
+    def test_yc_fallback_is_bounded_when_interactive_auth_is_required(self) -> None:
+        mod = load_module()
+        env = {
+            "REGION_TALK_YDB_ENDPOINT": "",
+            "REGION_TALK_YDB_DATABASE": "",
+            "REGION_TALK_YC_CLI_TIMEOUT_SECONDS": "7",
+        }
+        with (
+            mock.patch.dict(os.environ, env, clear=False),
+            mock.patch.object(mod.Path, "exists", return_value=True),
+            mock.patch.object(
+                mod.subprocess,
+                "check_output",
+                side_effect=subprocess.TimeoutExpired(cmd=["yc"], timeout=7),
+            ) as check_output,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "CLI timed out"):
+                mod.ydb_endpoint_database(allow_yc_fallback=True)
+            self.assertEqual(check_output.call_args.kwargs["timeout"], 7)
+
+    def test_yc_token_mint_is_bounded(self) -> None:
+        mod = load_module()
+        env = {
+            "REGION_TALK_YDB_IAM_TOKEN": "",
+            "YC_IAM_TOKEN": "",
+            "YDB_ACCESS_TOKEN": "",
+            "REGION_TALK_YC_CLI_TIMEOUT_SECONDS": "9",
+        }
+        with (
+            mock.patch.dict(os.environ, env, clear=False),
+            mock.patch.object(mod.Path, "exists", return_value=True),
+            mock.patch.object(
+                mod.subprocess,
+                "check_output",
+                side_effect=subprocess.TimeoutExpired(cmd=["yc"], timeout=9),
+            ) as check_output,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "interactive browser authentication"):
+                mod.ydb_token(allow_yc_fallback=True)
+            self.assertEqual(check_output.call_args.kwargs["timeout"], 9)
+
     def test_delivery_batch_limit_does_not_truncate_publication_ledger_scan(self) -> None:
         mod = load_module()
         self.assertEqual(mod.publication_scan_limit(1), 5000)

@@ -725,6 +725,11 @@ Important invariants:
   (`REGION_TALK_STACK_WATCHDOG_REPEAT=0`), avoiding the second native
   all-thread dump that coincided with the supervised Python 3.12 crash while
   retaining stage-level observability and all queue self-repair contracts.
+  Local control-plane fallback to `yc` is bounded by
+  `REGION_TALK_YC_CLI_TIMEOUT_SECONDS` (default 20): an expired browser-backed
+  profile fails with an explicit authentication action instead of hanging the
+  orchestrator. Scheduled automation should use the dedicated
+  `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON`, not a short-lived user IAM token.
 - `RegionTalkBgeM3Enrichment` keeps row count and in-memory batch size separate.
   The orchestrator default is `--batch-limit 48 --batch-size 4` after the live
   YDB backlog showed E5 production outpacing 24-row BGE batches; operators can
