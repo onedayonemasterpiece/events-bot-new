@@ -41,6 +41,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: user acceptance rejected v7 because the KAUP information architecture still obscured the bus origin/journey order and the telephone panel's real child geometry still broke despite the earlier browser claim; the stored `a-opus` output contained no final verdict and is not valid acceptance evidence.
 - 2026-07-17: published v8 desktop correction with an explicit terminal-address-first bus journey and a height-stable one-row telephone CTA; repeated public Playwright geometry and Gemini 3.1 Pro (High) visual review passed without material blockers.
 - 2026-07-17: pre-handoff mobile browser QA found that v8 rendered the corrected KAUP journey only on the desktop surface, so the v8 links were deliberately not sent for mobile review. A compact phone variant and generated-page contract were added for v9 before Telegram handoff.
+- 2026-07-17: mobile review of v9 found that some dynamically rendered event cards could navigate to an older preview/root event UI. A poisoned-cache Playwright reproduction isolated cross-build personal-feed URL reuse; v10 scopes the cache to the current base and rebases same-site dynamic event/search links at render time.
 
 ## Root Cause
 
@@ -68,6 +69,12 @@ The full-catalog static preview exposed several user-visible regressions around 
     established mobile renderer did not invoke the exact-venue component, and
     the v8 gate checked desktop KAUP plus generic mobile transport rather than
     asserting that event `4671` exposed the exact journey on the phone surface.
+16. Personal-feed cache identity included profile/schema/TTL but not the static
+    preview base. A valid manifest retained from an earlier preview therefore
+    supplied its old `display.href` unchanged to the dynamic-card renderer.
+    Authorized Search and discovery hydration shared the same trust boundary:
+    they rendered build-specific hrefs from remote/persisted manifests without
+    rebasing same-site event navigation to the currently open preview.
 
 ## Contributing Factors
 
@@ -75,6 +82,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - historical approved media was not re-run through the current visual pair-review contract;
 - lab/production iteration introduced event-specific presentation behavior without a user-state or product rule;
 - browser acceptance focused on initially rendered cards, not delayed/failed media.
+- clean-browser link checks did not replay a compatible profile with a still-valid manifest cached by an older preview build;
 - consultant review covered the component concept, while the automated gate did not replay the exact constrained phone specimen or assert bounding rectangles; this allowed a conceptually valid adaptive label to pass with invalid geometry.
 - source-backed transport facts were accepted independently from information
   architecture; no gate asserted the journey order or rejected decorative raw
@@ -114,6 +122,8 @@ The full-catalog static preview exposed several user-visible regressions around 
 - event `6851` keeps admission, the one-line phone number and all action controls on the same visual row at `1536×864` and `1920×1080`; its calendar is icon-only and the panel height is stable after copy success;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
 - insufficient-feedback placeholder copy is absent.
+- at phone widths `320` and `390`, a crawl of at least 36 event pages preserves the exact current preview prefix and the accepted mobile hero/action surface; actual hero-related, other-date, initial/load-more discovery and personal-feed clicks must be exercised;
+- a valid stale v7/root personal-feed cache and an old-prefix Authorized Search payload are either rejected or rebased: their rendered event, absolute/share and local calendar URLs stay in the current preview, while foreign organizer/ticket origins remain unchanged;
 
 ### Required evidence
 
@@ -136,6 +146,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - replace random mobile CTA expansion with stable icon-only secondary actions;
 - persist bounded calendar-use recency separately from saved-event expiry state;
 - reserve dynamic-card media geometry and add desktop gallery recommendation parity.
+- scope personal-feed caches by preview base and normalize same-site dynamic event URLs at the shared renderer boundary rather than trusting persisted/remote href projections.
 - require venue-access buffers after exact event ends, separate ambiguous multimodal route CTAs, apply quality admission with a weak-only fallback, and accept action panels by measured component geometry rather than content assertions alone.
 
 ## Follow-up Actions

@@ -8,3 +8,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+interface Window {
+  KenigEventsNormalizeInternalEventUrl?: (value: string, options?: { absolute?: boolean }) => string;
+  KenigEventsRenderEventCard?: (item: unknown, variant?: string) => string;
+}

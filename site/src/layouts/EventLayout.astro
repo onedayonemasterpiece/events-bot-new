@@ -2,7 +2,7 @@
 import SocialIcon from '../components/SocialIcon.astro';
 import ServiceShareAction from '../components/ServiceShareAction.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
-import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { BASE_PATH, getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular';
 
@@ -2167,7 +2167,7 @@ const HEADER_NAVIGATION = [
       }
     </style>
   </head>
-  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
@@ -2258,7 +2258,12 @@ const HEADER_NAVIGATION = [
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
         const DEFAULT_PRELOAD_TARGET = 10;
-        const PERSONAL_FEED_CACHE_KEY = 'ke_listing_personal_feed_cache_v1';
+        const CURRENT_BASE_PATH = String(document.body?.dataset.siteBasePath || '/').replace(/\/+$/u, '') || '';
+        const SITE_INTERNAL_ORIGIN = (() => {
+          try { return new URL(document.body?.dataset.siteOrigin || location.origin).origin; }
+          catch (_) { return location.origin; }
+        })();
+        const PERSONAL_FEED_CACHE_KEY = `ke_listing_personal_feed_cache_v1:${CURRENT_BASE_PATH || '/'}`;
         const PERSONAL_FEED_SURFACE = 'listing_personal_feed';
         const PERSONAL_FEED_SCHEMA_VERSION = 'listing-personal-feed-v1';
         const PERSONAL_FEED_LIMIT = 30;
@@ -2307,6 +2312,32 @@ const HEADER_NAVIGATION = [
             return false;
           }
         }
+
+        // Dynamic manifests and localStorage outlive an individual preview build.
+        // Treat their links as data, not trusted navigation: same-site event paths
+        // always belong to the currently open preview, while genuine external
+        // ticket URLs must remain untouched.
+        function rebaseInternalEventUrl(value, options = {}) {
+          const raw = typeof value === 'string' ? value.trim() : '';
+          if (!raw || raw === '#') return raw || '#';
+          let url;
+          try {
+            const hasScheme = /^[a-z][a-z0-9+.-]*:/iu.test(raw) || raw.startsWith('//');
+            url = new URL(hasScheme || raw.startsWith('/') ? raw : `/${raw}`, location.origin);
+          } catch (_) {
+            return raw;
+          }
+          if (url.origin !== location.origin && url.origin !== SITE_INTERNAL_ORIGIN) return raw;
+          const eventMarker = '/sobytiya/';
+          const eventIndex = url.pathname.lastIndexOf(eventMarker);
+          if (eventIndex < 0) return raw;
+          const eventSuffix = url.pathname.slice(eventIndex);
+          if (!/^\/sobytiya\/[^/]+\/(?:.*)?$/u.test(eventSuffix)) return raw;
+          const rebased = `${CURRENT_BASE_PATH}${eventSuffix}${url.search}${url.hash}`;
+          return options.absolute ? `${SITE_INTERNAL_ORIGIN}${rebased}` : rebased;
+        }
+
+        window.KenigEventsNormalizeInternalEventUrl = rebaseInternalEventUrl;
 
         function kaliningradEpochDay() {
           return Math.floor((Date.now() + 2 * 60 * 60 * 1000) / 86400000);
@@ -3062,8 +3093,8 @@ const HEADER_NAVIGATION = [
             display: {
               ...display,
               id,
-              href: display.href || candidate?.href || '#',
-              absolute_url: display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href,
+              href: rebaseInternalEventUrl(display.href || candidate?.href || '#'),
+              absolute_url: rebaseInternalEventUrl(display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href, { absolute: true }),
               title: display.title || candidate?.title || 'Событие',
               image_url: display.image_url || candidate?.image_url || null,
               image_alt: display.image_alt || candidate?.image_alt || `Афиша события «${display.title || candidate?.title || 'событие'}»`,
@@ -3081,7 +3112,7 @@ const HEADER_NAVIGATION = [
               price_label: display.price_label || null,
               likes_count: Number(display.likes_count || 0),
               shares_count: Number(display.shares_count || 0),
-              calendar_href: display.calendar_href || candidate?.calendar_href || '#',
+              calendar_href: rebaseInternalEventUrl(display.calendar_href || candidate?.calendar_href || '#'),
               calendar_eligible: Boolean(display.calendar_eligible || candidate?.calendar_eligible),
             },
           };
@@ -3107,6 +3138,7 @@ const HEADER_NAVIGATION = [
         function readPersonalFeedCache(profile) {
           const cache = readJson(PERSONAL_FEED_CACHE_KEY, null);
           if (!cache || cache.schema_version !== PERSONAL_FEED_SCHEMA_VERSION) return null;
+          if (cache.base_path !== CURRENT_BASE_PATH) return null;
           if (Number(cache.expires_at || 0) <= Date.now()) return null;
           if (cache.profile_hash !== personalFeedProfileHash(profile)) return null;
           if (!cache.manifest || !Array.isArray(cache.manifest.related_static)) return null;
@@ -3117,6 +3149,7 @@ const HEADER_NAVIGATION = [
           if (!manifest || !Array.isArray(manifest.related_static) || !manifest.related_static.length) return;
           writeJson(PERSONAL_FEED_CACHE_KEY, {
             schema_version: PERSONAL_FEED_SCHEMA_VERSION,
+            base_path: CURRENT_BASE_PATH,
             profile_hash: personalFeedProfileHash(profile),
             saved_at: Date.now(),
             expires_at: Date.now() + PERSONAL_FEED_TTL_MS,
@@ -3479,8 +3512,8 @@ const HEADER_NAVIGATION = [
           return {
             id,
             title,
-            href: display.href || candidate?.href || '#',
-            absolute_url: display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href,
+            href: rebaseInternalEventUrl(display.href || candidate?.href || '#'),
+            absolute_url: rebaseInternalEventUrl(display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href, { absolute: true }),
             event_type: display.event_type || candidate?.category || 'событие',
             image_url: display.image_url || null,
             image_alt: display.image_alt || `Афиша события «${title}»`,
@@ -3499,7 +3532,7 @@ const HEADER_NAVIGATION = [
             price_label: display.price_label || null,
             likes_count: Number(display.likes_count || 0),
             shares_count: Number(display.shares_count || 0),
-            calendar_href: display.calendar_href || candidate?.calendar_href || '#',
+            calendar_href: rebaseInternalEventUrl(display.calendar_href || candidate?.calendar_href || '#'),
             calendar_eligible: Boolean(display.calendar_eligible || candidate?.calendar_eligible),
             calendar_expiry_day: calendarExpiryDayFromIso(display.end_date || candidate?.end_date || candidate?.date || ''),
             rank: item && item.rank != null ? item.rank : '',
