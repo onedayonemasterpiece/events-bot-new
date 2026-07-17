@@ -35,7 +35,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: backed up and reconciled Epidemia EventPoster row `8622` against canonical row `7824`, rebuilt its Telegraph projection, and exported a fresh 303-event future/ongoing catalog.
 - 2026-07-17: published noindex preview `preview-20260717t-static-personalization-v4`; public HTTP and browser acceptance covered medallions, desktop calendar states, duplicate removal, stable failed-image geometry, personal-feed lazy loading/dedup, gallery parity and desktop/mobile transport.
 - 2026-07-17: completed the repaired full vector sync and replaced the temporary sparse catalog with noindex preview `preview-20260717t-static-personalization-v5-vector`: `303` events, `40` pgvector/HNSW candidates per event and no underfilled chains.
-- 2026-07-17: started the desktop-only v6 remediation for events `5756`, `4671`, `3103`, `4783` and `6851`; the only shared mobile change is replacing the retired fullscreen brand imitation with `AnnouncementsLockup`.
+- 2026-07-17: published desktop-only v6 remediation for events `5756`, `4671`, `3103`, `4783` and `6851`; the only shared mobile change is replacing the retired fullscreen brand imitation with `AnnouncementsLockup`.
 
 ## Root Cause
 
@@ -118,11 +118,11 @@ The full-catalog static preview exposed several user-visible regressions around 
 
 ## Release And Closure Evidence
 
-- deployed SHA: recorded by the final branch commit for this preview; production root was not promoted
-- deploy path: `https://kenigevents.ru/preview-20260717t-static-personalization-v5-vector/__preview/` (noindex preview only; production root unchanged)
+- deployed SHA: `fc413efb` on pushed branch `fix/static-site-v4-personalization-media-20260716`; production root was not promoted
+- deploy path: `https://kenigevents.ru/preview-20260717t-static-personalization-v6-desktop-fixes/__preview/` (noindex preview only; production root unchanged)
 - generated catalog: `303` future/ongoing event pages; `event_pgvector_related_chain_v2_two_doc` over `supabase_pgvector_hnsw_cosine_v1`, semantic embeddings enabled, exactly `40` candidates for every event and `0` underfilled chains
-- regression checks: Node source/build contracts `7/7`, preview check, desktop full-catalog contract (`303` pages), bus and rail directory checks, desktop-gallery contract and `git diff --check` passed
-- post-deploy verification: public HTTP `200` for the v5 index, events `5756`/`4671`/`3103`, personal-feed JSON and theatre SVG; prior Playwright acceptance on the identical application code confirmed one visible `dramteatr39` medallion, calendar fresh/regular/stale modes, ten unique Epidemia gallery assets with removed row absent, fixed failed-image geometry, lazy six-card `Для вас` chunk with no overlap, desktop terminal recommendation and desktop/mobile rail transport
+- regression checks: preview check, desktop full-catalog contract (`303` pages), bus and rail directory checks, `12` targeted pytest checks and `git diff --check` passed; the preview check also verifies exact visible-link/transport-ICS parity after the desktop/mobile shortlist union
+- post-deploy verification: public HTTP `200` for the v6 index, all five regression event pages and the recovered desktop train ICS; public Playwright passed `26/26` checks with zero console errors, covering Editorial routing and event-photo hero for `5756`, contained/click-dismissable documents and posters, KAUP transfer/bus/map facts, only evening returns `6724`/`6726`, the 12-image grouped viewer with group navigation, visible/copyable phone number, absent insufficient-feedback placeholder and preserved mobile `accepted-v8` with the shared lockup
 
 ## Prevention
 
