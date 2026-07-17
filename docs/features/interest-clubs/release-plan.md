@@ -2,7 +2,7 @@
 
 ## Release authority и неизменяемые условия
 
-Owner GO 2026-07-17 разрешает собрать implementation RC из research baseline PR #54 / `e1a14afc`. Production остаётся отдельным решением. До явного production GO запрещены production migrations, Smart Update flag changes, scheduled replay/catch-up и публикация root static tree.
+Owner GO 2026-07-17 сначала разрешил implementation RC из research baseline PR #54 / `e1a14afc`, а затем явно уточнил, что полное внедрение должно включать production delivery без отдельного напоминания. Это является production GO для additive migration/bootstrap, bounded replay, Smart Update enablement и checked public static publication. Rollout всё равно fail-closes на correctness/health gates; GO не разрешает обходить backup, tests, canary, rollback или evidence requirements.
 
 Каждый gate фиксирует `git SHA`, migration revision, `catalog_hash`, `gold_fixture_hash`, matcher `policy_version`, exact model id, static `build_id/manifest_hash` и reviewer. «Последний код» или незахешированный snapshot не является release evidence.
 
