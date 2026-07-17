@@ -50,7 +50,7 @@ const resolveScenario = (item: BriefingLabScenario) => {
       sourceHeight: mediaAsset.height,
       imageTextMode: mediaAsset.image_text_mode,
       imageKind: mediaAsset.image_kind,
-      maxUpscale: item.media.maxUpscale ?? 1.35,
+      maxUpscale: item.media.maxUpscale ?? 1.1,
       cropStrategy: 'curated-focal-cover',
     } : undefined,
   };
@@ -436,7 +436,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         mosaicRoot.dataset.upscaleRatio = upscaleRatio.toFixed(3);
         mosaicRoot.dataset.cropStrategy = media.cropStrategy || 'curated-focal-cover';
         mosaicRoot.dataset.ocrSafe = String(media.ocrSafe === true && media.imageTextMode === 'visual_only');
-        if (upscaleRatio > Number(media.maxUpscale || 1.35)) {
+        if (upscaleRatio > Number(media.maxUpscale || 1.1)) {
           mosaicRoot.dataset.mediaRejection = 'upscale';
           return false;
         }

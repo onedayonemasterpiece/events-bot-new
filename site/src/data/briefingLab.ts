@@ -192,7 +192,7 @@ export const briefingLabScenarios = [
       { text: 'может, в уют?' },
     ],
     ctaLabel: 'Показать лекцию', ctaEventId: 5803,
-    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43, ocrSafe: true },
+    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43 },
   },
   {
     id: 'storm_lecture_science_demo', label: 'Шторм → лекция', family: 'signal', cooldownDays: 7,
@@ -202,7 +202,7 @@ export const briefingLabScenarios = [
       { text: 'Суперспособности.', accent: true, eventId: 5803 },
     ],
     ctaLabel: 'Открыть лекцию', ctaEventId: 5803,
-    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43, ocrSafe: true },
+    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43 },
   },
   {
     id: 'festival_demo', label: 'Pianissimo', family: 'signal', cooldownDays: 7,

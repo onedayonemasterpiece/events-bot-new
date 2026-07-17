@@ -455,7 +455,7 @@ test('eligible scenarios use desktop mosaic media without moving the established
     const deck = JSON.parse(node.textContent || '[]');
     return { total: deck.filter((item: any) => item.id !== 'neutral_fallback').length, mosaic: deck.filter((item: any) => item.id !== 'neutral_fallback' && item.media?.mode === 'mosaic').length };
   });
-  expect(mediaCoverage).toEqual({ total: 19, mosaic: 5 });
+  expect(mediaCoverage).toEqual({ total: 19, mosaic: 3 });
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'mosaic');
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
 
@@ -500,14 +500,14 @@ test('narrative media is explicitly OCR-safe, photo-only, high-resolution and ab
     const enabled = deck.filter((item: any) => item.media?.mode === 'mosaic');
     return {
       enabled: enabled.map((item: any) => ({ id: item.id, media: item.media })),
-      abstained: Object.fromEntries(['today_count', 'weekend_count', 'smart_search_education', 'anticipated_person_named', 'live_meeting_mosaic', 'rare_event', 'festival_demo', 'unusual_format_demo'].map((id) => [id, Boolean(deck.find((item: any) => item.id === id)?.media)])),
+      abstained: Object.fromEntries(['today_count', 'weekend_count', 'smart_search_education', 'anticipated_person_named', 'live_meeting_mosaic', 'rare_event', 'storm_weekend_demo', 'storm_lecture_science_demo', 'festival_demo', 'unusual_format_demo'].map((id) => [id, Boolean(deck.find((item: any) => item.id === id)?.media)])),
     };
   });
-  expect(contract.enabled).toHaveLength(5);
-  expect(contract.abstained).toEqual({ today_count: false, weekend_count: false, smart_search_education: false, anticipated_person_named: false, live_meeting_mosaic: false, rare_event: false, festival_demo: false, unusual_format_demo: false });
+  expect(contract.enabled).toHaveLength(3);
+  expect(contract.abstained).toEqual({ today_count: false, weekend_count: false, smart_search_education: false, anticipated_person_named: false, live_meeting_mosaic: false, rare_event: false, storm_weekend_demo: false, storm_lecture_science_demo: false, festival_demo: false, unusual_format_demo: false });
   expect(contract.enabled.every(({ media }) => media.ocrSafe === true && media.imageTextMode === 'visual_only' && media.imageKind === 'photo')).toBeTruthy();
   expect(contract.enabled.every(({ media }) => media.sourceWidth >= 1000 && media.sourceWidth * media.sourceHeight >= 1_000_000)).toBeTruthy();
-  expect(contract.enabled.every(({ media }) => media.cropStrategy === 'curated-focal-cover' && media.maxUpscale === 1.35)).toBeTruthy();
+  expect(contract.enabled.every(({ media }) => media.cropStrategy === 'curated-focal-cover' && media.maxUpscale === 1.1)).toBeTruthy();
 
   await open(run.page, 'b', 'anticipated_person_named');
   await expect(run.page.locator('[data-briefing-slot]')).toHaveAttribute('data-media-mode', 'none');
@@ -518,7 +518,7 @@ test('narrative media is explicitly OCR-safe, photo-only, high-resolution and ab
 
 test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful, mobile-silent and fail-closed', async ({ browser }) => {
   const mosaicAsset = /401da1cf03c707138f810f094708b7939710e3707c913fa12fd029502b1c7c1e\.webp/u;
-  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="450"><rect width="1200" height="450" fill="#705045"/><circle cx="830" cy="170" r="150" fill="#c58f82"/></svg>';
+  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600"><rect width="1600" height="600" fill="#705045"/><circle cx="1100" cy="225" r="180" fill="#c58f82"/></svg>';
 
   const inspectMosaic = async (page: Page) => page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
@@ -651,7 +651,7 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
   expect(geometry.pseudoBackgroundImage).toContain('401da1cf03c707138f810f094708b7939710e3707c913fa12fd029502b1c7c1e.webp');
   expect(geometry.focusX).toBe('58%');
   expect(geometry.focusY).toBe('50%');
-  expect(geometry.upscaleRatio).toBeLessThanOrEqual(1.35);
+  expect(geometry.upscaleRatio).toBeLessThanOrEqual(1.1);
   expect(geometry.cropStrategy).toBe('curated-focal-cover');
   expect(geometry.ocrSafe).toBe('true');
   expect(geometry.borderRadius).toBe('0px');

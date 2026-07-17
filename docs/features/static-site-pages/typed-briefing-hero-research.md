@@ -98,7 +98,7 @@ Final immutable review build:
   readable hold; публичная кнопка `Показать следующее` скрыта во время цепочки и
   появляется только в terminal state;
 - предыдущая цель `13/19` media-сцен **superseded безопасностью источника**.
-  Текущий admission оставляет mosaic только у `5/19` сценариев: картинка
+  Текущий admission оставляет mosaic только у `3/19` сценариев: картинка
   должна одновременно иметь ручное `ocrSafe`, exporter metadata
   `image_text_mode=visual_only`, `image_kind=photo`, `safe_crop=true`,
   `recommended_hero_fit=cover`, ширину не менее `1000px` и площадь не менее
@@ -125,7 +125,7 @@ Final immutable review build:
   cover`; исходный aspect ratio больше не приводится к grid ratio. Для каждого
   lab media указана ручная focal position, а runtime фиксирует natural и cover
   dimensions для regression-проверки равного X/Y scale. До reveal runtime
-  вычисляет фактический cover-upscale и скрывает mosaic при значении `>1.35`,
+  вычисляет фактический cover-upscale и скрывает mosaic при значении `>1.10`,
   поэтому ошибочная exporter metadata не может легализовать размытый raster;
 - поверх scenario-seeded поля добавлены редкие независимые contrast accents:
   отдельные клетки принудительно уходят в `.03` (washed) или `.96` (bright),
@@ -443,7 +443,7 @@ Contract:
 - optional media содержит canonical `event_id`, validated derivative и
   `small|wide|mosaic` mode; mosaic дополнительно требует explicit OCR-safe
   curation, photo/visual-only metadata, safe cover crop, `≥1000px`, `≥1MP` и
-  runtime upscale `≤1.35`; отсутствие/ошибка media не инвалидирует text/link;
+  runtime upscale `≤1.10`; отсутствие/ошибка media не инвалидирует text/link;
 - `next_scenario_id` задаёт automatic edge; runtime останавливает chain после
   третьей сцены даже при циклическом графе;
 - public `Показать следующее` доступен только после terminal stop и начинает
