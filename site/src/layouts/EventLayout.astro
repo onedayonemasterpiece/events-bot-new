@@ -1,5 +1,6 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
+import '../styles/design-system.css';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
@@ -73,25 +74,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     ))}
     <style is:global>
       :root {
-        --bg: #fbf7ef;
-        --bg-soft: #f2e7d7;
-        --surface: #fffdf8;
-        --surface-strong: #ffffff;
-        --text: #221a14;
-        --muted: #6d6259;
-        --line: #e1d3c2;
-        --primary: #a54821;
-        --primary-strong: #793014;
-        --primary-text: #ffffff;
-        --accent: #0f766e;
-        --accent-soft: #d7f0ec;
-        --warning: #a16207;
-        --shadow: 0 18px 45px rgba(72, 45, 25, 0.12);
-        --radius-xl: 28px;
-        --radius-lg: 20px;
-        --radius-md: 14px;
         color-scheme: light;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: var(--ke-font-sans);
       }
 
       * { box-sizing: border-box; }
@@ -158,12 +142,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         display: block;
         padding: 18px 24px 16px;
         border-radius: 0 0 12px 12px;
-        background: #98401f;
+        background: var(--ke-color-brand-tag);
         color: #fffaf2;
         text-decoration: none;
         transition: background-color 160ms ease;
       }
-      .site-header__brand-tag:hover { background: #893719; }
+      .site-header__brand-tag:hover { background: var(--ke-color-brand-tag-hover); }
       .site-header__desktop-lockup { display: grid; grid-template-rows: 12px auto; align-content: start; gap: 4px; }
       .site-header__desktop-lockup .announcements-lockup__endorsement { overflow: visible; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 12px; text-transform: uppercase; white-space: nowrap; }
       .site-header__desktop-lockup .announcements-lockup__wordmark { display: block; width: 192px; height: auto; color: #fff; overflow: visible; }
@@ -1614,7 +1598,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           padding: max(1.35rem, calc(env(safe-area-inset-top) + 0.95rem)) 0.75rem 1rem;
           border: 0;
           border-radius: 0 0 12px 12px;
-          background: #98401f;
+          background: var(--ke-color-brand-tag);
           color: #fffdf8;
           box-shadow: 0 12px 28px rgba(72, 45, 25, 0.24);
           text-decoration: none;
@@ -1626,7 +1610,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           box-shadow: 0 10px 24px rgba(72, 45, 25, 0.22);
         }
         @media (hover:hover) and (pointer:fine) {
-          .mobile-discovery-menu__summary:hover { background:#893719; }
+          .mobile-discovery-menu__summary:hover { background:var(--ke-color-brand-tag-hover); }
         }
         .mobile-discovery-menu__lockup {
           position: relative;

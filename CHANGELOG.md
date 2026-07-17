@@ -2,36 +2,14 @@
 
 ## [Unreleased]
 
-### Fixed
-- **Telegram source medallions (INC-2026-07-17)**: exclude `MEOW Афиша`
-  and every other source/aggregator-channel identity from `@kldevents`
-  graphical-medallion strips while retaining source-grounded organizer, venue,
-  festival, program and Pushkin-card marks; the MEOW badge remains available on
-  static event-detail pages only.
-- **Smart Update image geometry queue starvation**: let the independent Gemma
-  geometry stage proceed when the earlier semantic-role stage remains pending
-  because its separate daily budget is exhausted.
-
 ### Changed
-- **Smart Update image geometry crowd bound**: cap geometry responses at the 25
-  largest/clearest faces so crowd images keep crop-relevant boxes without
-  truncating the structured JSON at the bounded 768-token output ceiling.
-- **Smart Update image geometry deadline**: raise the single-attempt hosted
-  vision deadline from 45 to 90 seconds while keeping retries durable and paced
-  outside the item call, avoiding false failures without introducing bursts.
+- **Static site / design system**: centralized semantic UI tokens and approved Astro primitives, added a noindex runtime catalog with foundations, complete interaction/data states and real event product components, registered the split-actions card baseline and deprecated overlay variant, and added contrast/state/build regression checks plus release-documentation gates.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
-- **Smart Update image geometry**: add an asynchronous, content-addressed
-  `gemma-4-31b-it` stage that stores normalized face bboxes and a viewer-value
-  region for event images, plus a resumable externally paced backfill,
-  fingerprint-guarded import and visual contact-sheet QA.
 - **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
 
 ### Changed
-- **Google AI key allocation**: add a fail-closed normal rotating key pool,
-  distinct from emergency overflow, and isolate image geometry on KEY4+KEY5 from
-  its first reservation with feature caps that do not assume per-key project quota.
 - **Interest clubs / gated implementation RC**: added additive versioned SQLite identity/relation/evaluation tables, an explicit shadow-only reviewed-fixture importer, bounded split-lane `gemma-4-31b-it` verification through the existing limiter with exact-quote validation and no Lite positive fallback, a default-off nonblocking Smart Update handoff, and a fail-closed `interest-clubs-static-v1` projection with gated `/kluby-po-interesam/` index/detail pages, recurrence/freshness filters, navigation, sitemap, SEO and a11y contracts. Production migrations, flags, Smart Update runtime and public promotion remain unchanged.
 - **Static listing visual lab acceptance**: add production p95/p99/max title stress tests, a visible `browse_title`/canonical-title contract, rounded edge-to-edge desktop media, finite crop-safe photo aspect tokens, fail-closed OCR/unknown/low-res handling, curated-only Bento, and separate mobile linear-feed evaluation.
 - **Static listing visual lab workflow**: define the 20–30-card personalization target as a cumulative cross-surface journey budget with success by touch 30, and require every visual proposal to carry a visible stable ID/name through screenshots, filenames, captions and acceptance tables.

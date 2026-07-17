@@ -25,6 +25,7 @@ export const GET: APIRoute = () => {
     ...(INTEREST_CLUBS_PUBLIC_ENABLED ? [{ loc: absoluteUrl('/kluby-po-interesam/'), lastmod: now }] : []),
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
+    { loc: absoluteUrl('/lab/design-system/'), lastmod: now },
     ...HERO_REVIEW_CASES.map((item) => ({ loc: absoluteUrl(`/lab/hero/review/${item.caseId}/`), lastmod: now })),
     ...getInterestClubs().map((club) => ({ loc: absoluteUrl(interestClubPath(club)), lastmod: normalizeLastmod(club.updated_at, now) })),
     ...getEvents().map((event) => ({ loc: absoluteUrl(eventPath(event)), lastmod: normalizeLastmod(event.updated_at, now) })),

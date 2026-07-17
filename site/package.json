@@ -10,7 +10,8 @@
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
     "build:preview": "node scripts/build-preview.mjs",
-    "check:preview": "node scripts/check-preview.mjs",
+    "check:preview": "npm run check:design-system && node scripts/check-preview.mjs",
+    "check:design-system": "node scripts/check-design-system.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
     "astro": "astro"
   },

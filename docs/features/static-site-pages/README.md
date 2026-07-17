@@ -195,6 +195,10 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 
 ## Связанные документы
 
+- [Каноническая дизайн-система и runtime-каталог](design-system/README.md) — токены, lifecycle, реестр компонентов и маршрут `/lab/design-system/`.
+- [Release UI contract](release-ui-contract.md) — обязательные surfaces, viewport/state matrix и immutable SHA/build sign-off.
+- [Сценарии проверки](test-scenarios.md) — пользовательские сценарии и отдельные `ADD-DS-*` regression contracts.
+
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.

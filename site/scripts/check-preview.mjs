@@ -27,6 +27,7 @@ const required = [
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
+  'lab/design-system/index.html',
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
@@ -41,6 +42,11 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+const designSystemHtml = readFileSync(join(root, 'lab/design-system/index.html'), 'utf8');
+if (!/<h1[^>]*>Дизайн-система статического сайта<\/h1>/u.test(designSystemHtml)) throw new Error('Design-system catalog misses its visible H1');
+if (!designSystemHtml.includes('data-preview-state="focus"') || !designSystemHtml.includes('aria-busy="true"') || !designSystemHtml.includes('aria-invalid="true"')) throw new Error('Design-system catalog misses focus/loading/error state evidence');
+if (!designSystemHtml.includes('split-actions') || !designSystemHtml.includes('overlay · deprecated')) throw new Error('Design-system catalog misses approved/deprecated EventCard comparison');
+if (!designSystemHtml.includes('EventCtaPanel.astro') || !designSystemHtml.includes('EventListItem.astro')) throw new Error('Design-system registry misses product component sources');
 if (interestClubsData.schema_version !== 'interest-clubs-static-v1' || interestClubsData.projection_version !== 1) {
   throw new Error('Interest-clubs projection contract is not interest-clubs-static-v1');
 }
@@ -293,6 +299,7 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/partnerstvo/`)) throw n
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/partners/`)) throw new Error('Sitemap misses info partners URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/design-system/`)) throw new Error('Sitemap misses design-system catalog URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/`)) throw new Error('Sitemap misses hero viewport review URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-poster-billboard/`)) throw new Error('Sitemap misses same-event hero review case URL');
 
@@ -408,7 +415,7 @@ if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/i
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
 if (!/event-hero--poster-billboard\.event-hero--poster-stage \.event-hero__image[\s\S]*?\{[^}]*width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero image itself must be full viewport width on mobile');
-if (!/mobile-discovery-menu__summary\{[^}]*background:\s*#98401f/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use the approved solid brand tag and stable after-hero state');
+if (!/mobile-discovery-menu__summary\{[^}]*background:\s*(?:var\(--ke-color-brand-tag\)|#98401f)/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use the approved solid brand tag and stable after-hero state');
 if (
   !/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*position:\s*fixed[^}]*transform:\s*translate3d\(0,\s*calc\(-1\s*\*\s*var\(--drawer-rail-h\)\s*-\s*env\(safe-area-inset-top\)\),\s*0\)/iu.test(css)
   || !/mobile-discovery-menu\[open\]\{[^}]*transform:\s*(?:translate3d\(0,\s*0,\s*0\)|translateZ\(0\))/iu.test(css)

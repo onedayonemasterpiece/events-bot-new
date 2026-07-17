@@ -44,7 +44,7 @@
 - `docs/features/interest-clubs/README.md` — implementation RC раздела клубов по интересам: evidence-first identity, static projection, ADR и отдельный production release gate
 
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
-- `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
+- `docs/features/static-site-pages/README.md` — static-first event pages на `kenigevents.ru`; дизайн-система, runtime-каталог компонентов и release UI contract находятся в `docs/features/static-site-pages/design-system/README.md`
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
 - `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`
 - `docs/features/event-favorites-calendar/README.md` — durable favorite/calendar state and lifecycle semantics
