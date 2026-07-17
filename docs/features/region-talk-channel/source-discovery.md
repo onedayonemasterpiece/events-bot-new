@@ -345,11 +345,30 @@ external visitor, rather than slowing the generic source backlog.
 A commercial token in one matched post (for example a sponsor footer or
 `промокод`) is treated as a **post-level suspicion**, not as sufficient proof
 that the entire blogger channel is spam. Immediate source rejection remains
-valid for spam/bait patterns in the source title or handle. Excerpt-only spam
-signals must repeat across the bounded recent-post sample (default threshold:
-three posts) before the canonical source row becomes
-`rejected_spam_source`. This prevents a useful travel author from disappearing
-because one KO post contains an integration.
+valid for hard spam/bait patterns in the source title or handle and for
+hard-spam evidence such as VPN/crypto/betting/bait/spoiler feeds. Commercial
+tokens in post text are split from that hard source evidence. A commercial
+marker after at least 120 characters of editorial text is treated as a footer;
+an ad-dominant item is counted only in a bounded source sample. The canonical
+source becomes `rejected_spam_source` for commercial dominance only when the
+sample contains at least five text posts, at least five are ad-dominant and the
+ad-dominant ratio is at least 0.8. These defaults are configurable through the
+`REGION_TALK_SOURCE_COMMERCIAL_*` variables, but post-level ad/promo filtering
+remains strict regardless of the source verdict. This prevents a useful travel
+author from disappearing because several otherwise editorial KO posts carry
+the same service footer.
+
+Pre-v3 `rejected_spam_source` rows may be reopened automatically only when the
+stored evidence consists exclusively of the old commercial tokens, the source
+title/handle has no spam marker, there is no hard-spam or spoiler evidence, and
+the source already has positive product evidence: confirmed-external status or
+an existing KO post. A generic sampled/candidate counter is insufficient.
+Commercial-only rejects with no KO work remain terminal instead of consuming
+rescan capacity. Reopening means
+`needs_rescan_or_retry`, not post acceptance: every post must still pass the
+complete dual E5+BGE, KO-only, external-source, non-ad and non-multiregion
+gates. A newer repaired canonical queue row wins over an older terminal status
+overlay; a genuinely newer terminal verdict remains authoritative.
 
 The operator scorecard reports this cohort as a disjoint product funnel:
 `total / scanned / unscanned / sources with KO`, followed by its processed

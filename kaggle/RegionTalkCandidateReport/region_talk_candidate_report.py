@@ -82,7 +82,7 @@ AD_WORDS = ["скидк", "промокод", "купить", "заказать"
 TRASH_WORDS = ["жесть", "треш", "трэш", "шок", "кошмар"]
 POSITIVE_WORDS = ["красив", "атмосфер", "море", "дюны", "архитект", "истори", "маршрут", "музей", "пляж", "курорт", "прогул", "путешеств"]
 
-SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09_local_scope_v2"
+SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_17_spam_evidence_v3"
 LOCAL_REGION_SOURCE_STATUS = "rejected_local_region_source"
 SPAM_SOURCE_STATUS = "rejected_spam_source"
 COMPLIANCE_SOURCE_STATUS = "rejected_compliance_source"
@@ -153,15 +153,27 @@ SOURCE_LOCAL_INSTITUTION_PROFILE_PATTERNS = [
     r"музе[йяею]", r"выставк", r"экспозици", r"архив", r"афиш", r"билет",
     r"жд[её]м\s+вас", r"пр[- ]?т\s+мира", r"проспект\s+мира",
 ]
-SOURCE_SPAM_SURFACE_PATTERNS = [
+SOURCE_HARD_SPAM_SURFACE_PATTERNS = [
     r"ты\s+не\s+сможешь", r"ты\s+не\s+можешь", r"ты\s+не\s+усто(?:ишь|ять)",
     r"ты\s+хочешь\s+ещ[её]", r"я\s+не\s+даю\s+тебе\s+покоя",
     r"я\s+не\s+выхожу\s+из\s+головы", r"я\s+знаю\s+твой\s+секрет",
     r"электрическ(?:ий|ая)\s+поцелуй", r"полночное\s+свечение",
     r"не\s+смотри\s+на\s+меня", r"обо\s+мне", r"искушен",
-    r"vpn", r"промокод", r"деш[её]в(?:ые|ые)\s+авиа", r"авиабилет",
+    r"vpn",
     r"крипт", r"трейд(?:инг|ер)", r"binance", r"(?<![а-яa-z])ставк[аи](?![а-яa-z])", r"blackjack",
     r"casino", r"казино", r"bonus", r"freespins?", r"знакомств", r"18\+",
+]
+SOURCE_COMMERCIAL_PROMO_SURFACE_PATTERNS = [
+    r"промокод", r"деш[её]в(?:ые|ые)\s+авиа", r"авиабилет",
+]
+# Backward-compatible union used for exact title/handle filtering and audit.
+# A channel literally named after promo codes/cheap flights is still a source-
+# level reject. The same tokens inside an editorial travel post are only
+# post-level commercial evidence until a bounded sample proves that the whole
+# source is a commercial feed.
+SOURCE_SPAM_SURFACE_PATTERNS = [
+    *SOURCE_HARD_SPAM_SURFACE_PATTERNS,
+    *SOURCE_COMMERCIAL_PROMO_SURFACE_PATTERNS,
 ]
 SOURCE_SPAM_HASHTAG_TOKENS = {
     "bonus", "freespins", "ставки", "ставка", "blackjack", "casino", "казино",
@@ -1847,6 +1859,41 @@ def _surface_hashtags(text: str) -> list[str]:
     ]
 
 
+def _first_regex_hit_start(patterns: list[str], text: str) -> int | None:
+    starts: list[int] = []
+    for pattern in patterns:
+        try:
+            match = re.search(pattern, text or "", flags=re.I)
+        except re.error:
+            pos = (text or "").lower().find(pattern.lower())
+            match = None
+            if pos >= 0:
+                starts.append(pos)
+        if match:
+            starts.append(match.start())
+    return min(starts) if starts else None
+
+
+def _commercial_promo_dominance(excerpt: str, commercial_hits: list[str]) -> tuple[bool, int]:
+    """Separate an ad-dominant post from an editorial post with a footer.
+
+    Travel authors commonly append booking/service links to otherwise useful
+    stories. Those posts may still fail the post-level ad gate, but three such
+    footers must not blacklist the whole source. A commercial marker near the
+    beginning, before at least 120 characters of editorial text, is treated as
+    an ad-dominant source-sample item and is aggregated only after the bounded
+    source scan completes.
+    """
+    if not commercial_hits:
+        return False, 0
+    start = _first_regex_hit_start(SOURCE_COMMERCIAL_PROMO_SURFACE_PATTERNS, excerpt)
+    if start is None:
+        return False, 0
+    prefix = re.sub(r"https?://\S+|\s+", " ", (excerpt or "")[:start]).strip()
+    prefix_chars = len(prefix)
+    return prefix_chars < getenv_int("REGION_TALK_SOURCE_COMMERCIAL_EDITORIAL_PREFIX_MIN_CHARS", 120), prefix_chars
+
+
 def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
     """Cheap title/hashtag/excerpt source filter before spending history budget.
 
@@ -1886,7 +1933,13 @@ def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
     title_handle = " ".join([title, handle]).lower()
     full = " ".join([title, handle, excerpt]).lower()
     local_hits = _regex_hits(SOURCE_LOCAL_TITLE_PATTERNS, title_handle)
+    title_spam_hits = _regex_hits(SOURCE_SPAM_SURFACE_PATTERNS, title_handle)
+    hard_spam_hits = _regex_hits(SOURCE_HARD_SPAM_SURFACE_PATTERNS, full)
+    commercial_promo_hits = _regex_hits(SOURCE_COMMERCIAL_PROMO_SURFACE_PATTERNS, full)
     spam_hits = _regex_hits(SOURCE_SPAM_SURFACE_PATTERNS, full)
+    commercial_dominant, editorial_prefix_chars = _commercial_promo_dominance(
+        excerpt, commercial_promo_hits
+    )
     tags = _surface_hashtags(excerpt)
     spam_tags = sorted({t for t in tags if t in SOURCE_SPAM_HASHTAG_TOKENS})
     try:
@@ -1896,8 +1949,8 @@ def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
     entity_types = str(row.get("entity_types") or row.get("message_entity_types") or "")
     if "MessageEntitySpoiler" in entity_types:
         spoiler_count += 1
-    spam_score = len(spam_hits) + (1 if len(spam_tags) >= 2 else 0) + (1 if spoiler_count >= 1 else 0)
-    if spam_score >= 2 or spam_hits:
+    spam_score = len(hard_spam_hits) + (1 if len(spam_tags) >= 2 else 0) + (1 if spoiler_count >= 1 else 0)
+    if title_spam_hits or spam_score >= 2 or hard_spam_hits:
         classification = "spam_source_reject"
     elif local_hits:
         classification = "local_region_source"
@@ -1908,6 +1961,12 @@ def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
         reason_parts.append("local_title_or_handle=" + ",".join(local_hits[:4]))
     if spam_hits:
         reason_parts.append("spam_surface=" + ",".join(spam_hits[:4]))
+    if commercial_promo_hits:
+        reason_parts.append(
+            "commercial_promo=" + ",".join(commercial_promo_hits[:4])
+            + f";dominant={str(commercial_dominant).lower()}"
+            + f";editorial_prefix_chars={editorial_prefix_chars}"
+        )
     if spam_tags:
         reason_parts.append("spam_hashtags=" + ",".join(spam_tags[:8]))
     if spoiler_count:
@@ -1917,6 +1976,10 @@ def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
         "source_surface_filter_version": SOURCE_SURFACE_FILTER_VERSION,
         "source_local_hits": ";".join(local_hits[:8]),
         "source_spam_hits": ";".join(spam_hits[:8]),
+        "source_hard_spam_hits": ";".join(hard_spam_hits[:8]),
+        "source_commercial_promo_hits": ";".join(commercial_promo_hits[:8]),
+        "source_commercial_promo_dominant": str(commercial_dominant).lower(),
+        "source_commercial_editorial_prefix_chars": editorial_prefix_chars,
         "source_spam_hashtags": ";".join(spam_tags[:12]),
         "source_spoiler_entity_count": spoiler_count,
         "source_surface_filter_reason": "; ".join(reason_parts),
@@ -1931,6 +1994,12 @@ def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
         return {}
     decision = source_discovery_surface_filter(row)
     klass = str(decision.get("source_quick_class") or "")
+    if decision.get("source_commercial_promo_hits"):
+        # Compatibility marker retained for existing telemetry. The v3
+        # contract is stricter: commercial text is a post-level signal unless
+        # an aggregate bounded scan proves an ad-dominant source.
+        decision["source_excerpt_spam_requires_multi_post_confirmation"] = "true"
+        decision["source_excerpt_commercial_promo_requires_post_gate"] = "true"
     if klass == "spam_source_reject":
         title = str(
             row.get("resolved_title")
@@ -1950,12 +2019,17 @@ def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
             or ""
         )
         title_spam_hits = _regex_hits(SOURCE_SPAM_SURFACE_PATTERNS, " ".join([title, handle]).lower())
-        if not title_spam_hits:
+        commercial_only_excerpt = bool(decision.get("source_commercial_promo_hits")) and not any((
+            decision.get("source_hard_spam_hits"),
+            decision.get("source_spam_hashtags"),
+            _rt_float(decision.get("source_spoiler_entity_count")) > 0,
+        ))
+        if not title_spam_hits and commercial_only_excerpt:
             # One exact KO post may legitimately contain a sponsor line or a
             # promo code. That is a post-level ad signal, not proof that the
-            # whole blogger source is spam. Keep the cheap signal for audit,
-            # but require the existing repeated-post threshold during the
-            # bounded source scan before terminal source rejection.
+            # whole blogger source is spam. Hard VPN/crypto/betting/bait,
+            # spoiler and spam-hashtag evidence is deliberately excluded from
+            # this compatibility downgrade and remains fail-closed.
             decision["source_quick_class"] = "candidate_keep"
             decision["source_excerpt_spam_requires_multi_post_confirmation"] = "true"
             suffix = "excerpt_spam_requires_multi_post_confirmation"
@@ -1986,6 +2060,111 @@ def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
             ),
         }
     return decision
+
+
+def repeated_commercial_source_spam_decision(
+    *,
+    commercial_dominant_posts: int,
+    sampled_text_posts: int,
+    last_surface_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a terminal source decision only for a commercial-dominant feed."""
+    threshold = max(1, getenv_int("REGION_TALK_SOURCE_COMMERCIAL_DOMINANT_POSTS_REJECT_THRESHOLD", 5))
+    min_sample = max(threshold, getenv_int("REGION_TALK_SOURCE_COMMERCIAL_MIN_SAMPLE_POSTS", 5))
+    min_ratio = min(1.0, max(0.0, getenv_float("REGION_TALK_SOURCE_COMMERCIAL_DOMINANT_RATIO_REJECT", 0.8)))
+    ratio = commercial_dominant_posts / max(1, sampled_text_posts)
+    if sampled_text_posts < min_sample or commercial_dominant_posts < threshold or ratio < min_ratio:
+        return {}
+    last = dict(last_surface_decision or {})
+    return {
+        "fetch_status": SPAM_SOURCE_STATUS,
+        "source_queue_status": SPAM_SOURCE_STATUS,
+        "source_quick_class": "spam_source_reject",
+        "source_surface_filter_version": SOURCE_SURFACE_FILTER_VERSION,
+        "source_surface_filter_reason": (
+            f"commercial_dominant_posts={commercial_dominant_posts}; "
+            f"sampled_text_posts={sampled_text_posts}; ratio={ratio:.3f}; "
+            f"last_reason={last.get('source_surface_filter_reason') or ''}"
+        ),
+        "source_spam_hits": last.get("source_spam_hits", ""),
+        "source_hard_spam_hits": last.get("source_hard_spam_hits", ""),
+        "source_commercial_promo_hits": last.get("source_commercial_promo_hits", ""),
+        "source_commercial_dominant_posts": commercial_dominant_posts,
+        "source_commercial_sampled_text_posts": sampled_text_posts,
+        "source_commercial_dominant_ratio": round(ratio, 3),
+        "monitoring_exclusion_reason": SPAM_SOURCE_REASON,
+        "source_probe_reason": "Rejected source after bounded commercial-dominance aggregation.",
+        "next_action": "do_not_rescan_spam_source",
+    }
+
+
+def legacy_commercial_spam_source_reopen_fields(row: dict[str, Any]) -> dict[str, Any]:
+    """Reopen pre-v3 source rejects caused only by promo/airfare tokens.
+
+    The old absolute `three matching posts` rule conflated a recurring travel
+    footer with a spam source. Reopening is deliberately narrow: no current-v3
+    verdict, no title/handle spam, no spoiler evidence, no hard-spam token and
+    positive product evidence (confirmed external author or an existing KO
+    post). A generic sampled/candidate counter is not sufficient because old
+    source scans populated it before KO qualification. The condition avoids
+    spending backlog capacity on an old commercial-only rejection that never
+    produced any KO work. The source
+    returns to its existing KO/scanned state and is eligible for a corrected
+    bounded rescan; no post or publication is accepted by this step.
+    """
+    item = dict(row or {})
+    terminal_status = str(item.get("source_queue_status") or item.get("fetch_status") or "")
+    if terminal_status != SPAM_SOURCE_STATUS:
+        return {}
+    if str(item.get("source_surface_filter_version") or "") == SOURCE_SURFACE_FILTER_VERSION:
+        return {}
+    title_handle = " ".join(str(item.get(field) or "") for field in (
+        "resolved_title", "source_title", "handle", "source_url", "canonical_url"
+    )).lower()
+    if _regex_hits(SOURCE_SPAM_SURFACE_PATTERNS, title_handle):
+        return {}
+    try:
+        spoiler_count = int(float(item.get("source_spoiler_entity_count") or 0))
+    except Exception:
+        spoiler_count = 0
+    if spoiler_count > 0:
+        return {}
+    stored_hits = str(item.get("source_spam_hits") or "")
+    stored_hard_hits = str(item.get("source_hard_spam_hits") or "")
+    commercial_pattern_tokens = set(SOURCE_COMMERCIAL_PROMO_SURFACE_PATTERNS)
+    stored_tokens = {token.strip() for token in stored_hits.split(";") if token.strip()}
+    if stored_hard_hits or not stored_tokens or not stored_tokens.issubset(commercial_pattern_tokens):
+        return {}
+    evidence_status = str(item.get("external_blogger_evidence_status") or "").strip().lower()
+    has_product_evidence = (
+        evidence_status == "confirmed_external"
+        or _rt_float(item.get("ko_posts_found")) > 0
+    )
+    if not has_product_evidence:
+        return {}
+    previous_reason = str(item.get("source_surface_filter_reason") or "")
+    return {
+        "previous_source_queue_status": terminal_status,
+        "source_queue_status": "needs_rescan_or_retry",
+        "fetch_status": "needs_rescan_or_retry",
+        "source_quick_class": "candidate_keep",
+        "source_surface_filter_version": SOURCE_SURFACE_FILTER_VERSION,
+        "source_surface_filter_reason": "legacy commercial-only source reject reopened under separated source/post promo policy",
+        "source_spam_hits": "",
+        "source_hard_spam_hits": "",
+        "source_commercial_promo_hits": "",
+        "source_commercial_promo_dominant": "false",
+        "source_commercial_editorial_prefix_chars": 0,
+        "source_commercial_dominant_posts": 0,
+        "source_commercial_sampled_text_posts": 0,
+        "source_commercial_dominant_ratio": "",
+        "source_spam_hashtags": "",
+        "monitoring_exclusion_reason": "",
+        "source_probe_reason": "Legacy commercial-only source rejection reopened; corrected bounded rescan required.",
+        "source_spam_reopen_status": "reopened_legacy_commercial_only_v3",
+        "source_spam_reopen_previous_reason": previous_reason,
+        "next_action": "rescan_source_with_separate_post_promo_gate",
+    }
 
 
 def source_local_region_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -2207,7 +2386,11 @@ SOURCE_STATE_FIELDS = [
     "source_history_scan_ever_completed", "source_history_posts_scanned_max",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
-    "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
+    "source_local_hits", "source_spam_hits", "source_hard_spam_hits", "source_commercial_promo_hits",
+    "source_commercial_promo_dominant", "source_commercial_editorial_prefix_chars",
+    "source_commercial_dominant_posts", "source_commercial_sampled_text_posts", "source_commercial_dominant_ratio",
+    "source_spam_reopen_status", "source_spam_reopen_previous_reason",
+    "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
     "monitoring_exclusion_reason", "high_volume_text_posts_date",
     "high_volume_text_posts_count", "high_volume_text_posts_threshold",
@@ -2242,7 +2425,11 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
     "source_surface_filter_version", "source_surface_filter_reason",
-    "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
+    "source_local_hits", "source_spam_hits", "source_hard_spam_hits", "source_commercial_promo_hits",
+    "source_commercial_promo_dominant", "source_commercial_editorial_prefix_chars",
+    "source_commercial_dominant_posts", "source_commercial_sampled_text_posts", "source_commercial_dominant_ratio",
+    "source_spam_reopen_status", "source_spam_reopen_previous_reason",
+    "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "actual_images_scored_count", "avg_actual_image_score", "low_actual_image_count",
     "source_image_quality_status", "source_image_quality_min_actual_scored",
@@ -2276,7 +2463,11 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "confidence", "active_scan_allowed", "quarantine_reason", "source_probe_reason",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_version", "source_surface_filter_reason",
-    "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
+    "source_local_hits", "source_spam_hits", "source_hard_spam_hits", "source_commercial_promo_hits",
+    "source_commercial_promo_dominant", "source_commercial_editorial_prefix_chars",
+    "source_commercial_dominant_posts", "source_commercial_sampled_text_posts", "source_commercial_dominant_ratio",
+    "source_spam_reopen_status", "source_spam_reopen_previous_reason",
+    "source_spam_hashtags", "source_spoiler_entity_count",
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
@@ -3488,7 +3679,19 @@ def merge_candidate_image_payload_with_latest(
     candidate_repairs_soft_gate = bool(
         latest_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
         and candidate_status in {"actual_scored", "deferred_text_gate"}
-        and str(candidate.get("publication_eligibility_decision") or "").startswith("needs_")
+        and (
+            (
+                candidate_status == "actual_scored"
+                and (
+                    str(candidate.get("publication_eligibility_decision") or "") == "accept"
+                    or str(candidate.get("publication_eligibility_decision") or "").startswith("needs_")
+                )
+            )
+            or (
+                candidate_status == "deferred_text_gate"
+                and str(candidate.get("publication_eligibility_decision") or "").startswith("needs_")
+            )
+        )
         and str(candidate.get("status_changed_this_run") or "").lower() == "true"
     )
     if candidate_status not in {"rejected_text_gate", "rejected_publication_eligibility"} and not candidate_repairs_soft_gate:
@@ -4396,12 +4599,48 @@ def merge_ydb_source_queue_status_items(
             incoming_is_stale = bool(
                 current_updated_at and incoming_updated_at and incoming_updated_at < current_updated_at
             )
+            incoming_is_canonical_queue = str(_pk).startswith("source_queue_item:")
+            current_terminal_before_merge = source_terminal_rejected_status(current.get("source_queue_status"))
+            incoming_terminal_before_merge = source_terminal_rejected_status(item.get("source_queue_status"))
+            incoming_is_newer_canonical_repair = bool(
+                incoming_is_canonical_queue
+                and current_terminal_before_merge
+                and not incoming_terminal_before_merge
+                and incoming_updated_at
+                and (not current_updated_at or incoming_updated_at > current_updated_at)
+            )
+            commercial_spam_reopen = bool(
+                incoming_is_newer_canonical_repair
+                and str(item.get("source_spam_reopen_status") or "").startswith(
+                    "reopened_legacy_commercial_only_"
+                )
+            )
+            terminal_repair_clear_fields = {
+                "monitoring_exclusion_reason", "source_spam_hits",
+                "source_hard_spam_hits", "source_commercial_promo_hits",
+                "source_commercial_dominant_ratio", "source_spam_hashtags",
+            }
+            if commercial_spam_reopen:
+                # compact_record omits empty strings. The durable reopen marker
+                # is therefore the explicit command to clear incompatible old
+                # terminal evidence even when those empty fields are absent
+                # from the incoming canonical payload.
+                for field in terminal_repair_clear_fields:
+                    current[field] = ""
+                current.update({
+                    "source_commercial_promo_dominant": "false",
+                    "source_commercial_editorial_prefix_chars": 0,
+                    "source_commercial_dominant_posts": 0,
+                    "source_commercial_sampled_text_posts": 0,
+                })
             numeric_max_fields = {
                 "posts_scanned", "ko_posts_found", "candidate_posts_found",
                 "actual_images_scored_count", "low_actual_image_count",
             }
             for field, value in item.items():
                 if value in (None, ""):
+                    if incoming_is_newer_canonical_repair and field in terminal_repair_clear_fields:
+                        current[field] = value
                     continue
                 if incoming_is_stale and field not in numeric_max_fields:
                     # `source_queue_item` is canonical. A late read of an older
@@ -4421,14 +4660,14 @@ def merge_ydb_source_queue_status_items(
                 if field == "source_queue_status":
                     current_terminal = source_terminal_rejected_status(current.get(field))
                     incoming_terminal = source_terminal_rejected_status(value)
-                    if current_terminal and not incoming_terminal:
+                    if current_terminal and not incoming_terminal and not incoming_is_newer_canonical_repair:
                         continue
                 if field in {"source_scope", "source_geo_class", "source_quick_class"}:
                     if (
                         str(current.get("source_scope") or "") == "local_region"
                         or str(current.get("source_geo_class") or "") == "kaliningrad_local"
                         or str(current.get("source_quick_class") or "") == "local_region_source"
-                    ) and value not in {"local_region", "kaliningrad_local", "local_region_source"}:
+                    ) and value not in {"local_region", "kaliningrad_local", "local_region_source"} and not incoming_is_newer_canonical_repair:
                         continue
                 if field in numeric_max_fields:
                     try:
@@ -7752,6 +7991,7 @@ def build_unified_source_queue(
     prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     entries: dict[str, dict[str, Any]] = {}
     skipped_non_target_queue_rows = 0
+    stale_commercial_spam_reopened = 0
 
     def queue_positive_int(value: Any) -> int:
         try:
@@ -8047,6 +8287,18 @@ def build_unified_source_queue(
     out: list[dict[str, Any]] = []
     for key, rec in entries.items():
         srow = source_by_key.get(key) or {}
+        pre_reopen_queue_status = str(
+            srow.get("source_queue_status")
+            or srow.get("fetch_status")
+            or rec.get("source_queue_status")
+            or rec.get("fetch_status")
+            or ""
+        )
+        reopen_fields = legacy_commercial_spam_source_reopen_fields({**rec, **srow})
+        if reopen_fields:
+            stale_commercial_spam_reopened += 1
+            rec.update(reopen_fields)
+            srow = {**srow, **reopen_fields}
         sid = str(srow.get("source_id") or rec.get("source_id") or "")
         sampled = posts_by_source.get(sid, []) if sid else []
         ko_posts = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
@@ -8118,7 +8370,7 @@ def build_unified_source_queue(
             or ""
         )
         previous_queue_status = str(rec.get("source_queue_status") or "")
-        original_queue_status = previous_queue_status
+        original_queue_status = pre_reopen_queue_status or previous_queue_status
         terminal_rejected_status = ""
         if source_terminal_rejected_status(fetch_status):
             terminal_rejected_status = fetch_status
@@ -8270,6 +8522,15 @@ def build_unified_source_queue(
             "source_surface_filter_reason": rec.get("source_surface_filter_reason") or surface_fields.get("source_surface_filter_reason", ""),
             "source_local_hits": rec.get("source_local_hits") or surface_fields.get("source_local_hits", ""),
             "source_spam_hits": rec.get("source_spam_hits") or surface_fields.get("source_spam_hits", ""),
+            "source_hard_spam_hits": srow.get("source_hard_spam_hits") or rec.get("source_hard_spam_hits") or surface_fields.get("source_hard_spam_hits", ""),
+            "source_commercial_promo_hits": srow.get("source_commercial_promo_hits") or rec.get("source_commercial_promo_hits") or surface_fields.get("source_commercial_promo_hits", ""),
+            "source_commercial_promo_dominant": srow.get("source_commercial_promo_dominant") or rec.get("source_commercial_promo_dominant") or surface_fields.get("source_commercial_promo_dominant", ""),
+            "source_commercial_editorial_prefix_chars": srow.get("source_commercial_editorial_prefix_chars") or rec.get("source_commercial_editorial_prefix_chars") or surface_fields.get("source_commercial_editorial_prefix_chars", 0),
+            "source_commercial_dominant_posts": int(srow.get("source_commercial_dominant_posts") or rec.get("source_commercial_dominant_posts") or 0),
+            "source_commercial_sampled_text_posts": int(srow.get("source_commercial_sampled_text_posts") or rec.get("source_commercial_sampled_text_posts") or 0),
+            "source_commercial_dominant_ratio": srow.get("source_commercial_dominant_ratio") or rec.get("source_commercial_dominant_ratio") or "",
+            "source_spam_reopen_status": rec.get("source_spam_reopen_status") or "",
+            "source_spam_reopen_previous_reason": rec.get("source_spam_reopen_previous_reason") or "",
             "source_spam_hashtags": rec.get("source_spam_hashtags") or surface_fields.get("source_spam_hashtags", ""),
             "source_spoiler_entity_count": rec.get("source_spoiler_entity_count") or surface_fields.get("source_spoiler_entity_count", 0),
             "monitoring_exclusion_reason": monitoring_exclusion_reason,
@@ -8323,6 +8584,7 @@ def build_unified_source_queue(
         "source_queue_keyword_existing_promoted_this_run": keyword_existing_promoted,
         "source_queue_keyword_surface_filtered_this_run": keyword_surface_filtered,
         "source_queue_order_shifted_for_keyword_this_run": keyword_queue_order_shifted,
+        "source_queue_stale_commercial_spam_reopened_this_run": stale_commercial_spam_reopened,
         "source_queue_seq_missing_repaired_this_run": queue_seq_missing_repaired,
         "source_queue_seq_duplicate_repaired_this_run": queue_seq_duplicate_repaired,
         "source_queue_seq_max": max_queue_seq,
@@ -8921,14 +9183,29 @@ def build_image_candidate_queue(
         row["publication_eligibility_evidence_json"] = json.dumps(eligibility.get("evidence") or {}, ensure_ascii=False, sort_keys=True)
         previous_status = str(row.get("image_queue_status") or "")
         if previous_status in {"rejected_text_gate", "rejected_publication_eligibility"}:
-            row["previous_image_queue_status"] = previous_status
-            row["image_queue_status"] = "needs_actual_image_fetch"
+            rejected_status = previous_status
+            transition_origin = str(row.get("previous_image_queue_status") or "")
+            reusable_actual_score = bool(
+                transition_origin == "actual_scored"
+                and str(row.get("image_model_input_type") or "") == "actual_image"
+                and _rt_float(row.get("images_scored_actual_count") or row.get("actual_image_count")) > 0
+                and str(row.get("last_image_diag_run_id") or "").strip()
+            )
+            row["previous_image_queue_status"] = transition_origin or rejected_status
+            row["image_queue_status"] = "actual_scored" if reusable_actual_score else "needs_actual_image_fetch"
             row["status_changed_this_run"] = "true"
             row["last_status_changed_at"] = run_now
             row["image_eligibility_status"] = ""
             row["image_eligibility_reason"] = ""
-            row["media_acquisition_status"] = "needs_actual_image_fetch"
-            row["next_action"] = "download_actual_image_bytes_next"
+            row["text_region_confirmation_status"] = "text_confirmed_ko_only_for_image_analysis"
+            row["image_product_gate_status"] = "accepted"
+            row["image_product_gate_reason"] = ""
+            if reusable_actual_score:
+                row["media_acquisition_status"] = row.get("media_acquisition_status") or "actual_album_downloaded_and_scored"
+                row["next_action"] = "reuse_existing_actual_image_score_after_text_gate_restore"
+            else:
+                row["media_acquisition_status"] = "needs_actual_image_fetch"
+                row["next_action"] = "download_actual_image_bytes_next"
         entries[key] = dict(row)
     media_by_url = {str(r.get("post_url") or ""): r for r in media_rows if r.get("post_url")}
 
@@ -13196,7 +13473,10 @@ async def fetch_telegram_posts(
                 source_post_rows: list[dict[str, Any]] = []
                 text_posts_by_day: dict[str, int] = {}
                 source_surface_spam_posts = 0
+                source_commercial_dominant_posts = 0
+                source_surface_text_posts_examined = 0
                 source_spoiler_posts = 0
+                last_surface_decision: dict[str, Any] = {}
                 cutoff = history_min_post_datetime()
                 old_posts_cutoff_hit = False
                 anchor_cap = getenv_int("REGION_TALK_TG_MAX_ANCHOR_QUERIES_PER_SOURCE", 3)
@@ -13239,6 +13519,10 @@ async def fetch_telegram_posts(
                             "message_entity_types": ";".join(entity_types[:20]),
                             "telegram_spoiler_entity_count": spoiler_count,
                         })
+                        last_surface_decision = surface_decision
+                        source_surface_text_posts_examined += 1
+                        if str(surface_decision.get("source_commercial_promo_dominant") or "").lower() == "true":
+                            source_commercial_dominant_posts += 1
                         if surface_decision.get("source_quick_class") == "spam_source_reject":
                             source_surface_spam_posts += 1
                         if (
@@ -13329,6 +13613,22 @@ async def fetch_telegram_posts(
                         break
                     if len(seen) >= max_posts:
                         break
+                if not source_terminal_rejected_status(src_row.get("fetch_status")):
+                    src_row.update({
+                        "source_commercial_dominant_posts": source_commercial_dominant_posts,
+                        "source_commercial_sampled_text_posts": source_surface_text_posts_examined,
+                        "source_commercial_dominant_ratio": round(
+                            source_commercial_dominant_posts / max(1, source_surface_text_posts_examined), 3
+                        ),
+                    })
+                    commercial_terminal = repeated_commercial_source_spam_decision(
+                        commercial_dominant_posts=source_commercial_dominant_posts,
+                        sampled_text_posts=source_surface_text_posts_examined,
+                        last_surface_decision=last_surface_decision,
+                    )
+                    if commercial_terminal:
+                        src_row.update(commercial_terminal)
+                        source_post_rows = []
                 governor.total_ok += 1
                 governor.history_sources_ok += 1
                 if source_terminal_rejected_status(src_row.get("fetch_status")):

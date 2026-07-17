@@ -201,12 +201,34 @@ def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_rows: list[dict[str, Any]]) -> None:
+def merge_live_source_rows(source_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge canonical source rows with chronology-aware status overlays."""
     sources: dict[str, dict[str, Any]] = {}
+    canonical_queue_updated_at: dict[str, str] = {}
+    classification_fields = {
+        "source_queue_status", "source_scope", "source_geo_class",
+        "source_topic_class", "source_quick_class",
+        "monitoring_exclusion_reason", "source_surface_filter_version",
+        "source_surface_filter_reason", "source_spam_hits",
+        "source_hard_spam_hits", "source_commercial_promo_hits",
+        "source_spam_hashtags", "next_action",
+    }
     for source in source_rows:
         key = canonical_source_key_for_row(source)
         if not key:
             continue
+        source_pk = str(source.get("_ydb_pk") or "")
+        incoming_is_canonical = source_pk.startswith("source_queue_item:")
+        incoming_is_overlay = source_pk.startswith(("source_status_item:", "online_source_item:"))
+        incoming_updated_at = max(
+            str(source.get("updated_at") or ""),
+            str(source.get("queue_item_updated_at") or ""),
+            str(source.get("source_status_updated_at") or ""),
+            str(source.get("_ydb_updated_at") or ""),
+        )
+        if incoming_is_canonical:
+            canonical_queue_updated_at[key] = incoming_updated_at
+        canonical_updated_at = canonical_queue_updated_at.get(key, "")
         current = dict(sources.get(key) or {})
         for field, value in source.items():
             if value in (None, ""):
@@ -216,6 +238,18 @@ def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_r
                     current[field] = max(int(float(current.get(field) or 0)), int(float(value or 0)))
                 except (TypeError, ValueError):
                     current[field] = value
+                continue
+            if (
+                field in classification_fields
+                and incoming_is_overlay
+                and canonical_updated_at
+                and incoming_updated_at
+                and incoming_updated_at <= canonical_updated_at
+            ):
+                # Delivery/confirmed metrics must use the same repaired source
+                # chronology as CandidateReport and the orchestrator. A stale
+                # status row may add counters, but cannot reapply an obsolete
+                # terminal verdict over a newer canonical queue repair.
                 continue
             if field == "source_queue_status":
                 existing = str(current.get(field) or "")
@@ -228,6 +262,15 @@ def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_r
                     continue
             current[field] = value
         sources[key] = current
+    return list(sources.values())
+
+
+def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_rows: list[dict[str, Any]]) -> None:
+    sources = {
+        canonical_source_key_for_row(source): source
+        for source in merge_live_source_rows(source_rows)
+        if canonical_source_key_for_row(source)
+    }
     for row in publications:
         source = sources.get(canonical_source_key_for_row(row))
         row["_live_authoritative_source_fingerprint"] = authoritative_source_fingerprint(source)
@@ -350,12 +393,7 @@ def build_stats_message(limit: int = 20000) -> str:
     try:
         source_queue = read_kind_rows(pool, ydb, table, "source_queue_item", limit)
         source_status = read_kind_rows(pool, ydb, table, "source_status_item", limit)
-        by_source: dict[str, dict[str, Any]] = {}
-        for row in source_queue + source_status:
-            key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_id") or row.get("source_url") or row.get("_ydb_pk") or "")
-            if key:
-                by_source[key] = {**by_source.get(key, {}), **row}
-        sources = list(by_source.values())
+        sources = merge_live_source_rows(source_queue + source_status)
         source_candidates = read_kind_rows(pool, ydb, table, "source_candidate_item", limit)
         source_edges = read_kind_rows(pool, ydb, table, "source_edge_item", limit)
         comment_links = read_kind_rows(pool, ydb, table, "comment_link_item", limit)

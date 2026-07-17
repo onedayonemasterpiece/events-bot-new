@@ -1274,6 +1274,16 @@ def _reconcile_terminal_provider_decision(
     verdict blocks an unsent acceptance without spending Gemini again, while a
     delivered row and a provider rejection remain terminal and monotonic.
     """
+    attestation_fields = (
+        "publication_eligibility_verdict", "publication_eligibility_evidence",
+        "publication_eligibility_evidence_fingerprint", "publication_eligibility_gate_version",
+        "authoritative_source_fingerprint", "authoritative_source_fingerprint_version",
+        "authoritative_source_found",
+    )
+    attestation_changed_from_previous = any(
+        str(previous.get(key) or "") != str(row.get(key) or "")
+        for key in attestation_fields
+    )
     before = {
         key: row.get(key)
         for key in (
@@ -1281,6 +1291,7 @@ def _reconcile_terminal_provider_decision(
             "publication_tombstone", "publication_revoked", "revoked_at",
             "finalization_status", "llm_attempted_this_run",
             "next_attempt_after", "next_action", "text_restore_reason",
+            *attestation_fields,
         )
     }
     decision = str(
@@ -1359,7 +1370,7 @@ def _reconcile_terminal_provider_decision(
     row["next_action"] = ""
     row["text_restore_reason"] = ""
     after = {key: row.get(key) for key in before}
-    return after != before
+    return after != before or attestation_changed_from_previous
 
 
 def _retry_after(now_iso: str, gate_status: str) -> str:

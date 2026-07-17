@@ -148,6 +148,18 @@ never had a candidate row stay out of the durable candidate ledger. This keeps
 the invalidation monotonic without turning thousands of old rejects into a new
 operational/storage backlog.
 
+The inverse transition is also evidence-preserving. If a reversible false
+source/text rejection is corrected and the image ledger still contains a
+complete `actual_scored` result with an ImageDiagnostic run id and positive
+actual-frame count, CandidateReport restores that result instead of downloading
+or scoring the album again. This does not weaken the current text gate: the
+restored row becomes actionable only after the current source, KO-only,
+non-ad/non-multiregion and dual E5+BGE checks accept it. Already delivered URLs
+remain immutable for Gemini and Telegram delivery. When their source policy or
+fingerprint changes, the finalizer may refresh only the eligibility/source
+attestation with zero Gemini calls, so current confirmed metrics reconcile
+without duplicate notification.
+
 ### Kaggle static/offline discipline
 
 Related: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `kaggle_status.py`, `kaggle_registry.py`, `video_announce/kaggle_client.py`.

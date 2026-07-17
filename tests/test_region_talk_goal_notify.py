@@ -111,6 +111,39 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         ])
         self.assertEqual(publication["_live_authoritative_source_fingerprint"], expected)
 
+    def test_stale_terminal_status_cannot_override_newer_queue_repair(self) -> None:
+        mod = load_module()
+        publication = {"canonical_source_key": "telegram:figarotravel"}
+        queue = {
+            "_ydb_pk": "source_queue_item:telegram:figarotravel",
+            "canonical_source_key": "telegram:figarotravel",
+            "source_queue_status": "processed_found_ko_candidate",
+            "source_scope": "external",
+            "source_geo_class": "external",
+            "source_quick_class": "candidate_keep",
+            "source_surface_filter_version": "source_surface_v2026_07_17_spam_evidence_v3",
+            "updated_at": "2026-07-17T09:00:00+00:00",
+        }
+        stale_status = {
+            "_ydb_pk": "source_status_item:telegram:figarotravel",
+            "canonical_source_key": "telegram:figarotravel",
+            "source_queue_status": "rejected_spam_source",
+            "source_quick_class": "spam_source_reject",
+            "updated_at": "2026-07-17T08:00:00+00:00",
+        }
+        stale_online = {
+            **stale_status,
+            "_ydb_pk": "online_source_item:telegram:figarotravel",
+            "updated_at": "2026-07-17T08:30:00+00:00",
+        }
+        merged = mod.merge_live_source_rows([queue, stale_status, stale_online])
+        self.assertEqual(merged[0]["source_queue_status"], "processed_found_ko_candidate")
+        mod.attach_live_source_fingerprints([publication], [queue, stale_status, stale_online])
+        self.assertEqual(
+            publication["_live_authoritative_source_fingerprint"],
+            mod.authoritative_source_fingerprint(queue),
+        )
+
     def test_delivery_identity_is_stable_per_canonical_post_and_chat(self) -> None:
         mod = load_module()
         first = {"post_url": "https://telegram.me/TravelCase/10?single=1"}

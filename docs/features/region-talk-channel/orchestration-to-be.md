@@ -281,11 +281,14 @@ Telegram Monitoring and Guide monitoring:
 - a publication tombstone is sent back to the finalizer when its persisted
   authoritative-source fingerprint differs from the current source ledger, so
   newly accumulated scan evidence can promote an earlier `review` decision;
-  fingerprint v2 includes substantive scan/KO/candidate counters but excludes
-  volatile row-update timestamps, preventing unchanged tombstones from being
-  re-finalized on every CandidateReport snapshot;
-  existing v1 tombstones are rewritten once with the v2 fingerprint even when
-  their eligibility verdict remains unchanged, closing the migration loop;
+  current fingerprint v3 includes material source classification/policy fields
+  but excludes monotonic scan counters and volatile row-update timestamps,
+  preventing unchanged tombstones from being re-finalized on every
+  CandidateReport snapshot;
+  already sent rows never re-enter Gemini or delivery. If their live source
+  fingerprint or eligibility-gate version changes, the finalizer performs an
+  attestation-only refresh and persists the current verdict with zero LLM calls;
+  this keeps current-confirmed metrics consistent without duplicate chat posts;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 

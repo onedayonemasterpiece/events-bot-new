@@ -1564,6 +1564,71 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["source_quick_class"], "candidate_keep")
         self.assertEqual(row["posts_scanned"], 4)
 
+    def test_ydb_newer_canonical_repair_replaces_older_terminal_checkpoint(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "telegram:figarotravel": {
+                    "canonical_source_key": "telegram:figarotravel",
+                    "source_queue_status": mod.SPAM_SOURCE_STATUS,
+                    "source_quick_class": "spam_source_reject",
+                    "monitoring_exclusion_reason": mod.SPAM_SOURCE_REASON,
+                    "source_spam_hits": "промокод",
+                    "_ydb_updated_at": "2026-07-17T08:00:00+00:00",
+                }
+            }
+        }
+        mod.merge_ydb_source_queue_status_items(
+            state,
+            {
+                "source_queue_item:telegram:figarotravel": {
+                    "canonical_source_key": "telegram:figarotravel",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "source_quick_class": "candidate_keep",
+                    "source_scope": "external",
+                    "source_spam_reopen_status": "reopened_legacy_commercial_only_v3",
+                    "_ydb_updated_at": "2026-07-17T09:00:00+00:00",
+                }
+            },
+        )
+        row = state["unified_source_queue"]["telegram:figarotravel"]
+        self.assertEqual(row["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(row["source_quick_class"], "candidate_keep")
+        self.assertEqual(row["monitoring_exclusion_reason"], "")
+        self.assertEqual(row["source_spam_hits"], "")
+
+    def test_ydb_newer_canonical_external_repair_replaces_older_local_classification(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "telegram:visitor": {
+                    "canonical_source_key": "telegram:visitor",
+                    "source_queue_status": mod.LOCAL_REGION_SOURCE_STATUS,
+                    "source_scope": "local_region",
+                    "source_geo_class": "kaliningrad_local",
+                    "source_quick_class": "local_region_source",
+                    "_ydb_updated_at": "2026-07-17T08:00:00+00:00",
+                }
+            }
+        }
+        mod.merge_ydb_source_queue_status_items(
+            state,
+            {
+                "source_queue_item:telegram:visitor": {
+                    "canonical_source_key": "telegram:visitor",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_quick_class": "candidate_keep",
+                    "_ydb_updated_at": "2026-07-17T09:00:00+00:00",
+                }
+            },
+        )
+        row = state["unified_source_queue"]["telegram:visitor"]
+        self.assertEqual(row["source_scope"], "external")
+        self.assertEqual(row["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(row["source_quick_class"], "candidate_keep")
+
     def test_ydb_online_write_circuit_breaker_disables_retries_after_auth_error(self) -> None:
         mod = load_module()
         old_env = os.environ.get("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR")
@@ -3133,6 +3198,134 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(decision["source_quick_class"], "candidate_keep")
         self.assertEqual(decision["source_excerpt_spam_requires_multi_post_confirmation"], "true")
         self.assertIn("промокод", decision["source_spam_hits"])
+
+    def test_hard_spam_excerpt_is_not_downgraded_to_commercial_footer(self) -> None:
+        mod = load_module()
+        decision = mod.source_surface_terminal_fields({
+            "source_title": "Путешествия по России",
+            "handle": "@travel_or_vpn",
+            "keyword_hit_text_excerpt": "Бесплатный VPN, крипта и бонус казино #Калининград",
+        })
+        self.assertEqual(decision["source_queue_status"], mod.SPAM_SOURCE_STATUS)
+        self.assertEqual(decision["source_quick_class"], "spam_source_reject")
+        self.assertIn("vpn", decision["source_hard_spam_hits"])
+
+    def test_commercial_footer_is_not_source_spam_but_ad_dominant_feed_is(self) -> None:
+        mod = load_module()
+        editorial = mod.source_discovery_surface_filter({
+            "source_title": "Фигаро здесь, Фигаро там",
+            "handle": "@figarotravel",
+            "text": (
+                "Правдинск удивил старой капеллой и необычной историей здания. "
+                "Мы долго гуляли по городу и советуем свернуть к кирхе, чтобы "
+                "рассмотреть детали фасада и тихие улицы вокруг. "
+                "Дешёвые авиабилеты и сервисы для поездки — по ссылке внизу."
+            ),
+        })
+        self.assertEqual(editorial["source_quick_class"], "candidate_keep")
+        self.assertEqual(editorial["source_commercial_promo_dominant"], "false")
+        self.assertIn("авиабилет", editorial["source_commercial_promo_hits"])
+
+        promo = mod.source_discovery_surface_filter({
+            "source_title": "Путешествия без границ",
+            "handle": "@travel_everywhere",
+            "text": "Дешёвые авиабилеты! Получить промокод и забронировать прямо сейчас.",
+        })
+        self.assertEqual(promo["source_quick_class"], "candidate_keep")
+        self.assertEqual(promo["source_commercial_promo_dominant"], "true")
+        self.assertFalse(mod.repeated_commercial_source_spam_decision(
+            commercial_dominant_posts=1,
+            sampled_text_posts=5,
+            last_surface_decision=promo,
+        ))
+        terminal = mod.repeated_commercial_source_spam_decision(
+            commercial_dominant_posts=5,
+            sampled_text_posts=6,
+            last_surface_decision=promo,
+        )
+        self.assertEqual(terminal["source_queue_status"], mod.SPAM_SOURCE_STATUS)
+        self.assertEqual(terminal["source_commercial_dominant_ratio"], 0.833)
+
+    def test_unified_queue_reopens_only_legacy_commercial_spam_source(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 0,
+            "unified_source_queue": {
+                "telegram:figarotravel": {
+                    "canonical_source_key": "telegram:figarotravel",
+                    "source_queue_id": "srcq_figaro",
+                    "queue_seq": 1,
+                    "queue_order": 1,
+                    "platform": "telegram",
+                    "handle": "@figarotravel",
+                    "source_title": "Фигаро здесь, Фигаро там",
+                    "source_url": "https://t.me/figarotravel",
+                    "canonical_url": "https://t.me/figarotravel",
+                    "source_queue_status": mod.SPAM_SOURCE_STATUS,
+                    "fetch_status": mod.SPAM_SOURCE_STATUS,
+                    "source_scope": "external",
+                    "source_geo_class": "external",
+                    "source_topic_class": "travel_blogger",
+                    "source_quick_class": "candidate_keep",
+                    "source_surface_filter_version": "source_surface_v2026_07_09_local_scope_v2",
+                    "source_surface_filter_reason": "recent_scan_spam_posts=3",
+                    "source_spam_hits": "промокод",
+                    "source_spoiler_entity_count": 0,
+                    "source_history_scan_ever_completed": "true",
+                    "source_history_posts_scanned_max": 8,
+                    "posts_scanned": 8,
+                    "ko_posts_found": 4,
+                    "candidate_posts_found": 4,
+                },
+                "telegram:hardspam": {
+                    "canonical_source_key": "telegram:hardspam",
+                    "source_queue_id": "srcq_hardspam",
+                    "queue_seq": 2,
+                    "queue_order": 2,
+                    "platform": "telegram",
+                    "handle": "@hardspam",
+                    "source_title": "Обычный заголовок",
+                    "source_url": "https://t.me/hardspam",
+                    "canonical_url": "https://t.me/hardspam",
+                    "source_queue_status": mod.SPAM_SOURCE_STATUS,
+                    "fetch_status": mod.SPAM_SOURCE_STATUS,
+                    "source_surface_filter_version": "source_surface_v2026_07_09_local_scope_v2",
+                    "source_spam_hits": "vpn",
+                    "source_history_scan_ever_completed": "false",
+                },
+                "telegram:commercial-no-ko": {
+                    "canonical_source_key": "telegram:commercial-no-ko",
+                    "source_queue_id": "srcq_commercial_no_ko",
+                    "queue_seq": 3,
+                    "queue_order": 3,
+                    "platform": "telegram",
+                    "handle": "@commercial_no_ko",
+                    "source_title": "Новости путешествий",
+                    "source_url": "https://t.me/commercial_no_ko",
+                    "canonical_url": "https://t.me/commercial_no_ko",
+                    "source_queue_status": mod.SPAM_SOURCE_STATUS,
+                    "fetch_status": mod.SPAM_SOURCE_STATUS,
+                    "source_surface_filter_version": "source_surface_v2026_07_09_local_scope_v2",
+                    "source_spam_hits": "авиабилет",
+                    "source_history_scan_ever_completed": "true",
+                    "posts_scanned": 9,
+                    "ko_posts_found": 0,
+                    "candidate_posts_found": 10,
+                },
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [], [], [], {}, "run-reopen", "2026-07-17T09:00:00+00:00"
+        )
+        by_key = {row["canonical_source_key"]: row for row in rows}
+        self.assertEqual(by_key["telegram:figarotravel"]["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(
+            by_key["telegram:figarotravel"]["source_spam_reopen_status"],
+            "reopened_legacy_commercial_only_v3",
+        )
+        self.assertEqual(by_key["telegram:hardspam"]["source_queue_status"], mod.SPAM_SOURCE_STATUS)
+        self.assertEqual(by_key["telegram:commercial-no-ko"]["source_queue_status"], mod.SPAM_SOURCE_STATUS)
+        self.assertEqual(metrics["source_queue_stale_commercial_spam_reopened_this_run"], 1)
 
     def test_spam_pattern_in_source_title_remains_terminal(self) -> None:
         mod = load_module()
@@ -5356,6 +5549,45 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["image_queue_status"], "needs_actual_image_fetch")
         self.assertEqual(row["previous_image_queue_status"], "rejected_text_gate")
         self.assertEqual(row["publication_eligibility_decision"], "accept")
+
+    def test_image_queue_reuses_actual_score_hidden_by_reversible_source_gate(self) -> None:
+        mod = load_module()
+        eligible = {
+            "post_url": "https://t.me/travel/restore-actual",
+            "source_url": "https://t.me/travel",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "has_media": True,
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "needs_image_review",
+            "current_lifecycle_status": "image_reviewable",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+        }
+        previous_image = {
+            **eligible,
+            "image_queue_id": "imgq_restore_actual",
+            "image_queue_order": 1,
+            "image_queue_status": "rejected_text_gate",
+            "previous_image_queue_status": "actual_scored",
+            "image_model_input_type": "actual_image",
+            "images_scored_actual_count": 3,
+            "actual_image_count": 3,
+            "last_image_diag_run_id": "image-run-before-soft-reject",
+            "image_acquisition_status": "complete",
+            "overall_media_score": 0.654,
+        }
+        rows, _, _ = mod.build_image_candidate_queue(
+            {"image_candidate_queue": {eligible["post_url"]: previous_image}},
+            [eligible], [], [], "run-restore", "2026-07-17T09:00:00+00:00",
+        )
+        row = next(item for item in rows if item["post_url"] == eligible["post_url"])
+        self.assertEqual(row["image_queue_status"], "actual_scored")
+        self.assertEqual(row["images_scored_actual_count"], 3)
+        self.assertEqual(row["next_action"], "human_review_best_image")
+        self.assertNotEqual(row["media_acquisition_status"], "needs_actual_image_fetch")
 
     def test_image_queue_reactivates_previous_only_publication_rejection(self) -> None:
         mod = load_module()
@@ -7847,8 +8079,34 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 "previous_image_queue_status": "actual_scored",
                 "status_changed_this_run": "true",
                 "last_status_changed_at": "2026-07-15T11:10:00+00:00",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_reason": "",
+                "next_action": "human_review_best_image",
+            },
+            latest,
+        )
+        self.assertEqual(merged["image_queue_status"], "actual_scored")
+        self.assertEqual(merged["next_action"], "human_review_best_image")
+        self.assertEqual(merged["images_scored_actual_count"], 6)
+        self.assertEqual(merged["image_quality_decision"], "needs_visual_review")
+
+    def test_candidate_image_write_preserves_actual_score_while_source_review_is_pending(self) -> None:
+        mod = load_module()
+        latest = {
+            "image_queue_status": "rejected_text_gate",
+            "previous_image_queue_status": "actual_scored",
+            "last_image_diag_run_id": "image-v3",
+            "images_scored_actual_count": 6,
+            "image_model_input_type": "actual_image",
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "next_action": "skip_text_rejected",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(
+            {
+                "image_queue_status": "actual_scored",
+                "previous_image_queue_status": "actual_scored",
+                "status_changed_this_run": "true",
                 "publication_eligibility_decision": "needs_source_review",
-                "publication_eligibility_reason": "source_verdict_unknown",
                 "next_action": "wait_for_source_or_text_gate_without_rescoring_image",
             },
             latest,
@@ -7856,7 +8114,6 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(merged["image_queue_status"], "actual_scored")
         self.assertEqual(merged["next_action"], "wait_for_source_or_text_gate_without_rescoring_image")
         self.assertEqual(merged["images_scored_actual_count"], 6)
-        self.assertEqual(merged["image_quality_decision"], "needs_visual_review")
 
     def test_candidate_image_write_can_reclassify_old_soft_reject_as_deferred(self) -> None:
         mod = load_module()

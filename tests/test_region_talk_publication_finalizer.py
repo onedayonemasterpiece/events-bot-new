@@ -1009,6 +1009,53 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(result[0]["llm_attempted_this_run"], "false")
         llm_mock.assert_not_called()
 
+    def test_sent_row_refreshes_changed_source_attestation_without_llm(self) -> None:
+        mod = self.mod
+        source = external_source()
+        previous = {
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "sent_to_chat",
+            "sent_to_chat": "true",
+            "llm_decision": "accept",
+            "publication_tombstone": "false",
+            "publication_revoked": "false",
+            "revoked_at": "",
+            "finalization_status": "terminal",
+            "llm_attempted_this_run": "false",
+            "next_attempt_after": "",
+            "next_action": "",
+            "text_restore_reason": "",
+            "publication_eligibility_verdict": "eligible",
+            "publication_eligibility_gate_version": "old-gate",
+            "publication_eligibility_evidence": "old-evidence",
+            "publication_eligibility_evidence_fingerprint": "old-evidence-fingerprint",
+            "authoritative_source_fingerprint": "stale-source-fingerprint",
+            "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "authoritative_source_found": "true",
+        }
+        row = candidate_row(
+            finalization_trigger="",
+            _previous_publication=previous,
+            _authoritative_source=source,
+            **previous,
+        )
+        with (
+            mock.patch.object(mod.rt, "publication_eligibility", create=True, return_value=eligibility("eligible")),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [row], max_llm=3, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-07-17T09:00:00+00:00",
+            )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["publication_candidate_status"], "sent_to_chat")
+        self.assertEqual(
+            result[0]["authoritative_source_fingerprint"],
+            mod.authoritative_source_fingerprint(source),
+        )
+        self.assertEqual(result[0]["llm_attempted_this_run"], "false")
+        llm_mock.assert_not_called()
+
     def test_existing_unsent_accept_finishes_onboarding_without_repeating_gemini(self) -> None:
         mod = self.mod
         source = external_source()

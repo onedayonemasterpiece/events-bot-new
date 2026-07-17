@@ -1103,6 +1103,39 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["source_queue_integrity_legacy_order_duplicate_rows_total"], 1)
         self.assertEqual(metrics["source_queue_integrity_cursor_past_max_total"], 1)
 
+    def test_source_merge_does_not_let_stale_terminal_status_override_newer_queue_repair(self) -> None:
+        mod = load_module()
+        queue = {
+            "_ydb_pk": "source_queue_item:telegram:travel",
+            "canonical_source_key": "telegram:travel",
+            "source_queue_status": "processed_found_ko_candidate",
+            "source_scope": "external",
+            "source_quick_class": "candidate_keep",
+            "updated_at": "2026-07-17T09:00:00+00:00",
+        }
+        stale_status = {
+            "_ydb_pk": "source_status_item:telegram:travel",
+            "canonical_source_key": "telegram:travel",
+            "source_queue_status": "rejected_spam_source",
+            "source_quick_class": "spam_source_reject",
+            "updated_at": "2026-07-17T08:00:00+00:00",
+        }
+        merged = mod._merge_source_rows([queue], [stale_status])[0]
+        self.assertEqual(merged["source_queue_status"], "processed_found_ko_candidate")
+        self.assertEqual(merged["source_quick_class"], "candidate_keep")
+
+        fresh_status = {**stale_status, "updated_at": "2026-07-17T10:00:00+00:00"}
+        merged_fresh = mod._merge_source_rows([queue], [fresh_status])[0]
+        self.assertEqual(merged_fresh["source_queue_status"], "rejected_spam_source")
+
+        stale_online = {
+            **stale_status,
+            "_ydb_pk": "online_source_item:telegram:travel",
+            "updated_at": "2026-07-17T08:30:00+00:00",
+        }
+        merged_two_overlays = mod._merge_source_rows([queue], [stale_status], [stale_online])[0]
+        self.assertEqual(merged_two_overlays["source_queue_status"], "processed_found_ko_candidate")
+
     def test_publication_taxonomy_and_finalizer_are_url_level(self) -> None:
         mod = load_module()
         images = [

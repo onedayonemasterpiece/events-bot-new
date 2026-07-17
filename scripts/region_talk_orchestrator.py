@@ -1071,6 +1071,7 @@ def _ko_candidate_source_keys(rows: Iterable[dict[str, Any]]) -> set[str]:
 
 def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
+    canonical_queue_updated_at: dict[str, str] = {}
     # ``source_queue_item`` is the canonical durable source verdict and is
     # passed first.  Later ``source_status_item`` / ``online_source_item`` rows
     # are deliberately sparse execution overlays.  A historical online row can
@@ -1088,6 +1089,15 @@ def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]
         "source_surface_filter_reason",
         "source_local_hits",
         "source_spam_hits",
+        "source_hard_spam_hits",
+        "source_commercial_promo_hits",
+        "source_commercial_promo_dominant",
+        "source_commercial_editorial_prefix_chars",
+        "source_commercial_dominant_posts",
+        "source_commercial_sampled_text_posts",
+        "source_commercial_dominant_ratio",
+        "source_spam_reopen_status",
+        "source_spam_reopen_previous_reason",
         "source_spam_hashtags",
         "monitoring_exclusion_reason",
         "source_locality_reconciliation_status",
@@ -1121,11 +1131,34 @@ def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]
             }
             current_is_terminal = _vector_source_terminal_excluded(current)
             incoming_is_terminal = _vector_source_terminal_excluded(row)
+            incoming_updated_at = max(
+                str(row.get("updated_at") or ""),
+                str(row.get("queue_item_updated_at") or ""),
+                str(row.get("source_status_updated_at") or ""),
+                str(row.get("_ydb_updated_at") or ""),
+            )
+            incoming_is_canonical_queue = str(row.get("_ydb_pk") or "").startswith("source_queue_item:")
+            incoming_is_status_overlay = str(row.get("_ydb_pk") or "").startswith(("source_status_item:", "online_source_item:"))
+            if incoming_is_canonical_queue:
+                canonical_queue_updated_at[key] = incoming_updated_at
+            canonical_updated_at = canonical_queue_updated_at.get(key, "")
             for k, v in row.items():
                 if v in (None, ""):
                     continue
                 if k in numeric_max_fields:
                     current[k] = max(_safe_int(current.get(k)), _safe_int(v))
+                elif (
+                    k in terminal_classification_fields
+                    and incoming_is_status_overlay
+                    and canonical_updated_at
+                    and incoming_updated_at
+                    and incoming_updated_at <= canonical_updated_at
+                ):
+                    # A newer canonical queue repair (for example reopening a
+                    # false commercial-spam verdict) owns classification. A
+                    # stale source_status heartbeat may still contribute
+                    # counters, but cannot immediately re-tombstone the source.
+                    continue
                 elif current_is_terminal and not incoming_is_terminal and k in terminal_classification_fields:
                     continue
                 else:
@@ -2156,8 +2189,25 @@ def _publication_handoff_metrics(
         if not row:
             return True
         candidate_status = str(row.get("publication_candidate_status") or "").lower()
-        if str(row.get("sent_to_chat") or "").lower() == "true" or candidate_status == "sent_to_chat":
-            return False
+        sent = str(row.get("sent_to_chat") or "").lower() == "true" or candidate_status == "sent_to_chat"
+        if sent:
+            live_source = source_by_key.get(canonical_source_key_for_row(row)) or {}
+            if not live_source:
+                return False
+            live_fingerprint = authoritative_source_fingerprint(live_source)
+            persisted_fingerprint = str(row.get("authoritative_source_fingerprint") or "")
+            gate_version = str(row.get("publication_eligibility_gate_version") or "")
+            # Delivery is immutable, but its source/eligibility attestation is
+            # not. Refresh a stale sent row without another Gemini call so
+            # current confirmed metrics neither silently fall nor retain an
+            # obsolete local/spam verdict.
+            return bool(
+                live_fingerprint
+                and (
+                    live_fingerprint != persisted_fingerprint
+                    or gate_version != CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION
+                )
+            )
         publication_status = str(row.get("publication_status") or "").lower()
         if publication_status == "text_restore_pending" or candidate_status == "awaiting_text_restore":
             # CandidateReport, not the finalizer, owns the next operation: a
