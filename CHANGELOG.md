@@ -82,6 +82,11 @@
 
 ### Fixed
 
+- **Popular feed / terminal target rescan load**: reuse `post_ts` from compact
+  social snapshots when old TG/VK posts have no legacy age-day row, and do not
+  bootstrap an unknown timestamp again after any terminal bucket exists; this
+  removes hundreds of no-op provider reads from every 30-minute Kaggle batch.
+
 - **Popular feed / Telegram due work and owned-source attribution**: reuse the
   stored event-post timestamp after the first read instead of polling every
   30 minutes, map promo/poll event-forward URLs back into static export, and
