@@ -945,9 +945,61 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
 
     add(row["source_post_url"])
     add(row["source_vk_post_url"])
+    add(row_get(row, "tg_event_post_url"))
     try:
         for src in con.execute("select source_url from event_source where event_id=?", (event_id,)):
             add(src["source_url"])
+    except sqlite3.OperationalError:
+        pass
+    try:
+        for publication in con.execute(
+            "select stored_url, live_url from event_publication where event_id=? and status='published'",
+            (event_id,),
+        ):
+            add(publication["stored_url"])
+            add(publication["live_url"])
+    except sqlite3.OperationalError:
+        pass
+    # @kenigevents also contains digests, polls and editorial posts. Include
+    # only exact event-forward ledgers, never arbitrary channel messages.
+    try:
+        for exposure in con.execute(
+            """
+            select details_json, public_targets_json
+            from promo_exposure
+            where event_id=? and surface='tg_repost' and publish_status='TG_FORWARDED'
+            """,
+            (event_id,),
+        ):
+            try:
+                details = json.loads(str(exposure["details_json"] or "{}"))
+            except (TypeError, ValueError):
+                details = {}
+            target_url = str(details.get("target_url") or "") if isinstance(details, dict) else ""
+            if re.search(r"(?:https?://)?t\.me/kenigevents/\d+", target_url, flags=re.I):
+                add(target_url)
+                continue
+            try:
+                public_targets = json.loads(str(exposure["public_targets_json"] or "[]"))
+            except (TypeError, ValueError):
+                public_targets = []
+            for target in public_targets if isinstance(public_targets, list) else []:
+                target_url = str(target.get("url") or "") if isinstance(target, dict) else ""
+                if re.search(r"(?:https?://)?t\.me/kenigevents/\d+", target_url, flags=re.I):
+                    add(target_url)
+    except sqlite3.OperationalError:
+        pass
+    try:
+        for forwarded in con.execute(
+            """
+            select poll_chat_id, forwarded_message_id
+            from poll_repost_run
+            where chosen_event_id=? and status='forwarded' and forwarded_message_id is not null
+            """,
+            (event_id,),
+        ):
+            if str(forwarded["poll_chat_id"] or "").strip().lstrip("@").lower() == "kenigevents":
+                add(f"https://t.me/kenigevents/{int(forwarded['forwarded_message_id'])}")
     except sqlite3.OperationalError:
         pass
     return urls
@@ -957,21 +1009,125 @@ def source_metrics(con: sqlite3.Connection, urls: list[str]) -> tuple[int, int, 
     likes = views = shares = sources = 0
     for url in urls:
         best = None
-        for table in ["telegram_post_metric", "vk_post_metric"]:
+        queries = [
+            "select likes, views, forwards as shares, collected_ts from telegram_post_metric where source_url=? order by collected_ts desc limit 1",
+            "select likes, views, reposts as shares, collected_ts from vk_post_metric where source_url=? order by collected_ts desc limit 1",
+            "select likes, views, shares, collected_ts from social_metric_snapshot where source_url=? and status='collected' order by collected_ts desc limit 1",
+        ]
+        for query in queries:
             try:
-                metric = con.execute(
-                    f"select likes, views, reposts, collected_ts from {table} where source_url=? order by collected_ts desc limit 1", (url,)
-                ).fetchone()
+                metric = con.execute(query, (url,)).fetchone()
             except sqlite3.OperationalError:
                 metric = None
-            if metric and (best is None or str(metric["collected_ts"] or "") > str(best["collected_ts"] or "")):
+            if metric and (
+                best is None
+                or int(metric["collected_ts"] or 0) > int(best["collected_ts"] or 0)
+            ):
                 best = metric
         if best:
             sources += 1
             likes += int(best["likes"] or 0)
             views += int(best["views"] or 0)
-            shares += int(best["reposts"] or 0)
+            shares += int(best["shares"] or 0)
     return likes, views, shares, sources
+
+
+def popularity_signals(
+    con: sqlite3.Connection,
+    urls: list[str],
+) -> tuple[list[str], float]:
+    """Return bounded, explainable reasons derived from the four batch buckets."""
+    if not urls:
+        return [], 0.0
+    placeholders = ",".join("?" for _ in urls)
+    try:
+        rows = con.execute(
+            f"""
+            select platform, publisher_id, source_url, age_bucket, views, likes,
+                   comments, shares, collected_ts
+            from social_metric_snapshot
+            where status='collected' and source_url in ({placeholders})
+            order by collected_ts asc
+            """,
+            tuple(urls),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return [], 0.0
+    if not rows:
+        return [], 0.0
+
+    by_url: dict[str, dict[str, sqlite3.Row]] = defaultdict(dict)
+    publishers: set[str] = set()
+    row_families: dict[tuple[str, str], str] = {}
+    for row in rows:
+        url = str(row["source_url"] or "")
+        if not url:
+            continue
+        by_url[url][str(row["age_bucket"])] = row
+        platform = str(row["platform"] or "")
+        publisher = str(row["publisher_id"] or "").lower()
+        if (platform == "telegram" and publisher in {"kldevents", "kenigevents"}) or (
+            platform == "vk" and publisher in {"231920894", "231828790"}
+        ):
+            family = "owned:kenigevents"
+        else:
+            family = f"{platform}:{publisher}"
+        publishers.add(family)
+        row_families[(url, str(row["age_bucket"]))] = family
+
+    fast_growth = False
+    latest_rows: list[sqlite3.Row] = []
+    for bucket_rows in by_url.values():
+        one, six = bucket_rows.get("1h"), bucket_rows.get("6h")
+        if one and six:
+            one_views, six_views = int(one["views"] or 0), int(six["views"] or 0)
+            one_likes, six_likes = int(one["likes"] or 0), int(six["likes"] or 0)
+            if (six_views - one_views >= max(100, one_views // 2)) or (
+                six_likes - one_likes >= max(3, one_likes // 2)
+            ):
+                fast_growth = True
+        latest_rows.append(max(bucket_rows.values(), key=lambda item: int(item["collected_ts"] or 0)))
+
+    # Original @kldevents post and its managed @kenigevents forward are one
+    # owned publisher family, not two independent sources. Use the strongest
+    # current counter in that family for reason thresholds instead of blindly
+    # summing an internally forwarded message twice.
+    family_totals: dict[str, dict[str, int]] = {}
+    for row in latest_rows:
+        family = row_families.get(
+            (str(row["source_url"] or ""), str(row["age_bucket"])),
+            f"{row['platform']}:{row['publisher_id']}",
+        )
+        current = family_totals.setdefault(family, {"views": 0, "shares": 0, "comments": 0})
+        current["views"] = max(current["views"], int(row["views"] or 0))
+        current["shares"] = max(current["shares"], int(row["shares"] or 0))
+        current["comments"] = max(current["comments"], int(row["comments"] or 0))
+    total_views = sum(item["views"] for item in family_totals.values())
+    total_shares = sum(item["shares"] for item in family_totals.values())
+    total_comments = sum(item["comments"] for item in family_totals.values())
+    frequently_shared = total_shares >= 2 and (
+        total_shares >= 5 or total_views <= 0 or total_shares / max(1, total_views) >= 0.003
+    )
+    discussed = total_comments >= 3 and (
+        total_comments >= 10 or total_views <= 0 or total_comments / max(1, total_views) >= 0.001
+    )
+
+    reasons: list[str] = []
+    if fast_growth:
+        reasons.append("fast_growth")
+    if frequently_shared:
+        reasons.append("frequently_shared")
+    if discussed:
+        reasons.append("discussed")
+    if len(publishers) >= 2:
+        reasons.append("multi_source")
+    weights = {
+        "fast_growth": 3.0,
+        "frequently_shared": 2.5,
+        "discussed": 2.0,
+        "multi_source": 1.0,
+    }
+    return reasons, round(sum(weights[reason] for reason in reasons), 4)
 
 def split_current_datetime(value: str | None, current_date: str) -> tuple[str, str | None]:
     raw = str(value or "").strip()
@@ -1149,6 +1305,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     primary_image, image_mode, image_role, image_assets = collect_images(con, event_id, row["photo_urls"], title)
     source_urls = collect_source_urls(con, event_id, row)
     source_likes, source_views, source_shares, engagement_sources = source_metrics(con, source_urls)
+    popularity_reason_codes, popularity_signal_score = popularity_signals(con, source_urls)
     summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
     description = str(row["description"] or row["source_text"] or summary or "").strip()
     if description_looks_truncated(description, str(row["source_text"] or "")):
@@ -1209,6 +1366,8 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "source_views_count": source_views,
         "source_engagement_sources_count": engagement_sources,
         "shares_count": source_shares,
+        "popularity_reason_codes": popularity_reason_codes,
+        "popularity_signal_score": popularity_signal_score,
     }
 
 
