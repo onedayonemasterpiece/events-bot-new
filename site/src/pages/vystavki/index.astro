@@ -3,7 +3,7 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getCurrentDate, getOngoingExhibitionEvents, SITE_NAME, withBase } from '../../lib/events';
+import { siteHomeHref, absoluteUrl, getCurrentDate, getOngoingExhibitionEvents, SITE_NAME, withBase } from '../../lib/events';
 
 const currentDate = getCurrentDate();
 const events = getOngoingExhibitionEvents();
@@ -15,7 +15,7 @@ const description = `Отдельная static-страница выставок
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Выставки</span>
       </nav>

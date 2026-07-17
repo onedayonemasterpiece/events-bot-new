@@ -12,7 +12,7 @@ import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
 import type { EventImageAsset } from '../../lib/types';
-import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -30,7 +30,7 @@ export function getStaticPaths() {
 
 const event = getEventBySlug(Astro.params.slug ?? '');
 if (!event) {
-  return Astro.redirect(withBase('/__preview/'));
+  return Astro.redirect(siteHomeHref());
 }
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
 const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
@@ -134,9 +134,9 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
       </div>
 
       <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
-        {event.city && <a href={withBase(`/__preview/?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
+        {event.city && <a href={siteHomeHref(`?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
         {event.city && <span aria-hidden="true">/</span>}
         {event.event_type && <span>{event.event_type}</span>}
       </nav>

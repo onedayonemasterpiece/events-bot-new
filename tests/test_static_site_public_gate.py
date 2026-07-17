@@ -119,6 +119,66 @@ def test_public_projection_gate_is_safe_for_old_schema_rows() -> None:
     assert [row["id"] for row in rows] == [10]
 
 
+def test_add_build_07_full_catalog_mode_is_unbounded_and_fail_closed() -> None:
+    exporter = _load_exporter_module()
+    con = _connect_with_public_gate_columns()
+    for event_id in range(1, 121):
+        _insert_event(con, event_id, date=f"2026-07-{10 + (event_id % 20):02d}")
+    _insert_event(con, 1001, silent=1)
+    _insert_event(con, 1002, lifecycle_status="cancelled")
+
+    rows = exporter.fetch_rows(
+        con,
+        limit=None,
+        current_date="2026-07-01",
+        include_ids=[],
+    )
+
+    assert len(rows) == 120
+    assert {row["id"] for row in rows} == set(range(1, 121))
+    try:
+        exporter.fetch_rows(con, limit=0, current_date="2026-07-01", include_ids=[])
+    except ValueError as exc:
+        assert "catalog_mode=full" in str(exc)
+    else:  # pragma: no cover - explicit fail-closed assertion
+        raise AssertionError("limit=0 must not mean full catalog")
+
+
+def test_add_build_09_catalog_ledger_proves_eligible_and_excluded_parity() -> None:
+    exporter = _load_exporter_module()
+    con = _connect_with_public_gate_columns()
+    con.execute("alter table event add column age_restriction text")
+    con.execute("alter table event add column age_restriction_status text")
+    _insert_event(con, 1, age_restriction="16+", age_restriction_status="declared")
+    _insert_event(con, 2, silent=1)
+    _insert_event(con, 3, identity_status="alias")
+    _insert_event(con, 4, age_restriction="18+", age_restriction_status="unknown")
+    rows = exporter.fetch_rows(con, limit=None, current_date="2026-07-01", include_ids=[])
+
+    ledger = exporter.build_catalog_ledger(
+        con,
+        rows,
+        current_date="2026-07-01",
+        current_time=None,
+        generated_at="2026-07-17T00:00:00+00:00",
+        repo_sha="a" * 40,
+        run_id="static-site:test:1",
+        build_id="production-test-1",
+        snapshot_id="snapshot-test-1",
+        snapshot_sha256="b" * 64,
+        snapshot_size=123,
+    )
+
+    assert ledger["eligible_count"] == 2
+    assert [item["event_id"] for item in ledger["eligible"]] == [1, 4]
+    assert [item["age_restriction"] for item in ledger["eligible"]] == ["16+", None]
+    assert {item["event_id"]: item["reason"] for item in ledger["excluded"]} == {
+        2: "silent",
+        3: "identity_status:not_canonical",
+    }
+    assert ledger["snapshot"]["sha256"] == "b" * 64
+
+
 def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
     exporter = _load_exporter_module()
     exporter.SKIP_IMAGE_PROBES = True

@@ -1,0 +1,84 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
+import {
+  CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
+} from './release-contract.mjs';
+
+const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const root = join(siteDir, 'dist');
+const manifestPath = join(root, 'static-release-manifest.json');
+const buildPath = join(root, 'production-build.json');
+function fail(message) { throw new Error(`Production check failed: ${message}`); }
+function required(path) { if (!existsSync(join(root, path))) fail(`missing ${path}`); }
+function html(path) { return readFileSync(join(root, path), 'utf8'); }
+
+required('static-release-manifest.json'); required('production-build.json');
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+const build = JSON.parse(readFileSync(buildPath, 'utf8'));
+if (manifest.schema_version !== RELEASE_MANIFEST_SCHEMA || manifest.site_mode !== 'production' || manifest.publication_mode !== 'artifact_only') fail('wrong manifest profile');
+if (build.validation_contract !== CHECK_CONTRACT_VERSION || build.site_mode !== 'production' || build.base_path !== '/') fail('wrong build profile');
+if (manifest.build_id !== build.build_id || manifest.run_id !== build.run_id || manifest.repo_sha !== build.repo_sha) fail('build/manifest identity mismatch');
+if (process.env.PRODUCTION_BUILD_ID && manifest.build_id !== process.env.PRODUCTION_BUILD_ID) fail('build id differs from requested id');
+validateCatalogLedger(catalogData, { repo_sha: manifest.repo_sha, run_id: manifest.run_id, build_id: manifest.build_id, 'snapshot.sha256': manifest.snapshot.sha256 });
+if (manifest.catalog.sha256 !== sha256(readFileSync(join(siteDir, 'src/data/production-catalog.json')))) fail('catalog ledger hash mismatch');
+
+const files = fileInventory(root, { exclude: ['static-release-manifest.json'] });
+const manifestByKey = new Map(manifest.files.map((file) => [file.key, file]));
+if (files.length !== manifest.files.length || manifestByKey.size !== files.length) fail('tree/manifest file count mismatch');
+for (const file of files) {
+  const expected = manifestByKey.get(file.key);
+  if (!expected || expected.sha256 !== file.sha256 || expected.size !== file.size || expected.content_type !== file.content_type) fail(`file inventory mismatch: ${file.key}`);
+}
+if (manifest.tree_sha256 !== treeHash(files)) fail('tree hash mismatch');
+if (manifest.counts.file_count !== files.length || manifest.counts.bytes !== files.reduce((sum, file) => sum + file.size, 0)) fail('manifest aggregate counts mismatch');
+
+for (const path of ['index.html','segodnya/index.html','zavtra/index.html','vyhodnye/index.html','vystavki/index.html','populyarnoe/index.html','poisk/index.html','partners/index.html','robots.txt','sitemap.xml']) required(path);
+for (const key of files.map((file) => file.key)) {
+  if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || key === 'partnerstvo/index.html' || /^preview-[^/]+\//u.test(key)) fail(`preview/fixture route leaked: ${key}`);
+}
+const eventById = new Map(eventsData.events.map((event) => [Number(event.id), event]));
+const eligibleIds = catalogData.eligible.map((item) => Number(item.event_id));
+if (eventById.size !== eligibleIds.length || eligibleIds.some((id) => !eventById.has(id))) fail('ADD-BUILD-09 eligible/exported catalog parity failed');
+for (const id of eventById.keys()) if (!eligibleIds.includes(id)) fail(`ineligible event leaked: ${id}`);
+for (const event of eventsData.events) {
+  required(`sobytiya/${event.slug}/index.html`);
+  required(`sobytiya/${event.slug}/event.ics`);
+  required(`data/discovery/${event.id}.json`);
+  const source = catalogData.eligible.find((item) => Number(item.event_id) === Number(event.id));
+  if ((source?.age_restriction || null) !== (event.age_restriction || null)) fail(`accepted age lost for event ${event.id}`);
+  const linked = [...new Set((event.other_date_ids || []).map(Number))];
+  if (linked.includes(Number(event.id))) fail(`self linked occurrence ${event.id}`);
+  for (const linkedId of linked) {
+    const target = eventById.get(linkedId);
+    if (!target) fail(`dangling linked occurrence ${event.id}->${linkedId}`);
+    if (!(target.other_date_ids || []).map(Number).includes(Number(event.id))) fail(`asymmetric linked occurrence ${event.id}<->${linkedId}`);
+  }
+}
+
+const siteOrigin = manifest.site_origin;
+for (const file of files.filter((item) => item.key.endsWith('.html'))) {
+  const source = html(file.key);
+  if (/noindex/iu.test(source)) fail(`noindex leaked into ${file.key}`);
+  if (!/<meta\s+name="robots"\s+content="index,follow"/iu.test(source)) fail(`index,follow missing from ${file.key}`);
+  if (/<meta\s+name="referrer"\s+content="no-referrer"/iu.test(source)) fail(`secret-candidate policy leaked into ${file.key}`);
+  if (source.includes('/__preview/') || source.includes('/_review/') || source.includes('Preview · noindex')) fail(`preview/candidate reference leaked into ${file.key}`);
+  const canonical = file.key === 'index.html' ? `${siteOrigin}/` : (file.key.endsWith('/index.html') ? `${siteOrigin}/${file.key.slice(0, -'index.html'.length)}` : null);
+  if (canonical && !source.includes(`<link rel="canonical" href="${canonical}">`)) fail(`canonical mismatch ${file.key}`);
+  if (/storage\.yandexcloud\.net\/(?:kenigevents|kenigevents\.ru)/u.test(source)) fail(`raw Object Storage URL leaked into ${file.key}`);
+  if (/(?:src|href)="https?:\/\/[^"]+\.(?:png|jpe?g|gif)(?:[?#"])/iu.test(source)) fail(`external runtime raster fallback leaked into ${file.key}`);
+}
+if (!html('index.html').includes('data-production-root-listing')) fail('root is not the today listing');
+const robots = readFileSync(join(root, 'robots.txt'), 'utf8');
+if (robots !== `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`) fail('robots policy is not production indexable');
+const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');
+const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match[1]);
+if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review|partnerstvo)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
+for (const event of eventsData.events) if (!locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`event missing from sitemap ${event.id}`);
+if (!Array.isArray(manifest.stable_ics) || manifest.stable_ics.length !== eventsData.events.length) fail('stable ICS manifest parity failed');
+for (const item of manifest.stable_ics) {
+  if (item.target_key !== `ics/${item.event_id}.ics` || !manifestByKey.has(item.source_key)) fail(`invalid stable ICS mapping ${item.event_id}`);
+}
+console.log(`ADD-BUILD-07/09 production check passed: ${manifest.build_id}, ${eligibleIds.length} events, ${files.length} files`);

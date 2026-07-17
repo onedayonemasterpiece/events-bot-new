@@ -10,8 +10,15 @@
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
     "build:preview": "node scripts/build-preview.mjs",
+    "build:production": "node scripts/build-production.mjs",
+    "build:secret-candidate": "node scripts/build-secret-candidate.mjs",
     "check:preview": "node scripts/check-preview.mjs",
+    "check:production": "node scripts/check-production.mjs",
+    "check:secret-candidate": "node scripts/check-secret-candidate.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
+    "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",
+    "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
+    "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
     "astro": "astro"
   },
   "dependencies": {

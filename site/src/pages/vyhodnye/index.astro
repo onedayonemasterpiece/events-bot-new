@@ -4,7 +4,7 @@ import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro'
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
+import { IS_PRODUCTION_FAMILY, siteHomeHref, absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
 
 const events = getWeekendEvents();
 const weekend = getWeekendRange();
@@ -16,7 +16,7 @@ const description = `Статический preview-листинг событи�
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Выходные</span>
       </nav>
@@ -28,7 +28,7 @@ const description = `Статический preview-листинг событи�
           <div class="source-links">
             <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
             <a href={withBase('/zavtra/')}>Смотреть завтра</a>
-            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
+            <a href={siteHomeHref()}>{IS_PRODUCTION_FAMILY ? 'Все анонсы' : 'Все тестовые страницы'}</a>
           </div>
         </div>
       </section>

@@ -15,6 +15,8 @@ import fcntl
 import hashlib
 import json
 import os
+import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -31,6 +33,73 @@ KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = ROOT / 'artifacts' / 'codex' / 'static-site-builder'
 LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_snapshot_contract(args: argparse.Namespace) -> dict[str, object]:
+    if args.profile == 'preview':
+        return {}
+    if not args.db or not args.snapshot_manifest:
+        raise ValueError('production-candidate profile requires --db and --snapshot-manifest')
+    db_path = Path(args.db).resolve()
+    manifest_path = Path(args.snapshot_manifest).resolve()
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    snapshot = manifest.get('snapshot') if isinstance(manifest.get('snapshot'), dict) else manifest
+    snapshot_id = str(snapshot.get('snapshot_id') or manifest.get('snapshot_id') or '').strip()
+    expected_sha = str(snapshot.get('sha256') or snapshot.get('snapshot_sha256') or manifest.get('snapshot_sha256') or '').strip().lower()
+    expected_size = int(snapshot.get('size') or snapshot.get('size_bytes') or manifest.get('snapshot_size') or 0)
+    quick_check = str(snapshot.get('quick_check') or manifest.get('quick_check') or '').strip().lower()
+    if not snapshot_id or not re.fullmatch(r'[0-9a-f]{64}', expected_sha):
+        raise ValueError('snapshot manifest requires snapshot_id and SHA-256')
+    actual_sha = sha256_file(db_path)
+    actual_size = db_path.stat().st_size
+    if actual_sha != expected_sha or (expected_size and actual_size != expected_size):
+        raise ValueError('immutable snapshot hash/size does not match its manifest')
+    if quick_check and quick_check not in {'ok', 'passed'}:
+        raise ValueError(f'snapshot quick_check is not ok: {quick_check}')
+    return {'snapshot_id': snapshot_id, 'sha256': actual_sha, 'size': actual_size, 'quick_check': quick_check or 'ok'}
+
+
+def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[str, object]:
+    result_path = out_dir / 'static_site_build_result.json'
+    if not result_path.exists() or result_path.stat().st_size > 256 * 1024:
+        raise RuntimeError('Kaggle result JSON is missing or unbounded')
+    result = json.loads(result_path.read_text(encoding='utf-8'))
+    if result.get('ok') is not True or result.get('build_id') != args.build_id:
+        raise RuntimeError('Kaggle result build identity/status mismatch')
+    if args.profile == 'production-candidate':
+        expected = {
+            'run_id': args.run_id,
+            'repo_sha': args.repo_sha,
+            'snapshot_id': args.snapshot_contract['snapshot_id'],
+            'snapshot_sha256': args.snapshot_contract['sha256'],
+            'profile': args.profile,
+        }
+        for key, value in expected.items():
+            actual = result.get('snapshot', {}).get(key) if key.startswith('snapshot_') else result.get(key)
+            if str(actual) != str(value):
+                raise RuntimeError(f'Kaggle result {key} mismatch: {actual!r} != {value!r}')
+        artifacts = result.get('artifacts')
+        if not isinstance(artifacts, list) or len(artifacts) != 2:
+            raise RuntimeError('production-candidate result must contain exactly root and secret artifacts')
+        for artifact in artifacts:
+            name = str(artifact.get('filename') or '')
+            path = out_dir / name
+            if not name.endswith('.tar.gz') or not path.is_file():
+                raise RuntimeError(f'Kaggle artifact missing: {name}')
+            if path.stat().st_size != int(artifact.get('size') or -1) or sha256_file(path) != artifact.get('sha256'):
+                raise RuntimeError(f'Kaggle artifact hash/size mismatch: {name}')
+        token = str(result.get('candidate', {}).get('token') or '')
+        if token != args.candidate_token or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
+            raise RuntimeError('Kaggle candidate token mismatch')
+    return result
 
 
 def copy_tree(src: Path, dst: Path, *, ignore_extra: list[str] | None = None) -> None:
@@ -79,6 +148,7 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--limit', str(args.limit),
             '--current-date', args.current_date,
             '--output-dir', str(staged_site / 'src' / 'data'),
+            '--catalog-mode', args.catalog_mode,
         ]
         if args.current_datetime:
             cmd.extend(['--current-datetime', args.current_datetime])
@@ -97,6 +167,15 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--base-path', args.build_id or '',
             '--ics-base-url', args.ics_base_url,
         ])
+        if args.profile != 'preview':
+            cmd.extend([
+                '--repo-sha', args.repo_sha,
+                '--run-id', args.run_id,
+                '--build-id', args.build_id,
+                '--snapshot-id', str(args.snapshot_contract['snapshot_id']),
+                '--snapshot-sha256', str(args.snapshot_contract['sha256']),
+                '--snapshot-size', str(args.snapshot_contract['size']),
+            ])
         if args.sync_pgvector_vectors:
             cmd.append('--sync-pgvector-vectors')
         if args.gemma_related_verify:
@@ -276,7 +355,7 @@ def create_secret_datasets_if_needed(
         return []
     encrypted, fernet_key = encrypt_secret_payload(payload)
     digest = hashlib.sha1(build_id.encode('utf-8')).hexdigest()[:8]
-    run_suffix = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+    run_suffix = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3)}"
     # Kaggle dataset slugs have tight length/charset constraints. Keep secret
     # dataset slugs intentionally short; the build id is recoverable from the
     # input dataset and from the hash suffix.
@@ -359,7 +438,7 @@ def create_status_dataset_if_configured(
     from db import Database
     from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset
 
-    run_id = f'static-site-builder:{build_id}'
+    run_id = args.run_id or f'static-site-builder:{build_id}'
     db = Database(status_db)
     config = asyncio.run(create_kaggle_run_config(
         db,
@@ -378,7 +457,7 @@ def create_status_dataset_if_configured(
         client,
         username=env_user,
         slug_prefix='status-static-site-builder',
-        run_id=build_id,
+        run_id=run_id,
         config=config,
     )
     if status_dataset:
@@ -394,6 +473,12 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
     config = {
         'build_id': build_id,
+        'run_id': args.run_id or build_id,
+        'profile': args.profile,
+        'catalog_mode': args.catalog_mode,
+        'repo_sha': args.repo_sha or None,
+        'candidate_token': args.candidate_token or None,
+        'snapshot': args.snapshot_contract or None,
         'current_date': args.current_date,
         'current_datetime': args.current_datetime or None,
         'focus_date_from': args.focus_date_from or None,
@@ -424,6 +509,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     staged_site = prepare_site_source(args, dataset_dir)
     if args.db and args.export_in_kaggle:
         shutil.copy2(Path(args.db).resolve(), dataset_dir / 'events.sqlite')
+        if args.snapshot_manifest:
+            shutil.copy2(Path(args.snapshot_manifest).resolve(), dataset_dir / 'snapshot-manifest.json')
     if args.related_cache and Path(args.related_cache).exists():
         shutil.copy2(Path(args.related_cache).resolve(), dataset_dir / 'event_related_chain_cache.json')
     (dataset_dir / 'build_config.json').write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -433,13 +520,15 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     # neutral.
     tar_site_source(staged_site, dataset_dir / 'site_source.tarball')
     shutil.rmtree(staged_site)
-    run_suffix = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+    run_suffix = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3)}"
     dataset_ref = f'{env_user}/static-site-builder-input-{run_suffix}'
     write_dataset_metadata(dataset_dir, dataset_ref, f'static site builder input {run_suffix}')
     create_input_dataset(client, dataset_dir, dataset_ref)
     expected = ['site_source.tarball', 'build_config.json']
     if args.db and args.export_in_kaggle:
         expected.append('events.sqlite')
+        if args.snapshot_manifest:
+            expected.append('snapshot-manifest.json')
     if args.related_cache and Path(args.related_cache).exists():
         expected.append('event_related_chain_cache.json')
     wait_dataset_ready(client, dataset_ref, expected_files=expected)
@@ -460,6 +549,12 @@ def embed_site_payload(staging: Path, site_dir: Path, config: dict) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--db', help='Optional SQLite snapshot; if set, export preview JSON before staging')
+    parser.add_argument('--snapshot-manifest', default=os.getenv('STATIC_SITE_SNAPSHOT_MANIFEST', ''))
+    parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
+    parser.add_argument('--catalog-mode', choices=['slice', 'full'], default=os.getenv('STATIC_SITE_CATALOG_MODE', 'slice'))
+    parser.add_argument('--repo-sha', default=os.getenv('STATIC_SITE_REPO_SHA', ''))
+    parser.add_argument('--run-id', default=os.getenv('STATIC_SITE_RUN_ID', ''))
+    parser.add_argument('--candidate-token', default=os.getenv('STATIC_SITE_CANDIDATE_TOKEN', ''))
     parser.add_argument('--limit', type=int, default=int(os.getenv('STATIC_SITE_BUILDER_LIMIT', '50')))
     parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', '2026-06-28'))
     parser.add_argument('--current-datetime', default=os.getenv('STATIC_SITE_CURRENT_DATETIME', ''))
@@ -513,6 +608,22 @@ def main() -> int:
     parser.add_argument('--download-output', action='store_true')
     parser.add_argument('--keep-staging', action='store_true')
     args = parser.parse_args()
+
+    if args.profile == 'production-candidate':
+        if args.catalog_mode != 'full' or not args.export_in_kaggle:
+            raise SystemExit('production-candidate requires --catalog-mode full and --export-in-kaggle')
+        if not re.fullmatch(r'[0-9a-f]{40}', args.repo_sha or ''):
+            raise SystemExit('production-candidate requires --repo-sha with a full 40-character SHA')
+        if not args.run_id:
+            raise SystemExit('production-candidate requires --run-id')
+        if not args.build_id or not re.fullmatch(r'production-[A-Za-z0-9][A-Za-z0-9._-]*', args.build_id):
+            raise SystemExit('production-candidate requires a production-* --build-id')
+        if args.candidate_token and not re.fullmatch(r'[A-Za-z0-9_-]{43}', args.candidate_token):
+            raise SystemExit('--candidate-token must be one 256-bit base64url value')
+        args.candidate_token = args.candidate_token or secrets.token_urlsafe(32)
+    elif args.catalog_mode != 'slice':
+        raise SystemExit('preview profile requires --catalog-mode slice')
+    args.snapshot_contract = load_snapshot_contract(args)
 
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open('w') as lock_file:
@@ -581,6 +692,12 @@ def main() -> int:
                             out_dir.mkdir(parents=True, exist_ok=True)
                             files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
                             print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
+                            validated = validate_downloaded_result(out_dir, args)
+                            print(
+                                '[static-site-kaggle] checked output '
+                                f"build_id={validated.get('build_id')} result_sha256={sha256_file(out_dir / 'static_site_build_result.json')}",
+                                flush=True,
+                            )
                             cache_out = out_dir / 'event_related_chain_cache.json'
                             if args.export_in_kaggle and args.related_cache and cache_out.exists():
                                 cache_target = Path(args.related_cache)

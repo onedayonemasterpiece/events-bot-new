@@ -1,0 +1,77 @@
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  CANDIDATE_MANIFEST_SCHEMA, candidateBasePath, fileInventory, pageCounts, safeCandidateToken,
+  sha256, treeHash, validateCatalogLedger,
+} from './release-contract.mjs';
+
+const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const distDir = join(siteDir, 'dist');
+const catalogPath = join(siteDir, 'src/data/production-catalog.json');
+const eventsPath = join(siteDir, 'src/data/preview-events.json');
+const productionManifestPath = join(distDir, 'static-release-manifest.json');
+const token = safeCandidateToken(process.env.SECRET_CANDIDATE_TOKEN || '');
+const basePath = candidateBasePath(token);
+const candidateRoot = join(distDir, basePath.slice(1));
+const siteOrigin = (process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
+const productionManifestBytes = readFileSync(productionManifestPath);
+const productionManifest = JSON.parse(productionManifestBytes);
+for (const key of ['production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
+  if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
+}
+const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+validateCatalogLedger(catalog, { repo_sha: productionManifest.repo_sha, run_id: productionManifest.run_id, build_id: productionManifest.build_id });
+
+rmSync(distDir, { recursive: true, force: true });
+const env = {
+  ...process.env,
+  PUBLIC_SITE_MODE: 'secret_candidate', PUBLIC_SITE_ORIGIN: siteOrigin, SITE_BASE_PATH: basePath,
+  PUBLIC_ICS_BASE_URL: '', PUBLIC_PREVIEW_BUILD_ID: '', PUBLIC_ROOT_PREVIEW_HREF: '',
+  PUBLIC_PERSONALIZATION_SUPABASE_URL: '', PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: '',
+};
+const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
+if (astro.status !== 0) process.exit(astro.status || 1);
+rmSync(join(distDir, '__preview'), { recursive: true, force: true });
+rmSync(join(distDir, 'lab'), { recursive: true, force: true });
+rmSync(join(distDir, 'partnerstvo', 'index.html'), { force: true });
+let rootHtml = readFileSync(join(distDir, 'segodnya/index.html'), 'utf8');
+const todayCanonical = `${siteOrigin}${basePath}/segodnya/`;
+const rootCanonical = `${siteOrigin}${basePath}/`;
+if (!rootHtml.includes(`<link rel="canonical" href="${todayCanonical}">`) || !rootHtml.includes(`<meta property="og:url" content="${todayCanonical}">`)) throw new Error('Cannot construct candidate root from today listing');
+rootHtml = rootHtml.replace(`<link rel="canonical" href="${todayCanonical}">`, `<link rel="canonical" href="${rootCanonical}">`);
+rootHtml = rootHtml.replace(`<meta property="og:url" content="${todayCanonical}">`, `<meta property="og:url" content="${rootCanonical}">`);
+rootHtml = rootHtml.replace('<main id="main">', '<main id="main" data-secret-candidate-root-listing>');
+writeFileSync(join(distDir, 'index.html'), rootHtml);
+const staged = join(siteDir, `.secret-candidate-dist-${process.pid}`);
+rmSync(staged, { recursive: true, force: true });
+renameSync(distDir, staged);
+mkdirSync(dirname(candidateRoot), { recursive: true });
+renameSync(staged, candidateRoot);
+
+const buildMetadata = {
+  schema_version: 'static_secret_candidate_build_v1', site_mode: 'secret_candidate', publication_mode: 'secret_link',
+  build_id: productionManifest.build_id, run_id: productionManifest.run_id, repo_sha: productionManifest.repo_sha,
+  generated_at: new Date().toISOString(), base_path: basePath, token_sha256: sha256(token),
+  production_manifest_sha256: sha256(productionManifestBytes), production_tree_sha256: productionManifest.tree_sha256,
+  snapshot: productionManifest.snapshot,
+};
+writeFileSync(join(candidateRoot, 'candidate-build.json'), `${JSON.stringify(buildMetadata, null, 2)}\n`);
+const files = fileInventory(candidateRoot, { exclude: ['secret-candidate-manifest.json'], secretCandidate: true });
+const events = JSON.parse(readFileSync(eventsPath, 'utf8')).events;
+const manifest = {
+  schema_version: CANDIDATE_MANIFEST_SCHEMA, site_mode: 'secret_candidate', publication_mode: 'secret_link',
+  build_id: productionManifest.build_id, run_id: productionManifest.run_id, repo_sha: productionManifest.repo_sha,
+  generated_at: buildMetadata.generated_at, base_path: basePath, token_sha256: sha256(token),
+  production_manifest_sha256: buildMetadata.production_manifest_sha256, production_tree_sha256: productionManifest.tree_sha256,
+  snapshot: productionManifest.snapshot, catalog: productionManifest.catalog, versions: productionManifest.versions,
+  counts: pageCounts(files, events.length), tree_sha256: treeHash(files), files,
+  checks: { astro_build: 'ok', candidate_contract: 'pending', catalog_parity: 'pending', noindex: 'pending', no_referrer: 'pending', prefix_containment: 'pending', root_isolation: 'pending' },
+};
+writeFileSync(join(candidateRoot, 'secret-candidate-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+const check = spawnSync(process.execPath, [join(siteDir, 'scripts/check-secret-candidate.mjs')], { cwd: siteDir, env: { ...env, SECRET_CANDIDATE_TOKEN: token }, stdio: 'inherit' });
+if (check.status !== 0) process.exit(check.status || 1);
+for (const key of ['candidate_contract','catalog_parity','noindex','no_referrer','prefix_containment','root_isolation']) manifest.checks[key] = 'ok';
+writeFileSync(join(candidateRoot, 'secret-candidate-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+console.log(`Checked secret candidate ready: ${basePath}/ token_sha256=${sha256(token)}`);

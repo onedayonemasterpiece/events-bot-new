@@ -1,7 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import InterestClubCard from '../../components/InterestClubCard.astro';
-import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
+import { siteHomeHref, absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 import { getInterestClubs, interestClubAbsoluteUrl } from '../../lib/clubs';
 
 const clubs = getInterestClubs();
@@ -35,7 +35,7 @@ const structuredData = [
   <main id="main">
     <div class="page-shell club-page">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Клубы по интересам</span>
       </nav>

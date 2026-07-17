@@ -1,0 +1,46 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import {
+  CANDIDATE_MANIFEST_SCHEMA, candidateBasePath, fileInventory, safeCandidateToken, sha256, treeHash,
+} from './release-contract.mjs';
+
+const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const token = safeCandidateToken(process.env.SECRET_CANDIDATE_TOKEN || '');
+const basePath = candidateBasePath(token);
+const root = join(siteDir, 'dist', basePath.slice(1));
+function fail(message) { throw new Error(`Secret-candidate check failed: ${message}`); }
+function source(key) { try { return readFileSync(join(root, key), 'utf8'); } catch { fail(`missing ${key}`); } }
+const manifest = JSON.parse(source('secret-candidate-manifest.json'));
+if (manifest.schema_version !== CANDIDATE_MANIFEST_SCHEMA || manifest.site_mode !== 'secret_candidate' || manifest.publication_mode !== 'secret_link') fail('wrong candidate manifest profile');
+if (manifest.base_path !== basePath || manifest.token_sha256 !== sha256(token)) fail('candidate token/base mismatch');
+const files = fileInventory(root, { exclude: ['secret-candidate-manifest.json'], secretCandidate: true });
+const byKey = new Map(manifest.files.map((file) => [file.key, file]));
+if (files.length !== byKey.size || manifest.counts.file_count !== files.length) fail('candidate file count mismatch');
+for (const file of files) {
+  const expected = byKey.get(file.key);
+  if (!expected || expected.sha256 !== file.sha256 || expected.size !== file.size || expected.cache_control !== 'private, no-store, max-age=0') fail(`candidate inventory mismatch ${file.key}`);
+}
+if (manifest.tree_sha256 !== treeHash(files)) fail('candidate tree hash mismatch');
+for (const key of files.map((file) => file.key)) if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || key === 'partnerstvo/index.html') fail(`QA route leaked ${key}`);
+for (const event of eventsData.events) {
+  source(`sobytiya/${event.slug}/index.html`); source(`sobytiya/${event.slug}/event.ics`); source(`data/discovery/${event.id}.json`);
+}
+for (const file of files.filter((item) => item.key.endsWith('.html'))) {
+  const html = source(file.key);
+  if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive,nosnippet"/iu.test(html)) fail(`noindex policy missing ${file.key}`);
+  if (!/<meta\s+name="referrer"\s+content="no-referrer"/iu.test(html)) fail(`no-referrer policy missing ${file.key}`);
+  const internalAttributes = [...html.matchAll(/(?:href|src|data-card-href|data-share-url)="(\/[^"]*)"/gu)].map((match) => match[1]);
+  for (const url of internalAttributes) {
+    if (url.startsWith('//')) continue;
+    if (!url.startsWith(`${basePath}/`) && !url.startsWith(`${basePath}?`) && url !== basePath) fail(`out-of-prefix internal URL in ${file.key}: ${url}`);
+  }
+  if (html.includes('https://static.kenigevents.ru/ics/') || /href="\/ics\//u.test(html)) fail(`stable ICS leaked ${file.key}`);
+}
+if (!source('index.html').includes('data-secret-candidate-root-listing')) fail('candidate root is not production-family listing');
+const robots = source('robots.txt');
+if (robots !== 'User-agent: *\nDisallow: /\n') fail('candidate robots artifact must remain disallow');
+const sitemap = source('sitemap.xml');
+if (sitemap.includes('/__preview/') || sitemap.includes('/lab/') || !sitemap.includes(`${manifest.base_path}/sobytiya/`)) fail('candidate sitemap route isolation failed');
+console.log(`ADD-BUILD-07/10 secret candidate check passed: ${manifest.build_id}, ${files.length} files`);

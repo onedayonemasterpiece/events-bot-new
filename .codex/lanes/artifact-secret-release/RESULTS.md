@@ -296,3 +296,28 @@ Run only after all code/tests are on a clean pushed feature SHA and the anonymou
 - Production root/DNS/CDN/bucket mutation: none.
 - Rollback performed: none; no live state changed.
 - Exact blocker: public Object Storage website with per-object reads, anonymous bucket listing enabled, versioning disabled, and no edge resolver consuming a release pointer.
+
+## Implementation follow-up
+
+Status: `committed` (implementation commit recorded in the final lane handoff)
+
+Implemented in this lane after the audit:
+
+- explicit preview / root-production-artifact / secret-candidate profiles;
+- full-catalog source ledger and production catalog/tree/age/linked-graph checks;
+- root-form checked artifact and a separate prefix-contained noindex/no-referrer candidate from the same source/snapshot identity;
+- bounded Kaggle result with two hash-checked archives and verified immutable snapshot handoff;
+- upload-only create-only candidate publisher that refuses anonymous bucket listing, unchecked manifests, root/current/control/stable-ICS targets, and overwrites;
+- no production deploy/promotion command and no bucket/root mutation.
+
+Verification:
+
+- `npm --prefix site run test:static-release` — 5/5 passed;
+- `pytest -q tests/test_static_site_public_gate.py` — 8/8 passed;
+- `python3 -m py_compile ...` — passed;
+- full 399-event synthetic-media production artifact check — 1,267 files passed;
+- full 399-event secret candidate check — 1,267 files passed;
+- preview build/check with browser-safe search env — passed;
+- `git diff --check` — passed.
+
+No generated `production-catalog.json`, build output, candidate token, or uploaded artifact is committed. No real Kaggle run or Object Storage upload was performed. Candidate publication remains correctly blocked while anonymous bucket listing is enabled.

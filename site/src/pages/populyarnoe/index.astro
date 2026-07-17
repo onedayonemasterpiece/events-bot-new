@@ -3,7 +3,7 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
+import { siteHomeHref, absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
 
 const events = getPopularEvents(20);
 const canonicalUrl = absoluteUrl('/populyarnoe/');
@@ -20,7 +20,7 @@ const reasonLabels: Record<string, string> = {
   <main id="main">
     <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
+        <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
         <span>Популярное</span>
       </nav>
