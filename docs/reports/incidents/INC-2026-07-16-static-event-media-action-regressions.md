@@ -53,6 +53,12 @@ The full-catalog static preview exposed several user-visible regressions around 
   the wrong legacy event-detail DOM and therefore did not constitute product
   acceptance. The pipeline was reopened to integrate and pin the complete v11
   template matrix before publishing a replacement candidate.
+- 2026-07-17: the first replacement Kaggle run reached a complete 307-event
+  root-form Astro build but was rejected before artifact creation: the desktop
+  contract checker inherited Kaggle's legacy `PREVIEW_BUILD_ID` and looked for
+  `dist/<production-build-id>/sobytiya` instead of `dist/sobytiya`. The checker
+  was corrected to choose its tree from `PUBLIC_SITE_MODE`; no candidate from
+  the failed run was published.
 
 ## Root Cause
 
@@ -109,6 +115,10 @@ The full-catalog static preview exposed several user-visible regressions around 
     exposed the older desktop DOM. Playwright then validated containment and
     overflow of that obsolete output instead of comparing template provenance
     and the accepted media-family matrix.
+21. Kaggle still exports the historical preview build id for shared runtime
+    bookkeeping. The new production desktop checker treated that ambient value
+    as a routing instruction even when `PUBLIC_SITE_MODE=production`, so its
+    filesystem target differed from the root-form build it had just generated.
 
 ## Contributing Factors
 

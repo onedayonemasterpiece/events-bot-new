@@ -25,7 +25,9 @@
   and keep the fullscreen gallery brand link on the active site profile instead
   of leaking production users into `__preview`; action panels now switch to the
   stacked layout from their measured component geometry instead of a viewport
-  guess, preventing the split portrait family from overflowing at 1366px.
+  guess, preventing the split portrait family from overflowing at 1366px; the
+  Kaggle production-profile template gate now ignores an ambient legacy
+  `PREVIEW_BUILD_ID` and checks the root-form artifact.
 - **Secret candidate Astro assets**: keep candidate CSS/JS under the immutable
   bearer prefix and resolve `{buildId}` for production asset templates; release
   checks now reject unresolved or external candidate `_astro` references.

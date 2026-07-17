@@ -239,6 +239,8 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   после Smart Update slug/title.
   Отсутствие хотя бы одного marker, lab-сценария или real-event family
   останавливает build до Kaggle artifact publication.
+  Production-profile check всегда читает root-form `dist/sobytiya`, даже если
+  Kaggle runtime унаследовал исторический `PREVIEW_BUILD_ID`.
 
 ### Related/vector barrier
 

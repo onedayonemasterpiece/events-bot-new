@@ -2,8 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const distBase = path.resolve('dist');
-const previewBuildId = process.env.PREVIEW_BUILD_ID
-  || (fs.existsSync(distBase) ? fs.readdirSync(distBase).find((name) => name.startsWith('preview-')) : undefined);
+const productionFamily = ['production', 'secret_candidate'].includes(String(process.env.PUBLIC_SITE_MODE || ''));
+// Kaggle historically exports PREVIEW_BUILD_ID for every static-site kernel.
+// A production-profile checker must still inspect the root-form dist tree.
+const previewBuildId = productionFamily
+  ? undefined
+  : process.env.PREVIEW_BUILD_ID
+    || (fs.existsSync(distBase) ? fs.readdirSync(distBase).find((name) => name.startsWith('preview-')) : undefined);
 const distRoot = previewBuildId
   ? path.join(distBase, previewBuildId, 'sobytiya')
   : path.join(distBase, 'sobytiya');
