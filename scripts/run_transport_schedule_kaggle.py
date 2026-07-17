@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import shutil
@@ -28,6 +29,33 @@ KERNELS = {
     "kppk": (ROOT / "kaggle" / "TransportKppkRefresh", "kenigevents-transport-kppk-refresh"),
     "bus": (ROOT / "kaggle" / "TransportBusRefresh", "kenigevents-transport-bus-refresh"),
 }
+TRANSPORT_PACKAGE_FILES = (
+    "__init__.py",
+    "ics.py",
+    "kernel.py",
+    "provider_job.py",
+    "schema.py",
+    "selection.py",
+    "store.py",
+)
+
+
+def _copy_transport_package(dataset: Path) -> list[str]:
+    package = dataset / "transport_refresh"
+    package.mkdir(parents=True, exist_ok=True)
+    hashes: dict[str, str] = {}
+    for name in TRANSPORT_PACKAGE_FILES:
+        source = ROOT / "transport_refresh" / name
+        target = package / name
+        shutil.copy2(source, target)
+        relative = f"transport_refresh/{name}"
+        hashes[relative] = hashlib.sha256(target.read_bytes()).hexdigest()
+    manifest_name = "transport_refresh_package_manifest.json"
+    (dataset / manifest_name).write_text(json.dumps({
+        "schema_version": "kenigevents.transport_runtime_package.v1",
+        "files": hashes,
+    }, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return [manifest_name, *hashes]
 
 
 def _publish_output(args: argparse.Namespace, output: Path) -> dict | None:
@@ -57,6 +85,32 @@ def _publish_output(args: argparse.Namespace, output: Path) -> dict | None:
     return report
 
 
+def _publish_failure(args: argparse.Namespace, run_id: str, reason: str, error: Exception) -> dict | None:
+    if not args.state_root:
+        return None
+    from transport_refresh.store import TransportManifestStore
+
+    report = TransportManifestStore(args.state_root).publish(
+        args.provider,
+        None,
+        failure_reason=reason,
+    )
+    output = Path(args.output_dir) / f"{args.provider}-{run_id}"
+    output.mkdir(parents=True, exist_ok=True)
+    evidence = {
+        "provider": args.provider,
+        "run_id": run_id,
+        "failure_reason": reason,
+        "error_type": error.__class__.__name__,
+        "publish": report,
+    }
+    (output / "transport_publish_failure.json").write_text(
+        json.dumps(evidence, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
 def _callback_url(explicit: str) -> str | None:
     if explicit.strip():
         return explicit.strip()
@@ -64,6 +118,15 @@ def _callback_url(explicit: str) -> str | None:
         return os.environ["KAGGLE_STATUS_CALLBACK_URL"].strip()
     webhook = os.getenv("WEBHOOK_URL", "").strip()
     return webhook.rstrip("/") + "/internal/kaggle/run-event" if webhook else None
+
+
+def _cleanup_datasets(client, refs: list[str]) -> None:
+    for ref in refs:
+        try:
+            client.delete_dataset(ref, no_confirm=True)
+            print(f"[transport-kaggle] private dataset deleted: {ref}", flush=True)
+        except Exception as exc:
+            print(f"[transport-kaggle] private dataset cleanup failed: {ref}: {exc}", flush=True)
 
 
 def _status_dataset(args: argparse.Namespace, client, username: str, run_id: str, kernel_ref: str, dataset_ref: str) -> str | None:
@@ -100,59 +163,82 @@ def run(args: argparse.Namespace) -> int:
     client = KaggleClient()
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     kernel_src, kernel_slug = KERNELS[args.provider]
-    with tempfile.TemporaryDirectory(prefix=f"transport-{args.provider}-") as temp:
-        root = Path(temp)
-        staging, dataset = root / "kernel", root / "dataset"
-        copy_tree(kernel_src, staging)
-        copy_tree(ROOT / "transport_refresh", staging / "transport_refresh")
-        dataset.mkdir(parents=True)
-        config = {
-            "provider": args.provider,
-            "source_url": source_url,
-            "timeout_seconds": args.source_timeout_seconds,
-            "queued_at": datetime.now(timezone.utc).isoformat(),
-        }
-        expected = ["transport_refresh_config.json"]
-        if args.source_payload:
-            source = Path(args.source_payload).resolve()
-            name = f"{args.provider}_source_payload.json"
-            shutil.copy2(source, dataset / name)
-            config["source_payload_filename"] = name
-            expected.append(name)
-        (dataset / "transport_refresh_config.json").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        dataset_ref = f"{username}/transport-{args.provider}-input-{run_id.lower().replace(':', '-')}"
-        write_dataset_metadata(dataset, dataset_ref, f"transport {args.provider} input {run_id}")
-        create_input_dataset(client, dataset, dataset_ref)
-        wait_dataset_ready(client, dataset_ref, expected_files=expected)
-        kernel_ref = f"{username}/{kernel_slug}"
-        sources = [dataset_ref]
-        status_ref = _status_dataset(args, client, username, run_id, kernel_ref, dataset_ref)
-        if status_ref:
-            sources.append(status_ref)
-        client.push_kernel(kernel_path=staging, dataset_sources=sources)
-        wait_kernel_dataset_sources(client, kernel_ref, sources)
-        print(f"[transport-kaggle] pushed provider={args.provider} run_id={run_id} kernel={kernel_ref}", flush=True)
-        if args.no_wait:
-            return 0
-        deadline = time.monotonic() + args.timeout_minutes * 60
-        last = None
-        while time.monotonic() < deadline:
-            time.sleep(max(5, args.poll_interval))
-            last = client.get_kernel_status(kernel_ref)
-            status = str(last.get("status") or "").upper()
-            print(f"[transport-kaggle] status={status}", flush=True)
-            if status == "COMPLETE":
-                output = Path(args.output_dir) / f"{args.provider}-{run_id}"
-                output.mkdir(parents=True, exist_ok=True)
-                client.download_kernel_output(kernel_ref, path=output, force=True)
-                print(f"[transport-kaggle] output={output}", flush=True)
-                publish = _publish_output(args, output)
-                if publish is not None:
-                    print(f"[transport-kaggle] publish={json.dumps(publish, ensure_ascii=False, sort_keys=True)}", flush=True)
-                return 0
-            if status in {"ERROR", "FAILED", "CANCELLED"}:
-                raise RuntimeError(f"transport Kaggle job failed: {last}")
-        raise TimeoutError(f"transport Kaggle job timed out: {last}")
+    try:
+        with tempfile.TemporaryDirectory(prefix=f"transport-{args.provider}-") as temp:
+            root = Path(temp)
+            staging, dataset = root / "kernel", root / "dataset"
+            copy_tree(kernel_src, staging)
+            dataset.mkdir(parents=True)
+            runtime_files = _copy_transport_package(dataset)
+            config = {
+                "provider": args.provider,
+                "source_url": source_url,
+                "timeout_seconds": args.source_timeout_seconds,
+                "queued_at": datetime.now(timezone.utc).isoformat(),
+            }
+            expected = ["transport_refresh_config.json", *runtime_files]
+            if args.source_payload:
+                source = Path(args.source_payload).resolve()
+                name = f"{args.provider}_source_payload.json"
+                shutil.copy2(source, dataset / name)
+                config["source_payload_filename"] = name
+                expected.append(name)
+            (dataset / "transport_refresh_config.json").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            dataset_ref = f"{username}/transport-{args.provider}-input-{run_id.lower().replace(':', '-')}"
+            write_dataset_metadata(dataset, dataset_ref, f"transport {args.provider} input {run_id}")
+            create_input_dataset(client, dataset, dataset_ref)
+            wait_dataset_ready(client, dataset_ref, expected_files=expected)
+            kernel_ref = f"{username}/{kernel_slug}"
+            metadata_path = staging / "kernel-metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["id"] = kernel_ref
+            metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            sources = [dataset_ref]
+            status_ref = _status_dataset(args, client, username, run_id, kernel_ref, dataset_ref)
+            if status_ref:
+                sources.append(status_ref)
+            client.push_kernel(kernel_path=staging, dataset_sources=sources)
+            wait_kernel_dataset_sources(client, kernel_ref, sources)
+            print(f"[transport-kaggle] pushed provider={args.provider} run_id={run_id} kernel={kernel_ref}", flush=True)
+            terminal_reached = False
+            try:
+                if args.no_wait:
+                    # Input/status datasets cannot be deleted while an asynchronous
+                    # kernel still needs them. The emitted refs are operator-owned
+                    # retention items for this explicitly non-production mode.
+                    return 0
+                deadline = time.monotonic() + args.timeout_minutes * 60
+                last = None
+                while time.monotonic() < deadline:
+                    time.sleep(max(5, args.poll_interval))
+                    last = client.get_kernel_status(kernel_ref)
+                    status = str(last.get("status") or "").upper()
+                    print(f"[transport-kaggle] status={status}", flush=True)
+                    if status == "COMPLETE":
+                        terminal_reached = True
+                        output = Path(args.output_dir) / f"{args.provider}-{run_id}"
+                        output.mkdir(parents=True, exist_ok=True)
+                        client.download_kernel_output(kernel_ref, path=output, force=True)
+                        print(f"[transport-kaggle] output={output}", flush=True)
+                        publish = _publish_output(args, output)
+                        if publish is not None:
+                            print(f"[transport-kaggle] publish={json.dumps(publish, ensure_ascii=False, sort_keys=True)}", flush=True)
+                            if publish.get("rebuild_pending"):
+                                raise RuntimeError("transport manifest accepted but static rebuild enqueue is pending")
+                        return 0
+                    if status in {"ERROR", "FAILED", "CANCELLED"}:
+                        terminal_reached = True
+                        raise RuntimeError(f"transport Kaggle job failed: {last}")
+                raise TimeoutError(f"transport Kaggle job timed out: {last}")
+            finally:
+                if terminal_reached and not args.keep_input_datasets:
+                    _cleanup_datasets(client, list(reversed(sources)))
+    except Exception as exc:
+        reason = "timeout" if isinstance(exc, TimeoutError) else "kernel_or_publish_failed"
+        report = _publish_failure(args, run_id, reason, exc)
+        if report is not None:
+            print(f"[transport-kaggle] failure_publish={json.dumps(report, ensure_ascii=False, sort_keys=True)}", flush=True)
+        raise
 
 
 def parser() -> argparse.ArgumentParser:
@@ -170,6 +256,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--timeout-minutes", type=int, default=30)
     result.add_argument("--poll-interval", type=int, default=20)
     result.add_argument("--no-wait", action="store_true")
+    result.add_argument("--keep-input-datasets", action="store_true", help="Retain private input/status datasets after a waited terminal run")
     return result
 
 

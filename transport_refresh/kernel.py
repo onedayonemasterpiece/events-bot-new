@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -30,7 +31,22 @@ def _init_status() -> None:
     try:
         from kaggle_status_client import load_status_client
     except ImportError:
-        return
+        load_status_client = None
+        for root in (Path.cwd(), Path("/kaggle/working"), INPUT):
+            if not root.exists():
+                continue
+            for candidate in sorted(root.rglob("kaggle_status_client.py")):
+                spec = importlib.util.spec_from_file_location("transport_kaggle_status_client", candidate)
+                if not spec or not spec.loader:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                load_status_client = module.load_status_client
+                break
+            if load_status_client is not None:
+                break
+        if load_status_client is None:
+            return
     STATUS = load_status_client(output_dir=WORKING, log=lambda value: print(value, flush=True))
     if not getattr(STATUS, "enabled", False):
         return
@@ -53,6 +69,7 @@ def _finish(ok: bool, message: str) -> None:
                     STATUS.release_resource(resource)
                 except Exception as exc:
                     print(f"[transport-refresh] resource release failed: {exc}", flush=True)
+            RESOURCES.clear()
             STATUS.stop_alive()
 
 

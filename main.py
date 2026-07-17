@@ -14356,6 +14356,7 @@ async def enqueue_job(
                     in {
                         JobTask.month_pages,
                         JobTask.weekend_pages,
+                        JobTask.static_site_build,
                         JobTask.event_vector_sync,
                         JobTask.event_age_bge_assessment,
                     }
@@ -14365,6 +14366,7 @@ async def enqueue_job(
                         in {
                             JobTask.event_vector_sync,
                             JobTask.event_age_bge_assessment,
+                            JobTask.static_site_build,
                         }
                     )
                     and job.coalesce_key
@@ -14383,6 +14385,8 @@ async def enqueue_job(
                                     ),
                                 )
                             )
+                        elif task == JobTask.static_site_build:
+                            delay = timedelta(minutes=15)
                         else:
                             delay = timedelta(minutes=15)
                         deferred_time = datetime.now(timezone.utc) + delay

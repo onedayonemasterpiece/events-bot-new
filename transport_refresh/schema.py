@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from datetime import date, datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -13,6 +14,7 @@ COMBINED_SCHEMA_VERSION = "kenigevents.transport_combined.v1"
 POINTER_SCHEMA_VERSION = "kenigevents.transport_pointer.v1"
 PROVIDERS = ("kppk", "bus")
 TIMEZONE = "Europe/Kaliningrad"
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ManifestValidationError(ValueError):
@@ -104,6 +106,7 @@ def validate_provider_manifest(
         reasons.append("snapshot_id:required")
 
     fetched_at = parse_datetime(manifest.get("fetched_at"), "fetched_at", reasons)
+    source_fetched_at = None
     source = manifest.get("source")
     if not isinstance(source, dict):
         reasons.append("source:object_required")
@@ -112,9 +115,9 @@ def validate_provider_manifest(
         parsed_url = urlparse(source_url)
         if parsed_url.scheme != "https" or not parsed_url.netloc:
             reasons.append("source.url:https_required")
-        parse_datetime(source.get("fetched_at"), "source.fetched_at", reasons)
-        if not str(source.get("document_sha256") or "").strip():
-            reasons.append("source.document_sha256:required")
+        source_fetched_at = parse_datetime(source.get("fetched_at"), "source.fetched_at", reasons)
+        if not SHA256_RE.fullmatch(str(source.get("document_sha256") or "")):
+            reasons.append("source.document_sha256:invalid")
 
     validity = manifest.get("validity")
     valid_from = valid_until = None
@@ -207,6 +210,14 @@ def validate_provider_manifest(
             reasons.append("freshness:fetched_in_future")
         elif (now - fetched_utc).total_seconds() > max_age_hours * 3600:
             reasons.append("freshness:source_stale")
+    if source_fetched_at:
+        source_fetched_utc = source_fetched_at.astimezone(timezone.utc)
+        if source_fetched_utc > now:
+            reasons.append("freshness:source_fetched_in_future")
+        elif (now - source_fetched_utc).total_seconds() > max_age_hours * 3600:
+            reasons.append("freshness:source_document_stale")
+        if fetched_at and source_fetched_utc > fetched_at.astimezone(timezone.utc):
+            reasons.append("source.fetched_at:after_manifest_fetch")
     if valid_until and now.astimezone(ZoneInfo(TIMEZONE)).date() > valid_until:
         reasons.append("freshness:validity_expired")
     if reasons:

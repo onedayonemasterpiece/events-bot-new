@@ -38,6 +38,8 @@ After a successful controlled canary, the proposed UTC schedule is:
 
 Each waited runner downloads and server-validates its result. Fan-in after either run is safe because it reads the other provider's fresh last-good. The static rebuild coalesce key is always `static_site_build:prod` and is used only on a changed combined content hash.
 
+This table is not scheduler configuration. There is no transport job or enable flag in `scheduling.py`/`fly.toml`. The checked-in provider boundary accepts explicit dated JSON only; official KPPK/bus HTML/PDF adapters and their licensing/source review remain a blocked activation prerequisite.
+
 Do **not** add these jobs to `scheduling.py`, cron or `fly.toml` until the canary checklist in [Event transport guidance](../event-transport/README.md#production-gate-and-rollback) passes with real sources.
 
 ## Acceptance matrix
@@ -51,8 +53,11 @@ Contract tests cover:
 - named stop/venue coordinates;
 - distinct event/transport ICS and transport alarm;
 - timeout, empty, invalid, stale last-good and recovery;
+- durable immutable attempt health for invalid/partial/stale/timeout while last-good stays intact;
 - immutable deterministic fan-in;
 - changed hash → one coalesced rebuild callback; unchanged hash → zero;
+- pointer-before-enqueue failure → durable pending intent → unchanged retry succeeds;
+- an update during a running static build creates one deferred coalesced follow-up;
 - status heartbeat/resource-lease/report instrumentation in both Kaggle jobs.
 
 The tests use synthetic explicit-date records. They are not evidence that either live provider adapter has passed canary.
