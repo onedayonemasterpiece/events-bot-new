@@ -90,7 +90,7 @@ test('desktop telephone uses the shared non-shifting copy action', async () => {
   assert.match(copyAction, /data-ke-copy-action/u);
   assert.match(copyAction, /navigator\.clipboard\?\.writeText/u);
   assert.match(copyAction, /document\.execCommand\('copy'\)/u);
-  assert.match(copyAction, /data-copy-status role="status" aria-live="polite"/u);
+  assert.match(copyAction, /data-ke-copy-status role="status" aria-live="polite"/u);
   assert.match(copyAction, /max\(44px, var\(--ke-control-min, 44px\)\)/u);
   assert.match(copyAction, /Icon name="copy"/u);
   assert.match(copyAction, /Icon name="check"/u);
