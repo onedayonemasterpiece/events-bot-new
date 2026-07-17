@@ -2246,6 +2246,21 @@ def _publication_handoff_metrics(
 
     def visual_review_is_now_accepted(url: str) -> bool:
         image = actual_by_url.get(url) or {}
+        memory = candidate_by_url.get(url) or {}
+        # A visual accept resolves only the visual part of the old review. The
+        # current text/source decision remains authoritative; otherwise a
+        # stale accepted image snapshot can repeatedly reopen a post that was
+        # later rejected as multi-region, advertising or not-KO-only.
+        if str(memory.get("vector_gate_status") or "").lower() != "vector_accept_candidate":
+            return False
+        if str(memory.get("text_vector_fusion_status") or "").lower() != "fused_e5_bge_m3":
+            return False
+        if str(memory.get("kaliningrad_oblast_only_scope") or "").lower() not in {"1", "true", "yes"}:
+            return False
+        if str(memory.get("is_ad_or_promo") or "").lower() in {"1", "true", "yes"}:
+            return False
+        if str(memory.get("is_multi_region_roundup") or "").lower() in {"1", "true", "yes"}:
+            return False
         decision = str(image.get("image_quality_decision") or "").lower()
         if decision == "vlm_visual_accept":
             return _image_vlm_verdict_is_current(image)

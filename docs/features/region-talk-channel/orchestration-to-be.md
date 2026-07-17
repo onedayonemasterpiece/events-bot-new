@@ -240,7 +240,9 @@ orchestrator reports this as
 `publication_visual_review_resolved_ready_for_finalizer_total` and immediately
 reopens the finalizer; it does not wait for CandidateReport to rewrite the old
 publication snapshot and does not treat a stale review label as a terminal
-verdict.
+verdict. This transition additionally requires the current candidate-memory
+row to remain KO-only, non-advertising, non-multiregion and accepted by fused
+E5+BGE. A visual accept alone can never resurrect a newer source/text reject.
 
 If Telegram/VK media resolves to a video/non-image file or an image decoder
 cannot open the downloaded payload, ImageDiagnostic must write a terminal

@@ -1357,12 +1357,37 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                     "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
                 }],
                 [],
-                [],
+                [{
+                    "post_url": url,
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "kaliningrad_oblast_only_scope": True,
+                    "is_ad_or_promo": False,
+                    "is_multi_region_roundup": False,
+                }],
             )
         self.assertEqual(metrics["publication_visual_review_pending_total"], 1)
         self.assertEqual(metrics["publication_visual_review_resolved_ready_for_finalizer_total"], 1)
         self.assertEqual(metrics["publication_visual_review_resolved_ready_for_finalizer_urls"], [url])
         self.assertEqual(metrics["finalizer_pending_urls"], [url])
+
+        rejected = mod._publication_handoff_metrics(
+            [image],
+            [{
+                "post_url": url,
+                "publication_status": "needs_visual_review",
+                "publication_candidate_status": "visual_review_pending",
+            }],
+            [],
+            [{
+                "post_url": url,
+                "vector_gate_status": "vector_reject_multi_region_roundup",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "kaliningrad_oblast_only_scope": False,
+            }],
+        )
+        self.assertEqual(rejected["publication_visual_review_resolved_ready_for_finalizer_total"], 0)
+        self.assertEqual(rejected["finalizer_pending_url_total"], 0)
 
     def test_image_review_metrics_separate_active_work_from_historical_ledger(self) -> None:
         mod = load_module()
