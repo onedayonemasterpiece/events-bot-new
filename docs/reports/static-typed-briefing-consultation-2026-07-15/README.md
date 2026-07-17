@@ -313,3 +313,40 @@ approval и не доказательство product desirability.
 | [`media-review-deck-acceptance-gemini.md`](media-review-deck-acceptance-gemini.md) | Required first `OVERALL: FAIL`. | `3af4bc48ab954babb1c4a0c15c6ed97a4e081096c62d25ac492f867bdcfd37ef` |
 | [`media-review-deck-postfix-prompt.md`](media-review-deck-postfix-prompt.md) | Exact blocker-closure prompt. | `943175ae3b12958406100dea85248ee7bc7e8d5591ec84aa2894bc38f9fad058` |
 | [`media-review-deck-postfix-gemini.md`](media-review-deck-postfix-gemini.md) | Final all-PASS answer. | `b89c3afa1d8ede921a17787fd6756e68eabaf3fa6eb575e08d78abb2db9908e3` |
+
+### Crop-interval model probe
+
+The follow-up crop experiment is recorded in
+[`crop-interval-gemma4-probe-2026-07-17.md`](crop-interval-gemma4-probe-2026-07-17.md).
+It is supplementary production-model evidence, not a Gemini Pro consultant
+verdict. A direct focal-point prompt failed the safety boundary; the accepted
+minimal contract asks Gemma 4 only for a semantic vertical interval. Gemma 4
+31B retained both tested scenes, while 26B A4B omitted a principal stage element
+and cannot be the sole author. Deterministic geometry retains final authority.
+
+### Narrative lifecycle / portrait corrective gate
+
+Gemini 3.1 Pro High was run as an adversarial visual gate over the persistent
+manual state, single portrait, three-source portrait collage, mobile controls
+and a six-state sequential WebM. The first two rounds correctly returned
+`OVERALL: FAIL`: first for media/copy desynchronization and a head-boundary
+crop, then for a perceptible transition blank. The implementation was not
+published on either verdict.
+
+The final round re-opened regenerated evidence after exact-source preload/decode
+plus atomic state commit and a contained group-portrait cluster. The prompt
+also clarified the already user-approved requirement that per-square alpha
+must remain irregular: contiguous means one source owns a contiguous
+macro-panel, not that every cell has equal opacity. Final verdict:
+`R01–R07 PASS`, `OVERALL: PASS`, `PUBLISH ISOLATED LAB FOR USER REVIEW: YES`,
+`BLOCKERS: none`. This is an isolated-lab publication gate only, not production
+approval or product-desirability evidence.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`crop-cycle-portrait-acceptance-prompt-2026-07-17.md`](crop-cycle-portrait-acceptance-prompt-2026-07-17.md) | First strict lifecycle/crop/portrait gate. | `06d82fd90dd0c7e4bf152804cd32b5c92ce54dd30e0c17fef209be69c93bb4e8` |
+| [`crop-cycle-portrait-acceptance-gemini-2026-07-17.md`](crop-cycle-portrait-acceptance-gemini-2026-07-17.md) | First `OVERALL: FAIL`. | `919a5d9765c0f2b54077e3f824d83ff410c338e332aea042bb5c35f730667220` |
+| [`crop-cycle-portrait-corrective-acceptance-prompt-2026-07-17.md`](crop-cycle-portrait-corrective-acceptance-prompt-2026-07-17.md) | Second blocker-closure gate. | `d2c0efe60874ac6bf49318f6fded960f007958989a0f521d6aa5539ac584b6d9` |
+| [`crop-cycle-portrait-corrective-acceptance-gemini-2026-07-17.md`](crop-cycle-portrait-corrective-acceptance-gemini-2026-07-17.md) | Second `OVERALL: FAIL`. | `a68f69b974b4569a1473b31e4eb2a4fc80614ae70594adb3d48f81997714f510` |
+| [`crop-cycle-final-clarified-acceptance-prompt-2026-07-17.md`](crop-cycle-final-clarified-acceptance-prompt-2026-07-17.md) | Final gate with explicit user-approved alpha semantics. | `9cac54e6d1cf5971298a4dec9be5b1b03ea2441e574ed3676b17d941d6d9678b` |
+| [`crop-cycle-final-clarified-acceptance-gemini-2026-07-17.md`](crop-cycle-final-clarified-acceptance-gemini-2026-07-17.md) | Final all-PASS answer. | `2fdb3f55490d9fbb67f3445889cae38fbe9bc039dfe8612f4824e30150efaf00` |

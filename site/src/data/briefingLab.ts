@@ -10,6 +10,8 @@ export type BriefingLabScenarioFamily = 'count' | 'education' | 'signal' | 'welc
 export type BriefingLabCursor = 'bar' | 'underscore';
 export type BriefingLabAction = 'share_event' | 'like_event' | 'not_interested';
 export type BriefingLabMediaMode = 'small' | 'wide' | 'mosaic';
+export type BriefingLabMediaLayout = 'panorama' | 'portrait-single' | 'portrait-collage';
+export type BriefingLabMediaFit = 'cover' | 'contain';
 
 export type BriefingLabScenario = {
   id: string;
@@ -33,6 +35,12 @@ export type BriefingLabScenario = {
     eventId: number;
     mode: BriefingLabMediaMode;
     assetSourceOrder?: number;
+    /** Several exact sources form contiguous panels; they are never shuffled per tile. */
+    assetSourceOrders?: readonly number[];
+    layout?: BriefingLabMediaLayout;
+    fit?: BriefingLabMediaFit;
+    /** Portrait panels are rendered much narrower than the panoramic shell. */
+    minSourceWidth?: number;
     focusX?: number;
     focusY?: number;
     /** Explicit lab curation: raster was checked to contain no competing text. */
@@ -245,7 +253,7 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Ивана Купала.', accent: true, eventId: 6525, breakAfter: true }, { text: 'Поедем?' }],
     ctaLabel: 'Открыть праздник', ctaEventId: 6525,
-    media: { eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 50, ocrSafe: true },
+    media: { eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 15, fit: 'contain', ocrSafe: true },
   },
   {
     id: 'media_review_region_80', label: 'Фото 03 · 80 лет области', family: 'signal', reviewOnly: true,
@@ -259,7 +267,7 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: '«Пишу сегодня', breakAfter: true }, { text: 'из Калининграда…»', accent: true, eventId: 6611 }],
     ctaLabel: 'Открыть программу', ctaEventId: 6611,
-    media: { eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, focusX: 56, focusY: 50, ocrSafe: true },
+    media: { eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, layout: 'portrait-single', fit: 'contain', focusX: 50, focusY: 50, ocrSafe: true },
   },
   {
     id: 'media_review_swan_lake', label: 'Фото 05 · Лебединое озеро', family: 'signal', reviewOnly: true,
@@ -273,21 +281,21 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Вертинский.', accent: true, eventId: 4757, breakAfter: true }, { text: 'Встретимся в театре?' }],
     ctaLabel: 'Открыть спектакль', ctaEventId: 4757,
-    media: { eventId: 4757, mode: 'mosaic', assetSourceOrder: 0, focusX: 38, focusY: 48, ocrSafe: true },
+    media: { eventId: 4757, mode: 'mosaic', assetSourceOrder: 0, focusX: 38, focusY: 20, ocrSafe: true },
   },
   {
     id: 'media_review_literary_evening', label: 'Фото 07 · Литературный вечер', family: 'signal', reviewOnly: true,
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Литературный вечер.', accent: true, eventId: 6153, breakAfter: true }, { text: 'Послушаем?' }],
     ctaLabel: 'Открыть программу', ctaEventId: 6153,
-    media: { eventId: 6153, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 45, ocrSafe: true },
+    media: { eventId: 6153, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 13, ocrSafe: true },
   },
   {
     id: 'media_review_hay_day', label: 'Фото 08 · День валяния в сене', family: 'signal', reviewOnly: true,
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'День валяния', breakAfter: true }, { text: 'в сене.', accent: true, eventId: 6365 }, { text: 'Серьёзно.' }],
     ctaLabel: 'Открыть необычное', ctaEventId: 6365,
-    media: { eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 50, ocrSafe: true },
+    media: { eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 30, fit: 'contain', ocrSafe: true },
   },
   {
     id: 'media_review_ship_quay', label: 'Фото 09 · Набережная кораблей', family: 'signal', reviewOnly: true,
@@ -315,7 +323,24 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Линии глины.', accent: true, eventId: 6494, breakAfter: true }, { text: 'Попробуем?' }],
     ctaLabel: 'Открыть мастер-класс', ctaEventId: 6494,
-    media: { eventId: 6494, mode: 'mosaic', assetSourceOrder: 5, focusX: 55, focusY: 50, ocrSafe: true },
+    media: { eventId: 6494, mode: 'mosaic', assetSourceOrder: 5, focusX: 52, focusY: 20, ocrSafe: true },
+  },
+  {
+    id: 'media_review_single_portrait', label: 'Фото 13 · Один вертикальный источник', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Древние воины.', accent: true, eventId: 698, breakAfter: true }, { text: 'Рассмотрим героя?' }],
+    ctaLabel: 'Открыть выставку', ctaEventId: 698,
+    media: { eventId: 698, mode: 'mosaic', assetSourceOrder: 0, layout: 'portrait-single', fit: 'contain', focusX: 50, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_portrait_collage', label: 'Фото 14 · Три вертикальных источника', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Живопись, которую', breakAfter: true }, { text: 'мы не потеряли.', accent: true, eventId: 5894 }],
+    ctaLabel: 'Открыть выставку', ctaEventId: 5894,
+    media: {
+      eventId: 5894, mode: 'mosaic', assetSourceOrders: [6, 10, 11], layout: 'portrait-collage', fit: 'contain',
+      focusX: 50, focusY: 50, minSourceWidth: 900, ocrSafe: true,
+    },
   },
 ] as const satisfies readonly BriefingLabScenario[];
 

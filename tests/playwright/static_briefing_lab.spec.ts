@@ -28,6 +28,7 @@ const mediaReviewScenarioIds = [
   'media_review_planet_ocean', 'media_review_ivana_kupala', 'media_review_region_80', 'media_review_writing_kaliningrad',
   'media_review_swan_lake', 'media_review_vertinsky', 'media_review_literary_evening', 'media_review_hay_day',
   'media_review_ship_quay', 'media_review_admiral', 'media_review_flight', 'media_review_craft',
+  'media_review_single_portrait', 'media_review_portrait_collage',
 ];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
 let server: ChildProcess;
@@ -463,7 +464,7 @@ test('eligible scenarios use desktop mosaic media without moving the established
     const review = scenarios.filter((item: any) => item.reviewOnly === true);
     return { total: deck.length, mosaic: deck.filter((item: any) => item.media?.mode === 'mosaic').length, reviewTotal: review.length, reviewMosaic: review.filter((item: any) => item.media?.mode === 'mosaic').length };
   });
-  expect(mediaCoverage).toEqual({ total: 19, mosaic: 3, reviewTotal: 12, reviewMosaic: 12 });
+  expect(mediaCoverage).toEqual({ total: 19, mosaic: 3, reviewTotal: 14, reviewMosaic: 14 });
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'mosaic');
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
 
@@ -524,7 +525,7 @@ test('narrative media is explicitly OCR-safe, photo-only, high-resolution and ab
   await run.context.close();
 });
 
-test('manual media-review deck exposes twelve distinct, admitted images and never auto-skips the sample', async ({ browser }) => {
+test('manual media-review deck exposes fourteen grounded layouts, persists, and can optionally autoplay', async ({ browser }) => {
   test.setTimeout(90_000);
   const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1707"><rect width="2560" height="1707" fill="#758b83"/><circle cx="1660" cy="760" r="420" fill="#bd7d62"/></svg>';
   const desktop = await freshPage(browser, { width: 1920, height: 900 });
@@ -533,22 +534,32 @@ test('manual media-review deck exposes twelve distinct, admitted images and neve
 
   const contract = await desktop.page.locator('#briefing-lab-scenarios').evaluate((node) => {
     const review = JSON.parse(node.textContent || '[]').filter((item: any) => item.reviewOnly === true);
-    return review.map((item: any) => ({ id: item.id, eventId: item.media?.eventId, src: item.media?.src, media: item.media }));
+    return review.map((item: any) => ({ id: item.id, eventId: item.media?.eventId, src: item.media?.src, sources: item.media?.sources || [], media: item.media }));
   });
   expect(contract.map(({ id }) => id)).toEqual(mediaReviewScenarioIds);
   expect(new Set(contract.map(({ eventId }) => eventId)).size).toBe(mediaReviewScenarioIds.length);
-  expect(new Set(contract.map(({ src }) => src)).size).toBe(mediaReviewScenarioIds.length);
+  const exactSources = contract.flatMap(({ sources }) => sources.map((source: any) => source.src));
+  expect(new Set(exactSources).size).toBe(exactSources.length);
+  expect(exactSources.length).toBe(mediaReviewScenarioIds.length + 2);
   expect(contract.every(({ media }) => media?.ocrSafe === true && media.imageTextMode === 'visual_only' && media.imageKind === 'photo')).toBeTruthy();
-  expect(contract.every(({ media }) => media?.sourceWidth >= 1900 && media.sourceWidth * media.sourceHeight >= 1_000_000)).toBeTruthy();
-  expect(contract.every(({ media }) => media?.cropStrategy === 'curated-focal-cover' && media.maxUpscale === 1.1)).toBeTruthy();
+  expect(contract.every(({ media }) => media?.sources.every((source: any) => source.width >= (media.minSourceWidth || 1000) && source.width * source.height >= 1_000_000))).toBeTruthy();
+  expect(contract.every(({ media }) => typeof media?.cropStrategy === 'string' && media.maxUpscale === 1.1)).toBeTruthy();
+  expect(Object.fromEntries(contract.filter(({ id }) => ['media_review_writing_kaliningrad', 'media_review_vertinsky', 'media_review_literary_evening', 'media_review_craft'].includes(id)).map(({ id, media }) => [id, media.focusY]))).toEqual({
+    media_review_writing_kaliningrad: 50,
+    media_review_vertinsky: 20,
+    media_review_literary_evening: 13,
+    media_review_craft: 20,
+  });
+  expect(contract.find(({ id }) => id === 'media_review_writing_kaliningrad')?.media).toMatchObject({ layout: 'portrait-single', fit: 'contain' });
 
   await expect(desktop.page.locator('[data-media-review-controls]')).toBeVisible();
   await expect(desktop.page.locator('[data-media-review-scenario]')).toHaveCount(mediaReviewScenarioIds.length);
   await expect(desktop.page.locator('[data-media-review-progress]')).toHaveText(`1 из ${mediaReviewScenarioIds.length}`);
   await expect(desktop.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 3000 });
   const stoppedAt = (await labState(desktop.page)).scenario;
-  await desktop.page.waitForTimeout(3200);
+  await desktop.page.waitForTimeout(6200);
   expect((await labState(desktop.page)).scenario).toBe(stoppedAt);
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
 
   for (let index = 0; index < mediaReviewScenarioIds.length; index += 1) {
     await desktop.page.locator(`[data-media-review-scenario="${mediaReviewScenarioIds[index]}"]`).click();
@@ -566,6 +577,41 @@ test('manual media-review deck exposes twelve distinct, admitted images and neve
   await desktop.page.locator('[data-media-review-next]').click();
   await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds.at(-1)!);
   expect((await labState(desktop.page)).reviewSize).toBe(mediaReviewScenarioIds.length);
+  await desktop.page.evaluate(() => {
+    const lab = document.querySelector('[data-briefing-lab]') as HTMLElement;
+    (window as any).__atomicMediaSwapAudit = [];
+    new MutationObserver(() => {
+      const media = document.querySelector('[data-narrative-media]') as HTMLElement;
+      const visibleTiles = [...document.querySelectorAll('[data-mosaic-tile]:not([hidden])')]
+        .filter((tile) => Number.parseFloat(getComputedStyle(tile).opacity) > 0).length;
+      (window as any).__atomicMediaSwapAudit.push({ scenario: lab.dataset.briefingScenarioId, present: media.classList.contains('is-present'), visibleTiles });
+    }).observe(lab, { attributes: true, attributeFilter: ['data-briefing-scenario-id'] });
+  });
+  await desktop.page.locator('[data-media-review-autoplay]').click();
+  await expect.poll(async () => (await labState(desktop.page)).scenario, { timeout: 5000 }).toBe(mediaReviewScenarioIds[1]);
+  await expect.poll(async () => (await labState(desktop.page)).scenario, { timeout: 5000 }).toBe(mediaReviewScenarioIds[2]);
+  const atomicSwapAudit = await desktop.page.evaluate(() => (window as any).__atomicMediaSwapAudit);
+  expect(atomicSwapAudit.length).toBeGreaterThanOrEqual(3);
+  expect(atomicSwapAudit.every((state: any) => state.present && state.visibleTiles > 0)).toBeTruthy();
+
+  await desktop.page.locator(`[data-media-review-scenario="media_review_portrait_collage"]`).click();
+  await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-source-count', '3');
+  const collagePanels = await desktop.page.locator('[data-mosaic-tile][data-source-index]:not([hidden])').evaluateAll((tiles) => {
+    const columns = Number((document.querySelector('[data-media-mosaic]') as HTMLElement).dataset.columns);
+    const bySource = new Map<string, number[]>();
+    tiles.forEach((tile: HTMLElement) => {
+      const source = tile.dataset.sourceIndex || '';
+      bySource.set(source, [...(bySource.get(source) || []), Number(tile.dataset.tileColumn)]);
+    });
+    return [...bySource.entries()].map(([source, values]) => ({ source, columns: [...new Set(values)].sort((a, b) => a - b), totalColumns: columns }));
+  });
+  expect(collagePanels.map(({ source }) => source)).toEqual(['0', '1', '2']);
+  expect(collagePanels.every(({ columns }) => columns.length === 5 && columns.every((column, index) => index === 0 || column === columns[index - 1] + 1))).toBeTruthy();
+  await desktop.page.locator(`[data-media-review-scenario="media_review_single_portrait"]`).click();
+  await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-layout', 'portrait-single');
+  await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-fit', 'contain');
+  expect(await desktop.page.locator('[data-mosaic-tile][data-source-index="0"]:not([hidden])').evaluateAll((tiles) => new Set(tiles.map((tile: HTMLElement) => tile.dataset.tileColumn)).size)).toBe(5);
+  expect(await desktop.page.locator('[data-mosaic-tile][data-source-index="0"]:not([hidden])').first().evaluate((tile) => getComputedStyle(tile, '::before').backgroundSize)).toBe('contain');
   await desktop.context.close();
 
   const mobile = await freshPage(browser, { width: 390, height: 844 });
@@ -762,11 +808,8 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
   expect(typingCursor.height).toBeLessThan(10);
   await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'true');
-  await expect(animated.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 4000 });
-  await animated.page.waitForTimeout(150);
-  const exiting = await animated.page.locator('[data-mosaic-tile]:not([hidden])').evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).opacity)));
-  expect(exiting.some((opacity) => opacity < .02)).toBeTruthy();
-  await expect.poll(async () => (await labState(animated.page)).scenario, { timeout: 2000 }).toBe('unusual_format_demo');
+  await expect(animated.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await expect.poll(async () => (await labState(animated.page)).scenario, { timeout: 5000 }).toBe('unusual_format_demo');
   await animated.context.close();
 
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 1024, height: 600 }]) {

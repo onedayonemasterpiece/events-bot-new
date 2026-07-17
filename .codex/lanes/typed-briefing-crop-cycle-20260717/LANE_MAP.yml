@@ -31,7 +31,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: failure analysis, state contract, acceptance tests
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: face-crop-audit
     role: reviewer
     requirement_ids: [advisory-R02, advisory-R03]
@@ -45,7 +45,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: per-scenario focal findings and crop/layout guardrails
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: crop-model-probe
     role: reviewer
     requirement_ids: [advisory-R04]
@@ -59,7 +59,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: exact prompt/model/output/latency and limitations
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: serial-integrator
     role: worker
     requirement_ids: [R01, R02, R03, R04]
@@ -87,4 +87,4 @@ lanes:
       - runtime LLM call from a page view
     expected_output: committed lab implementation, prompt/probe evidence, docs, tests and closure audit
     verification_scope: full_local
-    status: planned
+    status: completed

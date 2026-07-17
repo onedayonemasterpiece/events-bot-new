@@ -29,3 +29,18 @@ The browser/static renderer consumes metadata but does not run vision models.
 - visual regression for hero/card/list/gallery/share formats;
 - safe fallback when metadata is missing/low confidence;
 - content change invalidates stale focal metadata.
+
+## Bounded crop-interval probe
+
+A reproducible research CLI now exists at
+`scripts/inspect/probe_briefing_crop_interval.py`. It asks Gemma 4 for only the
+smallest crop-critical vertical interval and keeps all crop geometry in a
+validated deterministic solver. The 2026-07-17 two-image comparison found Gemma
+4 31B usable as the candidate interval author; Gemma 4 26B A4B lost a principal
+stage element and is not accepted as the sole author. Direct model-authored
+`focusY` is explicitly rejected.
+
+This does **not** close the missing-producer status. Production still needs
+content-hash versioning, face/head-box goldens, target-aspect evaluation,
+manual override and persisted metadata. Full evidence is in
+[`crop-interval-gemma4-probe-2026-07-17.md`](../../reports/static-typed-briefing-consultation-2026-07-15/crop-interval-gemma4-probe-2026-07-17.md).
