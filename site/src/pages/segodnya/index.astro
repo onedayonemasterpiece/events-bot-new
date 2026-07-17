@@ -1,102 +1,388 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
-import EventListItem from '../../components/EventListItem.astro';
+import TodayHourCard from '../../components/TodayHourCard.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, eventDaypart, getCurrentDate, getTodayContinuingEvents, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
-import type { EventDaypart } from '../../lib/events';
+import {
+  absoluteUrl,
+  getCurrentDate,
+  getPreviewBuild,
+  getTodayContinuingEvents,
+  getTodayPrimaryEvents,
+  SITE_NAME,
+  withBase,
+} from '../../lib/events';
+import type { PreviewEvent } from '../../lib/types';
+
+type HourGroup = { key: string; label: string; events: PreviewEvent[] };
 
 const currentDate = getCurrentDate();
-const events = getTodayPrimaryEvents();
+function normalizedIdentityPart(value: unknown): string {
+  return String(value || '').toLowerCase().replace(/[^a-zа-яё0-9]+/gu, ' ').trim();
+}
+
+function deduplicateExactListings(items: PreviewEvent[]): PreviewEvent[] {
+  const byIdentity = new Map<string, PreviewEvent>();
+  for (const event of items) {
+    const key = [
+      normalizedIdentityPart(event.title),
+      event.start_date,
+      event.start_time || event.display_time || '',
+      normalizedIdentityPart(event.venue_name),
+    ].join('|');
+    const current = byIdentity.get(key);
+    // An exact same-title/time/venue duplicate is a data replay, not a second
+    // user choice. Prefer the newer canonical row while preserving first-seen
+    // position through Map replacement.
+    if (!current || event.id > current.id) byIdentity.set(key, event);
+  }
+  return [...byIdentity.values()];
+}
+
+const events = deduplicateExactListings(getTodayPrimaryEvents());
 const continuingSectionEvents = getTodayContinuingEvents();
-const displayedEventsCount = events.length;
-const foundLabel = continuingSectionEvents.length
-  ? `Сегодня: ${events.length} · отдельно выставки и долгие форматы: ${continuingSectionEvents.length}`
-  : (displayedEventsCount ? `Найдено: ${displayedEventsCount}` : 'На сегодня в fixture нет событий');
+const generatedAtMs = Date.parse(getPreviewBuild().generated_at || '');
+const twoHoursMs = 2 * 60 * 60 * 1000;
+
+function exactTime(event: PreviewEvent): string | null {
+  const raw = event.start_time || event.display_time || '';
+  const match = /(\d{1,2}):(\d{2})/u.exec(raw);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
+}
+
+function startedClearlyEarlier(event: PreviewEvent): boolean {
+  if (!Number.isFinite(generatedAtMs) || !exactTime(event) || !event.starts_at) return false;
+  const startsAtMs = Date.parse(event.starts_at);
+  return Number.isFinite(startsAtMs) && startsAtMs + twoHoursMs < generatedAtMs;
+}
+
+function groupByExactTime(items: PreviewEvent[]): HourGroup[] {
+  const groups = new Map<string, PreviewEvent[]>();
+  for (const event of items) {
+    const key = exactTime(event) || 'untimed';
+    const group = groups.get(key) || [];
+    group.push(event);
+    groups.set(key, group);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => {
+      if (left === 'untimed') return 1;
+      if (right === 'untimed') return -1;
+      return left.localeCompare(right);
+    })
+    .map(([key, groupEvents]) => ({
+      key,
+      label: key === 'untimed' ? 'Без времени' : key,
+      events: groupEvents,
+    }));
+}
+
+function eventCountLabel(count: number): string {
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'событий';
+  const mod10 = count % 10;
+  if (mod10 === 1) return 'событие';
+  if (mod10 >= 2 && mod10 <= 4) return 'события';
+  return 'событий';
+}
+
+const upcomingEvents = events.filter((event) => !startedClearlyEarlier(event));
+const earlierEvents = events.filter(startedClearlyEarlier);
+const upcomingGroups = groupByExactTime(upcomingEvents);
+const earlierGroups = groupByExactTime(earlierEvents);
+const dateLabel = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Kaliningrad',
+}).format(new Date(`${currentDate}T12:00:00+02:00`));
 const canonicalUrl = absoluteUrl('/segodnya/');
 const title = `События сегодня в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ${currentDate}: быстрые события сегодня отдельно от выставок и долгих форматов.`;
-const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
-  { key: 'morning', label: 'Утро', note: '06:00–11:59' },
-  { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
-  { key: 'evening', label: 'Вечер', note: '17:00–21:59' },
-  { key: 'night', label: 'Ночь', note: '22:00–05:59' },
-];
-const sections = dayparts
-  .map((section) => ({ ...section, events: events.filter((event) => eventDaypart(event) === section.key) }));
+const description = `События на ${currentDate}, сгруппированные по точному времени начала.`;
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="today">
-  <main id="main">
-    <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <span>Сегодня</span>
-      </nav>
-      <section class="section-card">
-        <div class="section-card__inner">
-          <p class="eyebrow">Сегодня</p>
-          <h1 style="max-width: 14ch;">Что идёт сегодня</h1>
-          <p class="lead">Сначала показываем события, которые начинаются сегодня. Выставки и длинные ежедневные форматы вынесены ниже и в отдельную страницу, чтобы они не забивали быстрый список.</p>
-          <div class="source-links">
-            <a href={withBase('/zavtra/')}>Смотреть завтра</a>
-            <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
-            <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
-          </div>
+  <main id="main" class="today-hour-page">
+    <div class="today-hour-shell">
+      <section class="today-hour-head" aria-labelledby="today-title">
+        <div>
+          <p class="today-hour-head__date">{dateLabel}</p>
+          <h1 id="today-title">Сегодня</h1>
+          <span class="today-hour-version">TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9</span>
+          <p class="today-hour-head__lead">События собраны по точному времени: одна отметка слева, все варианты этого часа — плотным потоком справа.</p>
         </div>
+        <nav class="today-hour-routes" aria-label="Быстрый выбор даты">
+          <a class="is-current" href={withBase('/segodnya/')} aria-current="page">Сегодня <span aria-hidden="true">→</span></a>
+          <a href={withBase('/zavtra/')}>Завтра <span aria-hidden="true">→</span></a>
+          <a href={withBase('/vyhodnye/')}>Выходные <span aria-hidden="true">→</span></a>
+        </nav>
       </section>
 
-      <AuthorizedEventSearch />
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <ListingPersonalFilter total={displayedEventsCount} label="сегодня" />
-          <h2>{foundLabel}</h2>
-          {sections.length ? (
-            <div class="listing-dayparts">
-              {sections.map((section) => (
-                <section class="listing-daypart" data-listing-daypart aria-labelledby={`today-${section.key}`}>
-                  <div class="listing-daypart__header">
-                    <div>
-                      <p class="eyebrow">{section.note}</p>
-                      <h3 id={`today-${section.key}`}>{section.label}</h3>
-                    </div>
-                    <span class="listing-daypart__count" data-listing-daypart-count>{section.events.length}</span>
-                  </div>
-                  {section.events.length ? (
-                    <div class="listing-stack">
-                      {section.events.map((event) => <EventListItem event={event} />)}
-                    </div>
-                  ) : (
-                    <p class="muted-note">Пока нет событий в этом интервале.</p>
-                  )}
-                </section>
-              ))}
-            </div>
-          ) : (
-            <p class="muted-note">Событий на выбранную дату нет.</p>
-          )}
-          {continuingSectionEvents.length ? (
-            <section class="listing-daypart listing-daypart--continuing" data-listing-daypart aria-labelledby="today-continuing">
-              <div class="listing-daypart__header">
-                <div>
-                  <p class="eyebrow">Продолжаются</p>
-                  <h3 id="today-continuing">Идут сейчас</h3>
-                </div>
-                <span class="listing-daypart__count" data-listing-daypart-count>{continuingSectionEvents.length}</span>
-              </div>
-              <p class="muted-note">Длинные выставки и форматы, которые не начинаются сегодня, но доступны сейчас.</p>
-              <div class="listing-stack">
-                {continuingSectionEvents.map((event) => <EventListItem event={event} />)}
+      {upcomingGroups.length ? (
+        <section class="today-hour-timeline" aria-label="События сегодня">
+          {upcomingGroups.map((group) => (
+            <section class="today-hour-group" data-time={group.key} aria-labelledby={`today-time-${group.key}`}>
+              <header class="today-hour-group__time">
+                <h2 id={`today-time-${group.key}`}>{group.label}</h2>
+                <span>{group.events.length} {eventCountLabel(group.events.length)}</span>
+              </header>
+              <div class="today-hour-flow">
+                {group.events.map((event) => <TodayHourCard event={event} />)}
               </div>
             </section>
-          ) : null}
-        </div>
-      </section>
+          ))}
+        </section>
+      ) : (
+        <p class="today-hour-empty">Новых событий на оставшуюся часть дня не найдено.</p>
+      )}
+
+      {earlierGroups.length ? (
+        <details class="today-hour-earlier">
+          <summary>
+            <span>Ранее сегодня</span>
+            <small>{earlierEvents.length} {eventCountLabel(earlierEvents.length)}</small>
+            <span class="today-hour-earlier__arrow" aria-hidden="true">↓</span>
+          </summary>
+          <div class="today-hour-timeline today-hour-timeline--earlier">
+            {earlierGroups.map((group) => (
+              <section class="today-hour-group" data-time={group.key} aria-labelledby={`today-earlier-${group.key}`}>
+                <header class="today-hour-group__time">
+                  <h2 id={`today-earlier-${group.key}`}>{group.label}</h2>
+                  <span>{group.events.length} {eventCountLabel(group.events.length)}</span>
+                </header>
+                <div class="today-hour-flow">
+                  {group.events.map((event) => <TodayHourCard event={event} />)}
+                </div>
+              </section>
+            ))}
+          </div>
+        </details>
+      ) : null}
+
+      {continuingSectionEvents.length ? (
+        <p class="today-hour-continuing-note">
+          Длительные выставки и форматы не подмешаны в этот список — они находятся в <a href={withBase('/vystavki/')}>разделе выставок</a>.
+        </p>
+      ) : null}
 
       <PersonalFeedSlot context="today" />
     </div>
   </main>
 </EventLayout>
+
+<style>
+  .today-hour-page {
+    --today-ink: #17232d;
+    --today-muted: #6d7882;
+    --today-line: #dbe2e6;
+    color: var(--today-ink);
+    background: #fff;
+  }
+  .today-hour-shell {
+    width: min(1500px, calc(100% - 40px));
+    margin-inline: auto;
+    padding-bottom: 4rem;
+  }
+  .today-hour-head {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+    padding: 2.35rem 0 1.85rem;
+    border-bottom: 1px solid var(--today-line);
+  }
+  .today-hour-head__date {
+    margin: 0;
+    color: var(--today-muted);
+    font-size: .72rem;
+    font-weight: 850;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .today-hour-head h1 {
+    margin: .55rem 0 .65rem;
+    font-size: clamp(3rem, 4vw, 4.55rem);
+    line-height: .92;
+    letter-spacing: -.065em;
+  }
+  .today-hour-version {
+    display: inline-flex;
+    min-height: 29px;
+    align-items: center;
+    padding: 0 .65rem;
+    border-radius: 5px;
+    color: #fff;
+    background: var(--today-ink);
+    font: 800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .03em;
+  }
+  .today-hour-head__lead {
+    max-width: 760px;
+    margin: .8rem 0 0;
+    color: #5f6c75;
+    font-size: .96rem;
+    line-height: 1.45;
+  }
+  .today-hour-routes {
+    display: flex;
+    flex: none;
+    gap: .5rem;
+    padding-bottom: .2rem;
+  }
+  .today-hour-routes a {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    gap: .85rem;
+    padding: 0 .9rem;
+    border: 1px solid var(--today-line);
+    border-radius: 999px;
+    color: inherit;
+    font-size: .78rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .today-hour-routes a:hover { border-color: var(--today-ink); }
+  .today-hour-routes a.is-current { color: #fff; border-color: var(--today-ink); background: var(--today-ink); }
+  .today-hour-timeline {
+    margin-top: 2.25rem;
+    border-top: 1px solid var(--today-ink);
+  }
+  .today-hour-group {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 1.65rem;
+    padding: 1.15rem 0;
+    border-bottom: 1px solid var(--today-line);
+  }
+  .today-hour-group__time { padding-top: .15rem; }
+  .today-hour-group__time h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .today-hour-group__time span {
+    display: block;
+    margin-top: .5rem;
+    color: #89939b;
+    font-size: .69rem;
+  }
+  .today-hour-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 1.1rem .75rem;
+    min-width: 0;
+  }
+  :global(.today-hour-card) {
+    flex: 0 0 auto;
+    width: calc(174px * var(--today-poster-ratio));
+    min-width: 0;
+  }
+  :global(.today-hour-card__media) {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 174px;
+    overflow: hidden;
+    border-radius: 10px;
+    color: inherit;
+    background: #eef1f2;
+    text-decoration: none;
+  }
+  :global(.today-hour-card__media > img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  :global(.today-hour-card__fallback) {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    padding: 1rem;
+    color: var(--today-muted);
+    font-size: .72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  :global(.today-hour-card__medallion) {
+    --venue-medallion-bg: #fff;
+    --venue-medallion-ring: rgba(255,255,255,.92);
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 48px;
+    height: 48px;
+    overflow: hidden;
+    border: 3px solid var(--venue-medallion-ring);
+    border-radius: 999px;
+    background: var(--venue-medallion-bg);
+    box-shadow: 0 3px 12px rgba(10, 20, 30, .22);
+  }
+  :global(.today-hour-card__medallion picture),
+  :global(.today-hour-card__medallion img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  :global(.today-hour-card__medallion img) { object-fit: cover; }
+  :global(.today-hour-card__copy) { margin-top: .5rem; }
+  :global(.today-hour-card__title) {
+    display: -webkit-box;
+    overflow: hidden;
+    color: inherit;
+    font-size: .84rem;
+    font-weight: 790;
+    line-height: 1.22;
+    letter-spacing: -.01em;
+    text-decoration: none;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  :global(.today-hour-card__title:hover) { text-decoration: underline; text-underline-offset: .16em; }
+  :global(.today-hour-card__copy p) {
+    overflow: hidden;
+    margin: .3rem 0 0;
+    color: var(--today-muted);
+    font-size: .66rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .today-hour-earlier {
+    margin-top: 1.35rem;
+    border-block: 1px solid var(--today-line);
+  }
+  .today-hour-earlier > summary {
+    display: flex;
+    min-height: 62px;
+    align-items: center;
+    gap: .75rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+  .today-hour-earlier > summary::-webkit-details-marker { display: none; }
+  .today-hour-earlier > summary small { color: var(--today-muted); font-size: .72rem; font-weight: 650; }
+  .today-hour-earlier__arrow { margin-left: auto; transition: transform .2s ease; }
+  .today-hour-earlier[open] .today-hour-earlier__arrow { transform: rotate(180deg); }
+  .today-hour-timeline--earlier { margin: 0; border-top-color: var(--today-line); }
+  .today-hour-empty,
+  .today-hour-continuing-note {
+    margin: 1.4rem 0 0;
+    color: var(--today-muted);
+    font-size: .82rem;
+  }
+  .today-hour-continuing-note a { color: inherit; font-weight: 750; }
+  @media (max-width: 900px) {
+    .today-hour-head { align-items: flex-start; flex-direction: column; }
+    .today-hour-routes { overflow-x: auto; max-width: 100%; }
+    .today-hour-group { grid-template-columns: 1fr; gap: .8rem; }
+    .today-hour-group__time { display: flex; align-items: center; gap: .6rem; }
+    .today-hour-group__time span { margin: 0; }
+  }
+</style>

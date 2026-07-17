@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static Today / intrinsic hour flow**: replaced the equal-column Today listing with `TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9`, grouping real same-day events by exact start time in intrinsic-width wrapping rows, keeping finished events collapsed under `Ранее сегодня`, excluding long-running exhibitions from the primary flow and removing exact title/time/venue duplicates.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
   truncating the structured JSON at the bounded 768-token output ceiling.
@@ -12,6 +13,7 @@
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
+- **Static Today / gated venue medallion overlay**: added a curated bottom-right location medallion for Today cards only when both event and primary asset are visual-only and the asset is a semantically classified event photo; unknown and poster-like media fail closed, and `safe_crop` is never treated as OCR evidence.
 - **Smart Update image geometry**: add an asynchronous, content-addressed
   `gemma-4-31b-it` stage that stores normalized face bboxes and a viewer-value
   region for event images, plus a resumable externally paced backfill,

@@ -1,7 +1,7 @@
 # Event token medallions / quick-read badges
 
-> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
-> **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
+> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. A separate, deliberately narrow listing-overlay exception is approved for `TODAY-HOUR A`: a named venue medallion may sit over a classified event photo without OCR. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
+> **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`), plus the explicitly gated `TODAY-HOUR A` photo overlay described below. Other listing/search/related cards are unaffected without a separate approval.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
 ## Goal
@@ -20,8 +20,34 @@ The medallion row is informational and belongs to the event detail page; it is n
 Current scope:
 
 - **P0:** medallions on the concrete event page only;
+- **Approved compact exception:** on `TODAY-HOUR A`, one named venue medallion may be placed at the bottom-right edge of an event image only when the image passes the strict photo/no-OCR gate below;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
 - **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
+
+### `TODAY-HOUR A` venue-overlay exception
+
+This is not a general permission to decorate posters. It is a fail-closed
+location cue for the dense exact-time desktop flow:
+
+- placement: one `48px` circle at the image's bottom-right edge, with a quiet
+  ring/shadow; the title and venue text remain below the image;
+- semantics: the matched token must be a curated **venue/location brand** and
+  must match the normalized event venue by an exact or bounded alias;
+- required media evidence: the event and its primary asset are both
+  `image_text_mode=visual_only`; the primary asset is also
+  `media_role=event_photo`, `media_semantic_status=classified` and
+  `image_kind=photo`;
+- forbidden shortcuts: `safe_crop`, OCR length alone, filename, event title or
+  an inferred organizer are not sufficient evidence;
+- if any field is absent, unknown or contradictory, render no medallion;
+- poster-like images, including short-text posters that legacy OCR marked as
+  `visual_only`, remain excluded even if the venue has a curated mark.
+
+The gate was verified on the 2026-07-17 production-data preview. It admitted
+the Musical Theatre location medallion on the event photo for «Алые паруса» and
+rejected text-bearing/poster-like Kant, Tretyakovka and KAUP candidates. Variant
+B remains an alternative layout and does not inherit this exception
+automatically.
 
 ## Visual contract
 
