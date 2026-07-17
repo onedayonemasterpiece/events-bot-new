@@ -136,6 +136,28 @@ def test_image_geometry_validation_rejects_invalid_boxes(box) -> None:
     ) is None
 
 
+def test_image_geometry_crowd_contract_is_bounded_to_crop_relevant_faces() -> None:
+    face = [10, 10, 20, 20]
+    assert "up to 25 largest/clearest" in event_media._image_geometry_prompt()
+    assert event_media._validated_image_geometry(
+        {
+            "face_boxes_yxyx": [face] * event_media.IMAGE_GEOMETRY_MAX_FACE_BOXES,
+            "valuable_region_yxyx": [0, 0, 1000, 1000],
+            "valuable_region_confidence": 0.8,
+            "reason_code": "crowd",
+        }
+    ) is not None
+    assert event_media._validated_image_geometry(
+        {
+            "face_boxes_yxyx": [face]
+            * (event_media.IMAGE_GEOMETRY_MAX_FACE_BOXES + 1),
+            "valuable_region_yxyx": [0, 0, 1000, 1000],
+            "valuable_region_confidence": 0.8,
+            "reason_code": "crowd",
+        }
+    ) is None
+
+
 @pytest.mark.asyncio
 async def test_geometry_cache_reuses_pixel_identity_across_events(
     tmp_path, monkeypatch

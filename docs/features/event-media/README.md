@@ -169,7 +169,9 @@ export: только `lifecycle_status=active`, `silent=0` и события, к
 job в outbox и никогда не ждёт скачивание/provider inline. Один короткий
 `gemma-4-31b-it` запрос возвращает одновременно:
 
-- `face_boxes_yxyx_json` — tight bbox каждого явно видимого человеческого лица;
+- `face_boxes_yxyx_json` — tight bbox до 25 крупнейших/наиболее различимых
+  человеческих лиц (мелкие лица толпы не должны раздувать ответ без пользы для
+  защиты crop);
 - `valuable_region_yxyx_json` — минимальный связный прямоугольник с главным
   объектом/людьми, визуальной идентичностью и действительно важным текстом;
 - confidence и короткий `reason_code`.
@@ -181,7 +183,9 @@ job в outbox и никогда не ждёт скачивание/provider inli
 envelope, `thinking_level=MINIMAL`, отключённые thoughts и лимит `768` output
 tokens не дают задаче уходить в длинное reasoning. Диапазоны/длина/порядок bbox
 дополнительно валидируются приложением: JSON-Schema-only keywords hosted Gemma
-endpoint не принимает.
+endpoint не принимает. Лимит 25 лиц задаётся одновременно коротким prompt
+contract и application validator: это сохраняет полезные для crop лица и не
+позволяет массовой сцене оборвать structured JSON по `MAX_TOKENS`.
 
 `event_image_geometry` — глобальный versioned cache по точному
 `pixel_sha256 + model + prompt_version`; `EventPoster.image_geometry_id`

@@ -43,6 +43,7 @@ PAIR_POLICY_VERSION = "event-media-pair-v1"
 PAIR_PROMPT_VERSION = "event-media-vision-v1"
 MEDIA_ROLE_PROMPT_VERSION = "event-media-role-v1"
 IMAGE_GEOMETRY_PROMPT_VERSION = "event-image-geometry-v1"
+IMAGE_GEOMETRY_MAX_FACE_BOXES = 25
 MEDIA_ROLES = {
     "event_identity_poster",
     "event_photo",
@@ -1087,7 +1088,7 @@ def _validated_image_geometry(value: dict[str, Any] | None) -> dict[str, Any] | 
     if not isinstance(value, dict):
         return None
     raw_faces = value.get("face_boxes_yxyx")
-    if not isinstance(raw_faces, list) or len(raw_faces) > 50:
+    if not isinstance(raw_faces, list) or len(raw_faces) > IMAGE_GEOMETRY_MAX_FACE_BOXES:
         return None
     faces: list[list[float]] = []
     for raw in raw_faces:
@@ -1117,8 +1118,8 @@ def _image_geometry_prompt() -> str:
         "Analyze ONE image for metadata used later by independent crop mechanisms. "
         "Do not choose an aspect ratio and do not construct a final crop. "
         "Coordinates are integers 0..1000, origin top-left. "
-        "face_boxes_yxyx: every clearly visible human face as a tight "
-        "[ymin,xmin,ymax,xmax] box; return [] when no face is visible. "
+        "face_boxes_yxyx: up to 25 largest/clearest visible human faces as tight "
+        "[ymin,xmin,ymax,xmax] boxes; return [] when no face is visible. "
         "valuable_region_yxyx: the smallest coherent rectangle containing the part with maximum "
         "viewer value and meaning; prioritize principal people/faces, the main subject and essential "
         "visual identity or key text. Use the full frame only when it is genuinely all essential. "
