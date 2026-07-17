@@ -291,8 +291,15 @@ features:
     status: preview
     docs: docs/features/static-site-pages/README.md
     design_system: docs/features/static-site-pages/design-system/README.md
+    design_system_runtime:
+      tokens: site/src/styles/design-system.css
+      primitives: site/src/components/design-system/
+      catalog: site/src/pages/lab/design-system/index.astro
+      check: site/scripts/check-design-system.mjs
     brand_lockups: docs/features/static-site-pages/design-system/brand-lockups.md
     favicon: docs/features/static-site-pages/design-system/favicon.md
+    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
+    test_scenarios: docs/features/static-site-pages/test-scenarios.md
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
     related_personalization: docs/features/unsigned-personalization/README.md

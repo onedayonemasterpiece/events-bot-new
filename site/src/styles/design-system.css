@@ -1,0 +1,222 @@
+:root {
+  /* Brand and semantic colors. Components consume roles, not raw palette values. */
+  --ke-color-brand-600: #a54821;
+  --ke-color-brand-700: #98401f;
+  --ke-color-brand-800: #793014;
+  --ke-color-brand-900: #5f250f;
+  --ke-color-brand-tag: var(--ke-color-brand-700);
+  --ke-color-brand-tag-hover: #893719;
+  --ke-color-accent-600: #0f766e;
+  --ke-color-accent-700: #0f5d57;
+  --ke-color-success-50: #e6f6e9;
+  --ke-color-success-700: #0f6c3d;
+  --ke-color-warning-50: #fff8db;
+  --ke-color-warning-800: #5a3b06;
+  --ke-color-danger-50: #fff0f0;
+  --ke-color-danger-700: #a92d2d;
+  --ke-color-info-50: #e7f2f7;
+  --ke-color-info-700: #1f658d;
+  --ke-color-ink: #221a14;
+  --ke-color-copy: #44362d;
+  --ke-color-muted: #6d6259;
+  --ke-color-line: #e1d3c2;
+  --ke-color-canvas: #fbf7ef;
+  --ke-color-canvas-soft: #f2e7d7;
+  --ke-color-surface: #fffdf8;
+  --ke-color-surface-strong: #ffffff;
+  --ke-color-focus: #0f766e;
+
+  /* Typography. The system font stack avoids a blocking font request. */
+  --ke-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ke-font-size-100: 0.75rem;
+  --ke-font-size-200: 0.875rem;
+  --ke-font-size-300: 1rem;
+  --ke-font-size-400: 1.125rem;
+  --ke-font-size-500: 1.5rem;
+  --ke-font-size-600: clamp(1.75rem, 4vw, 2.5rem);
+  --ke-font-size-700: clamp(2.2rem, 7vw, 4.6rem);
+  --ke-line-tight: 1.08;
+  --ke-line-body: 1.6;
+
+  /* 4 px base spacing scale. */
+  --ke-space-1: 0.25rem;
+  --ke-space-2: 0.5rem;
+  --ke-space-3: 0.75rem;
+  --ke-space-4: 1rem;
+  --ke-space-5: 1.25rem;
+  --ke-space-6: 1.5rem;
+  --ke-space-8: 2rem;
+  --ke-space-10: 2.5rem;
+  --ke-space-12: 3rem;
+  --ke-space-16: 4rem;
+
+  --ke-radius-sm: 0.5rem;
+  --ke-radius-md: 0.875rem;
+  --ke-radius-lg: 1.25rem;
+  --ke-radius-xl: 1.75rem;
+  --ke-radius-pill: 999px;
+  --ke-shadow-1: 0 8px 22px rgba(72, 45, 25, 0.08);
+  --ke-shadow-2: 0 18px 45px rgba(72, 45, 25, 0.12);
+  --ke-shadow-3: 0 24px 64px rgba(72, 45, 25, 0.18);
+  --ke-duration-fast: 160ms;
+  --ke-duration-base: 220ms;
+  --ke-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ke-control-min: 44px;
+  --ke-content-max: 1180px;
+
+  /* Compatibility aliases used by the established product components. */
+  --bg: var(--ke-color-canvas);
+  --bg-soft: var(--ke-color-canvas-soft);
+  --surface: var(--ke-color-surface);
+  --surface-strong: var(--ke-color-surface-strong);
+  --text: var(--ke-color-ink);
+  --muted: var(--ke-color-muted);
+  --line: var(--ke-color-line);
+  --primary: var(--ke-color-brand-600);
+  --primary-strong: var(--ke-color-brand-700);
+  --primary-text: var(--ke-color-surface-strong);
+  --accent: var(--ke-color-accent-600);
+  --accent-soft: #d7f0ec;
+  --warning: #a16207;
+  --shadow: var(--ke-shadow-2);
+  --radius-xl: var(--ke-radius-xl);
+  --radius-lg: var(--ke-radius-lg);
+  --radius-md: var(--ke-radius-md);
+}
+
+.ke-button {
+  min-height: var(--ke-control-min);
+  min-width: var(--ke-control-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ke-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ke-radius-pill);
+  padding: 0.68rem 1rem;
+  font: 850 var(--ke-font-size-200) / 1.1 var(--ke-font-sans);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color var(--ke-duration-fast) var(--ke-ease-standard),
+    background-color var(--ke-duration-fast) var(--ke-ease-standard),
+    border-color var(--ke-duration-fast) var(--ke-ease-standard),
+    box-shadow var(--ke-duration-fast) var(--ke-ease-standard),
+    transform var(--ke-duration-fast) var(--ke-ease-standard);
+}
+
+.ke-button--large { min-height: 52px; padding: 0.86rem 1.25rem; font-size: var(--ke-font-size-300); }
+.ke-button--compact { padding-inline: 0.82rem; }
+.ke-button--icon { width: var(--ke-control-min); padding: 0; }
+.ke-button--large.ke-button--icon { width: 52px; }
+.ke-button .icon { width: 1.18rem; height: 1.18rem; flex: 0 0 auto; fill: currentColor; }
+.ke-button--primary { background: var(--ke-color-brand-600); color: var(--ke-color-surface-strong); }
+.ke-button--secondary { border-color: var(--ke-color-line); background: var(--ke-color-surface-strong); color: var(--ke-color-brand-700); }
+.ke-button--quiet { background: transparent; color: var(--ke-color-brand-700); }
+.ke-button--danger { background: var(--ke-color-danger-700); color: var(--ke-color-surface-strong); }
+
+.ke-button:hover,
+.ke-button[data-preview-state="hover"] { transform: translateY(-1px); box-shadow: var(--ke-shadow-1); }
+.ke-button--primary:hover,
+.ke-button--primary[data-preview-state="hover"] { background: var(--ke-color-brand-700); }
+.ke-button--secondary:hover,
+.ke-button--secondary[data-preview-state="hover"],
+.ke-button--quiet:hover,
+.ke-button--quiet[data-preview-state="hover"] { border-color: color-mix(in srgb, var(--ke-color-brand-600) 34%, transparent); background: #fff7ea; }
+.ke-button:active,
+.ke-button[data-preview-state="pressed"] { transform: translateY(1px); box-shadow: none; }
+.ke-button:focus-visible,
+.ke-button[data-preview-state="focus"] { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 68%, transparent); outline-offset: 3px; }
+.ke-button[aria-pressed="true"] { border-color: var(--ke-color-brand-600); background: #f8e5d8; color: var(--ke-color-brand-800); }
+.ke-button:disabled,
+.ke-button[aria-disabled="true"],
+.ke-button[data-preview-state="disabled"] { transform: none; border-color: #ddd2c6; background: #eee7de; color: #746a62; box-shadow: none; cursor: not-allowed; opacity: 0.82; }
+.ke-button__spinner {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ke-spin 700ms linear infinite;
+}
+
+.ke-badge {
+  min-height: 28px;
+  width: fit-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ke-space-1);
+  border: 1px solid var(--ke-color-line);
+  border-radius: var(--ke-radius-pill);
+  padding: 0.28rem 0.62rem;
+  background: var(--ke-color-surface-strong);
+  color: var(--ke-color-copy);
+  font: 800 var(--ke-font-size-100) / 1.15 var(--ke-font-sans);
+  overflow-wrap: anywhere;
+}
+.ke-badge--brand { border-color: #e2bda9; background: #f8e5d8; color: var(--ke-color-brand-900); }
+.ke-badge--accent { border-color: #b7ded9; background: #e8f3f1; color: var(--ke-color-accent-700); }
+.ke-badge--success { border-color: #b7dec2; background: var(--ke-color-success-50); color: var(--ke-color-success-700); }
+.ke-badge--warning { border-color: #ead28a; background: var(--ke-color-warning-50); color: var(--ke-color-warning-800); }
+.ke-badge--danger { border-color: #efc1c1; background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
+
+.ke-field { display: grid; gap: var(--ke-space-2); color: var(--ke-color-copy); font-family: var(--ke-font-sans); }
+.ke-field__label { font-size: var(--ke-font-size-200); font-weight: 850; }
+.ke-field__control {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #cdbfad;
+  border-radius: var(--ke-radius-md);
+  padding: 0.72rem 0.85rem;
+  background: var(--ke-color-surface-strong);
+  color: var(--ke-color-ink);
+  font: 500 var(--ke-font-size-300) / 1.35 var(--ke-font-sans);
+  transition: border-color var(--ke-duration-fast), box-shadow var(--ke-duration-fast), background-color var(--ke-duration-fast);
+}
+.ke-field__control::placeholder { color: #7a6f67; opacity: 1; }
+.ke-field__control:hover,
+.ke-field[data-preview-state="hover"] .ke-field__control { border-color: #a99683; }
+.ke-field__control:focus-visible,
+.ke-field[data-preview-state="focus"] .ke-field__control { outline: 0; border-color: var(--ke-color-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ke-color-focus) 24%, transparent); }
+.ke-field--error .ke-field__control { border-color: var(--ke-color-danger-700); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ke-color-danger-700) 16%, transparent); }
+.ke-field__hint { margin: 0; color: var(--ke-color-muted); font-size: var(--ke-font-size-100); line-height: 1.4; }
+.ke-field--error .ke-field__hint { color: var(--ke-color-danger-700); font-weight: 700; }
+.ke-field__control:disabled { background: #eee7de; color: #746a62; cursor: not-allowed; }
+
+.ke-state-panel {
+  display: grid;
+  gap: var(--ke-space-3);
+  align-content: start;
+  min-height: 172px;
+  border: 1px solid var(--ke-color-line);
+  border-radius: var(--ke-radius-lg);
+  padding: var(--ke-space-5);
+  background: var(--ke-color-surface);
+  box-shadow: var(--ke-shadow-1);
+}
+.ke-state-panel__mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #f8e5d8; color: var(--ke-color-brand-700); font-weight: 950; }
+.ke-state-panel h3 { margin: 0; font-size: var(--ke-font-size-400); line-height: 1.2; }
+.ke-state-panel p { margin: 0; color: var(--ke-color-muted); line-height: 1.5; }
+.ke-state-panel--info .ke-state-panel__mark { background: var(--ke-color-info-50); color: var(--ke-color-info-700); }
+.ke-state-panel--success .ke-state-panel__mark { background: var(--ke-color-success-50); color: var(--ke-color-success-700); }
+.ke-state-panel--warning .ke-state-panel__mark { background: var(--ke-color-warning-50); color: var(--ke-color-warning-800); }
+.ke-state-panel--danger .ke-state-panel__mark { background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
+.ke-state-panel--loading .ke-state-panel__mark { position: relative; overflow: hidden; color: transparent; }
+.ke-state-panel--loading .ke-state-panel__mark::after { content: ""; width: 18px; height: 18px; border: 3px solid var(--ke-color-brand-600); border-right-color: transparent; border-radius: 50%; animation: ke-spin 700ms linear infinite; }
+
+.ke-skeleton { position: relative; overflow: hidden; border-radius: var(--ke-radius-sm); background: #e5dbce; color: transparent; }
+.ke-skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,0.62), transparent); animation: ke-shimmer 1.35s ease-in-out infinite; }
+
+@keyframes ke-spin { to { transform: rotate(360deg); } }
+@keyframes ke-shimmer { to { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ke-button { transition: none; }
+  .ke-button__spinner,
+  .ke-state-panel--loading .ke-state-panel__mark::after { animation-duration: 1.4s; }
+  .ke-skeleton::after { animation: none; }
+}

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static site / design system**: centralized semantic UI tokens and approved Astro primitives, added a noindex runtime catalog with foundations, complete interaction/data states and real event product components, registered the split-actions card baseline and deprecated overlay variant, and added contrast/state/build regression checks plus release-documentation gates.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
