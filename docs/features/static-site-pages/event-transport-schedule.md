@@ -41,6 +41,43 @@ width (`max-height:76px`, then `92px` from `540px`) and remains `contain` rather
 than cropped. The raw review remains a local non-committed artifact
 under `artifacts/codex/static-site-production-integration-20260715/`.
 
+## 2026-07-17 desktop KAUP and explicit-duration remediation
+
+The desktop event renderer has one exact-venue KAUP block for aliases of
+`Поселение викингов Кауп`. It is intentionally not a generic Romanovo matcher
+and does not change the accepted mobile transport surface.
+
+- the recommended mode is the venue's official round-trip transfer: `600 ₽`,
+  boarding information and vehicle number are emailed after `19:00` on the day
+  before, and boarding requires a pre-purchased printed ticket;
+- pickup points shown from the venue are Дом Советов in Kaliningrad, Lenina 10
+  by the Zelenogradsk bus terminal and Lenina 33 by Svetlogorsk-2;
+- the booking CTA uses the current Radario destination linked by KAUP;
+- public bus `119` is shown separately. Arrival uses the reviewed 65-minute
+  ride plus about `4 km / 53 min` on foot from Romanovo; the UI does not invent
+  a short pedestrian entrance;
+- for the evening Epidemia regression there is no confirmed public-bus return,
+  so the block recommends the official transfer or a car;
+- the visible route diagram and map links point to KAUP and a route from
+  Kaliningrad.
+
+Primary source: [official KAUP site](https://www.kaup39.ru/). Bus timetable:
+[АО «Автовокзал» route table](https://avl39.ru/routes/reg/kaliningrad/).
+
+Desktop may also repair a missing `time_range_end` from an explicit
+source-labelled phrase such as `Продолжительность спектакля – 1 час 40 минут`.
+This narrow helper accepts a label plus punctuation/`составляет`, never infers
+duration from event type or generic prose, and is not applied to the mobile
+renderer. For event `3103` it produces `19:40`, therefore the desktop card shows
+same-evening trains `6724` and `6726` and does not suggest waiting until the
+next morning.
+
+Because the accepted mobile renderer deliberately keeps the exported event
+unchanged, static rail calendar generation takes the deduplicated union of the
+mobile shortlist and this desktop explicit-duration shortlist. Thus every
+visible desktop or mobile train row has a matching `.ics` file without forcing
+the desktop-only duration repair into the mobile page.
+
 The 2026-07-15 v3 corpus gate rendered all `282` future/ongoing event pages,
 found `21` rail-enabled pages and verified the illustration has a non-zero
 painted rectangle on every one. A real `390×844` route additionally decoded the

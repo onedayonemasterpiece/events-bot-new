@@ -5,6 +5,8 @@ import EventTokenMedallions from './EventTokenMedallions.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
 import EventTransportSchedule from './EventTransportSchedule.astro';
 import EventBusTransportSchedule from './EventBusTransportSchedule.astro';
+import KaupTransportSchedule from './KaupTransportSchedule.astro';
+import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import type { EventImageAsset, EventImageDerivative, EventImageMediaRole, PreviewEvent } from '../lib/types';
 import {
   displayDate,
@@ -13,6 +15,7 @@ import {
   withBase,
 } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
+import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
@@ -61,6 +64,9 @@ type GalleryImage = {
   position?: string;
   sourceIndex?: number;
   media_role: EventImageMediaRole;
+  media_semantic_status?: EventImageAsset['media_semantic_status'];
+  recommended_hero_fit?: EventImageAsset['recommended_hero_fit'];
+  safe_crop?: boolean;
   thumbnail_sources?: EventImageDerivative[];
 };
 
@@ -191,6 +197,9 @@ const galleryImages = (() => {
       media_role: (sourceIndex === undefined ? undefined : mediaRoleOverrides[sourceIndex])
         || (asset?.media_semantic_status === 'classified' ? asset.media_role : undefined)
         || fallbackMediaRole(imageTextMode),
+      media_semantic_status:asset?.media_semantic_status,
+      recommended_hero_fit:asset?.recommended_hero_fit,
+      safe_crop:asset?.safe_crop,
       width: dimensions?.width || asset?.width,
       height: dimensions?.height || asset?.height,
       position: asset?.recommended_object_position,
@@ -230,6 +239,13 @@ const viewerRecommendationImage = viewerRecommendation ? eventImageUrl(viewerRec
 const viewerRecommendationMeta = viewerRecommendation
   ? [displayDateTime(viewerRecommendation), viewerRecommendation.venue_name || viewerRecommendation.city].filter(Boolean).join(' · ')
   : '';
+const desktopTransportEvent = desktopEventWithExplicitEnd(event);
+const desktopGalleryFit = (image: GalleryImage) => image.media_semantic_status === 'classified'
+  && image.media_role === 'event_photo'
+  && image.recommended_hero_fit === 'cover'
+  && image.safe_crop === true
+    ? 'cover'
+    : 'contain';
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
@@ -463,10 +479,6 @@ const descriptionHtml = (event.description_html || '')
                 <p class="desktop-clean-description__lead">{event.summary || event.title}</p>
                 <div class="desktop-clean-description__text prose" set:html={descriptionHtml} />
               </article>
-              <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
-                <span class="desktop-clean-feedback__icon"><Icon name="spark" /></span>
-                <div><p class="eyebrow">Что говорят</p><h2 id={`feedback-${event.id}`}>Общего вывода пока нет</h2><p>Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.</p></div>
-              </aside>
               <section class="desktop-clean-practical" aria-labelledby={`practical-${event.id}`}>
                 <p class="eyebrow">Перед посещением</p><h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
                 <div class="desktop-clean-practical__grid">
@@ -477,8 +489,9 @@ const descriptionHtml = (event.description_html || '')
               </section>
               {showTransport && (
                 <div class="desktop-clean-transport" data-desktop-transport>
-                  <EventTransportSchedule event={event} />
-                  <EventBusTransportSchedule event={event} />
+                  <EventTransportSchedule event={desktopTransportEvent} />
+                  <EventBusTransportSchedule event={desktopTransportEvent} />
+                  <KaupTransportSchedule event={desktopTransportEvent} />
                 </div>
               )}
             </div>
@@ -496,14 +509,6 @@ const descriptionHtml = (event.description_html || '')
       <p class="desktop-clean-description__lead">{event.summary || event.title}</p>
       <div class="desktop-clean-description__text prose" set:html={descriptionHtml} />
     </article>
-    <aside class="desktop-clean-feedback" aria-labelledby={`feedback-${event.id}`}>
-      <span class="desktop-clean-feedback__icon"><Icon name="spark" /></span>
-      <div>
-        <p class="eyebrow">Что говорят</p>
-        <h2 id={`feedback-${event.id}`}>Общего вывода пока нет</h2>
-        <p>Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.</p>
-      </div>
-    </aside>
   </section>}
 
   {!usesLongFlow && <section class="desktop-clean-practical page-shell" aria-labelledby={`practical-${event.id}`}>
@@ -583,10 +588,10 @@ const descriptionHtml = (event.description_html || '')
   )}
 
   {photoCount > 0 && (
-    <div class="hero-gallery" id={galleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
+    <div class="hero-gallery" id={galleryId} data-hero-gallery data-desktop-gallery-dismiss="true" data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
       <div class="hero-gallery__chrome" aria-hidden="true"></div>
       <div class="hero-gallery__topbar">
-        <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы"><span>Полюбить Калининград</span><strong>Анонсы</strong></a>
+        <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы"><AnnouncementsLockup variant="desktop" class="hero-gallery__lockup" /></a>
         <h2 id={galleryTitleId} class="sr-only">Фото события: {event.title}</h2>
         <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
       </div>
@@ -594,7 +599,7 @@ const descriptionHtml = (event.description_html || '')
         <div class="hero-gallery__track" data-hero-gallery-track>
           {galleryImages.map((image, index) => (
             <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} data-source-index={image.sourceIndex} aria-hidden={index === 0 ? 'false' : 'true'}>
-              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
+              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
               <figcaption class="sr-only">Фото события: {event.title}</figcaption>
             </figure>
           ))}
@@ -622,6 +627,44 @@ const descriptionHtml = (event.description_html || '')
     const desktopViewport = window.matchMedia('(min-width: 1024px)');
     if (cleanRoot && desktopViewport.matches) {
       document.body.classList.add('desktop-clean-event-page');
+      const copyPlainText = async (value:string) => {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+          return;
+        }
+        const fallback = document.createElement('textarea');
+        fallback.value = value;
+        fallback.setAttribute('readonly', '');
+        fallback.style.position = 'fixed';
+        fallback.style.opacity = '0';
+        document.body.appendChild(fallback);
+        fallback.select();
+        const copied = document.execCommand('copy');
+        fallback.remove();
+        if (!copied) throw new Error('clipboard unavailable');
+      };
+      cleanRoot.querySelectorAll<HTMLButtonElement>('[data-desktop-phone-copy]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const value = button.dataset.phoneCopyValue || '';
+          const panel = button.closest<HTMLElement>('.desktop-prototype__action');
+          const status = panel?.querySelector<HTMLElement>('[data-phone-copy-status]');
+          const label = button.querySelector<HTMLElement>('[data-phone-copy-label]');
+          try {
+            await copyPlainText(value);
+            button.classList.add('is-copied');
+            if (label) label.textContent = 'Номер скопирован';
+            if (status) status.textContent = 'Номер скопирован в буфер обмена';
+            window.setTimeout(() => {
+              button.classList.remove('is-copied');
+              if (label) label.textContent = 'Скопировать номер';
+              if (status) status.textContent = '';
+            }, 2600);
+          } catch {
+            if (label) label.textContent = 'Выделите номер вручную';
+            if (status) status.textContent = 'Не удалось скопировать — номер виден на кнопке.';
+          }
+        });
+      });
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
@@ -1023,6 +1066,25 @@ const descriptionHtml = (event.description_html || '')
       efficientNext?.addEventListener('click', moveEfficientNext);
       efficientPrev?.addEventListener('click', moveEfficientPrev);
       efficientViewport?.addEventListener('scroll', () => window.requestAnimationFrame(updateEfficientViewer), { passive:true });
+      if (efficientViewport) {
+        let dismissStart:{ x:number; y:number } | null = null;
+        let dismissMoved = false;
+        efficientViewport.addEventListener('pointerdown', (event) => {
+          dismissStart = { x:event.clientX, y:event.clientY };
+          dismissMoved = false;
+        }, { passive:true });
+        efficientViewport.addEventListener('pointermove', (event) => {
+          if (!dismissStart) return;
+          dismissMoved ||= Math.hypot(event.clientX - dismissStart.x, event.clientY - dismissStart.y) > 8;
+        }, { passive:true });
+        efficientViewport.addEventListener('click', (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          const keepOpen = target?.closest('a,button,.desktop-portrait-viewer__recommendation');
+          if (!dismissMoved && !keepOpen) closeEfficientViewer();
+          dismissStart = null;
+          dismissMoved = false;
+        });
+      }
       window.addEventListener('keydown', (event) => {
         if (!efficientViewer || efficientViewer.hidden) return;
         if (event.key === 'Escape') closeEfficientViewer();
@@ -1648,14 +1710,9 @@ const descriptionHtml = (event.description_html || '')
 
   .desktop-clean-story { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(310px,.75fr); gap:clamp(2rem,5vw,5rem); padding-block:clamp(4rem,8vw,8rem); }
   .desktop-clean-description { max-width:78ch; }
-  .desktop-clean-description>.eyebrow, .desktop-clean-feedback .eyebrow, .desktop-clean-practical>.eyebrow, .desktop-clean-travel .eyebrow, .desktop-clean-related .eyebrow { margin:0 0 .7rem; color:#a44721; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
-  .desktop-clean-description h2, .desktop-clean-feedback h2, .desktop-clean-practical h2, .desktop-clean-travel h2, .desktop-clean-related h2 { margin:0; font-size:clamp(2rem,3.6vw,4.1rem); line-height:1; letter-spacing:-.045em; }
+  .desktop-clean-description>.eyebrow, .desktop-clean-practical>.eyebrow, .desktop-clean-travel .eyebrow, .desktop-clean-related .eyebrow { margin:0 0 .7rem; color:#a44721; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+  .desktop-clean-description h2, .desktop-clean-practical h2, .desktop-clean-travel h2, .desktop-clean-related h2 { margin:0; font-size:clamp(2rem,3.6vw,4.1rem); line-height:1; letter-spacing:-.045em; }
   .desktop-clean-description__text { margin-top:1.8rem; font-size:clamp(1.05rem,1.25vw,1.22rem); line-height:1.72; }
-  .desktop-clean-feedback { align-self:start; display:grid; grid-template-columns:3rem minmax(0,1fr); gap:1rem; padding:1.6rem; border:1px solid rgba(40,88,82,.2); border-radius:28px; background:#edf3ee; }
-  .desktop-clean-feedback__icon { width:3rem; height:3rem; display:grid; place-items:center; border-radius:50%; background:#285852; color:#fff; }
-  .desktop-clean-feedback__icon :global(.icon) { width:1.45rem; height:1.45rem; }
-  .desktop-clean-feedback h2 { font-size:clamp(1.55rem,2.3vw,2.45rem); }
-  .desktop-clean-feedback p:last-child { margin:.9rem 0 0; color:#61716c; line-height:1.55; }
   .desktop-clean-practical { padding-bottom:clamp(4rem,7vw,7rem); }
   .desktop-clean-practical__grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; margin-top:2rem; }
   .desktop-clean-practical__grid article { min-height:180px; display:grid; grid-template-columns:2rem 1fr; align-content:start; gap:.45rem .8rem; padding:1.4rem; border:1px solid rgba(121,48,20,.14); border-radius:24px; background:#fffaf2; }
@@ -1720,7 +1777,6 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-prototype__action--flow { grid-column:2; grid-row:2; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(2rem,4vw,4rem); border-radius:24px; }
     .desktop-clean-event--reading .desktop-clean-story { grid-column:2; grid-row:3; min-height:140svh; width:auto; margin:0; padding:clamp(2.5rem,5vw,6rem) clamp(1.5rem,3.6vw,4.5rem); grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-clean-description h2 { font-size:clamp(2rem,3.1vw,3.8rem); }
-    .desktop-clean-event--reading .desktop-clean-feedback { margin-top:clamp(3rem,8vh,7rem); }
     .desktop-clean-event--reading .desktop-clean-practical { grid-column:2; grid-row:4; width:auto; margin:0; padding:0 clamp(1.5rem,3.6vw,4.5rem) clamp(4rem,8vw,8rem); }
     .desktop-clean-event--reading .desktop-clean-practical__grid { grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-clean-practical__grid article { min-height:130px; }
@@ -1777,10 +1833,8 @@ const descriptionHtml = (event.description_html || '')
     .desktop-prototype__content-flow--long .desktop-prototype__info { position:relative; inset:auto; width:auto; min-height:0; margin:0; padding:clamp(1.5rem,3vw,3.2rem); background:transparent; box-shadow:none; }
     .desktop-prototype__flow-body { display:grid; grid-template-columns:minmax(0,1fr); gap:clamp(3rem,7vw,6.5rem); padding:clamp(2.5rem,5vw,5.5rem) clamp(1.5rem,3vw,3.2rem) clamp(4rem,8vw,8rem); border-top:1px solid rgba(121,48,20,.13); }
     .desktop-prototype__flow-body > .desktop-clean-description,
-    .desktop-prototype__flow-body > .desktop-clean-feedback,
     .desktop-prototype__flow-body > .desktop-clean-practical { grid-column:1; grid-row:auto; width:auto; }
     .desktop-prototype__flow-body .desktop-clean-description { max-width:68ch; }
-    .desktop-prototype__flow-body .desktop-clean-feedback { margin:0; }
     .desktop-prototype__flow-body .desktop-clean-practical { padding:0; }
     .desktop-prototype__flow-body .desktop-clean-practical__grid { grid-template-columns:1fr; }
     .desktop-prototype__flow-body .desktop-clean-practical__grid article { min-height:128px; }
@@ -1916,6 +1970,16 @@ const descriptionHtml = (event.description_html || '')
 
   /* Desktop focus v7: only the selected Editorial and Split/Fallback families. */
   @media (min-width:1024px) {
+    :global(.hero-gallery[data-desktop-gallery-dismiss="true"] .hero-gallery__image[data-desktop-gallery-fit="contain"]) {
+      object-fit:contain !important;
+      object-position:center !important;
+      animation:none !important;
+      cursor:zoom-out;
+    }
+    :global(.hero-gallery[data-desktop-gallery-dismiss="true"] .hero-gallery__image[data-desktop-gallery-fit="cover"]) {
+      object-fit:cover;
+      cursor:zoom-out;
+    }
     .desktop-clean-description__heading { margin:0; color:#a44721; font-size:clamp(.78rem,.8vw,.9rem) !important; line-height:1.2 !important; letter-spacing:.11em !important; text-transform:uppercase; }
     .desktop-clean-description__lead { max-width:34ch; margin:.85rem 0 0; font-size:clamp(1.35rem,2vw,2.15rem); font-weight:780; line-height:1.12; letter-spacing:-.03em; }
     .desktop-clean-description__text { margin-top:1.45rem; }

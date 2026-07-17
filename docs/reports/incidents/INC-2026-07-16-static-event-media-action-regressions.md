@@ -11,7 +11,7 @@ Related docs: `docs/features/static-site-pages/event-token-medallions.md`, `docs
 
 ## Summary
 
-The full-catalog static preview exposed several user-visible regressions around an otherwise accepted desktop/mobile event template: the Dramatic Theatre venue medallion was absent, event `4671` exposed two visually duplicated versions of the same poster, narrow mobile event docks expanded an arbitrary secondary action according to event-id parity, dynamically appended cards could collapse while their image was loading, and the desktop full-screen gallery lacked the terminal related-event recommendation already present on mobile.
+The full-catalog static preview exposed several user-visible regressions around an otherwise accepted desktop/mobile event template: the Dramatic Theatre venue medallion was absent, event `4671` exposed two visually duplicated versions of the same poster, narrow mobile event docks expanded an arbitrary secondary action according to event-id parity, dynamically appended cards could collapse while their image was loading, and the desktop full-screen gallery lacked the terminal related-event recommendation already present on mobile. A later full-catalog review also found role-blind desktop hero selection, cropped OCR in fullscreen, missing grouped portrait viewing, incomplete KAUP transport, an irrelevant next-morning train suggestion and a desktop phone CTA that attempted to dial instead of exposing the number.
 
 ## User / Business Impact
 
@@ -35,6 +35,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: backed up and reconciled Epidemia EventPoster row `8622` against canonical row `7824`, rebuilt its Telegraph projection, and exported a fresh 303-event future/ongoing catalog.
 - 2026-07-17: published noindex preview `preview-20260717t-static-personalization-v4`; public HTTP and browser acceptance covered medallions, desktop calendar states, duplicate removal, stable failed-image geometry, personal-feed lazy loading/dedup, gallery parity and desktop/mobile transport.
 - 2026-07-17: completed the repaired full vector sync and replaced the temporary sparse catalog with noindex preview `preview-20260717t-static-personalization-v5-vector`: `303` events, `40` pgvector/HNSW candidates per event and no underfilled chains.
+- 2026-07-17: started the desktop-only v6 remediation for events `5756`, `4671`, `3103`, `4783` and `6851`; the only shared mobile change is replacing the retired fullscreen brand imitation with `AnnouncementsLockup`.
 
 ## Root Cause
 
@@ -43,6 +44,11 @@ The full-catalog static preview exposed several user-visible regressions around 
 3. The accepted mobile V8 dock was later given an event-id parity rule that randomly expanded `calendar` or `share` text at narrow widths.
 4. Dynamically inserted cards did not reserve their media aspect ratio until image error/load handling ran.
 5. The mobile gallery appended a terminal related-event slide, while the desktop gallery generated image slides only.
+6. Desktop routing trusted the first exported media mode and scanned alternate landscapes only for a strict identity poster, so a classified non-identity document could force the split family even when safe horizontal event photos existed.
+7. Fullscreen CSS treated legacy/derived `visual_only` as permission to cover; it did not require classified `event_photo` plus explicit safe-crop evidence.
+8. The efficient viewer gate required at least five portrait images and a 60% portrait share; a real 12-image gallery with four strong portraits therefore fell back to the ordinary one-at-a-time viewer.
+9. KAUP had no exact-venue transport component, and the rail exporter missed an explicit duration written with a dash rather than the older colon-only form.
+10. Desktop telephone CTA reused a mobile `tel:` action instead of a visible copyable number.
 
 ## Contributing Factors
 
@@ -75,6 +81,13 @@ The full-catalog static preview exposed several user-visible regressions around 
 - delayed, invalid and successful dynamically inserted card images keep one stable reserved media frame;
 - desktop and mobile full-screen galleries both expose one terminal related-event recommendation;
 - previous desktop template, related-card crop, transport and mobile V8 regression contracts remain green across the full future-event catalog.
+- event `5756` uses Editorial with a classified safe horizontal photo while its non-identity document remains contained in fullscreen;
+- event `4671` shows exact-venue KAUP transfer, bus and map guidance sourced from KAUP/Автовокзал;
+- event `3103` shows explicit-end evening returns and no next-morning wait inside the desktop renderer;
+- event `4783` opens the grouped multi-portrait viewer with every source image addressable;
+- event `6851` exposes and copies the formatted telephone number with visible success feedback;
+- desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
+- insufficient-feedback placeholder copy is absent.
 
 ### Required evidence
 

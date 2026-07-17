@@ -19,6 +19,7 @@ const expectedSpecimens = new Map([
   ['blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815', ['split', 'split-portrait-or-square-visual']],
   ['spektakl-garazh-kaliningrad-5658', ['editorial', 'editorial-primary-qualified-landscape']],
   ['epidemiya-ognennaya-rukopis-kaliningrad-4671', ['editorial', 'editorial-with-classified-identity-poster']],
+  ['zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756', ['editorial', 'editorial-replaces-non-identity-document-with-classified-photo']],
 ]);
 
 const requiredRoutingFamilies = new Set([
@@ -53,6 +54,39 @@ for (const { slug, file } of eventFiles) {
   }
   if (slug === 'spektakl-garazh-kaliningrad-5658' && !html.includes('/p/thumb/v1/')) {
     failures.push(`${slug}: accepted compact rail lost its immutable thumbnail derivatives`);
+  }
+  const desktopHtml = html.slice(html.indexOf('<main class="desktop-clean-event'), html.indexOf('</main>', html.indexOf('<main class="desktop-clean-event')) + 7);
+  if (slug === 'zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756') {
+    if (!desktopHtml.includes('data-selected-media-policy="visual_only"')) failures.push(`${slug}: classified horizontal photo was not selected as the desktop hero`);
+    if (!desktopHtml.includes('data-desktop-gallery-fit="contain"')) failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);
+  }
+  if (slug === 'epidemiya-ognennaya-rukopis-kaliningrad-4671') {
+    for (const marker of ['data-kaup-transport', 'data-kaup-official-transfer', 'data-kaup-public-bus', '600 ₽ туда и обратно', 'Построить маршрут']) {
+      if (!desktopHtml.includes(marker)) failures.push(`${slug}: KAUP desktop transport is missing ${marker}`);
+    }
+  }
+  if (slug === '15-avgusta-v-yantar-holl-spektakl-papa-svetlogorsk-3103') {
+    for (const train of ['data-train-number="6724"', 'data-train-number="6726"']) {
+      if (!desktopHtml.includes(train)) failures.push(`${slug}: explicit-duration evening return is missing ${train}`);
+    }
+    if (desktopHtml.includes('Первый поезд 16 августа')) failures.push(`${slug}: desktop still suggests waiting for a next-morning train despite evening returns`);
+  }
+  if (slug === 'myuzikl-alye-parusa-kaliningrad-4783') {
+    const efficientItems = desktopHtml.match(/data-efficient-viewer-item/g)?.length || 0;
+    if (!desktopHtml.includes('data-split-efficient-viewer="true"') || efficientItems < 10) {
+      failures.push(`${slug}: accepted grouped multi-portrait viewer is missing or incomplete (${efficientItems} items)`);
+    }
+  }
+  if (slug === 'kinopokaz-fatalnaya-chechetka-kaliningrad-6851') {
+    if (!desktopHtml.includes('data-desktop-phone-copy') || !desktopHtml.includes('+7 911 868-89-55')) {
+      failures.push(`${slug}: desktop phone CTA does not expose the copyable number`);
+    }
+  }
+  if (html.includes('Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.')) {
+    failures.push(`${slug}: insufficient-feedback placeholder is still rendered`);
+  }
+  if (html.includes('<div class="hero-gallery"') && !html.includes('data-desktop-gallery-dismiss="true"')) {
+    failures.push(`${slug}: desktop gallery click-to-close contract is missing`);
   }
 }
 

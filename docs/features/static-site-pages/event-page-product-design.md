@@ -199,7 +199,7 @@ Primary CTA is selected by event facts:
 | registration link | `Зарегистрироваться` | “может потребоваться регистрация” |
 | free + explicit registration link | `Зарегистрироваться` | admission property must still say `Бесплатно · регистрация` |
 | free without registration requirement | `В календарь` | calendar save is also the service saved-event action; source remains secondary |
-| phone-only booking | `Позвонить` on mobile, `Показать телефон` desktop | plain visible phone fallback |
+| phone-only booking | `Позвонить` on mobile, visible number + copy on desktop | desktop click copies the number and confirms success without trying to open a dialer |
 | paid/ticketed, price unknown | `Билеты` | never invent `Узнать цену`, `Узнать условия` or `По билетам` |
 | source link only / unknown tickets | `Источник события` | honest secondary destination, no fake ticket CTA |
 | sold out | `Билеты закончились` as disabled/status | offer related events, not fake CTA |
@@ -301,6 +301,12 @@ not be reflowed by desktop experiments.
   graphite frame, with no copy, backdrop fields or crop. Other documents
   (services, schedule, wayfinding, sponsors) stay in the gallery/rail and are
   never called an афиша.
+- An `unknown_document`, attendee-information or other non-identity document
+  must not become the desktop hero merely because it is the first source image.
+  When the same event has an explicitly classified, safely coverable
+  horizontal `event_photo`, the Editorial family uses that photo and keeps the
+  document available in the rail/gallery. This is a role-first rule; OCR
+  emptiness, filename order and broad text heuristics do not promote media.
 - If no strong horizontal/photo hero is available, the split fallback keeps a
   document/portrait media column and a readable information column. OCR text is
   never horizontally cropped.
@@ -309,6 +315,19 @@ not be reflowed by desktop experiments.
   images; next/previous buttons, keyboard arrows and swipe all advance by a
   viewport group in both directions. It never silently falls back to a
   one-image viewer.
+- Desktop fullscreen rendering is fail-closed: only a classified `event_photo`
+  with `recommended_hero_fit=cover` and `safe_crop=true` may fill by cover.
+  Posters and all OCR/document media use `contain`, do not auto-pan, and remain
+  fully readable. An un-dragged click on the displayed image or empty backdrop
+  closes the viewer in addition to `×` and `Escape`; clicks on navigation,
+  links or the terminal recommendation never close it.
+- Both desktop and mobile fullscreen galleries render the shared
+  `AnnouncementsLockup` (`240×88` desktop, `128×96` mobile). A hand-built copy
+  of the retired tag/wordmark is forbidden. This shared brand replacement is
+  the only mobile change in the 2026-07-17 desktop remediation.
+- The insufficient-evidence feedback placeholder (`Общего вывода пока нет` /
+  `Отзывов недостаточно`) is omitted. A future feedback block may render only
+  a substantive, evidence-backed aggregate.
 - Related cards use a common bounded media height. Documents/OCR are scaled to
   full card width and may overflow only vertically (centered, or shifted by a
   trusted focal Y); source left/right edges are never cut and no side fields are

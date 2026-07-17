@@ -27,6 +27,11 @@ const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.tick
 const ctaHref = eventActionHref(event);
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
 const ctaIsTelephone = isTelephoneUrl(ctaHref);
+const phoneValue = ctaIsTelephone ? String(ctaHref || '').replace(/^tel:/iu, '').trim() : '';
+const phoneDigits = phoneValue.replace(/\D/gu, '');
+const phoneDisplay = phoneDigits.length === 11 && phoneDigits.startsWith('7')
+  ? `+7 ${phoneDigits.slice(1, 4)} ${phoneDigits.slice(4, 7)}-${phoneDigits.slice(7, 9)}-${phoneDigits.slice(9, 11)}`
+  : phoneValue;
 const soldOut = isTicketSoldOut(event);
 const canAddToCalendar = isCalendarEligible(event);
 const requiresExplicitBooking = event.ticket.kind === 'registration' || event.ticket.kind === 'phone';
@@ -44,6 +49,10 @@ const shareFileName = `kenigevents-${event.slug}`;
   <p><span>вход</span><strong>{admissionLabel}</strong></p>
   {calendarPrimary ? (
     <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+  ) : ctaIsTelephone && phoneValue ? (
+    <button type="button" class="desktop-prototype__primary-action desktop-prototype__phone-copy" data-desktop-phone-copy data-phone-copy-value={phoneValue} aria-label={`Скопировать номер организатора ${phoneDisplay}`}>
+      <Icon name="phone" /><span><strong>{phoneDisplay}</strong><small data-phone-copy-label>Скопировать номер</small></span>
+    </button>
   ) : ctaHref ? (
     <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
       <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
@@ -55,6 +64,7 @@ const shareFileName = `kenigevents-${event.slug}`;
   ) : (
     <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
   )}
+  {ctaIsTelephone && phoneValue && <p class="desktop-prototype__phone-status" data-phone-copy-status aria-live="polite"></p>}
   <div class="desktop-prototype__action-row event-hero__metric-row">
     {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
     <button
@@ -127,6 +137,12 @@ const shareFileName = `kenigevents-${event.slug}`;
     box-shadow: 0 12px 24px rgba(124, 49, 20, .25);
   }
   :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }
+  :global(button.desktop-prototype__primary-action) { border:0; font:inherit; cursor:pointer; }
+  .desktop-prototype__phone-copy > span { display:grid; gap:.08rem; text-align:left; }
+  .desktop-prototype__phone-copy strong { font-size:1.02rem; font-variant-numeric:tabular-nums; }
+  .desktop-prototype__phone-copy small { color:rgba(255,255,255,.82); font-size:.72rem; font-weight:800; }
+  .desktop-prototype__phone-copy.is-copied { background:#2d6f58; box-shadow:0 12px 24px rgba(26,88,67,.24); }
+  .desktop-prototype__phone-status { min-height:1.1rem; margin:-.35rem 0 0 !important; color:#d7c9bc; font-size:.72rem; line-height:1.2; }
   :global(.desktop-prototype__primary-action.is-disabled) { opacity: .7; }
   .desktop-prototype__action-row { display: flex; gap: .45rem; }
   :global(.desktop-prototype__icon-action) {

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { buildTransportIcs, transportIcsDownloadFilename } from '../../../../lib/ics';
+import { desktopEventWithExplicitEnd } from '../../../../lib/desktopEventTransport';
 import {
   eventTransportCalendarEntries,
   eventTransportTripKey,
@@ -20,13 +21,34 @@ interface TransportIcsProps {
 
 export function getStaticPaths() {
   return getEvents().flatMap((event) => {
-    const suggestion = getEventTransportSuggestion(event);
-    if (!suggestion) return [];
-    return eventTransportCalendarEntries(suggestion).map(({ direction, train }) => ({
-      params: { slug: event.slug, trip: eventTransportTripKey(suggestion, direction, train) },
-      props: { event, suggestion, direction, train } satisfies TransportIcsProps,
-    }));
+    // Desktop can recover a strictly source-labelled duration that has not yet
+    // reached the export. Its return shortlist can therefore differ from the
+    // unchanged mobile shortlist. Generate the union so every rendered rail
+    // calendar link resolves, while keeping one canonical file per trip key.
+    const variants = [event, desktopEventWithExplicitEnd(event)];
+    const paths = new Map<string, ReturnType<typeof pathForTrip>>();
+    for (const variant of variants) {
+      const suggestion = getEventTransportSuggestion(variant);
+      if (!suggestion) continue;
+      for (const { direction, train } of eventTransportCalendarEntries(suggestion)) {
+        const trip = eventTransportTripKey(suggestion, direction, train);
+        paths.set(trip, pathForTrip(variant, suggestion, direction, train));
+      }
+    }
+    return [...paths.values()];
   });
+}
+
+function pathForTrip(
+  event: PreviewEvent,
+  suggestion: EventTransportSuggestion,
+  direction: EventTransportDirection,
+  train: EventTrainOption,
+) {
+  return {
+    params: { slug: event.slug, trip: eventTransportTripKey(suggestion, direction, train) },
+    props: { event, suggestion, direction, train } satisfies TransportIcsProps,
+  };
 }
 
 export const GET: APIRoute = ({ props }) => {

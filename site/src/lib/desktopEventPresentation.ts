@@ -52,6 +52,21 @@ function isReliableIdentityPoster(asset: EventImageAsset | undefined): boolean {
     && asset.media_role === 'event_identity_poster';
 }
 
+function isReliableEditorialPhoto(asset: EventImageAsset | undefined): boolean {
+  return asset?.media_semantic_status === 'classified'
+    && asset.media_role === 'event_photo'
+    && asset.safe_crop === true
+    && asset.recommended_hero_fit === 'cover'
+    && isEditorialLandscape(asset);
+}
+
+function isReliableNonIdentityDocument(asset: EventImageAsset | undefined): boolean {
+  return asset?.media_semantic_status === 'classified'
+    && Boolean(asset.media_role)
+    && asset.media_role !== 'event_photo'
+    && asset.media_role !== 'event_identity_poster';
+}
+
 function objectPosition(event: PreviewEvent, asset: EventImageAsset | undefined, bottomSafe: boolean): string {
   if (bottomSafe) return '50% 100%';
   if (asset?.recommended_object_position) return asset.recommended_object_position;
@@ -94,8 +109,16 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
   const ocrSourceIndexes = distinctIndexes.filter((index) => !isVisual(assets[index]));
   const identityPosterIndex = distinctIndexes.find((index) => isReliableIdentityPoster(assets[index]));
   const portraitIndexes = distinctIndexes.filter((index) => isVisual(assets[index]) && assetRatio(assets[index]) < PORTRAIT_MAX_RATIO);
-  const splitPortraitViewer = portraitIndexes.length >= 5
-    && portraitIndexes.length >= Math.ceil(Math.max(1, distinctIndexes.length) * 0.6);
+  const classifiedPortraitPhotoCount = portraitIndexes.filter((index) => (
+    assets[index]?.media_semantic_status === 'classified'
+    && assets[index]?.media_role === 'event_photo'
+  )).length;
+  // The accepted grouped viewer is useful once an event has a real portrait
+  // family, not only when portraits are an absolute majority. Two classified
+  // event photos anchor semantics; pending companions may then join by geometry.
+  const splitPortraitViewer = portraitIndexes.length >= 4
+    && classifiedPortraitPhotoCount >= 2
+    && portraitIndexes.length >= Math.ceil(Math.max(1, distinctIndexes.length) * 0.3);
 
   // A landscape alternative may become hero only when a classified identity
   // poster anchors event semantics. A portrait/square visual primary alone is
@@ -128,6 +151,40 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
         splitPortraitSourceIndexes:[],
         relatedMediaTreatment:'hybrid',
         reason:'editorial-with-classified-identity-poster',
+      };
+    }
+  }
+
+  // A classified non-identity document (venue announcement, attendee note,
+  // schedule, map) must not monopolise the desktop hero when the same event has
+  // a separately classified, crop-safe, full-resolution event photograph.
+  // Keep the document in the gallery; only the desktop hero family changes.
+  if (isReliableNonIdentityDocument(primary)) {
+    const landscapePhotoIndex = distinctIndexes
+      .filter((index) => index !== primaryIndex && isReliableEditorialPhoto(assets[index]))
+      .sort((left, right) => (assets[right].width * assets[right].height) - (assets[left].width * assets[left].height))[0];
+    if (landscapePhotoIndex !== undefined) {
+      const hero = assets[landscapePhotoIndex];
+      const bottomSafe = assetRatio(hero) < NEAR_SQUARE_MAX_RATIO;
+      return {
+        candidate:'editorial',
+        mediaPolicy:'non-ocr',
+        heroImageIndex:landscapePhotoIndex,
+        heroWidth:hero.width,
+        heroHeight:hero.height,
+        heroObjectPosition:objectPosition(event, hero, bottomSafe),
+        editorialRail:true,
+        editorialMotion:'continuous',
+        editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'exact',
+        ocrCompanionLayout:'separate',
+        autoRotate:distinctIndexes.filter((index) => isReliableEditorialPhoto(assets[index])).length > 1,
+        ocrSourceIndexes,
+        duplicateSourceIndexes:[],
+        splitMediaFit:'natural',
+        splitPortraitViewer:false,
+        splitPortraitSourceIndexes:[],
+        relatedMediaTreatment:'hybrid',
+        reason:'editorial-replaces-non-identity-document-with-classified-photo',
       };
     }
   }
@@ -175,7 +232,9 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     duplicateSourceIndexes:[],
     splitMediaFit:selectedIsVisual && selectedRatio >= 1.15 ? 'viewport-cover' : 'natural',
     splitPortraitViewer,
-    splitPortraitSourceIndexes:splitPortraitViewer ? portraitIndexes : [],
+    // The grouped viewer must contain every rail source. Restricting it to the
+    // portrait subset made a click on a landscape thumbnail open image one.
+    splitPortraitSourceIndexes:splitPortraitViewer ? distinctIndexes : [],
     relatedMediaTreatment:'hybrid',
     reason:!primary && !event.image_url
       ? 'split-no-image-fallback'

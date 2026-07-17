@@ -1,6 +1,6 @@
 # Bus transport coverage directory
 
-> Status: implemented static reference; public timetable UI remains enabled only for `romanovo-holmogorye` until each corridor has reviewed stop times.
+> Status: implemented static reference; the generic public timetable UI remains enabled only for `romanovo-holmogorye`. Desktop KAUP is a separate exact-venue exception led by the venue's official transfer and a conservative `119` warning, not by a generic Romanovo matcher.
 
 ## Storage decision
 
@@ -68,7 +68,7 @@ Pedestrian figures use Valhalla over OSM geometry. The table deliberately distin
 | Приморье — сквер у озера | `Приморье`, `125/125А` | 247 m / 4 min | address/stop proxy; schedule still conditional |
 | Романово — Сказочное Холмогорье | `Романово`, `119` | 2 km / 27 min | reviewed public example |
 | Романово — Сказочное Холмогорье | `Романовский поворот`, `118/118А` | 3.9 km / 52 min | reviewed public example |
-| Романово — Поселение викингов Кауп | `Романово-2`, `119` | 4.306 km / 53 min | **do not enable:** OSM pedestrian graph produces a detour; entrance/path needs field/Yandex confirmation |
+| Романово — Поселение викингов Кауп | `Романово-2`, `119` | 4.306 km / 53 min | desktop exact-venue warning only: never present as short/easy access; recommend official transfer or car |
 | Рыбачий — `посёлок Рыбачий` | `Рыбачий`, `593` | 0–800 m / 0–10 min | locality band only; exact event point missing |
 | Советск — ОЦК ТеплоСеть | Автовокзал Советск | 1.056 km / 13 min | measured |
 | Ушаково — Замок Бранденбург | `Ушаково-1`, `117` | 499 m / 6 min | measured; timetable still conditional |
@@ -82,7 +82,7 @@ Pedestrian figures use Valhalla over OSM geometry. The table deliberately distin
 - **Ушаково homonym:** route `110` goes to another Ушаково via Родники/Низовье. Brandenburg is on the Мамоново corridor `117`. The validator forbids attaching `110` to this venue.
 - **Территория Я:** `10 км` in the source address is a road-location label, not a ten-kilometre walking distance. The mapped route from stop `10-й километр` is 2.611 km.
 - **Медведевка:** route and stop exist, but no exact event venue exists in the data. Numeric walking guidance is suppressed.
-- **Кауп:** straight-line intuition is unsafe; the routable pedestrian graph gives more than 4 km. Public guidance remains off pending an entrance/path check.
+- **Кауп:** straight-line intuition is unsafe; the routable pedestrian graph gives more than 4 km. The desktop exact-venue card may state that conservative walk and the absence of a confirmed evening public return, but it must lead with KAUP's official round-trip transfer. Generic Romanovo guidance remains off pending an entrance/path check.
 
 ## Prepared catalog candidates
 
