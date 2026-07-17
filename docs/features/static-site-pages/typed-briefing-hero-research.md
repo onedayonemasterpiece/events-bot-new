@@ -116,7 +116,7 @@ Final immutable review build:
 - текст остаётся на той же shared-shell позиции, что и text-only hero:
   mosaic не меняет stage/message width, font или alignment. Старые `96%`
   background-плашки, `0.08em` padding и четыре расширяющих box-shadow удалены:
-  fragment/CTA получают один узкий `42%` paper wash только в средней части
+  fragment/CTA получают один узкий `30%` paper wash только в средней части
   строки, `1px` glyph halo и нулевой box-shadow; inline event link сохраняет
   один underline, отделённый от wash. Viewport-bound media shell начинается
   ровно около `25vw` (`x=360` при 1440, `x=480` при 1920) и заканчивается на

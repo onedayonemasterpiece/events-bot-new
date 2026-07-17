@@ -478,7 +478,7 @@ test('eligible scenarios use desktop mosaic media without moving the established
   expect(Math.abs(mediaGeometry.initial.y - mediaGeometry.withoutMedia.y)).toBeLessThanOrEqual(1);
   expect(Math.abs(mediaGeometry.initial.width - mediaGeometry.withoutMedia.width)).toBeLessThanOrEqual(1);
   expect(mediaGeometry.stripe).toContain('linear-gradient');
-  expect(mediaGeometry.stripe).toContain('0.42');
+  expect(mediaGeometry.stripe).toContain('0.3');
   expect(mediaGeometry.stripeColor).toBe('rgba(0, 0, 0, 0)');
   expect(mediaGeometry.stripeShadow).toBe('none');
   expect(mediaGeometry.withoutStripe).toBe('none');
@@ -762,7 +762,7 @@ test('approved header lockup, lightweight mosaic stripe and weather actions keep
     expect(geometry.media.left).toBeLessThan(geometry.message.right);
     expect(Math.abs(geometry.longMessage.left - geometry.message.left)).toBeLessThanOrEqual(1);
     expect(geometry.stripe).toContain('linear-gradient');
-    expect(geometry.stripe).toContain('0.42');
+    expect(geometry.stripe).toContain('0.3');
     expect(geometry.stripeColor).toBe('rgba(0, 0, 0, 0)');
     expect(geometry.stripeShadow).toBe('none');
     expect(geometry.paddingInline).toBeLessThan(3);
