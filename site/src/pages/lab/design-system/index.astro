@@ -2,6 +2,7 @@
 import EventLayout from '../../../layouts/EventLayout.astro';
 import Badge from '../../../components/design-system/Badge.astro';
 import Button from '../../../components/design-system/Button.astro';
+import CopyAction from '../../../components/design-system/CopyAction.astro';
 import Field from '../../../components/design-system/Field.astro';
 import StatePanel from '../../../components/design-system/StatePanel.astro';
 import EventCard from '../../../components/EventCard.astro';
@@ -62,7 +63,7 @@ const colors = [
   ['Surface', 'var(--ke-color-surface)', '#fffdf8'],
 ] as const;
 const spacing = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16];
-const iconNames = ['heart', 'calendar', 'dislike', 'share', 'pin', 'ticket', 'info', 'spark', 'lock', 'image', 'phone'] as const;
+const iconNames = ['heart', 'calendar', 'dislike', 'share', 'pin', 'ticket', 'info', 'spark', 'lock', 'image', 'phone', 'copy', 'check'] as const;
 const title = `Дизайн-система | ${SITE_NAME}`;
 const description = 'Канонический каталог токенов, состояний и продуктовых компонентов статического сайта KenigEvents.';
 const canonicalUrl = absoluteUrl('/lab/design-system/');
@@ -172,6 +173,26 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
             <Button variant="danger">Удалить</Button>
             <Button variant="secondary" size="large">Крупное действие</Button>
             <Button variant="secondary" iconOnly ariaLabel="Добавить в избранное"><Icon name="heart" /></Button>
+          </div>
+          <h3>Иконочное копирование</h3>
+          <p class="muted-note">Значение остаётся обычным текстом, а кнопка показывает только общепринятую иконку. Успех меняет copy на check в том же квадрате; скрытый live-status озвучивает результат.</p>
+          <div class="ds-copy-grid">
+            <div class="ds-copy-fixture">
+              <span><small>Телефон</small><strong>+7 911 868-89-55</strong></span>
+              <CopyAction value="+79118688955" ariaLabel="Скопировать номер +7 911 868-89-55" successLabel="Номер скопирован" />
+            </div>
+            <div class="ds-copy-fixture ds-copy-fixture--inverse">
+              <span><small>Телефон на тёмной поверхности</small><strong>+7 911 868-89-55</strong></span>
+              <CopyAction variant="inverse" size="large" value="+79118688955" ariaLabel="Скопировать номер +7 911 868-89-55" successLabel="Номер скопирован" />
+            </div>
+            <div class="ds-copy-state-fixture">
+              <CopyAction value="Пример" ariaLabel="Скопировать пример" previewState="success" resetDelayMs={0} />
+              <code>success · check + live status</code>
+            </div>
+            <div class="ds-copy-state-fixture">
+              <CopyAction value="Пример" ariaLabel="Скопировать пример" previewState="error" resetDelayMs={0} />
+              <code>error · ! + live recovery</code>
+            </div>
           </div>
           <h3>Состояния выбора и статуса</h3>
           <div class="ds-state-row">
@@ -312,6 +333,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
               <thead><tr><th>Компонент</th><th>Статус</th><th>Runtime source</th><th>Проверка</th></tr></thead>
               <tbody>
                 <tr><td>Button</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Button.astro</code></td><td>default/hover/focus/pressed/loading/disabled</td></tr>
+                <tr><td>CopyAction</td><td><Badge tone="warning">candidate</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>secondary/inverse + success/error + clipboard fallback</td></tr>
                 <tr><td>Badge</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Badge.astro</code></td><td>6 semantic tones</td></tr>
                 <tr><td>Field</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
                 <tr><td>StatePanel</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>
@@ -394,6 +416,15 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
   .ds-state-row { align-items: flex-end; }
   .ds-state-sample { display: grid; gap: var(--ke-space-2); justify-items: start; }
   .ds-state-sample code { color: var(--ke-color-muted); font-size: var(--ke-font-size-100); }
+  .ds-copy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ke-space-3); max-width: 840px; }
+  .ds-copy-fixture { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: var(--ke-space-4); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-3); background: var(--ke-color-surface-strong); }
+  .ds-copy-fixture > span { min-width: 0; display: grid; gap: var(--ke-space-1); }
+  .ds-copy-fixture small { color: var(--ke-color-muted); font-size: var(--ke-font-size-100); }
+  .ds-copy-fixture strong { font-size: var(--ke-font-size-300); font-variant-numeric: tabular-nums; white-space: nowrap; user-select: all; }
+  .ds-copy-fixture--inverse { border-color: var(--ke-color-control-inverse-line); background: var(--ke-color-ink); color: var(--ke-color-control-inverse); }
+  .ds-copy-fixture--inverse small { color: var(--ke-color-control-inverse); opacity: .78; }
+  .ds-copy-state-fixture { min-height: 76px; display: flex; align-items: center; gap: var(--ke-space-3); border: 1px dashed var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-3); background: var(--ke-color-surface); }
+  .ds-copy-state-fixture code { color: var(--ke-color-muted); font-size: var(--ke-font-size-100); }
   .ds-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ds-skeleton-card { width: min(100%, 340px); display: grid; gap: var(--ke-space-3); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-4); background: var(--ke-color-surface-strong); }
   .ds-skeleton-card__media { min-height: 180px; }
@@ -429,6 +460,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
     .ds-component-block__head { display: grid; }
     .ds-field-grid,
     .ds-panel-grid,
+    .ds-copy-grid,
     .ds-card-comparison { grid-template-columns: 1fr; }
     .ds-catalog__toc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ds-catalog__toc a { justify-content: center; }

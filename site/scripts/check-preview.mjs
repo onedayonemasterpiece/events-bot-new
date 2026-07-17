@@ -47,6 +47,9 @@ if (!/<h1[^>]*>Дизайн-система статического сайта<\
 if (!designSystemHtml.includes('data-preview-state="focus"') || !designSystemHtml.includes('aria-busy="true"') || !designSystemHtml.includes('aria-invalid="true"')) throw new Error('Design-system catalog misses focus/loading/error state evidence');
 if (!designSystemHtml.includes('split-actions') || !designSystemHtml.includes('overlay · deprecated')) throw new Error('Design-system catalog misses approved/deprecated EventCard comparison');
 if (!designSystemHtml.includes('EventCtaPanel.astro') || !designSystemHtml.includes('EventListItem.astro')) throw new Error('Design-system registry misses product component sources');
+if (!designSystemHtml.includes('data-ke-copy-action') || !designSystemHtml.includes('icon--copy') || !designSystemHtml.includes('icon--check')) throw new Error('Design-system catalog misses the real icon-only CopyAction');
+if (!designSystemHtml.includes('ke-button--inverse') || !designSystemHtml.includes('data-copy-state="success"') || !designSystemHtml.includes('data-copy-state="error"')) throw new Error('Design-system catalog misses inverse/success/error CopyAction fixtures');
+if (!designSystemHtml.includes('role="status"') || !designSystemHtml.includes('aria-live="polite"') || !designSystemHtml.includes('design-system/CopyAction.astro')) throw new Error('Design-system CopyAction misses accessible feedback or registry evidence');
 if (interestClubsData.schema_version !== 'interest-clubs-static-v1' || interestClubsData.projection_version !== 1) {
   throw new Error('Interest-clubs projection contract is not interest-clubs-static-v1');
 }

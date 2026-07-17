@@ -25,6 +25,10 @@
   --ke-color-surface: #fffdf8;
   --ke-color-surface-strong: #ffffff;
   --ke-color-focus: #0f766e;
+  --ke-color-control-inverse: #fffdf8;
+  --ke-color-control-inverse-bg: rgba(255, 255, 255, 0.1);
+  --ke-color-control-inverse-line: rgba(255, 255, 255, 0.34);
+  --ke-color-control-inverse-hover: rgba(255, 255, 255, 0.18);
 
   /* Typography. The system font stack avoids a blocking font request. */
   --ke-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -115,6 +119,7 @@
 .ke-button--primary { background: var(--ke-color-brand-600); color: var(--ke-color-surface-strong); }
 .ke-button--secondary { border-color: var(--ke-color-line); background: var(--ke-color-surface-strong); color: var(--ke-color-brand-700); }
 .ke-button--quiet { background: transparent; color: var(--ke-color-brand-700); }
+.ke-button--inverse { border-color: var(--ke-color-control-inverse-line); background: var(--ke-color-control-inverse-bg); color: var(--ke-color-control-inverse); }
 .ke-button--danger { background: var(--ke-color-danger-700); color: var(--ke-color-surface-strong); }
 
 .ke-button:hover,
@@ -125,6 +130,8 @@
 .ke-button--secondary[data-preview-state="hover"],
 .ke-button--quiet:hover,
 .ke-button--quiet[data-preview-state="hover"] { border-color: color-mix(in srgb, var(--ke-color-brand-600) 34%, transparent); background: #fff7ea; }
+.ke-button--inverse:hover,
+.ke-button--inverse[data-preview-state="hover"] { border-color: var(--ke-color-control-inverse); background: var(--ke-color-control-inverse-hover); }
 .ke-button:active,
 .ke-button[data-preview-state="pressed"] { transform: translateY(1px); box-shadow: none; }
 .ke-button:focus-visible,
@@ -141,6 +148,40 @@
   border-right-color: transparent;
   border-radius: 50%;
   animation: ke-spin 700ms linear infinite;
+}
+
+.ke-copy-action { position: relative; flex: 0 0 auto; overflow: visible; }
+.ke-copy-action__icon { width: 1.18rem; height: 1.18rem; display: grid; place-items: center; }
+.ke-copy-action__icon .icon { grid-area: 1 / 1; }
+.ke-copy-action__check-icon { display: none; }
+.ke-copy-action[data-copy-state="success"] { border-color: var(--ke-color-success-700); background: var(--ke-color-success-700); color: var(--ke-color-surface-strong); }
+.ke-copy-action[data-copy-state="success"] .ke-copy-action__copy-icon { display: none; }
+.ke-copy-action[data-copy-state="success"] .ke-copy-action__check-icon { display: block; }
+.ke-copy-action[data-copy-state="error"] { border-color: var(--ke-color-danger-700); background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
+.ke-copy-action[data-copy-state="error"]::after {
+  content: "!";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ke-color-danger-700);
+  color: var(--ke-color-surface-strong);
+  font: 900 10px / 1 var(--ke-font-sans);
+}
+.ke-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 .ke-badge {

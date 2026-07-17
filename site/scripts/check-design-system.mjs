@@ -7,8 +7,11 @@ const css = read('src/styles/design-system.css');
 const layout = read('src/layouts/EventLayout.astro');
 const rootPage = read('src/pages/index.astro');
 const catalog = read('src/pages/lab/design-system/index.astro');
+const icon = read('src/components/Icon.astro');
+const copyAction = read('src/components/design-system/CopyAction.astro');
 const componentPaths = [
   'src/components/design-system/Button.astro',
+  'src/components/design-system/CopyAction.astro',
   'src/components/design-system/Badge.astro',
   'src/components/design-system/Field.astro',
   'src/components/design-system/StatePanel.astro',
@@ -24,7 +27,7 @@ const requiredTokens = [
   '--ke-color-brand-600', '--ke-color-brand-tag', '--ke-color-accent-600', '--ke-color-ink', '--ke-color-muted',
   '--ke-color-canvas', '--ke-color-surface', '--ke-font-sans', '--ke-font-size-300',
   '--ke-space-1', '--ke-space-4', '--ke-space-8', '--ke-radius-md', '--ke-shadow-2',
-  '--ke-duration-fast', '--ke-control-min', '--ke-content-max',
+  '--ke-duration-fast', '--ke-control-min', '--ke-content-max', '--ke-color-control-inverse',
 ];
 for (const token of requiredTokens) {
   if (!css.includes(`${token}:`)) throw new Error(`Missing canonical design token: ${token}`);
@@ -39,6 +42,15 @@ if (/background:\s*#(?:98401f|893719)/iu.test(layout)) throw new Error('Approved
 for (const state of ['default', 'hover', 'focus', 'pressed', 'loading', 'disabled']) {
   if (!catalog.includes(`state: '${state}'`)) throw new Error(`Button catalog misses ${state} state`);
 }
+for (const iconName of ['copy', 'check']) {
+  if (!icon.includes(`name === '${iconName}'`) || !catalog.includes(`'${iconName}'`)) throw new Error(`CopyAction icon inventory misses ${iconName}`);
+}
+for (const marker of ['data-ke-copy-action', 'navigator.clipboard?.writeText', "document.execCommand('copy')", 'data-ke-copy-status', 'aria-live="polite"', "previewState=\"success\"", "previewState=\"error\""]) {
+  if (!copyAction.includes(marker) && !catalog.includes(marker)) throw new Error(`CopyAction contract misses ${marker}`);
+}
+if (!copyAction.includes("'ke-button--icon'") || !css.includes('.ke-button--icon { width: var(--ke-control-min)')) throw new Error('CopyAction must consume the fixed 44px icon-only button contract');
+if (!css.includes('.ke-copy-action__check-icon') || !css.includes('content: "!"')) throw new Error('CopyAction success/error cannot rely on color alone');
+if (!catalog.includes('<CopyAction') || !catalog.includes('variant="inverse"') || !catalog.includes('design-system/CopyAction.astro')) throw new Error('Catalog misses the real CopyAction fixtures or registry row');
 for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'PersonalFeedSlot', 'SocialIcon']) {
   if (!catalog.includes(`<${component}`)) throw new Error(`Catalog misses real product component: ${component}`);
 }
