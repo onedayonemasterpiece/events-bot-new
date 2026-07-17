@@ -1289,6 +1289,36 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publication_text_restore_pending_total"], 1)
         self.assertEqual(metrics["publication_active_candidate_total"], 1)
         self.assertEqual(metrics["finalizer_pending_url_total"], 0)
+        self.assertEqual(metrics["publication_text_restore_ready_for_finalizer_total"], 0)
+
+    def test_restored_candidate_text_reopens_finalizer_without_another_fetch(self) -> None:
+        mod = load_module()
+        url = "https://t.me/travel/10"
+        metrics = mod._publication_handoff_metrics(
+            [{
+                "post_url": url,
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+            }],
+            [{
+                "post_url": url,
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "publication_eligibility_verdict": "eligible",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            }],
+            [],
+            [{
+                "post_url": url,
+                "full_text": "Полный восстановленный рассказ о поездке в Калининград.",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+            }],
+        )
+        self.assertEqual(metrics["publication_text_restore_pending_total"], 1)
+        self.assertEqual(metrics["publication_text_restore_ready_for_finalizer_total"], 1)
+        self.assertEqual(metrics["publication_text_restore_ready_for_finalizer_urls"], [url])
+        self.assertEqual(metrics["finalizer_pending_url_total"], 1)
+        self.assertEqual(metrics["finalizer_pending_urls"], [url])
 
     def test_image_review_metrics_separate_active_work_from_historical_ledger(self) -> None:
         mod = load_module()

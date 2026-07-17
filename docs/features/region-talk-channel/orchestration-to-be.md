@@ -224,6 +224,15 @@ compliance blocks) from
 `publication_eligibility_refresh_deferred_count` (non-terminal contract
 refresh). They also report posts and distinct frames separately.
 
+Publication text restoration is a two-owner handoff, not a polling dead end.
+CandidateReport owns the bounded governed Telegram refetch and current E5+BGE
+rebuild. As soon as exact full text is again present in current candidate
+memory, the orchestrator reports
+`publication_text_restore_ready_for_finalizer_total` and schedules the normal
+finalizer even if the older publication row still says `awaiting_text_restore`.
+Without restored text the finalizer remains suppressed, so the queue cannot hot
+loop or bypass Telegram request governance.
+
 If Telegram/VK media resolves to a video/non-image file or an image decoder
 cannot open the downloaded payload, ImageDiagnostic must write a terminal
 `image_queue_status=not_reviewable_unsupported_media` with

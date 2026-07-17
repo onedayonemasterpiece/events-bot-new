@@ -2171,6 +2171,7 @@ def _publication_handoff_metrics(
     images: list[dict[str, Any]],
     publications: list[dict[str, Any]],
     source_rows: list[dict[str, Any]] | None = None,
+    candidate_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if source_rows is not None:
         attach_live_source_fingerprints(publications, source_rows)
@@ -2184,6 +2185,7 @@ def _publication_handoff_metrics(
     video_by_url, video_missing_url = _latest_rows_by_post_url(video_rows)
     finalizer_input_by_url = {**actual_by_url, **video_by_url}
     publication_by_url, publication_missing_url = _latest_rows_by_post_url(publications)
+    candidate_by_url, _candidate_missing_url = _latest_rows_by_post_url(candidate_rows or [])
     now = datetime.now(timezone.utc)
     source_by_key = {
         canonical_source_key_for_row(row): row
@@ -2238,7 +2240,11 @@ def _publication_handoff_metrics(
         if needs_source_evidence(row) and not publication_is_terminal_non_candidate(url)
     )
 
-    def needs_finalizer(row: dict[str, Any] | None) -> bool:
+    def restored_text_is_ready(url: str) -> bool:
+        memory = candidate_by_url.get(url) or {}
+        return bool(str(memory.get("full_text") or memory.get("text") or "").strip())
+
+    def needs_finalizer(url: str, row: dict[str, Any] | None) -> bool:
         if not row:
             return True
         candidate_status = str(row.get("publication_candidate_status") or "").lower()
@@ -2263,9 +2269,12 @@ def _publication_handoff_metrics(
             )
         publication_status = str(row.get("publication_status") or "").lower()
         if publication_status == "text_restore_pending" or candidate_status == "awaiting_text_restore":
-            # CandidateReport, not the finalizer, owns the next operation: a
-            # governed exact Telethon refetch from post_link_queue_item.
-            return False
+            # CandidateReport owns the governed Telethon refetch, but once it
+            # has restored the exact body into current candidate memory the
+            # normal finalizer owns the next operation.  Looking only at the
+            # stale publication status leaves a completed restore in a
+            # permanent no-action gap.
+            return restored_text_is_ready(url)
         llm_terminal_non_candidate = (
             candidate_status in {"llm_rejected", "llm_needs_review"}
             or publication_status in {"gemini_reject", "gemini_needs_review"}
@@ -2323,7 +2332,15 @@ def _publication_handoff_metrics(
 
     finalizer_pending_urls = sorted(
         url for url in finalizer_input_by_url
-        if needs_finalizer(publication_by_url.get(url))
+        if needs_finalizer(url, publication_by_url.get(url))
+    )
+    text_restore_ready_urls = sorted(
+        url for url, row in publication_by_url.items()
+        if (
+            str(row.get("publication_status") or "").lower() == "text_restore_pending"
+            or str(row.get("publication_candidate_status") or "").lower() == "awaiting_text_restore"
+        )
+        and restored_text_is_ready(url)
     )
 
     confirmed_urls = {url for url, row in publication_by_url.items() if is_confirmed_publication(row)}
@@ -2366,6 +2383,8 @@ def _publication_handoff_metrics(
         "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
         "publication_visual_review_pending_total": sum(1 for status in status_by_url.values() if status == "visual_review_pending"),
         "publication_text_restore_pending_total": sum(1 for status in status_by_url.values() if status == "awaiting_text_restore"),
+        "publication_text_restore_ready_for_finalizer_total": len(text_restore_ready_urls),
+        "publication_text_restore_ready_for_finalizer_urls": text_restore_ready_urls,
         "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error"}),
         "publication_rejected_total": sum(1 for status in status_by_url.values() if status in {"filtered_before_llm", "llm_rejected"}),
         "publication_source_evidence_backlog_total": len(source_evidence_urls),
@@ -3569,7 +3588,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         and str(r.get("publication_eligibility_gate_version") or "")
     ]
     image_terminal_metrics = _image_queue_status_metrics(images)
-    publication_metrics = _publication_handoff_metrics(images, publications, source_rows)
+    publication_metrics = _publication_handoff_metrics(images, publications, source_rows, candidates)
     image_review_lifecycle_metrics = _image_review_lifecycle_metrics(images, publications)
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
