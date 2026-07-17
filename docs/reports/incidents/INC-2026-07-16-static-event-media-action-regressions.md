@@ -46,6 +46,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: the v10 product pass restored North-derived route-119 times, flattened KAUP into one concise journey hierarchy after Gemini 3.1 Pro (High) critique, and aligned the desktop phone control with the parallel design-system CopyAction contract: standard-size number, no phone glyph/helper copy, fixed icon-only copy→check feedback.
 - 2026-07-17: follow-up product review rejected v10's plain number plus detached copy utility as a loss of primary-action hierarchy. The correction restores the existing branded CTA styling: `Показать телефон` with a copy icon reveals and copies the normalized number in one click and reports `Номер скопирован` without moving the panel.
 - 2026-07-17: follow-up product review found that wide no-OCR event photographs were letterboxed in the desktop hero/fullscreen viewer because pending semantic-role hints overrode positive `visual_only` evidence; the carousel contract was separated into photo-cover, document-contain and efficient portrait-series families, with a named production-data portrait example.
+- 2026-07-17: transport-infographic discovery reviewed 120 Pinterest candidates and authoritative public-transport standards, produced three responsive alternatives, and obtained a completed Gemini 3.1 Pro (High) comparison. The recommended scalable direction is a dense departure board with one shared route strip and progressive disclosure; alternatives were delivered to the existing Telegram UI-review topic before implementation choice.
 
 ## Root Cause
 
@@ -198,6 +199,8 @@ The full-catalog static preview exposed several user-visible regressions around 
 - v10 public browser evidence: KAUP at `320/390` and telephone geometry/copy at `1366/1536/1920` returned `failures: []`; the full mobile routing gate passed `36/36` event pages at both `320` and `390`, five actual related-event transitions and a poisoned stale-v7 cache with exact v10-prefix rebasing and untouched foreign ticket origin
 - v10 external review: completed Gemini 3.1 Pro (High) visual review returned `PASS`, `Material blockers: Нет`; the earlier truncated response remains excluded
 - v10 mobile handoff: five current-prefix seed links and the dozens-event review instruction were delivered and read back as Telegram message `254` in the existing `Mobile event UI · hero, дата, OCR` topic (`chat 4337049383`, topic `2`) with the role-approved E2E human session
+- v11 local integration: `374` routes / `303` event pages; preview, production-desktop, rail, bus, focused Node tests and `git diff --check` passed. Playwright passed phone CTA geometry at `1366/1536/1920`, wide-photo hero/fullscreen `cover` for event `5658`, the seven-item efficient portrait example for event `4783`, preserved mobile `accepted-v8`, and the current-prefix `36/36 × 2` crawl plus stale-cache poison test with zero failures.
+- v11 transport review handoff: three responsive alternatives and the completed Gemini 3.1 Pro (High) verdict (`A > C > B`, recommend shared route strip plus dense departure table) were sent/read back as Telegram messages `261–265` in topic `2`; no production transport implementation was selected or promoted implicitly.
 
 ## Prevention
 

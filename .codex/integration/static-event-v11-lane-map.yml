@@ -26,7 +26,8 @@ lanes:
     expected_output: source-backed shortlist, contact sheet, scalable UI alternatives and self-review
     verification_scope: inspection_only
     effort: high
-    status: spawned
+    status: merged
+    integration_commit: 51f9c039
   - id: phone-cta
     role: worker
     requirement_ids: [R02]
@@ -40,7 +41,8 @@ lanes:
     expected_output: committed component fix and focused tests
     verification_scope: targeted
     effort: high
-    status: spawned
+    status: merged
+    integration_commit: afbbd1ec
   - id: carousel-contracts
     role: worker
     requirement_ids: [R03, R04]
@@ -54,4 +56,5 @@ lanes:
     expected_output: root-cause fix, explicit crop matrix, lab example and browser evidence
     verification_scope: full_local
     effort: extra-high
-    status: spawned
+    status: merged
+    integration_commit: 63e4c1b0
