@@ -68,9 +68,10 @@ Route:
 
 ### Clean-home/media iteration — текущий source contract
 
-Final immutable review build:
+Immutable review builds:
 
-- [current 14-scenario narrative-bound media deck](https://kenigevents.ru/preview-20260717t1237-briefing-lab-139d9809/lab/briefing/?variant=c&review=media&scenario=media_review_writing_kaliningrad&pace=slow&replay=1);
+- corrective conditional-motion build: URL is recorded after immutable publish;
+- [superseded: 14-scenario deck that retained terminal media by removing entry/exit motion](https://kenigevents.ru/preview-20260717t1237-briefing-lab-139d9809/lab/briefing/?variant=c&review=media&scenario=media_review_writing_kaliningrad&pace=slow&replay=1);
 - [superseded: manual 12-image deck without sequence/portrait contracts](https://kenigevents.ru/preview-20260717t1049-briefing-lab-38425f28/lab/briefing/?variant=c&review=media&scenario=media_review_planet_ocean&pace=slow&replay=1);
 - [current stripe/OCR/source-quality corrective candidate](https://kenigevents.ru/preview-20260717t0951-briefing-lab-21ca7a49/lab/briefing/?variant=c&scenario=weather_water_demo&pace=slow&replay=1);
 - [superseded: dramatic mosaic with opaque/overlapping stripe, low-resolution sources and insufficient OCR admission](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
@@ -111,7 +112,7 @@ Final immutable review build:
   event objects и 16 exact sources (три источника входят в один collage-plan).
   Они не попадают в cooldown, automatic queue или трёхэкранную цепочку. После
   reveal каждый экран по умолчанию останавливается и сохраняет финальную
-  картинку без отдельного таймера исчезновения; под hero всегда видны прямые
+  картинку; под hero всегда видны прямые
   кнопки `1–14`, `Назад`, `Повтор`, `По очереди`, `Далее`. `По очереди`
   запускает последовательный просмотр разных нарративов, manual default
   позволяет вернуть любую картинку без ожидания. Review mode сохраняет exact source order: если именно
@@ -121,29 +122,37 @@ Final immutable review build:
   защита следует grid, а не создаёт новую бумажную плашку. Mobile показывает те
   же тексты и review controls без raster URL; rail `1–14` переносится полностью
   и не прячет последние состояния;
-- image lifetime равен narrative lifetime: terminal/review media остаётся
-  видимой, а public chain меняет её только вместе со следующим атомарным
-  `{copy, CTA, media-plan}`. Следующий exact media-plan предварительно
-  загружается и декодируется, после чего весь state коммитится одним swap без
-  нового текста поверх старой картинки и без пустого промежутка. Старый orphan
-  `mediaExitTimer`, создававший бессмысленный пустой hero, удалён;
-- текущие face scenes получили ручную safety-коррекцию `focusY` (`06=20`,
-  `07=13`, `12=20`); групповые сцены `02`, `04` и `08`, где лица не
-  помещаются в панорамное cover-окно, используют source-faithful `contain`, а
-  scene `04` дополнительно переводится в непрерывный правый cluster с внешним
-  margin над головами. Это временные human overrides до production metadata
-  producer;
+- image lifetime равен narrative lifetime. Каждая новая mosaic проходит
+  irregular tile-entry. Terminal и manual state не запускают exit вообще и
+  сохраняют картинку. Только реальный automatic successor сначала
+  preloads/decodes exact next media-plan, затем запускает irregular exit
+  текущего кадра; после exit вместе коммитятся `{copy, CTA, media-plan}`, а
+  следующая mosaic снова проходит entry. Поэтому нет ни пустого hero, ни новой
+  copy поверх orphan-картинки. Pause инкрементирует transition token, отменяет
+  pending entry/exit и фиксирует текущий кадр в `is-present`;
+- crop correction точечный, а не массовый: сцены `02` Ivana Kupala и `08`
+  «День валяния в сене» возвращены к принятому baseline `cover 52/50` и
+  `cover 55/50`; `07` и `12` также возвращены к `52/45` и `55/50`.
+  Единственные сохранённые portrait-led head-safety exceptions — `04`
+  «Пишу из Калининграда» (`75vw`, 16 колонок, `56/6`) и `06` Верти́нский
+  (`38/20`). Scene `04` не становится detached portrait stamp: 16 меняет
+  высоту square-cell поля, но его ширина остаётся `75vw` до правого viewport
+  edge. Это временные human overrides до production metadata producer;
 - review states 13/14 проверяют два отдельных portrait contracts. Один
   вертикальный source занимает непрерывный правый `5×5` cluster без
-  растяжения; три вертикальных OCR-safe источника одного события занимают три
-  соседних `5×5` cluster. Источники не чередуются по клеткам и fail closed как
-  один atomic plan, если отсутствует хотя бы один exact asset;
-- immutable build `preview-20260717t1237-briefing-lab-139d9809` проверен на
-  public endpoint: manual scene остаётся с raster после семи секунд,
-  `По очереди` показал шесть разных state в WebM, mobile `390×844` имеет
-  `scrollWidth == innerWidth == 390`, 14 кнопок и `mediaMode=none`. Evidence и
-  ссылка отправлены в Telegram topic `6`, сообщения `185–190`, после отправки
-  topic перечитан — новых входящих комментариев не появилось;
+  растяжения. Три вертикальных OCR-safe источника одного события распределяют
+  **все** активные колонки между тремя соседними contiguous cover-панелями
+  (`7/7/6` при 20 колонках): каждая клетка заполнена ровно одним источником,
+  letterbox/half-cell и чередования источников нет. План fail closed целиком,
+  если отсутствует хотя бы один exact asset;
+- build `preview-20260717t1237-briefing-lab-139d9809` сохраняется только как
+  regression evidence: он правильно удерживал terminal raster, но удалял
+  entry/exit целиком и массово менял crop. Corrective local candidate прошёл
+  Playwright `17/17` плюс focused `2/2`; exact screenshots/WebM подтверждают
+  irregular entry, conditional exit→next-entry, terminal persistence,
+  восстановленные сцены `02/08` и заполненный three-source collage. Gemini 3.1
+  Pro High gate сохранён как честная последовательность `FAIL` → correction →
+  `PASS`, а не как перенос старого approval;
 - актуальная mosaic — адаптивная CSS-grid `16×5` / `18×5` / `20×5` для
   `1024–1535` / `1536–1791` / `≥1792px`. Она занимает правые `75vw` на любой
   desktop review-width, поэтому больше не сжимается до половины экрана из-за

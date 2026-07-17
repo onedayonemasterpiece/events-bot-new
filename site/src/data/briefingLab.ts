@@ -39,6 +39,8 @@ export type BriefingLabScenario = {
     assetSourceOrders?: readonly number[];
     layout?: BriefingLabMediaLayout;
     fit?: BriefingLabMediaFit;
+    /** Scene-specific aspect safeguard; used only when a proven face interval needs more height. */
+    mosaicColumns?: number;
     /** Portrait panels are rendered much narrower than the panoramic shell. */
     minSourceWidth?: number;
     focusX?: number;
@@ -253,7 +255,7 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Ивана Купала.', accent: true, eventId: 6525, breakAfter: true }, { text: 'Поедем?' }],
     ctaLabel: 'Открыть праздник', ctaEventId: 6525,
-    media: { eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 15, fit: 'contain', ocrSafe: true },
+    media: { eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 50, ocrSafe: true },
   },
   {
     id: 'media_review_region_80', label: 'Фото 03 · 80 лет области', family: 'signal', reviewOnly: true,
@@ -267,7 +269,7 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: '«Пишу сегодня', breakAfter: true }, { text: 'из Калининграда…»', accent: true, eventId: 6611 }],
     ctaLabel: 'Открыть программу', ctaEventId: 6611,
-    media: { eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, layout: 'portrait-single', fit: 'contain', focusX: 50, focusY: 50, ocrSafe: true },
+    media: { eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, mosaicColumns: 16, focusX: 56, focusY: 6, ocrSafe: true },
   },
   {
     id: 'media_review_swan_lake', label: 'Фото 05 · Лебединое озеро', family: 'signal', reviewOnly: true,
@@ -288,14 +290,14 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Литературный вечер.', accent: true, eventId: 6153, breakAfter: true }, { text: 'Послушаем?' }],
     ctaLabel: 'Открыть программу', ctaEventId: 6153,
-    media: { eventId: 6153, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 13, ocrSafe: true },
+    media: { eventId: 6153, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 45, ocrSafe: true },
   },
   {
     id: 'media_review_hay_day', label: 'Фото 08 · День валяния в сене', family: 'signal', reviewOnly: true,
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'День валяния', breakAfter: true }, { text: 'в сене.', accent: true, eventId: 6365 }, { text: 'Серьёзно.' }],
     ctaLabel: 'Открыть необычное', ctaEventId: 6365,
-    media: { eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 30, fit: 'contain', ocrSafe: true },
+    media: { eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 50, ocrSafe: true },
   },
   {
     id: 'media_review_ship_quay', label: 'Фото 09 · Набережная кораблей', family: 'signal', reviewOnly: true,
@@ -323,7 +325,7 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Линии глины.', accent: true, eventId: 6494, breakAfter: true }, { text: 'Попробуем?' }],
     ctaLabel: 'Открыть мастер-класс', ctaEventId: 6494,
-    media: { eventId: 6494, mode: 'mosaic', assetSourceOrder: 5, focusX: 52, focusY: 20, ocrSafe: true },
+    media: { eventId: 6494, mode: 'mosaic', assetSourceOrder: 5, focusX: 55, focusY: 50, ocrSafe: true },
   },
   {
     id: 'media_review_single_portrait', label: 'Фото 13 · Один вертикальный источник', family: 'signal', reviewOnly: true,
@@ -338,7 +340,7 @@ export const briefingLabMediaReviewScenarios = [
     fragments: [{ text: 'Живопись, которую', breakAfter: true }, { text: 'мы не потеряли.', accent: true, eventId: 5894 }],
     ctaLabel: 'Открыть выставку', ctaEventId: 5894,
     media: {
-      eventId: 5894, mode: 'mosaic', assetSourceOrders: [6, 10, 11], layout: 'portrait-collage', fit: 'contain',
+      eventId: 5894, mode: 'mosaic', assetSourceOrders: [6, 10, 11], layout: 'portrait-collage', fit: 'cover',
       focusX: 50, focusY: 50, minSourceWidth: 900, ocrSafe: true,
     },
   },

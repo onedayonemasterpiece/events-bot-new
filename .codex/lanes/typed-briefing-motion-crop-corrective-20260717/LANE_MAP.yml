@@ -32,7 +32,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: regression root cause, prior-good code references, acceptance timing assertions
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: crop-regression-audit
     role: reviewer
     requirement_ids: [advisory-R03]
@@ -46,7 +46,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: exact scene-level restore/repair matrix with visual evidence
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: portrait-fill-audit
     role: reviewer
     requirement_ids: [advisory-R04]
@@ -60,7 +60,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: CSS/geometry contract and edge-case acceptance tests
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: serial-integrator
     role: worker
     requirement_ids: [R01, R02, R03, R04]
@@ -86,4 +86,4 @@ lanes:
       - runtime page-view LLM calls
     expected_output: corrected isolated lab, regression tests, visual/video evidence, consultant gate, Telegram review
     verification_scope: full_local
-    status: planned
+    status: merged

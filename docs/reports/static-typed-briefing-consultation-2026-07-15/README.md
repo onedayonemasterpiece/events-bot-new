@@ -31,6 +31,32 @@ artifacts/codex/static-typed-intro-consultation-20260715/
 
 The committed copies are the durable review surface; the ignored directory is not required to audit the product decision.
 
+## Conditional-motion and crop-regression corrective gate
+
+The `2026-07-17` correction did not inherit the previous media-deck approval.
+Gemini **3.1 Pro (High)** received the exact four desktop screenshots, two
+WebM recordings, extracted entry/terminal frames, the accepted older contact
+sheet and the implementation/tests. The first complete review returned
+`FAIL`: it correctly accepted the conditional motion state machine but found
+that the three-source collage left ambient columns. It also made two factual
+mistakes—treating `mosaicColumns` as shell width and treating restored crop
+values as new broad edits. Those statements were not silently accepted.
+
+The collage was changed to allocate every active column among contiguous
+cover panels (`7/7/6` at 20 columns), pause cancellation was tightened, and the
+second prompt explicitly required pixel/code verification of the disputed
+claims. The recheck returned strict overall `PASS`, all nine contracts
+`PASS`, and `Можно публиковать`. This sequence is retained as
+`FAIL → concrete fix/fact correction → PASS`; the final response is approval
+for isolated user review only, not production-home rollout or desirability.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`motion-crop-corrective-gate-prompt.md`](motion-crop-corrective-gate-prompt.md) | Strict first gate with screenshots, WebM, baseline and nine contracts. | `29529c3c7edbd4af11306e121daa364da8d7ee4ea88cb3fddc5d882db5ab4949` |
+| [`motion-crop-corrective-gate-gemini.md`](motion-crop-corrective-gate-gemini.md) | Initial overall `FAIL`; motion passed and collage/crop concerns were challenged. | `fddb3ac2cbc6a6b3fa2309d65f461fad534266450afe7ce0c910d80ec9a41be0` |
+| [`motion-crop-corrective-recheck-prompt.md`](motion-crop-corrective-recheck-prompt.md) | Corrective recheck with refreshed collage and factual constraints. | `7dad7ebeb1aded55a18d933607198936299ddf45a9224bcca915d3362c4c9931` |
+| [`motion-crop-corrective-recheck-gemini.md`](motion-crop-corrective-recheck-gemini.md) | Final strict `PASS`, nine of nine contracts accepted. | `7ff12c8acb6ec8b7c5af332832657bbd1218cfdc075b9aa6c81108b8fb5ddf4c` |
+
 ## Focused media-correction gate
 
 After user review rejected the first `wide-media` composition as a nested

@@ -308,12 +308,15 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       let fragmentTimers = [];
       let advanceTimer = 0;
       let cursorLingerTimer = 0;
+      let mediaEntryTimer = 0;
       let mediaLoadToken = 0;
       let mosaicResizeFrame = 0;
       let ignoreOutOfViewUntil = 0;
       let running = false;
       let deckPlaying = params.get('autoplay') === '1';
       const AUTO_CHAIN_LIMIT = 3;
+      const MOSAIC_ENTRY_MS = 1560;
+      const MOSAIC_EXIT_MS = 720;
       let autoChainStep = 1;
       let explicitPaused = false;
       let hoverPaused = false;
@@ -343,6 +346,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         fragmentTimers.forEach(clearTimeout); fragmentTimers = [];
         clearTimeout(advanceTimer); advanceTimer = 0;
         clearTimeout(cursorLingerTimer); cursorLingerTimer = 0;
+        clearTimeout(mediaEntryTimer); mediaEntryTimer = 0;
       };
       const fragments = () => [...message.querySelectorAll('[data-reveal-fragment]')];
       const setPendingCursor = (visible, { terminal = false } = {}) => {
@@ -413,9 +417,9 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       const mediaAllowed = (media) => media?.mode === 'mosaic' ? mosaicMedia.matches : desktopMedia.matches;
       const MOSAIC_ROWS = 5;
       const MOSAIC_LEVELS = [.03, .1, .24, .5, .78, .96];
-      const mosaicColumnsForViewport = (media = currentScenario.media) => media?.layout === 'portrait-single'
+      const mosaicColumnsForViewport = (media = currentScenario.media) => Number(media?.mosaicColumns) || (media?.layout === 'portrait-single'
         ? (innerWidth >= 1792 ? 10 : 9)
-        : innerWidth >= 1792 ? 20 : innerWidth >= 1536 ? 18 : 16;
+        : innerWidth >= 1792 ? 20 : innerWidth >= 1536 ? 18 : 16);
       const hashUnit = (...parts) => {
         const input = parts.join('|');
         let hash = 2166136261;
@@ -494,13 +498,21 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         mosaicRoot.style.setProperty('--mosaic-render-height', `${rootRect.height}px`);
         const layout = media.layout || 'panorama';
         const clusterColumns = 5;
-        const ambientColumns = layout === 'portrait-collage'
-          ? Math.max(0, columns - sources.length * clusterColumns)
-          : layout === 'portrait-single' ? Math.max(0, columns - clusterColumns) : 0;
+        const ambientColumns = layout === 'portrait-single' ? Math.max(0, columns - clusterColumns) : 0;
         const activeTiles = mosaicTiles.slice(0, activeCount);
+        const collageWidths = layout === 'portrait-collage'
+          ? Array.from({ length: sources.length }, (_, sourceIndex) => {
+              const baseWidth = Math.floor(columns / sources.length);
+              return baseWidth + (sourceIndex < columns % sources.length ? 1 : 0);
+            })
+          : [];
         const panelIndexes = Array.from({ length: sources.length }, (_, sourceIndex) => {
           if (layout === 'panorama') return { sourceIndex, start: 0, end: columns };
-          const start = ambientColumns + sourceIndex * clusterColumns;
+          if (layout === 'portrait-collage') {
+            const start = collageWidths.slice(0, sourceIndex).reduce((sum, width) => sum + width, 0);
+            return { sourceIndex, start, end: start + collageWidths[sourceIndex] };
+          }
+          const start = ambientColumns;
           return { sourceIndex, start, end: Math.min(columns, start + clusterColumns) };
         });
         let maximumScale = 0;
@@ -587,7 +599,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         const allowed = Boolean(media && mediaAllowed(media));
         stage.dataset.mediaMode = allowed ? media.mode : 'none';
         briefing.dataset.hasMedia = String(allowed);
-        mediaShell?.classList.remove('is-present', 'is-exiting', 'is-error');
+        mediaShell?.classList.remove('is-present', 'is-entering', 'is-exiting', 'is-error');
         if (!media || !mediaShell || !mediaImage || !mediaLink) {
           if (mediaShell) { delete mediaShell.dataset.mediaMode; delete mediaShell.dataset.mediaLayout; }
           mediaImage?.removeAttribute('src'); mediaImage?.removeAttribute('data-src');
@@ -601,8 +613,31 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         mediaImage.alt = media.alt;
         mediaLink.href = media.href;
         if (!allowed) { delete mediaShell.dataset.mediaMode; delete mediaShell.dataset.mediaLayout; mediaImage.removeAttribute('src'); clearMosaicSource(); return; }
-        const revealLoaded = () => { if (loadToken !== mediaLoadToken) return; mediaShell.classList.remove('is-error', 'is-exiting'); mediaShell.classList.add('is-present'); };
-        const revealFailed = () => { mediaShell.classList.remove('is-present'); mediaShell.classList.add('is-error'); mediaImage.removeAttribute('src'); clearMosaicSource(); };
+        const revealLoaded = () => {
+          if (loadToken !== mediaLoadToken) return;
+          clearTimeout(mediaEntryTimer); mediaEntryTimer = 0;
+          mediaShell.classList.remove('is-error', 'is-exiting', 'is-present');
+          if (variant !== 'reveal' || reduced.matches) {
+            mediaShell.classList.remove('is-entering');
+            mediaShell.classList.add('is-present');
+            delete stage.dataset.mediaTransition;
+            return;
+          }
+          mediaShell.classList.add('is-entering');
+          stage.dataset.mediaTransition = 'entering';
+          emit('briefing_media_entry_start', { media_mode: media.mode });
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (loadToken !== mediaLoadToken) return;
+            mediaShell.classList.remove('is-entering');
+            mediaShell.classList.add('is-present');
+            mediaEntryTimer = setTimeout(() => {
+              if (loadToken !== mediaLoadToken) return;
+              delete stage.dataset.mediaTransition;
+              emit('briefing_media_entry_complete', { media_mode: media.mode });
+            }, media.mode === 'mosaic' ? MOSAIC_ENTRY_MS : 1050);
+          }));
+        };
+        const revealFailed = () => { mediaShell.classList.remove('is-present', 'is-entering', 'is-exiting'); mediaShell.classList.add('is-error'); mediaImage.removeAttribute('src'); clearMosaicSource(); delete stage.dataset.mediaTransition; };
         const loadAdditionalSources = () => Promise.all((media.sources || []).slice(1).map((source) => new Promise((resolve, reject) => {
           const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = source.src;
         })));
@@ -658,7 +693,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         fragments().forEach((node) => { node.classList.add('is-visible'); node.classList.remove('is-active'); });
       };
       const rememberReveal = () => { try { sessionStorage.setItem(revealKey, 'complete'); } catch (_) {} };
-      const transitionToScenario = async (nextIndex, reason, onCommit = () => {}, scenarioOverride = null) => {
+      const transitionToScenario = async (nextIndex, reason, onCommit = () => {}, scenarioOverride = null, { automatic = false } = {}) => {
         const nextScenario = scenarioOverride || deck[nextIndex];
         if (!nextScenario) return;
         const transitionToken = ++scenarioTransitionToken;
@@ -667,10 +702,25 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           if (cached) mediaPreloadCache.set(mediaCacheKey(nextScenario.media), cached);
         } catch (_) {}
         if (transitionToken !== scenarioTransitionToken) return;
+        const canAnimateExit = automatic
+          && variant === 'reveal'
+          && !reduced.matches
+          && currentScenario.media
+          && mediaAllowed(currentScenario.media)
+          && mediaShell?.classList.contains('is-present');
+        if (canAnimateExit) {
+          setPendingCursor(false);
+          mediaShell.classList.add('is-exiting');
+          stage.dataset.mediaTransition = 'exiting';
+          emit('briefing_media_exit_start', { next_scenario_id: nextScenario.id, media_mode: currentScenario.media.mode });
+          await new Promise((resolve) => setTimeout(resolve, currentScenario.media.mode === 'mosaic' ? MOSAIC_EXIT_MS : 1050));
+          if (transitionToken !== scenarioTransitionToken) return;
+          emit('briefing_media_exit_complete', { next_scenario_id: nextScenario.id, media_mode: currentScenario.media.mode });
+        }
         current = nextIndex;
         currentScenario = nextScenario;
         onCommit();
-        startReveal({ force: true, reason, atomicMediaSwap: true });
+        startReveal({ force: true, reason });
       };
       const scheduleAdvance = () => {
         clearTimeout(advanceTimer);
@@ -708,7 +758,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
             transitionToScenario(chained, 'chain_next', () => {
               autoChainStep += 1;
               automaticExposureCandidate = false;
-            });
+            }, null, { automatic: true });
           }, hold);
           return;
         }
@@ -720,7 +770,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           }
           let next = (current + 1) % deck.length;
           while (completedDeckIndexes.has(next)) next = (next + 1) % deck.length;
-          transitionToScenario(next, 'deck_next');
+          transitionToScenario(next, 'deck_next', () => {}, null, { automatic: true });
         }, hold);
       };
       const complete = (reason = 'manual_complete', { remember = true } = {}) => {
@@ -732,11 +782,8 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         emit('briefing_complete', { completion_reason: reason });
         scheduleAdvance();
       };
-      const startReveal = ({ force = false, reason = 'replay', atomicMediaSwap = false } = {}) => {
-        clearMotionTimers(); setPublicNext(false);
-        mediaShell?.classList.toggle('is-atomic-swap', atomicMediaSwap);
-        renderMessage();
-        if (atomicMediaSwap) requestAnimationFrame(() => mediaShell?.classList.remove('is-atomic-swap'));
+      const startReveal = ({ force = false, reason = 'replay' } = {}) => {
+        clearMotionTimers(); setPublicNext(false); renderMessage();
         if (variant !== 'reveal' || reduced.matches) { briefing.dataset.motion = 'complete'; showAllFragments(); updateStatus(reduced.matches ? 'Без анимации' : 'Статичный вариант'); scheduleAdvance(); return; }
         if (!force) {
           try { if (sessionStorage.getItem(revealKey) === 'complete' && params.get('replay') !== '1') return complete('session_complete', { remember: false }); } catch (_) {}
@@ -757,11 +804,17 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         fragmentTimers.push(setTimeout(() => complete('natural'), Math.max(1, items.length - 1) * stagger + 360));
       };
       const pause = (reason, explicit = true) => {
+        // A pause is also a transition cancellation boundary.  Otherwise an
+        // already awaited exit timer can still commit the next scene after the
+        // visitor has explicitly asked us to stop.
+        scenarioTransitionToken += 1;
         if (running) complete(reason, { remember: true });
         clearTimeout(advanceTimer); advanceTimer = 0;
+        clearTimeout(mediaEntryTimer); mediaEntryTimer = 0;
         if (currentScenario.media?.mode === 'mosaic' && mediaAllowed(currentScenario.media)) {
-          mediaShell?.classList.remove('is-exiting');
+          mediaShell?.classList.remove('is-entering', 'is-exiting');
           mediaShell?.classList.add('is-present');
+          delete stage.dataset.mediaTransition;
         }
         setPendingCursor(false);
         if (reason === 'hover') hoverPaused = true;
@@ -790,9 +843,8 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       lab.querySelectorAll('[data-variant-switch]').forEach((node) => node.setAttribute('aria-current', node.dataset.variantSwitch === variant ? 'page' : 'false'));
       if (variant === 'control') { stage.hidden = true; automaticExposureCandidate = false; }
       syncPaceControls();
-      renderMessage();
       if (variant === 'reveal') startReveal({ force: params.get('replay') === '1', reason: 'initial' });
-      else complete(variant === 'control' ? 'control' : 'static', { remember: false });
+      else { renderMessage(); complete(variant === 'control' ? 'control' : 'static', { remember: false }); }
 
       const runFromDock = (callback) => {
         ignoreOutOfViewUntil = performance.now() + 800;
@@ -999,12 +1051,11 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
     .briefing-stage__mosaic-tile { position: relative; display: block; min-width: 0; min-height: 0; overflow: hidden; opacity: 0; transition-property: opacity; transition-duration: var(--tile-in-duration); transition-timing-function: cubic-bezier(.65,0,.35,1); transition-delay: var(--tile-in-delay); }
     .briefing-stage__mosaic-tile::before { content: ""; position: absolute; left: var(--tile-image-left); top: var(--tile-image-top); width: var(--tile-render-width, var(--mosaic-render-width)); height: var(--tile-render-height, var(--mosaic-render-height)); background-image: var(--tile-image, var(--mosaic-image)); background-repeat: no-repeat; background-size: var(--mosaic-fit, cover); background-position: var(--mosaic-focus-x, 50%) var(--mosaic-focus-y, 50%); }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); }
-    .briefing-stage__media[data-media-mode="mosaic"].is-atomic-swap .briefing-stage__mosaic-tile { transition: none !important; }
+    .briefing-stage__media[data-media-mode="mosaic"].is-entering .briefing-stage__mosaic-tile { opacity: 0; transition: none; }
     .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile[data-copy-shield="true"] { transition: none !important; }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile[data-copy-shield="true"] { opacity: min(var(--tile-opacity), .24); }
     .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: var(--tile-out-duration); transition-delay: var(--tile-out-delay); }
     [data-briefing-variant="static"] .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); transition: none; }
-    [data-briefing-scenario-id="media_review_writing_kaliningrad"] .briefing-stage__mosaic { --mosaic-fit: 86% auto !important; }
     [data-briefing-scenario-id="weather_water_demo"] .briefing-stage__message h1,
     [data-briefing-scenario-id^="storm_"] .briefing-stage__message h1,
     [data-briefing-scenario-id="festival_demo"] .briefing-stage__message h1,

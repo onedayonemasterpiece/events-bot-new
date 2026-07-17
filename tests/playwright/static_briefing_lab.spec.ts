@@ -545,12 +545,15 @@ test('manual media-review deck exposes fourteen grounded layouts, persists, and 
   expect(contract.every(({ media }) => media?.sources.every((source: any) => source.width >= (media.minSourceWidth || 1000) && source.width * source.height >= 1_000_000))).toBeTruthy();
   expect(contract.every(({ media }) => typeof media?.cropStrategy === 'string' && media.maxUpscale === 1.1)).toBeTruthy();
   expect(Object.fromEntries(contract.filter(({ id }) => ['media_review_writing_kaliningrad', 'media_review_vertinsky', 'media_review_literary_evening', 'media_review_craft'].includes(id)).map(({ id, media }) => [id, media.focusY]))).toEqual({
-    media_review_writing_kaliningrad: 50,
+    media_review_writing_kaliningrad: 6,
     media_review_vertinsky: 20,
-    media_review_literary_evening: 13,
-    media_review_craft: 20,
+    media_review_literary_evening: 45,
+    media_review_craft: 50,
   });
-  expect(contract.find(({ id }) => id === 'media_review_writing_kaliningrad')?.media).toMatchObject({ layout: 'portrait-single', fit: 'contain' });
+  expect(contract.find(({ id }) => id === 'media_review_writing_kaliningrad')?.media).toMatchObject({ focusX: 56, mosaicColumns: 16, fit: 'cover' });
+  expect(contract.find(({ id }) => id === 'media_review_ivana_kupala')?.media).toMatchObject({ focusX: 52, focusY: 50, fit: 'cover' });
+  expect(contract.find(({ id }) => id === 'media_review_hay_day')?.media).toMatchObject({ focusX: 55, focusY: 50, fit: 'cover' });
+  expect(contract.find(({ id }) => id === 'media_review_craft')?.media).toMatchObject({ focusX: 55, focusY: 50, fit: 'cover' });
 
   await expect(desktop.page.locator('[data-media-review-controls]')).toBeVisible();
   await expect(desktop.page.locator('[data-media-review-scenario]')).toHaveCount(mediaReviewScenarioIds.length);
@@ -577,25 +580,30 @@ test('manual media-review deck exposes fourteen grounded layouts, persists, and 
   await desktop.page.locator('[data-media-review-next]').click();
   await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds.at(-1)!);
   expect((await labState(desktop.page)).reviewSize).toBe(mediaReviewScenarioIds.length);
-  await desktop.page.evaluate(() => {
-    const lab = document.querySelector('[data-briefing-lab]') as HTMLElement;
-    (window as any).__atomicMediaSwapAudit = [];
-    new MutationObserver(() => {
-      const media = document.querySelector('[data-narrative-media]') as HTMLElement;
-      const visibleTiles = [...document.querySelectorAll('[data-mosaic-tile]:not([hidden])')]
-        .filter((tile) => Number.parseFloat(getComputedStyle(tile).opacity) > 0).length;
-      (window as any).__atomicMediaSwapAudit.push({ scenario: lab.dataset.briefingScenarioId, present: media.classList.contains('is-present'), visibleTiles });
-    }).observe(lab, { attributes: true, attributeFilter: ['data-briefing-scenario-id'] });
-  });
+  // A manually selected terminal image must not disappear just because its
+  // reading hold has elapsed.
+  await desktop.page.waitForTimeout(4200);
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+  await expect(desktop.page.locator('[data-narrative-media]')).not.toHaveClass(/is-exiting/u);
+
+  // Autoplay is intentionally cinematic: the old scene exits before the
+  // scenario commit, and every committed successor gets a fresh entry.
+  await desktop.page.evaluate(() => { (window as any).__briefingTelemetry.length = 0; });
   await desktop.page.locator('[data-media-review-autoplay]').click();
   await expect.poll(async () => (await labState(desktop.page)).scenario, { timeout: 5000 }).toBe(mediaReviewScenarioIds[1]);
   await expect.poll(async () => (await labState(desktop.page)).scenario, { timeout: 5000 }).toBe(mediaReviewScenarioIds[2]);
-  const atomicSwapAudit = await desktop.page.evaluate(() => (window as any).__atomicMediaSwapAudit);
-  expect(atomicSwapAudit.length).toBeGreaterThanOrEqual(3);
-  expect(atomicSwapAudit.every((state: any) => state.present && state.visibleTiles > 0)).toBeTruthy();
+  const motionEvents = await desktop.page.evaluate(() => (window as any).__briefingTelemetry.map((event: any) => ({ kind: event.event_kind, scenario: event.scenario_id, next: event.next_scenario_id })));
+  const kinds = motionEvents.map(({ kind }) => kind);
+  expect(kinds).toContain('briefing_media_exit_start');
+  expect(kinds).toContain('briefing_media_exit_complete');
+  expect(kinds).toContain('briefing_media_entry_start');
+  expect(kinds.indexOf('briefing_media_exit_start')).toBeLessThan(kinds.indexOf('briefing_media_exit_complete'));
+  expect(kinds.indexOf('briefing_media_exit_complete')).toBeLessThan(kinds.lastIndexOf('briefing_media_entry_start'));
+  await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-entering|is-present/u);
 
   await desktop.page.locator(`[data-media-review-scenario="media_review_portrait_collage"]`).click();
   await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-source-count', '3');
+  await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-fit', 'cover');
   const collagePanels = await desktop.page.locator('[data-mosaic-tile][data-source-index]:not([hidden])').evaluateAll((tiles) => {
     const columns = Number((document.querySelector('[data-media-mosaic]') as HTMLElement).dataset.columns);
     const bySource = new Map<string, number[]>();
@@ -606,7 +614,10 @@ test('manual media-review deck exposes fourteen grounded layouts, persists, and 
     return [...bySource.entries()].map(([source, values]) => ({ source, columns: [...new Set(values)].sort((a, b) => a - b), totalColumns: columns }));
   });
   expect(collagePanels.map(({ source }) => source)).toEqual(['0', '1', '2']);
-  expect(collagePanels.every(({ columns }) => columns.length === 5 && columns.every((column, index) => index === 0 || column === columns[index - 1] + 1))).toBeTruthy();
+  expect(collagePanels.every(({ columns }) => columns.length >= 6 && columns.every((column, index) => index === 0 || column === columns[index - 1] + 1))).toBeTruthy();
+  expect(collagePanels.flatMap(({ columns }) => columns).sort((a, b) => a - b)).toEqual(Array.from({ length: collagePanels[0].totalColumns }, (_, index) => index));
+  expect(Math.max(...collagePanels.map(({ columns }) => columns.length)) - Math.min(...collagePanels.map(({ columns }) => columns.length))).toBeLessThanOrEqual(1);
+  expect(await desktop.page.locator('[data-mosaic-tile][data-source-index]:not([hidden])').evaluateAll((tiles) => tiles.every((tile) => getComputedStyle(tile, '::before').backgroundSize === 'cover'))).toBeTruthy();
   await desktop.page.locator(`[data-media-review-scenario="media_review_single_portrait"]`).click();
   await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-layout', 'portrait-single');
   await expect(desktop.page.locator('[data-media-mosaic]')).toHaveAttribute('data-fit', 'contain');
