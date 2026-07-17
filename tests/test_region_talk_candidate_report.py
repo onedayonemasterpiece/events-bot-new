@@ -38,6 +38,28 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_required_kaggle_ydb_service_account_fails_before_metadata_fallback(self) -> None:
+        mod = load_module()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL": "1",
+            "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET": "1",
+            "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON": "",
+            "REGION_TALK_YDB_IAM_TOKEN": "",
+            "YC_IAM_TOKEN": "",
+            "YDB_ACCESS_TOKEN": "",
+        }, clear=False):
+            with self.assertRaisesRegex(RuntimeError, "Kaggle User Secret is required"):
+                mod.validate_required_ydb_runtime_credential()
+
+    def test_required_kaggle_ydb_service_account_accepts_loaded_key(self) -> None:
+        mod = load_module()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL": "1",
+            "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET": "1",
+            "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON": '{"id":"unit"}',
+        }, clear=False):
+            mod.validate_required_ydb_runtime_credential()
+
     def test_stack_watchdog_is_single_shot_by_default(self) -> None:
         mod = load_module()
         old_started = mod._REGION_TALK_STACK_WATCHDOG_STARTED

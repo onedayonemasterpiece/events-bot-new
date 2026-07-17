@@ -686,6 +686,30 @@ def load_split_runtime_from_kaggle_input() -> dict[str, Any]:
     return config
 
 
+def validate_required_ydb_runtime_credential() -> None:
+    """Fail before YDB SDK metadata fallback when a dedicated key is required.
+
+    Kaggle is not a Yandex Compute VM.  Letting ``credentials_from_env`` fall
+    through to ``169.254.169.254`` turns one missing User Secret into several
+    opaque metadata timeouts.  The launcher already makes the service-account
+    contract explicit; enforce the same contract inside the worker after the
+    per-run config and Kaggle User Secrets have both been loaded.
+    """
+    if not getenv_bool("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", False):
+        return
+    if (os.getenv("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip():
+        return
+    if getenv_bool("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", False):
+        raise RuntimeError(
+            "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON Kaggle User Secret is required "
+            "but was not loaded; refusing YDB metadata-credential fallback"
+        )
+    raise RuntimeError(
+        "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1 requires "
+        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON"
+    )
+
+
 class Status:
     def __init__(self) -> None:
         self.client = None
@@ -18545,6 +18569,7 @@ async def amain() -> int:
             # REGION_TALK/GOOGLE_AI controls while secrets remain loaded through
             # the encrypted bundle above.
             os.environ[str(k)] = str(v)
+    validate_required_ydb_runtime_credential()
     run_id = str(config.get('run_id') or os.getenv('REGION_TALK_RUN_ID') or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}")
     os.environ["REGION_TALK_RUN_ID"] = run_id
     start_region_talk_stack_watchdog()

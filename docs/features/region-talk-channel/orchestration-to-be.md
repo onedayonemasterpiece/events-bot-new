@@ -730,6 +730,11 @@ Important invariants:
   profile fails with an explicit authentication action instead of hanging the
   orchestrator. Scheduled automation should use the dedicated
   `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON`, not a short-lived user IAM token.
+  When `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1` and the launcher
+  delegates credential loading to Kaggle User Secrets, the worker verifies the
+  key immediately after loading run config/secrets. A missing key is terminal
+  before state read; Kaggle must never fall through to the Yandex Compute
+  metadata address `169.254.169.254`.
 - `RegionTalkBgeM3Enrichment` keeps row count and in-memory batch size separate.
   The orchestrator default is `--batch-limit 48 --batch-size 4` after the live
   YDB backlog showed E5 production outpacing 24-row BGE batches; operators can
