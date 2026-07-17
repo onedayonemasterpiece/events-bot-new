@@ -2204,6 +2204,7 @@ SOURCE_STATE_FIELDS = [
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
     "source_queue_status", "fetch_attempted", "last_history_fetch_at", "history_fetch_mode",
+    "source_history_scan_ever_completed", "source_history_posts_scanned_max",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
@@ -2236,6 +2237,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "priority_lane", "priority_reason", "priority_updated_at",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "fetch_attempted",
     "last_history_fetch_at", "history_fetch_mode", "platform",
+    "source_history_scan_ever_completed", "source_history_posts_scanned_max",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_profile_build_mode", "source_profile_sampled_posts", "source_profile_recent_history_exhausted",
@@ -3009,6 +3011,13 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
     handle = str(row.get("handle") or row.get("recommended_username") or row.get("username_or_handle") or "")
     title = str(row.get("source_title") or row.get("resolved_title") or row.get("recommended_title") or row.get("discovered_from_source") or handle or url)
     fetch_status = str(status or row.get("fetch_status") or row.get("candidate_source_status") or row.get("frontier_status") or row.get("method_status") or "observed")
+    row_posts_scanned = int(float(row.get("posts_scanned") or 0))
+    durable_history_posts = int(float(row.get("source_history_posts_scanned_max") or 0))
+    actual_history_evidence = bool(
+        str(row.get("source_history_scan_ever_completed") or "").strip().lower() in {"1", "true", "yes"}
+        or str(row.get("last_history_fetch_at") or "").strip()
+        or (row_posts_scanned > 0 and not _source_row_is_non_primary_probe(row))
+    )
     rejected_prefixes = ("skipped", "error", "reject", "rejected", "debug_self_loop_rejected")
     if row.get("source_candidate_id"):
         queue_status = "candidate"
@@ -3042,6 +3051,11 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "frontier_reason": row.get("frontier_reason") or row.get("source_probe_reason") or "",
         "discovery_type": row.get("discovery_type") or "",
         "edge_type": row.get("edge_type") or "",
+        "source_history_scan_ever_completed": str(actual_history_evidence).lower(),
+        "source_history_posts_scanned_max": max(
+            durable_history_posts,
+            row_posts_scanned if actual_history_evidence else 0,
+        ),
         "posts_scanned": row.get("posts_scanned") or 0,
         "ko_posts_found": row.get("ko_posts_found") or 0,
         "candidate_posts_found": row.get("candidate_posts_found") or 0,
@@ -8131,6 +8145,28 @@ def build_unified_source_queue(
             or (len(sampled) > 0 and not non_primary_probe)
             or (not non_primary_probe and (actual_n > 0 or ko_posts > 0 or candidate_posts > 0))
         )
+        rec_actual_history = bool(
+            str(rec.get("source_history_scan_ever_completed") or "").strip().lower() in {"1", "true", "yes"}
+            or str(rec.get("last_history_fetch_at") or "").strip()
+            or (not _source_row_is_non_primary_probe(rec) and positive_int(rec.get("posts_scanned")))
+        )
+        srow_actual_history = bool(
+            str(srow.get("source_history_scan_ever_completed") or "").strip().lower() in {"1", "true", "yes"}
+            or str(srow.get("last_history_fetch_at") or "").strip()
+            or (bool(srow) and not srow_non_primary_probe and successful_scan_status and positive_int(srow.get("posts_scanned")))
+        )
+        source_history_scan_ever_completed = bool(
+            rec_actual_history
+            or srow_actual_history
+            or (len(sampled) > 0 and not non_primary_probe)
+        )
+        source_history_posts_scanned_max = max(
+            int(rec.get("source_history_posts_scanned_max") or 0),
+            int(srow.get("source_history_posts_scanned_max") or 0),
+            int(rec.get("posts_scanned") or 0) if rec_actual_history else 0,
+            int(srow.get("posts_scanned") or 0) if srow_actual_history else 0,
+            len(sampled) if not non_primary_probe else 0,
+        )
         source_text_profile = "\n".join(
             str(r.get("text") or r.get("text_excerpt") or r.get("short_summary") or "")
             for r in sampled[:40]
@@ -8208,6 +8244,8 @@ def build_unified_source_queue(
             "last_scan_status": fetch_status if scanned else rec.get("last_scan_status", ""),
             "fetch_attempted": srow.get("fetch_attempted") or rec.get("fetch_attempted") or "",
             "history_fetch_mode": srow.get("history_fetch_mode") or rec.get("history_fetch_mode") or "",
+            "source_history_scan_ever_completed": str(source_history_scan_ever_completed).lower(),
+            "source_history_posts_scanned_max": source_history_posts_scanned_max,
             "last_history_fetch_at": (
                 run_now
                 if srow_scan_evidence and successful_scan_status

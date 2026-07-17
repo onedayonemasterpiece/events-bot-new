@@ -4622,6 +4622,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotEqual(row["last_scan_run_id"], "repair-run")
         self.assertEqual(row["status_changed_this_run"], "true")
         self.assertEqual(row["posts_scanned"], 12)
+        self.assertEqual(row["source_history_scan_ever_completed"], "true")
+        self.assertEqual(row["source_history_posts_scanned_max"], 12)
 
     def test_exact_post_fetch_does_not_complete_source_primary_scan(self) -> None:
         mod = load_module()
@@ -4673,6 +4675,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row.get("last_scan_run_id") or "", "")
         self.assertEqual(row.get("last_history_fetch_at") or "", "")
         self.assertEqual(row["history_fetch_mode"], "exact_post_link_fetch")
+        self.assertEqual(row["source_history_scan_ever_completed"], "false")
+        self.assertEqual(row["source_history_posts_scanned_max"], 0)
 
     def test_repaired_historical_scan_is_mandatory_without_relabeling_all_history(self) -> None:
         mod = load_module()

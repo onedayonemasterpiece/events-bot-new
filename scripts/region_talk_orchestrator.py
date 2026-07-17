@@ -2372,6 +2372,8 @@ def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
 
 
 def _source_has_scan_evidence(row: dict[str, Any]) -> bool:
+    if str(row.get("source_history_scan_ever_completed") or "").strip().lower() in {"1", "true", "yes"}:
+        return True
     explicit_history = bool(
         str(row.get("last_history_fetch_at") or "").strip()
         or str(row.get("primary_scan_completed_at") or "").strip()
@@ -2381,20 +2383,11 @@ def _source_has_scan_evidence(row: dict[str, Any]) -> bool:
         return True
     if _source_is_post_probe_only(row):
         return False
-    access_status = " ".join(
-        str(row.get(field) or "").lower()
-        for field in ("source_queue_status", "fetch_status", "last_scan_status")
-    )
-    access_attempted = any(marker in access_status for marker in (
-        "skipped_cached_entity_only_no_private_entity",
-        "skipped_telegram_resolve_cooldown",
-        "skipped_telegram_global_cooldown",
-        "error_floodwait_resolve",
-    ))
     return bool(
-        _safe_int(row.get("posts_scanned")) > 0
-        or str(row.get("fetch_attempted") or "").strip().lower() in {"1", "true", "yes"}
-        or access_attempted
+        max(
+            _safe_int(row.get("posts_scanned")),
+            _safe_int(row.get("source_history_posts_scanned_max")),
+        ) > 0
     )
 
 
@@ -3513,7 +3506,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
     source_with_posts = [
         r for r in source_rows
-        if _safe_int(r.get("posts_scanned")) > 0 and _source_has_scan_evidence(r)
+        if max(
+            _safe_int(r.get("posts_scanned")),
+            _safe_int(r.get("source_history_posts_scanned_max")),
+        ) > 0 and _source_has_scan_evidence(r)
     ]
     source_with_posts_count = len(source_with_posts)
     source_with_any_processed_post_count = len(processed_post_source_keys)

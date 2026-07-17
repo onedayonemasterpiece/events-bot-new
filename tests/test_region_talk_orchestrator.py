@@ -120,11 +120,17 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         completed_history = {**exact, "last_history_fetch_at": "2026-07-14T00:00:00+00:00"}
         self.assertTrue(mod._source_has_scan_evidence(completed_history))
 
-    def test_primary_history_fetch_attempt_is_scan_evidence(self) -> None:
+    def test_primary_history_fetch_attempt_without_posts_is_not_real_scan_evidence(self) -> None:
         mod = load_module()
-        self.assertTrue(mod._source_has_scan_evidence({
+        self.assertFalse(mod._source_has_scan_evidence({
             "fetch_attempted": "true",
             "history_fetch_mode": "delta_scan_active",
+            "posts_scanned": 0,
+        }))
+        self.assertTrue(mod._source_has_scan_evidence({
+            "fetch_attempted": "true",
+            "source_history_scan_ever_completed": "true",
+            "source_history_posts_scanned_max": 7,
             "posts_scanned": 0,
         }))
 

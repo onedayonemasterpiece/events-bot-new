@@ -1143,6 +1143,14 @@ transient-error disablement is an explicit opt-in
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.
+Every completed source-history read therefore carries two monotonic queue
+fields: `source_history_scan_ever_completed` and
+`source_history_posts_scanned_max`. Exact-post and fast-check probes never set
+them. The operator label «реально просмотрено» requires a successful history
+timestamp or a positive durable history-post count; a generic
+`fetch_attempted`, resolve cooldown, FloodWait or access denial is an attempt,
+not a viewed source. Those failures remain visible in their own reason/status
+metrics and cannot inflate confirmed-blogger scan coverage.
 The orchestrator therefore reports repaired totals plus raw source-row and
 repair-delta counters: `publics_scanned_with_posts_*`,
 `publics_with_ko_candidates_*` and `source_queue_posts_scanned_*`. The repaired
