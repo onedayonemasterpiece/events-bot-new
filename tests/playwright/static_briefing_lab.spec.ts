@@ -763,7 +763,14 @@ test('approved header lockup, lightweight mosaic stripe and weather actions keep
       longName.textContent = 'Христофор Константинопольский.';
       const longMessage = document.querySelector('[data-message]')!.getBoundingClientRect();
       const style = getComputedStyle(longName);
-      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), stripe: style.backgroundImage, stripeColor: style.backgroundColor, stripeShadow: style.boxShadow, paddingInline: Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight), scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
+      const firstColumn = [...document.querySelectorAll('[data-mosaic-tile]:not([hidden])')]
+        .filter((node: HTMLElement) => node.dataset.tileColumn === '0')
+        .map((node) => node.getBoundingClientRect())
+        .sort((a, b) => a.top - b.top);
+      const gutters = firstColumn.slice(1).map((rect, index) => ({ top: firstColumn[index].bottom, bottom: rect.top }));
+      const fragmentRects = [...document.querySelectorAll('[data-reveal-fragment]')].flatMap((node) => [...node.getClientRects()]);
+      const gutterTextIntersections = gutters.filter((gap) => fragmentRects.some((rect) => rect.bottom > gap.top && rect.top < gap.bottom)).length;
+      return { stage: stage.toJSON(), message: message.toJSON(), media: media.toJSON(), longMessage: longMessage.toJSON(), stripe: style.backgroundImage, stripeColor: style.backgroundColor, stripeShadow: style.boxShadow, paddingInline: Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight), gutterTextIntersections, scrollHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).scrollHeight, clientHeight: (document.querySelector('[data-briefing-slot]') as HTMLElement).clientHeight };
     });
     expect(geometry.stage.height).toBeLessThanOrEqual(viewport.height * .5);
     expect(Math.abs(geometry.message.left - geometry.stage.left)).toBeLessThanOrEqual(1);
@@ -774,6 +781,7 @@ test('approved header lockup, lightweight mosaic stripe and weather actions keep
     expect(geometry.stripeColor).toBe('rgba(0, 0, 0, 0)');
     expect(geometry.stripeShadow).toBe('none');
     expect(geometry.paddingInline).toBeLessThan(3);
+    expect(geometry.gutterTextIntersections).toBe(0);
     expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
 
     await open(run.page, 'b', 'weather_water_demo');
