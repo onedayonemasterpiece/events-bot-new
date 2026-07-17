@@ -312,6 +312,15 @@ Smart Update является владельцем семантического 
 
 ## 9. Release evidence pack
 
+### Current design-system review build (2026-07-17)
+
+- Source SHA: `b96575e5` on `integration/static-design-system-desktop-parity-20260717`.
+- Immutable build id: `preview-design-system-b96575e5`.
+- Public catalog: <https://kenigevents.ru/preview-design-system-b96575e5/lab/design-system/>.
+- Exact-build contracts: design-system registry/contrast/state check passed; preview and production-desktop checks passed for 303 events/pages; targeted Node tests 10/10 and Python regressions 5/5 passed.
+- Public desktop Playwright inspection: 9 graphite CTA states, 8 authorized-search states, 10 skeleton fixtures and 2 real poster/preview compositions; no document-level overflow at `1440×1000`.
+- Release status: review evidence only. Product/design owner sign-off, live authenticated search regression checks, full browser/real-device matrix, `origin/main` integration and stable-root promotion remain open gates.
+
 Каждый feature task перед integration должен приложить:
 
 - [ ] base/head SHA and `origin/main` reachability;

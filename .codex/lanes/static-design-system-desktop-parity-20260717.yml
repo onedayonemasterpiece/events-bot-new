@@ -68,4 +68,4 @@ lanes:
     forbidden_files: []
     expected_output: committed integration and immutable public preview
     verification_scope: full_local
-    status: planned
+    status: committed

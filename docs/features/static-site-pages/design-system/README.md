@@ -1,6 +1,6 @@
 # KenigEvents static-site design system
 
-> **Status:** desktop-v14 parity and runtime enforcement implemented on the integration branch; immutable public preview and product/design release sign-off remain pending.
+> **Status:** desktop-v14 parity and runtime enforcement implemented on the integration branch; immutable public preview published, product/design release sign-off remains pending.
 > **Runtime catalog:** `/lab/design-system/` in every checked preview build.
 > **Source of truth:** `site/src/styles/design-system.css` + `site/src/components/design-system/`.
 
@@ -42,6 +42,14 @@ PREVIEW_BUILD_ID=preview-<id> npm run check:preview
 ```
 
 In a published preview the route is `<preview-base>/lab/design-system/`. The exact immutable preview URL and SHA are recorded in release evidence; product/design approval must never refer only to “latest”.
+
+Current review evidence:
+
+- build source: `b96575e5`;
+- build id: `preview-design-system-b96575e5`;
+- immutable catalog: <https://kenigevents.ru/preview-design-system-b96575e5/lab/design-system/>;
+- scope: noindex preview only, not a stable-root production promotion;
+- status: automated contracts and desktop public inspection passed; product/design owner sign-off and the complete release browser/real-device matrix are still required.
 
 ## Architecture
 

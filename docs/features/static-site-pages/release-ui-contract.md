@@ -1,12 +1,14 @@
 # Static event-page release UI contract
 
-> Status: **design-system baseline implemented; immutable RC preview and product/design sign-off pending**.
+> Status: **design-system baseline implemented; immutable review preview published, RC promotion and product/design sign-off pending**.
 
 ## Purpose
 
 This is the single current UI acceptance contract. Historical hero/date/decision/onboarding labs remain research evidence and must not silently redefine the release baseline.
 
 The canonical component catalog is [the static-site design system](design-system/README.md), rendered at `/lab/design-system/`. Release sign-off must name an immutable preview build id and git SHA and must include that route; screenshots or approval of one event page are not sufficient.
+
+Current review build: source `b96575e5`, build id `preview-design-system-b96575e5`, public catalog <https://kenigevents.ru/preview-design-system-b96575e5/lab/design-system/>. This noindex preview is evidence for review, not an RC/stable-root promotion or owner sign-off.
 
 ## Design-system gate
 
