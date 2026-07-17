@@ -24,6 +24,11 @@ const scenarioIds = [
     'anticipated_person_named', 'live_meeting_mosaic', 'rare_event', 'weather_water_demo', 'storm_weekend_demo', 'storm_lecture_science_demo',
   'festival_demo', 'unusual_format_demo',
 ];
+const mediaReviewScenarioIds = [
+  'media_review_planet_ocean', 'media_review_ivana_kupala', 'media_review_region_80', 'media_review_writing_kaliningrad',
+  'media_review_swan_lake', 'media_review_vertinsky', 'media_review_literary_evening', 'media_review_hay_day',
+  'media_review_ship_quay', 'media_review_admiral', 'media_review_flight', 'media_review_craft',
+];
 const viewports = [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 1440, height: 900 }];
 let server: ChildProcess;
 
@@ -452,10 +457,12 @@ test('eligible scenarios use desktop mosaic media without moving the established
   await open(desktop.page, 'b', 'weather_water_demo');
 
   const mediaCoverage = await desktop.page.locator('#briefing-lab-scenarios').evaluate((node) => {
-    const deck = JSON.parse(node.textContent || '[]');
-    return { total: deck.filter((item: any) => item.id !== 'neutral_fallback').length, mosaic: deck.filter((item: any) => item.id !== 'neutral_fallback' && item.media?.mode === 'mosaic').length };
+    const scenarios = JSON.parse(node.textContent || '[]');
+    const deck = scenarios.filter((item: any) => item.id !== 'neutral_fallback' && item.reviewOnly !== true);
+    const review = scenarios.filter((item: any) => item.reviewOnly === true);
+    return { total: deck.length, mosaic: deck.filter((item: any) => item.media?.mode === 'mosaic').length, reviewTotal: review.length, reviewMosaic: review.filter((item: any) => item.media?.mode === 'mosaic').length };
   });
-  expect(mediaCoverage).toEqual({ total: 19, mosaic: 3 });
+  expect(mediaCoverage).toEqual({ total: 19, mosaic: 3, reviewTotal: 12, reviewMosaic: 12 });
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'mosaic');
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
 
@@ -497,7 +504,7 @@ test('narrative media is explicitly OCR-safe, photo-only, high-resolution and ab
   await open(run.page, 'b', 'weather_water_demo');
   const contract = await run.page.locator('#briefing-lab-scenarios').evaluate((node) => {
     const deck = JSON.parse(node.textContent || '[]');
-    const enabled = deck.filter((item: any) => item.media?.mode === 'mosaic');
+    const enabled = deck.filter((item: any) => item.reviewOnly !== true && item.media?.mode === 'mosaic');
     return {
       enabled: enabled.map((item: any) => ({ id: item.id, media: item.media })),
       abstained: Object.fromEntries(['today_count', 'weekend_count', 'smart_search_education', 'anticipated_person_named', 'live_meeting_mosaic', 'rare_event', 'storm_weekend_demo', 'storm_lecture_science_demo', 'festival_demo', 'unusual_format_demo'].map((id) => [id, Boolean(deck.find((item: any) => item.id === id)?.media)])),
@@ -514,6 +521,57 @@ test('narrative media is explicitly OCR-safe, photo-only, high-resolution and ab
   await expect(run.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
   await expect(run.page.locator('[data-message]')).toContainText('Татьяна Куртукова');
   await run.context.close();
+});
+
+test('manual media-review deck exposes twelve distinct, admitted images and never auto-skips the sample', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1707"><rect width="2560" height="1707" fill="#758b83"/><circle cx="1660" cy="760" r="420" fill="#bd7d62"/></svg>';
+  const desktop = await freshPage(browser, { width: 1920, height: 900 });
+  await desktop.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com|kaliningrad\.tretyakovgallery\.ru)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(desktop.page, 'c', mediaReviewScenarioIds[0], '&review=media&replay=1&pace=fast');
+
+  const contract = await desktop.page.locator('#briefing-lab-scenarios').evaluate((node) => {
+    const review = JSON.parse(node.textContent || '[]').filter((item: any) => item.reviewOnly === true);
+    return review.map((item: any) => ({ id: item.id, eventId: item.media?.eventId, src: item.media?.src, media: item.media }));
+  });
+  expect(contract.map(({ id }) => id)).toEqual(mediaReviewScenarioIds);
+  expect(new Set(contract.map(({ eventId }) => eventId)).size).toBe(mediaReviewScenarioIds.length);
+  expect(new Set(contract.map(({ src }) => src)).size).toBe(mediaReviewScenarioIds.length);
+  expect(contract.every(({ media }) => media?.ocrSafe === true && media.imageTextMode === 'visual_only' && media.imageKind === 'photo')).toBeTruthy();
+  expect(contract.every(({ media }) => media?.sourceWidth >= 1900 && media.sourceWidth * media.sourceHeight >= 1_000_000)).toBeTruthy();
+  expect(contract.every(({ media }) => media?.cropStrategy === 'curated-focal-cover' && media.maxUpscale === 1.1)).toBeTruthy();
+
+  await expect(desktop.page.locator('[data-media-review-controls]')).toBeVisible();
+  await expect(desktop.page.locator('[data-media-review-scenario]')).toHaveCount(mediaReviewScenarioIds.length);
+  await expect(desktop.page.locator('[data-media-review-progress]')).toHaveText(`1 из ${mediaReviewScenarioIds.length}`);
+  await expect(desktop.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 3000 });
+  const stoppedAt = (await labState(desktop.page)).scenario;
+  await desktop.page.waitForTimeout(3200);
+  expect((await labState(desktop.page)).scenario).toBe(stoppedAt);
+
+  for (let index = 0; index < mediaReviewScenarioIds.length; index += 1) {
+    await desktop.page.locator(`[data-media-review-scenario="${mediaReviewScenarioIds[index]}"]`).click();
+    await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds[index]);
+    await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'mosaic');
+    await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
+    await expect(desktop.page.locator('[data-media-image]')).toHaveAttribute('src', contract[index].src);
+    await expect(desktop.page.locator('[data-media-review-progress]')).toHaveText(`${index + 1} из ${mediaReviewScenarioIds.length}`);
+  }
+  await desktop.page.locator('[data-media-review-previous]').click();
+  await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds.at(-2)!);
+  await desktop.page.locator('[data-media-review-next]').click();
+  await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds.at(-1)!);
+  expect((await labState(desktop.page)).reviewSize).toBe(mediaReviewScenarioIds.length);
+  await desktop.context.close();
+
+  const mobile = await freshPage(browser, { width: 390, height: 844 });
+  await open(mobile.page, 'b', mediaReviewScenarioIds[0], '&review=media');
+  await expect(mobile.page.locator('[data-media-review-controls]')).toBeVisible();
+  await expect(mobile.page.locator('[data-briefing-slot]')).toHaveAttribute('data-media-mode', 'none');
+  await expect(mobile.page.locator('[data-media-image]')).not.toHaveAttribute('src', /.+/u);
+  await expect(mobile.page.locator('[data-briefing-categories]')).toBeVisible();
+  await expect(mobile.page.locator('[data-briefing-feed]')).toBeVisible();
+  await mobile.context.close();
 });
 
 test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful, mobile-silent and fail-closed', async ({ browser }) => {

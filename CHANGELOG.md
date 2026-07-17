@@ -35,6 +35,8 @@
 
 ### Added
 
+- **Static homepage / typed-briefing media comparison deck**: added a separate `review=media` lab mode with 12 grounded, source-distinct, manually curated high-resolution photo scenarios, direct 1–12 selection plus Previous/Replay/Next controls, and no automatic scenario skip; every image keeps exact source-order admission, focal cover, OCR-safe curation and runtime upscale rejection while the ordinary 19-scenario narrative queue remains unchanged and mobile remains text-only.
+
 - **Mobile UI / обязательный Telegram review gate**: added a repo skill and operator runbook that require every mobile web/UI task to inspect the matching `KenigEvents · UI review` forum topic and process its comments/screenshots before implementation, create a task topic when missing, then publish and verify real mobile screenshots plus motion evidence in the same thread before closure; the typed-briefing lab is seeded in topic `6`.
 
 - **Static homepage / curiosity-action briefing queue**: expanded the isolated typed-briefing lab into an eight-scene narrative queue with share/like/not-interested education, curiosity-led demo social/comment signals, bounded local exposure/action cooldown memory, persistent explicit pace preference, a real wordmark-derived decorative «о», and vertical/underscore cursor variants.

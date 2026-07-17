@@ -15,6 +15,8 @@ export type BriefingLabScenario = {
   id: string;
   label: string;
   family: BriefingLabScenarioFamily;
+  /** Review-deck scenarios never enter the ordinary narrative queue. */
+  reviewOnly?: boolean;
   fragments: readonly BriefingLabFragment[];
   ctaLabel: string;
   ctaHref?: string;
@@ -223,6 +225,97 @@ export const briefingLabScenarios = [
     ],
     ctaLabel: 'Найти необычное', ctaHref: '/poisk/', nextScenarioId: 'weekend_count',
     media: { eventId: 6112, mode: 'mosaic', assetSourceOrder: 0, focusX: 61, focusY: 48 },
+  },
+] as const satisfies readonly BriefingLabScenario[];
+
+// A deliberately manual visual-review deck. These are grounded event objects,
+// but they do not enter the ordinary narrative queue, cooldown memory or
+// three-step automatic chain. Every asset was inspected at source resolution
+// for the absence of competing raster copy and has a curated focal cover.
+export const briefingLabMediaReviewScenarios = [
+  {
+    id: 'media_review_planet_ocean', label: 'Фото 01 · Планета Океан', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Планета Океан.', accent: true, eventId: 6466, breakAfter: true }, { text: 'Заглянем?' }],
+    ctaLabel: 'Открыть событие', ctaEventId: 6466,
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_ivana_kupala', label: 'Фото 02 · Ивана Купала', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Ивана Купала.', accent: true, eventId: 6525, breakAfter: true }, { text: 'Поедем?' }],
+    ctaLabel: 'Открыть праздник', ctaEventId: 6525,
+    media: { eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_region_80', label: 'Фото 03 · 80 лет области', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Области — 80.', accent: true, eventId: 6559, breakAfter: true }, { text: 'Празднуем?' }],
+    ctaLabel: 'Открыть концерт', ctaEventId: 6559,
+    media: { eventId: 6559, mode: 'mosaic', assetSourceOrder: 0, focusX: 56, focusY: 48, ocrSafe: true },
+  },
+  {
+    id: 'media_review_writing_kaliningrad', label: 'Фото 04 · Пишу из Калининграда', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: '«Пишу сегодня', breakAfter: true }, { text: 'из Калининграда…»', accent: true, eventId: 6611 }],
+    ctaLabel: 'Открыть программу', ctaEventId: 6611,
+    media: { eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, focusX: 56, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_swan_lake', label: 'Фото 05 · Лебединое озеро', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: '«Лебединое озеро».', accent: true, eventId: 6565, breakAfter: true }, { text: 'Посмотрим?' }],
+    ctaLabel: 'Открыть спектакль', ctaEventId: 6565,
+    media: { eventId: 6565, mode: 'mosaic', assetSourceOrder: 1, focusX: 55, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_vertinsky', label: 'Фото 06 · Вертинский', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Вертинский.', accent: true, eventId: 4757, breakAfter: true }, { text: 'Встретимся в театре?' }],
+    ctaLabel: 'Открыть спектакль', ctaEventId: 4757,
+    media: { eventId: 4757, mode: 'mosaic', assetSourceOrder: 0, focusX: 38, focusY: 48, ocrSafe: true },
+  },
+  {
+    id: 'media_review_literary_evening', label: 'Фото 07 · Литературный вечер', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Литературный вечер.', accent: true, eventId: 6153, breakAfter: true }, { text: 'Послушаем?' }],
+    ctaLabel: 'Открыть программу', ctaEventId: 6153,
+    media: { eventId: 6153, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 45, ocrSafe: true },
+  },
+  {
+    id: 'media_review_hay_day', label: 'Фото 08 · День валяния в сене', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'День валяния', breakAfter: true }, { text: 'в сене.', accent: true, eventId: 6365 }, { text: 'Серьёзно.' }],
+    ctaLabel: 'Открыть необычное', ctaEventId: 6365,
+    media: { eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_ship_quay', label: 'Фото 09 · Набережная кораблей', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Набережная кораблей.', accent: true, eventId: 6155, breakAfter: true }, { text: 'Пойдём к воде?' }],
+    ctaLabel: 'Открыть событие', ctaEventId: 6155,
+    media: { eventId: 6155, mode: 'mosaic', assetSourceOrder: 0, focusX: 59, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_admiral', label: 'Фото 10 · Адмирал маринистики', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Адмирал маринистики.', accent: true, eventId: 5725, breakAfter: true }, { text: 'Посмотрим?' }],
+    ctaLabel: 'Открыть выставку', ctaEventId: 5725,
+    media: { eventId: 5725, mode: 'mosaic', assetSourceOrder: 0, focusX: 50, focusY: 48, ocrSafe: true },
+  },
+  {
+    id: 'media_review_flight', label: 'Фото 11 · Полёт над городом', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Полёт', breakAfter: true }, { text: 'над Калининградом.', accent: true, eventId: 6587 }],
+    ctaLabel: 'Открыть показ', ctaEventId: 6587,
+    media: { eventId: 6587, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50, ocrSafe: true },
+  },
+  {
+    id: 'media_review_craft', label: 'Фото 12 · Линии глины', family: 'signal', reviewOnly: true,
+    cooldownDays: 0, cursor: 'underscore',
+    fragments: [{ text: 'Линии глины.', accent: true, eventId: 6494, breakAfter: true }, { text: 'Попробуем?' }],
+    ctaLabel: 'Открыть мастер-класс', ctaEventId: 6494,
+    media: { eventId: 6494, mode: 'mosaic', assetSourceOrder: 5, focusX: 55, focusY: 50, ocrSafe: true },
   },
 ] as const satisfies readonly BriefingLabScenario[];
 

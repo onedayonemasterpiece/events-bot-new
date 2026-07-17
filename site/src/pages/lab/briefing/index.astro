@@ -7,6 +7,7 @@ import {
   briefingLabExcludedFixtureId,
   briefingLabFallback,
   briefingLabFixtureIds,
+  briefingLabMediaReviewScenarios,
   briefingLabScenarios,
   defaultBriefingLabScenario,
 } from '../../../data/briefingLab';
@@ -31,9 +32,9 @@ const resolveScenario = (item: BriefingLabScenario) => {
     && asset.recommended_hero_fit === 'cover'
     && asset.width >= 1000
     && asset.width * asset.height >= 1_000_000;
-  const mediaAsset = mediaEvent?.image_assets?.find((asset) => asset.source_order === item.media?.assetSourceOrder && eligibleMediaAsset(asset))
-    || mediaEvent?.image_assets?.find(eligibleMediaAsset)
-    || undefined;
+  // Media is a hand-curated object, not a request to find "something close".
+  // If the exact source-order asset is gone or fails admission, abstain.
+  const mediaAsset = mediaEvent?.image_assets?.find((asset) => asset.source_order === item.media?.assetSourceOrder && eligibleMediaAsset(asset));
   return {
     ...item,
     fragments: item.fragments.map((fragment) => ({
@@ -55,7 +56,7 @@ const resolveScenario = (item: BriefingLabScenario) => {
     } : undefined,
   };
 };
-const rawScenarios: readonly BriefingLabScenario[] = [...briefingLabScenarios, briefingLabFallback];
+const rawScenarios: readonly BriefingLabScenario[] = [...briefingLabScenarios, ...briefingLabMediaReviewScenarios, briefingLabFallback];
 const scenarios = rawScenarios.map(resolveScenario);
 const scenario = scenarios.find((item) => item.id === defaultBriefingLabScenario.id)!;
 const scenarioCount = briefingLabScenarios.length;
@@ -104,6 +105,23 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           </div>
         </div>
       </section>
+
+      <nav class="media-review-controls" aria-label="Сравнение изображений" data-media-review-controls hidden>
+        <div class="media-review-controls__heading">
+          <strong>Сравнение изображений</strong>
+          <span data-media-review-progress>1 из {briefingLabMediaReviewScenarios.length}</span>
+        </div>
+        <div class="media-review-controls__rail">
+          {briefingLabMediaReviewScenarios.map((item, index) => (
+            <button type="button" data-media-review-scenario={item.id} aria-label={item.label}>{index + 1}</button>
+          ))}
+        </div>
+        <div class="media-review-controls__actions">
+          <button type="button" data-media-review-previous>← Предыдущее</button>
+          <button type="button" data-media-review-replay>↻ Повторить</button>
+          <button type="button" data-media-review-next>Следующее →</button>
+        </div>
+      </nav>
 
       <nav class="briefing-categories" aria-label="Быстрый переход к категориям" data-briefing-categories>
         {briefingLabCategories.map((category) => <a href={category.href} data-category-route={category.href}>{category.label}</a>)}
@@ -184,10 +202,14 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       const message = lab?.querySelector('[data-message]');
       if (!lab || !stage || !briefing || !message) return;
 
-      const allScenarios = JSON.parse(document.querySelector('#briefing-lab-scenarios')?.textContent || '[]');
-      const deck = allScenarios.filter((item) => item.id !== 'neutral_fallback');
-      const byId = new Map(allScenarios.map((item) => [item.id, item]));
       const params = new URLSearchParams(location.search);
+      const allScenarios = JSON.parse(document.querySelector('#briefing-lab-scenarios')?.textContent || '[]');
+      const byId = new Map(allScenarios.map((item) => [item.id, item]));
+      const requestedById = params.has('scenario') ? byId.get(params.get('scenario')) : undefined;
+      const reviewMode = params.get('review') === 'media' || requestedById?.reviewOnly === true;
+      const ordinaryDeck = allScenarios.filter((item) => item.id !== 'neutral_fallback' && item.reviewOnly !== true);
+      const mediaReviewDeck = allScenarios.filter((item) => item.reviewOnly === true);
+      const deck = reviewMode ? mediaReviewDeck : ordinaryDeck;
       const aliases = { a: 'control', b: 'static', c: 'reveal', control: 'control', static: 'static', reveal: 'reveal' };
       const variant = aliases[String(params.get('variant') || 'c').toLowerCase()] || 'reveal';
       const MEMORY_KEY = 'ke-briefing-memory-v1';
@@ -252,7 +274,9 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         })[0];
       };
       const explicitScenario = params.has('scenario');
-      const requested = explicitScenario ? (byId.get(params.get('scenario')) || byId.get('neutral_fallback')) : chooseAutomatic();
+      const requested = explicitScenario && deck.some((item) => item.id === requestedById?.id)
+        ? requestedById
+        : reviewMode ? deck[0] : chooseAutomatic();
       let preserveAutomaticUrl = !explicitScenario;
       let current = Math.max(0, deck.findIndex((item) => item.id === requested.id));
       let currentScenario = requested;
@@ -320,6 +344,9 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         const chain = lab.querySelector('[data-chain-progress]');
         if (chain) chain.textContent = deckPlaying ? 'LAB · весь банк' : `цепочка ${autoChainStep}/${AUTO_CHAIN_LIMIT}`;
         const select = lab.querySelector('[data-scenario-select]'); if (select) select.value = currentScenario.id;
+        const reviewProgress = lab.querySelector('[data-media-review-progress]');
+        if (reviewProgress && reviewMode) reviewProgress.textContent = `${pos + 1} из ${deck.length}`;
+        lab.querySelectorAll('[data-media-review-scenario]').forEach((button) => button.setAttribute('aria-current', String(button.dataset.mediaReviewScenario === currentScenario.id)));
         lab.dataset.briefingScenarioId = currentScenario.id;
       };
       const setPublicNext = (visible) => {
@@ -338,6 +365,8 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         url.searchParams.set('variant', variant === 'control' ? 'a' : variant === 'static' ? 'b' : 'c');
         if (preserveAutomaticUrl) url.searchParams.delete('scenario');
         else url.searchParams.set('scenario', currentScenario.id);
+        if (reviewMode) url.searchParams.set('review', 'media');
+        else url.searchParams.delete('review');
         url.searchParams.set('pace', pace);
         url.searchParams.delete('replay');
         history.replaceState({}, '', url);
@@ -534,6 +563,14 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         }
         const baseHold = { slow: 5200, normal: 3600, fast: 2400 }[pace];
         const hold = baseHold + (currentScenario.media?.mode === 'mosaic' && mediaAllowed(currentScenario.media) ? 820 : 0);
+        if (reviewMode) {
+          deckPlaying = false;
+          setPendingCursor(true, { terminal: true });
+          setPublicNext(true);
+          updateStatus(`Сравнение изображений · ${current + 1}/${deck.length}`);
+          emit('media_review_stop', { review_index: current + 1, review_total: deck.length });
+          return;
+        }
         if (!deckPlaying) {
           const chained = currentScenario.nextScenarioId ? deck.findIndex((item) => item.id === currentScenario.nextScenarioId) : -1;
           if (autoChainStep >= AUTO_CHAIN_LIMIT || chained < 0) {
@@ -623,6 +660,9 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       };
 
       lab.dataset.briefingVariant = variant;
+      lab.dataset.briefingReviewMode = reviewMode ? 'media' : 'none';
+      const reviewControls = lab.querySelector('[data-media-review-controls]');
+      if (reviewControls) reviewControls.hidden = !reviewMode;
       lab.querySelectorAll('[data-variant-switch]').forEach((node) => node.setAttribute('aria-current', node.dataset.variantSwitch === variant ? 'page' : 'false'));
       if (variant === 'control') { stage.hidden = true; automaticExposureCandidate = false; }
       syncPaceControls();
@@ -650,6 +690,16 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       });
       lab.querySelector('[data-previous]')?.addEventListener('click', () => runFromDock(() => move(-1)));
       lab.querySelector('[data-public-next]')?.addEventListener('click', () => move(1, true));
+      lab.querySelector('[data-media-review-previous]')?.addEventListener('click', () => move(-1));
+      lab.querySelector('[data-media-review-next]')?.addEventListener('click', () => move(1));
+      lab.querySelector('[data-media-review-replay]')?.addEventListener('click', () => startReveal({ force: true, reason: 'media_review_replay' }));
+      lab.querySelectorAll('[data-media-review-scenario]').forEach((button) => button.addEventListener('click', () => {
+        const nextIndex = deck.findIndex((item) => item.id === button.dataset.mediaReviewScenario);
+        if (nextIndex < 0) return;
+        clearMotionTimers(); deckPlaying = false; completedDeckIndexes.clear(); preserveAutomaticUrl = false;
+        current = nextIndex; currentScenario = deck[current]; autoChainStep = 1; automaticExposureCandidate = false;
+        startReveal({ force: true, reason: 'media_review_select' });
+      }));
       lab.querySelector('[data-pause]')?.addEventListener('click', () => {
         if (explicitPaused) {
           ignoreOutOfViewUntil = performance.now() + 800;
@@ -706,7 +756,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
       });
-      window.__briefingLab = { replay: () => { automaticExposureCandidate = false; autoChainStep = 1; startReveal({ force: true }); }, next: () => move(1, true), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, chainStep: autoChainStep, chainState: stage.dataset.chainState, deckPlaying, paused: explicitPaused || hoverPaused || focusPaused, pace, memory: cleanMemory(memory) }) };
+      window.__briefingLab = { replay: () => { automaticExposureCandidate = false; autoChainStep = 1; startReveal({ force: true }); }, next: () => move(1, true), playAll: () => lab.querySelector('[data-play-all]')?.click(), pause: () => pause('api'), resume, getState: () => ({ variant, scenario: currentScenario.id, motion: briefing.dataset.motion, chainStep: autoChainStep, chainState: stage.dataset.chainState, deckPlaying, reviewMode, reviewSize: mediaReviewDeck.length, paused: explicitPaused || hoverPaused || focusPaused, pace, memory: cleanMemory(memory) }) };
       lab.dataset.briefingReady = 'true';
     })();
   </script>
@@ -754,6 +804,17 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
   .pace-control { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; }
   .pace-control select { display: none; }
   .pace-control button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+  .media-review-controls[hidden] { display: none; }
+  .media-review-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .5rem 1rem; margin: .62rem 0 .72rem; padding: .55rem .65rem; border-block: 1px solid var(--line); }
+  .media-review-controls__heading { display: flex; align-items: baseline; gap: .55rem; white-space: nowrap; }
+  .media-review-controls__heading strong { font-size: .76rem; }
+  .media-review-controls__heading span { color: var(--muted); font: 800 .66rem/1.1 ui-monospace, monospace; }
+  .media-review-controls__rail, .media-review-controls__actions { display: flex; align-items: center; gap: .3rem; }
+  .media-review-controls__rail { justify-content: center; }
+  .media-review-controls button { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: .25rem .45rem; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font: 850 .7rem/1 inherit; cursor: pointer; }
+  .media-review-controls button:hover, .media-review-controls button:focus-visible { border-color: var(--primary); color: var(--primary-strong); }
+  .media-review-controls button[aria-current="true"] { border-color: var(--text); background: var(--text); color: #fff; }
+  .media-review-controls__actions button { min-width: auto; padding-inline: .7rem; }
   .briefing-categories { display: flex; flex-wrap: wrap; gap: .42rem; margin: .62rem 0 .72rem; }
   .briefing-categories a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: .45rem .72rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font-size: .78rem; font-weight: 850; text-decoration: none; }
   .briefing-context-feed__heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .75rem; margin: 0 0 .5rem; }
@@ -816,6 +877,10 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
   }
   @media (max-width: 759px) {
     html:has([data-briefing-lab]) .site-nav { display: none; }
+    .media-review-controls { grid-template-columns: 1fr; gap: .45rem; }
+    .media-review-controls__rail { justify-content: flex-start; overflow-x: auto; padding-bottom: .2rem; }
+    .media-review-controls__actions { justify-content: space-between; }
+    .media-review-controls__actions button { min-height: 44px; }
     [data-briefing-scenario-id="local_keska"] .briefing-stage__message h1 { max-width: 100%; font-size: 1.4rem; }
     [data-briefing-scenario-id="anticipated_person_named"] .briefing-stage__message h1 { max-width: 100%; }
   }
