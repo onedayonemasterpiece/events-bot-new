@@ -16,10 +16,14 @@ const eventFiles = fs.readdirSync(distRoot)
   .filter(({ file }) => fs.existsSync(file));
 
 const expectedSpecimens = new Map([
-  ['kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294', ['split', 'split-resolution-constrained-landscape']],
   ['blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815', ['split', 'split-portrait-or-square-visual']],
   ['spektakl-garazh-kaliningrad-5658', ['editorial', 'editorial-primary-qualified-landscape']],
   ['epidemiya-ognennaya-rukopis-kaliningrad-4671', ['editorial', 'editorial-with-classified-identity-poster']],
+]);
+
+const requiredRoutingFamilies = new Set([
+  'split:split-resolution-constrained-landscape',
+  ...[...expectedSpecimens.values()].map(([family, reason]) => `${family}:${reason}`),
 ]);
 
 const counts = new Map();
@@ -54,6 +58,10 @@ for (const { slug, file } of eventFiles) {
 
 for (const slug of expectedSpecimens.keys()) {
   if (!eventFiles.some((item) => item.slug === slug)) failures.push(`${slug}: required real-event specimen is absent`);
+}
+
+for (const key of requiredRoutingFamilies) {
+  if (!counts.has(key)) failures.push(`fresh event set has no representative for ${key}`);
 }
 
 if (failures.length) {

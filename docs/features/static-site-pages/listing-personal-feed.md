@@ -1,6 +1,6 @@
 # Listing personal feed
 
-> **Status:** client contract prepared; backend/RPC not enabled yet.
+> **Status:** client contract and same-origin static-catalog MVP implemented; backend/RPC remains an optional fallback, not the default read path.
 
 ## Product rule
 
@@ -14,9 +14,13 @@ This keeps SEO-safe deterministic listing content first, then adds a personal co
 2. JS looks for a cached `ke_listing_personal_feed_cache_v1` manifest in `localStorage`.
 3. Cache is shared across listing pages and has a short TTL of 30 minutes.
 4. If cache is valid for the current compatible profile hash, the personal section renders immediately without another network call.
-5. If there is no cache and public Supabase RPC config is present, the page makes one RPC request for up to 30 card projections.
+5. If there is no cache, the browser first loads the bounded same-origin `/data/personal-feed.json` catalog and ranks it locally. A public Supabase RPC, when explicitly configured, is only a fallback if that static request fails.
 6. While browsing across listing pages, the same localStorage list is reused; “Обновить ленту” can force a refresh when backend config exists.
-7. If backend/RPC is absent or fails, the section remains hidden; static listing UX is not degraded.
+7. If both sources fail, the section remains hidden; static listing UX is not degraded.
+
+On event-detail pages the same surface is intentionally delayed until the
+visitor reaches `Смотрите дальше`; see
+[Personal feed architecture](../unsigned-personalization/personal-feed-architecture.md).
 
 ## Why localStorage cache
 

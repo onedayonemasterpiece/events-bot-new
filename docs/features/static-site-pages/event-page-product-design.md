@@ -208,6 +208,13 @@ Primary CTA is selected by event facts:
 Secondary CTAs:
 
 - **Добавить в календарь** — always if date exists; ICS download link; on mobile must open/download predictably.
+- On desktop, a secondary calendar action may adapt its visible label from local
+  usage history while preserving its accessible name: show `В календарь` for a
+  new user, fewer than three uses, or no use in the last 30 days; collapse to the
+  calendar icon for a regular recent user. Primary calendar CTA and mobile
+  actions do not use this adaptive desktop presentation rule. Successful or
+  fallback calendar clicks update a bounded local counter; saved-event expiry
+  remains a separate state.
 - **Поделиться** — use Web Share API on mobile; fallback to copy link on desktop/unsupported browsers.
 - **Скопировать ссылку** — visible fallback; toast “Ссылка скопирована”.
 - **Сохранить** — MVP can be local-only after consent; if no consent, show “сохранить в браузере?” prompt or keep for post-MVP.

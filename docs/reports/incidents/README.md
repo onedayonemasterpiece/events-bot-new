@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-16-static-event-media-action-regressions.md`
+  - Scope: static event medallion inventory, legacy approved media duplicates, user-state-driven desktop calendar labels, stable dynamic-card media and desktop/mobile gallery-ending parity.
+  - Must not regress: Dramatic Theatre renders its accepted medallion; event `4671` exposes one canonical poster variant; mobile secondary actions never expand by event-id parity; delayed images reserve geometry; both galleries finish with a related event.
 - `INC-2026-07-15-static-production-v2-secondary-surfaces.md`
   - Scope: generated desktop recommendation geometry, rail transport media, exact accepted mobile V8 integration and full-catalog preview acceptance.
   - Must not regress: recommendation rows use one media ratio without fields, OCR crops stay at or below 20%, rail examples retain the train image, and production mobile routes reuse the accepted V8 behavior from `fd8766b1` rather than an older approximation.

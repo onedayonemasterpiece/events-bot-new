@@ -120,6 +120,7 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
 | Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
 | Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.svg` (`.png` fallback/QA) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`, replacing the octopus symbol, with `АКТ` inset inside the circle |
+| Калининградский драматический театр | `dramteatr39` | `/assets/organizers/dramteatr39.svg` | official `dramteatr39.ru/img/logo.svg?v=2`; the accepted round runtime mark uses the left theatre emblem from the official horizontal SVG and matches venue/source aliases including `Драматический театр` |
 | Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the enlarged white internal `З` symbol as a root-clipped group, optically centered and clipped by the lower circle edge |
 | Фестиваль «80 историй о главном» | `kgd80` | `/assets/organizers/kgd80.svg` (`.png` fallback/QA) | KGD80 hero lockup from `site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg`; tighter medallion viewBox with safe margins and a small downward optical nudge; forced for `event.festival=80 историй о главном` |
 | Фестиваль «Кантата» | `kantata-festival` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | official Tilda PNG wordmark `КАНТАТА`; WebP-first because source is raster |
@@ -146,6 +147,16 @@ Asset inventory:
 - `znanie-russia` is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`, and is also forced by curated policy for `event.festival=80 историй о главном`.
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
+
+### Manifest-inventory regression contract
+
+The runtime manifest and the optimized asset must move together. The July 2026
+`dramteatr39` regression happened because the accepted SVG existed on an older
+medallion branch but its manifest item was absent from the later integration
+base; alias matching itself was not broken. Full-catalog preview acceptance must
+therefore render event `5756` and assert both the local
+`/assets/organizers/dramteatr39.svg` URL and the theatre label. A visual asset
+present only in branch history is not considered integrated.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 

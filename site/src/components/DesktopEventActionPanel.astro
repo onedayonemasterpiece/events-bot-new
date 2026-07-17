@@ -145,6 +145,29 @@ const shareFileName = `kenigevents-${event.slug}`;
     text-decoration: none;
     cursor: pointer;
   }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label]) {
+    width: auto;
+    padding-inline: .75rem;
+    transition: padding .18s ease, min-width .18s ease;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
+    max-width: 9rem;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: .88rem;
+    font-weight: 850;
+    opacity: 1;
+    transition: max-width .18s ease, opacity .12s ease;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label].is-calendar-label-compact) {
+    width: 52px;
+    min-width: 52px;
+    padding-inline: .3rem;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label].is-calendar-label-compact [data-calendar-label]) {
+    max-width: 0;
+    opacity: 0;
+  }
   :global(.desktop-prototype__icon-action .icon) { width: 29px; height: 29px; }
   :global(.desktop-prototype__icon-action strong) { font-size: .92rem; font-variant-numeric: tabular-nums; }
 </style>

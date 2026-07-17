@@ -49,11 +49,6 @@ const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = displayDateTime(event);
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
-const compactLabelAction = stickyCalendarPrimary && ctaHref
-  ? 'ticket'
-  : !stickyCalendarPrimary && isCalendarEligible(event)
-    ? (event.id % 2 === 0 ? 'calendar' : 'share')
-    : 'share';
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const calendarExpiryDay = eventCalendarStateExpiryDay(event);
@@ -128,7 +123,6 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
     data-prose-treatment="open"
     data-actions-treatment="dock"
     data-mobile-review-revision="v4"
-    data-compact-label-action={compactLabelAction}
     data-mobile-parallax-profile="photo-continuous-crop"
   >
     <div class="page-shell page-shell--event-impact mobile-event-production__shell">
@@ -192,10 +186,9 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
           <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>
         </div>
       </section>
-
-      <PersonalFeedSlot context="event-detail" />
     </div>
   </main>
+  <PersonalFeedSlot context="event-detail" />
   {stickyHref && (
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">

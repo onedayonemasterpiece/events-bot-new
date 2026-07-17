@@ -43,6 +43,27 @@ const headingId = `personal-feed-${context}-title`;
     display: none;
   }
 
+  .personal-feed-section--event-detail {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: clamp(2rem, 4vw, 4.5rem) max(16px, calc((100vw - min(1180px, calc(100vw - 32px))) / 2));
+    border: 0;
+    border-radius: 0;
+    background: #f5ede2;
+    box-shadow: none;
+  }
+
+  .personal-feed-section--event-detail > .section-card__inner {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .personal-feed-section--event-detail h2 {
+    font-size: clamp(2rem, 4vw, 4rem);
+  }
+
   .personal-feed-section__explanation,
   .personal-feed-section__status {
     max-width: 46rem;
@@ -76,6 +97,12 @@ const headingId = `personal-feed-${context}-title`;
   }
 
   @media (max-width: 620px) {
+    .personal-feed-section--event-detail {
+      margin-top: 1rem;
+      padding: 1.15rem 1rem 1.35rem;
+      border-radius: 24px;
+    }
+
     .personal-feed-section__feed {
       grid-template-columns: minmax(0, 1fr);
       gap: 0.85rem;

@@ -1142,6 +1142,33 @@ const HEADER_NAVIGATION = [
       .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
       .event-card__media-shell--document { background: #15110f; }
       .event-card__media-shell--document .event-card__media { display: block; width: 100%; height: auto; }
+      .event-card__media-shell--dynamic {
+        aspect-ratio: var(--dynamic-media-ratio, 4 / 5);
+        min-height: 1px;
+      }
+      .event-card__media-shell--dynamic.event-card__media-shell--document .event-card__media {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .event-card__media-shell--dynamic::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        background: linear-gradient(105deg, transparent 18%, rgba(255,255,255,.2) 38%, rgba(255,255,255,.34) 50%, rgba(255,255,255,.2) 62%, transparent 82%);
+        background-size: 220% 100%;
+        animation: event-card-shimmer 1.35s ease-in-out infinite;
+      }
+      .event-card__media-shell--dynamic.is-image-loaded::after,
+      .event-card__media-shell--dynamic.is-image-missing::after { display: none; }
+      @keyframes event-card-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .event-card__media-shell--dynamic::after { animation: none; background-position: 50% 0; }
+      }
       .event-card__media { position: relative; z-index: 1; background: #15110f; }
       .event-card__image-fallback {
         position: absolute;
@@ -1162,7 +1189,7 @@ const HEADER_NAVIGATION = [
       }
       .event-card__image-fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
       .event-card__media-shell.is-image-missing {
-        aspect-ratio: 4 / 5;
+        aspect-ratio: var(--dynamic-media-ratio, 4 / 5);
         background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e);
       }
       .event-card__media-shell.is-image-missing .event-card__media { display: none; }
@@ -2225,6 +2252,10 @@ const HEADER_NAVIGATION = [
         const CALENDAR_STATE_KEY = 'ke_calendar_saved_v1';
         const CALENDAR_STATE_VERSION = 1;
         const CALENDAR_STATE_LIMIT = 256;
+        const CALENDAR_USAGE_KEY = 'ke_calendar_usage_v1';
+        const CALENDAR_USAGE_VERSION = 1;
+        const CALENDAR_USAGE_REGULAR_THRESHOLD = 3;
+        const CALENDAR_USAGE_RECENT_MS = 30 * 24 * 60 * 60 * 1000;
         const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
         const DEFAULT_WEIGHTS = {
           staticContext: 0.80,
@@ -2322,8 +2353,42 @@ const HEADER_NAVIGATION = [
           return true;
         }
 
+        function normalizeCalendarUsage(value) {
+          const count = value && value.v === CALENDAR_USAGE_VERSION
+            ? Math.max(0, Math.min(9999, Number(value.count || 0)))
+            : 0;
+          const lastUsedAt = value && value.v === CALENDAR_USAGE_VERSION
+            ? Math.max(0, Number(value.last_used_at || 0))
+            : 0;
+          return {
+            v: CALENDAR_USAGE_VERSION,
+            count: Number.isFinite(count) ? Math.floor(count) : 0,
+            last_used_at: Number.isFinite(lastUsedAt) ? lastUsedAt : 0,
+          };
+        }
+
+        function readCalendarUsage() {
+          return normalizeCalendarUsage(readJson(CALENDAR_USAGE_KEY, null));
+        }
+
+        function markCalendarUsed() {
+          const usage = readCalendarUsage();
+          writeJson(CALENDAR_USAGE_KEY, {
+            v: CALENDAR_USAGE_VERSION,
+            count: Math.min(9999, usage.count + 1),
+            last_used_at: Date.now(),
+          });
+        }
+
+        function calendarLabelMayCollapse(usage = readCalendarUsage()) {
+          if (usage.count < CALENDAR_USAGE_REGULAR_THRESHOLD) return false;
+          if (!usage.last_used_at) return false;
+          return Date.now() - usage.last_used_at <= CALENDAR_USAGE_RECENT_MS;
+        }
+
         function syncCalendarControls() {
           const state = readCalendarState();
+          const collapseAdaptiveLabels = calendarLabelMayCollapse();
           document.querySelectorAll('a[data-calendar-action]').forEach((anchor) => {
             const label = anchor.querySelector('[data-calendar-label]');
             if (label && !label.dataset.calendarOriginalLabel) label.dataset.calendarOriginalLabel = label.textContent?.trim() || 'В календарь';
@@ -2333,6 +2398,10 @@ const HEADER_NAVIGATION = [
             if (label) label.textContent = added ? 'Добавлено' : (label.dataset.calendarOriginalLabel || 'В календарь');
             const title = anchor.dataset.calendarEventTitle || 'событие';
             anchor.setAttribute('aria-label', added ? `Скачать файл календаря ещё раз: ${title}` : `Добавить в календарь: ${title}`);
+            const adaptive = anchor.hasAttribute('data-calendar-adaptive-label');
+            const collapsed = adaptive && collapseAdaptiveLabels;
+            anchor.classList.toggle('is-calendar-label-compact', collapsed);
+            anchor.dataset.calendarLabelMode = collapsed ? 'icon' : 'text';
           });
         }
 
@@ -2372,6 +2441,8 @@ const HEADER_NAVIGATION = [
             if (!eventId || !Number.isInteger(expiryDay) || anchor.dataset.calendarPending === 'true') return;
             event.preventDefault();
             anchor.dataset.calendarPending = 'true';
+            markCalendarUsed();
+            syncCalendarControls();
             try {
               const response = await fetch(anchor.href, { credentials: 'omit' });
               if (!response.ok) throw new Error(`ICS HTTP ${response.status}`);
@@ -2386,7 +2457,7 @@ const HEADER_NAVIGATION = [
             }
           }, true);
           window.addEventListener('storage', (event) => {
-            if (event.key === CALENDAR_STATE_KEY) syncCalendarControls();
+            if (event.key === CALENDAR_STATE_KEY || event.key === CALENDAR_USAGE_KEY) syncCalendarControls();
           });
           window.addEventListener('pageshow', syncCalendarControls);
         }
@@ -2938,6 +3009,21 @@ const HEADER_NAVIGATION = [
           });
         }
 
+        function personalFeedSignalCount(profile) {
+          if (!isCompatibleProfile(profile)) return 0;
+          const explicitIds = new Set([
+            ...toArray(profile.liked_event_ids).map(asId),
+            ...toArray(profile.not_interested_event_ids).map(asId),
+            ...toArray(profile.hidden_event_ids).map(asId),
+          ].filter(Boolean));
+          const shareSignals = Object.values(profile.share_counts || {}).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+          return explicitIds.size + Math.min(3, shareSignals);
+        }
+
+        function personalFeedProfileIsReady(profile) {
+          return isCompatibleProfile(profile) && personalFeedSignalCount(profile) >= 3;
+        }
+
         function normalizePersonalFeedItem(item, index) {
           const candidate = item && item.candidate ? item.candidate : item;
           const display = displayOf(candidate);
@@ -2954,9 +3040,9 @@ const HEADER_NAVIGATION = [
             status: candidate?.status || display.status_label || 'available',
             lifecycle_status: candidate?.lifecycle_status || 'active',
             is_free: Boolean(candidate?.is_free) || /бесплат|свободн/iu.test(display.price_label || ''),
-            base_similarity: Number(candidate?.base_similarity ?? candidate?.personal_score ?? Math.max(0, 1 - index * 0.01)),
-            static_score: Number(candidate?.static_score ?? candidate?.base_similarity ?? Math.max(0, 1 - index * 0.01)),
-            reason_codes: unique([...(toArray(candidate?.reason_codes)), 'backend:listing_personal_feed']),
+            base_similarity: Number(candidate?.base_similarity ?? candidate?.personal_score ?? Math.max(0, 1 - index * 0.001)),
+            static_score: Number(candidate?.static_score ?? candidate?.base_similarity ?? Math.max(0, 1 - index * 0.001)),
+            reason_codes: unique([...(toArray(candidate?.reason_codes)), 'catalog:personal_feed']),
             exploration_candidate: Boolean(candidate?.exploration_candidate),
             display: {
               ...display,
@@ -2968,6 +3054,8 @@ const HEADER_NAVIGATION = [
               image_alt: display.image_alt || candidate?.image_alt || `Афиша события «${display.title || candidate?.title || 'событие'}»`,
               image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
               image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+              image_width: Number(display.image_width || candidate?.image_width || 0),
+              image_height: Number(display.image_height || candidate?.image_height || 0),
               focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
               display_date: display.display_date || candidate?.date || '',
               display_date_time: display.display_date_time || display.display_date || candidate?.date || '',
@@ -2992,7 +3080,7 @@ const HEADER_NAVIGATION = [
             feature_schema_version: payload?.feature_schema_version || FEATURE_SCHEMA_VERSION,
             taxonomy_version: payload?.taxonomy_version || TAXONOMY_VERSION,
             surface: payload?.surface || PERSONAL_FEED_SURFACE,
-            algorithm_id: payload?.algorithm_id || 'supabase_rpc_personal_feed_v1',
+            algorithm_id: payload?.algorithm_id || 'static_personal_feed_catalog_v1',
             generated_at: payload?.generated_at || new Date().toISOString(),
             preload_target: Number(payload?.preload_target || PERSONAL_FEED_LIMIT),
             page_size: Number(payload?.page_size || PERSONAL_FEED_LIMIT),
@@ -3047,7 +3135,14 @@ const HEADER_NAVIGATION = [
           };
         }
 
-        async function fetchPersonalFeedManifest(profile) {
+        async function fetchPersonalFeedManifest(profile, section) {
+          const source = String(section?.dataset.personalFeedSrc || '').trim();
+          if (source) {
+            try {
+              const response = await fetch(source, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+              if (response.ok) return normalizePersonalFeedManifest(await response.json());
+            } catch (_) {}
+          }
           const config = personalFeedConfig();
           if (!config) return null;
           const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
@@ -3068,15 +3163,15 @@ const HEADER_NAVIGATION = [
           return normalizePersonalFeedManifest(await response.json());
         }
 
-        async function getPersonalFeedManifest({ force = false } = {}) {
+        async function getPersonalFeedManifest(section, { force = false } = {}) {
           const profile = readProfile();
+          if (!personalFeedProfileIsReady(profile)) return null;
           if (!force) {
             const cached = readPersonalFeedCache(profile);
             if (cached) return cached;
           }
-          if (!personalFeedConfig()) return null;
           if (personalFeedRequest && !force) return personalFeedRequest;
-          personalFeedRequest = fetchPersonalFeedManifest(profile)
+          personalFeedRequest = fetchPersonalFeedManifest(profile, section)
             .then((manifest) => {
               if (manifest) writePersonalFeedCache(manifest, profile);
               return manifest;
@@ -3086,33 +3181,151 @@ const HEADER_NAVIGATION = [
           return personalFeedRequest;
         }
 
+        function personalFeedPopularity(candidate) {
+          const display = displayOf(candidate);
+          const likes = Math.max(0, Number(display.likes_count || 0));
+          const shares = Math.max(0, Number(display.shares_count || 0));
+          return Math.min(1, Math.log1p(likes + shares * 1.5) / Math.log(80));
+        }
+
+        function rankPersonalFeedCandidates(manifest, profile) {
+          if (!personalFeedProfileIsReady(profile)) return [];
+          const scored = [];
+          for (const candidate of toArray(manifest?.related_static)) {
+            if (!isEligibleCandidate(candidate, manifest, profile)) continue;
+            const affinity = tagAffinity(candidate, profile);
+            const negative = negativeInterestPenalty(candidate, profile);
+            const fatigue = fatiguePenalty(candidate, profile);
+            const price = priceMatch(candidate, profile);
+            const time = timeMatch(candidate, profile);
+            const popularity = personalFeedPopularity(candidate);
+            const exploration = candidate?.exploration_candidate ? 1 : 0;
+            const score =
+              0.60 * affinity +
+              0.16 * popularity +
+              0.09 * price +
+              0.06 * time +
+              0.05 * staticCandidateScore(candidate) +
+              0.04 * exploration -
+              0.62 * negative -
+              0.16 * fatigue;
+            const reasonCodes = toArray(candidate.reason_codes).slice();
+            if (affinity > 0) reasonCodes.push('profile:positive_affinity');
+            if (popularity > 0) reasonCodes.push('catalog:popularity');
+            if (price > 0) reasonCodes.push('profile:price_match');
+            scored.push({ candidate, score, base_similarity: staticCandidateScore(candidate), reason_codes: unique(reasonCodes) });
+          }
+          scored.sort((left, right) => right.score - left.score || right.base_similarity - left.base_similarity || Number(candidateId(left.candidate) || 0) - Number(candidateId(right.candidate) || 0));
+          return applyDiversity(scored, { maxSameCategory: 3, maxSameVenue: 2 }).map((item, index) => ({
+            event_id: candidateId(item.candidate),
+            candidate: item.candidate,
+            rank: index,
+            personal_score: Number(item.score.toFixed(4)),
+            base_similarity: Number(item.base_similarity.toFixed(4)),
+            reason_codes: item.reason_codes,
+            diversity_postponed: Boolean(item.diversity_postponed),
+          }));
+        }
+
+        const PERSONAL_FEED_CHUNK_SIZE = 6;
+        const PERSONAL_FEED_RENDER_LIMIT = 18;
+        const personalFeedStores = new WeakMap();
+        const personalFeedReached = new WeakSet();
+
+        function visibleHideStickyMarker() {
+          const markers = Array.from(document.querySelectorAll('[data-hide-sticky-after]'));
+          return markers.find((marker) => marker.getClientRects().length > 0) || markers[0] || null;
+        }
+
+        function eventIdsAlreadyOffered(section) {
+          const ids = new Set();
+          document.querySelectorAll('[data-related-start] [data-event-card], [data-discovery-feed] [data-event-card]').forEach((card) => {
+            const id = asId(card.dataset.eventId);
+            if (id) ids.add(id);
+          });
+          const discoveryFeed = document.querySelector('[data-discovery-feed]');
+          const currentId = asId(discoveryFeed?.dataset.currentEventId);
+          if (currentId) ids.add(currentId);
+          section?.querySelectorAll('[data-event-card]').forEach((card) => {
+            const id = asId(card.dataset.eventId);
+            if (id) ids.add(id);
+          });
+          return ids;
+        }
+
+        function appendPersonalFeedChunk(section) {
+          const store = personalFeedStores.get(section);
+          const slot = section.querySelector('[data-personal-feed-slot]');
+          const loadMore = section.querySelector('[data-personal-feed-load-more]');
+          if (!store || !slot) return 0;
+          const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
+          const chunk = store.items.slice(store.rendered, end);
+          if (chunk.length) slot.insertAdjacentHTML('beforeend', chunk.map((item) => eventCardHtml(item, slot.dataset.feedCardVariant || 'split-actions')).join(''));
+          store.rendered = end;
+          if (loadMore) loadMore.hidden = store.rendered >= store.items.length;
+          syncCardsFeedbackState(store.profile);
+          return chunk.length;
+        }
+
         function renderPersonalFeedSection(section, manifest) {
           const slot = section.querySelector('[data-personal-feed-slot]');
           const status = section.querySelector('[data-personal-feed-status]');
           const refresh = section.querySelector('[data-personal-feed-refresh]');
-          if (!slot || !manifest || !toArray(manifest.related_static).length) {
+          const loadMore = section.querySelector('[data-personal-feed-load-more]');
+          const profile = readProfile();
+          if (!slot || !manifest || !personalFeedProfileIsReady(profile)) {
             section.hidden = true;
+            personalFeedStores.delete(section);
             return;
           }
-          const profile = activeProfile(manifest);
-          const ranked = rankEventDetailRelated(manifest, profile, { maxSameCategory: 4, maxSameVenue: 3 }).slice(0, PERSONAL_FEED_LIMIT);
-          const eligible = ranked.filter((item) => isEligibleCandidate(item.candidate, manifest, profile));
-          if (!eligible.length) {
+          const excluded = eventIdsAlreadyOffered(section);
+          const ranked = rankPersonalFeedCandidates(manifest, profile)
+            .filter((item) => !excluded.has(asId(item.event_id)))
+            .slice(0, PERSONAL_FEED_RENDER_LIMIT);
+          if (!ranked.length) {
             section.hidden = true;
+            personalFeedStores.delete(section);
             return;
           }
-          slot.innerHTML = eligible.map((item) => eventCardHtml(item, slot.dataset.feedCardVariant || 'split-actions')).join('');
+          slot.innerHTML = '';
+          personalFeedStores.set(section, { items: ranked, rendered: 0, profile });
           section.hidden = false;
+          section.dataset.personalFeedReady = 'true';
           if (status) status.hidden = true;
-          if (refresh) refresh.hidden = !personalFeedConfig();
-          syncCardsFeedbackState(profile);
+          if (refresh) refresh.hidden = true;
+          if (loadMore) loadMore.hidden = false;
+          appendPersonalFeedChunk(section);
         }
 
-        async function hydratePersonalFeedSlots({ force = false } = {}) {
+        async function hydratePersonalFeedSlots({ force = false, sections = null } = {}) {
+          const candidates = sections || Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section));
+          for (const section of candidates) {
+            const manifest = await getPersonalFeedManifest(section, { force });
+            renderPersonalFeedSection(section, manifest);
+          }
+        }
+
+        function initializePersonalFeedObservers() {
           const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
-          if (!sections.length) return;
-          const manifest = await getPersonalFeedManifest({ force });
-          sections.forEach((section) => renderPersonalFeedSection(section, manifest));
+          sections.forEach((section) => {
+            const context = section.dataset.listingContext || '';
+            const target = context === 'event-detail'
+              ? visibleHideStickyMarker()
+              : document.querySelector('main');
+            if (!target || !('IntersectionObserver' in window)) {
+              personalFeedReached.add(section);
+              const idleLoad = window.requestIdleCallback || ((callback) => setTimeout(callback, 900));
+              idleLoad(() => hydratePersonalFeedSlots({ sections: [section] }));
+              return;
+            }
+            const observer = new IntersectionObserver((entries) => {
+              if (!entries.some((entry) => entry.isIntersecting)) return;
+              observer.disconnect();
+              personalFeedReached.add(section);
+              hydratePersonalFeedSlots({ sections: [section] });
+            }, { rootMargin: '320px 0px 320px 0px', threshold: 0.01 });
+            observer.observe(target);
+          });
         }
 
         async function ensureDiscoveryStore(feed) {
@@ -3258,6 +3471,8 @@ const HEADER_NAVIGATION = [
             image_alt: display.image_alt || `Афиша события «${title}»`,
             image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
             image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+            image_width: Number(display.image_width || candidate?.image_width || 0),
+            image_height: Number(display.image_height || candidate?.image_height || 0),
             focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
             display_date: display.display_date || formatDateForUi(candidate?.date || ''),
             display_time: display.display_time || null,
@@ -3303,8 +3518,11 @@ const HEADER_NAVIGATION = [
             ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" data-calendar-action data-calendar-event-id="${escapeHtml(data.id)}" data-calendar-expiry-day="${escapeHtml(data.calendar_expiry_day)}" data-calendar-event-title="${escapeHtml(data.title)}" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span data-calendar-label>В календарь</span></a>`
             : '';
           const imageFallback = `<span class="event-card__image-fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
+          const imageRatio = data.image_width > 0 && data.image_height > 0
+            ? `${Math.max(1, data.image_width)} / ${Math.max(1, data.image_height)}`
+            : '4 / 5';
           const image = data.image_url
-            ? `<span class="event-card__media-shell ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async" onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
+            ? `<span class="event-card__media-shell event-card__media-shell--dynamic is-image-loading ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--dynamic-media-ratio:${escapeHtml(imageRatio)};--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" width="${escapeHtml(data.image_width || '')}" height="${escapeHtml(data.image_height || '')}" loading="lazy" decoding="async" onload="this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-loaded');" onerror="this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
             : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
           const overlayFeedback = cardVariant === 'overlay-controls'
             ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`
@@ -3619,7 +3837,8 @@ const HEADER_NAVIGATION = [
           if (!options.skipDiscoveryHydration) {
             await hydrateDiscoveryFeeds({ automatic: true, anchorEventId: options.anchorEventId || null });
           }
-          await hydratePersonalFeedSlots({ force: false });
+          const reachedPersonalSections = Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section));
+          if (reachedPersonalSections.length) await hydratePersonalFeedSlots({ force: false, sections: reachedPersonalSections });
           syncListingPersonalFilter();
           renderFeedbackReport();
         }
@@ -3961,10 +4180,19 @@ const HEADER_NAVIGATION = [
         });
 
         document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-personal-feed-load-more]');
+          if (!button) return;
+          event.preventDefault();
+          const section = button.closest('[data-personal-feed-section]');
+          if (section) appendPersonalFeedChunk(section);
+        });
+
+        document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-personal-feed-refresh]');
           if (!button) return;
           event.preventDefault();
-          await hydratePersonalFeedSlots({ force: true });
+          const section = button.closest('[data-personal-feed-section]');
+          if (section) await hydratePersonalFeedSlots({ force: true, sections: [section] });
         });
 
         document.addEventListener('click', (event) => {
@@ -3984,7 +4212,7 @@ const HEADER_NAVIGATION = [
           const button = event.target.closest('[data-reset-personalization]');
           if (!button) return;
           event.preventDefault();
-          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY];
+          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY, CALENDAR_USAGE_KEY];
           keys.forEach((key) => {
             try { localStorage.removeItem(key); } catch (_) {}
           });
@@ -3999,7 +4227,7 @@ const HEADER_NAVIGATION = [
         });
 
         const sticky = document.querySelector('[data-sticky-cta]');
-        const marker = document.querySelector('[data-hide-sticky-after]');
+        const marker = visibleHideStickyMarker();
         let stickyHiddenByFeed = false;
         let stickyHiddenByHero = false;
         const updateStickyCtaVisibility = () => {
@@ -4567,6 +4795,7 @@ const HEADER_NAVIGATION = [
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
         hydrateCalendarActions();
+        initializePersonalFeedObservers();
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();

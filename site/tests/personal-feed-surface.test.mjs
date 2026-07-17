@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,22 @@ const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 async function read(relativePath) {
   return readFile(path.join(siteRoot, relativePath), 'utf8');
+}
+
+async function readBuilt(relativePath) {
+  const distRoot = path.join(siteRoot, 'dist');
+  const entries = await readdir(distRoot, { withFileTypes: true });
+  const previewBuilds = entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('preview-'))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+  const buildRoot = process.env.PREVIEW_BUILD_ID
+    ? path.join(distRoot, process.env.PREVIEW_BUILD_ID)
+    : previewBuilds.length > 0
+      ? path.join(distRoot, previewBuilds[0])
+      : distRoot;
+  return readFile(path.join(buildRoot, relativePath), 'utf8');
 }
 
 test('personal feed component exposes a hidden reusable hydration surface', async () => {
@@ -34,7 +51,7 @@ test('personal feed endpoint is a bounded static catalog without a backend RPC',
 });
 
 test('built personal feed manifest is compact, public, and card-compatible', async () => {
-  const payload = JSON.parse(await read('dist/data/personal-feed.json'));
+  const payload = JSON.parse(await readBuilt('data/personal-feed.json'));
   assert.equal(payload.schema_version, 'listing-personal-feed-v1');
   assert.equal(payload.feature_schema_version, 'event-detail-related-v1');
   assert.equal(payload.surface, 'listing_personal_feed');
