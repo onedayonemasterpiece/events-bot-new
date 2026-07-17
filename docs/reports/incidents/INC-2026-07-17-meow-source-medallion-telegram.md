@@ -1,10 +1,10 @@
 # INC-2026-07-17 MEOW source medallion leaked into Telegram Afisha posts
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram event publishing (`@kldevents`)
 Opened: 2026-07-17
-Closed: —
+Closed: 2026-07-17
 Owners: events-bot
 Related incidents: `INC-2026-07-15-tg-rich-medallion-rendering-gaps`
 Related docs: `docs/features/tg-publishing/README.md`, `docs/features/static-site-pages/event-token-medallions.md`, `docs/operations/incident-management.md`
@@ -48,6 +48,22 @@ static event-detail-page provenance aid only.
   RichMessages `2548` and `2556` with the source-only strip.
 - 2026-07-17 — operator report opened this incident; production audit and
   prevention/repair work started.
+- 2026-07-17 20:47Z — merge commit `eeb165a6cbe360cb9e1eef70e094901f499b2c93`
+  was deployed from a clean `origin/main` worktree as Fly release `v1691`.
+- 2026-07-17 20:50Z — the first canonical repair replay failed closed before
+  sending because the Lite writer returned invalid grounded copy and the
+  strict `gpt-4o` daily fallback budget was exhausted. No public mapping was
+  changed by that attempt.
+- 2026-07-17 20:54Z — all four posts were rebuilt through the canonical
+  send-first/delete-after-success publisher while preserving their existing
+  reviewed narrative. New photo-caption message ids are `2575`, `2576`,
+  `2577` and `2578` for events `6867`, `6911`, `6931` and `6932`.
+- 2026-07-17 20:55Z — event mappings and `joboutbox.last_result` were
+  reconciled to the replacements; SQLite `PRAGMA quick_check` returned `ok`.
+- 2026-07-17 20:56Z — authenticated Telethon UI verification found all four
+  replacements with poster/caption and expected calendar buttons, no
+  RichMessage/source strip, and all four old message ids absent. `/healthz`
+  remained ready with no reported issues.
 
 ## Root Cause
 
@@ -115,16 +131,22 @@ static event-detail-page provenance aid only.
 
 ## Immediate Mitigation
 
-- Prevention and public cleanup are in progress. The source asset remains on
-  static pages; only Telegram resolver use is being removed.
+- The Telegram resolver no longer returns the MEOW source badge. The source
+  asset remains available to the static event-detail page, where it represents
+  provenance rather than an event attribute.
+- All four affected RichMessages were replaced after the prevention release.
+  The repair reused each post's already-reviewed narrative, so exhausted LLM
+  fallback budget could not turn a visual cleanup into public-copy drift.
 
 ## Corrective Actions
 
-- Remove every `manifest_kind="source"` branch from the Telegram graphical
+- [x] Remove every `manifest_kind="source"` branch from the Telegram graphical
   resolver.
-- Add positive/negative regression controls around MEOW source handling.
-- Document that source-channel medallions are static event-detail-page only.
-- Repair all four public RichMessages and persist their clean replacement ids.
+- [x] Add positive/negative regression controls around MEOW source handling.
+- [x] Document that source-channel medallions are static event-detail-page
+  only.
+- [x] Repair all four public RichMessages and persist their clean replacement
+  ids.
 
 ## Follow-up Actions
 
@@ -133,10 +155,37 @@ static event-detail-page provenance aid only.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- Deployed SHA: `eeb165a6cbe360cb9e1eef70e094901f499b2c93`, reachable
+  from `origin/main`; implementation commit
+  `2d61bf7b8541626b4247aaa7e4abc4d9824ab803` was merged by PR
+  [#66](https://github.com/onedayonemasterpiece/events-bot-new/pull/66).
+- Deploy path: clean detached `origin/main` worktree, Fly release `v1691`,
+  machine version `1691`, image
+  `deployment-01KXRX9FE53KCPKTHABDSX2WPE`; Fly reported one passing check.
+- Regression checks: focused MEOW/RichMessage suite `11 passed`; related
+  outbox/ICS/public-fanout checks `4 passed`; GitHub Actions passed; `git diff
+  --check` and `py_compile` passed. The complete
+  `tests/test_tg_event_publish.py` run was `90 passed, 8 failed`; all eight
+  failures are the pre-existing date-relative June 2026 fixtures that are past
+  relative to the 2026-07-17 test date, not changed medallion behavior.
+- Reversible data safety: backups
+  `codex_backup_inc_20260717_meow_medallion_event` and
+  `codex_backup_inc_20260717_meow_medallion_joboutbox` contain the four
+  pre-repair rows.
+- Post-repair mappings:
+  - event `6867`: `2496` -> `2575` (`photo_caption`);
+  - event `6911`: `2520` -> `2576` (`photo_caption`), calendar post `7506`;
+  - event `6931`: `2556` -> `2577` (`photo_caption`), calendar post `7526`;
+  - event `6932`: `2548` -> `2578` (`photo_caption`), calendar post `7527`.
+- Authenticated Telethon UI verification: each new id is a normal single-photo
+  message with non-empty caption and no `rich_message`; each old id is absent.
+  The three events with calendar posts preserve the corresponding inline
+  button URL. Event `6867` correctly has no calendar button.
+- Production verification: `PRAGMA quick_check=ok`; `joboutbox` rows are
+  `done`, have no error and point to the four new URLs; runtime mirror records
+  four successful `photo_caption` publications; `/healthz` returned
+  `ok=true`, `ready=true`, `job_outbox_worker_loop=ok`, `issues=[]`, with
+  900 MB free on `/data`.
 
 ## Prevention
 
