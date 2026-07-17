@@ -1,0 +1,74 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main@41442a64219d7a39615851c5bdb7f9b8b4340632
+base_branch: main
+integration_branch: integration/interest-clubs-full
+global_constraints:
+  - PR #54/e1a14afc is the accepted research baseline.
+  - No production deploy or database mutation in this implementation run.
+  - LLM-first semantic verdicts; deterministic logic may only retrieve/fail-close.
+  - Preserve linked-occurrence and festival identity boundaries.
+  - New code behavior requires canonical docs and CHANGELOG.
+  - Current dirty IDE worktree is forbidden.
+verification_owner: /root
+stop_conditions:
+  - destructive or non-additive migration
+  - browser exposure of backend credentials
+  - relation creation without evidence or on provider failure
+lanes:
+  - id: L1-core
+    role: worker
+    effort: extra-high
+    requirement_ids: [R02, R03, R05]
+    target: versioned SQLite club identity/relation model, bounded Gemma verifier, incremental Smart Update/build trigger, focused tests
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/interest-clubs/l1-core
+    worktree: /home/dev/.codex/worktrees/events-bot-new/interest-clubs-l1-core
+    writable_files: [interest_clubs.py, db.py, models.py, smart_event_update.py, scheduling.py, alembic/versions/, tests/test_interest_clubs.py, .codex/lanes/L1-core/RESULTS.md]
+    forbidden_files: [site/, docs/, CHANGELOG.md, .env]
+    expected_output: committed implementation and lane results
+    verification_scope: targeted
+    status: merged
+  - id: L2-static-ui
+    role: worker
+    effort: high
+    requirement_ids: [R04]
+    target: static projection export plus /kluby-po-interesam index/detail pages, navigation, SEO/a11y/no-JS checks
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/interest-clubs/l2-static-ui
+    worktree: /home/dev/.codex/worktrees/events-bot-new/interest-clubs-l2-static-ui
+    writable_files: [site/, tests/test_interest_clubs_static_export.py, .codex/lanes/L2-static-ui/RESULTS.md]
+    forbidden_files: [db.py, models.py, smart_event_update.py, scheduling.py, docs/, CHANGELOG.md, .env]
+    expected_output: committed static slice and lane results
+    verification_scope: targeted
+    status: merged
+  - id: L3-release-docs
+    role: worker
+    effort: high
+    requirement_ids: [R01, R06]
+    target: promote accepted club contract to canonical feature docs, write release plan/ADR and explicit postrelease acquisition scenarios including Hero Talk
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/interest-clubs/l3-release-docs
+    worktree: /home/dev/.codex/worktrees/events-bot-new/interest-clubs-l3-release-docs
+    writable_files: [docs/, .codex/lanes/L3-release-docs/RESULTS.md]
+    forbidden_files: [site/, '*.py', CHANGELOG.md, .env]
+    expected_output: committed documentation and lane results
+    verification_scope: inspection_only
+    status: merged
+  - id: L4-integrator
+    role: merge_reviewer
+    effort: extra-high
+    requirement_ids: [R07]
+    target: reconcile contracts, changelog, full validation, push and handoff
+    depends_on: [L1-core, L2-static-ui, L3-release-docs]
+    execution_mode: serial_after_dependency
+    branch: integration/interest-clubs-full
+    worktree: /home/dev/.codex/worktrees/events-bot-new/interest-clubs-integration
+    writable_files: ['*']
+    forbidden_files: [.env]
+    expected_output: integrated clean branch and closure report
+    verification_scope: full_local
+    status: merged

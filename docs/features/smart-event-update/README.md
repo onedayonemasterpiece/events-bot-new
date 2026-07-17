@@ -697,3 +697,17 @@ Source-native `age_restriction` сохраняется без LLM. Для text/O
 feature не увеличивает число provider requests на событие. Declared и assessed
 разделены; конфликт fail-closed, публичный default — declared-only. Полная
 каноника, CPU Kaggle/BGE gate и backfill: [Event age rating](../event-age-rating/README.md).
+
+### Interest-club relation handoff
+
+Interest-club matching is a downstream identity relation, not part of the
+Smart Update match/create/merge verdict and never rewrites canonical event
+fields.  A completed canonical event change may enqueue/coalesce a bounded
+club candidate evaluation.  Deterministic anchors only retrieve or fail-close;
+positive relation requires the feature's grounded Gemma verdict plus exact
+quote.  `no`, `unclear`, invalid quote, quota/provider failure and missing
+anchor do not create a relation and do not use Lite as positive fallback.
+Linked occurrences and festival identity remain owned by their existing
+features.  Full contract and separate production gate:
+[Interest clubs](../interest-clubs/README.md) and
+[release plan](../interest-clubs/release-plan.md).

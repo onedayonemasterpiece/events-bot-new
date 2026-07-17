@@ -21,6 +21,7 @@
 - Telegram Monitoring (каноника): `docs/features/telegram-monitoring/README.md`
 - Telegram Monitoring videos (Supabase): `docs/backlog/features/telegram-monitoring-videos/README.md`
 - Smart Event Update (каноника): `docs/features/smart-event-update/README.md`
+- Interest clubs (research завершён, implementation RC): `docs/features/interest-clubs/README.md`
 
 ## Дополнительно
 

@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     Integer,
     SmallInteger,
+    String,
     UniqueConstraint,
     text,
 )
@@ -1013,6 +1014,95 @@ class EventSourceFact(SQLModel, table=True):
     # - note: technical/service note (filters, snippets, poster actions)
     status: str = Field(default="added")
     created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class InterestClub(SQLModel, table=True):
+    """Owner-curated club identity; never inferred from event recurrence alone."""
+
+    __tablename__ = "interest_club"
+    __table_args__ = (
+        Index("ix_interest_club_public_status", "public_status"),
+        Index("ix_interest_club_updated_at", "updated_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(sa_column=Column(String, nullable=False, unique=True))
+    canonical_name: str
+    topic: Optional[str] = None
+    description: Optional[str] = None
+    city: Optional[str] = None
+    typical_place: Optional[str] = None
+    public_status: str = "shadow"  # shadow|approved|archived|merged
+    identity_version: int = 1
+    policy_version: str = "interest-club-relation-v1"
+    aliases_json: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    source_anchors_json: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    provenance_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class InterestClubEvent(SQLModel, table=True):
+    """Versioned projection relation; only ``active`` is publishable."""
+
+    __tablename__ = "interest_club_event"
+    __table_args__ = (
+        UniqueConstraint("club_id", "event_id", name="ux_interest_club_event_pair"),
+        Index("ix_interest_club_event_event_status", "event_id", "status"),
+        Index("ix_interest_club_event_club_status", "club_id", "status"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    club_id: int = Field(foreign_key="interest_club.id")
+    event_id: int = Field(foreign_key="event.id")
+    status: str = "active"  # active|deferred|review
+    decision_lane: str
+    evidence_quote: Optional[str] = None
+    evidence_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    model: Optional[str] = None
+    policy_version: str = "interest-club-relation-v1"
+    input_hash: str
+    evaluated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class InterestClubEvaluation(SQLModel, table=True):
+    """Compact latest-decision ledger, including fail-closed non-relations."""
+
+    __tablename__ = "interest_club_evaluation"
+    __table_args__ = (
+        UniqueConstraint("club_id", "event_id", name="ux_interest_club_evaluation_pair"),
+        Index("ix_interest_club_evaluation_status", "status", "updated_at"),
+        Index("ix_interest_club_evaluation_event", "event_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    club_id: int = Field(foreign_key="interest_club.id")
+    event_id: int = Field(foreign_key="event.id")
+    status: str  # accepted|no_match|review|deferred|ineligible
+    verdict: str  # yes|no|unclear|provider_error|ineligible
+    decision_lane: str
+    evidence_quote: Optional[str] = None
+    evidence_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    model: Optional[str] = None
+    policy_version: str = "interest-club-relation-v1"
+    input_hash: str
+    error_code: Optional[str] = None
+    attempts: int = 1
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
 

@@ -1,0 +1,718 @@
+{
+  "version": "interest_clubs_known_match_eval_v1",
+  "created_at": "2026-07-17",
+  "scope": "48 real event/candidate pairs; owner review pending",
+  "label_contract": {
+    "yes": "accepted membership in the reviewed club ledger",
+    "no": "researcher-adjudicated hard negative; no relation may be created",
+    "unclear": "fail-closed at runtime, but fixture expectation remains no"
+  },
+  "input_contract": {
+    "club_fields": [
+      "candidate_id",
+      "normalized_club_name",
+      "interest_category",
+      "curated canonical source aliases"
+    ],
+    "event_fields": [
+      "source aliases",
+      "location_name",
+      "title",
+      "search_digest or description",
+      "URL-sanitized source_text up to 2200 chars"
+    ]
+  },
+  "routing_contract": {
+    "source_match": "short source-specific Gemma verifier",
+    "name_match_only": "short name/organizer-role Gemma verifier",
+    "no_name_or_source_match": "deterministic fail-closed no; no provider call",
+    "positive_relation": "only yes plus a verbatim input substring",
+    "curated_source_aliases": {
+      "club_eee": [
+        "club_eee"
+      ],
+      "facetoface": [
+        "facetofaceclub"
+      ],
+      "game_vibes": [
+        "gamevibes_kld"
+      ],
+      "kinokloob": [
+        "kinokloob"
+      ],
+      "relation_club": [
+        "relationclubnews"
+      ],
+      "rep_chess": [
+        "repchesskld"
+      ],
+      "s_toboi_ok": [
+        "s_toboi_vse_okei"
+      ],
+      "westside_movieclub": [
+        "westside_movieclub"
+      ]
+    },
+    "curated_name_aliases": {
+      "autoretroclub": [
+        "авторетроклуб"
+      ],
+      "beer_lingual": [
+        "beer-lingual club",
+        "beer lingual club"
+      ],
+      "cinemango": [
+        "синеманго"
+      ],
+      "club_eee": [
+        "клуб эээ",
+        "клуба эээ",
+        "клуб eee"
+      ],
+      "english_cafe": [
+        "english cafe",
+        "english café"
+      ],
+      "game_vibes": [
+        "game vibes",
+        "gamevibes"
+      ],
+      "kinokloob": [
+        "kinokloob"
+      ],
+      "good_enough_parents": [
+        "клуб достаточно хороших родителей",
+        "клуба достаточно хороших родителей"
+      ],
+      "neural_researchers": [
+        "клуб исследователей нейронок",
+        "клуб по нейросетям"
+      ],
+      "poets39": [
+        "поэты39",
+        "поэты 39"
+      ],
+      "prochitano_library": [
+        "proчитано"
+      ],
+      "relation_club": [
+        "клуб «… про … отношения»",
+        "клуб ... про ... отношения"
+      ],
+      "rep_chess": [
+        "rep chess"
+      ],
+      "s_toboi_ok": [
+        "с тобой всё в порядке"
+      ],
+      "technology_researchers": [
+        "клуб исследователей технологий",
+        "мастерская технологий",
+        "мастерской технологий"
+      ],
+      "westside_movieclub": [
+        "westside movieclub",
+        "westside movie club"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case_id": "p-1694-cinemango",
+      "event_id": 1694,
+      "candidate_id": "cinemango",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "🎬 Счастливого Нового Года",
+      "source_urls": [
+        "https://vk.com/wall-30777579_14148"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-2170-cinemango",
+      "event_id": 2170,
+      "candidate_id": "cinemango",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "🎬 Путешествие по Азии: Криминальный город",
+      "source_urls": [
+        "https://vk.com/wall-30777579_14292"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-3393-cinemango",
+      "event_id": 3393,
+      "candidate_id": "cinemango",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "СИНЕМАНГО: Путешествие по Азии — «Маленький лес»",
+      "source_urls": [
+        "https://vk.com/wall-30777579_14867"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6929-game_vibes",
+      "event_id": 6929,
+      "candidate_id": "game_vibes",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Настольные игры",
+      "source_urls": [
+        "https://t.me/gamevibes_kld/1554",
+        "https://t.me/gamevibes_kld/1618",
+        "https://t.me/signalkld/11317"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-6835-game_vibes",
+      "event_id": 6835,
+      "candidate_id": "game_vibes",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Гоблинское сражение",
+      "source_urls": [
+        "https://t.me/gamevibes_kld/1617",
+        "https://t.me/signalkld/11285",
+        "https://t.me/terkatalk/5157"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-6718-game_vibes",
+      "event_id": 6718,
+      "candidate_id": "game_vibes",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Игротека «Космос рядом!»",
+      "source_urls": [
+        "https://t.me/signalkld/11247"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6572-english_cafe",
+      "event_id": 6572,
+      "candidate_id": "english_cafe",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Personal Growth",
+      "source_urls": [
+        "https://t.me/signalkld/11218"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6137-english_cafe",
+      "event_id": 6137,
+      "candidate_id": "english_cafe",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "TOURIST -or- TRAVELER?",
+      "source_urls": [
+        "https://t.me/signalkld/11073"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6853-autoretroclub",
+      "event_id": 6853,
+      "candidate_id": "autoretroclub",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Выставка ретроавтомобилей на Дне города в Янтарном",
+      "source_urls": [
+        "https://vk.com/wall-127107743_14707"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-4876-autoretroclub",
+      "event_id": 4876,
+      "candidate_id": "autoretroclub",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Родной автопром: легенды и быль",
+      "source_urls": [
+        "https://t.me/festdir/4329"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6279-westside_movieclub",
+      "event_id": 6279,
+      "candidate_id": "westside_movieclub",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Пляж | The Beach",
+      "source_urls": [
+        "https://t.me/okcng/568"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-3903-westside_movieclub",
+      "event_id": 3903,
+      "candidate_id": "westside_movieclub",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Проект «Аве Мария»",
+      "source_urls": [
+        "https://t.me/meowafisha/7149",
+        "https://t.me/signalkld/10419",
+        "https://t.me/terkatalk/4734"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-6662-neural_researchers",
+      "event_id": 6662,
+      "candidate_id": "neural_researchers",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Клуб исследователей нейронок",
+      "source_urls": [
+        "https://t.me/signalkld/11229"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-4049-neural_researchers",
+      "event_id": 4049,
+      "candidate_id": "neural_researchers",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Исследуемый курс по нейронкам",
+      "source_urls": [
+        "https://t.me/signalkld/10483"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-5806-technology_researchers",
+      "event_id": 5806,
+      "candidate_id": "technology_researchers",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Клуб исследователей технологий",
+      "source_urls": [
+        "https://t.me/signalkld/10945"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-3032-technology_researchers",
+      "event_id": 3032,
+      "candidate_id": "technology_researchers",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Оживляем устройства! Мастер-класс по Arduino",
+      "source_urls": [
+        "https://t.me/signalkld/9975"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-5219-good_enough_parents",
+      "event_id": 5219,
+      "candidate_id": "good_enough_parents",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Встреча для родителей о травле среди школьников",
+      "source_urls": [
+        "https://t.me/molod_kld/3675"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6657-rep_chess",
+      "event_id": 6657,
+      "candidate_id": "rep_chess",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Шахматный турнир (рапид)",
+      "source_urls": [
+        "https://t.me/repchesskld/379"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-6250-rep_chess",
+      "event_id": 6250,
+      "candidate_id": "rep_chess",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Шахматный турнир",
+      "source_urls": [
+        "https://t.me/repchesskld/375"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-3463-relation_club",
+      "event_id": 3463,
+      "candidate_id": "relation_club",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Обнимательная встреча от Кати",
+      "source_urls": [
+        "https://t.me/relationclubnews/42",
+        "https://t.me/signalkld/10193",
+        "https://t.me/signalkld/10339"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-6381-s_toboi_ok",
+      "event_id": 6381,
+      "candidate_id": "s_toboi_ok",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Игра «С тобой всё в порядке»",
+      "source_urls": [
+        "https://t.me/signalkld/11163"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-5853-beer_lingual",
+      "event_id": 5853,
+      "candidate_id": "beer_lingual",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "Beer Lingual Club",
+      "source_urls": [
+        "https://t.me/mesto_sily_bar/1829"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "p-6776-kinokloob",
+      "event_id": 6776,
+      "candidate_id": "kinokloob",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "🎬 «Кино-пикник»",
+      "source_urls": [
+        "https://kaliningrad.qtickets.events/244962-kino-piknik",
+        "https://t.me/kinokloob/8463",
+        "https://t.me/meowafisha/7942"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "p-2378-prochitano_library",
+      "event_id": 2378,
+      "candidate_id": "prochitano_library",
+      "expected": "yes",
+      "class": "accepted_ledger_membership",
+      "title": "📚 Литературный клуб PROЧитано: «Милый друг»",
+      "source_urls": [
+        "https://vk.com/wall-30777579_14477"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "n-6027-poets39",
+      "event_id": 6027,
+      "candidate_id": "poets39",
+      "expected": "no",
+      "class": "organizer_or_venue_mention",
+      "title": "ПОЭТИЧЕСКИЙ ОТКРЫТЫЙ МИКРОФОН",
+      "source_urls": [
+        "https://t.me/locostandup/3549"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "n-6573-club_eee",
+      "event_id": 6573,
+      "candidate_id": "club_eee",
+      "expected": "no",
+      "class": "external_lecture",
+      "title": "Теория игр для бизнеса: как понять клиента",
+      "source_urls": [
+        "https://t.me/terkatalk/5070"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "n-6866-facetoface",
+      "event_id": 6866,
+      "candidate_id": "facetoface",
+      "expected": "no",
+      "class": "lexical_same_name_show",
+      "title": "Клуб знакомств",
+      "source_urls": [
+        "https://t.me/locostandup/3670",
+        "https://vk.com/wall-214027639_11595"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-6742-kaliningrad_photo_club",
+      "event_id": 6742,
+      "candidate_id": "kaliningrad_photo_club",
+      "expected": "no",
+      "class": "festival_community_mention",
+      "title": "однодневный фестиваль фотографических сообществ Калининграда",
+      "source_urls": [
+        "https://t.me/terkatalk/5122",
+        "https://vk.com/wall-138053522_2662"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-3903-game_vibes",
+      "event_id": 3903,
+      "candidate_id": "game_vibes",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Проект «Аве Мария»",
+      "source_urls": [
+        "https://t.me/meowafisha/7149",
+        "https://t.me/signalkld/10419",
+        "https://t.me/terkatalk/4734"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-2739-english_cafe",
+      "event_id": 2739,
+      "candidate_id": "english_cafe",
+      "expected": "no",
+      "class": "same_source_and_venue_other_activity",
+      "title": "Эверделл",
+      "source_urls": [
+        "https://t.me/signalkld/9884",
+        "https://vk.com/wall-211997788_2815"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-3385-neural_researchers",
+      "event_id": 3385,
+      "candidate_id": "neural_researchers",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Английское кафе",
+      "source_urls": [
+        "https://t.me/signalkld/10153"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-3516-urban_studies_club",
+      "event_id": 3516,
+      "candidate_id": "urban_studies_club",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Клуб Исследователей Технологий: мастер-класс по пайке",
+      "source_urls": [
+        "https://t.me/signalkld/10236"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-2951-westside_movieclub",
+      "event_id": 2951,
+      "candidate_id": "westside_movieclub",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Клуб «Исследователи нейронок»",
+      "source_urls": [
+        "https://t.me/signalkld/9939"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-3003-game_vibes",
+      "event_id": 3003,
+      "candidate_id": "game_vibes",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Клуб поющих друзей: вечер Булата Окуджавы",
+      "source_urls": [
+        "https://t.me/signalkld/10061",
+        "https://t.me/signalkld/9854",
+        "https://t.me/signalkld/9961"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-3220-english_cafe",
+      "event_id": 3220,
+      "candidate_id": "english_cafe",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Death Cafe",
+      "source_urls": [
+        "https://t.me/signalkld/10034"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-2808-technology_researchers",
+      "event_id": 2808,
+      "candidate_id": "technology_researchers",
+      "expected": "no",
+      "class": "same_source_and_venue_other_club",
+      "title": "Открытая встреча клуба Городских исследований",
+      "source_urls": [
+        "https://t.me/signalkld/9890"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-755-good_enough_parents",
+      "event_id": 755,
+      "candidate_id": "good_enough_parents",
+      "expected": "no",
+      "class": "same_venue_other_club",
+      "title": "📚 Встреча Семейного книжного клуба: «Что такое буллинг? Как с ним бороться»",
+      "source_urls": [
+        "https://vk.com/wall-228087066_514"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-881-family_book_dom_semii",
+      "event_id": 881,
+      "candidate_id": "family_book_dom_semii",
+      "expected": "no",
+      "class": "same_venue_other_club",
+      "title": "Клуб достаточно хороших родителей с Милой Дружининой",
+      "source_urls": [],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-5575-kinokloob",
+      "event_id": 5575,
+      "candidate_id": "kinokloob",
+      "expected": "no",
+      "class": "program_row_not_club_event",
+      "title": "Йога на открытом воздухе от Human Concept",
+      "source_urls": [
+        "https://t.me/kinokloob/8274",
+        "https://t.me/meowafisha/7552"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "n-6747-kinokloob",
+      "event_id": 6747,
+      "candidate_id": "kinokloob",
+      "expected": "no",
+      "class": "program_row_not_club_event",
+      "title": "Выступление перкуссионного ансамбля Tempo Libre у костра",
+      "source_urls": [
+        "https://t.me/kinokloob/8456",
+        "https://t.me/meowafisha/7847"
+      ],
+      "match_lane": "source"
+    },
+    {
+      "case_id": "n-834-autoretroclub",
+      "event_id": 834,
+      "candidate_id": "autoretroclub",
+      "expected": "no",
+      "class": "club_is_venue_for_festival",
+      "title": "🎬 Показ конкурсных фильмов Фестиваля уличного кино",
+      "source_urls": [
+        "https://vk.com/wall-127107743_14323"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "n-4957-westside_movieclub",
+      "event_id": 4957,
+      "candidate_id": "westside_movieclub",
+      "expected": "no",
+      "class": "nightclub_lexical_club",
+      "title": "ЛИЛ КИДД",
+      "source_urls": [
+        "https://kaliningrad.qtickets.events/234250-lil-kidd-25-iyulya-yalta"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-3619-facetoface",
+      "event_id": 3619,
+      "candidate_id": "facetoface",
+      "expected": "no",
+      "class": "standup_club_venue_or_producer",
+      "title": "Калининградский Стендап Клуб",
+      "source_urls": [
+        "https://vk.com/wall-78172842_7342"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-5750-english_cafe",
+      "event_id": 5750,
+      "candidate_id": "english_cafe",
+      "expected": "no",
+      "class": "different_similar_club",
+      "title": "Английский разговорный клуб",
+      "source_urls": [
+        "https://t.me/meowafisha/7579"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-1196-english_cafe",
+      "event_id": 1196,
+      "candidate_id": "english_cafe",
+      "expected": "no",
+      "class": "different_similar_club",
+      "title": "🗣️ Клуб общения на английском языке",
+      "source_urls": [
+        "https://vk.com/wall-32547811_9964"
+      ],
+      "match_lane": "none"
+    },
+    {
+      "case_id": "n-4210-autoretroclub",
+      "event_id": 4210,
+      "candidate_id": "autoretroclub",
+      "expected": "no",
+      "class": "works_mentioned_in_other_program",
+      "title": "Кинопоказ калининградских фильмов на Острове Канта",
+      "source_urls": [
+        "https://vk.com/wall-127107743_14578",
+        "https://vk.com/wall-182104060_6924"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "n-5575-rep_chess",
+      "event_id": 5575,
+      "candidate_id": "rep_chess",
+      "expected": "no",
+      "class": "other_program_item_mentioned",
+      "title": "Йога на открытом воздухе от Human Concept",
+      "source_urls": [
+        "https://t.me/kinokloob/8274",
+        "https://t.me/meowafisha/7552"
+      ],
+      "match_lane": "name"
+    },
+    {
+      "case_id": "n-6458-game_vibes",
+      "event_id": 6458,
+      "candidate_id": "game_vibes",
+      "expected": "no",
+      "class": "generic_same_ecosystem_activity",
+      "title": "D&D Ваншот: Гребень русалки",
+      "source_urls": [
+        "https://t.me/okcng/507",
+        "https://t.me/okcng/584",
+        "https://t.me/signalkld/11154"
+      ],
+      "match_lane": "none"
+    }
+  ]
+}

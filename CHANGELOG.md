@@ -6,6 +6,7 @@
 - **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
 
 ### Changed
+- **Interest clubs / gated implementation RC**: added additive versioned SQLite identity/relation/evaluation tables, an explicit shadow-only reviewed-fixture importer, bounded split-lane `gemma-4-31b-it` verification through the existing limiter with exact-quote validation and no Lite positive fallback, a default-off nonblocking Smart Update handoff, and a fail-closed `interest-clubs-static-v1` projection with gated `/kluby-po-interesam/` index/detail pages, recurrence/freshness filters, navigation, sitemap, SEO and a11y contracts. Production migrations, flags, Smart Update runtime and public promotion remain unchanged.
 - **Static listing visual lab acceptance**: add production p95/p99/max title stress tests, a visible `browse_title`/canonical-title contract, rounded edge-to-edge desktop media, finite crop-safe photo aspect tokens, fail-closed OCR/unknown/low-res handling, curated-only Bento, and separate mobile linear-feed evaluation.
 - **Static listing visual lab workflow**: define the 20–30-card personalization target as a cumulative cross-surface journey budget with success by touch 30, and require every visual proposal to carry a visible stable ID/name through screenshots, filenames, captions and acceptance tables.
 - **Popular feed / all owned channels and compact VK resolution**: connected the
@@ -16,6 +17,9 @@
   collapsed all four managed TG/VK surfaces into one max-based owned family so
   internal reposts improve but never double-count ranking; storage remains four
   age buckets per post under the rolling metrics retention.
+- **Interest clubs / known-club LLM stand**: expanded the controlled real-post matcher fixture to 48 event/candidate pairs, split canonical source and name-only organizer checks into 162/172-character Gemma prompts, fail-closed 17 no-identity candidates without provider calls, and recorded 22/24 accepted positives, zero unsafe false positives, 46/48 safe decisions, 12/12 stable hard-case repeats and 55/55 Supabase reserve/mark/finalize paths; the Lite shadow retained false positives and its final rerun was correctly blocked at the default lane's 450 RPD, so Lite remains deferred/review-only.
+- **Interest clubs / R0 catalog audit**: delivered a production read-only past/future audit with 52 reviewed candidate clusters (20 confirmed, 14 probable, 8 needs-evidence, 10 rejected), 203 unique accepted/probable canonical events, an independently frozen discovery-only time-split proxy, scope/leakage assertions, live Gemini sidecar coverage check, BGE-M3 feasibility gate, and a minimal public-source review fixture; completeness, production/UI/architecture remain blocked on owner review and a paired BGE/Gemini benchmark.
+- **Interest clubs / research handoff**: added the research-first contract, clean feature branch, reproducible past/future catalog-audit prompt, evidence/count/time-split requirements, BGE-on-Kaggle-CPU comparison gate, ecological storage constraints, and an explicit stop before production implementation.
 - **Popular feed / thin-bot collection boundary**: moved scheduled Telegram and
   VK metric API reads into one private Kaggle CPU batch with exact-ID manifests,
   split encrypted secrets, human-like sequential Telegram pacing, status/resource
