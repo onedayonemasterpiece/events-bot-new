@@ -2714,6 +2714,81 @@ def test_tg_graphic_medallions_do_not_duplicate_explicit_znanie_for_kgd80():
     assert slugs == ["konb", "kgd80-80-stories", "znanie-russia"]
 
 
+def test_tg_graphic_medallions_never_add_source_channel_badges():
+    event = _event(
+        title="Kino",
+        location_name="Видеосалон / Плохой охотник",
+        source_post_url="https://t.me/meowafisha/7951",
+        source_vk_post_url="https://vk.com/wall-231920894_7640",
+        source_urls=["https://t.me/meowafisha/7951"],
+    )
+
+    assert main.resolve_event_graphic_medallions(event) == []
+
+
+def test_tg_graphic_medallions_keep_real_venue_badge_for_meow_source():
+    event = _event(
+        title="Встреча в библиотеке",
+        location_name="Калининградская областная научная библиотека",
+        source_post_url="https://t.me/meowafisha/7951",
+        source_vk_post_url="https://vk.com/wall-231920894_7640",
+    )
+
+    slugs = [item["slug"] for item in main.resolve_event_graphic_medallions(event)]
+
+    assert slugs == ["konb"]
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_replaces_source_only_rich_message_after_send(monkeypatch):
+    event = _event(
+        id=6931,
+        title="Kino",
+        location_name="Видеосалон / Плохой охотник",
+        source_post_url="https://t.me/meowafisha/7951",
+        source_vk_post_url="https://vk.com/wall-231920894_7640",
+        photo_urls=["https://img.example/poster.jpg"],
+        tg_event_post_id=2556,
+        tg_event_post_mode="rich_message",
+        tg_event_post_url="https://t.me/c/3954607218/2556",
+        tg_event_source_hash="source-medallion-hash",
+    )
+    materialize_calls = _patch_media_materializer(monkeypatch)
+    scheduled = []
+
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
+        assert event_arg is event
+        assert source_text == "Описание."
+        return "Описание."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    monkeypatch.setattr(
+        main,
+        "_schedule_tg_premium_emoji_editor",
+        lambda *args, **kwargs: scheduled.append((args, kwargs)),
+    )
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        "Описание.",
+        None,
+        bot,
+    )
+
+    assert (url, post_id, mode) == (
+        "https://t.me/c/1234567890/101",
+        101,
+        "photo_caption",
+    )
+    assert source_hash and source_hash != "source-medallion-hash"
+    assert materialize_calls == [("https://img.example/poster.jpg", 0)]
+    assert len(bot.photos) == 1
+    assert bot.rich_messages == []
+    assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 2556}]
+    assert scheduled and scheduled[0][0] == ([("@kldevents", 101)],)
+
+
 def test_tg_rich_message_footer_uses_non_collapsing_semantic_gap():
     event = _event()
     ordinary = main.build_tg_event_announcement(event, "Описание.", include_medallions=False)

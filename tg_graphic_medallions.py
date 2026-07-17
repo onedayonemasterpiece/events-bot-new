@@ -204,25 +204,6 @@ def resolve_event_graphic_medallions(
         if kantata and "кантата" in festival_value:
             add(kantata, "festival_field", semantic_key="festival:kantata")
 
-    source_urls = [
-        str(value or "")
-        for value in [
-            getattr(event, "source_post_url", None),
-            getattr(event, "source_vk_post_url", None),
-            *((getattr(event, "source_urls", None) or []) if isinstance(getattr(event, "source_urls", None), (list, tuple)) else []),
-        ]
-        if str(value or "").strip()
-    ]
-    if 0 < len(set(source_urls)) <= 2 and any(re.search(r"(?:t|telegram)\.me/meowafisha(?:/|$)", url, re.I) for url in source_urls):
-        source_item = {
-            "slug": "meow-afisha",
-            "name": "MEOW Афиша",
-            "avatarUrl": "/assets/sources/meow-afisha.webp",
-            "fallbackPngUrl": "/assets/sources/meow-afisha.png",
-            "manifest_kind": "source",
-        }
-        add(source_item, "curated_source", semantic_key="source:meow-afisha")
-
     if bool(getattr(event, "pushkin_card", False)):
         pushkin_item = {
             "slug": "pushkin-card",

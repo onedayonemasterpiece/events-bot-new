@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- **Telegram source medallions (INC-2026-07-17)**: exclude `MEOW Афиша`
+  and every other source/aggregator-channel identity from `@kldevents`
+  graphical-medallion strips while retaining source-grounded organizer, venue,
+  festival, program and Pushkin-card marks; the MEOW badge remains available on
+  static event-detail pages only.
 - **Smart Update image geometry queue starvation**: let the independent Gemma
   geometry stage proceed when the earlier semantic-role stage remains pending
   because its separate daily budget is exhausted.
