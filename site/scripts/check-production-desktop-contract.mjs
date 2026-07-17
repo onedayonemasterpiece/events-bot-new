@@ -61,25 +61,40 @@ for (const { slug, file } of eventFiles) {
     if (!desktopHtml.includes('data-desktop-gallery-fit="contain"')) failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);
   }
   if (slug === 'epidemiya-ognennaya-rukopis-kaliningrad-4671') {
-    for (const marker of ['data-kaup-transport', 'data-kaup-official-transfer', 'data-kaup-public-bus', '600 ₽ туда и обратно', 'Построить маршрут']) {
+    for (const marker of [
+      'data-kaup-transport',
+      'data-kaup-official-transfer',
+      'data-kaup-public-bus',
+      '600 ₽ туда и обратно',
+      'Маршрут от остановки до Кауп',
+      'Маршрут на авто из Калининграда',
+      'rtt=pd',
+    ]) {
       if (!desktopHtml.includes(marker)) failures.push(`${slug}: KAUP desktop transport is missing ${marker}`);
     }
   }
   if (slug === '15-avgusta-v-yantar-holl-spektakl-papa-svetlogorsk-3103') {
-    for (const train of ['data-train-number="6724"', 'data-train-number="6726"']) {
-      if (!desktopHtml.includes(train)) failures.push(`${slug}: explicit-duration evening return is missing ${train}`);
+    for (const train of ['data-train-number="6726"', 'data-train-number="6728"']) {
+      if (!desktopHtml.includes(train)) failures.push(`${slug}: safe explicit-duration evening return is missing ${train}`);
     }
+    if (desktopHtml.includes('data-train-number="6724"')) failures.push(`${slug}: unsafe 19:57 return is still suggested before the venue-access buffer`);
+    if (!desktopHtml.includes('data-return-access-minutes="30"')) failures.push(`${slug}: Yantar Hall return-access buffer is missing`);
+    if (!desktopHtml.includes('около 15 минут пешком до Светлогорска-2')) failures.push(`${slug}: Yantar Hall walk/exit rationale is missing`);
     if (desktopHtml.includes('Первый поезд 16 августа')) failures.push(`${slug}: desktop still suggests waiting for a next-morning train despite evening returns`);
   }
   if (slug === 'myuzikl-alye-parusa-kaliningrad-4783') {
     const efficientItems = desktopHtml.match(/data-efficient-viewer-item/g)?.length || 0;
-    if (!desktopHtml.includes('data-split-efficient-viewer="true"') || efficientItems < 10) {
-      failures.push(`${slug}: accepted grouped multi-portrait viewer is missing or incomplete (${efficientItems} items)`);
+    if (!desktopHtml.includes('data-split-efficient-viewer="true"') || efficientItems !== 7) {
+      failures.push(`${slug}: quality-admitted grouped multi-portrait viewer should contain 7 items, got ${efficientItems}`);
     }
+    if (!desktopHtml.includes('Показаны 7 из 12 изображений в лучшем качестве')) failures.push(`${slug}: grouped viewer does not disclose quality filtering`);
   }
   if (slug === 'kinopokaz-fatalnaya-chechetka-kaliningrad-6851') {
     if (!desktopHtml.includes('data-desktop-phone-copy') || !desktopHtml.includes('+7 911 868-89-55')) {
       failures.push(`${slug}: desktop phone CTA does not expose the copyable number`);
+    }
+    if (!desktopHtml.includes('data-desktop-action-panel') || !desktopHtml.includes('data-primary-action-kind="phone"')) {
+      failures.push(`${slug}: phone action panel lacks the component-responsive geometry contract`);
     }
   }
   if (html.includes('Отзывов недостаточно, чтобы уверенно выделить повторяющиеся впечатления.')) {

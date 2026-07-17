@@ -56,6 +56,11 @@ and does not change the accepted mobile transport surface.
 - public bus `119` is shown separately. Arrival uses the reviewed 65-minute
   ride plus about `4 km / 53 min` on foot from Romanovo; the UI does not invent
   a short pedestrian entrance;
+- the `4 km` last-mile warning is shown before the bus options. The pedestrian
+  CTA is explicitly named `Маршрут от остановки до Кауп` and routes from the
+  Romanovo stop to the venue (`rtt=pd`); the separate car CTA is named
+  `Маршрут на авто из Калининграда`. A generic `Построить маршрут` label is
+  forbidden here because it hides both the starting point and travel mode;
 - for the evening Epidemia regression there is no confirmed public-bus return,
   so the block recommends the official transfer or a car;
 - the visible route diagram and map links point to KAUP and a route from
@@ -68,9 +73,31 @@ Desktop may also repair a missing `time_range_end` from an explicit
 source-labelled phrase such as `Продолжительность спектакля – 1 час 40 минут`.
 This narrow helper accepts a label plus punctuation/`составляет`, never infers
 duration from event type or generic prose, and is not applied to the mobile
-renderer. For event `3103` it produces `19:40`, therefore the desktop card shows
-same-evening trains `6724` and `6726` and does not suggest waiting until the
-next morning.
+renderer. For event `3103` it produces `19:40`. A venue-specific return-access
+profile then adds `30` minutes for leaving Янтарь холл, the approximately
+15-minute walk to Светлогорск-2 and a boarding reserve. The first eligible
+departure is therefore after `20:10`: the desktop card shows trains `6726` and
+`6728`, not the unsafe `19:57` train `6724`, and does not suggest waiting until
+the next morning.
+
+### Duration-evidence and return-safety hierarchy
+
+The page must not turn category statistics into a precise promise that the
+visitor will catch a train. The current hierarchy is:
+
+1. source-explicit end time or a source-labelled exact duration;
+2. a trusted structured official duration imported into the canonical event;
+3. no exact end: show factual schedule boundaries and ask the visitor to
+   confirm the end with the organizer; do not emit a precise return shortlist.
+
+An exact source value always overrides any future category/venue prior. This
+is important for long outliers such as six-hour operas. The current 303-event
+preview is not statistically adequate for a defensible duration model: only
+`17/303` events have either an explicit end or a narrowly extractable labelled
+duration, and only one of them is a spectacle. These figures are release-audit
+evidence, not a permanent product constant. A future probabilistic model may
+rank uncertainty, but it may not display an exact catchability claim without
+source-grounded end evidence.
 
 Because the accepted mobile renderer deliberately keeps the exported event
 unchanged, static rail calendar generation takes the deduplicated union of the
@@ -96,7 +123,7 @@ laboratory-only rule.
 5. Calculate the trip back from an explicit `time_range_end`. The exporter may derive that field only from a source-labeled `Продолжительность: …` value.
 6. If the source has no end, do not invent one from the event type. Show factual schedule boundaries instead: the last same-day return, whether a night service exists, and the first next-day return. Ask the visitor to confirm the organizer’s end time.
 7. Use the event type only to inflect the outbound heading (`К началу концерта / спектакля / мастер-класса …`), never to calculate time.
-8. With an explicit end, keep the first two return trains departing within three hours. A categorical no-return message is allowed only when the service calendar covers the relevant dates.
+8. With an explicit end, add the reviewed venue-access buffer before filtering departures. Янтарь холл currently uses `30` minutes; the generic supported-venue fallback is `25` minutes. Then keep the first two trains whose departure is both after that ready time and within the configured maximum wait from the event end. A categorical no-return message is allowed only when the service calendar covers the relevant dates.
 9. Hide the whole block when neither a usable outbound option nor a matched return option exists. For an unknown end there is no matched return by definition, so a supported page needs at least one outbound train; schedule cutoffs enrich that block but do not make an otherwise empty block appear.
 10. Show the rail route once in the header. Each compact train row is itself the calendar link; it keeps the time pair, one metadata line, a calendar icon, keyboard focus and a 44px-or-larger interactive target without repeating the route or a separate `В календарь` button.
 11. Every rendered train, including a factual last/night return, links to its own static `.ics` containing departure, arrival, route and a `VALARM` 30 minutes before departure.
@@ -173,6 +200,7 @@ Additional release scenarios:
 
 - event `6397`, Светлогорск, `2026-07-12 21:30`: train `6725` arrives at `20:23` (67 minutes before); because the end is unknown the page reports the factual last same-day train at `22:40`, absence of night service and first next-day train at `06:25`, without inferring a two-hour duration or claiming no return;
 - production event `6710`, Сказочное Холмогорье, `2026-07-25 11:00–16:00`: compact bus chips for `118/118А/119`, one shared corridor/Северный estimate, hours-aware earlier return choices, a drawn preferred walking route and one route link. Re-confirm the organizer date before the official presentation because the venue's aggregate site has a conflicting day label.
+- production event `3103`, Янтарь холл, `2026-08-15 18:00`, labelled duration `1 ч 40 мин`: end `19:40`, safe station-ready time `20:10`, return trains `6726` and `6728`; train `6724` at `19:57` is an explicit negative regression because it leaves no realistic exit/walk/boarding time.
 
 ## TD-STATIC-TRANSPORT-001 — automated schedule refresh before presentation
 

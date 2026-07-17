@@ -32,7 +32,9 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
     <div class="kaup-transport__grid">
       <section data-kaup-public-bus>
         <p class="kaup-transport__eyebrow">Самостоятельно · автобус № {suggestion.busRoute}</p>
-        <h3>Автовокзал → «{suggestion.busArrivalStop}»</h3>
+        <h3 class="kaup-transport__bus-heading">Автовокзал → «{suggestion.busArrivalStop}»</h3>
+        <p class="kaup-transport__warning">После автобуса: от остановки «{suggestion.busArrivalStop}» до Кауп — {suggestion.walkDistanceLabel}, {suggestion.walkEstimateLabel}. Подтверждённого короткого пешеходного входа нет.</p>
+        <a class="kaup-transport__walk-link" href={suggestion.stopToVenueDirectionsUrl} target="_blank" rel="noopener noreferrer nofollow" aria-label={`Маршрут от остановки ${suggestion.busArrivalStop} до Кауп: ${suggestion.walkDistanceLabel} пешком, тротуар не подтверждён`}>Маршрут от остановки до Кауп</a>
         {suggestion.outbound.length > 0 ? (
           <ol>
             {suggestion.outbound.map((option) => (
@@ -43,7 +45,6 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
             ))}
           </ol>
         ) : <p>Подходящих рейсов к началу события не найдено.</p>}
-        <p class="kaup-transport__warning">От остановки — {suggestion.walkDistanceLabel}, {suggestion.walkEstimateLabel}. Подтверждённого короткого пешеходного входа нет.</p>
         {!suggestion.publicReturnAvailable && <p class="kaup-transport__warning kaup-transport__warning--strong">После вечернего события подтверждённого обратного автобуса нет — для возвращения выбирайте официальный трансфер или автомобиль.</p>}
       </section>
       <section class="kaup-transport__map-card">
@@ -52,7 +53,7 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
         <div class="kaup-transport__map-mark" aria-hidden="true"><Icon name="pin" /><span>54.8781, 20.2789</span></div>
         <div class="kaup-transport__links">
           <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть Кауп на карте</a>
-          <a href={suggestion.directionsMapUrl} target="_blank" rel="noopener noreferrer nofollow">Построить маршрут</a>
+          <a href={suggestion.directionsMapUrl} target="_blank" rel="noopener noreferrer nofollow">Маршрут на авто из Калининграда</a>
         </div>
       </section>
     </div>
@@ -71,6 +72,7 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
   .kaup-transport__route b { color:#8e3d1e; font-size:.78rem; }
   .kaup-transport__transfer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:1rem; padding:1.15rem 1.2rem; background:#292521; color:#fffaf2; }
   .kaup-transport__transfer h3,.kaup-transport__grid h3 { margin:.28rem 0 .45rem; font-size:1.35rem; }
+  .kaup-transport__grid .kaup-transport__bus-heading { font-size:1.05rem; font-weight:760; }
   .kaup-transport__transfer p:not(.kaup-transport__eyebrow) { margin:.25rem 0; color:#e2d6ca; line-height:1.45; }
   .kaup-transport__transfer ul { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:.45rem; margin:.75rem 0 0; padding:0; list-style:none; color:#fff; font-size:.82rem; }
   .kaup-transport__transfer li { display:flex; align-items:center; min-height:44px; padding:.55rem .68rem; border:1px solid rgba(255,255,255,.1); border-radius:12px; background:rgba(255,255,255,.08); line-height:1.35; }
@@ -85,6 +87,7 @@ const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
   .kaup-transport ol>li span { color:#51453d; }
   .kaup-transport ol>li small { grid-column:2; color:#8e3d1e; font-weight:800; }
   .kaup-transport__warning { margin:.65rem 0 0; color:#625249; font-size:.84rem; line-height:1.45; }
+  .kaup-transport__walk-link { min-height:42px; display:inline-flex; align-items:center; margin:.65rem 0 .15rem; padding:.45rem .7rem; border:1px solid rgba(121,48,20,.22); border-radius:11px; color:#8e3d1e; background:rgba(255,250,242,.76); font-size:.83rem; font-weight:850; text-decoration:none; }
   .kaup-transport__warning--strong { padding:.65rem .75rem; border-radius:12px; background:#ffe1cf; color:#78351f; font-weight:850; }
   .kaup-transport__map-mark { min-height:132px; display:grid; place-content:center; justify-items:center; gap:.35rem; margin:.75rem 0; border-radius:16px; background:radial-gradient(circle at 50% 44%,#dba278 0 8%,transparent 9%),linear-gradient(135deg,#dfd2b8,#b9c9b0); color:#542c1c; }
   .kaup-transport__map-mark :global(.icon) { width:2.5rem; height:2.5rem; }

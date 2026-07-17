@@ -36,6 +36,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: published noindex preview `preview-20260717t-static-personalization-v4`; public HTTP and browser acceptance covered medallions, desktop calendar states, duplicate removal, stable failed-image geometry, personal-feed lazy loading/dedup, gallery parity and desktop/mobile transport.
 - 2026-07-17: completed the repaired full vector sync and replaced the temporary sparse catalog with noindex preview `preview-20260717t-static-personalization-v5-vector`: `303` events, `40` pgvector/HNSW candidates per event and no underfilled chains.
 - 2026-07-17: published desktop-only v6 remediation for events `5756`, `4671`, `3103`, `4783` and `6851`; the only shared mobile change is replacing the retired fullscreen brand imitation with `AnnouncementsLockup`.
+- 2026-07-17: follow-up review found that v6 still used an ambiguous KAUP route label, offered train `6724` without a realistic Янтарь-холл exit/walk buffer, admitted low-resolution images into the grouped viewer despite a strong set, and allowed the constrained phone panel to wrap/overflow.
 
 ## Root Cause
 
@@ -49,6 +50,8 @@ The full-catalog static preview exposed several user-visible regressions around 
 8. The efficient viewer gate required at least five portrait images and a 60% portrait share; a real 12-image gallery with four strong portraits therefore fell back to the ordinary one-at-a-time viewer.
 9. KAUP had no exact-venue transport component, and the rail exporter missed an explicit duration written with a dash rather than the older colon-only form.
 10. Desktop telephone CTA reused a mobile `tel:` action instead of a visible copyable number.
+11. The v6 acceptance script asserted phone copy content but not child geometry at the user's effective `1536×864` viewport; CSS grids remained viewport-responsive while the action component's actual container was narrower.
+12. Return selection filtered directly from event end and omitted venue exit/walk/boarding time. Media grouping tested orientation/count but ignored imported technical quality when strong alternatives existed.
 
 ## Contributing Factors
 
@@ -56,6 +59,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - historical approved media was not re-run through the current visual pair-review contract;
 - lab/production iteration introduced event-specific presentation behavior without a user-state or product rule;
 - browser acceptance focused on initially rendered cards, not delayed/failed media.
+- consultant review covered the component concept, while the automated gate did not replay the exact constrained phone specimen or assert bounding rectangles; this allowed a conceptually valid adaptive label to pass with invalid geometry.
 
 ## Automation Contract
 
@@ -82,10 +86,11 @@ The full-catalog static preview exposed several user-visible regressions around 
 - desktop and mobile full-screen galleries both expose one terminal related-event recommendation;
 - previous desktop template, related-card crop, transport and mobile V8 regression contracts remain green across the full future-event catalog.
 - event `5756` uses Editorial with a classified safe horizontal photo while its non-identity document remains contained in fullscreen;
-- event `4671` shows exact-venue KAUP transfer, bus and map guidance sourced from KAUP/Автовокзал;
-- event `3103` shows explicit-end evening returns and no next-morning wait inside the desktop renderer;
-- event `4783` opens the grouped multi-portrait viewer with every source image addressable;
+- event `4671` shows exact-venue KAUP transfer, bus and map guidance sourced from KAUP/Автовокзал and distinguishes the pedestrian route from the Romanovo stop from the separate Kaliningrad car route;
+- event `3103` applies the 30-minute Янтарь-холл exit/walk/boarding buffer, shows `6726`/`6728`, excludes unsafe `6724`, and shows no next-morning wait inside the desktop renderer;
+- event `4783` opens the grouped multi-portrait viewer with the seven technically strong images, excludes five materially weak renditions while that strong set exists, and discloses `7 из 12`;
 - event `6851` exposes and copies the formatted telephone number with visible success feedback;
+- event `6851` keeps the phone number on one line and all action controls inside the graphite panel at `1536×864` and `1920×1080`;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
 - insufficient-feedback placeholder copy is absent.
 
@@ -110,6 +115,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - replace random mobile CTA expansion with stable icon-only secondary actions;
 - persist bounded calendar-use recency separately from saved-event expiry state;
 - reserve dynamic-card media geometry and add desktop gallery recommendation parity.
+- require venue-access buffers after exact event ends, separate ambiguous multimodal route CTAs, apply quality admission with a weak-only fallback, and accept action panels by measured component geometry rather than content assertions alone.
 
 ## Follow-up Actions
 
@@ -123,6 +129,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - generated catalog: `303` future/ongoing event pages; `event_pgvector_related_chain_v2_two_doc` over `supabase_pgvector_hnsw_cosine_v1`, semantic embeddings enabled, exactly `40` candidates for every event and `0` underfilled chains
 - regression checks: preview check, desktop full-catalog contract (`303` pages), bus and rail directory checks, `12` targeted pytest checks and `git diff --check` passed; the preview check also verifies exact visible-link/transport-ICS parity after the desktop/mobile shortlist union
 - post-deploy verification: public HTTP `200` for the v6 index, all five regression event pages and the recovered desktop train ICS; public Playwright passed `26/26` checks with zero console errors, covering Editorial routing and event-photo hero for `5756`, contained/click-dismissable documents and posters, KAUP transfer/bus/map facts, only evening returns `6724`/`6726`, the 12-image grouped viewer with group navigation, visible/copyable phone number, absent insufficient-feedback placeholder and preserved mobile `accepted-v8` with the shared lockup
+- v7 product-polish release evidence: pending build/public acceptance in this incident follow-up; production root remains unchanged until explicit approval
 
 ## Prevention
 

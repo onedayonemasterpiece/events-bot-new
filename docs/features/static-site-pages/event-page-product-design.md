@@ -315,6 +315,15 @@ not be reflowed by desktop experiments.
   images; next/previous buttons, keyboard arrows and swipe all advance by a
   viewport group in both directions. It never silently falls back to a
   one-image viewer.
+- The efficient viewer is quality-aware. When at least four technically strong
+  assets exist (`long edge >= 720`, `>= 450k` pixels and imported quality score
+  `>= 10`), only that strong set participates in the grouped viewer and
+  the header discloses `Показаны N из M изображений в лучшем качестве`.
+  Materially weak media remains excluded when a strong set exists; if fewer
+  than four strong assets exist, the viewer keeps the full source set rather
+  than hiding the only available event evidence. This is a deterministic
+  presentation gate over upstream quality metadata, not a semantic substitute
+  for the LLM-first media-role pipeline.
 - Desktop fullscreen rendering is fail-closed: only a classified `event_photo`
   with `recommended_hero_fit=cover` and `safe_crop=true` may fill by cover.
   Posters and all OCR/document media use `contain`, do not auto-pan, and remain
@@ -338,6 +347,13 @@ not be reflowed by desktop experiments.
 Desktop header uses the shared announcement lockup at `240×88`, menu on the
 right, exact-listing active state only, and no selected item on event details.
 Keyboard navigation and visible focus remain required.
+
+The graphite desktop action panel is component-responsive, not only
+viewport-responsive. The phone number is a single selectable/copyable line and
+the panel may stack its primary CTA when the actual container is constrained.
+Calendar wording still follows bounded per-user usage history, but collapses
+to the icon before it can wrap the phone CTA or push share/like controls beyond
+the panel. A visible in-place success state confirms number copying.
 
 ## 8. Related events and personalization placement
 
@@ -481,6 +497,10 @@ Product/UI:
 
 - 375px: no horizontal scroll; primary CTA visible; touch targets >=44px;
 - desktop 1366px: two-column layout, not stretched mobile feed;
+- desktop phone/action regressions are additionally measured at `1536×864`
+  and `1920×1080`: every action rectangle must remain inside the graphite
+  panel, the phone number must stay on one line and the document width must not
+  exceed the viewport;
 - share works on phone via Web Share API or copy fallback;
 - calendar ICS works;
 - ticket/registration/source CTA matches event facts;

@@ -47,6 +47,7 @@ interface Props {
   splitMediaFit?: SplitMediaFit;
   splitPortraitViewer?: boolean;
   splitPortraitSourceIndexes?: number[];
+  splitViewerHiddenSourceIndexes?: number[];
   relatedMediaTreatment?: RelatedMediaTreatment;
   mediaRoleOverrides?: Record<number, EventImageMediaRole>;
   mediaDimensionOverrides?: Record<number, { width: number; height: number }>;
@@ -92,6 +93,7 @@ const {
   splitMediaFit = 'natural',
   splitPortraitViewer = false,
   splitPortraitSourceIndexes = [],
+  splitViewerHiddenSourceIndexes = [],
   relatedMediaTreatment = 'hybrid',
   mediaRoleOverrides = {},
   mediaDimensionOverrides = {},
@@ -227,8 +229,11 @@ const editorialRailCandidates = indexedGalleryImages.filter(({ image, galleryInd
 const editorialRailImages = editorialRailCandidates;
 // Gallery keeps every source rendition so its source indexes remain stable. The compact rail,
 // however, only advertises distinct media identities supplied by the upstream/lab contract.
-const splitRailCandidates = indexedGalleryImages.filter(({ image, galleryIndex }) => galleryIndex !== 0 && !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
 const portraitSourceIndexSet = new Set(splitPortraitSourceIndexes);
+const splitHiddenSourceIndexSet = new Set(splitViewerHiddenSourceIndexes);
+const splitRailCandidates = indexedGalleryImages.filter(({ image, galleryIndex }) => galleryIndex !== 0
+  && !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1)
+  && (!splitPortraitViewer || !splitHiddenSourceIndexSet.has(image.sourceIndex ?? -1)));
 const splitViewerImages = splitPortraitSourceIndexes.length > 0
   ? indexedGalleryImages.filter(({ image }) => portraitSourceIndexSet.has(image.sourceIndex ?? -1))
   : indexedGalleryImages.filter(({ image }) => !hiddenDuplicateSourceIndexes.has(image.sourceIndex ?? -1));
@@ -553,6 +558,7 @@ const descriptionHtml = (event.description_html || '')
         <div class="desktop-portrait-viewer__heading">
           <strong>{event.title}</strong>
           <time datetime={event.starts_at || undefined}>{dateTimeLabel}</time>
+          {splitViewerHiddenSourceIndexes.length > 0 && <span class="desktop-portrait-viewer__quality-note">Показаны {splitViewerImages.length} из {splitViewerImages.length + splitViewerHiddenSourceIndexes.length} изображений в лучшем качестве</span>}
         </div>
         <button type="button" data-efficient-viewer-close aria-label="Закрыть просмотр изображений">×</button>
       </div>
@@ -664,6 +670,66 @@ const descriptionHtml = (event.description_html || '')
             if (status) status.textContent = 'Не удалось скопировать — номер виден на кнопке.';
           }
         });
+      });
+      const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
+      const actionPanelFitTokens = new WeakMap<HTMLElement, number>();
+      const fitActionPanel = (panel:HTMLElement) => {
+        const primary = panel.querySelector<HTMLElement>('.desktop-prototype__primary-action');
+        const actionRow = panel.querySelector<HTMLElement>('.desktop-prototype__action-row');
+        const phoneNumber = panel.querySelector<HTMLElement>('.desktop-prototype__phone-copy strong');
+        const phonePanel = panel.dataset.primaryActionKind === 'phone';
+        const fitToken = (actionPanelFitTokens.get(panel) || 0) + 1;
+        actionPanelFitTokens.set(panel, fitToken);
+        panel.dataset.actionLayout = 'inline';
+        panel.dataset.actionDensity = 'comfortable';
+        const stillCurrent = () => actionPanelFitTokens.get(panel) === fitToken;
+        const hasInlineGeometryIssue = () => {
+          const panelRect = panel.getBoundingClientRect();
+          const styles = getComputedStyle(panel);
+          const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
+          const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
+          const children = [
+            panel.querySelector<HTMLElement>(':scope > p:first-child'),
+            primary,
+            actionRow,
+          ].filter((item): item is HTMLElement => Boolean(item));
+          const outside = children.some((item) => {
+            const rect = item.getBoundingClientRect();
+            return rect.left < leftLimit || rect.right > rightLimit;
+          });
+          const overlaps = children.some((item, index) => children.slice(index + 1).some((other) => {
+            const first = item.getBoundingClientRect();
+            const second = other.getBoundingClientRect();
+            const sharesRow = Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 4;
+            return sharesRow && Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
+          }));
+          const primaryOverflow = Boolean(primary && primary.scrollWidth > primary.clientWidth + 2);
+          const phoneOverflow = Boolean(phoneNumber && phoneNumber.scrollWidth > phoneNumber.clientWidth + 2);
+          return outside || overlaps || primaryOverflow || phoneOverflow;
+        };
+        requestAnimationFrame(() => {
+          if (!stillCurrent()) return;
+          if (phonePanel && hasInlineGeometryIssue()) panel.dataset.actionDensity = 'compact';
+          requestAnimationFrame(() => {
+            if (!stillCurrent()) return;
+            if (phonePanel && hasInlineGeometryIssue()) panel.dataset.actionLayout = 'stacked';
+            requestAnimationFrame(() => {
+              if (!stillCurrent()) return;
+              const styles = getComputedStyle(panel);
+              const usableWidth = panel.clientWidth
+                - (Number.parseFloat(styles.paddingLeft) || 0)
+                - (Number.parseFloat(styles.paddingRight) || 0);
+              const actionOverflow = Boolean(actionRow && actionRow.scrollWidth > usableWidth + 2);
+              if (panel.dataset.actionLayout === 'stacked') {
+                panel.dataset.actionDensity = actionOverflow || panel.clientWidth < 390 ? 'compact' : 'comfortable';
+              }
+            });
+          });
+        });
+      };
+      actionPanels.forEach((panel) => {
+        fitActionPanel(panel);
+        new ResizeObserver(() => fitActionPanel(panel)).observe(panel);
       });
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
@@ -2195,6 +2261,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-portrait-viewer__heading { min-width:0; display:flex; align-items:baseline; gap:clamp(.75rem,1.4vw,1.4rem); }
     .desktop-portrait-viewer__heading strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1rem; }
     .desktop-portrait-viewer__heading time { flex:none; color:#d8c9bd; font-size:.84rem; font-weight:780; font-variant-numeric:tabular-nums; }
+    .desktop-portrait-viewer__quality-note { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#a99b91; font-size:.75rem; }
     .desktop-portrait-viewer__topbar button {
       width:46px;
       height:46px;
@@ -2429,6 +2496,19 @@ const descriptionHtml = (event.description_html || '')
 
     .desktop-portrait-viewer__track { box-sizing:border-box; }
     .desktop-portrait-viewer__item { max-height:100%; }
+
+    /* Component-responsive action geometry. The calendar wording still follows
+       the per-user usage state, but constrained phone panels never wrap or
+       push share/like controls outside their graphite surface. */
+    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"]) {
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center;
+    }
+    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] > p:first-child) { grid-column:1; grid-row:1; }
+    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__primary-action) { grid-column:1/-1 !important; grid-row:2 !important; min-width:0; }
+    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__action-row) { grid-column:2 !important; grid-row:1 !important; justify-self:end; }
+    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__phone-status) { grid-column:1/-1; grid-row:3; }
+    .desktop-clean-event :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__primary-action) { overflow:hidden; }
   }
 
   /* Keep the event identity and primary action readable on wide, shallow

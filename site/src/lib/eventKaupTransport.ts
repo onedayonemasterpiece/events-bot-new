@@ -12,6 +12,7 @@ export interface KaupTransportSuggestion {
   venueName: string;
   venueMapUrl: string;
   directionsMapUrl: string;
+  stopToVenueDirectionsUrl: string;
   officialSourceUrl: string;
   transferBookingUrl: string;
   transferPriceLabel: string;
@@ -77,6 +78,7 @@ export function getKaupTransportSuggestion(event: Pick<PreviewEvent, 'venue_name
     venueName:'Поселение викингов Кауп',
     venueMapUrl:'https://yandex.ru/maps/org/poseleniye_vikingov_kaup/1685907695/?ll=20.430595%2C55.036368&z=8',
     directionsMapUrl:'https://yandex.ru/maps/?rtext=54.710426%2C20.452214~54.8781221%2C20.2789453&rtt=auto',
+    stopToVenueDirectionsUrl:'https://yandex.ru/maps/?rtext=54.8958609%2C20.2759337~54.8781221%2C20.2789453&rtt=pd',
     officialSourceUrl:'https://www.kaup39.ru/',
     transferBookingUrl:'https://radario.ru/customer/afisha/07491527ea271252d4cf919044700687b69e8774898812c?openAsLinkKey=076uuwhz5i',
     transferPriceLabel:'600 ₽ туда и обратно',

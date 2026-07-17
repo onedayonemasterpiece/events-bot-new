@@ -21,6 +21,7 @@ export interface DesktopEventPresentation {
   splitMediaFit: 'natural' | 'viewport-cover';
   splitPortraitViewer: boolean;
   splitPortraitSourceIndexes: number[];
+  splitViewerHiddenSourceIndexes: number[];
   relatedMediaTreatment: 'hybrid';
   reason: string;
 }
@@ -93,6 +94,21 @@ function distinctSourceIndexes(assets: EventImageAsset[]): number[] {
   return out;
 }
 
+function qualityAdmittedSourceIndexes(assets: EventImageAsset[], indexes: number[]): number[] {
+  const technicallyStrong = indexes.filter((index) => {
+    const asset = assets[index];
+    const pixels = Number(asset?.width || 0) * Number(asset?.height || 0);
+    const longEdge = Math.max(Number(asset?.width || 0), Number(asset?.height || 0));
+    // 720 px on the long edge plus a real image area is the minimum at which
+    // a desktop fullscreen presentation remains useful. `quality_score` is a
+    // supporting signal only; geometry is the stable cross-export contract.
+    return longEdge >= 720 && pixels >= 450_000 && Number(asset?.quality_score || 0) >= 10;
+  });
+  // Curate only when there is a genuine strong set. If an event has no strong
+  // media family, preserving its weak originals is better than an empty viewer.
+  return technicallyStrong.length >= 4 ? technicallyStrong : indexes;
+}
+
 /**
  * Route production desktop pages into the exact accepted Continuous Editorial
  * or Split component families. This is deliberately geometry + semantic-state
@@ -119,6 +135,12 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
   const splitPortraitViewer = portraitIndexes.length >= 4
     && classifiedPortraitPhotoCount >= 2
     && portraitIndexes.length >= Math.ceil(Math.max(1, distinctIndexes.length) * 0.3);
+  const admittedSplitIndexes = splitPortraitViewer
+    ? qualityAdmittedSourceIndexes(assets, distinctIndexes)
+    : [];
+  const hiddenSplitIndexes = splitPortraitViewer
+    ? distinctIndexes.filter((index) => !admittedSplitIndexes.includes(index))
+    : [];
 
   // A landscape alternative may become hero only when a classified identity
   // poster anchors event semantics. A portrait/square visual primary alone is
@@ -149,6 +171,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
         splitMediaFit:'natural',
         splitPortraitViewer:false,
         splitPortraitSourceIndexes:[],
+        splitViewerHiddenSourceIndexes:[],
         relatedMediaTreatment:'hybrid',
         reason:'editorial-with-classified-identity-poster',
       };
@@ -183,6 +206,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
         splitMediaFit:'natural',
         splitPortraitViewer:false,
         splitPortraitSourceIndexes:[],
+        splitViewerHiddenSourceIndexes:[],
         relatedMediaTreatment:'hybrid',
         reason:'editorial-replaces-non-identity-document-with-classified-photo',
       };
@@ -209,6 +233,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
       splitMediaFit:'natural',
       splitPortraitViewer:false,
       splitPortraitSourceIndexes:[],
+      splitViewerHiddenSourceIndexes:[],
       relatedMediaTreatment:'hybrid',
       reason:bottomSafe ? 'editorial-primary-near-square-bottom-safe' : 'editorial-primary-qualified-landscape',
     };
@@ -234,7 +259,8 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     splitPortraitViewer,
     // The grouped viewer must contain every rail source. Restricting it to the
     // portrait subset made a click on a landscape thumbnail open image one.
-    splitPortraitSourceIndexes:splitPortraitViewer ? distinctIndexes : [],
+    splitPortraitSourceIndexes:admittedSplitIndexes,
+    splitViewerHiddenSourceIndexes:hiddenSplitIndexes,
     relatedMediaTreatment:'hybrid',
     reason:!primary && !event.image_url
       ? 'split-no-image-fallback'

@@ -68,6 +68,9 @@ export interface EventTransportSuggestion {
   eventStart: string;
   eventEnd: string | null;
   eventEndBasis: EventEndBasis;
+  returnAccessMinutes: number;
+  returnAccessLabel: string;
+  returnReadyTime: string | null;
   eventTypeGenitive: string;
   outbound: EventTrainOption[];
   returns: EventTrainOption[];
@@ -139,6 +142,25 @@ function normalizeEventType(value: string | null | undefined): string {
     .replace(/ё/gu, 'е')
     .replace(/[^а-яa-z]+/gu, ' ')
     .trim();
+}
+
+function clockFromMinutes(value: number): string {
+  const normalized = ((value % (24 * 60)) + (24 * 60)) % (24 * 60);
+  return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
+}
+
+function returnAccessProfile(event: Pick<PreviewEvent, 'venue_name' | 'city'>): { minutes: number; label: string } {
+  const venue = normalizeCity(event.venue_name);
+  if (venue.includes('янтарь холл') || venue.includes('yantar hall')) {
+    return {
+      minutes:30,
+      label:'Закладываем 30 минут: выход из зала, около 15 минут пешком до Светлогорска-2 и запас на посадку.',
+    };
+  }
+  return {
+    minutes:25,
+    label:'Закладываем 25 минут на выход с площадки, дорогу до станции и посадку.',
+  };
 }
 
 function localIso(serviceDate: string, time: string, dayOffset = 0): string {
@@ -259,7 +281,7 @@ function getRoute(city: string | null | undefined): TransportRouteRecord | null 
 }
 
 export function getEventTransportSuggestion(
-  event: Pick<PreviewEvent, 'city' | 'start_date' | 'end_date' | 'start_time' | 'time_range_end' | 'event_type'>,
+  event: Pick<PreviewEvent, 'city' | 'venue_name' | 'start_date' | 'end_date' | 'start_time' | 'time_range_end' | 'event_type'>,
 ): EventTransportSuggestion | null {
   const route = getRoute(event.city);
   const eventStartMinutes = timeToMinutes(event.start_time);
@@ -284,6 +306,9 @@ export function getEventTransportSuggestion(
   const eventEndBasis: EventEndBasis = eventEndRaw !== null ? 'explicit' : 'schedule_cutoff';
   let eventEndMinutes = eventEndRaw;
   if (eventEndMinutes !== null && eventEndMinutes < eventStartMinutes) eventEndMinutes += 24 * 60;
+  const accessProfile = returnAccessProfile(event);
+  const returnReadyMinutes = eventEndMinutes === null ? null : eventEndMinutes + accessProfile.minutes;
+  const earliestReturnMinutes = returnReadyMinutes ?? Number.POSITIVE_INFINITY;
   const nextDate = addIsoDays(event.start_date, 1);
   const sameDayCovered = calendarCovers(route.return, event.start_date);
   const nextDayCovered = calendarCovers(route.return, nextDate);
@@ -320,7 +345,7 @@ export function getEventTransportSuggestion(
     ? []
     : returnCandidates
       .map((item) => ({ ...item, wait: item.departureMinutes - eventEndMinutes }))
-      .filter(({ wait }) => wait >= 0 && wait <= schedules.selection.max_return_wait_minutes)
+      .filter(({ departureMinutes, wait }) => departureMinutes >= earliestReturnMinutes && wait <= schedules.selection.max_return_wait_minutes)
       .sort((left, right) => left.wait - right.wait || left.departureMinutes - right.departureMinutes)
       .slice(0, optionLimit)
       .map(({ train, serviceDate, nextDay: isNextDay, wait }) => toOption(train, serviceDate, isNextDay, { waitAfterEventMinutes: wait }));
@@ -336,6 +361,9 @@ export function getEventTransportSuggestion(
     eventStart: event.start_time || '',
     eventEnd: event.time_range_end || null,
     eventEndBasis,
+    returnAccessMinutes:accessProfile.minutes,
+    returnAccessLabel:accessProfile.label,
+    returnReadyTime:returnReadyMinutes === null ? null : clockFromMinutes(returnReadyMinutes),
     eventTypeGenitive: EVENT_TYPE_GENITIVE[normalizedType] || 'события',
     outbound,
     returns,

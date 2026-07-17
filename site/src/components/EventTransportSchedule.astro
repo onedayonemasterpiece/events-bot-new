@@ -127,21 +127,24 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
             <p class="event-transport__cutoff-note">Уточните время окончания у организатора.</p>
           </div>
         ) : suggestion.returns.length > 0 ? (
-          <ol class="event-transport__trains">
-            {suggestion.returns.map((train) => (
-              <li class="event-transport__train-row" data-transport-direction="return" data-train-number={train.number}>
-                <a class="event-transport__train-link" href={calendarHref('return', train)} type="text/calendar" aria-label={calendarLabel('return', train)}>
-                  <div class="event-transport__times">
-                    <time datetime={train.departureIso}>{train.departure}</time>
-                    <span aria-hidden="true">→</span>
-                    <time datetime={train.arrivalIso}>{train.arrival}</time>
-                  </div>
-                  <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatWait(train)}{train.nextDay ? ' · на следующий день' : ''}</small>
-                  <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
-                </a>
-              </li>
-            ))}
-          </ol>
+          <>
+            <p class="event-transport__return-buffer" data-return-access-minutes={suggestion.returnAccessMinutes}>{suggestion.returnAccessLabel} Первый безопасный выезд — после {suggestion.returnReadyTime}.</p>
+            <ol class="event-transport__trains">
+              {suggestion.returns.map((train) => (
+                <li class="event-transport__train-row" data-transport-direction="return" data-train-number={train.number}>
+                  <a class="event-transport__train-link" href={calendarHref('return', train)} type="text/calendar" aria-label={calendarLabel('return', train)}>
+                    <div class="event-transport__times">
+                      <time datetime={train.departureIso}>{train.departure}</time>
+                      <span aria-hidden="true">→</span>
+                      <time datetime={train.arrivalIso}>{train.arrival}</time>
+                    </div>
+                    <small>{train.trainType} № {train.number} · {formatDuration(train.durationMinutes)} · {formatWait(train)}{train.nextDay ? ' · на следующий день' : ''}</small>
+                    <span class="event-transport__calendar-icon" aria-hidden="true"><Icon name="calendar" /></span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </>
         ) : suggestion.returnCalendarCovered ? (
           <p class="event-transport__empty event-transport__empty--warning">После окончания события поездов в Калининград в этот вечер больше нет.</p>
         ) : (
@@ -185,6 +188,7 @@ const lastSameDaySummary = suggestion?.lastSameDayReturn
   .event-transport__direction h3 { margin: 0.1rem 0 0; font-size: 1rem; color: #2d3035; }
   .event-transport__step { margin: 0; color: #96352e; font-size: 0.76rem; font-weight: 920; letter-spacing: 0.08em; text-transform: uppercase; }
   .event-transport__trains { display: grid; gap: 0.42rem; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+  .event-transport__return-buffer { margin:.5rem 0 0; padding:.58rem .66rem; border-radius:12px; color:#5d4d43; background:rgba(121,48,20,.06); font-size:.78rem; line-height:1.4; }
   .event-transport__train-link { display: grid; grid-template-columns: minmax(0,1fr) 2.4rem; grid-template-areas: "times icon" "meta icon"; align-items: center; gap: 0.1rem 0.55rem; min-height: 4.15rem; padding: 0.58rem 0.68rem; border: 1px solid rgba(45,48,53,0.1); border-radius: 14px; color: inherit; background: rgba(255,255,255,0.82); text-decoration: none; touch-action: manipulation; }
   .event-transport__train-link:hover,.event-transport__cutoff-item:hover { border-color: rgba(121,48,20,0.28); background: #fffdf8; }
   .event-transport__train-link:active,.event-transport__cutoff-item:active { background: #fff7ea; }

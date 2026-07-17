@@ -45,7 +45,7 @@ const shareImageType = shareImage.toLowerCase().includes('.webp') ? 'image/webp'
 const shareFileName = `kenigevents-${event.slug}`;
 ---
 
-<aside class:list={['desktop-prototype__action', className]} data-feedback-scope aria-label="Действия события">
+<aside class:list={['desktop-prototype__action', className]} data-feedback-scope data-desktop-action-panel data-primary-action-kind={ctaIsTelephone ? 'phone' : calendarPrimary ? 'calendar' : 'default'} aria-label="Действия события">
   <p><span>вход</span><strong>{admissionLabel}</strong></p>
   {calendarPrimary ? (
     <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
@@ -111,6 +111,7 @@ const shareFileName = `kenigevents-${event.slug}`;
     padding: clamp(1rem, 2.2vw, 1.4rem);
     color: #fffaf2;
     background: #292521;
+    container: desktop-actions / inline-size;
   }
   .desktop-prototype__action > p { display: grid; gap: .06rem; margin: 0; }
   .desktop-prototype__action > p span {
@@ -139,7 +140,7 @@ const shareFileName = `kenigevents-${event.slug}`;
   :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }
   :global(button.desktop-prototype__primary-action) { border:0; font:inherit; cursor:pointer; }
   .desktop-prototype__phone-copy > span { display:grid; gap:.08rem; text-align:left; }
-  .desktop-prototype__phone-copy strong { font-size:1.02rem; font-variant-numeric:tabular-nums; }
+  .desktop-prototype__phone-copy strong { display:block; white-space:nowrap; font-size:clamp(.86rem,1.18cqi,1.02rem); font-variant-numeric:tabular-nums; user-select:all; }
   .desktop-prototype__phone-copy small { color:rgba(255,255,255,.82); font-size:.72rem; font-weight:800; }
   .desktop-prototype__phone-copy.is-copied { background:#2d6f58; box-shadow:0 12px 24px rgba(26,88,67,.24); }
   .desktop-prototype__phone-status { min-height:1.1rem; margin:-.35rem 0 0 !important; color:#d7c9bc; font-size:.72rem; line-height:1.2; }
@@ -186,4 +187,6 @@ const shareFileName = `kenigevents-${event.slug}`;
   }
   :global(.desktop-prototype__icon-action .icon) { width: 29px; height: 29px; }
   :global(.desktop-prototype__icon-action strong) { font-size: .92rem; font-variant-numeric: tabular-nums; }
+  :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:52px; min-width:52px; padding-inline:.3rem; }
+  :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { max-width:0; opacity:0; }
 </style>

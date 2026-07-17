@@ -43,7 +43,10 @@ reused `564` unchanged embeddings with `0` provider calls. Browser page views
 still consume only same-origin static discovery JSON. The replacement local
 acceptance covers the whole `282/282` catalog with no page errors, plus a
 `4 events × 3 viewports` (`1536×864`, `1920×1080`, `1440×650`) matrix with
-visible H1/CTA and zero horizontal overflow. Interaction checks cover exact
+visible H1/CTA, action-panel child geometry and zero horizontal overflow.
+Phone variants must prove a one-line number and every calendar/share/like
+control inside the graphite panel; text presence alone is not acceptance.
+Interaction checks cover exact
 gallery indices, classified-poster opening, idle autorotation, CTA safe
 release, immutable thumbnail derivatives and both transport types. Public HTTP
 is `200` for the preview index, four pinned events and both transport examples;
