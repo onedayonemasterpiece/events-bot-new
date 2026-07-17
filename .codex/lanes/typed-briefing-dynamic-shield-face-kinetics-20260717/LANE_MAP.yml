@@ -1,0 +1,86 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 02095bcd03d927b58e7887b97cd451a7fcca38a4
+base_branch: origin/feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-dynamic-shield-face-kinetics-20260717
+global_constraints:
+  - isolated briefing lab only; production homepage unchanged
+  - lighting/copy shield follows measured rendered phrase geometry, not a fixed left-to-right assumption
+  - face bbox tiles must remain visually present and never become empty/near-empty
+  - preserve deterministic, stable motion and reduced-motion fallback
+  - no paid image generation
+verification_owner: root
+stop_conditions:
+  - face bbox intersects any hidden or effectively empty tile
+  - delayed accents become random/non-reproducible or delay reading excessively
+  - easing regresses to linear/step or causes visible jump
+  - mobile begins requesting narrative raster
+lanes:
+  - id: dynamic-copy-shield-audit
+    role: reviewer
+    requirement_ids: [R01]
+    target: derive measured line-geometry-driven illumination field from actual rendered fragments
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-dynamic-shield-face-kinetics-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: algorithm, edge cases and test assertions
+    verification_scope: inspection_only
+    status: planned
+  - id: face-bbox-contract-audit
+    role: reviewer
+    requirement_ids: [R02]
+    target: design Smart Update face bbox metadata contract and tile-level non-empty protection
+    depends_on: []
+    execution_mode: parallel
+    effort: extra-high
+    branch: integration/typed-briefing-dynamic-shield-face-kinetics-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: schema, coordinate mapping, overlap rule, fallback and tests
+    verification_scope: inspection_only
+    status: planned
+  - id: kinetics-easing-audit
+    role: reviewer
+    requirement_ids: [R03]
+    target: audit current easing and define deterministic 2-3 delayed accent tiles
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-dynamic-shield-face-kinetics-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: easing verdict, timing bounds, selection algorithm and tests
+    verification_scope: inspection_only
+    status: planned
+  - id: serial-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03]
+    primary: true
+    target: implement measured copy field, face-safe bbox tiles and delayed kinetic accents
+    depends_on: [dynamic-copy-shield-audit, face-bbox-contract-audit, kinetics-easing-audit]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: integration/typed-briefing-dynamic-shield-face-kinetics-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/features/static-site-pages/typed-briefing-face-bbox-contract.md
+      - CHANGELOG.md
+      - .codex/lanes/typed-briefing-dynamic-shield-face-kinetics-20260717/**
+      - .codex/integration/typed-briefing-dynamic-shield-face-kinetics-20260717-INTEGRATION_REPORT.md
+    forbidden_files:
+      - production homepage routes
+      - Smart Update runtime implementation
+      - production database
+    expected_output: corrected lab, future-compatible bbox contract, tests and public review evidence
+    verification_scope: full_local
+    status: planned
