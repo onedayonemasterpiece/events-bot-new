@@ -919,6 +919,13 @@ scope/vector evaluation contract. Therefore the end-to-end conversion must be
 read together with coverage; it cannot by itself distinguish low-yield source
 selection from an incomplete historical evaluation pass. Raw lexical
 `heuristic_ko_raw_posts_total` remains a lower-bound diagnostic, not this KPI.
+The hard KO-only safety projection recognizes grammatical case forms only for
+canonical allow-listed external geographies. This prevents a text such as
+`Куршская коса … каньон Сулак в Дагестане` from reaching media/Gemini merely
+because the external-region list stores `Дагестан` in nominative form. It does
+not replace semantic dual-vector scoring or create positive acceptance from a
+regex; policy refresh v4 simply recomputes the current source/text handoff for
+active older rows.
 Keyword-source queue health is monitored separately via
 `publics_keyword_discovered_total`, `publics_keyword_scanned_with_posts_total`,
 `publics_keyword_with_ko_candidates_total`,

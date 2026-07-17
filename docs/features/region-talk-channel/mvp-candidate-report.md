@@ -598,6 +598,18 @@ For bounded live-YDB handoff runs, fetched posts are pre-ordered before the vect
 
 Hard Kaliningrad-only region scope now runs before candidate memory and `04a_final_shortlist`: multi-region/non-Kaliningrad posts are rejected as `reject_not_kaliningrad_oblast_only` and cannot leak into product shortlist unless manually overridden with explicit region evidence. Image scoring remains only for selected non-ad Kaliningrad rows; broad LLM stays disabled (`wide_funnel_llm_calls=0`) and the optional LLM verifier is limited to top-N final rows through the Supabase limiter.
 
+The external-region/country safety evidence is matched in ordinary Russian
+case forms, not only in the canonical nominative dictionary form. For example,
+`в Дагестане`, `в Новосибирской области`, `в Нижнем Новгороде`, `через Польшу`
+map back to their exact allow-listed canonical geo terms and make a mixed
+destination post fail the KO-only gate before image/Gemini spend. This is a
+narrow inflection expansion of known external geographies, not a regex-based
+positive region classifier: adjective-derived unrelated words such as
+`дагестанская кухня` or `польская плитка` do not become external destinations.
+The policy version is `region_talk_post_processing_v4_external_geo_case_forms`
+so active stale rows receive the normal idempotent policy refresh; E5+BGE
+remains mandatory and unchanged.
+
 The delayed E5→BGE path has the same pre-image safety contract as the direct
 path. Candidate memory retains hard ad/promo and multi-region evidence while it
 waits for BGE. When BGE arrives, the promotion pass reuses the complete active

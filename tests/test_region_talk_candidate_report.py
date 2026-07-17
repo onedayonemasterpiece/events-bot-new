@@ -2656,6 +2656,34 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
 
+    def test_kaliningrad_only_scope_rejects_inflected_external_geo_mentions(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        live_regression = mod.kaliningrad_oblast_only_scope_gate(
+            "Куршская коса прекрасна, а затем покажем каньон Сулак в Дагестане — чудеса России.",
+            lexicon,
+        )
+        self.assertFalse(live_regression["kaliningrad_oblast_only_scope"])
+        self.assertIn("дагестан", live_regression["external_geo_mentions"])
+
+        adjective_case = mod.external_geo_mentions(
+            "После Калининграда маршрут продолжился в Новосибирской области и Нижнем Новгороде."
+        )
+        self.assertIn("новосибирская область", adjective_case[0])
+        self.assertIn("нижний новгород", adjective_case[0])
+
+        country_case = mod.external_geo_mentions("Из Калининграда вернулись через Польшу и Литву.")
+        self.assertIn("польша", country_case[1])
+        self.assertIn("литва", country_case[1])
+
+    def test_external_geo_case_matcher_does_not_expand_non_geo_substrings(self) -> None:
+        mod = load_module()
+        regions, countries = mod.external_geo_mentions(
+            "Калининградская область: дагестанская кухня и польская плитка в новом кафе."
+        )
+        self.assertNotIn("дагестан", regions)
+        self.assertNotIn("польша", countries)
+
     def test_kaliningrad_only_scope_rejects_comparison_to_kaliningrad(self) -> None:
         mod = load_module()
         lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")

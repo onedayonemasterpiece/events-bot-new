@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 from xml.sax.saxutils import escape
@@ -6106,6 +6107,67 @@ def term_in_text(norm_term: str, norm_text: str) -> bool:
     return re.search(rf"(?<![0-9a-zа-я]){escaped}(?![0-9a-zа-я])", norm_text, flags=re.I) is not None
 
 
+def _russian_geo_token_pattern(token: str) -> str:
+    """Return a conservative case-form pattern for a Russian geo token.
+
+    ``EXTERNAL_REGION_TERMS`` and ``EXTERNAL_COUNTRY_TERMS`` are stored in a
+    canonical (usually nominative) form.  Exact token matching therefore
+    missed ordinary travel prose such as ``в Дагестане`` or
+    ``в Новосибирской области``.  This helper expands only grammatical endings
+    of the already allow-listed geo term; it does not discover new places or
+    make a positive semantic decision.
+    """
+
+    word = normalize_geo_text(token)
+    if not word or not re.fullmatch(r"[а-я]+", word):
+        return re.escape(word)
+
+    # Full adjective paradigms cover both single-word adjective place names
+    # and the first token in ``<adjective> область/край``.  Keep the stem exact
+    # so a substring such as ``новосибир`` cannot become a place by itself.
+    adjective_endings = (
+        "ий", "ый", "ой", "ая", "яя", "ое", "ее", "ые", "ие",
+        "ого", "его", "ому", "ему", "ым", "им", "ом", "ем",
+        "ую", "юю", "ых", "их", "ыми", "ими",
+    )
+    for ending in ("ий", "ый", "ой", "ая", "яя", "ое", "ее", "ые", "ие"):
+        if word.endswith(ending) and len(word) > len(ending) + 2:
+            stem = re.escape(word[:-len(ending)])
+            return stem + "(?:" + "|".join(adjective_endings) + ")"
+
+    if word.endswith("ия") and len(word) > 4:
+        return re.escape(word[:-2]) + r"(?:ия|ии|ию|ией)"
+    if word.endswith("ея") and len(word) > 4:
+        return re.escape(word[:-1]) + r"(?:я|и|ю|ей|ею)"
+    if word.endswith("а") and len(word) > 3:
+        return re.escape(word[:-1]) + r"(?:а|ы|и|е|у|ой|ою)"
+    if word.endswith("я") and len(word) > 3:
+        return re.escape(word[:-1]) + r"(?:я|и|е|ю|ей|ею)"
+    if word.endswith("ь") and len(word) > 3:
+        return re.escape(word[:-1]) + r"(?:ь|я|и|ю|ем|е|ью)"
+    if word.endswith("й") and len(word) > 3:
+        return re.escape(word[:-1]) + r"(?:й|я|ю|ем|е)"
+    if re.search(r"[бвгджзклмнпрстфхцчшщ]$", word) and len(word) > 3:
+        return re.escape(word) + r"(?:а|у|ом|е|ы|и)?"
+    # Indeclinable names (for example, Сочи) stay exact.
+    return re.escape(word)
+
+
+@lru_cache(maxsize=512)
+def russian_geo_term_pattern(norm_term: str) -> re.Pattern[str]:
+    tokens = re.findall(r"[0-9a-zа-я]+", normalize_geo_text(norm_term))
+    if not tokens:
+        return re.compile(r"(?!)")
+    body = r"(?:[-\s]+)".join(_russian_geo_token_pattern(token) for token in tokens)
+    return re.compile(rf"(?<![0-9a-zа-я]){body}(?![0-9a-zа-я])", flags=re.I)
+
+
+def russian_geo_term_in_text(norm_term: str, norm_text: str) -> bool:
+    """Match an allow-listed Russian place in ordinary grammatical cases."""
+
+    return russian_geo_term_pattern(normalize_geo_text(norm_term)).search(norm_text) is not None
+
+
 def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[dict[str, Any]]:
     norm = normalize_geo_text(text)
     matches: list[dict[str, Any]] = []
@@ -6164,8 +6226,8 @@ def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[d
 
 def external_geo_mentions(text: str) -> tuple[list[str], list[str]]:
     norm = normalize_geo_text(text_main_content_for_geo(text))
-    regions = [term for term in EXTERNAL_REGION_TERMS if term_in_text(normalize_geo_text(term), norm)]
-    countries = [term for term in EXTERNAL_COUNTRY_TERMS if term_in_text(normalize_geo_text(term), norm)]
+    regions = [term for term in EXTERNAL_REGION_TERMS if russian_geo_term_in_text(term, norm)]
+    countries = [term for term in EXTERNAL_COUNTRY_TERMS if russian_geo_term_in_text(term, norm)]
     return sorted(set(regions)), sorted(set(countries))
 
 
@@ -14188,7 +14250,7 @@ E5_TEXT_MODEL_ID = "intfloat/multilingual-e5-base"
 BGE_M3_TEXT_MODEL_ID = "BAAI/bge-m3"
 BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
 E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
-POST_PROCESSING_POLICY_VERSION = "region_talk_post_processing_v3_ambiguous_place_context"
+POST_PROCESSING_POLICY_VERSION = "region_talk_post_processing_v4_external_geo_case_forms"
 TEXT_EMBEDDING_MODELS = [E5_TEXT_MODEL_ID, BGE_M3_TEXT_MODEL_ID]
 
 
@@ -15241,8 +15303,8 @@ def _prototype_vector_scores(text: str, ts: dict[str, Any], scope: dict[str, Any
         other_region = max(other_region, 0.75)
     # Full-text external evidence catches cases where hashtags/boilerplate were removed from geo-main-content.
     full_norm = normalize_geo_text(text)
-    full_external_regions = [term for term in EXTERNAL_REGION_TERMS if term_in_text(normalize_geo_text(term), full_norm)]
-    full_external_countries = [term for term in EXTERNAL_COUNTRY_TERMS if term_in_text(normalize_geo_text(term), full_norm)]
+    full_external_regions = [term for term in EXTERNAL_REGION_TERMS if russian_geo_term_in_text(term, full_norm)]
+    full_external_countries = [term for term in EXTERNAL_COUNTRY_TERMS if russian_geo_term_in_text(term, full_norm)]
     if full_external_regions or full_external_countries:
         other_region = max(other_region, 0.75)
         if any(w in low for w in multi_item_words):
