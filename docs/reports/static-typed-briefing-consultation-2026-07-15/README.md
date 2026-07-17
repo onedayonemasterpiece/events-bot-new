@@ -286,3 +286,30 @@ The isolated `/lab/briefing/` prototype is the only approved implementation scop
 ## Later external audit provenance
 
 The corrective audit supplied by the user was read from an IDE attachment and is not copied into this report because it was not a consultant invocation made by this branch. Its source SHA-256 was `d0755feab8065e2ce5872c8c5d62e264fa307f157ba8587581489e0c405873d5`; requirements R01–R10 are resolved in the canonical feature document.
+
+### Twelve-image manual review deck gate
+
+Пользовательская претензия «три автоматических сценария, одна картинка» оформлена
+как отдельный reviewability gate, а не как расширение обычной narrative queue.
+Gemini **3.1 Pro (High)** сначала получил exact 12-image contact sheet, отдельные
+problem slides, mobile `390×844`, six-scene WebM и measured source/crop facts.
+Запуск `2026-07-17 10:25:53–10:27:43 UTC` вернул честный `OVERALL: FAIL`:
+сценарии 04/05/07 теряли контраст на тёмных клетках, а mobile rail обрезал
+состояния 10–12. Этот ответ сохранён как обязательный rejected gate, а не
+acceptance.
+
+После исправления клетки, геометрически пересекающие фактические line boxes
+текста, получили alpha cap `.24` без opaque paper slab; остальные клетки
+сохранили нерегулярный контраст. Mobile rail стал переноситься в две строки без
+горизонтального clipping. Corrective запуск `2026-07-17 10:34:25–10:35:17 UTC`,
+provider status `0`, stderr empty, закрыл оба блокера и вернул все пять критериев
+`PASS`, `OVERALL: PASS`, `PUBLISH FOR USER REVIEW: YES`, `BLOCKERS: none`.
+Это разрешение только на пользовательскую проверку isolated lab, не production
+approval и не доказательство product desirability.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`media-review-deck-acceptance-prompt.md`](media-review-deck-acceptance-prompt.md) | First exact 12-image/manual-reviewability gate. | `8dd464fdbcbf9e8bcea7d16011fff24b35e3d1f65436bff8b9acf05bce7756a5` |
+| [`media-review-deck-acceptance-gemini.md`](media-review-deck-acceptance-gemini.md) | Required first `OVERALL: FAIL`. | `3af4bc48ab954babb1c4a0c15c6ed97a4e081096c62d25ac492f867bdcfd37ef` |
+| [`media-review-deck-postfix-prompt.md`](media-review-deck-postfix-prompt.md) | Exact blocker-closure prompt. | `943175ae3b12958406100dea85248ee7bc7e8d5591ec84aa2894bc38f9fad058` |
+| [`media-review-deck-postfix-gemini.md`](media-review-deck-postfix-gemini.md) | Final all-PASS answer. | `b89c3afa1d8ede921a17787fd6756e68eabaf3fa6eb575e08d78abb2db9908e3` |
