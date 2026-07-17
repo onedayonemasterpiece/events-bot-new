@@ -5,18 +5,25 @@ import importlib.util
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
 import traceback
+import unicodedata
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 INPUT_ROOT = Path("/kaggle/input")
 OUTPUT = Path("/kaggle/working/social_metrics_results.json")
+
+MONTHS_RU_GEN = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля", 5: "мая", 6: "июня",
+    7: "июля", 8: "августа", 9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
+}
 
 
 def _find(name: str) -> Path:
@@ -62,6 +69,164 @@ def _metric_count(item: dict[str, Any], key: str) -> int | None:
     if isinstance(value, dict):
         value = value.get("count")
     return int(value) if isinstance(value, int) and value >= 0 else None
+
+
+def _normalize_text(value: Any) -> str:
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold().replace("ё", "е")
+    return re.sub(r"\s+", " ", re.sub(r"[^a-zа-я0-9]+", " ", text)).strip()
+
+
+def _contains_sequence(tokens: list[str], needle: list[str]) -> bool:
+    if not needle or len(needle) > len(tokens):
+        return False
+    return any(tokens[index:index + len(needle)] == needle for index in range(len(tokens) - len(needle) + 1))
+
+
+def _match_post(candidate: dict[str, Any], item: dict[str, Any]) -> tuple[int, float]:
+    try:
+        target_date = date.fromisoformat(str(candidate.get("date") or "")[:10])
+    except ValueError:
+        return 0, 0.0
+    text = str(item.get("text") or "")
+    normalized = _normalize_text(text)
+    title_tokens = [token for token in _normalize_text(candidate.get("title")).split() if len(token) >= 3 or token.isdigit()][:6]
+    if not title_tokens or not _contains_sequence(_normalize_text(text).split(), title_tokens):
+        return 0, 0.0
+    if _normalize_text(f"{target_date.day} {MONTHS_RU_GEN.get(target_date.month, '')}") not in normalized:
+        return 0, 0.0
+    score = 2
+    time_match = re.search(r"\d{1,2}:\d{2}", str(candidate.get("time") or ""))
+    time_anchor = time_match.group(0) if time_match else ""
+    if time_anchor and time_anchor in text:
+        score += 1
+    location_tokens = [token for token in _normalize_text(candidate.get("location_name")).split() if len(token) >= 4][:3]
+    if any(token in normalized for token in location_tokens):
+        score += 1
+    if (time_anchor or location_tokens) and score < 3:
+        return 0, 0.0
+    return score, min(1.0, 0.45 + 0.18 * score)
+
+
+def _resolution_row(
+    candidate: dict[str, Any],
+    *,
+    observed_ts: int,
+    status: str,
+    item: dict[str, Any] | None = None,
+    method: str,
+    confidence: float = 0.0,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "candidate_id": candidate["candidate_id"],
+        "status": status,
+        "observed_ts": observed_ts,
+        "match_method": method,
+        "match_confidence": confidence,
+    }
+    if item is not None:
+        row.update({
+            "live_post_id": int(item.get("id") or 0),
+            "post_ts": int(item["date"]) if isinstance(item.get("date"), int) else None,
+            # Transient bounded evidence lets Fly rerun the canonical strict
+            # matcher. It is validated then discarded, never written to SQLite.
+            "evidence_text": str(item.get("text") or "")[:16384],
+            "views": _metric_count(item, "views"),
+            "likes": _metric_count(item, "likes"),
+            "comments": _metric_count(item, "comments"),
+            "shares": _metric_count(item, "reposts"),
+        })
+    return row
+
+
+async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str], wall_limit: int) -> list[dict[str, Any]]:
+    if not candidates:
+        return []
+    token = secrets.get("VK_TOKEN", "")
+    if not token:
+        raise RuntimeError("VK token is missing")
+    by_group: dict[str, list[dict[str, Any]]] = {}
+    for candidate in candidates:
+        by_group.setdefault(str(candidate["publisher_id"]), []).append(candidate)
+    out: list[dict[str, Any]] = []
+    for group, rows in sorted(by_group.items()):
+        direct: dict[int, dict[str, Any]] = {}
+        direct_failed: set[str] = set()
+        for start in range(0, len(rows), 100):
+            chunk = rows[start:start + 100]
+            if start:
+                await asyncio.sleep(0.35)
+            try:
+                response = await asyncio.to_thread(
+                    _vk_request,
+                    "wall.getById",
+                    token,
+                    posts=",".join(f"-{group}_{row['stored_post_id']}" for row in chunk),
+                )
+                items = response if isinstance(response, list) else response.get("items", [])
+                direct.update({int(item.get("id") or 0): item for item in items if isinstance(item, dict)})
+            except Exception:
+                direct_failed.update(str(row["candidate_id"]) for row in chunk)
+
+        selected: dict[str, tuple[dict[str, Any], str, float]] = {}
+        unresolved: list[dict[str, Any]] = []
+        for candidate in rows:
+            candidate_id = str(candidate["candidate_id"])
+            if candidate_id in direct_failed:
+                out.append(_resolution_row(candidate, observed_ts=int(time.time()), status="error", method="direct_error"))
+                continue
+            item = direct.get(int(candidate["stored_post_id"]))
+            score, confidence = _match_post(candidate, item) if item else (0, 0.0)
+            if item and score > 0:
+                selected[candidate_id] = (item, "direct", confidence)
+            else:
+                unresolved.append(candidate)
+
+        wall_items: list[dict[str, Any]] = []
+        wall_error = False
+        if unresolved:
+            try:
+                for offset in range(0, max(100, min(1000, int(wall_limit))), 100):
+                    if offset:
+                        await asyncio.sleep(0.35)
+                    response = await asyncio.to_thread(
+                        _vk_request, "wall.get", token,
+                        owner_id=f"-{group}", filter="owner", count=100, offset=offset,
+                    )
+                    chunk = response.get("items", []) if isinstance(response, dict) else []
+                    chunk = [item for item in chunk if isinstance(item, dict)]
+                    wall_items.extend(chunk)
+                    if len(chunk) < 100:
+                        break
+            except Exception:
+                wall_error = True
+        for candidate in unresolved:
+            if wall_error:
+                out.append(_resolution_row(candidate, observed_ts=int(time.time()), status="error", method="wall_scan_error"))
+                continue
+            best: tuple[int, int, float, dict[str, Any]] | None = None
+            for item in wall_items:
+                score, confidence = _match_post(candidate, item)
+                rank = (score, int(item.get("date") or 0))
+                if score > 0 and (best is None or rank > (best[0], best[1])):
+                    best = (score, rank[1], confidence, item)
+            if best:
+                selected[str(candidate["candidate_id"])] = (best[3], "wall_scan", best[2])
+            else:
+                out.append(_resolution_row(candidate, observed_ts=int(time.time()), status="missing", method="unmatched"))
+
+        claims: dict[int, list[str]] = {}
+        for candidate_id, (item, _method, _confidence) in selected.items():
+            claims.setdefault(int(item.get("id") or 0), []).append(candidate_id)
+        candidates_by_id = {str(row["candidate_id"]): row for row in rows}
+        for candidate_id, (item, method, confidence) in selected.items():
+            if len(claims.get(int(item.get("id") or 0), [])) > 1:
+                out.append(_resolution_row(candidates_by_id[candidate_id], observed_ts=int(time.time()), status="ambiguous", method="ambiguous"))
+            else:
+                out.append(_resolution_row(
+                    candidates_by_id[candidate_id], observed_ts=int(time.time()), status="published",
+                    item=item, method=method, confidence=confidence,
+                ))
+    return sorted(out, key=lambda row: str(row["candidate_id"]))
 
 
 def _vk_request(method: str, token: str, **params: Any) -> dict[str, Any]:
@@ -210,7 +375,9 @@ async def main() -> None:
         manifest = json.loads(_find("social_metrics_manifest.json").read_text())
         secrets = _decrypt()
         targets = list(manifest.get("targets") or [])
-        state.update({"phase": "run", "targets_total": len(targets), "progress_label": f"цели 0/{len(targets)}"})
+        candidates = list(manifest.get("vk_resolve_candidates") or [])
+        total_work = len(targets) + len(candidates)
+        state.update({"phase": "run", "targets_total": total_work, "progress_label": f"цели 0/{total_work}"})
         emit("preflight_ok", "preflight", "running")
         if status:
             status.start_alive(interval_seconds=60, progress_provider=lambda: dict(state))
@@ -228,13 +395,22 @@ async def main() -> None:
         observations = await _collect_vk(vk, secrets, progress)
         tg_observations = await _collect_tg(tg, secrets, lambda done, req, label: progress(len(observations) + done, req, label))
         observations.extend(tg_observations)
+        resolutions = await _resolve_vk(
+            candidates,
+            secrets,
+            int(manifest.get("vk_wall_scan_limit") or 1000),
+        )
         result = {
-            "schema_version": 1, "run_id": manifest["run_id"],
+            "schema_version": 2, "run_id": manifest["run_id"],
             "manifest_sha256": manifest["manifest_sha256"], "observations": observations,
-            "diagnostics": {"targets": len(targets), "observations": len(observations)},
+            "vk_resolutions": resolutions,
+            "diagnostics": {
+                "targets": len(targets), "observations": len(observations),
+                "resolve_candidates": len(candidates), "resolutions": len(resolutions),
+            },
         }
-        OUTPUT.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        state.update({"phase": "report", "targets_done": len(observations), "progress_percent": 100, "progress_label": f"цели {len(observations)}/{len(targets)}"})
+        OUTPUT.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+        state.update({"phase": "report", "targets_done": len(observations) + len(resolutions), "progress_percent": 100, "progress_label": f"цели {len(observations) + len(resolutions)}/{total_work}"})
         emit("report_written", "report", "done")
     except Exception as exc:
         state["phase"] = "failed"

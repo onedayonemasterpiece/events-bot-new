@@ -946,6 +946,7 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
     add(row["source_post_url"])
     add(row["source_vk_post_url"])
     add(row_get(row, "tg_event_post_url"))
+    add(row_get(row, "vk_repost_url"))
     try:
         for src in con.execute("select source_url from event_source where event_id=?", (event_id,)):
             add(src["source_url"])
@@ -989,6 +990,46 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
                     add(target_url)
     except sqlite3.OperationalError:
         pass
+    # The official VK wall also contains multi-event formats. Attribute only
+    # successful exact event repost exposures to this event; never fan out a
+    # digest/video/story counter across its participants.
+    try:
+        for exposure in con.execute(
+            """
+            select details_json, public_targets_json
+            from promo_exposure
+            where event_id=? and surface='vk_repost' and publish_status='PUBLISHED_MAIN'
+            """,
+            (event_id,),
+        ):
+            try:
+                details = json.loads(str(exposure["details_json"] or "{}"))
+            except (TypeError, ValueError):
+                details = {}
+            candidates = [str(details.get("target_url") or "")] if isinstance(details, dict) else []
+            declared_group = details.get("target_group_id") if isinstance(details, dict) else None
+            if declared_group not in (None, ""):
+                try:
+                    if abs(int(declared_group)) != 231828790:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+            try:
+                public_targets = json.loads(str(exposure["public_targets_json"] or "[]"))
+            except (TypeError, ValueError):
+                public_targets = []
+            candidates.extend(
+                str(target.get("url") or "")
+                for target in (public_targets if isinstance(public_targets, list) else [])
+                if isinstance(target, dict)
+            )
+            for target_url in candidates:
+                match = re.search(r"wall-?231828790_(\d+)", target_url, flags=re.I)
+                if match:
+                    add(f"https://vk.com/wall-231828790_{int(match.group(1))}")
+                    break
+    except sqlite3.OperationalError:
+        pass
     try:
         for forwarded in con.execute(
             """
@@ -1006,7 +1047,10 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
 
 
 def source_metrics(con: sqlite3.Connection, urls: list[str]) -> tuple[int, int, int, int]:
-    likes = views = shares = sources = 0
+    # Managed reposts are distribution of one event inside one owned audience,
+    # not independent sources. Keep the strongest counter per component for
+    # that family; truly external publishers still add independent reach.
+    families: dict[str, dict[str, int]] = {}
     for url in urls:
         best = None
         queries = [
@@ -1024,12 +1068,25 @@ def source_metrics(con: sqlite3.Connection, urls: list[str]) -> tuple[int, int, 
                 or int(metric["collected_ts"] or 0) > int(best["collected_ts"] or 0)
             ):
                 best = metric
-        if best:
-            sources += 1
-            likes += int(best["likes"] or 0)
-            views += int(best["views"] or 0)
-            shares += int(best["shares"] or 0)
-    return likes, views, shares, sources
+        if not best:
+            continue
+        lower_url = str(url or "").lower()
+        if re.search(r"t\.me/(?:kldevents|kenigevents)/\d+", lower_url) or re.search(
+            r"wall-?(?:231920894|231828790)_\d+", lower_url
+        ):
+            family = "owned:kenigevents"
+        else:
+            family = f"url:{lower_url}"
+        current = families.setdefault(family, {"likes": 0, "views": 0, "shares": 0})
+        current["likes"] = max(current["likes"], int(best["likes"] or 0))
+        current["views"] = max(current["views"], int(best["views"] or 0))
+        current["shares"] = max(current["shares"], int(best["shares"] or 0))
+    return (
+        sum(item["likes"] for item in families.values()),
+        sum(item["views"] for item in families.values()),
+        sum(item["shares"] for item in families.values()),
+        len(families),
+    )
 
 
 def popularity_signals(

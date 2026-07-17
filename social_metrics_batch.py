@@ -26,6 +26,7 @@ TERMINAL_STATUSES = {"collected", "not_found", "skipped_late"}
 OWN_TG_USERNAME = "kldevents"
 OWN_TG_AFISHA_USERNAME = "kenigevents"
 OWN_VK_TARGET = "klgdevents"
+OWN_VK_OFFICIAL_GROUP_ID = 231828790
 
 
 @dataclass(slots=True, frozen=True)
@@ -176,6 +177,41 @@ def _parse_vk_url(value: str | None) -> tuple[int, int] | None:
     if not match:
         return None
     return abs(int(match.group(1))), int(match.group(2))
+
+
+def _official_vk_group_id() -> int:
+    """Dedicated metrics identity; do not reuse the overloaded VK_AFISHA_GROUP_ID."""
+    return abs(_env_int("SOCIAL_METRICS_VK_OFFICIAL_GROUP_ID", OWN_VK_OFFICIAL_GROUP_ID))
+
+
+def _official_vk_exposure_url(
+    details_json: Any,
+    public_targets_json: Any,
+    *,
+    group_id: int,
+) -> str | None:
+    """Return only an exact single-event wall target for our official group."""
+    details = _json_object(details_json)
+    declared_group = details.get("target_group_id")
+    if declared_group not in (None, ""):
+        try:
+            if abs(int(declared_group)) != abs(int(group_id)):
+                return None
+        except (TypeError, ValueError):
+            return None
+    candidates = [str(details.get("target_url") or "")]
+    try:
+        public_targets = json.loads(str(public_targets_json or "[]"))
+    except (TypeError, ValueError):
+        public_targets = []
+    for target in public_targets if isinstance(public_targets, list) else []:
+        if isinstance(target, Mapping):
+            candidates.append(str(target.get("url") or ""))
+    for candidate in candidates:
+        parsed = _parse_vk_url(candidate)
+        if parsed and parsed[0] == abs(int(group_id)):
+            return f"https://vk.com/wall-{abs(int(group_id))}_{parsed[1]}"
+    return None
 
 
 def _parse_tg_url(value: str | None) -> tuple[str, int] | None:
@@ -464,6 +500,79 @@ async def load_social_post_targets(
                     post_ts=int(post_ts) if isinstance(post_ts, int) else None,
                     owned=True,
                     publication_kind="event_announcement",
+                )
+            )
+
+        # The second managed VK community mixes exact event reposts with daily
+        # digests, videos and stories. Only durable single-event ledgers are
+        # eligible. A short rolling backfill lets an already published exact
+        # repost enter the bounded 90-day store without scanning the whole wall.
+        official_group_id = _official_vk_group_id()
+        cur = await conn.execute(
+            f"""
+            SELECT e.vk_repost_url
+            FROM event e
+            WHERE {active_sql}
+              AND e.vk_repost_url IS NOT NULL
+              AND TRIM(e.vk_repost_url)!=''
+            """,
+            active_params,
+        )
+        for (url,) in await cur.fetchall():
+            parsed = _parse_vk_url(str(url or ""))
+            if not parsed or parsed[0] != official_group_id:
+                continue
+            targets.append(
+                SocialPostTarget(
+                    platform="vk",
+                    publisher_id=str(official_group_id),
+                    post_id=parsed[1],
+                    source_url=f"https://vk.com/wall-{official_group_id}_{parsed[1]}",
+                    owned=True,
+                    publication_kind="event_forward",
+                )
+            )
+
+        retention_days = max(
+            1,
+            _env_int(
+                "POST_METRICS_RETENTION_DAYS",
+                _env_int("POST_POPULARITY_HORIZON_DAYS", 90),
+            ),
+        )
+        exposure_cutoff = datetime.fromtimestamp(
+            now.timestamp() - retention_days * 86400,
+            tz=timezone.utc,
+        ).isoformat()
+        cur = await conn.execute(
+            f"""
+            SELECT pe.details_json, pe.public_targets_json, pe.published_at
+            FROM promo_exposure pe
+            JOIN event e ON e.id=pe.event_id
+            WHERE pe.surface='vk_repost'
+              AND pe.publish_status='PUBLISHED_MAIN'
+              AND (({active_sql}) OR pe.published_at >= ?)
+            """,
+            (*active_params, exposure_cutoff),
+        )
+        for details_json, public_targets_json, published_at in await cur.fetchall():
+            url = _official_vk_exposure_url(
+                details_json,
+                public_targets_json,
+                group_id=official_group_id,
+            )
+            parsed = _parse_vk_url(url)
+            if not parsed:
+                continue
+            targets.append(
+                SocialPostTarget(
+                    platform="vk",
+                    publisher_id=str(official_group_id),
+                    post_id=parsed[1],
+                    source_url=str(url),
+                    post_ts=_published_at_ts(published_at),
+                    owned=True,
+                    publication_kind="event_forward",
                 )
             )
 
@@ -990,6 +1099,60 @@ def _target_manifest_row(target: SocialPostTarget) -> dict[str, Any]:
     }
 
 
+async def load_owned_vk_resolution_candidates(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Build a DB-only postponed->live plan; provider reads happen on Kaggle."""
+    now = now_utc or datetime.now(timezone.utc)
+    today = now.astimezone(ZoneInfo("Europe/Kaliningrad")).date().isoformat()
+    active_sql, active_params = _active_event_sql(today)
+    group_id = abs(_env_int("VK_EVENTS_GROUP_ID", 231920894))
+    cooldown = max(1, _env_int("SOCIAL_METRICS_VK_RESOLVE_COOLDOWN_HOURS", 6)) * 3600
+    cutoff = datetime.fromtimestamp(now.timestamp() - cooldown, tz=timezone.utc).isoformat()
+    limit = max(1, min(500, _env_int("SOCIAL_METRICS_VK_RESOLVE_MAX_CANDIDATES", 500)))
+    out: list[dict[str, Any]] = []
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            f"""
+            SELECT e.id, e.title, e.date, e.time, e.location_name,
+                   e.source_vk_post_url, p.status, p.resolved_at
+            FROM event e
+            LEFT JOIN event_publication p
+              ON p.event_id=e.id AND p.platform='vk' AND p.target=?
+            WHERE {active_sql}
+              AND e.source_vk_post_url IS NOT NULL
+              AND TRIM(e.source_vk_post_url)!=''
+              AND (p.live_post_id IS NULL OR p.status!='published')
+              AND (p.resolved_at IS NULL OR p.status NOT IN ('missing','ambiguous','error') OR p.resolved_at <= ?)
+            ORDER BY COALESCE(p.resolved_at, ''), e.id
+            LIMIT ?
+            """,
+            (OWN_VK_TARGET, *active_params, cutoff, limit),
+        )
+        for row in await cur.fetchall():
+            parsed = _parse_vk_url(str(row[5] or ""))
+            if not parsed or parsed[0] != group_id:
+                continue
+            event_id = int(row[0])
+            out.append(
+                {
+                    "candidate_id": f"vkresolve:{OWN_VK_TARGET}:{event_id}",
+                    "event_id": event_id,
+                    "target": OWN_VK_TARGET,
+                    "publisher_id": str(group_id),
+                    "stored_post_id": int(parsed[1]),
+                    "stored_url": str(row[5] or ""),
+                    "title": str(row[1] or ""),
+                    "date": str(row[2] or ""),
+                    "time": str(row[3] or ""),
+                    "location_name": str(row[4] or ""),
+                }
+            )
+    return out
+
+
 def _manifest_digest(payload: Mapping[str, Any]) -> str:
     unsigned = dict(payload)
     unsigned.pop("manifest_sha256", None)
@@ -1019,11 +1182,14 @@ async def build_social_metrics_manifest(
         if bucket or target.post_ts is None:
             rows.append(_target_manifest_row(target))
     rows.sort(key=lambda row: (row["platform"], row["publisher_id"], row["post_id"]))
+    candidates = await load_owned_vk_resolution_candidates(db, now_utc=now)
     payload: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "generated_at": now.isoformat(),
         "targets": rows,
+        "vk_resolve_candidates": candidates,
+        "vk_wall_scan_limit": max(100, min(1000, _env_int("SOCIAL_METRICS_VK_WALL_SCAN_LIMIT", 1000))),
     }
     payload["manifest_sha256"] = _manifest_digest(payload)
     return payload
@@ -1052,6 +1218,152 @@ def _validated_metric(value: Any, name: str) -> int | None:
     return value
 
 
+def _validated_vk_resolutions(
+    manifest: Mapping[str, Any],
+    result: Mapping[str, Any],
+) -> tuple[list[tuple[Any, ...]], list[tuple[SocialPostTarget, int, MetricPayload]], dict[str, int]]:
+    import poll_to_forward_popularity as pfp
+
+    candidate_rows = list(manifest.get("vk_resolve_candidates") or [])
+    candidates = {str(row.get("candidate_id") or ""): row for row in candidate_rows if isinstance(row, Mapping)}
+    if len(candidates) != len(candidate_rows) or "" in candidates:
+        raise ValueError("duplicate or invalid VK resolution candidate")
+    result_rows = list(result.get("vk_resolutions") or [])
+    seen: set[str] = set()
+    claimed: set[tuple[str, int]] = set()
+    publications: list[tuple[Any, ...]] = []
+    metrics: list[tuple[SocialPostTarget, int, MetricPayload]] = []
+    counts = {"published": 0, "missing": 0, "ambiguous": 0, "error": 0}
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    for row in result_rows:
+        if not isinstance(row, Mapping):
+            raise ValueError("invalid VK resolution")
+        candidate_id = str(row.get("candidate_id") or "")
+        if candidate_id not in candidates or candidate_id in seen:
+            raise ValueError("unknown or duplicate VK resolution")
+        seen.add(candidate_id)
+        candidate = candidates[candidate_id]
+        status = str(row.get("status") or "")
+        method = str(row.get("match_method") or "")
+        allowed_methods = {
+            "published": {"direct", "wall_scan"},
+            "missing": {"unmatched"},
+            "ambiguous": {"ambiguous"},
+            "error": {"direct_error", "wall_scan_error"},
+        }
+        if status not in allowed_methods or method not in allowed_methods[status]:
+            raise ValueError("invalid VK resolution status/method")
+        observed_ts = row.get("observed_ts")
+        if not isinstance(observed_ts, int) or observed_ts <= 0 or observed_ts > now_ts + 900:
+            raise ValueError("invalid VK resolution observed_ts")
+        publisher_id = str(candidate.get("publisher_id") or "")
+        event_id = int(candidate.get("event_id") or 0)
+        stored_post_id = int(candidate.get("stored_post_id") or 0)
+        if event_id <= 0 or stored_post_id <= 0 or publisher_id != str(abs(_env_int("VK_EVENTS_GROUP_ID", 231920894))):
+            raise ValueError("invalid VK resolution candidate identity")
+        live_post_id: int | None = None
+        live_url: str | None = None
+        confidence = 0.0
+        if status == "published":
+            live_post_id = row.get("live_post_id") if isinstance(row.get("live_post_id"), int) else None
+            post_ts = row.get("post_ts")
+            evidence_text = row.get("evidence_text")
+            confidence_raw = row.get("match_confidence")
+            if (
+                not live_post_id or live_post_id <= 0
+                or not isinstance(post_ts, int) or post_ts <= 0 or post_ts > observed_ts + 900
+                or not isinstance(evidence_text, str) or len(evidence_text) > 16384
+                or not isinstance(confidence_raw, (int, float)) or isinstance(confidence_raw, bool)
+            ):
+                raise ValueError("invalid published VK resolution")
+            try:
+                target_date = date.fromisoformat(str(candidate.get("date") or "")[:10])
+            except ValueError as exc:
+                raise ValueError("invalid VK candidate date") from exc
+            event = type("EventMatch", (), dict(candidate))()
+            score, canonical_confidence = pfp._match_post_score(
+                event,
+                {"id": live_post_id, "date": post_ts, "text": evidence_text},
+                target_date,
+            )
+            confidence = float(confidence_raw)
+            if score <= 0 or not 0.0 <= confidence <= 1.0 or abs(confidence - canonical_confidence) > 0.001:
+                raise ValueError("VK resolution evidence mismatch")
+            claim = (publisher_id, live_post_id)
+            if claim in claimed:
+                raise ValueError("duplicate VK live post assignment")
+            claimed.add(claim)
+            live_url = f"https://vk.com/wall-{publisher_id}_{live_post_id}"
+            payload = MetricPayload(
+                post_id=live_post_id,
+                post_ts=post_ts,
+                views=_validated_metric(row.get("views"), "views"),
+                likes=_validated_metric(row.get("likes"), "likes"),
+                comments=_validated_metric(row.get("comments"), "comments"),
+                shares=_validated_metric(row.get("shares"), "shares"),
+            )
+            metrics.append((
+                SocialPostTarget(
+                    platform="vk",
+                    publisher_id=publisher_id,
+                    post_id=live_post_id,
+                    source_url=live_url,
+                    post_ts=post_ts,
+                    owned=True,
+                    publication_kind="event_announcement",
+                ),
+                observed_ts,
+                payload,
+            ))
+        counts[status] += 1
+        publications.append((
+            event_id,
+            "vk",
+            str(candidate.get("target") or OWN_VK_TARGET),
+            str(candidate.get("stored_url") or ""),
+            live_url,
+            stored_post_id,
+            live_post_id,
+            method,
+            confidence,
+            status,
+            datetime.fromtimestamp(observed_ts, tz=timezone.utc).isoformat(),
+        ))
+    if seen != set(candidates):
+        raise ValueError("incomplete VK resolution coverage")
+    return publications, metrics, counts
+
+
+async def _write_event_publications(db: Database, rows: Sequence[tuple[Any, ...]]) -> None:
+    if not rows:
+        return
+    async with db.raw_conn() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            await conn.executemany(
+                """
+                INSERT INTO event_publication(
+                    event_id, platform, target, stored_url, live_url, stored_post_id,
+                    live_post_id, match_method, match_confidence, status, resolved_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(event_id, platform, target) DO UPDATE SET
+                    stored_url=excluded.stored_url,
+                    live_url=excluded.live_url,
+                    stored_post_id=excluded.stored_post_id,
+                    live_post_id=excluded.live_post_id,
+                    match_method=excluded.match_method,
+                    match_confidence=excluded.match_confidence,
+                    status=excluded.status,
+                    resolved_at=excluded.resolved_at
+                """,
+                rows,
+            )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+
+
 async def import_social_metrics_result(
     db: Database,
     *,
@@ -1059,7 +1371,7 @@ async def import_social_metrics_result(
     result: Mapping[str, Any],
 ) -> dict[str, int]:
     """Validate a Kaggle result completely before applying provider observations."""
-    if int(result.get("schema_version") or 0) != 1:
+    if int(result.get("schema_version") or 0) != 2 or int(manifest.get("schema_version") or 0) != 2:
         raise ValueError("unsupported result schema")
     if result.get("run_id") != manifest.get("run_id"):
         raise ValueError("result run_id mismatch")
@@ -1110,6 +1422,10 @@ async def import_social_metrics_result(
             )
         validated.append((target_by_id[target_id], observed_ts, status, payload, str(row.get("error_code") or "") or None))
 
+    if seen != set(target_by_id):
+        raise ValueError("incomplete observation coverage")
+    publication_rows, resolution_metrics, resolution_counts = _validated_vk_resolutions(manifest, result)
+
     terminal_map = await _load_terminal_buckets(db)
     writes: list[SnapshotWrite] = []
     counts = {"collected": 0, "not_found": 0, "error": 0, "skipped_late": 0}
@@ -1131,7 +1447,23 @@ async def import_social_metrics_result(
         else:
             writes.append(SnapshotWrite(target=target, age_bucket=bucket, collected_ts=observed_ts, status=status, error_code=error_code))
         counts[status] += 1
+    for target, observed_ts, payload in resolution_metrics:
+        terminal = terminal_map.get(target.key, set())
+        bucket, skipped = _due_plan(
+            post_ts=payload.post_ts,
+            now_ts=observed_ts,
+            terminal_buckets=terminal,
+        )
+        for name in skipped:
+            writes.append(SnapshotWrite(target=target, age_bucket=name, collected_ts=observed_ts, status="skipped_late"))
+            counts["skipped_late"] += 1
+        if bucket:
+            writes.append(SnapshotWrite(target=target, age_bucket=bucket, collected_ts=observed_ts, payload=payload))
+            counts["collected"] += 1
+    await _write_event_publications(db, publication_rows)
     await _write_snapshot_chunk(db, writes)
+    if manifest.get("vk_resolve_candidates"):
+        counts.update({f"resolved_{key}": value for key, value in resolution_counts.items()})
     return counts
 
 

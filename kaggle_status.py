@@ -439,6 +439,7 @@ async def create_kaggle_run_config(
     dataset_ref: str | None = None,
     callback_url: str | None = None,
     resource_leases: list[str] | None = None,
+    replace_existing: bool = True,
 ) -> dict[str, Any] | None:
     callback = callback_url or resolve_callback_url()
     if not callback:
@@ -447,41 +448,55 @@ async def create_kaggle_run_config(
     token = generate_callback_token()
     now = utc_now_iso()
     async with db.raw_conn() as conn:
-        await _expire_resource_leases(conn, now=now)
-        await conn.execute(
-            """
-            INSERT INTO kaggle_run_ledger(
-                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
-                status, phase, token_hash, progress_json, created_at, updated_at
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            await _expire_resource_leases(conn, now=now)
+            if not replace_existing:
+                cur = await conn.execute(
+                    "SELECT 1 FROM kaggle_run_ledger WHERE run_id=?",
+                    (run_id,),
+                )
+                if await cur.fetchone():
+                    await conn.commit()
+                    logger.info("kaggle_status: run already claimed run_id=%s", run_id)
+                    return None
+            await conn.execute(
+                """
+                INSERT INTO kaggle_run_ledger(
+                    run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                    status, phase, token_hash, progress_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'created', 'created', ?, '{}', ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    session_id=excluded.session_id,
+                    kind=excluded.kind,
+                    notebook=excluded.notebook,
+                    kernel_ref=COALESCE(excluded.kernel_ref, kaggle_run_ledger.kernel_ref),
+                    dataset_ref=COALESCE(excluded.dataset_ref, kaggle_run_ledger.dataset_ref),
+                    token_hash=excluded.token_hash,
+                    status='created',
+                    phase='created',
+                    progress_json='{}',
+                    updated_at=excluded.updated_at,
+                    terminal_at=NULL,
+                    error=NULL
+                """,
+                (
+                    run_id,
+                    session_id,
+                    kind,
+                    notebook,
+                    kernel_ref,
+                    dataset_ref,
+                    hash_token(token),
+                    now,
+                    now,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, 'created', 'created', ?, '{}', ?, ?)
-            ON CONFLICT(run_id) DO UPDATE SET
-                session_id=excluded.session_id,
-                kind=excluded.kind,
-                notebook=excluded.notebook,
-                kernel_ref=COALESCE(excluded.kernel_ref, kaggle_run_ledger.kernel_ref),
-                dataset_ref=COALESCE(excluded.dataset_ref, kaggle_run_ledger.dataset_ref),
-                token_hash=excluded.token_hash,
-                status='created',
-                phase='created',
-                progress_json='{}',
-                updated_at=excluded.updated_at,
-                terminal_at=NULL,
-                error=NULL
-            """,
-            (
-                run_id,
-                session_id,
-                kind,
-                notebook,
-                kernel_ref,
-                dataset_ref,
-                hash_token(token),
-                now,
-                now,
-            ),
-        )
-        await conn.commit()
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
     return {
         "run_id": run_id,
         "session_id": session_id,

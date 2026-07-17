@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Changed
+- **Popular feed / all owned channels and compact VK resolution**: connected the
+  exact single-event repost ledger for the second managed VK community
+  `231828790`, moved postponed-to-live VK resolution into the existing Kaggle
+  batch with Fly-side evidence revalidation, added atomic per-slot dispatch and
+  exact result coverage, cleaned temporary datasets on failed launches, and
+  collapsed all four managed TG/VK surfaces into one max-based owned family so
+  internal reposts improve but never double-count ranking; storage remains four
+  age buckets per post under the rolling metrics retention.
 - **Popular feed / thin-bot collection boundary**: moved scheduled Telegram and
   VK metric API reads into one private Kaggle CPU batch with exact-ID manifests,
   split encrypted secrets, human-like sequential Telegram pacing, status/resource

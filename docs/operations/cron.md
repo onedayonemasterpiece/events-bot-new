@@ -66,7 +66,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR`. Kaggle reader использует bounded human-like
   jitter, последовательные channel batches и не обращается к E2E/S22 sessions.
   Job не создаёт расписание на каждый пост и после простоя сам подбирает свежую
-  допустимую точку `1h|6h|24h|72h`. Каноника данных и флагов:
+  допустимую точку `1h|6h|24h|72h`; postponed→live VK resolution также идёт
+  пакетно в том же Kaggle run, а атомарный slot claim не допускает второй push.
+  Каноника данных и флагов:
   `docs/features/post-metrics/README.md`.
 
 - **Postbox transactional outbox worker** – every

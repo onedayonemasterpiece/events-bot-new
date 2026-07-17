@@ -86,7 +86,8 @@ def _launch_sync(
     username: str,
     secret_payload: dict[str, str],
     timeout_seconds: int,
-) -> tuple[dict[str, Any], list[str]]:
+    refs: list[str],
+) -> dict[str, Any]:
     from cryptography.fernet import Fernet
     from scripts.run_static_site_builder_kaggle import (
         create_input_dataset,
@@ -97,7 +98,6 @@ def _launch_sync(
 
     client = KaggleClient()
     suffix = f"{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid.uuid4().hex[:8]}"
-    refs: list[str] = []
     with tempfile.TemporaryDirectory(prefix="social-metrics-kaggle-") as tmp:
         root = Path(tmp)
         manifest_dir = root / "manifest"
@@ -112,7 +112,7 @@ def _launch_sync(
         cipher_ref = f"{username}/social-metrics-cipher-{suffix}"
         key_ref = f"{username}/social-metrics-key-{suffix}"
         (manifest_dir / "social_metrics_manifest.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8"
         )
         _dataset_metadata(manifest_dir, manifest_ref, f"Social metrics input {suffix}")
 
@@ -128,8 +128,8 @@ def _launch_sync(
             (cipher_dir, cipher_ref, ["secrets.enc"]),
             (key_dir, key_ref, ["fernet.key"]),
         ):
-            create_input_dataset(client, path, ref)
             refs.append(ref)
+            create_input_dataset(client, path, ref)
             wait_dataset_ready(client, ref, expected_files=files)
 
         status_ref = create_kaggle_status_dataset(
@@ -170,7 +170,7 @@ def _launch_sync(
                         raise RuntimeError("Kaggle result artifact is missing")
                     result_path = matches[0]
                 result = json.loads(result_path.read_text(encoding="utf-8"))
-                return result, refs
+                return result
             if raw in {"ERROR", "FAILED", "CANCELLED"}:
                 raise RuntimeError(f"Kaggle social metrics failed: {last_status}")
         raise TimeoutError(f"Kaggle social metrics timeout: {last_status}")
@@ -196,13 +196,14 @@ async def run_social_metrics_kaggle_batch(db: Database) -> dict[str, Any]:
         return {"enabled": True, "skipped": "active_run", "run_id": active}
 
     slot = int(time.time()) // max(300, int(_first_env("SOCIAL_METRICS_BATCH_INTERVAL_MINUTES") or "30") * 60)
-    run_id = f"social-metrics:{slot}-{uuid.uuid4().hex[:8]}"
+    run_id = f"social-metrics:{slot}"
     manifest = await build_social_metrics_manifest(db, run_id=run_id)
     targets = list(manifest.get("targets") or [])
-    if not targets:
+    resolve_candidates = list(manifest.get("vk_resolve_candidates") or [])
+    if not targets and not resolve_candidates:
         return {"enabled": True, "run_id": run_id, "targets": 0, "empty": True}
     has_tg = any(row.get("platform") == "telegram" for row in targets)
-    has_vk = any(row.get("platform") == "vk" for row in targets)
+    has_vk = bool(resolve_candidates) or any(row.get("platform") == "vk" for row in targets)
     secrets = _secret_payload(has_tg, has_vk)
     username = _first_env("KAGGLE_USERNAME")
     callback = resolve_callback_url()
@@ -222,20 +223,24 @@ async def run_social_metrics_kaggle_batch(db: Database) -> dict[str, Any]:
             "job:social_metrics_batch",
             *(["telegram_session:telegram_auth_bundle_check_popular"] if has_tg else []),
         ],
+        replace_existing=False,
     )
     if not status_config:
-        raise RuntimeError("failed to create Kaggle status config")
+        return {"enabled": True, "skipped": "slot_claimed", "run_id": run_id}
 
     refs: list[str] = []
+    failure_phase = "server_launch_failed"
     try:
-        result, refs = await asyncio.to_thread(
+        result = await asyncio.to_thread(
             _launch_sync,
             manifest=manifest,
             status_config=status_config,
             username=username,
             secret_payload=secrets,
             timeout_seconds=max(600, int(_first_env("SOCIAL_METRICS_KAGGLE_TIMEOUT_SECONDS") or "1800")),
+            refs=refs,
         )
+        failure_phase = "import_failed"
         imported = await import_social_metrics_result(db, manifest=manifest, result=result)
         async with db.raw_conn() as conn:
             await conn.execute(
@@ -243,7 +248,26 @@ async def run_social_metrics_kaggle_batch(db: Database) -> dict[str, Any]:
                 (json.dumps({"targets": len(targets), "imported": imported}, ensure_ascii=False), datetime.now(timezone.utc).isoformat(), run_id),
             )
             await conn.commit()
-        return {"enabled": True, "run_id": run_id, "targets": len(targets), "imported": imported}
+        return {
+            "enabled": True,
+            "run_id": run_id,
+            "targets": len(targets),
+            "resolve_candidates": len(resolve_candidates),
+            "imported": imported,
+        }
+    except Exception as exc:
+        now = datetime.now(timezone.utc).isoformat()
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                UPDATE kaggle_run_ledger
+                SET status='error', phase=?, error=?, terminal_at=?, updated_at=?
+                WHERE run_id=?
+                """,
+                (failure_phase, f"{type(exc).__name__}: {exc}"[:1000], now, now, run_id),
+            )
+            await conn.commit()
+        raise
     finally:
         if refs:
             await asyncio.to_thread(_cleanup_sync, refs)
