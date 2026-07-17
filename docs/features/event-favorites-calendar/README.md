@@ -43,3 +43,26 @@ Supabase/Postgres owns favorite/follow state with RLS by user identity. Local an
 - [Static event pages](../static-site-pages/README.md)
 - [Transactional event email](../event-email-notifications/README.md)
 - [Email delivery](../../operations/email-delivery.md)
+
+## Implemented shared foundation (2026-07-17)
+
+`site_identity_saved_occurrence_v1` supplies a compact durable occurrence model and
+layout-neutral RPCs:
+
+- `personalization_save_occurrence_v1(event_id, occurrence_key, starts_at, saved)`
+  is idempotent under the unique profile/event/occurrence constraint; undo is a
+  soft removal and revokes an active reminder;
+- `personalization_saved_count_v1()` returns `count(distinct event_id)` for the
+  authenticated menu contract, including a real `N > 0` result;
+- `event_signal` stores `like` and `not_interested` separately from calendar save;
+- lifecycle is `upcoming | rescheduled | cancelled | completed`; only a service
+  sync from canonical Fly event facts may change it;
+- the browser controller exposes `saveOccurrence`, `refreshSavedCount`, `setLike`
+  and `setReminder` for parallel UI work.
+
+ICS remains a static, Supabase-independent fallback. `site/src/lib/ics.ts` now emits
+an occurrence UID, `X-KENIGEVENTS-OCCURRENCE-ID`, lifecycle `STATUS`, `TRANSP` and
+`LAST-MODIFIED`; no failed dynamic save may suppress the `.ics` link/download.
+
+The schema stores identifiers, occurrence time and state only. It intentionally does
+not duplicate event title, description, poster, venue or ticket facts from Fly.

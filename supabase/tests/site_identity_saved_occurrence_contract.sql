@@ -7,6 +7,7 @@ declare
   v_user uuid:=extensions.gen_random_uuid();
   v_other uuid:=extensions.gen_random_uuid();
   v_device uuid:=extensions.gen_random_uuid();
+  v_device_two uuid:=extensions.gen_random_uuid();
   v_request uuid:=extensions.gen_random_uuid();
   v_hmac text:=repeat('h',43);
   v_merge record;
@@ -49,6 +50,14 @@ begin
     raise exception 'merge duplicated profile or save';
   end if;
 
+  perform public.personalization_materialize_device_v1(v_device_two,repeat('b',64),'personalization-v1',
+   '[{"event_id":101,"occurrence_key":"101@2026-08-20T16:00:00Z","saved":true}]'::jsonb);
+  perform public.personalization_merge_device_v1(v_user,v_device_two,repeat('b',64),'personalization-v1',extensions.gen_random_uuid());
+  if (select count(*) from site_identity.profile where user_id=v_user)<>1
+     or (select count(*) from saved_events.saved_occurrence where event_id=101)<>1 then
+    raise exception 'cross-device merge duplicated profile or save';
+  end if;
+
   begin
     perform public.personalization_merge_device_v1(v_other,v_device,repeat('a',64),'personalization-v1',extensions.gen_random_uuid());
   exception when unique_violation then v_conflict:=true; end;
@@ -63,13 +72,18 @@ begin
 
   select * into v_reminder from public.personalization_set_reminder_v1(101,'101@2026-08-20T16:00:00Z',true,'reminder-v1',extensions.gen_random_uuid());
   if v_reminder.state<>'active' or v_reminder.masked_email<>'s***@example.test' then raise exception 'reminder consent/mask failed'; end if;
+  if (select count(*) from saved_events.reminder_consent_event)<>1 then raise exception 'reminder consent evidence missing'; end if;
+  if saved_events.schedule_d1_v1('2026-07-19 00:00:00+00','2026-07-17 18:00:00+00')<>'2026-07-18 06:00:00+00' then raise exception 'quiet-hours schedule failed'; end if;
+  if saved_events.schedule_d1_v1('2026-07-17 15:00:00+00','2026-07-17 12:00:00+00')<>'2026-07-17 12:00:00+00' then raise exception 'catch-up schedule failed'; end if;
   update saved_events.reminder_subscription set scheduled_for=now()-interval '1 minute';
   v_count:=public.personalization_enqueue_due_reminders_v1(10,true);
   if v_count<>1 or public.personalization_enqueue_due_reminders_v1(10,true)<>0 then raise exception 'D-1 exactly-once enqueue failed'; end if;
   if (select count(*) from saved_events.reminder_delivery where kind='event_reminder_24h')<>1 then raise exception 'duplicate D-1 delivery guard failed'; end if;
+  if exists(select 1 from email_control.email_outbox where kind='event_reminder_24h' and (payload_json->>'subject' is null or payload_json->>'text' is null or payload_json ? 'event_id')) then raise exception 'Postbox payload schema invalid'; end if;
 
   perform public.personalization_apply_occurrence_lifecycle_v1(101,'101@2026-08-20T16:00:00Z','cancelled','2026-08-20T16:00:00Z');
   if (select state from saved_events.reminder_subscription limit 1)<>'cancelled' then raise exception 'cancellation did not stop reminder'; end if;
+  if (select count(*) from saved_events.reminder_delivery where kind='event_cancelled')<>1 then raise exception 'cancellation lifecycle mail missing'; end if;
   select * into v_save from public.personalization_save_occurrence_v1(101,'101@2026-08-20T16:00:00Z',null,false);
   if v_save.unique_saved_event_count<>0 or public.personalization_saved_count_v1()<>0 then raise exception 'undo failed'; end if;
 end;

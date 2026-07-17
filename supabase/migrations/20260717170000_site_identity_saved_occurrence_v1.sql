@@ -129,6 +129,17 @@ create table saved_events.reminder_subscription (
 create index reminder_due_idx on saved_events.reminder_subscription(scheduled_for,id)
   where state='active' and reminder_sent_at is null;
 
+create table saved_events.reminder_consent_event (
+  request_id uuid primary key,
+  reminder_subscription_id uuid not null references saved_events.reminder_subscription(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  previous_state text,
+  new_state text not null check (new_state in ('active','revoked')),
+  terms_version text not null,
+  occurred_at timestamptz not null default now(),
+  constraint reminder_consent_terms_size_chk check (length(terms_version) between 1 and 80)
+);
+
 create table saved_events.reminder_delivery (
   id uuid primary key default extensions.gen_random_uuid(),
   reminder_subscription_id uuid not null references saved_events.reminder_subscription(id) on delete cascade,
@@ -149,6 +160,7 @@ alter table saved_events.anonymous_saved_occurrence enable row level security;
 alter table saved_events.saved_occurrence enable row level security;
 alter table saved_events.event_signal enable row level security;
 alter table saved_events.reminder_subscription enable row level security;
+alter table saved_events.reminder_consent_event enable row level security;
 alter table saved_events.reminder_delivery enable row level security;
 
 revoke all on all tables in schema site_identity, saved_events from public, anon, authenticated, service_role;
@@ -236,7 +248,7 @@ create or replace function public.personalization_set_reminder_v1(
  p_event_id bigint,p_occurrence_key text,p_enabled boolean,p_terms_version text,p_request_id uuid
 ) returns table(state text,scheduled_for timestamptz,masked_email text)
 language plpgsql security definer set search_path='' as $$
-declare v_user uuid:=(select auth.uid()); v_saved saved_events.saved_occurrence%rowtype; v_email text; v_state text; v_when timestamptz;
+declare v_user uuid:=(select auth.uid()); v_saved saved_events.saved_occurrence%rowtype; v_email text; v_state text; v_previous text; v_when timestamptz; v_subscription uuid;
 begin
  if v_user is null then raise exception 'authenticated user required' using errcode='28000'; end if;
  if p_request_id is null or length(trim(coalesce(p_terms_version,''))) not between 1 and 80 then raise exception 'consent evidence required' using errcode='22023'; end if;
@@ -249,11 +261,17 @@ begin
    raise exception 'transactional consent required' using errcode='28000'; end if;
  v_when:=case when p_enabled then saved_events.schedule_d1_v1(v_saved.occurrence_starts_at,now()) else null end;
  v_state:=case when p_enabled then 'active' else 'revoked' end;
+ select r.state into v_previous from saved_events.reminder_subscription r where r.saved_occurrence_id=v_saved.id;
+ if exists(select 1 from saved_events.reminder_consent_event e where e.request_id=p_request_id and (e.user_id<>v_user or e.new_state<>v_state or e.terms_version<>trim(p_terms_version))) then
+  raise exception 'consent request replay conflict' using errcode='23505';
+ end if;
  insert into saved_events.reminder_subscription(saved_occurrence_id,user_id,state,terms_version,scheduled_for,revoked_at)
  values(v_saved.id,v_user,v_state,trim(p_terms_version),v_when,case when p_enabled then null else now() end)
  on conflict(saved_occurrence_id) do update set state=excluded.state,terms_version=excluded.terms_version,
  scheduled_for=excluded.scheduled_for,revoked_at=excluded.revoked_at,updated_at=now()
- returning reminder_subscription.state,reminder_subscription.scheduled_for into v_state,v_when;
+ returning reminder_subscription.id,reminder_subscription.state,reminder_subscription.scheduled_for into v_subscription,v_state,v_when;
+ insert into saved_events.reminder_consent_event(request_id,reminder_subscription_id,user_id,previous_state,new_state,terms_version)
+ values(p_request_id,v_subscription,v_user,v_previous,v_state,trim(p_terms_version)) on conflict(request_id) do nothing;
  return query select v_state,v_when,case when v_email is null then null else left(v_email,1)||'***@'||split_part(v_email,'@',2) end;
 end; $$;
 
@@ -333,7 +351,7 @@ end; $$;
 create or replace function public.personalization_apply_occurrence_lifecycle_v1(
  p_event_id bigint,p_occurrence_key text,p_lifecycle_status text,p_occurrence_starts_at timestamptz
 ) returns integer language plpgsql security definer set search_path='' as $$
-declare v_changed integer;
+declare v_changed integer; v_row record; v_kind text; v_key text; v_payload jsonb; v_hash text; v_outbox uuid;
 begin
  if p_lifecycle_status not in ('upcoming','rescheduled','cancelled','completed') then raise exception 'invalid lifecycle' using errcode='22023'; end if;
  update saved_events.saved_occurrence s set lifecycle_status=p_lifecycle_status,
@@ -348,6 +366,28 @@ begin
  scheduled_for=case when p_lifecycle_status in ('cancelled','completed') then null when r.reminder_sent_at is null then saved_events.schedule_d1_v1(p_occurrence_starts_at,now()) else r.scheduled_for end,
  updated_at=now()
  from saved_events.saved_occurrence s where r.saved_occurrence_id=s.id and s.event_id=p_event_id and s.occurrence_key=trim(p_occurrence_key);
+
+ if p_lifecycle_status in ('rescheduled','cancelled') then
+  v_kind:=case when p_lifecycle_status='cancelled' then 'event_cancelled' else 'event_rescheduled' end;
+  for v_row in
+   select r.id reminder_id,r.user_id,r.schedule_revision,s.id saved_id,s.lifecycle_revision
+   from saved_events.reminder_subscription r join saved_events.saved_occurrence s on s.id=r.saved_occurrence_id
+   where s.event_id=p_event_id and s.occurrence_key=trim(p_occurrence_key)
+  loop
+   v_key:='lifecycle:'||v_row.saved_id::text||':'||v_kind||':'||v_row.lifecycle_revision::text;
+   v_payload:=jsonb_build_object(
+    'subject',case when v_kind='event_cancelled' then 'Сохранённое событие отменено' else 'Сохранённое событие изменилось' end,
+    'text',format('Статус события №%s изменён: %s. Проверьте актуальные сведения на KenigEvents.',p_event_id,p_lifecycle_status)
+   );
+   v_hash:=encode(extensions.digest(v_payload::text,'sha256'),'hex');
+   begin
+    v_outbox:=public.email_enqueue_transactional_v1(v_row.user_id,v_kind,p_event_id,v_key,'transactional-plain-v1',v_payload,v_hash,true);
+    insert into saved_events.reminder_delivery(reminder_subscription_id,kind,schedule_revision,outbox_id,idempotency_key)
+    values(v_row.reminder_id,v_kind,v_row.lifecycle_revision,v_outbox,v_key) on conflict do nothing;
+   exception when sqlstate '28000' then null;
+   end;
+  end loop;
+ end if;
  return v_changed;
 end; $$;
 
@@ -365,7 +405,10 @@ begin
   order by r.scheduled_for for update of r skip locked limit p_limit
  loop
   v_key:='d1:'||v_row.saved_id::text||':'||v_row.schedule_revision::text;
-  v_payload:=jsonb_build_object('event_id',v_row.event_id,'occurrence_key',v_row.occurrence_key,'occurrence_starts_at',v_row.occurrence_starts_at,'reminder','D-1');
+  v_payload:=jsonb_build_object(
+    'subject','Напоминание о сохранённом событии',
+    'text',format('Событие №%s, сохранённое вами, начнётся %s. Проверьте актуальные дату, время и место на KenigEvents.',v_row.event_id,coalesce(v_row.occurrence_starts_at::text,'в указанную дату'))
+  );
   v_hash:=encode(extensions.digest(v_payload::text,'sha256'),'hex');
   v_outbox:=public.email_enqueue_transactional_v1(v_row.user_id,'event_reminder_24h',v_row.event_id,v_key,'transactional-plain-v1',v_payload,v_hash,p_dry_run);
   insert into saved_events.reminder_delivery(reminder_subscription_id,kind,schedule_revision,outbox_id,idempotency_key)
@@ -373,6 +416,19 @@ begin
   if found then update saved_events.reminder_subscription set reminder_sent_at=now(),updated_at=now() where id=v_row.reminder_id; v_count:=v_count+1; end if;
  end loop;
  return v_count;
+end; $$;
+
+create or replace function public.personalization_retention_cleanup_v1(p_now timestamptz default now())
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare v_devices integer; v_saves integer; v_signals integer; v_delivery integer; v_audit integer; v_purge integer;
+begin
+ delete from site_identity.device where expires_at<p_now; get diagnostics v_devices=row_count;
+ delete from saved_events.saved_occurrence where removed_at<p_now-interval '30 days'; get diagnostics v_saves=row_count;
+ delete from saved_events.event_signal where not active and updated_at<p_now-interval '30 days'; get diagnostics v_signals=row_count;
+ delete from saved_events.reminder_delivery where created_at<p_now-interval '400 days'; get diagnostics v_delivery=row_count;
+ delete from site_identity.merge_audit where occurred_at<p_now-interval '400 days'; get diagnostics v_audit=row_count;
+ delete from site_identity.purge_request where status='complete' and completed_at<p_now-interval '90 days'; get diagnostics v_purge=row_count;
+ return jsonb_build_object('devices',v_devices,'removed_saves',v_saves,'inactive_signals',v_signals,'reminder_delivery',v_delivery,'merge_audit',v_audit,'purge_requests',v_purge);
 end; $$;
 
 revoke all on function public.personalization_save_occurrence_v1(bigint,text,timestamptz,boolean) from public,anon;
@@ -390,9 +446,11 @@ revoke all on function public.personalization_unlink_device_v1(uuid,uuid) from p
 revoke all on function public.personalization_mark_profile_deleting_v1(uuid) from public,anon,authenticated;
 revoke all on function public.personalization_apply_occurrence_lifecycle_v1(bigint,text,text,timestamptz) from public,anon,authenticated;
 revoke all on function public.personalization_enqueue_due_reminders_v1(integer,boolean) from public,anon,authenticated;
+revoke all on function public.personalization_retention_cleanup_v1(timestamptz) from public,anon,authenticated;
 grant execute on function public.personalization_materialize_device_v1(uuid,text,text,jsonb) to service_role;
 grant execute on function public.personalization_merge_device_v1(uuid,uuid,text,text,uuid) to service_role;
 grant execute on function public.personalization_unlink_device_v1(uuid,uuid) to service_role;
 grant execute on function public.personalization_mark_profile_deleting_v1(uuid) to service_role;
 grant execute on function public.personalization_apply_occurrence_lifecycle_v1(bigint,text,text,timestamptz) to service_role;
 grant execute on function public.personalization_enqueue_due_reminders_v1(integer,boolean) to service_role;
+grant execute on function public.personalization_retention_cleanup_v1(timestamptz) to service_role;

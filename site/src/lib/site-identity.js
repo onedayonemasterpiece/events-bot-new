@@ -64,6 +64,7 @@ export function createSiteIdentityController(options) {
   const emailTtlMs = options.emailTtlMs || 15 * 60_000;
   const emailCooldownMs = options.emailCooldownMs || 60_000;
   const maxEmailAttempts = options.maxEmailAttempts || 5;
+  const mergeConsent = options.getConsentVersion || (() => options.consentVersion || null);
   const listeners = new Set();
   let authSubscription = null;
   let channel = null;
@@ -111,9 +112,14 @@ export function createSiteIdentityController(options) {
     emit({ savedCount: count });
     return count;
   }
-  async function mergeAfterAuth(consentVersion, requestId = uuid(cryptoImpl)) {
+  async function mergeAfterAuth(consentVersion, requestId = null) {
     if (!apiUrl || !state.session?.access_token || !consentVersion) return { skipped: true };
     const current = device();
+    const requestKey = `${PREFIX}.merge_request.${state.user.id}`;
+    if (!requestId) {
+      requestId = read(storage, requestKey)?.id || uuid(cryptoImpl);
+      write(storage, requestKey, { id: requestId, created_at: clock() });
+    }
     const response = await fetchImpl(apiUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${state.session.access_token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -136,7 +142,11 @@ export function createSiteIdentityController(options) {
       savedCount: switched ? 0 : state.savedCount,
       error: null,
     });
-    if (user) setTimeout(() => { refreshSavedCount().catch(() => emit({ error: 'saved_count_unavailable' })); }, 0);
+    if (user) setTimeout(() => {
+      refreshSavedCount().catch(() => emit({ error: 'saved_count_unavailable' }));
+      const consent = mergeConsent();
+      if (consent) mergeAfterAuth(consent).catch((error) => emit({ status: 'authenticated', error: error?.code || 'merge_failed' }));
+    }, 0);
   }
 
   async function init() {

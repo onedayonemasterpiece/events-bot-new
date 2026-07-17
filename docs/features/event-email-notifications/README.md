@@ -46,3 +46,29 @@ does not authorize a client to supply event facts or enqueue arbitrary mail.
 ## Release gates
 
 See [email delivery operations](../../operations/email-delivery.md) and [favorites/calendar](../event-favorites-calendar/README.md).
+
+## Saved-event D-1 producer foundation (2026-07-17)
+
+The saved-occurrence migration adds explicit per-occurrence reminder consent. Save,
+like and reminder consent are independent. Enabling requires a synchronized verified
+`email_control.recipient_identity`, active `transactional_event` purpose consent and
+returns only a masked address.
+
+`saved_events.schedule_d1_v1` targets 24 hours before start, catches up when consent
+arrives inside that window, and shifts a due time out of 22:00–08:00
+`Europe/Kaliningrad` quiet hours. Completed/cancelled occurrences stop pending work;
+reschedule increments the schedule revision and recalculates a not-yet-sent reminder.
+A unique delivery/idempotency key plus `reminder_sent_at` guarantees one D-1 enqueue.
+Reschedule/cancellation are separate lifecycle messages, not a second D-1.
+
+`personalization_enqueue_due_reminders_v1` is service-only and writes strict
+`transactional-plain-v1` payloads through the existing
+`email_enqueue_transactional_v1` path. The existing Postbox worker therefore keeps
+all claim-time verified-email, consent, suppression, hard-bounce, complaint,
+unsubscribe, kill-switch and ambiguous-delivery protections. The migration defaults
+producer calls to dry-run; activation needs a scheduled service call and existing
+Postbox runtime switches.
+
+The generic foundation message intentionally contains only server-owned event id and
+occurrence timing. A later canonical Fly producer may enrich subject/body from a
+server-validated event snapshot; the browser must never provide mail facts.
