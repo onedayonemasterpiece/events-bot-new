@@ -70,6 +70,7 @@ Route:
 
 Final immutable review build:
 
+- [current manual 12-image review deck](https://kenigevents.ru/preview-20260717t1049-briefing-lab-38425f28/lab/briefing/?variant=c&review=media&scenario=media_review_planet_ocean&pace=slow&replay=1);
 - [current stripe/OCR/source-quality corrective candidate](https://kenigevents.ru/preview-20260717t0951-briefing-lab-21ca7a49/lab/briefing/?variant=c&scenario=weather_water_demo&pace=slow&replay=1);
 - [superseded: dramatic mosaic with opaque/overlapping stripe, low-resolution sources and insufficient OCR admission](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [superseded: rejected `12×4` checkerboard/distorted crop](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
@@ -233,6 +234,20 @@ none. Telegram topic `6`: scope/URL `#144`, desktop `#145–146`, mobile `#147`,
 WebM `#148`; receipts verified, post-send top message `148`, новых входящих
 комментариев после публикации не было. Это acceptance только isolated lab, не
 production homepage.
+
+Отдельный manual-review prefix
+`preview-20260717t1049-briefing-lab-38425f28` построен из implementation source
+`38425f28`. Он показывает 12 разных event objects и 12 разных exact-source
+photos через `review=media`; автоматический переход отключён, прямые `1–12`,
+`Назад`, `Повтор`, `Далее` остаются под hero. Isolated build/check прошёл
+allowlist из 6 файлов; полный Playwright regression прошёл `17/17`. Первый
+Gemini 3.1 Pro (High) gate честно вернул `OVERALL: FAIL` из-за контраста
+04/05/07 и обрезанных mobile 10–12; после alpha cap `.24` только у клеток,
+пересекающих line boxes, и двухстрочного mobile rail corrective gate вернул
+все критерии `PASS`, `PUBLISH FOR USER REVIEW: YES`, blockers none. Telegram
+topic `6`: URL `#159`, contact sheet `#160`, сложные desktop states `#161–163`,
+mobile `#164`, WebM `#165`; все receipts verified, post-send top message `165`,
+новых входящих комментариев после отправки не было. Production не изменён.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего

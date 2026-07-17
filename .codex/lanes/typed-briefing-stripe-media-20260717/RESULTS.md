@@ -14,3 +14,18 @@
 - Telegram topic 6: `#144–148`, all receipts verified; post-send top message `148`.
 
 The abandoned read-only reviewer lane produced no usable output and was superseded by the integrator's direct pixel/DOM/source audit. No production homepage files or routes were changed.
+
+## Manual reviewability follow-up
+
+- **Done.** Added an isolated `review=media` deck with 12 distinct event/image
+  pairs, direct 1–12/Previous/Replay/Next controls and no automatic skip.
+- **Done.** Exact curated source resolution is fail-closed; ordinary narrative
+  queue/cooldown and mobile text-only behavior are unchanged.
+- **Done.** Copy-intersecting cells cap at `.24` opacity without an opaque slab;
+  mobile 1–12 wraps completely.
+- Build/check: 6-file allowlist PASS; Playwright `17/17` PASS.
+- Gemini 3.1 Pro (High): first exact gate FAIL (contrast, mobile clipping),
+  corrective gate all PASS and publish-for-user-review YES.
+- Immutable lab: `preview-20260717t1049-briefing-lab-38425f28`.
+- Telegram topic 6: `#159–165`, all receipts verified; post-send top message
+  `165`, no new operator feedback.

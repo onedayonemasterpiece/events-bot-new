@@ -17,6 +17,7 @@ The implementation now treats readability, image quality and raster text as admi
 | Stripe/OCR/upscale pixel gate | PASS | Gemini 3.1 Pro (High), 2026-07-17 09:48:55–09:50:39 UTC |
 | Immutable publication | PASS | `preview-20260717t0951-briefing-lab-21ca7a49` |
 | Mobile handoff | PASS | Telegram topic 6, messages 144–148 |
+| Manual 12-image review deck | PASS after required FAIL/fix/review | `preview-20260717t1049-briefing-lab-38425f28`; Playwright 17/17; Telegram 159–165 |
 
 ## Closure audit
 
@@ -26,3 +27,7 @@ The implementation now treats readability, image quality and raster text as admi
 - R04 Done — explicit OCR-free/photo-only fail-closed admission.
 - Docs and `CHANGELOG.md` synchronized.
 - Prior dramatic-mosaic acceptance remains explicitly invalid/superseded.
+- The later reviewability follow-up does not inflate the ordinary queue: it is
+  a manual `review=media` sample with 12 direct states and no auto-skip. Its
+  first Gemini gate failed real contrast/mobile issues; only the corrected
+  pixels received the final all-PASS publish-for-user-review verdict.
