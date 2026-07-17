@@ -32,7 +32,7 @@ GitHub URL после первого push:
 
 - `docs/README.md` и `docs/routes.yml`;
 - `docs/features/linked-events/README.md`;
-- `docs/features/festivals/static-site-release.md`;
+- `docs/features/festivals/README.md`;
 - `docs/features/smart-event-update/README.md`;
 - `docs/features/kaggle-status-framework/README.md`;
 - `docs/llm/request-guide.md`;

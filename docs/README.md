@@ -33,6 +33,7 @@
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
   - post-release interest-club catalog and research prompt: `docs/backlog/features/interest-clubs/README.md`
+    - catalog audit 2026-07-17: `docs/reports/interest-clubs-catalog-audit-2026-07-17.md`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
 - Инструменты: `docs/tools/`
 

@@ -1,0 +1,522 @@
+{
+  "schema_version": "interest_clubs_review_fixture_v1",
+  "fixture_version": "2026-07-17.2",
+  "timezone": "Europe/Kaliningrad",
+  "discovery_cutoff_exclusive": "2026-06-01",
+  "future_cutoff_inclusive": "2026-07-17",
+  "purpose": "Minimal redacted/public-source review fixture; not independent or owner-approved benchmark gold, not a production dump or complete catalog.",
+  "clusters": [
+    {
+      "candidate_id": "game_vibes",
+      "normalized_name": "Game Vibes",
+      "verdict": "confirmed",
+      "confidence": "high",
+      "interest_category": "настольные игры",
+      "event_examples": [
+        {
+          "event_id": 2897,
+          "title": "Вавилон",
+          "date": "2026-03-14",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Сигнал, Леонова 22, Калининград",
+          "source_url": "https://t.me/signalkld/9929"
+        },
+        {
+          "event_id": 2915,
+          "title": "Большой киноквиз",
+          "date": "2026-03-13",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Сигнал, Леонова 22, Калининград",
+          "source_url": "https://t.me/signalkld/9935"
+        },
+        {
+          "event_id": 6835,
+          "title": "Гоблинское сражение",
+          "date": "2026-07-26",
+          "window": "future",
+          "city": "Калининград",
+          "venue": "Клуб настольных игр Газебо",
+          "source_url": "https://t.me/signalkld/11285"
+        },
+        {
+          "event_id": 6929,
+          "title": "Настольные игры",
+          "date": "2026-07-19",
+          "window": "future",
+          "city": "Калининград",
+          "venue": "Сигнал",
+          "source_url": "https://t.me/signalkld/11317"
+        }
+      ],
+      "confounders": [
+        "same-day programme rows inside ДВИ; venue Signal is not identity by itself"
+      ],
+      "rationale": "Публичное игровое сообщество объединяет Codenames, ДВИ, квизы, D&D и другие игры; одинаковый source alias связывает разные темы и площадки."
+    },
+    {
+      "candidate_id": "neural_researchers",
+      "normalized_name": "Клуб исследователей нейронок",
+      "verdict": "confirmed",
+      "confidence": "high",
+      "interest_category": "ИИ и нейросети",
+      "event_examples": [
+        {
+          "event_id": 2533,
+          "title": "🤖 Клуб Исследователей Нейронок: Создаём сайт с помощью ИИ",
+          "date": "2026-02-11",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Арт-пространство Сигнал",
+          "source_url": "https://vk.com/wall-211997788_2757"
+        },
+        {
+          "event_id": 2951,
+          "title": "Клуб «Исследователи нейронок»",
+          "date": "2026-03-11",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Сигнал, Леонова 22, Калининград",
+          "source_url": "https://t.me/signalkld/9939"
+        },
+        {
+          "event_id": 6662,
+          "title": "Клуб исследователей нейронок",
+          "date": "2026-07-04",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "встречу в субботу",
+          "source_url": "https://t.me/signalkld/11229"
+        }
+      ],
+      "confounders": [
+        "two canonical rows on 2026-03-11; 4049 has changed title but explicit continuation evidence"
+      ],
+      "rationale": "Одинаковая именованная identity и публичный source Сигнала связывают лаборатории/встречи с разными практическими темами."
+    },
+    {
+      "candidate_id": "technology_researchers",
+      "normalized_name": "Клуб исследователей технологий",
+      "verdict": "confirmed",
+      "confidence": "high",
+      "interest_category": "электроника и технологии",
+      "event_examples": [
+        {
+          "event_id": 3032,
+          "title": "Оживляем устройства! Мастер-класс по Arduino",
+          "date": "2026-03-14",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Сигнал, Леонова 22, Калининград",
+          "source_url": "https://t.me/signalkld/9975"
+        },
+        {
+          "event_id": 3516,
+          "title": "Клуб Исследователей Технологий: мастер-класс по пайке",
+          "date": "2026-04-01",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Сигнал, Леонова 22, Калининград",
+          "source_url": "https://t.me/signalkld/10236"
+        },
+        {
+          "event_id": 5806,
+          "title": "Клуб исследователей технологий",
+          "date": "2026-06-10",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "Сигнал",
+          "source_url": "https://t.me/signalkld/10945"
+        }
+      ],
+      "confounders": [
+        "same-day cross-source duplicate on 2026-05-06"
+      ],
+      "rationale": "Повторяющиеся открытые встречи по пайке/Arduino/электронике сохраняют именованную identity и source при смене конкретного задания."
+    },
+    {
+      "candidate_id": "s_toboi_ok",
+      "normalized_name": "Клуб «С тобой всё в порядке»",
+      "verdict": "confirmed",
+      "confidence": "high",
+      "interest_category": "психологическая взаимопомощь",
+      "event_examples": [
+        {
+          "event_id": 3488,
+          "title": "Встреча клуба «С тобой всё в порядке» «Где брать силы, когда нервы на пределе»",
+          "date": "2026-04-04",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "ОКЦ",
+          "source_url": "https://t.me/signalkld/10228"
+        },
+        {
+          "event_id": 3923,
+          "title": "Игра «С тобой всё в порядке»",
+          "date": "2026-04-18",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "«Зеленый дом»",
+          "source_url": "https://t.me/signalkld/10426"
+        },
+        {
+          "event_id": 6381,
+          "title": "Игра «С тобой всё в порядке»",
+          "date": "2026-06-27",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "Кофейня «Зелёный дом»",
+          "source_url": "https://t.me/signalkld/11163"
+        }
+      ],
+      "confounders": [
+        "same-day cross-source duplicate rows on 2026-06-13"
+      ],
+      "rationale": "Именованный клуб, собственный source и повторяющиеся встречи/игры сохраняют identity при смене темы и площадки."
+    },
+    {
+      "candidate_id": "autoretroclub",
+      "normalized_name": "АвтоРетроКлуб Калининград",
+      "verdict": "confirmed",
+      "confidence": "high",
+      "interest_category": "ретроавтомобили",
+      "event_examples": [
+        {
+          "event_id": 3265,
+          "title": "День открытых дверей в АвтоРетроКлубе",
+          "date": "2026-03-28",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Калининград Сити Джаз Клуб",
+          "source_url": "https://vk.com/wall-127107743_14519"
+        },
+        {
+          "event_id": 3814,
+          "title": "Первые пивовары: пролог Авторетросезона-2026",
+          "date": "2026-04-18",
+          "window": "discovery",
+          "city": "Полесск",
+          "venue": "Полесск",
+          "source_url": "https://vk.com/wall-127107743_14537"
+        },
+        {
+          "event_id": 6853,
+          "title": "Выставка ретроавтомобилей на Дне города в Янтарном",
+          "date": "2026-07-18",
+          "window": "future",
+          "city": "Янтарный",
+          "venue": "Янтарный",
+          "source_url": "https://vk.com/wall-127107743_14707"
+        }
+      ],
+      "confounders": [
+        "some events are partner/city programmes; same-day 3814/3815 likely duplicate/publication split; festival screening #834 excluded as venue leakage"
+      ],
+      "rationale": "Публичный автоклуб проводит открытые дни, сезонные встречи, пробег и выставки; название и единый public VK source устойчивы."
+    },
+    {
+      "candidate_id": "psychology_book_signal",
+      "normalized_name": "Книжный клуб психологической литературы",
+      "verdict": "probable",
+      "confidence": "medium",
+      "interest_category": "книжный клуб",
+      "event_examples": [
+        {
+          "event_id": 5998,
+          "title": "Книжный клуб психологической литературы",
+          "date": "2026-06-17",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "Сигнал",
+          "source_url": "https://t.me/signalkld/11022"
+        },
+        {
+          "event_id": 6854,
+          "title": "Книжный клуб психологической литературы",
+          "date": "2026-07-29",
+          "window": "future",
+          "city": "Калининград",
+          "venue": "Сигнал",
+          "source_url": "https://t.me/signalkld/11297"
+        }
+      ],
+      "confounders": [
+        "no discovery-period meeting before 2026-06-01"
+      ],
+      "rationale": "Одинаковое имя, venue и source; разные даты, одна встреча находится в будущем."
+    },
+    {
+      "candidate_id": "quizprosvet",
+      "normalized_name": "QuizПросвет",
+      "verdict": "probable",
+      "confidence": "medium",
+      "interest_category": "интеллектуальные игры",
+      "event_examples": [
+        {
+          "event_id": 6206,
+          "title": "Первая игра сообщества QuizПросвет",
+          "date": "2026-06-21",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "ОКЦ на Горького",
+          "source_url": "https://t.me/okcng/527"
+        },
+        {
+          "event_id": 6890,
+          "title": "Первая интеллектуальная битва QuizПросвет",
+          "date": "2026-07-20",
+          "window": "future",
+          "city": "Калининград",
+          "venue": "КЛДскоп",
+          "source_url": "https://t.me/kldscope_news/21"
+        }
+      ],
+      "confounders": [
+        "only two dates; title “первая” conflicts across rows"
+      ],
+      "rationale": "Собственный source QuizProsvet связывает две публичные игры; вторая является будущим событием."
+    },
+    {
+      "candidate_id": "standup_dating_show",
+      "normalized_name": "Шоу «Клуб знакомств»",
+      "verdict": "rejected",
+      "confidence": "low",
+      "interest_category": "комедийное шоу",
+      "event_examples": [
+        {
+          "event_id": 2438,
+          "title": "🎭 Клуб знакомств",
+          "date": "2026-02-17",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Стендап клуб Локация",
+          "source_url": "https://vk.com/wall-214027639_10579"
+        },
+        {
+          "event_id": 3040,
+          "title": "Клуб знакомств: комедийное шоу",
+          "date": "2026-03-18",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Форма пицца-бар, Гаражная 2б, Калининград",
+          "source_url": "https://vk.com/wall-214027639_10852"
+        },
+        {
+          "event_id": 6866,
+          "title": "Клуб знакомств",
+          "date": "2026-07-19",
+          "window": "future",
+          "city": "Калининград",
+          "venue": "Стендап клуб Локация",
+          "source_url": "https://t.me/locostandup/3670"
+        }
+      ],
+      "confounders": [
+        "commercial-series false positive"
+      ],
+      "rationale": "Повторяется коммерческий сценический формат, а не identity сообщества участников."
+    },
+    {
+      "candidate_id": "nightclub_venues",
+      "normalized_name": "YALTA / Вагонка / Склад / Universal как club venues",
+      "verdict": "rejected",
+      "confidence": "low",
+      "interest_category": "ночная музыка",
+      "event_examples": [
+        {
+          "event_id": 290,
+          "title": "🎸 ROCK PRIVET в клубе 'YALTA'",
+          "date": "2025-09-27",
+          "window": "discovery",
+          "city": "",
+          "venue": "YALTA",
+          "source_url": "https://telegra.ph/ROCK-PRIVET-v-klube-YALTA-07-27"
+        },
+        {
+          "event_id": 637,
+          "title": "🎤 Тайпан х 11.10 х Клуб Universal",
+          "date": "2025-10-11",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Заря",
+          "source_url": "https://telegra.ph/Tajpan-h-1110-h-Klub-Universal-09-12"
+        },
+        {
+          "event_id": 4957,
+          "title": "ЛИЛ КИДД",
+          "date": "2026-07-25",
+          "window": "future",
+          "city": "Калининград",
+          "venue": "YALTA",
+          "source_url": "https://kaliningrad.qtickets.events/234250-lil-kidd-25-iyulya-yalta"
+        },
+        {
+          "event_id": 5836,
+          "title": "Drum'N'Bass",
+          "date": "2026-06-26",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "СКЛАD",
+          "source_url": "https://kaliningrad.qtickets.events/239308-drumnbass-for-mass-06-26"
+        }
+      ],
+      "confounders": [
+        "venue/nightlife leakage"
+      ],
+      "rationale": "Club обозначает ночную площадку, а не клуб по интересам."
+    },
+    {
+      "candidate_id": "cinemango_programme",
+      "normalized_name": "СИНЕМАНГО / «Путешествие по Азии»",
+      "verdict": "rejected",
+      "confidence": "low",
+      "interest_category": "кинопрограмма",
+      "event_examples": [
+        {
+          "event_id": 577,
+          "title": "🎬 СИНЕМАНГО: Путешествие по Азии - Станция \"Сеул\"",
+          "date": "2025-09-13",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Научная библиотека",
+          "source_url": "https://telegra.ph/SINEMANGO-Puteshestvie-po-Azii---Stanciya-Seul-09-05"
+        },
+        {
+          "event_id": 1694,
+          "title": "🎬 Счастливого Нового Года",
+          "date": "2025-12-13",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Научная библиотека",
+          "source_url": "https://vk.com/wall-30777579_14148"
+        },
+        {
+          "event_id": 3393,
+          "title": "СИНЕМАНГО: Путешествие по Азии — «Маленький лес»",
+          "date": "2026-03-28",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Научная библиотека, Мира 9, Калининград",
+          "source_url": "https://vk.com/wall-30777579_14867"
+        }
+      ],
+      "confounders": [
+        "programme-series false positive"
+      ],
+      "rationale": "Брендированная библиотечная программа повторяется, но evidence постоянного сообщества/участников нет."
+    },
+    {
+      "candidate_id": "linked_occurrence_series",
+      "normalized_name": "Одна программа в нескольких датах",
+      "verdict": "rejected",
+      "confidence": "low",
+      "interest_category": "театры/показы",
+      "event_examples": [
+        {
+          "event_id": 89,
+          "title": "🎙🎭🤘 Та самая рок-опера «Моцарт»",
+          "date": "2025-08-08",
+          "window": "discovery",
+          "city": "Некрасово",
+          "venue": "замок Шаакен",
+          "source_url": "https://t.me/kenigevents/869"
+        },
+        {
+          "event_id": 90,
+          "title": "🎙🎭🤘 Та самая рок-опера «Моцарт»",
+          "date": "2025-08-16",
+          "window": "discovery",
+          "city": "Некрасово",
+          "venue": "замок Шаакен",
+          "source_url": "https://t.me/kenigevents/869"
+        },
+        {
+          "event_id": 4210,
+          "title": "Кинопоказ калининградских фильмов на Острове Канта",
+          "date": "2026-05-16",
+          "window": "discovery",
+          "city": "Калининград",
+          "venue": "Остров Канта",
+          "source_url": "https://vk.com/wall-182104060_6924"
+        }
+      ],
+      "confounders": [
+        "linked-occurrence leakage"
+      ],
+      "rationale": "Повторы одной программы/слота относятся к linked occurrences, не к club identity."
+    },
+    {
+      "candidate_id": "festival_programmes",
+      "normalized_name": "Фестиваль и его программа",
+      "verdict": "rejected",
+      "confidence": "low",
+      "interest_category": "фестивали",
+      "event_examples": [
+        {
+          "event_id": 6314,
+          "title": "🥳 Детский фестиваль «Матушка-земля»",
+          "date": "2026-06-26",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "Железнодорожные ворота",
+          "source_url": "https://vk.com/wall-190663987_8934"
+        },
+        {
+          "event_id": 6742,
+          "title": "однодневный фестиваль фотографических сообществ Калининграда",
+          "date": "2026-07-12",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "Закхаймские ворота",
+          "source_url": "https://t.me/terkatalk/5122"
+        }
+      ],
+      "confounders": [
+        "festival leakage",
+        "corrupt/future duplicate date example"
+      ],
+      "rationale": "Festival identity и programme rows не являются клубом."
+    },
+    {
+      "candidate_id": "strawberry_lexical",
+      "normalized_name": "«Клубника» как lexical club match",
+      "verdict": "rejected",
+      "confidence": "low",
+      "interest_category": "агротуризм",
+      "event_examples": [
+        {
+          "event_id": 4907,
+          "title": "Праздник клубники на ферме «Козья горка»",
+          "date": "2026-05-30",
+          "window": "discovery",
+          "city": "Светлогорск",
+          "venue": "Козья горка",
+          "source_url": "https://t.me/kozia_gorka/1425"
+        },
+        {
+          "event_id": 5044,
+          "title": "🍓 Продажа клубники",
+          "date": "2026-05-17",
+          "window": "discovery",
+          "city": "Гурьевск",
+          "venue": "АгроПарк «Некрасово поле»",
+          "source_url": "https://vk.com/wall-221969169_52691"
+        },
+        {
+          "event_id": 6516,
+          "title": "Последний день самосбора клубники",
+          "date": "2026-06-30",
+          "window": "holdout_elapsed",
+          "city": "Калининград",
+          "venue": "АгроПарк Некрасово поле",
+          "source_url": "https://t.me/agropark39/1888"
+        }
+      ],
+      "confounders": [
+        "keyword/substring false positive"
+      ],
+      "rationale": "Русская лексема «клубника» создаёт ложное совпадение с «клуб»."
+    }
+  ]
+}

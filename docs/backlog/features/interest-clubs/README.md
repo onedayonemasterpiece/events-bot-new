@@ -2,16 +2,16 @@
 
 ## Статус
 
-**Planning / research pending.** Это отдельная пострелизная продуктовая фича, а не блокер первой публичной презентации статического сайта.
+**R0 catalog audit delivered; owner/BGE gates open.** Это отдельная пострелизная продуктовая фича, а не блокер первой публичной презентации статического сайта.
 
-На 2026-07-17 исследование прошлых и будущих событий **не запускалось**, фактический каталог клубов и их количество ещё не определены. Нельзя утверждать, что найдено `N` клубов, пока не создан воспроизводимый evidence-backed отчёт по [исследовательскому заданию](research-prompt.md).
+Read-only аудит на production-снимке 2026-07-17 сформировал [воспроизводимый отчёт](../../../reports/interest-clubs-catalog-audit-2026-07-17.md): 52 reviewed candidate clusters, из них 19 `confirmed`, 14 `probable`, 8 `needs_evidence` и 11 `rejected`. `confirmed + probable` покрывают 198 уникальных surviving canonical event ids (193 past, 5 future), но это число относится к текущему reviewed pool, а не доказывает полный региональный каталог. Blind discovery-only freeze дал strict exact-name coverage 24/56 post-cutoff events и 0/5 future, name/source candidate coverage 36/56 и 2/5 future; это proxy на researcher labels, не owner-approved population recall. Paired BGE/Gemini quality benchmark на одном frozen corpus и owner review ещё не выполнены, поэтому production/UI GO отсутствует.
 
 Каноническая ветка для исследования и последующей консолидации решений:
 
 - `feature/interest-clubs-postrelease`
-- [будущая ветка на GitHub](https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/interest-clubs-postrelease)
+- [ветка на GitHub](https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/interest-clubs-postrelease)
 
-Ветку нужно создать от свежего `origin/main`. Текущая documentation/release-plan ветка не является базой реализации.
+Ветка создана от `origin/main@100892d87c56f9fa465c4f10bcb712fda27fbbeb`; текущая documentation/release-plan ветка не использовалась как база.
 
 ## Продуктовая цель
 
@@ -35,7 +35,7 @@
 - одноразовый мастер-класс, лекцию или экскурсию;
 - все события одной площадки или организатора без общей клубной идентичности;
 - коммерческую серию концертов/спектаклей/показов только из-за сходства темы;
-- фестиваль и его программу — это отдельная [festival identity](../../../features/festivals/static-site-release.md);
+- фестиваль и его программу — это отдельная [festival identity](../../../features/festivals/README.md);
 - дубли одной записи или одного временного слота;
 - закрытую частную группу, если нет достаточного публичного event/source evidence.
 
@@ -97,9 +97,9 @@ Embeddings, cadence и детерминированная нормализаци
 
 ### R0 — каталог-аудит
 
-- [ ] Создать `feature/interest-clubs-postrelease` от свежего `origin/main` и запушить её до длительной работы.
-- [ ] Провести read-only аудит прошлых и будущих событий по [готовому prompt](research-prompt.md).
-- [ ] Сохранить raw evidence только в `artifacts/codex/interest-clubs-audit-20260717/` и закоммитить компактный воспроизводимый отчёт.
+- [x] Создать `feature/interest-clubs-postrelease` от свежего `origin/main` и запушить её до длительной работы.
+- [x] Провести read-only аудит прошлых и будущих событий по [готовому prompt](research-prompt.md).
+- [x] Сохранить raw evidence только в `artifacts/codex/interest-clubs-audit-20260717/` и закоммитить компактный воспроизводимый отчёт.
 - [ ] Получить owner review фактического списка клубов, counts, taxonomy и false-positive ledger.
 
 ### R1 — product/technology decision
@@ -139,7 +139,7 @@ Embeddings, cadence и детерминированная нормализаци
 ## Роутинг и ожидаемые артефакты
 
 - Исполняемый prompt исследования: [research-prompt.md](research-prompt.md)
-- Будущий durable report: `docs/reports/interest-clubs-catalog-audit-2026-07-17.md`
+- Durable report: [catalog audit 2026-07-17](../../../reports/interest-clubs-catalog-audit-2026-07-17.md)
 - Raw evidence, не коммитить: `artifacts/codex/interest-clubs-audit-20260717/`
 - Общий release plan: [static personal announcements readiness](../../../reports/static-personal-announcements-release-readiness-2026-07-11.md)
 - Smart Update: [canonical docs](../../../features/smart-event-update/README.md)
