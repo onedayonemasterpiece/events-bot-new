@@ -60,6 +60,8 @@ PROMO_SURFACE_VK_REPOST = "vk_repost"
 PROMO_SURFACE_VK_STORY = "vk_story"
 PROMO_SURFACE_AFISHA_ENGAGEMENT = "afishaengagement"
 PROMO_SURFACE_VK_FESTIVAL_CAROUSEL = "vk_festival_carousel"
+PROMO_SURFACE_ARTIST_ARRIVAL_DIGEST = "artist_arrival_digest"
+PROMO_SURFACE_ARTIST_ARRIVAL_HERO = "artist_arrival_hero"
 PROMO_VK_DEFAULT_WINDOW_HOURS = 24
 PROMO_VK_REPOST_DEDUP_HOURS = 72
 PROMO_VK_ACTIVE_START_HOUR = 9
@@ -95,6 +97,8 @@ DEBUG_PROMO_EXPOSURE_STATUSES = frozenset({"VK_SCHEDULED_DEBUG"})
 # query_text holds "<chat_username>:<author_username>" (both lowercased, no @).
 PROMO_TARGET_TYPE_TG_CHAT_AUTHOR = "tg_chat_author"
 PROMO_TARGET_TYPE_ALL = "all"
+PROMO_TARGET_TYPE_ARTIST_ARRIVALS = "artist_arrivals"
+ARTIST_ARRIVALS_CAMPAIGN_TITLE = "Приезды артистов · Россия и международные гости"
 # Concrete kraftmarket39 / @LANGEANNA -> video announce campaign.
 KRAFTMARKET_AUTHOR_CHAT = "kraftmarket39"
 KRAFTMARKET_AUTHOR_USERNAME = "langeanna"

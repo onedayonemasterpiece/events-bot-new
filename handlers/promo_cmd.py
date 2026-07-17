@@ -12,6 +12,8 @@ from models import Event, EventSource, PromoActivity, PromoCampaign, PromoExposu
 from promo import (
     INITIAL_80_STORIES_FESTIVAL,
     INITIAL_80_STORIES_PRIORITY,
+    PROMO_SURFACE_ARTIST_ARRIVAL_DIGEST,
+    PROMO_SURFACE_ARTIST_ARRIVAL_HERO,
     PROMO_TARGET_TYPE_TG_CHAT_AUTHOR,
     PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
     PROMO_SURFACE_TG_EVENT_PUBLISH,
@@ -345,6 +347,8 @@ def _activity_label(activity: PromoActivity) -> str:
         PROMO_SURFACE_VK_CHANNEL_PUBLISH: "VK-канал",
         PROMO_SURFACE_VK_REPOST: "VK-репост",
         PROMO_SURFACE_VK_STORY: "VK-история",
+        PROMO_SURFACE_ARTIST_ARRIVAL_DIGEST: "Дайджест приездов артистов",
+        PROMO_SURFACE_ARTIST_ARRIVAL_HERO: "Hero Talk: приезды артистов",
     }.get(activity.surface, activity.surface)
     parts = [surface_label]
     if activity.profile_key:

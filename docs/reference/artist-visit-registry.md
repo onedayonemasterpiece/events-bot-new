@@ -1,8 +1,10 @@
 # Реестр артистов для выявления гастрольных приездов
 
-Статус: **seed / не готов для автоматической публикации**. Это каноническая
+Статус: **versioned seed + sparse shadow overlay; auto-publication выключена**. Это каноническая
 справка по исходному XLSX, его нормализованной копии и правилам безопасного
 определения `местный / приезжий`. Продуктовый дайджест описан в
+[artist-arrivals/README.md](../features/artist-arrivals/README.md). Исходный
+product contract и связанный unusual-event backlog сохранены в
 [artist-arrivals-and-unusual-events.md](../backlog/features/static-typed-briefing/artist-arrivals-and-unusual-events.md).
 
 ## Назначение и ключевое ограничение

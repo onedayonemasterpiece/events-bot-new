@@ -1,0 +1,74 @@
+---
+import type { ArtistArrivalsProjection } from '../lib/artistArrivals';
+
+interface Props {
+  projection: ArtistArrivalsProjection;
+  allowShadow?: boolean;
+}
+
+const { projection, allowShadow = false } = Astro.props;
+const expiresAt = projection.expires_at ? new Date(projection.expires_at) : null;
+const fresh = !expiresAt || (!Number.isNaN(expiresAt.valueOf()) && expiresAt.valueOf() >= Date.now());
+const visible = projection.eligible || (allowShadow && projection.shadow_eligible);
+const items = visible && fresh ? projection.items.slice(0, 4) : [];
+const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const dateLabel = (raw?: string) => {
+  if (!raw) return 'дата в событии';
+  const parsed = new Date(`${raw.slice(0, 10)}T12:00:00+02:00`);
+  return Number.isNaN(parsed.valueOf()) ? raw : `${parsed.getDate()} ${months[parsed.getMonth()]}`;
+};
+---
+
+{items.length > 0 && (
+  <section class="arrival-talk" aria-labelledby="artist-arrivals-title">
+    <div class="arrival-talk__intro">
+      <p>К нам едут</p>
+      <h2 id="artist-arrivals-title">Артисты в Калининградской области</h2>
+      <span>Только подтверждённые приезды; местные артисты не получают метку гостя.</span>
+      {allowShadow && projection.publication_mode === 'shadow' && <em>Shadow preview · не опубликовано</em>}
+    </div>
+    <div class="arrival-talk__rail" role="list">
+      {items.map((item) => {
+        const Tag = item.event_url ? 'a' : 'article';
+        return (
+          <Tag class:list={['arrival-talk__card', { 'arrival-talk__card--photo': item.media_ready && item.photo_url }]} href={item.event_url || undefined} role="listitem">
+            {item.media_ready && item.photo_url && <img src={item.photo_url} alt="" loading="lazy" decoding="async" />}
+            <div class="arrival-talk__shade"></div>
+            <div class="arrival-talk__content">
+              <small>{item.arrival_kind === 'international' ? 'Зарубежный гость' : 'Гость из России'}</small>
+              <strong>{item.artist_name}</strong>
+              <span>с проектом «{item.project_title}»</span>
+              <b>{dateLabel(item.dates[0])} <i aria-hidden="true">→</i></b>
+            </div>
+          </Tag>
+        );
+      })}
+    </div>
+  </section>
+)}
+
+<style>
+  .arrival-talk { margin: 1rem 0; padding: clamp(1rem, 3vw, 2.2rem); border-radius: 2rem; color: #fff9ee; background: #202832; overflow: hidden; }
+  .arrival-talk__intro { display: grid; grid-template-columns: minmax(8rem, .35fr) 1fr; gap: .35rem 1.25rem; align-items: end; margin-bottom: 1.2rem; }
+  .arrival-talk__intro p { margin: 0; color: #f2b64c; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .arrival-talk__intro h2 { margin: 0; max-width: 15ch; font-size: clamp(1.7rem, 4vw, 3rem); line-height: .98; }
+  .arrival-talk__intro span { grid-column: 2; max-width: 50ch; color: #cad0d5; font-size: .9rem; }
+  .arrival-talk__intro em { grid-column: 2; color: #f2b64c; font-size: .75rem; font-style: normal; }
+  .arrival-talk__rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(15rem, 24rem); gap: .8rem; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: .35rem; }
+  .arrival-talk__card { position: relative; min-height: 24rem; border-radius: 1.4rem; overflow: hidden; scroll-snap-align: start; color: inherit; text-decoration: none; background: radial-gradient(circle at 90% 0%, #a84627 0, transparent 45%), linear-gradient(145deg, #efe4d1, #ba552f); }
+  .arrival-talk__card img, .arrival-talk__shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .arrival-talk__card img { object-fit: cover; }
+  .arrival-talk__shade { background: linear-gradient(180deg, transparent 25%, rgba(15, 20, 25, .92) 88%); }
+  .arrival-talk__content { position: absolute; inset: auto 1.2rem 1.15rem; display: grid; gap: .38rem; }
+  .arrival-talk__content small { color: #ffd37a; font-size: .7rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+  .arrival-talk__content strong { font-size: clamp(1.65rem, 3.7vw, 2.6rem); line-height: .94; }
+  .arrival-talk__content span { color: #f1e8da; line-height: 1.25; }
+  .arrival-talk__content b { margin-top: .45rem; color: #ffd37a; }
+  .arrival-talk__content i { float: right; font-style: normal; }
+  @media (max-width: 620px) {
+    .arrival-talk__intro { grid-template-columns: 1fr; }
+    .arrival-talk__intro span { grid-column: 1; }
+    .arrival-talk__rail { grid-auto-columns: 86%; }
+  }
+  @media (prefers-reduced-motion: reduce) { .arrival-talk__rail { scroll-behavior: auto; } }
+</style>

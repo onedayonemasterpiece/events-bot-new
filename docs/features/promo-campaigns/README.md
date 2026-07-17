@@ -1,5 +1,20 @@
 # Promo Campaigns
 
+## Artist arrivals
+
+Редакционная campaign `Приезды артистов · Россия и международные гости`
+использует target type `artist_arrivals` и две независимые activity surfaces:
+
+- `artist_arrival_digest` — один frozen issue для Telegram RichMessage и VK
+  carousel, отдельный delivery ledger по channel/target;
+- `artist_arrival_hero` — статическая Hero Talk проекция, не расходующая social
+  cooldown.
+
+Campaign создаётся как `draft`, обе activity — `enabled=false`. Auto delivery
+требует отдельного env switch и media-rights gate. Канонические eligibility,
+threshold, dedupe и rollout описаны в
+[`docs/features/artist-arrivals/README.md`](../artist-arrivals/README.md).
+
 > **Status:** MVP implemented  
 > **Scope:** editorial promotion campaigns for existing future events and existing festival event sets.
 

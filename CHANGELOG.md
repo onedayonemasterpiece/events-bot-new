@@ -40,6 +40,8 @@
 
 ### Added
 
+- **Artist arrivals / shadow foundation**: added the versioned JSON + sparse Fly SQLite registry design, evidence-reviewed Russian/international/local overlays, daily stable artist+project manifest with target-aware delivery dedupe and ambiguous-send reconciliation, full event source-revision invalidation, disabled-by-default promo activities, Telegram RichMessage slideshow and VK carousel renderers with photo identity/rights plus SSRF/stream-size gates, and a sanitized static Hero Talk preview projection; YDB is intentionally not used for this event-domain state.
+
 - **Popular feed / dedicated human-like Telegram reader**: the batch collector
   now accepts only `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR`, reads exact event
   announcements from `@kldevents` and ledger-backed event forwards from

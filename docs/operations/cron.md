@@ -256,6 +256,12 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `V_TOMORROW_WATCHDOG_GRACE_SECONDS` – same-day local-time grace window after the slot before the independent watchdog dispatches a missing `video_tomorrow` run (default: `720`).
 - `V_TOMORROW_WATCHDOG_INTERVAL_SECONDS` – polling interval for the independent `video_tomorrow` watchdog task (default: `60`).
 - `ENABLE_V_POPULAR_REVIEW_SCHEDULED` – enable scheduled CherryFlash `popular_review`.
+- `ENABLE_ARTIST_ARRIVALS_DAILY` – register the daily verified-arrivals manifest builder (default off).
+- `ARTIST_ARRIVALS_TIME_LOCAL` / `ARTIST_ARRIVALS_TZ` – local schedule for the builder (default `06:40 Europe/Kaliningrad`).
+- `ARTIST_ARRIVALS_HORIZON_DAYS` / `ARTIST_ARRIVALS_MIN_ARTISTS` / `ARTIST_ARRIVALS_MIN_PROJECTS` / `ARTIST_ARRIVALS_MAX_ITEMS` – manifest horizon and social threshold (defaults: 14 days, 3 artists, 2 projects, 8 cards; preferred artist count is 4).
+- `ARTIST_ARRIVALS_PUBLICATION_MODE` / `ARTIST_ARRIVALS_ALLOW_PUBLICATION` – shadow/auto and the independent public-delivery gate. Defaults are `shadow` and `0`; the promo activity must additionally be enabled.
+- `ARTIST_ARRIVALS_PHOTO_HOST_ALLOWLIST` – required comma-separated public HTTPS hosts for the built-in auto photo fetcher. Each redirect and resolved IP is revalidated and streamed under a 12 MiB cap.
+- If a public network call leaves `artist_publication_ledger.publish_status=sending`, do not delete it blindly. Inspect the exact TG/VK target, then use `reconcile_artist_arrival_delivery()` with the complete issue dedupe-key set and `published` or `not_published`; see the feature runbook.
 - `V_POPULAR_REVIEW_TIME_LOCAL` / `V_POPULAR_REVIEW_TZ` – local schedule for CherryFlash `popular_review` (default: `10:15 Europe/Kaliningrad`).
 - `V_POPULAR_REVIEW_WATCHDOG_GRACE_SECONDS` – same-day local-time grace window after the CherryFlash slot before the independent watchdog dispatches a missing local-only pre-handoff run (default: `900`).
 - `V_PARTNER_TRACK_ECO_TIME_LOCAL` / `V_PARTNER_TRACK_KONB_TIME_LOCAL` / `V_PARTNER_TRACK_EAST_TIME_LOCAL` – local schedule overrides for the always-registered CherryFlash partner tracks.

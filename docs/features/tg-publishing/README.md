@@ -1,5 +1,14 @@
 # Telegram Event Publishing
 
+## Artist-arrivals slideshow
+
+Дайджест приездов — отдельный RichMessage surface, не event-post mode. Он
+использует `<tg-slideshow>` с 3–10 локально отрендеренными JPEG и frozen
+manifest, общий с VK/static. Auto send fail closed без verified artist↔photo
+identity и разрешённого rights status; shadow review допускает только
+deterministic text cards и не вызывает Bot API. Полный контракт:
+[`docs/features/artist-arrivals/README.md`](../artist-arrivals/README.md).
+
 Каноника для исходящих Telegram-публикаций отдельных событий после Smart Update.
 
 ## Event Posts

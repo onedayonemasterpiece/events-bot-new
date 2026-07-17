@@ -1,0 +1,1310 @@
+{
+  "schema_version": "kenigevents.artist_arrivals.curated.v1",
+  "generated_at": "2026-07-17",
+  "source_registry_sha256": "c40b238910d677c935d4c19bafb2d2f3fc14294d83193d27a6047f15075843ac",
+  "profiles": [
+    {
+      "artist_id": "KEART-C7B41D35D5F5",
+      "entity_type": "person",
+      "display_name": "Matteo Buonannoce",
+      "canonical_name": "Matteo Buonannoce",
+      "aliases": [
+        "Маттео Буонанноче"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_international_verified",
+      "base_country_code": "IT",
+      "base_region_code": null,
+      "base_city": "Turin",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-1247405BC677",
+          "source_url": "https://operann.ru/pianissimo-mateo-buonanoche",
+          "source_kind": "official_or_event_source",
+          "claim": "Italian pianist; Turin conservatory training",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.9,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-4E83BE4E2E01",
+      "entity_type": "person",
+      "display_name": "João Neto Vieira",
+      "canonical_name": "João Neto Vieira",
+      "aliases": [
+        "Жоау Нету Виейра",
+        "Joao Neto Vieira"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_international_verified",
+      "base_country_code": "PT",
+      "base_region_code": null,
+      "base_city": "Porto",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-E8F259617BF3",
+          "source_url": "https://www.teatromunicipaldoporto.pt/pt/evento-destaque/novos-talentos/jo-o-neto-vieira/",
+          "source_kind": "official_or_event_source",
+          "claim": "Portuguese pianist and Porto-based student",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-27A319026B2E",
+      "entity_type": "person",
+      "display_name": "PUPO",
+      "canonical_name": "PUPO",
+      "aliases": [
+        "Пупо",
+        "Enzo Ghinazzi"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_international_verified",
+      "base_country_code": "IT",
+      "base_region_code": null,
+      "base_city": null,
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-EC07A7A5D2E0",
+          "source_url": "https://www.pupo.tv/en/",
+          "source_kind": "official_or_event_source",
+          "claim": "Official biography of Italian singer Enzo Ghinazzi",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-2A49CDC6BF00",
+      "entity_type": "person",
+      "display_name": "Can Saraç",
+      "canonical_name": "Can Saraç",
+      "aliases": [
+        "Джан Сарач",
+        "Can Sarac"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_international_verified",
+      "base_country_code": "TR",
+      "base_region_code": null,
+      "base_city": "Istanbul",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-4E96B29153B0",
+          "source_url": "https://cansaracpianist.com/",
+          "source_kind": "official_or_event_source",
+          "claim": "Official biography of Turkish pianist",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-7F03EE7E7B1C",
+      "entity_type": "person",
+      "display_name": "Teresa Voskanyan",
+      "canonical_name": "Teresa Voskanyan",
+      "aliases": [
+        "Тереза Восканян"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_international_verified",
+      "base_country_code": "AM",
+      "base_region_code": null,
+      "base_city": "Etchmiadzin",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-9F53526F1730",
+          "source_url": "https://sobor39.ru/events/concerts/night/",
+          "source_kind": "official_or_event_source",
+          "claim": "Event source identifies organist of Holy Etchmiadzin Cathedral",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.88,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-6DA8EB010E66",
+      "entity_type": "collective",
+      "display_name": "ЭПИДЕМИЯ",
+      "canonical_name": "ЭПИДЕМИЯ",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-89F7D29E6EB2",
+          "source_url": "https://epidemiaru.bandcamp.com/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official artist music profile identifies the band as Moscow, Russia",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        },
+        {
+          "evidence_id": "EV-8C34B954ABE6",
+          "source_url": "https://30.epidemia.ru/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official 2026 tour distinguishes Kaliningrad visit from Moscow dates",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-DD09BC748603",
+      "entity_type": "person",
+      "display_name": "Эд Авдали",
+      "canonical_name": "Эд Авдали",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Krasnodar Krai",
+      "base_city": "Krasnodar",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-A05BC6218481",
+          "source_url": "https://vk.com/wall-214027639_11559",
+          "source_kind": "official_or_event_source",
+          "claim": "Source explicitly calls performer a comedian from Krasnodar",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "RUART-0480",
+      "entity_type": "person",
+      "display_name": "Максим Аверин",
+      "canonical_name": "Максим Аверин",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-D3E56488FBF0",
+          "source_url": "https://maximaverin.ru/bio/biografiya.html",
+          "source_kind": "official_or_event_source",
+          "claim": "Official biography and national touring career",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-324B54B658E6",
+      "entity_type": "collective",
+      "display_name": "КВАТРО",
+      "canonical_name": "КВАТРО",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-AA4A67B4CCF3",
+          "source_url": "https://kvatro-originals.ru/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official group biography and current schedule show Moscow institutional origin and recurring Moscow programme",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        },
+        {
+          "evidence_id": "EV-C355EE78C4AB",
+          "source_url": "https://kvatro-originals.ru/afisha",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official 2026 route lists Svetlogorsk between recurring Moscow dates",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.97,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "RUART-0061",
+      "entity_type": "person",
+      "display_name": "Елена Ваенга",
+      "canonical_name": "Елена Ваенга",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Saint Petersburg",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-07AF258C1AFA",
+          "source_url": "https://www.elena-vaenga.com/story/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official biography says the artist returned to Saint Petersburg and built her professional career there",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-3C8AE4BA9962",
+      "entity_type": "person",
+      "display_name": "Лев Чефанов",
+      "canonical_name": "Лев Чефанов",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-AED187D6E951",
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-23/20:00:00",
+          "source_kind": "official_or_event_source",
+          "claim": "Source identifies Moscow-born Conservatory pianist",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-84C466FAF3DB",
+      "entity_type": "person",
+      "display_name": "Даниил Саямов",
+      "canonical_name": "Даниил Саямов",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-86EC632CBAF8",
+          "source_url": "https://vk.com/wall-26231813_10780",
+          "source_kind": "official_or_event_source",
+          "claim": "Source identifies Moscow Conservatory teacher",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.96,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-A1CFDAC7EF5A",
+      "entity_type": "collective",
+      "display_name": "Театр танца «Шторм»",
+      "canonical_name": "Театр танца «Шторм»",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Saint Petersburg",
+      "base_city": "Saint Petersburg",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-DF810CF00EB8",
+          "source_url": "https://vk.com/wall-211204375_3911",
+          "source_kind": "official_or_event_source",
+          "claim": "Source identifies St Petersburg touring dance theatre",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-DD59939F9015",
+      "entity_type": "collective",
+      "display_name": "Сергей Жилин и Фонограф-Джаз-Трио",
+      "canonical_name": "Сергей Жилин и Фонограф-Джаз-Трио",
+      "aliases": [
+        "Сергей Жилин",
+        "Фонограф-Джаз-Трио"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-8F1816F28529",
+          "source_url": "https://www.mosconsv.ru/ru/person/194461",
+          "source_kind": "official_or_event_source",
+          "claim": "Moscow institutional biography",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.98,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-8F29EED84E8B",
+      "entity_type": "person",
+      "display_name": "Игорь Сидоров",
+      "canonical_name": "Игорь Сидоров",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-D0320008DD7A",
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
+          "source_kind": "official_or_event_source",
+          "claim": "Source identifies St Petersburg birth and Moscow school",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.97,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-F34B036A0F85",
+      "entity_type": "person",
+      "display_name": "Константин Хачикян",
+      "canonical_name": "Константин Хачикян",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-99A36A3A7317",
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-08-07/20:00:00",
+          "source_kind": "official_or_event_source",
+          "claim": "Source explicitly identifies Russia and Moscow Conservatory",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-0B2FA769A321",
+      "entity_type": "person",
+      "display_name": "Мария Макарова",
+      "canonical_name": "Мария Макарова",
+      "aliases": [
+        "Маша и Медведи"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-8EBD28E63BD0",
+          "source_url": "https://moskvichmag.ru/lyudi/%D1%8D%D1%82%D0%BE-%D0%BC%D0%BE%D0%B9-%D0%B3%D0%BE%D1%80%D0%BE%D0%B4-%D1%81%D0%BE%D0%BB%D0%B8%D1%81%D1%82%D0%BA%D0%B0-%D0%B3%D1%80%D1%83%D0%BF%D0%BF%D1%8B-%D0%BC%D0%B0%D1%88%D0%B0-%D0%B8-%D0%BC/amp/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Direct artist interview states current residence in Moscow",
+          "geography_type": "residence",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.94,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-2699E9A3766D",
+      "entity_type": "person",
+      "display_name": "Артур Беркут и Сергей Маврин",
+      "canonical_name": "Артур Беркут и Сергей Маврин",
+      "aliases": [
+        "Беркут и Маврин"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "non_local_ru_verified",
+      "base_country_code": "RU",
+      "base_region_code": null,
+      "base_city": "Moscow",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-5D8EFD9226FD",
+          "source_url": "https://arthur-berkut.ru/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official current tour/contact site shows recurring Moscow professional activity",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        },
+        {
+          "evidence_id": "EV-EA844459B440",
+          "source_url": "https://mavrick.ru/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Official Sergey Mavrin project site",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.96,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-08CBAFCAF375",
+      "entity_type": "person",
+      "display_name": "HOFFMANN TRIO",
+      "canonical_name": "HOFFMANN TRIO",
+      "aliases": [
+        "ГОФМАН ТРИО"
+      ],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-814D1B103A1F",
+          "source_url": "https://muzteatr39.ru/xor-2/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Current member Alexandra Charnomskaya is listed in the Kaliningrad Regional Musical Theatre orchestra",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        },
+        {
+          "evidence_id": "EV-94DCCE855026",
+          "source_url": "https://live.mts.ru/persons/andrej_stepanenko",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Founder Andrey Stepanenko is artistic director of the Kaliningrad regional orchestra; source identifies HOFFMANN TRIO",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.88,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-D24480192703",
+      "entity_type": "collective",
+      "display_name": "Квартет Алексея Маркова",
+      "canonical_name": "Квартет Алексея Маркова",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-1CFDCB93E565",
+          "source_url": "https://www.ambermuseum.ru/news/all/21-iyulya-otmetim-2026/",
+          "source_kind": "official_or_row_level_biography",
+          "claim": "Kaliningrad Amber Museum explicitly labels the quartet as a Kaliningrad collective",
+          "geography_type": "professional_base",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.9,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-9EB198DD3C11",
+      "entity_type": "person",
+      "display_name": "Мария Гаврилюк",
+      "canonical_name": "Мария Гаврилюк",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-BA2DE0A59CD9",
+          "source_url": "https://filarmonia39.ru/o-filarmonii/solisty/mariya-gavrilyuk-17/",
+          "source_kind": "official_or_event_source",
+          "claim": "Current Kaliningrad Philharmonic soloist",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-5B87904F942C",
+      "entity_type": "person",
+      "display_name": "Анна Ушакова",
+      "canonical_name": "Анна Ушакова",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-1D36B832ECEB",
+          "source_url": "https://filarmonia39.ru/novosti/evgeniy-knyazev-kantata-gloriya-organnye-shedevry-bakha-startuet-festival-bakhosluzhenie-v-filarmoni/",
+          "source_kind": "official_or_event_source",
+          "claim": "Current Kaliningrad Philharmonic soloist",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-6AA1FC22B7A9",
+      "entity_type": "person",
+      "display_name": "Анна Юсупова",
+      "canonical_name": "Анна Юсупова",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-1D36B832ECEB",
+          "source_url": "https://filarmonia39.ru/novosti/evgeniy-knyazev-kantata-gloriya-organnye-shedevry-bakha-startuet-festival-bakhosluzhenie-v-filarmoni/",
+          "source_kind": "official_or_event_source",
+          "claim": "Current Kaliningrad Philharmonic soloist",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-6AC28B390A6D",
+      "entity_type": "person",
+      "display_name": "Евгений Авраменко",
+      "canonical_name": "Евгений Авраменко",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-D2A26FBBBDB0",
+          "source_url": "https://sobor39.ru/en/about/concert-hall/",
+          "source_kind": "official_or_event_source",
+          "claim": "Titular organist in Kaliningrad since 2017",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-6789D460C1EE",
+      "entity_type": "person",
+      "display_name": "Мансур Юсупов",
+      "canonical_name": "Мансур Юсупов",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-D2A26FBBBDB0",
+          "source_url": "https://sobor39.ru/en/about/concert-hall/",
+          "source_kind": "official_or_event_source",
+          "claim": "Titular organist in Kaliningrad since 2017",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    },
+    {
+      "artist_id": "KEART-D26763210654",
+      "entity_type": "collective",
+      "display_name": "Камерный оркестр Калининградской областной филармонии",
+      "canonical_name": "Камерный оркестр Калининградской областной филармонии",
+      "aliases": [],
+      "primary_domain": "performing_arts",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "Kaliningrad Oblast",
+      "base_city": "Kaliningrad",
+      "locality_basis": "current professional base or official institutional affiliation",
+      "evidence": [
+        {
+          "evidence_id": "EV-B4971D4BA9E3",
+          "source_url": "https://filarmonia39.ru/festivali/mezhdunarodnyy-muzykalnyy-festival-bakhosluzhenie-4/",
+          "source_kind": "official_or_event_source",
+          "claim": "Resident Kaliningrad Philharmonic ensemble",
+          "retrieved_at": "2026-07-17",
+          "valid_until": "2027-01-17"
+        }
+      ],
+      "verification_status": "verified",
+      "confidence": 0.99,
+      "photo_rights_status": "none",
+      "decision_version": "artist-locality-v1",
+      "verified_at": "2026-07-17T00:00:00+00:00",
+      "valid_until": "2027-01-17T00:00:00+00:00"
+    }
+  ],
+  "appearances": [
+    {
+      "event_id": 5295,
+      "artist_id": "KEART-C7B41D35D5F5",
+      "role": "performer",
+      "project_title": "Pianissimo: сольный концерт",
+      "project_key": "pianissimo-matteo-buonannoce",
+      "visit_cluster_key": "keart-c7b41d35d5f5:pianissimo-matteo-buonannoce",
+      "status": "confirmed",
+      "identity_confidence": 0.9,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.9,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-17/20:00:00",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "c17ff48a048c1c58eff235479cc516b4e32aad4ea6c71227939df5aefcc88dda",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5296,
+      "artist_id": "KEART-4E83BE4E2E01",
+      "role": "performer",
+      "project_title": "Pianissimo: сольный концерт",
+      "project_key": "pianissimo-joao-neto-vieira",
+      "visit_cluster_key": "keart-4e83be4e2e01:pianissimo-joao-neto-vieira",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-24/20:00:00",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "133ec739037fe833c618a7acfece57301a0842d2584fa7e3301e59a4a0586341",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 6272,
+      "artist_id": "KEART-27A319026B2E",
+      "role": "performer",
+      "project_title": "Концерт PUPO",
+      "project_key": "pupo-concert",
+      "visit_cluster_key": "keart-27a319026b2e:pupo-concert-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-100137391_164964",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "4148f56f6d6b128d38987fd61fb374a4a1f4c6109362143bae260b08aaaf13fc",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5298,
+      "artist_id": "KEART-2A49CDC6BF00",
+      "role": "performer",
+      "project_title": "Pianissimo: сольный концерт",
+      "project_key": "pianissimo-can-sarac",
+      "visit_cluster_key": "keart-2a49cdc6bf00:pianissimo-can-sarac",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "24e03ebcef16f9d999eec8b11bf303638fb42c06a3b30947a129a741b0103244",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 3742,
+      "artist_id": "KEART-7F03EE7E7B1C",
+      "role": "performer",
+      "project_title": "Звучащие сады",
+      "project_key": "zvuchashchie-sady",
+      "visit_cluster_key": "keart-7f03ee7e7b1c:zvuchashchie-sady-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.88,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.88,
+      "participant_evidence": [
+        {
+          "source_url": "https://sobor39.ru/events/concerts/night/",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "9cdfc6c3138df0ddd2b28dce6553dd798f742bbbf3cbce4e1dbf9bd96228ff50",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 4671,
+      "artist_id": "KEART-6DA8EB010E66",
+      "role": "performer",
+      "project_title": "Огненная рукопись",
+      "project_key": "epidemiya-ognennaya-rukopis",
+      "visit_cluster_key": "keart-6da8eb010e66:epidemiya-ognennaya-rukopis-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.qtickets.events/233763-epidemiya-ognennaya-rukopis",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "aa580fe8db7641a09b43a03096c8cf06181cccf1fcb39393848187051e1827ca",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 6859,
+      "artist_id": "KEART-6DA8EB010E66",
+      "role": "performer",
+      "project_title": "Огненная рукопись",
+      "project_key": "epidemiya-ognennaya-rukopis",
+      "visit_cluster_key": "keart-6da8eb010e66:epidemiya-ognennaya-rukopis-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-221061373_7260",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "521399a4129015021a665f3a9b27c804363fb973e24978fd387287dad464b7fb",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 6731,
+      "artist_id": "KEART-DD09BC748603",
+      "role": "performer",
+      "project_title": "Сольный стендап",
+      "project_key": "ed-avdali-standup",
+      "visit_cluster_key": "keart-dd09bc748603:ed-avdali-standup-july-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-214027639_11559",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "3dbc0b4e53e67a688c1e38e4208acb48575162b18ca7b382b2e9927ac0d56f9e",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 6732,
+      "artist_id": "KEART-DD09BC748603",
+      "role": "performer",
+      "project_title": "Сольный стендап",
+      "project_key": "ed-avdali-standup",
+      "visit_cluster_key": "keart-dd09bc748603:ed-avdali-standup-july-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-214027639_11559",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "94e92191043e9629bc23638f0526769d037cf15931171152cb16be6229398b68",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 3262,
+      "artist_id": "RUART-0480",
+      "role": "performer",
+      "project_title": "Расправь крылья",
+      "project_key": "maksim-averin-rasprav-krylya",
+      "visit_cluster_key": "ruart-0480:maksim-averin-rasprav-krylya",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-100137391_164243",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "617bb47eac323a1f3eba752362df7822f2e5881c21db6e802f87f004e02e3f6b",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5855,
+      "artist_id": "KEART-324B54B658E6",
+      "role": "performer",
+      "project_title": "Истинный итальянец",
+      "project_key": "kvatro-istinnyy-italyanets",
+      "visit_cluster_key": "keart-324b54b658e6:kvatro-istinnyy-italyanets",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://t.me/yantarholl/4665",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "7074bff95ba71b3bd420cb15143b10b8f350500bcbaa8a6966368839b1b77bf3",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5896,
+      "artist_id": "RUART-0061",
+      "role": "performer",
+      "project_title": "Сольный концерт",
+      "project_key": "elena-vaenga-concert",
+      "visit_cluster_key": "ruart-0061:elena-vaenga-concert-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://t.me/yantarholl/4667",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "beff76c7bf985f571c860f0e277b72ba51457b8e531e9c919f8d713a44c081fc",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5269,
+      "artist_id": "KEART-3C8AE4BA9962",
+      "role": "performer",
+      "project_title": "Pianissimo: сольный концерт",
+      "project_key": "pianissimo-lev-chefanov",
+      "visit_cluster_key": "keart-3c8ae4ba9962:pianissimo-lev-chefanov",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-23/20:00:00",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "32a478023fc9e86b30a0cefc91edf579f65e701249c3f2f3b7a11d33993ee302",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 6735,
+      "artist_id": "KEART-84C466FAF3DB",
+      "role": "performer",
+      "project_title": "Сольный концерт",
+      "project_key": "daniil-sayamov-solo",
+      "visit_cluster_key": "keart-84c466faf3db:daniil-sayamov-solo-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-26231813_10780",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "7c8b784bc2040016d9c044e71cbdc3b8678281965ee0f9a047335b87a3bd9836",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5467,
+      "artist_id": "KEART-A1CFDAC7EF5A",
+      "role": "performer",
+      "project_title": "Шоу под дождём",
+      "project_key": "shtorm-show-pod-dozhdem",
+      "visit_cluster_key": "keart-a1cfdac7ef5a:shtorm-show-pod-dozhdem-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-211204375_3911",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "48491e970ca7f3c8b352a369f358179f3ceb07574868efb06357b98913654203",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5375,
+      "artist_id": "KEART-DD59939F9015",
+      "role": "performer",
+      "project_title": "Упоение джазом",
+      "project_key": "zhilin-upoenie-dzhazom",
+      "visit_cluster_key": "keart-dd59939f9015:zhilin-upoenie-dzhazom-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://vk.com/wall-100137391_164822",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "3628684f2498b3cc75d47e5f968b0550a5809dfb2c904195135a36a5641fe52b",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5297,
+      "artist_id": "KEART-8F29EED84E8B",
+      "role": "performer",
+      "project_title": "Pianissimo: сольный концерт",
+      "project_key": "pianissimo-igor-sidorov",
+      "visit_cluster_key": "keart-8f29eed84e8b:pianissimo-igor-sidorov",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "d0d6bc0935fa0e29aa86b0b81796d0e4d4790620e6703fe27ec57732d0eaf91d",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 3864,
+      "artist_id": "KEART-F34B036A0F85",
+      "role": "performer",
+      "project_title": "Pianissimo: сольный концерт",
+      "project_key": "pianissimo-konstantin-khachikyan",
+      "visit_cluster_key": "keart-f34b036a0f85:pianissimo-konstantin-khachikyan",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-08-07/20:00:00",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "8e1cbc45341ba1587dc5e421f984792353463476e63251662ddb4832af7661d2",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5873,
+      "artist_id": "KEART-0B2FA769A321",
+      "role": "performer",
+      "project_title": "Акустика",
+      "project_key": "mariya-makarova-akustika",
+      "visit_cluster_key": "keart-0b2fa769a321:mariya-makarova-akustika-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.qtickets.events/240069-mariya-makarova-akustika",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "6eba2760f5df818aa6d5ad2695e21b4fa23d1fe777adda00d959be47badae91a",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    },
+    {
+      "event_id": 5380,
+      "artist_id": "KEART-2699E9A3766D",
+      "role": "performer",
+      "project_title": "Скитальцы",
+      "project_key": "berkut-mavrin-skitaltsy",
+      "visit_cluster_key": "keart-2699e9a3766d:berkut-mavrin-skitaltsy-2026",
+      "status": "confirmed",
+      "identity_confidence": 0.98,
+      "physical_visit_status": "confirmed",
+      "physical_visit_confidence": 0.98,
+      "participant_evidence": [
+        {
+          "source_url": "https://kaliningrad.qtickets.events/237534-15-avgusta-berkut-i-mavrin",
+          "claim": "Named performer in a dated physical Kaliningrad Oblast event",
+          "retrieved_at": "2026-07-17"
+        }
+      ],
+      "source_revision": "044142ca846fc66e36fef8a93db83c4bcdefa50cea380ee07c0f08808023ec59",
+      "eligibility_status": "eligible",
+      "media_identity_status": "review_required",
+      "media_rights_status": "event_source"
+    }
+  ],
+  "exclusions": [
+    {
+      "event_id": 6476,
+      "reason": "tribute_exclusion",
+      "detail": "Black Bulls + Вася Меркьюри, not group АРИЯ"
+    },
+    {
+      "event_id": 5374,
+      "reason": "tribute_exclusion",
+      "detail": "Yalta Band tribute, not Linkin Park"
+    },
+    {
+      "event_id": 5130,
+      "reason": "tribute_exclusion",
+      "detail": "tribute festival; repertoire artists are not participants"
+    },
+    {
+      "event_id": 5278,
+      "reason": "series_container",
+      "detail": "Pianissimo aggregate subscription; use dated child concerts"
+    }
+  ]
+}

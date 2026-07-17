@@ -2660,6 +2660,104 @@ def build_related(
     }
 
 
+def export_artist_arrivals_projection(
+    con: sqlite3.Connection,
+    *,
+    current_date: str | None = None,
+) -> dict[str, Any]:
+    """Export only the public fields from the latest frozen arrival issue."""
+
+    empty = {
+        "schema_version": "kenigevents.artist_arrivals.v1",
+        "manifest_hash": None,
+        "generated_at": None,
+        "expires_at": None,
+        "eligible": False,
+        "shadow_eligible": False,
+        "publication_mode": "shadow",
+        "social_threshold_met": False,
+        "items": [],
+    }
+    exists = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artist_digest_issue'"
+    ).fetchone()
+    if not exists:
+        return empty
+    row = con.execute(
+        """
+        SELECT manifest_hash, window_end, meets_threshold, items_json, created_at
+        FROM artist_digest_issue
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return empty
+    current_date = (current_date or datetime.now(timezone.utc).date().isoformat())[:10]
+    if str(row["window_end"] or "")[:10] < current_date:
+        return empty
+    try:
+        raw_items = json.loads(row["items_json"] or "[]")
+    except (TypeError, ValueError):
+        return empty
+    allowed_localities = {"non_local_ru_verified", "non_local_international_verified"}
+    public_keys = (
+        "item_key",
+        "artist_name",
+        "arrival_kind",
+        "project_title",
+        "role",
+        "event_ids",
+        "dates",
+        "venues",
+        "municipalities",
+        "event_url",
+        "photo_url",
+        "media_ready",
+    )
+    items = [
+        {key: item.get(key) for key in public_keys}
+        for item in raw_items
+        if isinstance(item, dict)
+        and item.get("locality_status") in allowed_localities
+        and any(str(value)[:10] >= current_date for value in (item.get("dates") or []))
+    ]
+    hero_enabled = False
+    promo_tables = {
+        value[0]
+        for value in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('promo_activity', 'promo_campaign')"
+        ).fetchall()
+    }
+    if promo_tables == {"promo_activity", "promo_campaign"}:
+        hero_enabled = bool(
+            con.execute(
+                """
+                SELECT 1
+                FROM promo_activity AS activity
+                JOIN promo_campaign AS campaign ON campaign.id = activity.campaign_id
+                WHERE activity.surface = 'artist_arrival_hero'
+                  AND activity.enabled = 1
+                  AND campaign.status = 'active'
+                LIMIT 1
+                """
+            ).fetchone()
+        )
+    return {
+        "schema_version": "kenigevents.artist_arrivals.v1",
+        "manifest_hash": row["manifest_hash"],
+        "generated_at": row["created_at"],
+        "expires_at": f"{row['window_end']}T23:59:59+02:00",
+        # Hero Talk may use one verified arrival even when the social digest is
+        # intentionally suppressed by its higher threshold.
+        "eligible": bool(items) and hero_enabled,
+        "shadow_eligible": bool(items),
+        "publication_mode": "auto" if hero_enabled else "shadow",
+        "social_threshold_met": bool(row["meets_threshold"]),
+        "items": items,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -2735,6 +2833,11 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    artist_arrivals = export_artist_arrivals_projection(con, current_date=effective_date)
+    (out_dir / "artist-arrivals.json").write_text(
+        json.dumps(artist_arrivals, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     if args.skip_related:
         print(f"Exported {len(events)} events to {out_dir}")
         print("IDs:", ",".join(str(event["id"]) for event in events))

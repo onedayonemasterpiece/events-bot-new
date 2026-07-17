@@ -28,6 +28,7 @@
 - `docs/features/admin-action-assistant/README.md` — ассистент админ‑команд: запрос «простыми словами» → команда + подтверждение
 - `docs/features/recent-imports/README.md` — отчёт `/recent_imports`: список событий, недавно созданных/обновлённых из Telegram, VK и `/parse`
 - `docs/features/promo-campaigns/README.md` — промо-кампании для будущих событий/фестивалей: `/promo`, `/a`, CherryFlash boost и мягкое `✨`-выделение
+- `docs/features/artist-arrivals/README.md` — подтверждённые приезды неместных артистов: compact registry overlay, daily manifest, TG/VK carousel и static Hero Talk
 - `docs/features/telegraph-cache-sanitizer/README.md` — прогрев/проверка Telegram web preview (Instant View) для Telegraph страниц + очередь на пересборку “битых”
 - `docs/features/preview-3d/README.md` — генерация 3D-превью (`/3di`) через Kaggle/Blender с выгрузкой в Supabase Storage
 - `docs/features/guide-excursions-monitoring/README.md` — мониторинг экскурсионных анонсов гидов, отдельный digest track и публикация в тестовый канал

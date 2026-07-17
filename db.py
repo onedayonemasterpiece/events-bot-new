@@ -2541,6 +2541,120 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_promo_exposure_event_surface ON promo_exposure(event_id, surface, published_at)"
             )
 
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS artist_registry_entity(
+                    artist_id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL DEFAULT 'person',
+                    display_name TEXT NOT NULL,
+                    canonical_name TEXT NOT NULL,
+                    aliases_json JSON NOT NULL DEFAULT '[]',
+                    primary_domain TEXT,
+                    locality_status TEXT NOT NULL DEFAULT 'unknown',
+                    base_country_code TEXT,
+                    base_region_code TEXT,
+                    base_city TEXT,
+                    locality_basis TEXT,
+                    evidence_json JSON NOT NULL DEFAULT '[]',
+                    verification_status TEXT NOT NULL DEFAULT 'review',
+                    confidence REAL,
+                    photo_url TEXT,
+                    photo_rights_status TEXT NOT NULL DEFAULT 'none',
+                    photo_rights_evidence_json JSON NOT NULL DEFAULT '[]',
+                    seed_version TEXT,
+                    decision_version TEXT NOT NULL DEFAULT 'artist-locality-v1',
+                    verified_at TIMESTAMP,
+                    valid_until TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS ix_artist_registry_locality_valid
+                    ON artist_registry_entity(locality_status, valid_until);
+
+                CREATE TABLE IF NOT EXISTS event_artist_appearance(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    artist_id TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'performer',
+                    project_title TEXT NOT NULL,
+                    project_key TEXT NOT NULL,
+                    visit_cluster_key TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'review',
+                    identity_confidence REAL,
+                    physical_visit_status TEXT NOT NULL DEFAULT 'review',
+                    physical_visit_confidence REAL,
+                    participant_evidence_json JSON NOT NULL DEFAULT '[]',
+                    locality_evidence_ids_json JSON NOT NULL DEFAULT '[]',
+                    cancellation_evidence_json JSON NOT NULL DEFAULT '[]',
+                    visit_evidence_json JSON NOT NULL DEFAULT '[]',
+                    appearance_input_hash TEXT NOT NULL,
+                    source_revision TEXT NOT NULL,
+                    eligibility_status TEXT NOT NULL DEFAULT 'review',
+                    exclusion_reason TEXT,
+                    media_event_poster_id INTEGER,
+                    media_identity_status TEXT NOT NULL DEFAULT 'unverified',
+                    media_rights_status TEXT NOT NULL DEFAULT 'event_source',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    cancelled_at TIMESTAMP,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(artist_id) REFERENCES artist_registry_entity(artist_id),
+                    UNIQUE(event_id, artist_id, project_key, role)
+                );
+                CREATE INDEX IF NOT EXISTS ix_event_artist_appearance_event
+                    ON event_artist_appearance(event_id, eligibility_status);
+                CREATE INDEX IF NOT EXISTS ix_event_artist_appearance_artist
+                    ON event_artist_appearance(artist_id, project_key);
+
+                CREATE TABLE IF NOT EXISTS artist_digest_issue(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    manifest_hash TEXT NOT NULL UNIQUE,
+                    build_date TEXT NOT NULL,
+                    window_start TEXT NOT NULL,
+                    window_end TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'preview',
+                    unique_artist_count INTEGER NOT NULL DEFAULT 0,
+                    unique_project_count INTEGER NOT NULL DEFAULT 0,
+                    meets_threshold BOOLEAN NOT NULL DEFAULT 0,
+                    threshold_json JSON NOT NULL DEFAULT '{}',
+                    items_json JSON NOT NULL DEFAULT '[]',
+                    excluded_counts_json JSON NOT NULL DEFAULT '{}',
+                    published_targets_json JSON NOT NULL DEFAULT '[]',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    published_at TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS ix_artist_digest_issue_status_created
+                    ON artist_digest_issue(status, created_at);
+                CREATE INDEX IF NOT EXISTS ix_artist_digest_issue_window
+                    ON artist_digest_issue(window_start, window_end);
+
+                CREATE TABLE IF NOT EXISTS artist_publication_ledger(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    issue_id INTEGER NOT NULL,
+                    activity_id INTEGER,
+                    artist_id TEXT NOT NULL,
+                    project_key TEXT NOT NULL,
+                    surface TEXT NOT NULL,
+                    target_key TEXT NOT NULL,
+                    dedupe_key TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    publish_status TEXT NOT NULL DEFAULT 'pending',
+                    target_url TEXT,
+                    target_message_id INTEGER,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    details_json JSON NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(issue_id) REFERENCES artist_digest_issue(id) ON DELETE CASCADE,
+                    FOREIGN KEY(activity_id) REFERENCES promo_activity(id),
+                    UNIQUE(surface, target_key, dedupe_key)
+                );
+                CREATE INDEX IF NOT EXISTS ix_artist_publication_issue
+                    ON artist_publication_ledger(issue_id, surface);
+                """
+            )
+
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS organization(

@@ -1,7 +1,7 @@
 mode: full_fanout_read_only_discovery_serial_integration
 repo: /home/dev/projects/events-bot-new
 base_ref: origin/main
-base_sha: 100892d8
+base_sha: f2c9c83f
 base_branch: main
 integration_branch: integration/artist-arrivals-promo-20260717
 integration_worktree: /home/dev/.codex/worktrees/events-bot-new/artist-arrivals-promo-20260717
@@ -39,7 +39,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: Architecture recommendation with exact reusable code paths, schema proposal and operational trade-offs.
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: event_evidence
     role: planner
     effort: extra-high
@@ -53,7 +53,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: Evidence ledger with confidence, exclusions, local registry candidates and preliminary arrival list.
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: surface_mapping
     role: planner
     effort: high
@@ -67,7 +67,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: Concrete integration map, media/copy contracts and test seams.
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: serial_integrator
     role: worker
     effort: extra-high
@@ -96,7 +96,7 @@ lanes:
       - .env
     expected_output: Committed implementation and targeted/full validation evidence.
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: merge_review
     role: merge_reviewer
     effort: extra-high
@@ -110,4 +110,4 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: PASS/FAIL review with missing requirements and exact remediation.
     verification_scope: full_local
-    status: planned
+    status: completed

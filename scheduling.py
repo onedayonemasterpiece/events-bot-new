@@ -4464,6 +4464,43 @@ def startup(
             "ENABLE_V_POPULAR_REVIEW_SCHEDULED!=1",
         )
 
+    if _env_enabled("ENABLE_ARTIST_ARRIVALS_DAILY", default=False):
+        async def artist_arrivals_daily_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            from artist_arrivals.daily import run_artist_arrivals_daily
+
+            await run_artist_arrivals_daily(db_obj, bot_obj, trigger="scheduled")
+
+        artist_tz = (os.getenv("ARTIST_ARRIVALS_TZ") or "Europe/Kaliningrad").strip()
+        artist_time = (os.getenv("ARTIST_ARRIVALS_TIME_LOCAL") or "06:40").strip()
+        artist_hour, artist_minute = _cron_from_local(
+            artist_time,
+            artist_tz,
+            default_hour="6",
+            default_minute="40",
+            label="ARTIST_ARRIVALS_TIME_LOCAL",
+        )
+        _register_job(
+            "artist_arrivals_daily",
+            _job_wrapper("artist_arrivals_daily", artist_arrivals_daily_scheduler, notify_skip=_notify_admin_skip),
+            "cron",
+            id="artist_arrivals_daily",
+            hour=artist_hour,
+            minute=artist_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,
+        )
+    else:
+        logging.info("SCHED skipping artist_arrivals_daily (ENABLE_ARTIST_ARRIVALS_DAILY!=1)")
+        _notify_admin_skip("artist_arrivals_daily", "ENABLE_ARTIST_ARRIVALS_DAILY!=1")
+
     if _env_enabled("ENABLE_PROMO_VK_SCHEDULER", default=True):
         async def promo_vk_scheduler(
             db_obj,

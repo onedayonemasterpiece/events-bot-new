@@ -1,0 +1,11 @@
+{
+  "schema_version": "kenigevents.artist_arrivals.v1",
+  "manifest_hash": null,
+  "generated_at": null,
+  "expires_at": null,
+  "eligible": false,
+  "shadow_eligible": false,
+  "publication_mode": "shadow",
+  "social_threshold_met": false,
+  "items": []
+}

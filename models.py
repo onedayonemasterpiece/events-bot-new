@@ -607,6 +607,128 @@ class PromoExposure(SQLModel, table=True):
     )
 
 
+class ArtistRegistryEntity(SQLModel, table=True):
+    """Sparse operational overlay for the versioned artist seed registry."""
+
+    __tablename__ = "artist_registry_entity"
+    __table_args__ = (
+        Index("ix_artist_registry_locality_valid", "locality_status", "valid_until"),
+        {"extend_existing": True},
+    )
+
+    artist_id: str = Field(primary_key=True)
+    entity_type: str = "person"
+    display_name: str
+    canonical_name: str
+    aliases_json: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    primary_domain: Optional[str] = None
+    locality_status: str = "unknown"
+    base_country_code: Optional[str] = None
+    base_region_code: Optional[str] = None
+    base_city: Optional[str] = None
+    locality_basis: Optional[str] = None
+    evidence_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    verification_status: str = "review"
+    confidence: Optional[float] = None
+    photo_url: Optional[str] = None
+    photo_rights_status: str = "none"
+    photo_rights_evidence_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    seed_version: Optional[str] = None
+    decision_version: str = "artist-locality-v1"
+    verified_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    valid_until: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class EventArtistAppearance(SQLModel, table=True):
+    __tablename__ = "event_artist_appearance"
+    __table_args__ = (
+        UniqueConstraint("event_id", "artist_id", "project_key", "role", name="ux_event_artist_appearance_identity"),
+        Index("ix_event_artist_appearance_event", "event_id", "eligibility_status"),
+        Index("ix_event_artist_appearance_artist", "artist_id", "project_key"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id")
+    artist_id: str = Field(foreign_key="artist_registry_entity.artist_id")
+    role: str = "performer"
+    project_title: str
+    project_key: str
+    visit_cluster_key: str
+    status: str = "review"
+    identity_confidence: Optional[float] = None
+    physical_visit_status: str = "review"
+    physical_visit_confidence: Optional[float] = None
+    participant_evidence_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    locality_evidence_ids_json: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    cancellation_evidence_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    visit_evidence_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    appearance_input_hash: str
+    source_revision: str
+    eligibility_status: str = "review"
+    exclusion_reason: Optional[str] = None
+    media_event_poster_id: Optional[int] = None
+    media_identity_status: str = "unverified"
+    media_rights_status: str = "event_source"
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    cancelled_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+
+class ArtistDigestIssue(SQLModel, table=True):
+    __tablename__ = "artist_digest_issue"
+    __table_args__ = (
+        Index("ix_artist_digest_issue_status_created", "status", "created_at"),
+        Index("ix_artist_digest_issue_window", "window_start", "window_end"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    manifest_hash: str = Field(unique=True, index=True)
+    build_date: str
+    window_start: str
+    window_end: str
+    status: str = "preview"
+    unique_artist_count: int = 0
+    unique_project_count: int = 0
+    meets_threshold: bool = False
+    threshold_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    items_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    excluded_counts_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    published_targets_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    published_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+
+class ArtistPublicationLedger(SQLModel, table=True):
+    __tablename__ = "artist_publication_ledger"
+    __table_args__ = (
+        UniqueConstraint("surface", "target_key", "dedupe_key", name="ux_artist_publication_dedupe"),
+        Index("ix_artist_publication_issue", "issue_id", "surface"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    issue_id: int = Field(foreign_key="artist_digest_issue.id")
+    activity_id: Optional[int] = Field(default=None, foreign_key="promo_activity.id")
+    artist_id: str
+    project_key: str
+    surface: str
+    target_key: str
+    dedupe_key: str
+    content_hash: str
+    publish_status: str = "pending"
+    target_url: Optional[str] = None
+    target_message_id: Optional[int] = None
+    attempts: int = 0
+    details_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
 class PromoVkRepostJob(SQLModel, table=True):
     __tablename__ = "promo_vk_repost_job"
     __table_args__ = (

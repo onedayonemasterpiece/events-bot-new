@@ -55,6 +55,7 @@ sections:
     location_flags: docs/reference/location-flags.md
     holidays: docs/reference/holidays.md
     recurring_events: docs/reference/recurring-events.md
+    artist_visit_registry: docs/reference/artist-visit-registry.md
     month_page_template: docs/reference/month-page-template.md
   pipelines:
     source_parsing: docs/features/source-parsing/README.md
@@ -153,6 +154,15 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  artist_arrivals:
+    status: shadow_rollout
+    docs: docs/features/artist-arrivals/README.md
+    entrypoints:
+      - artist_arrivals/service.py
+      - artist_arrivals/daily.py
+      - artist_arrivals/publisher.py
+      - site/src/components/ArtistArrivalsHeroTalk.astro
+
   static_personal_announcements:
     status: release_planning
     docs: docs/features/static-personal-announcements/README.md

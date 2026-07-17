@@ -1,6 +1,9 @@
 # Приезды артистов и необычные события: product contract
 
-Статус: **design / backlog**, production pipeline не реализован.
+Статус: **split**. Artist-arrivals foundation реализован в shadow-режиме;
+каноника реализации —
+[`docs/features/artist-arrivals/README.md`](../../../features/artist-arrivals/README.md).
+Необычные события и promotion настоящей homepage остаются design/backlog.
 
 Документ определяет две связанные функции для narrative engine:
 
