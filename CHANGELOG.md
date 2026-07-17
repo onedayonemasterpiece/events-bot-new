@@ -15,6 +15,9 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static event occurrence graph**: filter exported `other_date_ids` to mutual
+  links inside the eligible immutable catalog, so past/ineligible occurrences
+  cannot create dangling production-manifest edges.
 - **VK auto-import provider-quota false reject (INC-2026-07-17)**: allocate
   Smart Update requests across the registered KEY1–KEY5 normal pool from the
   first reserve and rotate to another pool member on provider-side `429`

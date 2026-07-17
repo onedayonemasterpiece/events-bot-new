@@ -3050,6 +3050,31 @@ def build_related(
     }
 
 
+def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
+    """Keep only mutual links inside the exported eligible catalog.
+
+    Canonical rows may retain links to past/ineligible occurrences.  Those
+    source links remain in SQLite, but a static release must not emit dangling
+    or one-way graph edges that point outside its immutable catalog.
+    """
+
+    by_id = {int(event["id"]): event for event in events}
+    raw_links = {
+        event_id: {
+            int(value)
+            for value in (event.get("other_date_ids") or [])
+            if str(value).isdigit() and int(value) != event_id
+        }
+        for event_id, event in by_id.items()
+    }
+    for event_id, event in by_id.items():
+        event["other_date_ids"] = sorted(
+            linked_id
+            for linked_id in raw_links[event_id]
+            if linked_id in by_id and event_id in raw_links.get(linked_id, set())
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -3128,6 +3153,7 @@ def main() -> int:
         focus_date_to=args.focus_date_to,
     )
     events = [build_event(con, row, effective_date) for row in rows]
+    normalize_linked_occurrences(events)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()

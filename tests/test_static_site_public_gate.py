@@ -179,6 +179,23 @@ def test_add_build_09_catalog_ledger_proves_eligible_and_excluded_parity() -> No
     assert ledger["snapshot"]["sha256"] == "b" * 64
 
 
+def test_add_build_09_linked_occurrences_are_mutual_and_catalog_bounded() -> None:
+    exporter = _load_exporter_module()
+    events = [
+        {"id": 1, "other_date_ids": [1, 2, 3, 999]},
+        {"id": 2, "other_date_ids": [1]},
+        {"id": 3, "other_date_ids": []},
+    ]
+
+    exporter.normalize_linked_occurrences(events)
+
+    assert events == [
+        {"id": 1, "other_date_ids": [2]},
+        {"id": 2, "other_date_ids": [1]},
+        {"id": 3, "other_date_ids": []},
+    ]
+
+
 def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
     exporter = _load_exporter_module()
     exporter.SKIP_IMAGE_PROBES = True
