@@ -37,6 +37,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: completed the repaired full vector sync and replaced the temporary sparse catalog with noindex preview `preview-20260717t-static-personalization-v5-vector`: `303` events, `40` pgvector/HNSW candidates per event and no underfilled chains.
 - 2026-07-17: published desktop-only v6 remediation for events `5756`, `4671`, `3103`, `4783` and `6851`; the only shared mobile change is replacing the retired fullscreen brand imitation with `AnnouncementsLockup`.
 - 2026-07-17: follow-up review found that v6 still used an ambiguous KAUP route label, offered train `6724` without a realistic Янтарь-холл exit/walk buffer, admitted low-resolution images into the grouped viewer despite a strong set, and allowed the constrained phone panel to wrap/overflow.
+- 2026-07-17: published noindex v7 product-polish preview with distinct pedestrian/car KAUP routes, venue-access-aware return selection, quality-admitted grouped media and measured component-responsive telephone actions.
 
 ## Root Cause
 
@@ -129,7 +130,11 @@ The full-catalog static preview exposed several user-visible regressions around 
 - generated catalog: `303` future/ongoing event pages; `event_pgvector_related_chain_v2_two_doc` over `supabase_pgvector_hnsw_cosine_v1`, semantic embeddings enabled, exactly `40` candidates for every event and `0` underfilled chains
 - regression checks: preview check, desktop full-catalog contract (`303` pages), bus and rail directory checks, `12` targeted pytest checks and `git diff --check` passed; the preview check also verifies exact visible-link/transport-ICS parity after the desktop/mobile shortlist union
 - post-deploy verification: public HTTP `200` for the v6 index, all five regression event pages and the recovered desktop train ICS; public Playwright passed `26/26` checks with zero console errors, covering Editorial routing and event-photo hero for `5756`, contained/click-dismissable documents and posters, KAUP transfer/bus/map facts, only evening returns `6724`/`6726`, the 12-image grouped viewer with group navigation, visible/copyable phone number, absent insufficient-feedback placeholder and preserved mobile `accepted-v8` with the shared lockup
-- v7 product-polish release evidence: pending build/public acceptance in this incident follow-up; production root remains unchanged until explicit approval
+- v7 product-polish source: pushed commit `79ff2c25c18e0f0ed8f739c578a720350f506dac` on `fix/static-site-v4-personalization-media-20260716`
+- v7 preview: `https://kenigevents.ru/preview-20260717t-static-personalization-v7-product-polish/__preview/` (noindex only; production root unchanged)
+- v7 build and static gates: `373` total pages / `303` event pages; preview, production-desktop (`303`), rail (`13` source pages / `9` routes / `17` locality policies / `10` patterns), bus (`17` localities / `26` venues / `21` stops), four targeted pytest regressions and `git diff --check` passed
+- v7 public evidence: HTTP `200` for the preview index and all four regression pages; Playwright at `1536×864`, `1920×1080` and mobile `390×844` verified no horizontal overflow, one-line copyable telephone geometry, compact/comfortable calendar adaptation, separate KAUP `rtt=pd` and `rtt=auto` routes, return trains `6726`/`6728` after the `20:10` safe-ready threshold, seven admitted images out of twelve and preserved mobile `accepted-v8`
+- external review: `a-opus`/agy review was used for product and UI critique; the resulting acceptance gate relies on measured browser geometry rather than consultant approval alone
 
 ## Prevention
 
