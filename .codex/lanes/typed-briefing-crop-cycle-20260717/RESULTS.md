@@ -15,4 +15,6 @@
 - Crop probe tests: `3 passed`.
 - Lab allowlist: `6 files`, pass.
 - Gemini 3.1 Pro High: two corrective FAIL rounds retained; final `R01–R07 PASS`, `OVERALL PASS`, no blockers.
+- Immutable public build `preview-20260717t1237-briefing-lab-139d9809`: deploy and public capture pass.
+- Telegram topic `6`: evidence messages `185–190` verified; no new incoming feedback at closure.
 - Production homepage and database: unchanged.

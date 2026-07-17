@@ -30,3 +30,8 @@ database and runtime page-view LLM path were not modified.
 - `git diff --check`: pass.
 - Gemini 3.1 Pro High final gate: `R01–R07 PASS`, `OVERALL PASS`, isolated-lab
   publication allowed; earlier FAIL artifacts remain committed as provenance.
+- Immutable public build:
+  `preview-20260717t1237-briefing-lab-139d9809`; public verification pass.
+- Telegram mobile-review topic `6`: URL, three desktop screenshots, one mobile
+  screenshot and sequential WebM delivered and verified as messages `185–190`;
+  no later incoming comment was present at closure.

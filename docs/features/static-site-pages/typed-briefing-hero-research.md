@@ -70,7 +70,8 @@ Route:
 
 Final immutable review build:
 
-- [current manual 12-image review deck](https://kenigevents.ru/preview-20260717t1049-briefing-lab-38425f28/lab/briefing/?variant=c&review=media&scenario=media_review_planet_ocean&pace=slow&replay=1);
+- [current 14-scenario narrative-bound media deck](https://kenigevents.ru/preview-20260717t1237-briefing-lab-139d9809/lab/briefing/?variant=c&review=media&scenario=media_review_writing_kaliningrad&pace=slow&replay=1);
+- [superseded: manual 12-image deck without sequence/portrait contracts](https://kenigevents.ru/preview-20260717t1049-briefing-lab-38425f28/lab/briefing/?variant=c&review=media&scenario=media_review_planet_ocean&pace=slow&replay=1);
 - [current stripe/OCR/source-quality corrective candidate](https://kenigevents.ru/preview-20260717t0951-briefing-lab-21ca7a49/lab/briefing/?variant=c&scenario=weather_water_demo&pace=slow&replay=1);
 - [superseded: dramatic mosaic with opaque/overlapping stripe, low-resolution sources and insufficient OCR admission](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [superseded: rejected `12×4` checkerboard/distorted crop](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
@@ -137,6 +138,12 @@ Final immutable review build:
   растяжения; три вертикальных OCR-safe источника одного события занимают три
   соседних `5×5` cluster. Источники не чередуются по клеткам и fail closed как
   один atomic plan, если отсутствует хотя бы один exact asset;
+- immutable build `preview-20260717t1237-briefing-lab-139d9809` проверен на
+  public endpoint: manual scene остаётся с raster после семи секунд,
+  `По очереди` показал шесть разных state в WebM, mobile `390×844` имеет
+  `scrollWidth == innerWidth == 390`, 14 кнопок и `mediaMode=none`. Evidence и
+  ссылка отправлены в Telegram topic `6`, сообщения `185–190`, после отправки
+  topic перечитан — новых входящих комментариев не появилось;
 - актуальная mosaic — адаптивная CSS-grid `16×5` / `18×5` / `20×5` для
   `1024–1535` / `1536–1791` / `≥1792px`. Она занимает правые `75vw` на любой
   desktop review-width, поэтому больше не сжимается до половины экрана из-за
