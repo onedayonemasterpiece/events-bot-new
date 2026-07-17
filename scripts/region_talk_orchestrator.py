@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -401,14 +402,37 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         f"Источники, где уже найден хотя бы один возможный пост о КО: {value('publics_with_ko_candidates_total')}",
         (
-            "Стабильный реестр внешних блогеров — записей / confirmed / needs review / "
-            "поддерживаемых TG+VK источников / уже в очереди / ещё не заведены в очередь: "
+            "Реестр людей/проектов — всего записей / confirmed / needs review / "
+            "confirmed, но местные / eligible confirmed non-local: "
             f"{value('external_blogger_registry_records_total')}/"
             f"{value('external_blogger_registry_confirmed_records_total')}/"
             f"{value('external_blogger_registry_needs_review_records_total')}/"
+            f"{value('external_blogger_registry_confirmed_local_excluded_records_total')}/"
+            f"{value('external_blogger_registry_eligible_records_total')}"
+        ),
+        (
+            "Eligible-записи реестра — есть поддерживаемый Telegram/VK источник / "
+            "нет поддерживаемой TG/VK-ссылки / заведены в единую очередь / "
+            "хотя бы один источник просмотрен / найден возможный KO-пост: "
+            f"{value('external_blogger_registry_records_with_supported_tg_vk_source_total')}/"
+            f"{value('external_blogger_registry_records_without_supported_tg_vk_source_total')}/"
+            f"{value('external_blogger_registry_supported_records_in_queue_total')}/"
+            f"{value('external_blogger_registry_supported_records_with_scanned_source_total')}/"
+            f"{value('external_blogger_registry_supported_records_with_ko_source_total')}"
+        ),
+        (
+            "Физически всё ещё помечены ingestion-полем pipeline_status=stored_only "
+            "(это не операционный статус обработки): "
+            f"{value('external_blogger_registry_pipeline_stored_only_records_total')}"
+        ),
+        (
+            "Уникальные поддерживаемые TG+VK источники реестра — всего / в очереди / "
+            "не заведены / просмотрены / с возможным KO-постом: "
             f"{value('external_blogger_registry_canonical_tg_vk_sources_total')}/"
             f"{value('external_blogger_registry_canonical_sources_in_queue_total')}/"
-            f"{value('external_blogger_registry_canonical_sources_missing_from_queue_total')}"
+            f"{value('external_blogger_registry_canonical_sources_missing_from_queue_total')}/"
+            f"{value('external_blogger_registry_canonical_sources_scanned_total')}/"
+            f"{value('external_blogger_registry_canonical_sources_with_ko_total')}"
         ),
         (
             "Подтверждённые внешние блогеры — источников в единой очереди / просмотрено / найден KO / "
@@ -865,18 +889,50 @@ def _evidence_relation_is_local(value: Any) -> bool:
     ))
 
 
+def _vk_source_url_from_video_profile(value: Any) -> str:
+    """Return a scan-capable VK wall URL for a VK Video author profile."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(
+            raw if re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I) else "https://" + raw.lstrip("/")
+        )
+    except Exception:
+        return ""
+    if (parsed.netloc or "").strip().lower() not in {"vkvideo.ru", "www.vkvideo.ru"}:
+        return ""
+    first = (parsed.path or "").strip("/").split("/", 1)[0]
+    if not first.startswith("@"):
+        return ""
+    identity = first[1:].strip().lower()
+    if not re.fullmatch(r"[a-z0-9_.-]{3,}", identity, re.I):
+        return ""
+    return f"https://vk.com/{identity}"
+
+
 def _evidence_canonical_source_keys(row: dict[str, Any]) -> set[str]:
     keys: set[str] = set()
     telegram_url = str(row.get("telegram_url") or "").strip()
     handle = _telegram_handle_from_url(telegram_url)
     if handle:
         keys.add(f"telegram:{handle}")
-    vk_url = str(row.get("vk_public_url") or "").strip()
-    match = re.search(r"(?:https?://)?(?:www\.)?vk\.com/([^/?#]+)", vk_url, re.I)
-    if match:
-        identity = match.group(1).strip().lower()
-        if identity and identity not in {"wall", "feed", "video"}:
-            keys.add(f"vk:{identity}")
+    public_keys: set[str] = set()
+    vk_public_url = str(row.get("vk_public_url") or "").strip()
+    for vk_url in (vk_public_url,):
+        match = re.search(r"(?:https?://)?(?:www\.)?vk\.(?:com|ru)/([^/?#]+)", vk_url, re.I)
+        if match:
+            identity = match.group(1).strip().lower()
+            if identity and identity not in {"wall", "feed", "video"}:
+                public_keys.add(f"vk:{identity}")
+    keys.update(public_keys)
+    if not public_keys:
+        video_profile_url = _vk_source_url_from_video_profile(row.get("vk_video_url"))
+        match = re.search(r"(?:https?://)?(?:www\.)?vk\.com/([^/?#]+)", video_profile_url, re.I)
+        if match:
+            identity = match.group(1).strip().lower()
+            if identity and identity not in {"wall", "feed", "video"}:
+                keys.add(f"vk:{identity}")
     return keys
 
 
@@ -887,27 +943,50 @@ def _external_blogger_registry_metrics(
     confirmed = [row for row in evidence_rows if str(row.get("confirmation_status") or "").strip().lower() == "confirmed_external"]
     review = [row for row in evidence_rows if str(row.get("confirmation_status") or "").strip().lower() == "needs_externality_review"]
     eligible_records = [row for row in confirmed if not _evidence_relation_is_local(row.get("region_relation_status"))]
-    canonical_keys = set().union(*(_evidence_canonical_source_keys(row) for row in eligible_records)) if eligible_records else set()
+    record_keys = [(row, _evidence_canonical_source_keys(row)) for row in eligible_records]
+    canonical_keys = set().union(*(keys for _, keys in record_keys)) if record_keys else set()
     queue_keys: set[str] = set()
+    scanned_keys: set[str] = set()
+    ko_keys: set[str] = set()
     for row in source_rows:
+        row_keys: set[str] = set()
         canonical = str(row.get("canonical_source_key") or "").strip().lower().rstrip("/")
         if canonical:
-            queue_keys.add(canonical)
+            row_keys.add(canonical)
         for alias in _source_alias_keys(row):
             if alias.startswith(("telegram:", "vk:")):
-                queue_keys.add(alias)
+                row_keys.add(alias)
+        queue_keys.update(row_keys)
+        if _source_has_scan_evidence(row):
+            scanned_keys.update(row_keys)
+        if _source_has_ko_candidate(row):
+            ko_keys.update(row_keys)
     queued = canonical_keys & queue_keys
-    records_with_supported_source = sum(1 for row in eligible_records if _evidence_canonical_source_keys(row))
+    supported_records = [(row, keys) for row, keys in record_keys if keys]
+    records_in_queue = [(row, keys) for row, keys in supported_records if keys & queue_keys]
+    records_scanned = [(row, keys) for row, keys in supported_records if keys & scanned_keys]
+    records_with_ko = [(row, keys) for row, keys in supported_records if keys & ko_keys]
     return {
         "external_blogger_registry_records_total": len(evidence_rows),
         "external_blogger_registry_confirmed_records_total": len(confirmed),
         "external_blogger_registry_needs_review_records_total": len(review),
         "external_blogger_registry_confirmed_local_excluded_records_total": len(confirmed) - len(eligible_records),
         "external_blogger_registry_eligible_records_total": len(eligible_records),
-        "external_blogger_registry_records_with_supported_tg_vk_source_total": records_with_supported_source,
+        "external_blogger_registry_records_with_supported_tg_vk_source_total": len(supported_records),
+        "external_blogger_registry_records_without_supported_tg_vk_source_total": len(eligible_records) - len(supported_records),
+        "external_blogger_registry_supported_records_in_queue_total": len(records_in_queue),
+        "external_blogger_registry_supported_records_missing_from_queue_total": len(supported_records) - len(records_in_queue),
+        "external_blogger_registry_supported_records_with_scanned_source_total": len(records_scanned),
+        "external_blogger_registry_supported_records_without_scanned_source_total": len(supported_records) - len(records_scanned),
+        "external_blogger_registry_supported_records_with_ko_source_total": len(records_with_ko),
+        "external_blogger_registry_pipeline_stored_only_records_total": sum(
+            1 for row in evidence_rows if str(row.get("pipeline_status") or "").strip().lower() == "stored_only"
+        ),
         "external_blogger_registry_canonical_tg_vk_sources_total": len(canonical_keys),
         "external_blogger_registry_canonical_sources_in_queue_total": len(queued),
         "external_blogger_registry_canonical_sources_missing_from_queue_total": len(canonical_keys - queue_keys),
+        "external_blogger_registry_canonical_sources_scanned_total": len(canonical_keys & scanned_keys),
+        "external_blogger_registry_canonical_sources_with_ko_total": len(canonical_keys & ko_keys),
     }
 
 

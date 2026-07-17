@@ -210,16 +210,53 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "confirmation_status": "needs_externality_review",
                 "telegram_url": "https://t.me/review",
             },
+            {
+                "record_id": "4",
+                "confirmation_status": "confirmed_external",
+                "region_relation_status": "external visitor",
+                "vk_video_url": "https://vkvideo.ru/@videoauthor",
+                "pipeline_status": "stored_only",
+            },
+            {
+                "record_id": "5",
+                "confirmation_status": "confirmed_external",
+                "region_relation_status": "external visitor",
+                "rutube_url": "https://rutube.ru/channel/123/",
+                "pipeline_status": "stored_only",
+            },
         ]
-        source_rows = [{"canonical_source_key": "telegram:blogger", "platform": "telegram", "source_url": "https://t.me/blogger"}]
+        source_rows = [
+            {
+                "canonical_source_key": "telegram:blogger",
+                "platform": "telegram",
+                "source_url": "https://t.me/blogger",
+                "source_history_scan_ever_completed": True,
+                "ko_posts_found": 1,
+            },
+            {
+                "canonical_source_key": "vk:videoauthor",
+                "platform": "vk",
+                "source_url": "https://vk.com/videoauthor",
+            },
+        ]
         metrics = mod._external_blogger_registry_metrics(evidence, source_rows)
-        self.assertEqual(metrics["external_blogger_registry_records_total"], 3)
-        self.assertEqual(metrics["external_blogger_registry_confirmed_records_total"], 2)
+        self.assertEqual(metrics["external_blogger_registry_records_total"], 5)
+        self.assertEqual(metrics["external_blogger_registry_confirmed_records_total"], 4)
         self.assertEqual(metrics["external_blogger_registry_needs_review_records_total"], 1)
         self.assertEqual(metrics["external_blogger_registry_confirmed_local_excluded_records_total"], 1)
-        self.assertEqual(metrics["external_blogger_registry_canonical_tg_vk_sources_total"], 2)
-        self.assertEqual(metrics["external_blogger_registry_canonical_sources_in_queue_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_eligible_records_total"], 3)
+        self.assertEqual(metrics["external_blogger_registry_records_with_supported_tg_vk_source_total"], 2)
+        self.assertEqual(metrics["external_blogger_registry_records_without_supported_tg_vk_source_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_supported_records_in_queue_total"], 2)
+        self.assertEqual(metrics["external_blogger_registry_supported_records_with_scanned_source_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_supported_records_without_scanned_source_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_supported_records_with_ko_source_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_pipeline_stored_only_records_total"], 2)
+        self.assertEqual(metrics["external_blogger_registry_canonical_tg_vk_sources_total"], 3)
+        self.assertEqual(metrics["external_blogger_registry_canonical_sources_in_queue_total"], 2)
         self.assertEqual(metrics["external_blogger_registry_canonical_sources_missing_from_queue_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_canonical_sources_scanned_total"], 1)
+        self.assertEqual(metrics["external_blogger_registry_canonical_sources_with_ko_total"], 1)
 
     def test_confirmed_blogger_metrics_count_terminal_missing_telegram_username(self) -> None:
         mod = load_module()

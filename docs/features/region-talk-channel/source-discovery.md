@@ -194,16 +194,34 @@ valid Telegram channel and VK community **or personal profile** into the same
 canonical `unified_source_queue`. Admission is idempotent by
 `canonical_source_key`; no second blogger queue or second cursor is created.
 
-The 2026-07-14 registry snapshot contains 238 evidence records: 186
-`confirmed_external` and 52 `needs_externality_review`. Those are record
-counts, not unique source counts: one person may carry Telegram, VK, VK Video,
-RUTUBE and several evidence URLs. Current product ingestion canonicalizes only
-supported Telegram and VK identities; VK Video/RUTUBE remain evidence for the
-same author until a dedicated source reader exists. `pipeline_status=stored_only`
-does not block confirmed rows. The orchestrator therefore reports the stable
-registry denominator, eligible confirmed records, unique canonical TG/VK
-sources, already queued sources and missing queue admissions separately; it
-must not present 238 records as 238 scanned communities.
+The 2026-07-17 registry snapshot contains 266 evidence records: 202
+`confirmed_external` and 64 `needs_externality_review`. Six confirmed rows say
+that the author is local to Kaliningrad Oblast, leaving 196 eligible non-local
+people/projects. Those are record counts, not unique source counts: one person
+may carry Telegram, VK, VK Video, RUTUBE and several evidence URLs.
+
+Current product ingestion can scan only Telegram and ordinary VK
+communities/personal profiles. A VK Video **author profile** of the form
+`vkvideo.ru/@screen_name` is converted narrowly to `vk.com/screen_name`; a
+concrete video/playlist path is not admitted as a source. Public `vk.ru/...`
+aliases are normalized to the same canonical `vk.com/...` source. RUTUBE, YouTube,
+Instagram and other-only records remain valid research evidence but cannot be
+processed by this Telegram/VK worker until a supported source URL is added or
+a separate platform reader is implemented. In the 2026-07-17 snapshot, 100 of
+196 eligible records have a supported TG/VK identity after this conversion;
+96 have no supported TG/VK identity at all.
+
+`pipeline_status=stored_only` is currently an ingestion-owned physical field
+and does not block confirmed rows or describe downstream progress. The
+orchestrator therefore derives and reports separately:
+
+- eligible people/projects with and without a supported TG/VK identity;
+- eligible records with at least one canonical source in the unified queue;
+- eligible records with at least one source-history scan and with KO evidence;
+- unique supported source roots, queue admission, scan and KO coverage.
+
+It must never present the active unscanned **source** count as the number of all
+confirmed people/projects still awaiting product processing.
 
 Such rows carry `priority_lane=confirmed_external_blogger` and are selected
 ahead of generic backlog and old no-hit continuations. Existing terminal

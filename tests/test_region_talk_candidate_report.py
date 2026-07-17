@@ -1968,6 +1968,66 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertTrue(all(row["priority_lane"] == "confirmed_external_blogger" for row in evidence_rows))
         self.assertTrue(any(row["source_url"] == "https://vk.com/id123456" for row in evidence_rows))
 
+    def test_confirmed_external_blogger_evidence_maps_vkvideo_author_profile_to_vk_wall(self) -> None:
+        mod = load_module()
+        previous = {
+            "external_blogger_evidence": {
+                "vkvideo": {
+                    "record_id": "ext-vkvideo",
+                    "blogger_name": "External Video Author",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external visitor",
+                    "vk_video_url": "https://vkvideo.ru/@external_author/playlists",
+                },
+                "video-only": {
+                    "record_id": "ext-video-only",
+                    "blogger_name": "Concrete Video",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external visitor",
+                    "vk_video_url": "https://vkvideo.ru/video-1_2",
+                },
+                "public-wins": {
+                    "record_id": "ext-public-wins",
+                    "blogger_name": "Same VK Presence",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external visitor",
+                    "vk_public_url": "https://vk.ru/club123456",
+                    "vk_video_url": "https://vkvideo.ru/@same_vk_presence",
+                },
+            },
+        }
+
+        rows = mod.external_blogger_evidence_source_rows(
+            previous, "evidence-run", "2026-07-17T00:00:00+00:00",
+        )
+
+        by_key = {row["canonical_source_key"]: row for row in rows}
+        self.assertEqual(set(by_key), {"vk:external_author", "vk:club123456"})
+        self.assertEqual(by_key["vk:external_author"]["source_url"], "https://vk.com/external_author")
+        self.assertEqual(by_key["vk:club123456"]["source_url"], "https://vk.com/club123456")
+
+    def test_confirmed_external_blogger_evidence_maps_vk_ru_public_alias_to_vk_com(self) -> None:
+        mod = load_module()
+        previous = {
+            "external_blogger_evidence": {
+                "vk-ru": {
+                    "record_id": "ext-vk-ru",
+                    "blogger_name": "External VK Author",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external visitor",
+                    "vk_public_url": "https://vk.ru/club236035592",
+                },
+            },
+        }
+
+        rows = mod.external_blogger_evidence_source_rows(
+            previous, "evidence-run", "2026-07-17T00:00:00+00:00",
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["canonical_source_key"], "vk:club236035592")
+        self.assertEqual(rows[0]["source_url"], "https://vk.com/club236035592")
+
     def test_confirmed_external_blogger_evidence_is_deduped_into_single_queue_and_persisted(self) -> None:
         mod = load_module()
         previous = {

@@ -477,6 +477,15 @@ Important invariants:
   as `publics_pending_post_probe_only_total` and cannot increase the count of
   publics whose history was scanned. `publics_with_any_processed_post_total`
   remains available as the broader post-presence metric.
+- External-blogger reporting has two explicit grains. The registry block counts
+  people/projects (`records`): total, confirmed, review, confirmed-local,
+  eligible non-local, supported-TG/VK, unsupported, queued, source-history
+  scanned and KO-producing. The execution block counts canonical TG/VK
+  sources: total, queued, scanned, KO and active unscanned. A number such as
+  `confirmed_external_blogger_pending_total` is therefore only an active source
+  backlog; it is not allowed to answer "how many confirmed bloggers remain".
+  Physical `pipeline_status=stored_only` is shown as a data-quality fact but is
+  not used as the operational lifecycle source of truth.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and a 7-query lexicon-driven Telegram global-search

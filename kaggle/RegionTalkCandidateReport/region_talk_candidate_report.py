@@ -427,7 +427,7 @@ def stable_hash(*parts: Any, length: int = 16) -> str:
 def canonical_handle(value: str) -> str:
     raw = (value or "").strip()
     raw = re.sub(r"^https?://t\.me/", "@", raw, flags=re.I)
-    raw = re.sub(r"^https?://(?:www\.)?vk\.com/", "@", raw, flags=re.I)
+    raw = re.sub(r"^https?://(?:www\.)?vk\.(?:com|ru)/", "@", raw, flags=re.I)
     if raw and not raw.startswith("@") and re.fullmatch(r"[A-Za-z0-9_\.]+", raw):
         raw = "@" + raw
     return raw
@@ -446,7 +446,7 @@ def canonical_source_url(platform: str, handle: str, url: str) -> str:
             if m:
                 return "https://t.me/" + m.group(1).lstrip("@")
         if platform in {"vk", "vkvideo"}:
-            m = re.search(r"vk\.com/([A-Za-z0-9_.-]+)", raw, re.I)
+            m = re.search(r"vk\.(?:com|ru)/([A-Za-z0-9_.-]+)", raw, re.I)
             if m:
                 ident = m.group(1)
                 # `club<ID>`, `public<ID>` and `id<ID>` are complete VK
@@ -544,7 +544,7 @@ def normalize_source_platform(value: str, url: str = "") -> str:
     low_url = (url or "").strip().lower()
     if raw in {"telegram", "tg", "telegram-channel", "telegram channel", "telegram_post", "telegram-post"} or "t.me/" in low_url or "telegram.me/" in low_url:
         return "telegram"
-    if raw in {"vk", "vkontakte", "vk-public", "vk public", "vk-community", "vk community", "vk group", "vk_group"} or "vk.com/" in low_url:
+    if raw in {"vk", "vkontakte", "vk-public", "vk public", "vk-community", "vk community", "vk group", "vk_group"} or "vk.com/" in low_url or "vk.ru/" in low_url:
         if "video" in raw:
             return "vkvideo"
         return "vk"
@@ -7837,6 +7837,34 @@ def external_blogger_evidence_row_is_local(row: dict[str, Any]) -> bool:
     ])
 
 
+def vk_source_url_from_video_profile(value: Any) -> str:
+    """Map a VK Video author profile to the corresponding VK wall/profile.
+
+    ``vkvideo.ru/@screen_name`` is an author identity, unlike a concrete video
+    or playlist URL.  Region Talk cannot scan VK Video itself, but it can scan
+    the same public/person through the ordinary VK wall API.  Keep this narrow:
+    media ids and arbitrary VK Video paths must never become source roots.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(
+            raw if re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I) else "https://" + raw.lstrip("/")
+        )
+    except Exception:
+        return ""
+    if (parsed.netloc or "").strip().lower() not in {"vkvideo.ru", "www.vkvideo.ru"}:
+        return ""
+    first = (parsed.path or "").strip("/").split("/", 1)[0]
+    if not first.startswith("@"):
+        return ""
+    identity = first[1:].strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,}", identity):
+        return ""
+    return f"https://vk.com/{identity}"
+
+
 def external_blogger_evidence_source_rows(previous_state: dict[str, Any], run_id: str, run_now: str) -> list[dict[str, Any]]:
     """Convert authoritative external-blogger evidence into source-queue rows.
 
@@ -7857,9 +7885,19 @@ def external_blogger_evidence_source_rows(previous_state: dict[str, Any], run_id
         if external_blogger_evidence_row_is_local(row):
             excluded_local += 1
             continue
+        vk_public_url = str(row.get("vk_public_url") or "").strip()
+        vk_public_canonical = canonical_source_url("vk", canonical_handle(vk_public_url), vk_public_url) if vk_public_url else ""
+        # A dedicated VK public/profile is authoritative.  The VK Video author
+        # profile is a fallback for the same VK presence, not a second source;
+        # queuing both screen names can duplicate one underlying community.
+        vk_source_url = (
+            vk_public_url
+            if vk_public_canonical and target_source_url_reason("vk", vk_public_canonical) == "ok"
+            else vk_source_url_from_video_profile(row.get("vk_video_url"))
+        )
         links = [
             ("telegram", str(row.get("telegram_url") or "").strip()),
-            ("vk", str(row.get("vk_public_url") or "").strip()),
+            ("vk", vk_source_url),
         ]
         for platform, raw_url in links:
             if not raw_url:
