@@ -5,6 +5,7 @@ import EventHero, { type HeroComposition } from '../../components/EventHero.astr
 import EventFacts from '../../components/EventFacts.astro';
 import EventTransportSchedule from '../../components/EventTransportSchedule.astro';
 import EventBusTransportSchedule from '../../components/EventBusTransportSchedule.astro';
+import KaupTransportSchedule from '../../components/KaupTransportSchedule.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
@@ -152,6 +153,7 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
             <EventFacts event={event} />
             <EventTransportSchedule event={event} />
             <EventBusTransportSchedule event={event} />
+            <KaupTransportSchedule event={event} compact />
             {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
           </div>
           <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>

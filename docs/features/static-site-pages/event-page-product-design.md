@@ -359,6 +359,16 @@ and no change to panel height. Browser acceptance compares child vertical
 centres/overlap and before/after-copy geometry; containment-only assertions are
 not sufficient.
 
+The exact-venue KAUP journey is not desktop-only. On the accepted phone event
+surface it appears after `Коротко` as one flat compact block with the same
+actionable order: recommended official transfer, exact Kaliningrad bus-terminal
+origin, filtered departures, Romanovo-to-venue walk, explicit no-return warning
+and the car alternative. Only transfer boarding fine print is collapsed into a
+native `details` disclosure; origin, departures and the return risk remain
+visible without a tap. This compact variant has no raw-coordinate label,
+pseudo-map decoration or button wall, and standard bus/walk/car/pin icons keep
+mode changes scannable.
+
 ## 8. Related events and personalization placement
 
 ### Static fallback

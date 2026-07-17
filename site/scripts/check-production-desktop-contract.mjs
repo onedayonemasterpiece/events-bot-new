@@ -56,6 +56,7 @@ for (const { slug, file } of eventFiles) {
     failures.push(`${slug}: accepted compact rail lost its immutable thumbnail derivatives`);
   }
   const desktopHtml = html.slice(html.indexOf('<main class="desktop-clean-event'), html.indexOf('</main>', html.indexOf('<main class="desktop-clean-event')) + 7);
+  const mobileHtml = html.slice(html.indexOf('<main class="mobile-event-production'), html.indexOf('</main>', html.indexOf('<main class="mobile-event-production')) + 7);
   if (slug === 'zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756') {
     if (!desktopHtml.includes('data-selected-media-policy="visual_only"')) failures.push(`${slug}: classified horizontal photo was not selected as the desktop hero`);
     if (!desktopHtml.includes('data-desktop-gallery-fit="contain"')) failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);
@@ -87,6 +88,12 @@ for (const { slug, file } of eventFiles) {
     const carIndex = desktopHtml.indexOf('data-kaup-car-route');
     if (!(originIndex >= 0 && scheduleIndex > originIndex && lastMileIndex > scheduleIndex && returnWarningIndex > lastMileIndex && carIndex > returnWarningIndex)) {
       failures.push(`${slug}: KAUP travel flow is not ordered as origin → schedule → last mile → return warning → car`);
+    }
+    for (const marker of ['data-kaup-compact', 'Трансфер · 600 ₽ туда и обратно', 'Точки посадки и условия', 'Калининградский автовокзал', 'ул. Железнодорожная, 7', 'Автобус № 119']) {
+      if (!mobileHtml.includes(marker)) failures.push(`${slug}: compact mobile KAUP journey is missing ${marker}`);
+    }
+    if (!mobileHtml.includes('<details class="kaup-transport__transfer-details"')) {
+      failures.push(`${slug}: compact mobile KAUP transfer details are not progressively disclosed`);
     }
   }
   if (slug === '15-avgusta-v-yantar-holl-spektakl-papa-svetlogorsk-3103') {

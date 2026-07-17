@@ -43,9 +43,11 @@ under `artifacts/codex/static-site-production-integration-20260715/`.
 
 ## 2026-07-17 desktop KAUP and explicit-duration remediation
 
-The desktop event renderer has one exact-venue KAUP block for aliases of
-`Поселение викингов Кауп`. It is intentionally not a generic Romanovo matcher
-and does not change the accepted mobile transport surface.
+The event renderer has one exact-venue KAUP block for aliases of
+`Поселение викингов Кауп`. It is intentionally not a generic Romanovo matcher.
+Desktop uses the full reading-flow component; the phone surface uses the same
+facts and journey order in a compact flat variant after `Коротко`, with only
+official-transfer boarding fine print hidden in a native disclosure.
 
 - the recommended mode is the venue's official round-trip transfer: `600 ₽`,
   boarding information and vehicle number are emailed after `19:00` on the day
@@ -58,6 +60,9 @@ and does not change the accepted mobile transport surface.
   pin link to that point. Arrival uses the reviewed 65-minute ride plus about
   `4 km / 53 min` on foot from Romanovo; the UI does not invent a short
   pedestrian entrance;
+- the compact phone variant keeps the bus origin, departures, final walk and
+  no-return warning open by default, uses bus/walk/car/pin SVG icons and removes
+  desktop-card shadow/weight instead of hiding the transport product entirely;
 - the independent-travel reading order is fixed: bus origin → suitable
   departures and approximate Romanovo arrival → final walking leg → warning
   about the absent evening public return → compact car alternative. The
