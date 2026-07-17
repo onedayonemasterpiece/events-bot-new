@@ -206,8 +206,11 @@ test('hover/focus/pointer finish the sentence; inline link is stable and pace co
   expect((await labState(page)).paused).toBeTruthy();
 
   await page.locator('[data-replay]').click();
+  // Replay is intentionally deferred until the dock scroll settles; wait for
+  // that callback before focus-interrupting it instead of racing its 120 ms timer.
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running', { timeout: 500 });
   await page.locator('a[data-reveal-fragment]').first().focus();
-  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 200 });
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 500 });
   expect((await labState(page)).paused).toBeTruthy();
 
   await page.locator('[data-pace="fast"]').click();
