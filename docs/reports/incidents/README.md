@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-17-meow-source-medallion-telegram.md`
+  - Scope: `@kldevents` RichMessage medallion selection and the boundary between static-page provenance badges and Telegram event attributes.
+  - Must not regress: source/aggregator-channel badges such as `MEOW Афиша` never enter Telegram graphical strips; legitimate organizer, venue, festival, program and Pushkin-card medallions remain available; affected public posts are replaced through send-first/delete-after-success and DB mappings point only to the clean replacements.
 - `INC-2026-06-03-smart-update-flash-lite-rpd.md`
   - Scope: Google AI key registry/scoping, normal versus emergency pools, Smart Update quota exhaustion and bounded fallback behavior.
   - Must not regress: every runtime key used by a pool is registered; image geometry rotates only across KEY4+KEY5 from its first reservation, fails closed without the shared limiter, and bulk work stays paced/capped rather than converting ledger exhaustion into provider 429 or unrelated-lane spend.

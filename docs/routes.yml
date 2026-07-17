@@ -106,6 +106,7 @@ sections:
     interest_clubs_catalog_audit_2026_07_17: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_meow_source_medallion_telegram_2026_07_17: docs/reports/incidents/INC-2026-07-17-meow-source-medallion-telegram.md
     incident_event_vector_sidecar_sync_stalled_2026_07_11: docs/reports/incidents/INC-2026-07-11-event-vector-sidecar-sync-stalled.md
     incident_future_event_semantic_audit_2026_07_10: docs/reports/incidents/INC-2026-07-10-future-event-semantic-audit.md
     incident_zoo_ticket_validity_non_event_2026_07_10: docs/reports/incidents/INC-2026-07-10-zoo-ticket-validity-non-event.md

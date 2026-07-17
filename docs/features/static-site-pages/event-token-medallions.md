@@ -316,3 +316,8 @@ Synthesis and accepted/deferred decisions are recorded in [event-token-medallion
 ### Source-channel medallions
 
 `MEOW Афиша` uses the public Telegram avatar from <https://t.me/meowafisha>, stored as `/assets/sources/meow-afisha.webp` (`.png` fallback). It is rendered only when the event source URLs include `t.me/meowafisha` and the event has no more than two known source URLs, so the badge means source/provenance rather than a generic topic.
+
+This source-channel badge is a **static event-detail-page surface only**. Source
+and aggregator identities are not event attributes and must never be included
+in Telegram `@kldevents` graphical-medallion strips. Telegram may still show
+source-grounded organizer, venue, festival, program and Pushkin-card marks.
