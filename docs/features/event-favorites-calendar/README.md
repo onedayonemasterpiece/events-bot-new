@@ -57,6 +57,9 @@ layout-neutral RPCs:
 - `event_signal` stores `like` and `not_interested` separately from calendar save;
 - lifecycle is `upcoming | rescheduled | cancelled | completed`; only a service
   sync from canonical Fly event facts may change it;
+- occurrence times submitted by the browser/device never become reminder facts;
+  reminder consent stays unavailable until the service lifecycle sync validates the
+  canonical Fly start and records its validation timestamp;
 - favorite/save, `like`/`not_interested`, reminder consent evidence and reminder
   scheduling/delivery are separate relations; a save or like cannot authorize mail;
 - browser roles have RPC execution only and no private-schema/table access; even a

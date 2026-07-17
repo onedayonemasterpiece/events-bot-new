@@ -138,8 +138,17 @@ begin
   select * into v_save from public.personalization_save_occurrence_v1(101,'101@2026-08-20T16:00:00Z','2026-08-20T16:00:00Z',true);
   select * into v_save from public.personalization_save_occurrence_v1(101,'101@2026-08-20T16:00:00Z','2026-08-20T16:00:00Z',true);
   if v_save.unique_saved_event_count<>1 or public.personalization_saved_count_v1()<>1 then raise exception 'repeat save/count failed'; end if;
+  if exists(select 1 from saved_events.saved_occurrence where event_id=101 and (occurrence_starts_at is not null or occurrence_validated_at is not null)) then
+    raise exception 'browser/device timestamp became canonical reminder fact';
+  end if;
   perform public.personalization_set_event_signal_v1(101,'101@2026-08-20T16:00:00Z','like',true);
   if (select count(*) from saved_events.event_signal where signal='like')<>1 then raise exception 'like was not separate'; end if;
+  v_conflict:=false;
+  begin
+    perform public.personalization_set_reminder_v1(101,'101@2026-08-20T16:00:00Z',true,'reminder-v1',extensions.gen_random_uuid());
+  exception when invalid_parameter_value then v_conflict:=true; end;
+  if not v_conflict then raise exception 'unvalidated browser timestamp authorized reminder'; end if;
+  perform public.personalization_apply_occurrence_lifecycle_v1(101,'101@2026-08-20T16:00:00Z','upcoming','2026-08-20T16:00:00Z');
 
   select * into v_reminder from public.personalization_set_reminder_v1(101,'101@2026-08-20T16:00:00Z',true,'reminder-v1',v_reminder_request);
   if v_reminder.state<>'active' or v_reminder.masked_email<>'s***@example.test' then raise exception 'reminder consent/mask failed'; end if;
@@ -182,6 +191,7 @@ begin
   -- A reschedule recalculates an unsent/pending reminder. If the prior D-1 was
   -- already delivered, only the separately keyed lifecycle notice is created.
   select * into v_save from public.personalization_save_occurrence_v1(102,'102@revision',now()+interval '30 hours',true);
+  perform public.personalization_apply_occurrence_lifecycle_v1(102,'102@revision','upcoming',now()+interval '30 hours');
   select * into v_reminder from public.personalization_set_reminder_v1(102,'102@revision',true,'reminder-v1',extensions.gen_random_uuid());
   select r.id,r.scheduled_for into v_subscription,v_schedule from saved_events.reminder_subscription r
    join saved_events.saved_occurrence s on s.id=r.saved_occurrence_id where s.event_id=102;
@@ -205,6 +215,7 @@ begin
   end if;
 
   select * into v_save from public.personalization_save_occurrence_v1(103,'103@completed',now()+interval '30 hours',true);
+  perform public.personalization_apply_occurrence_lifecycle_v1(103,'103@completed','upcoming',now()+interval '30 hours');
   select * into v_reminder from public.personalization_set_reminder_v1(103,'103@completed',true,'reminder-v1',extensions.gen_random_uuid());
   update saved_events.reminder_subscription r set scheduled_for=now()-interval '1 minute'
    from saved_events.saved_occurrence s where s.id=r.saved_occurrence_id and s.event_id=103;
@@ -215,6 +226,7 @@ begin
   end if;
 
   select * into v_save from public.personalization_save_occurrence_v1(104,'104@stale',now()+interval '30 hours',true);
+  perform public.personalization_apply_occurrence_lifecycle_v1(104,'104@stale','upcoming',now()+interval '30 hours');
   select * into v_reminder from public.personalization_set_reminder_v1(104,'104@stale',true,'reminder-v1',extensions.gen_random_uuid());
   update saved_events.reminder_subscription r set scheduled_for=now()-interval '7 hours'
    from saved_events.saved_occurrence s where s.id=r.saved_occurrence_id and s.event_id=104;
