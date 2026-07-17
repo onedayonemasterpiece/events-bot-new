@@ -1195,6 +1195,14 @@ only an explicit operator `--reverify-existing` run may spend Gemini on them
 again. Eligibility tombstones remain refreshable when their underlying source
 classification or gate contract materially changes.
 
+The same current-text ownership applies to asynchronous text restoration. A
+historical publication row may retain `awaiting_text_restore` for audit after
+CandidateReport has restored and re-scored the body, but it is active work only
+while current candidate memory still has a KO-only, non-ad, non-multiregion
+fused E5+BGE accept. Operator metrics therefore expose text-restore
+`raw/active/tombstoned` separately; a stale restore marker cannot make a current
+dual-text rejection look like publication backlog.
+
 If the latest Candidate heartbeat stops in `state_write_started` or
 `report_write_started`, this is reported as a late-tail failure. It does not
 justify replacing high-yield exact/fast-check work with deeper generic history.

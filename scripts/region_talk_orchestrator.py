@@ -658,11 +658,13 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         ),
         (
             "Финализатор — постов с оценённым фото / видео / non-terminal visual review / "
-            "ждут восстановления текста / ещё требуют решения или обновления: "
+            "text-restore raw/active/tombstoned / ещё требуют решения или обновления: "
             f"{value('image_actual_scored_urls_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}/"
             f"{value('publication_visual_review_pending_total')}/"
+            f"{value('publication_text_restore_pending_raw_total')}/"
             f"{value('publication_text_restore_pending_total')}/"
+            f"{value('publication_text_restore_tombstoned_total')}/"
             f"{value('finalizer_pending_url_total')}"
         ),
         (
@@ -2244,6 +2246,27 @@ def _publication_handoff_metrics(
         memory = candidate_by_url.get(url) or {}
         return bool(str(memory.get("full_text") or memory.get("text") or "").strip())
 
+    def current_text_gate_is_eligible(url: str) -> bool:
+        memory = candidate_by_url.get(url) or {}
+        # A missing memory row means the governed restore has not rebuilt the
+        # current text projection yet, so keep the request actionable.  Once a
+        # current row exists it is authoritative: a stale publication restore
+        # marker must not remain an active backlog after dual scoring rejects
+        # the post.
+        if not memory:
+            return True
+        if str(memory.get("vector_gate_status") or "").lower() != "vector_accept_candidate":
+            return False
+        if str(memory.get("text_vector_fusion_status") or "").lower() != "fused_e5_bge_m3":
+            return False
+        if str(memory.get("kaliningrad_oblast_only_scope") or "").lower() not in {"1", "true", "yes"}:
+            return False
+        if str(memory.get("is_ad_or_promo") or "").lower() in {"1", "true", "yes"}:
+            return False
+        if str(memory.get("is_multi_region_roundup") or "").lower() in {"1", "true", "yes"}:
+            return False
+        return True
+
     def visual_review_is_now_accepted(url: str) -> bool:
         image = actual_by_url.get(url) or {}
         memory = candidate_by_url.get(url) or {}
@@ -2296,7 +2319,7 @@ def _publication_handoff_metrics(
             # normal finalizer owns the next operation.  Looking only at the
             # stale publication status leaves a completed restore in a
             # permanent no-action gap.
-            return restored_text_is_ready(url)
+            return current_text_gate_is_eligible(url) and restored_text_is_ready(url)
         if publication_status == "needs_visual_review" or candidate_status == "visual_review_pending":
             # The publication row is a snapshot of the old image outcome. A
             # later bounded album/VLM pass can resolve that review without
@@ -2362,12 +2385,24 @@ def _publication_handoff_metrics(
         url for url in finalizer_input_by_url
         if needs_finalizer(url, publication_by_url.get(url))
     )
+    text_restore_raw_urls = sorted(
+        url for url, row in publication_by_url.items()
+        if (
+            str(row.get("publication_status") or "").lower() == "text_restore_pending"
+            or str(row.get("publication_candidate_status") or "").lower() == "awaiting_text_restore"
+        )
+    )
+    text_restore_active_urls = sorted(
+        url for url in text_restore_raw_urls
+        if current_text_gate_is_eligible(url)
+    )
     text_restore_ready_urls = sorted(
         url for url, row in publication_by_url.items()
         if (
             str(row.get("publication_status") or "").lower() == "text_restore_pending"
             or str(row.get("publication_candidate_status") or "").lower() == "awaiting_text_restore"
         )
+        and current_text_gate_is_eligible(url)
         and restored_text_is_ready(url)
     )
     visual_review_resolved_urls = sorted(
@@ -2391,7 +2426,9 @@ def _publication_handoff_metrics(
     for url, row in publication_by_url.items():
         candidate_status = str(row.get("publication_candidate_status") or "").lower()
         publication_status = str(row.get("publication_status") or "").lower()
-        if candidate_status in {"ready_for_llm", "visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due", "awaiting_text_restore"}:
+        if candidate_status in {"ready_for_llm", "visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due"}:
+            active_candidate_urls.add(url)
+        elif candidate_status == "awaiting_text_restore" and current_text_gate_is_eligible(url):
             active_candidate_urls.add(url)
         elif publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"}:
             active_candidate_urls.add(url)
@@ -2418,7 +2455,9 @@ def _publication_handoff_metrics(
         "publication_unsent_confirmed_total": len(unsent_confirmed_urls),
         "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
         "publication_visual_review_pending_total": sum(1 for status in status_by_url.values() if status == "visual_review_pending"),
-        "publication_text_restore_pending_total": sum(1 for status in status_by_url.values() if status == "awaiting_text_restore"),
+        "publication_text_restore_pending_raw_total": len(text_restore_raw_urls),
+        "publication_text_restore_pending_total": len(text_restore_active_urls),
+        "publication_text_restore_tombstoned_total": max(0, len(text_restore_raw_urls) - len(text_restore_active_urls)),
         "publication_text_restore_ready_for_finalizer_total": len(text_restore_ready_urls),
         "publication_text_restore_ready_for_finalizer_urls": text_restore_ready_urls,
         "publication_visual_review_resolved_ready_for_finalizer_total": len(visual_review_resolved_urls),

@@ -1286,7 +1286,9 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             }],
             [],
         )
+        self.assertEqual(metrics["publication_text_restore_pending_raw_total"], 1)
         self.assertEqual(metrics["publication_text_restore_pending_total"], 1)
+        self.assertEqual(metrics["publication_text_restore_tombstoned_total"], 0)
         self.assertEqual(metrics["publication_active_candidate_total"], 1)
         self.assertEqual(metrics["finalizer_pending_url_total"], 0)
         self.assertEqual(metrics["publication_text_restore_ready_for_finalizer_total"], 0)
@@ -1311,7 +1313,9 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             [{
                 "post_url": url,
                 "full_text": "Полный восстановленный рассказ о поездке в Калининград.",
+                "vector_gate_status": "vector_accept_candidate",
                 "text_vector_fusion_status": "fused_e5_bge_m3",
+                "kaliningrad_oblast_only_scope": True,
             }],
         )
         self.assertEqual(metrics["publication_text_restore_pending_total"], 1)
@@ -1319,6 +1323,38 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publication_text_restore_ready_for_finalizer_urls"], [url])
         self.assertEqual(metrics["finalizer_pending_url_total"], 1)
         self.assertEqual(metrics["finalizer_pending_urls"], [url])
+
+    def test_stale_text_restore_is_not_active_after_current_dual_text_reject(self) -> None:
+        mod = load_module()
+        url = "https://t.me/travel/12"
+        metrics = mod._publication_handoff_metrics(
+            [{
+                "post_url": url,
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+                "image_quality_decision": "vlm_visual_accept",
+            }],
+            [{
+                "post_url": url,
+                "publication_status": "text_restore_pending",
+                "publication_candidate_status": "awaiting_text_restore",
+                "publication_eligibility_verdict": "eligible",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            }],
+            [],
+            [{
+                "post_url": url,
+                "vector_gate_status": "vector_reject_not_kaliningrad_oblast",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "kaliningrad_oblast_only_scope": False,
+            }],
+        )
+        self.assertEqual(metrics["publication_text_restore_pending_raw_total"], 1)
+        self.assertEqual(metrics["publication_text_restore_pending_total"], 0)
+        self.assertEqual(metrics["publication_text_restore_tombstoned_total"], 1)
+        self.assertEqual(metrics["publication_active_candidate_total"], 0)
+        self.assertEqual(metrics["publication_text_restore_ready_for_finalizer_total"], 0)
+        self.assertEqual(metrics["finalizer_pending_url_total"], 0)
 
     def test_current_vlm_accept_reopens_stale_visual_review_publication(self) -> None:
         mod = load_module()
