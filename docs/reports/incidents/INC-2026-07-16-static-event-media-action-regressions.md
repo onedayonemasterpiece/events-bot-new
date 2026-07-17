@@ -243,6 +243,28 @@ The full-catalog static preview exposed several user-visible regressions around 
 - v11 pushed source: integration SHA `652d670f` on `integration/static-event-v11-transport-phone-carousel`; immutable noindex preview `https://kenigevents.ru/preview-20260717t-static-event-v11-phone-carousel/__preview/`; production root unchanged.
 - v11 public release evidence: HTTP `200` with `noindex,nofollow,noarchive` on the index, event `6851`, event `5658` and the portrait-carousel example; public Playwright passed the phone CTA at all three desktop widths, wide-photo hero/fullscreen, the three-visible/seven-item portrait viewer, preserved `accepted-v8` mobile, and `36/36 × 2` current-prefix crawl plus stale-cache poison gate with `failures: []`.
 - v11 fixed-page handoff: phone CTA, event `5658` wide-photo and event `4783` vertical-carousel example links were sent/read back as Telegram message `268` in the existing topic `2` using the role-approved E2E session; the note explicitly states that KAUP awaits the user's infographic choice.
+- v11 automatic-template replacement source: pushed SHA
+  `0fcc92223790f293b2f12137f3a99754ba2f30e1`; the first controlled run was
+  rejected after its complete Astro build because the gate followed ambient
+  `PREVIEW_BUILD_ID`, and published no candidate. Corrected build
+  `production-20260717t-template-parity-v11-kaggle-v2` completed on Kaggle CPU
+  from immutable snapshot `snapshot-20260717t-template-parity-v11` (SHA-256
+  `3105191211ed79a3e34284c8d4c01a4e5631b6adbb62512035b0f00ef120d443`,
+  `quick_check=ok`): `307` event pages, `1119` files, both production and secret
+  checks green, manifest/template provenance pinned.
+- replacement public secret-candidate evidence: `1120` create-only objects and
+  manifest SHA-256
+  `0600fa5e64db12c33810bd75c2e7babce4520d2585246f529621207edf81f6bc`;
+  public Playwright passed `30/30` combinations for six real-event specimens at
+  `1366/1536/1920/320/390`, including zero overflow, responsive active surface,
+  exact v11 family/reason markers, phone reveal/copy feedback, wide-photo cover,
+  horizontal+OCR companion, seven-item portrait series and all three KAUP
+  transport treatments from `Северный вокзал`. The wrong-template candidate
+  was revoked (`994` objects, remaining `0`, HTTP `404`). Production root body
+  SHA-256 remained
+  `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`;
+  root promotion stayed disabled. The replacement bearer URL/token are not
+  committed.
 
 ## Prevention
 
