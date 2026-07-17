@@ -1,0 +1,132 @@
+---
+import Icon from '../Icon.astro';
+
+interface Props {
+  value: string;
+  ariaLabel: string;
+  successLabel?: string;
+  errorLabel?: string;
+  variant?: 'secondary' | 'inverse';
+  size?: 'default' | 'large';
+  className?: string;
+  previewState?: 'default' | 'success' | 'error';
+  resetDelayMs?: number;
+}
+
+const {
+  value,
+  ariaLabel,
+  successLabel = 'Скопировано',
+  errorLabel = 'Не удалось скопировать — выделите значение вручную',
+  variant = 'secondary',
+  size = 'default',
+  className = '',
+  previewState = 'default',
+  resetDelayMs = 2200,
+} = Astro.props;
+const currentLabel = previewState === 'success' ? successLabel : previewState === 'error' ? errorLabel : ariaLabel;
+const currentStatus = previewState === 'default' ? '' : currentLabel;
+const classes = [
+  'ke-button',
+  `ke-button--${variant}`,
+  'ke-button--icon',
+  size === 'large' ? 'ke-button--large' : '',
+  'ke-copy-action',
+  className,
+].filter(Boolean).join(' ');
+---
+
+<button
+  type="button"
+  class={classes}
+  data-ke-copy-action
+  data-copy-value={value}
+  data-copy-default-label={ariaLabel}
+  data-copy-success-label={successLabel}
+  data-copy-error-label={errorLabel}
+  data-copy-reset-ms={Math.max(0, resetDelayMs)}
+  data-copy-state={previewState === 'default' ? undefined : previewState}
+  aria-label={currentLabel}
+  title={currentLabel}
+>
+  <span class="ke-copy-action__icon" aria-hidden="true">
+    <Icon name="copy" className="ke-copy-action__copy-icon" />
+    <Icon name="check" className="ke-copy-action__check-icon" />
+  </span>
+  <span class="ke-visually-hidden" data-ke-copy-status role="status" aria-live="polite" aria-atomic="true">{currentStatus}</span>
+</button>
+
+<script>
+  const copyActionRoot = document.documentElement;
+  if (!copyActionRoot.hasAttribute('data-ke-copy-action-bound')) {
+    copyActionRoot.setAttribute('data-ke-copy-action-bound', '');
+    const resetTimers = new WeakMap<HTMLButtonElement, number>();
+
+    const fallbackCopy = (value: string) => {
+      const field = document.createElement('textarea');
+      field.value = value;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.inset = '-9999px auto auto -9999px';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      field.setSelectionRange(0, field.value.length);
+      const copied = document.execCommand('copy');
+      field.remove();
+      if (!copied) throw new Error('clipboard unavailable');
+    };
+
+    const copyText = async (value: string) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(value);
+          return;
+        } catch {
+          // Permission and webview failures still get the deterministic fallback.
+        }
+      }
+      fallbackCopy(value);
+    };
+
+    const setCopyState = (button: HTMLButtonElement, state: 'default' | 'success' | 'error', message = '') => {
+      if (state === 'default') delete button.dataset.copyState;
+      else button.dataset.copyState = state;
+      const defaultLabel = button.dataset.copyDefaultLabel || 'Скопировать';
+      const label = state === 'success'
+        ? button.dataset.copySuccessLabel || 'Скопировано'
+        : state === 'error'
+          ? button.dataset.copyErrorLabel || 'Не удалось скопировать'
+          : defaultLabel;
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      const status = button.querySelector<HTMLElement>('[data-ke-copy-status]');
+      if (status) status.textContent = message || (state === 'default' ? '' : label);
+    };
+
+    document.addEventListener('click', async (event) => {
+      const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-ke-copy-action]') : null;
+      if (!target || target.getAttribute('aria-busy') === 'true') return;
+      const value = target.dataset.copyValue || '';
+      if (!value) {
+        setCopyState(target, 'error');
+        return;
+      }
+      const currentTimer = resetTimers.get(target);
+      if (currentTimer) window.clearTimeout(currentTimer);
+      target.setAttribute('aria-busy', 'true');
+      try {
+        await copyText(value);
+        setCopyState(target, 'success');
+      } catch {
+        setCopyState(target, 'error');
+      } finally {
+        target.removeAttribute('aria-busy');
+        const delay = Number.parseInt(target.dataset.copyResetMs || '2200', 10);
+        if (Number.isFinite(delay) && delay > 0) {
+          resetTimers.set(target, window.setTimeout(() => setCopyState(target, 'default'), delay));
+        }
+      }
+    });
+  }
+</script>

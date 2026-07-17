@@ -1,6 +1,6 @@
 ---
 interface Props {
-  name: 'heart' | 'calendar' | 'dislike' | 'share' | 'pin' | 'ticket' | 'info' | 'spark' | 'lock' | 'image' | 'phone';
+  name: 'heart' | 'calendar' | 'dislike' | 'share' | 'pin' | 'ticket' | 'info' | 'spark' | 'lock' | 'image' | 'phone' | 'copy' | 'check';
   className?: string;
   title?: string;
 }
@@ -64,6 +64,12 @@ const common = `icon icon--${name}${className ? ` ${className}` : ''}`;
       stroke-linecap="round"
       stroke-linejoin="round"
     />
+  )}
+  {name === 'copy' && (
+    <path d="M8.25 3.5h8.5A2.75 2.75 0 0 1 19.5 6.25v8.5a2.75 2.75 0 0 1-2.75 2.75h-1.5v.25A2.75 2.75 0 0 1 12.5 20.5H6.25a2.75 2.75 0 0 1-2.75-2.75V11.5a2.75 2.75 0 0 1 2.75-2.75h.25v-2.5A2.75 2.75 0 0 1 8.25 3.5Zm0 5.25h4.25a2.75 2.75 0 0 1 2.75 2.75V16h1.5A1.25 1.25 0 0 0 18 14.75v-8.5A1.25 1.25 0 0 0 16.75 5h-8.5A1.25 1.25 0 0 0 7 6.25v2.5h1.25ZM6.25 10.25A1.25 1.25 0 0 0 5 11.5v6.25A1.25 1.25 0 0 0 6.25 19h6.25a1.25 1.25 0 0 0 1.25-1.25V11.5a1.25 1.25 0 0 0-1.25-1.25H6.25Z" />
+  )}
+  {name === 'check' && (
+    <path d="M9.55 17.45a.9.9 0 0 1-.64-.27l-4.1-4.1a.9.9 0 1 1 1.28-1.27l3.46 3.46 8.36-8.36a.9.9 0 1 1 1.28 1.27l-9 9a.9.9 0 0 1-.64.27Z" />
   )}
 
 </svg>

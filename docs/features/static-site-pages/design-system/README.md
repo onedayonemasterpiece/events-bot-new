@@ -9,7 +9,7 @@ This directory is the normative home for reusable visual rules of the KenigEvent
 ## What is implemented
 
 - one semantic token layer for color, type, spacing, radii, elevation, motion, touch size and content width;
-- shared primitive Astro components: `Button`, `Badge`, `Field`, `StatePanel`;
+- shared primitive Astro components: `Button`, `Badge`, `Field`, `StatePanel`, plus the candidate `CopyAction` clipboard affordance;
 - compatibility aliases for established product components, so the system can be adopted without a risky all-at-once rewrite;
 - shared token/action adoption by both `EventLayout` pages and the standalone root landing page;
 - a built Astro catalog at `/lab/design-system/`, linked from `/__preview/`;
@@ -66,7 +66,8 @@ Legacy aliases such as `--primary`, `--surface` and `--radius-md` remain tempora
 
 | Component | Runtime path | Required states | Status |
 |---|---|---|---|
-| Button | `site/src/components/design-system/Button.astro` | default, hover, focus, pressed, selected, loading, disabled; primary/secondary/quiet/danger | approved |
+| Button | `site/src/components/design-system/Button.astro` | default, hover, focus, pressed, selected, loading, disabled; primary/secondary/quiet/inverse/danger | approved |
+| CopyAction | `site/src/components/design-system/CopyAction.astro` | secondary/inverse; default, success, error; Clipboard API and deterministic fallback | candidate |
 | Badge | `site/src/components/design-system/Badge.astro` | neutral, brand, accent, success, warning, danger | approved |
 | Field | `site/src/components/design-system/Field.astro` | default, hover, focus, filled, error, disabled | approved |
 | StatePanel | `site/src/components/design-system/StatePanel.astro` | empty, loading, error, stale/degraded, success, informational | approved |
@@ -87,6 +88,12 @@ Current registry:
 - `ListingPersonalFilter`, `PersonalFeedSlot` and `AuthorizedEventSearch` — conditional client-enhancement components; the catalog exposes their static/forced state and links to the dedicated auth/search surface, while live network/auth states remain in feature E2E.
 
 A registry row in `/lab/design-system/#registry` links status, runtime source and coverage. Status vocabulary is `experimental`, `candidate`, `approved`, `deprecated`.
+
+### Icon-only copy action
+
+`CopyAction` is the single candidate contract for copying an already visible value such as a phone number. The value remains ordinary selectable text; the adjacent action shows the conventional copy icon without persistent helper copy. Its accessible name states exactly what will be copied, and the fixed icon box changes from `copy` to `check` on success. A hidden polite live region announces success or an actionable failure, while a visible `!` marker ensures the error state is not communicated by colour alone. Neither state changes the control geometry.
+
+Use `secondary` on light surfaces and `inverse` on a dark or brand surface. Both variants inherit the `44px` minimum target, focus ring and motion rules from `Button`. Product components must consume `CopyAction` rather than adding another Clipboard API listener or a page-local copy glyph. The component remains `candidate` until its immutable preview and real product integration receive owner sign-off.
 
 ## Brand architecture
 
