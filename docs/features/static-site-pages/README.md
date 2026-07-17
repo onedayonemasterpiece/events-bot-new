@@ -9,6 +9,8 @@
 В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
+`/populyarnoe/` сейчас является только source-engagement preview: exporter отдаёт TG/VK counters, `service_likes_count` остаётся нулём, а Astro ранжирует локальной формулой. Публичный релиз требует, чтобы страница без собственного скоринга потребляла SHA-bound ordered projection общего [source + site engagement contract](../post-metrics/consolidated-event-engagement.md#shared-popular-event-projection); наличие общего `EventListItem` решает только отображение, но не консолидацию популярности.
+
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
 `media_role`, semantic status/confidence, dimensions, focal metadata и
 content-addressed 256/512 WebP derivatives. Только строгая роль
@@ -107,6 +109,8 @@ Production must replace the same-page canvas fallback with a stable server/offli
 
 Admin backlog: add a one-click “prepare detailed event post” function that creates a richer ready-to-paste post package for Max/VK/Telegram (share image + caption + URL) for an operator, without changing public page SEO.
 
+Sharing KenigEvents itself is a separate mandatory release capability from sharing an event. The common mobile menu and footer share one centrally prerendered service-card WebP plus the service URL; the same desktop placements use the accepted clipboard behavior. A preliminary footer-only implementation is open in [PR #44](https://github.com/onedayonemasterpiece/events-bot-new/pull/44) at `421d6bca`; the header/mobile-menu placement was intentionally not changed and remains required before release. It never uses the per-event canvas path or enters event media/JSON-LD. Canonical F18 contract: `docs/features/static-site-pages/service-sharing.md`.
+
 ## Event-page medallions
 
 Event detail pages render large quick-read **medallions** after the hero/title area on `/sobytiya/<slug>/`. These are medallions of the concrete event, not a card-list badge row. The current slice renders curated organizer avatars plus safe facts such as `Пушкинская карта`, free/price, family/charity/festival hints; speaker/celebrity avatar medallions are a P1 extension gated by source-grounded identity and cached avatars. Listing/search cards keep only the metadata formatting change: show a short weekday and render event type as plain text without `#`. Canonical contract: `docs/features/static-site-pages/event-token-medallions.md`.
@@ -186,15 +190,20 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 
 ## Связанные документы
 
-- Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
+- Release umbrella and F1–F18 map: `docs/features/static-personal-announcements/README.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
+- Responsive navigation decision/research: `docs/features/static-site-pages/responsive-navigation.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
+- Service sharing card, mobile share and desktop copy-link: `docs/features/static-site-pages/service-sharing.md`.
+- Event age-rating source/projection/UI coverage on every public event representation: `docs/features/static-site-pages/event-age-rating.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
-- Event transport: `docs/features/event-transport/README.md`.
+- Event gallery duplicate release audit: `docs/operations/event-image-duplicate-audit.md`.
+- Event transport: `docs/features/event-transport/README.md`; optional gallery card: `docs/features/event-transport/gallery-how-to-get-there-card.md`.
 - Event comment feedback: `docs/features/event-comment-feedback/README.md`.
 - Admin issue reporting: `docs/features/event-issue-reporting/README.md`.
 - Astro SSG preview runbook and public URLs: `docs/features/static-site-pages/astro-preview.md`.
 - CDN asset delivery: `docs/features/static-site-pages/cdn-asset-delivery.md`.
+- Final post-UI-freeze SEO/GEO optimization and three-agent audit: `docs/features/static-site-pages/seo-geo-release-optimization.md`.
 - Listing personal feed: `docs/features/static-site-pages/listing-personal-feed.md`.
 - Исторический backlog/research: `docs/backlog/features/static-event-pages/README.md`.
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.
@@ -208,6 +217,7 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Merged implementation skeleton for the first page build: `docs/features/static-site-pages/event-page-merged-skeleton.md`.
 - Event-card UI A/B comparison and product hypothesis: `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`.
 - Event hero composition lab / mobile-first decision: `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`.
+- Homepage typed briefing / compact «Городской обзор» research, scenario library and Conditional Go gate: `docs/features/static-site-pages/typed-briefing-hero-research.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
 - Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.
 - Production integration plan for personalization, promo, Smart Update rebuilds, analytics and CTA: `docs/features/unsigned-personalization/production-integration.md`.
@@ -305,6 +315,13 @@ Supabase/Postgres personalization DB
 - одна страница соответствует конкретному event occurrence/date;
 - `linked_event_ids` используются для блока “Другие даты”, но не склеивают разные даты в один canonical URL.
 
+For release M6 this relation must also be visible inside every shared event card:
+the primary occurrence keeps its own URL/date/time, while compact alternatives
+expose other eligible dates/times of the same programme. The current exporter
+hardcodes `other_date_ids=[]` and the frontend title/venue inference is only a
+preview fallback, not release truth. Canonical requirements and full-surface gates:
+[`docs/features/linked-events/README.md`](../linked-events/README.md#m6-обязательный-static-site-release-contract).
+
 Нужны отдельные правила для:
 
 - отмены события;
@@ -375,14 +392,20 @@ Acceptance criteria для первой реализации:
 
 ## Related-block rebuild freshness
 
-`static_related_v1` is a build artifact over the current active event catalog. If a new event appears, it can become a good recommendation for already published event pages. MVP decision: do not maintain per-event reverse dependency updates in the hot path. Rebuild and republish the full static event slice nightly, because the generated HTML/JSON is cheap and this avoids stale related blocks without complex invalidation.
+`static_related_v1` was the first build artifact over the active event catalogue. The release implementation is the strict `related_v1` pgvector + LLM-verified graph described in [Semantic vector retrieval](../unsigned-personalization/semantic-vector-retrieval.md#release-automation-contract). If a new event appears, it can become a good recommendation for already published event pages, so rebuilding only the new page is not sufficient.
 
-Operational rule:
+Release operational rule:
 
-- immediate/same-run build publishes the new/changed event page and its own `/data/discovery/<event_id>.json`;
-- existing pages may keep yesterday's `Смотрите дальше` until the scheduled nightly rebuild;
+- every effectful Smart Update create/update schedules one coalesced full-catalog static build for 15 minutes after the last effect;
+- the build publishes the new/changed event page and recomputes the active/future related graph for older anchors before atomic promotion;
+- an update during a running build guarantees exactly one follow-up build from a newer snapshot;
+- the independent vector lane runs after Smart Update and on periodic full-catalog reconciliation; the static build verifies matching `related_v1` hashes before retrieval;
+- a periodic drift reconciler and scheduled lifecycle rebuild recover lost triggers and expire started/ended candidates even when no Smart Update occurs;
+- changed candidate windows require current LLM-verifier evidence; unchanged fingerprint+policy cache hits are valid, while raw vectors are never silently labelled `Похожие`;
 - emergency/manual rebuild is allowed after major imports, large festivals, or quality fixes;
-- future optimization may add reverse-impact rebuilds by same city/category/date bucket, but only after manifest-hash evidence shows nightly full rebuild is too slow.
+- future optimization may add reverse-impact rebuilds by same city/category/date bucket, but only after manifest-hash evidence shows full-catalog rebuild/reconciliation is too slow.
+
+This automatic publication loop is **not production-complete yet**: the vector projection lane is configured, but the static Kaggle builder/strict related flags and atomic CDN promotion remain release gates.
 
 ## Date listing SEO/product contract
 

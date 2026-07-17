@@ -3,6 +3,8 @@
 > **Status:** source-counter sync slice implemented on 2026-06-27. Preview `v14` still renders build-time counters from a fixture, but the personalization Supabase counter table has been backfilled from production Fly SQLite source metrics. Telegram/VK metric upserts now queue a best-effort Supabase source-counter refresh when personalization secrets are available. Counter manifests and first-party site-like persistence are still separate follow-up slices.
 > **Related DB:** separate personalization Supabase/Postgres project, not the core Fly SQLite database.
 
+The release-wide source+site views/likes/shares read contract is canonical in [Consolidated event engagement](../post-metrics/consolidated-event-engagement.md). This document owns static counter presentation/freshness, not a second popularity aggregator.
+
 ## Product rule
 
 Cards show one simple public number: total likes. Users must not see technical wording such as “source likes” or “service likes”.
@@ -31,6 +33,7 @@ Implemented:
 Not implemented yet:
 
 - first-party site likes are local/preview-only and are not persisted to Supabase yet;
+- first-party valid site views/shares are not yet consolidated with source post metrics through the shared event-level function;
 - static pages do not yet fetch a small live counter manifest after first paint;
 - production Fly currently needs the personalization Supabase secrets to be present before the runtime hook can write counters from the deployed bot process.
 

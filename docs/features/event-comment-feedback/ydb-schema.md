@@ -1,6 +1,6 @@
 # YDB schema draft — event-comment-feedback
 
-Status: draft for follow-up implementation. Persistent storage for this feature is a **YDB sidecar**. Do not add SQLite tables for comments, embeddings, phrase matches, verifier cache or public feedback.
+Status: draft for the separate post-release implementation. Persistent storage for this feature is a **YDB sidecar**. PFR-1 must add authority/thread metadata and a typed verified-fact ledger before any public projection; the earlier phrase-group tables remain deferred carousel support. Do not add SQLite tables for comments, embeddings, phrase matches, verifier cache or public feedback.
 
 This sidecar is explicitly outside the site user/profile control plane. Supabase/Postgres remains the user identity/profile/favorites/subscription owner; YDB comment rows must not become a competing profile or directly change one. See [personalization data ownership](../../architecture/personalization-data-ownership.md).
 
@@ -38,6 +38,8 @@ Purpose: incremental crawl state for a platform source post that is linked to on
 | `source_url` | `Utf8` | Public source URL if available. |
 | `platform_post_key` | `Utf8` | Stable post key. |
 | `source_fingerprint` | `Utf8` | Hash of source identity + event relation. |
+| `source_owner_identity_hash` | `Utf8?` | HMAC/versioned private identity used only to prove source-owner replies; never exported. |
+| `identity_hash_version` | `Utf8?` | Key/version label for reproducible authority comparison without a public raw id. |
 | `last_seen_comment_key` | `Utf8?` | Incremental cursor. |
 | `last_seen_comment_created_at` | `Timestamp?` | Cursor aid. |
 | `last_known_comment_count` | `Uint32?` | Precheck signal only. |
@@ -89,7 +91,12 @@ Purpose: normalized comment corpus.
 | `platform_post_key` | `Utf8` | Parent source post. |
 | `platform_comment_id` | `Utf8` | Platform-local id. |
 | `parent_comment_key` | `Utf8?` | Thread/reply relation. |
-| `author_hash` | `Utf8?` | Non-reversible hash; no raw user id. |
+| `thread_root_comment_key` | `Utf8?` | Root Q/A context. |
+| `reply_depth` | `Uint16?` | Required for bounded Q/A pairing. |
+| `author_hash` | `Utf8?` | Non-reversible hash; no public raw user id. |
+| `author_peer_type` | `Utf8?` | `profile|group|channel|unknown`. |
+| `is_source_owner` | `Bool` | API-derived equality against the source owner; text similarity cannot set it. |
+| `verified_organizer_identity_key` | `Utf8?` | Versioned allowlisted organizer identity, if separately approved. |
 | `text` | `Utf8` | Raw-ish text after allowed redaction, backend only. |
 | `text_normalized` | `Utf8` | Matching input. |
 | `text_hash` | `Utf8` | Dedup/re-embed key. |
@@ -129,6 +136,49 @@ Purpose: embedding cache for normalized comments.
 Primary key: `(comment_key, embedding_model, embedding_document_version)`.
 
 Important: YDB stores vectors/cache; MVP matching loads phrase prototypes/comments into Kaggle/Python memory and uses numpy/faiss/sklearn.
+
+
+## 3A. `event_comment_verified_fact`
+
+Purpose: current and historical typed official-answer facts for PFR-1/PFR-3. This is independent from phrase groups and from the core flat `EventSourceFact` ledger.
+
+| Field | Type | Notes |
+|---|---|---|
+| `fact_id` | `Utf8` | Stable hash of scope + fact type + normalized value + source evidence. |
+| `event_id` | `Uint64?` | Set for exact occurrence scope. |
+| `event_series_key` | `Utf8?` | Set when a shared post supports only series scope. Exactly one scope owner is required. |
+| `fact_type` | `Utf8` | Closed allowlist such as `duration`, `transfer_direction`, `doors_open`. |
+| `value_json` | `Json` | Typed literal value; never embedding-generated prose. |
+| `normalized_value_hash` | `Utf8` | Novelty/idempotency key. |
+| `platform_post_key` | `Utf8` | Source post. |
+| `question_comment_key` | `Utf8?` | Parent question when Q/A pairing is used. |
+| `answer_comment_key` | `Utf8` | Official assertion evidence. |
+| `evidence_span_hash` | `Utf8` | Reproducible exact-span evidence; raw text remains backend-only/retained separately. |
+| `source_role` | `Utf8` | Must be `official_comment_fact` for PFR-2. |
+| `authority_method` | `Utf8` | `source_owner|verified_organizer_identity`. |
+| `authority_version` | `Utf8` | Identity/policy version. |
+| `speech_act` | `Utf8` | `assertion|negative_assertion|correction|retraction`; questions/uncertainty cannot be active facts. |
+| `scope_status` | `Utf8` | `event_instance|event_series|ambiguous`. |
+| `model_scores_json` | `Json` | E5/BGE family/speech-act/polarity scores and margins. |
+| `policy_version` | `Utf8` | Taxonomy/threshold/parser version. |
+| `active` | `Bool` | Current accepted state. |
+| `observed_at` | `Timestamp` | Source observation. |
+| `expires_at` | `Timestamp?` | Required for volatile ticket/access facts. |
+| `supersedes_fact_id` | `Utf8?` | Correction chain. |
+| `retracted_by_fact_id` | `Utf8?` | Retraction chain. |
+| `verified_fact_set_hash` | `Utf8` | Hash of the complete active fact set for the scope. |
+| `applied_hash` | `Utf8?` | Last successfully projected public/Smart Update snapshot. |
+| `updated_at` | `Timestamp` | Last reconciliation. |
+
+Primary key: `(fact_id)`. Required query keys: scope + `active`, `expires_at`, `verified_fact_set_hash`, `applied_hash`.
+
+Rules:
+
+- queries filter `active=true` and non-expired state explicitly;
+- questions, ordinary-user claims, uncertainty and ambiguous scope are stored only as suppressed audit candidates, never active facts;
+- unchanged active fact-set hash produces no rebuild/Smart Update handoff;
+- retraction/expiry reconciles from the active snapshot rather than editing previous narrative prose;
+- public export contains typed rendered values only, not comment keys/evidence/authority/model scores.
 
 ## 4. `event_feedback_phrase`
 

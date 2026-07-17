@@ -47,12 +47,26 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
 | Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
 | Strong-action current state/profile inputs | Supabase | Analytics event in YDB |
+| Current first-party event views/likes/shares aggregate | Supabase compact current row | CDN counter manifest; de-identified YDB daily history |
+| TG/VK source post metric snapshots and source-event mapping | Fly SQLite | Source component fields in compact Supabase event aggregate/CDN manifest |
 | Raw TG/VK comments, embeddings and matches | YDB comment-feedback sidecar | Sanitized static manifest in Object Storage |
 | Canonical event data | Fly SQLite | Bounded card/vector projection in Supabase |
 
 ## Profile materialization rule
 
 Before consent/server sync, browser state is device-local and not a durable identity claim. After materialization, the current durable profile belongs to Supabase. The project must not maintain competing `visitor_profile_snapshot`/`profile_revision` rows in Supabase and `pa_profile_snapshot` rows in YDB with unclear precedence.
+
+## Capacity and ecological boundary
+
+The personalization Supabase project has an approximately 500 MB plan ceiling and must remain a compact current-state/control plane. Resource efficiency is part of correctness:
+
+- local-first reranking and CDN/static manifests avoid a database read or LLM call for every card/page view;
+- Supabase stores bounded current profile/action/control state and compact short-lived evidence, not a raw telemetry firehose;
+- de-identified high-volume history may be projected asynchronously to YDB with TTL, while generated/bulky artifacts go to Object Storage;
+- table and index growth, retention, compaction and admission bands are release gates;
+- capacity pressure may drop nonessential telemetry but must not block consent withdrawal, suppression, favorite/reminder cancellation or other user-control writes.
+
+Canonical operational budgets and release evidence: [Personalization Supabase storage budget and compaction](../operations/personalization-storage-budget.md).
 
 The post-release VK privacy vault is a scoped exception: it stores only VK subject proof, VK consent, eligible friend edges and their lifecycle in YDB. It does not copy or independently rank the current personalization profile. A separate 152-FZ audit must decide whether the broader Supabase Auth/email/profile flow may remain as implemented or must migrate to a Russian primary store; the VK feature cannot be used to claim that unresolved broader flow is compliant.
 
@@ -65,6 +79,7 @@ The post-release VK privacy vault is a scoped exception: it stores only VK subje
 3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
 4. An asynchronous outbox projects de-identified analytics to YDB.
 5. YDB failure never blocks CTA/navigation or rolls back a user action.
+6. A batch engagement projector/read service combines distinct latest TG/VK source-post metrics with compact accepted site summaries. All popularity consumers use its one versioned event-level schema; it performs no cross-database transaction and no per-event remote read loop.
 
 ### Login and profile linking
 
@@ -154,4 +169,5 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - [Site user identity](../features/site-user-identity/README.md)
 - [Favorites and calendar](../features/event-favorites-calendar/README.md)
 - [Email delivery operations](../operations/email-delivery.md)
+- [Personalization storage budget and compaction](../operations/personalization-storage-budget.md)
 - [Event comment feedback](../features/event-comment-feedback/README.md)

@@ -164,6 +164,8 @@ Loop guards are mandatory before any automatic response. Do not Bcc automated ou
 
 Examples include registration/address confirmation where the application owns that flow, preference/account changes, save/follow confirmation, reminder, cancellation and material reschedule notices. The server must derive current event/account facts and recheck the transactional send guard immediately before Postbox claim.
 
+The release product/scheduling contract for the event reminder is [Transactional event email notifications](../features/event-email-notifications/README.md): it is a separate explicit opt-in, scheduled 24 hours before the current canonical start, and the calendar-save UI may promise it only after verified email and eligible consent are confirmed.
+
 Transactional consent/legitimate-trigger rules are distinct from recommendation consent. A favorite, calendar save, auth session or previous transactional delivery never opts a user into recommendations.
 
 Postbox notifications are QoS 1 / at-least-once. The consumer deduplicates by the

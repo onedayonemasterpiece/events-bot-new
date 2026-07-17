@@ -15,6 +15,7 @@ It is not a second semantic gate and must not replace LLM-first Smart Update dec
 - **Regular full inventory:** audit the complete active/future catalog at an agreed cadence before release.
 - **Release cutoff:** freeze the exact active/future inventory and complete a full source-grounded audit.
 - **Canary:** continue the same cadence and measure new/reopened incidents during the stability window.
+- **Image baseline:** before RC, run the one-time exhaustive [event image duplicate audit](event-image-duplicate-audit.md) with recorded visual review for every eligible multi-image event; during the stability window automatically scan every new/changed gallery and adjudicate ambiguous clusters before GO.
 
 ## Workflow
 
@@ -37,11 +38,19 @@ At minimum track by import batch and day:
 - wrong/prose/default location incidents;
 - wrong date/time incidents;
 - invalid/non-event rows reaching a public projection;
+- events and excess refs with exact/mirror/re-encoded/visually confirmed intra-event image duplicates, plus unreviewed/unreviewable gallery clusters;
 - newly opened, reopened, mitigated and closed quality incidents;
 - root causes closed with passing replay;
 - time from detection to mitigation and prevention closure.
 
-Numerical GO thresholds and the required stable window are global product/release decisions. The release owner must not replace missing thresholds with an informal “looks clean”.
+The product owner approved the release stability gate on 2026-07-12:
+
+- **14 consecutive days** of the normal daily/full-inventory monitoring cadence before GO;
+- **0 new critical event-quality defects** reaching public release surfaces;
+- **0 recurrences/reopens of a defect family whose root cause was declared closed**;
+- any violation resets the window after mitigation, root-cause correction and passing closure-grade replay.
+
+Lower-severity defect-rate targets still need measured baselines, but they cannot be used to average away a critical defect or a repeated closed root cause. The release owner must not replace the gate with an informal “looks clean”.
 
 ## Projection safety boundary
 
@@ -59,4 +68,4 @@ Use the current incident index and at least the contracts linked from the [stati
 - replay commands/results and DB diffs;
 - current Telegram/VK/Telegraph/static/ICS evidence;
 - remaining risks, owner and deadline;
-- approved stability-window result.
+- complete 14-day stability-window result with zero critical defects and zero closed-root-cause recurrences.

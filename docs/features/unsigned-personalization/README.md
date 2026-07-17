@@ -25,6 +25,8 @@ Authorized event search / pgvector RPC contract: `docs/features/unsigned-persona
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
+Personalization E2E/KPI release acceptance: `docs/features/unsigned-personalization/e2e-acceptance.md`.
+Supabase 500 MB capacity/compaction operations: `docs/operations/personalization-storage-budget.md`.
 Cross-feature data ownership ADR: `docs/architecture/personalization-data-ownership.md`.
 Site identity/profile linking: `docs/features/site-user-identity/README.md`.
 Durable favorites/calendar: `docs/features/event-favorites-calendar/README.md`.
@@ -43,6 +45,7 @@ Personal email announcements: `docs/features/personal-email-announcements/README
 - Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
 - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
 - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`;
+- detailed E2E scenario/KPI plan: `docs/features/unsigned-personalization/e2e-acceptance.md`;
 - anti-bot/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`;
 - static event page interface references: `docs/features/static-site-pages/interface-references.md`;
 - thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.

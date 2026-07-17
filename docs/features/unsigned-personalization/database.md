@@ -15,6 +15,8 @@ As of 2026-06-30 after the two-document vector backfill, the separate personaliz
 - largest relations: `event_embeddings≈9.4 MiB`, `event_search_documents≈4.1 MiB`;
 - vectors present in the current active/future sidecar: about `404` `search_v3` rows and `343` `related_v1` rows. Ordinary page views still use static manifests and do not call Supabase vector search.
 
+This is historical evidence, not current release proof. The canonical capacity bands, forecast, compaction and near-cap fail-safe contract live in [Personalization Supabase storage budget and compaction](../../operations/personalization-storage-budget.md). A release must take a fresh snapshot and remain in the Green band rather than extrapolating from the 2026-06-30 value.
+
 ## Architectural gate constraints
 
 This schema is not a raw telemetry sink. It is shaped by `production-integration.md`:
@@ -90,6 +92,8 @@ Default MVP retention and storage policy is intentionally stricter than the earl
 | `event_feature_snapshot` | while event is future + static retention window | ranking features tied to event lifecycle |
 
 Retention should run from backend/cron/SQL jobs with direct DB credentials, not from browser. Raw telemetry must be deleted or aggregated before it can threaten the free-tier cap.
+
+Where this design still gives a range, the operational storage-budget document supplies proposed release defaults and the required product/legal approval. Consent, suppression and send-critical evidence must not be shortened automatically merely to make telemetry fit.
 
 ## Client payload -> accepted row mapping
 

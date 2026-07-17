@@ -1,5 +1,7 @@
 # Festivals (серии и выпуски)
 
+> Status: core model, queue, one-shot parser and **legacy Telegraph** pages are partial/in progress. The Astro static festival section, permanent website monitoring and stable edition relation are planned in the [separate post-release contract](static-site-release.md).
+
 Документация описывает **серии фестивалей** (бренд/линейка) и **выпуски** (конкретная итерация), а также их связь с событиями, Smart Update и Universal Festival Parser.
 
 ## Основные понятия
@@ -20,7 +22,7 @@
 
 - **Единственный инструмент создания/обновления событий — Smart Update.**
 - `event.festival` всегда указывает на **выпуск** фестиваля.
-- На страницах событий, месяца и выходных отображается ссылка на страницу фестиваля (уже реализовано).
+- На legacy Telegraph pages событий, месяца и выходных отображается ссылка на Telegraph page фестиваля. Это не означает покрытие нового Astro static site: там стабильная edition relation, event-card/detail links и festival pages ещё отсутствуют.
 
 ## Детекция фестиваля в Smart Update
 
@@ -194,9 +196,7 @@ Smart Update сообщает оператору:
 
 ## E2E
 
-Сценарии находятся в:
-- `tests/e2e/features/festival_queue.feature` (live ссылки VK/TG)
-- `tests/e2e/features/festival_queue_prefilled.feature` (предзаполненная очередь из snapshot БД)
+Сейчас в дереве есть `tests/e2e/features/festival_parser.feature`. Полные queue-handoff сценарии для live VK/TG и предзаполненной `festival_queue` **запланированы, но отсутствуют**; прежние ссылки на `festival_queue.feature` и `festival_queue_prefilled.feature` нельзя считать release evidence до появления файлов и live прогона.
 
 Индекс: `docs/operations/e2e-scenarios.md`.
 
@@ -207,3 +207,9 @@ Smart Update сообщает оператору:
 - Для аварийного fallback обложки индекса можно задать `FESTIVALS_INDEX_FALLBACK_COVER_URL` (должен быть preview‑friendly URL).
 - Исторический fallback вида `https://telegra.ph/file/...` считается устаревшим (upload endpoint deprecated) и не используется как preview‑friendly цель.
 - Агрегированные VK-посты о фестивалях временно выключены по умолчанию: `sync_festival_vk_post` возвращает skip, пока явно не выставлен `ENABLE_FESTIVAL_VK_POSTS=1`. Это не отключает обычные VK/TG посты отдельных событий через Smart Update. Возврат VK festival aggregate publishing требует закрыть техдолг `docs/backlog/features/festival-monitoring-debt/README.md` и пройти отдельный E2E/acceptance gate.
+
+## Routing
+
+- Separate static festival release: [static-site-release.md](static-site-release.md)
+- Open queue/monitoring debt: [festival-monitoring-debt](../../backlog/features/festival-monitoring-debt/README.md)
+- Universal Festival Parser: [festival parser](../source-parsing/sources/festival-parser/README.md)

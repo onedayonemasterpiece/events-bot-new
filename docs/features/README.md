@@ -14,7 +14,7 @@
 - `docs/features/smart-event-update/README.md` — единый Smart Update (match/merge, лог фактов, Telegraph)
 - `docs/features/event-media/README.md` — единый автоматический Smart Update gate для event images и approved public projection
 - `docs/features/event-age-rating/README.md` — declared/assessed возраст, provenance, Smart Update, CPU BGE и backfill
-- `docs/features/linked-events/README.md` — связанные события (серии “то же событие в другие даты” + UI «Другие даты»)
+- `docs/features/linked-events/README.md` — связанные события: core/Telegraph «Другие даты» реализованы; M6 требует canonical static projection и видимые альтернативные даты/время во всех event cards до публичного релиза
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily
 - `docs/features/vk-location-marker/README.md` — безопасная VK location marker-метка для событийных wall-постов
@@ -23,6 +23,7 @@
 - `docs/features/tg-premium-emojis-update/README.md` — Telethon-редактор premium/custom emoji для ежедневных Telegram-анонсов
 - `docs/features/exhibitions-smart-update/README.md` — поддержка выставок через Smart Update
 - `docs/features/festivals/README.md` — фестивали: серии/выпуски, очередь и связь с событиями
+  - separate post-release static-site release contract: `docs/features/festivals/static-site-release.md`
 - `docs/features/post-metrics/README.md` — статистика постов и популярность (TG/VK): медианы, уровни ⭐/👍, основа для ранжирования
 - `docs/features/ticket-sites-queue/README.md` — очередь обогащения событий по ссылкам на ticket‑сайты (pyramida/dom/qtickets)
 - `docs/features/admin-action-assistant/README.md` — ассистент админ‑команд: запрос «простыми словами» → команда + подтверждение
@@ -41,15 +42,20 @@
 
 ## Research / rollout
 
-- `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
+- `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F18, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
+  - homepage «Городской обзор»: `docs/features/static-site-pages/typed-briefing-hero-research.md` — preliminary Conditional Go candidate; static/motion prototype and owner release-scope decision pending
+  - event age rating: `docs/features/static-site-pages/event-age-rating.md` — mandatory source-to-canonical-to-every-renderer coverage gate for any confirmed `0+|6+|12+|16+|18+`
+  - share the service itself: `docs/features/static-site-pages/service-sharing.md` — mobile menu/footer Web Share card, evidence-gated desktop copy and centralized metric-bound prerender
+  - F18 desktop clipboard research: `docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md` — Windows/macOS D0/D1/D2 paste matrix before rich-copy product selection
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
 - `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`
 - `docs/features/event-favorites-calendar/README.md` — durable favorite/calendar state and lifecycle semantics
 - `docs/features/personal-email-announcements/README.md` — opt-in recommendation email with exactly three events plus a personal page
 - `docs/features/event-email-notifications/README.md` — transactional followed-event confirmation/reminder/cancellation/reschedule email
 - `docs/features/event-transport/README.md` — source-backed rail/bus guidance and transport ICS for eligible event pages
-- `docs/features/event-comment-feedback/README.md` — aggregated discussion signals from public source comments
+- `docs/features/event-comment-feedback/README.md` — explicit post-release plan for official typed decision facts, deterministic «Важно знать», Smart Update shadow ingress and independently calibrated «Активно обсуждают» medallion; broad discussion carousel is deferred
+- `docs/backlog/features/interest-clubs/README.md` — separate post-release research-first release for detecting recurring interest-club meetings and building an evidence-backed auto-growing static section
 - `docs/features/event-issue-reporting/README.md` — admin event-problem report and ArtKodex repair/history workflow
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
 

@@ -20,6 +20,7 @@ sections:
     event_quality_release_monitoring: docs/operations/event-quality-release-monitoring.md
     event_image_duplicate_audit: docs/operations/event-image-duplicate-audit.md
     email_delivery: docs/operations/email-delivery.md
+    personalization_storage_budget: docs/operations/personalization-storage-budget.md
     telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
       docs: docs/operations/cron.md
@@ -84,6 +85,10 @@ sections:
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
+      festival_monitoring_debt: docs/backlog/features/festival-monitoring-debt/README.md
+      operations_control_dashboard: docs/backlog/features/operations-control-dashboard/README.md
+      interest_clubs: docs/backlog/features/interest-clubs/README.md
+      interest_clubs_research_prompt: docs/backlog/features/interest-clubs/research-prompt.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
       poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
@@ -129,6 +134,7 @@ sections:
     incident_80_stories_source_coverage_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-source-coverage.md
     incident_80_stories_video_promo_gap_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-video-promo-gap.md
     incident_event_source_media_aggregation_gap_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-source-media-aggregation-gap.md
+    incident_event_media_duplicates_2026_06_09: docs/reports/incidents/INC-2026-06-09-event-media-duplicates.md
     incident_smart_update_gemma3_fallback_hallucination_2026_05_05: docs/reports/incidents/INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md
     incident_event_quality_regression_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-quality-regression.md
     incident_kitoboya_garage_date_2026_05_05: docs/reports/incidents/INC-2026-05-05-kitoboya-garage-date.md
@@ -162,6 +168,12 @@ features:
     data_routing_skill: .codex/skills/events-bot-dual-db/SKILL.md
     event_quality_operations: docs/operations/event-quality-release-monitoring.md
     email_operations: docs/operations/email-delivery.md
+    homepage_typed_briefing_research: docs/features/static-site-pages/typed-briefing-hero-research.md
+    homepage_typed_briefing_source_branch: feature/static-typed-intro-prototype-20260715
+    homepage_typed_briefing_source_commit: 8045599b
+    event_age_rating: docs/features/static-site-pages/event-age-rating.md
+    service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
 
   digests:
     status: implemented
@@ -289,18 +301,32 @@ features:
     event_page_consultant_review_application_2026_06_27: docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md
     event_page_merged_skeleton: docs/features/static-site-pages/event-page-merged-skeleton.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
+    popular_event_projection: docs/features/post-metrics/consolidated-event-engagement.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
+    responsive_navigation: docs/features/static-site-pages/responsive-navigation.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
+    service_sharing: docs/features/static-site-pages/service-sharing.md
+    service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md
     image_framing: docs/features/static-site-pages/image-framing.md
+    seo_geo_release_optimization: docs/features/static-site-pages/seo-geo-release-optimization.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md
     related_event_issue_reporting: docs/features/event-issue-reporting/README.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
+    typed_briefing_hero_research: docs/features/static-site-pages/typed-briefing-hero-research.md
+    typed_briefing_hero_source_branch: feature/static-typed-intro-prototype-20260715
+    typed_briefing_hero_source_commit: 8045599b
+    event_age_rating: docs/features/static-site-pages/event-age-rating.md
     event_token_medallions: docs/features/static-site-pages/event-token-medallions.md
+    event_token_medallions_visual_qa: docs/features/static-site-pages/medallion-visual-qa.md
+    event_token_medallions_integration_branch: integration/static-site-medallions-release-20260712
+    event_token_medallions_source_branch: feature/static-site-venue-medallions-20260703
+    event_token_medallions_content_baseline: fa367ea3
+    event_token_medallions_draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/38
     event_token_medallions_consultant_notes_2026_06_29: docs/features/static-site-pages/event-token-medallions-consultant-notes-2026-06-29.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
@@ -314,8 +340,19 @@ features:
       production_atomic_promotion: missing
       catalog_freshness: partial_blocked
       release_ui: candidate_signoff_pending
+      responsive_navigation: adaptive_hybrid_selected_visual_signoff_pending
+      homepage_typed_briefing: conditional_go_research_only_static_motion_prototype_missing
+      event_age_rating: release_blocker_source_partial_canonical_projection_ui_missing
       sharing: preview_canvas_offline_generator_missing
+      service_sharing: release_blocker_design_only_desktop_windows_macos_matrix_pending
+      popular_listing: partial_source_only_local_formula
+      popular_listing_shared_projection: missing_release_gate
       image_framing: renderer_preview_metadata_producer_missing
+      event_medallions_main_baseline: partial_11_organizers_no_festival_manifest
+      event_medallions_release_branch: consolidated_25_organizers_11_festivals
+      event_medallions_release_shortlist: p0_open
+      event_medallions_visual_acceptance: static_site_exhaustive_playwright_surface_capture_pending_telegram_excluded
+      seo_geo_release_gate: post_ui_ux_freeze_three_agent_audit_pending
     entrypoints:
       - main.py
       - smart_event_update.py
@@ -327,6 +364,7 @@ features:
       - site/src/pages/[preview]/index.astro
       - site/src/pages/segodnya/index.astro
       - site/src/pages/vyhodnye/index.astro
+      - site/src/pages/populyarnoe/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
       - site/src/pages/data/discovery/[eventId].json.ts
@@ -362,6 +400,8 @@ features:
     requirements: docs/features/unsigned-personalization/requirements.md
     golden_interest_facets: docs/features/unsigned-personalization/golden-interest-facets.md
     personal_feed_architecture: docs/features/unsigned-personalization/personal-feed-architecture.md
+    e2e_acceptance: docs/features/unsigned-personalization/e2e-acceptance.md
+    storage_budget: docs/operations/personalization-storage-budget.md
     authorized_event_search: docs/features/unsigned-personalization/authorized-event-search.md
     semantic_vector_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
@@ -390,7 +430,18 @@ features:
     capabilities:
       local_anonymous_profile: preview
       related_pgvector: canary_partial
+      event_vector_sync_after_smart_update: production_configured_90s
+      event_vector_periodic_reconciliation: production_configured_180m
+      related_static_build_after_smart_update: code_only_production_disabled
+      related_full_graph_recompute: canary_implemented_release_automation_missing
+      related_llm_verification: canary_implemented_production_disabled
+      related_manifest_periodic_reconciler: missing_release_gate
       authorized_search: canary_partial
+      search_feedback_tag_candidate_intake: partial
+      saved_search_public_tag: design_required_for_release
+      full_personalization_e2e: design_required_for_release
+      cards_to_first_relevant_le_20: accepted_golden_gate
+      supabase_compact_500mb_budget: design_required_for_release
       remote_telemetry_ingest: design
       durable_profile: design
       profile_merge: design
@@ -398,7 +449,12 @@ features:
       - static_site/personalization/personalization.js
       - static_site/personalization/demo.html
       - event_vector_sync.py
+      - main.py
+      - scheduling.py
       - scripts/sync_event_search_vectors_to_supabase.py
+      - scripts/run_static_site_builder_kaggle.py
+      - kaggle/StaticSiteBuilder/static_site_builder.py
+      - site/scripts/export-production-preview-data.py
       - site/src/components/AuthorizedEventSearch.astro
       - supabase/functions/event-search/index.ts
       - scripts/check_authorized_search_readiness.py
@@ -409,16 +465,29 @@ features:
       - tests/e2e/features/static_site_personalization.feature
       - tests/playwright/static_personalization_contract.spec.ts
   site_user_identity:
-    status: partial_design
+    status: search_only_yandex_global_identity_shell_missing
     docs: docs/features/site-user-identity/README.md
     vk_message_link_postrelease: docs/features/site-user-identity/vk-message-link.md
     vk_personal_data_store: ydb_ru_central1_isolated
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_search: docs/features/unsigned-personalization/authorized-event-search.md
     related_favorites: docs/features/event-favorites-calendar/README.md
+    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
+    e2e_acceptance: docs/features/unsigned-personalization/e2e-acceptance.md
     capabilities:
+      global_html_identity_shell: missing_release_blocker
+      yandex_login_from_any_html_page: missing
+      email_passwordless_login_from_any_html_page: design
+      global_session_restore: design
+      global_logout: search_only_partial
+      forget_email_on_device: design
+      cross_tab_state_sync: design
+      identity_shell_html_coverage_e2e: missing
       yandex_login_logout: partial
+      yandex_verified_email_sync: design
       verified_email_identity: design
+      manual_email_code_or_link: design
+      manual_email_localstorage_reuse: design
       profile_linking: design
       vk_message_link_and_friend_signals: postrelease_design
 
@@ -432,6 +501,10 @@ features:
       ics_export: preview
       durable_favorite: design
       calendar_favorite_atomic_state: design
+      reminder_status_after_save: design
+      global_favorites_menu_count: design
+      saved_events_page: design
+      cross_tab_device_sync: design
 
   personal_email_announcements:
     status: design_v3_provider_routing_accepted
@@ -451,21 +524,51 @@ features:
     operations: docs/operations/email-delivery.md
     data_ownership: docs/architecture/personalization-data-ownership.md
     related_favorites: docs/features/event-favorites-calendar/README.md
+    post_release_attendance_feedback: docs/backlog/features/post-event-attendance-feedback/README.md
     superseded_branch: feature/event-email-notifications-static-20260702
     shared_control_plane_package: email_control/
     shared_control_plane_migration: supabase/migrations/20260711203940_email_control_plane_v1.sql
+    capabilities:
+      verified_identity_consent_outbox_guard: implemented_production_disabled
+      event_reminder_24h_kind: implemented_production_disabled
+      postbox_feedback_consumer: live_verified
+      postbox_worker: live_verified_controlled_canary
+      calendar_reminder_ui: design
+      event_reminder_schedule_producer: missing
+      cross_provider_warmup: pending
+      post_event_attendance_feedback: post_release_backlog
     postbox_worker_migration: supabase/migrations/20260712083037_email_postbox_worker_v1.sql
     postbox_worker_tests: email_control/tests/test_worker.py
 
   event_transport:
-    status: branch_candidate_refresh_blocked_by_wip
+    status: preliminary_branch_refreshed_ui_and_automatic_refresh_pending
     docs: docs/features/event-transport/README.md
     related_static_site: docs/features/static-site-pages/README.md
     implementation_branch: integration/event-transport-schedule
+    refresh_merge: 4577b334
+    draft_pr: https://github.com/onedayonemasterpiece/events-bot-new/pull/37
+    renderer_contract: docs/features/static-site-pages/event-transport-schedule.md
+    gallery_how_to_get_there_card: docs/features/event-transport/gallery-how-to-get-there-card.md
+    rail_directory: docs/features/static-site-pages/rail-multimodal-directory.md
+    bus_directory: docs/features/static-site-pages/bus-transport-directory.md
+    capabilities:
+      rail_schedule_block: preliminary_implemented
+      bus_schedule_block: preliminary_implemented
+      transport_leg_ics: preliminary_implemented
+      official_route_directories: preliminary_implemented
+      release_ui_integration: pending
+      gallery_how_to_get_there_card: optional_prototype_not_implemented
+      nightly_kaggle_refresh: missing_p0
+      kppk_provider_refresh: missing_p0
+      bus_provider_refresh: missing_p0
+      combined_manifest_fan_in: missing_p0
+      single_coalesced_rebuild: missing_p0
+      atomic_last_good_publish: missing_p0
 
   event_comment_feedback:
-    status: design_probe_port_required
+    status: design_region_talk_audit_and_skills_required_before_probe_port
     docs: docs/features/event-comment-feedback/README.md
+    region_talk_reuse_audit: docs/features/event-comment-feedback/region-talk-reuse-audit.md
     ydb_schema: docs/features/event-comment-feedback/ydb-schema.md
     static_site_contract: docs/features/event-comment-feedback/static-site-contract.md
     llm_verifier_contract: docs/features/event-comment-feedback/llm-verifier-contract.md
@@ -474,6 +577,16 @@ features:
     data_ownership: docs/architecture/personalization-data-ownership.md
     docs_source_branch: origin/docs/event-comment-feedback-docs
     superseded_runner_branch: agent/event-comment-feedback-kaggle-runner
+    region_talk_evidence_branch: origin/agent/region-talk/bge-m3-enrichment-test
+    capabilities:
+      region_talk_formal_audit: required_preimplementation
+      reuse_adapt_reject_defer_matrix: required_preimplementation
+      region_talk_ydb_funnel_audit_skill: planned_required
+      event_comment_feedback_pipeline_skill: planned_required
+      social_comment_collection_ops_skill: conditional_on_repeated_work
+      clean_probe_port: blocked_by_audit_and_skills
+      production_ydb_collection: missing
+      static_export_astro_ui: missing
 
   event_issue_reporting:
     status: prototype_clean_port_required
@@ -522,12 +635,27 @@ features:
       - scheduling.py
       - main_part2.py
   post_metrics:
-    status: implemented
+    status: source_metrics_implemented_consolidated_event_engagement_pending
     docs: docs/features/post-metrics/README.md
+    consolidated_event_engagement: docs/features/post-metrics/consolidated-event-engagement.md
+    reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    capabilities:
+      tg_vk_source_snapshots: implemented
+      source_counter_sync: partial
+      first_party_site_reaction_persistence: missing
+      first_party_valid_view_aggregate: missing
+      single_event_engagement_read_function: missing_release_gate
+      shared_popular_event_projection: missing_release_gate
+      static_popular_section: partial_source_only_local_formula
+      popular_posts_consumer_migration: missing_release_gate
+      ecological_current_aggregate: designed
     entrypoints:
       - source_parsing/post_metrics.py
       - reaction_counter_sync.py
       - scripts/sync_reaction_counters_to_supabase.py
+      - site/scripts/export-production-preview-data.py
+      - site/src/lib/events.ts
+      - site/src/pages/populyarnoe/index.astro
       - db.py
   smart_event_update:
     status: implemented
@@ -557,14 +685,30 @@ features:
       - scripts/apply_event_media_audit_cleanup.py
       - scripts/stage_event_media_review_backfill.py
   linked_events:
-    status: implemented
+    status: core_and_telegraph_implemented_static_card_release_blocker
     docs: docs/features/linked-events/README.md
+    capabilities:
+      canonical_linked_event_ids: implemented
+      symmetric_recompute: implemented
+      telegraph_other_dates: implemented
+      static_detail_other_dates: partial_preview
+      static_export_canonical_links: missing_hardcoded_empty
+      static_event_card_date_time_choices: missing_release_blocker
+      full_catalog_graph_audit: missing_release_gate
     entrypoints:
       - linked_events.py
       - smart_event_update.py
       - source_parsing/handlers.py
       - main.py
       - main_part2.py
+      - site/scripts/export-production-preview-data.py
+      - site/src/lib/events.ts
+      - site/src/components/EventCard.astro
+      - site/src/components/EventListItem.astro
+      - site/src/pages/sobytiya/[slug].astro
+    tests:
+      - tests/test_tg_event_publish.py
+      - site/scripts/check-preview.mjs
   vk_auto_queue:
     status: implemented
     docs: docs/features/vk-auto-queue/README.md
@@ -585,6 +729,7 @@ features:
   general_stats:
     status: in_progress
     docs: docs/features/general-stats/README.md
+    post_release_operations_dashboard: docs/backlog/features/operations-control-dashboard/README.md
     entrypoints:
       - scheduling.py
       - main.py
@@ -606,8 +751,20 @@ features:
       - vk_intake.py
       - main.py
   festivals:
-    status: in_progress
+    status: legacy_telegraph_partial_static_release_planned
     docs: docs/features/festivals/README.md
+    static_site_release: docs/features/festivals/static-site-release.md
+    monitoring_debt: docs/backlog/features/festival-monitoring-debt/README.md
+    parser: docs/features/source-parsing/sources/festival-parser/README.md
+    capabilities:
+      series_edition_model: partial
+      telegraph_pages_index: implemented_legacy
+      queue: partial_default_off
+      one_shot_website_parser: partial_legacy_model
+      permanent_website_monitoring: missing
+      astro_index_detail_pages: missing
+      stable_event_edition_relation: missing
+      static_refresh_promotion: missing
     entrypoints:
       - main.py
       - main_part2.py

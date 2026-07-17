@@ -310,8 +310,8 @@ Evidence from 2026-06-29 UTC:
 
 ## Job sequence after Smart Update
 
-1. Smart Update updates canonical events in Fly SQLite.
-2. Static-site build is coalesced after the update window, as for Telegraph/page generation.
+1. An effectful Smart Update creates or updates canonical events in Fly SQLite.
+2. Vector projection is independently debounced and the static-site build is coalesced for 15 minutes after the last effective Smart Update.
 3. Kaggle StaticSiteBuilder runs on CPU from a production SQLite snapshot.
 4. Static exporter emits compact preview events and search documents.
 5. Vector sync upserts changed `event_search_documents` and only changed/missing `event_embeddings` into personalization Supabase.
@@ -340,6 +340,36 @@ audit embeddings never count as persistent sidecar coverage.
    Backend-only Supabase secret/service keys are used only for vector sync/RPC and are never copied to `PUBLIC_*`.
 9. Preview/public checks run before publishing. Last-good static build remains fallback.
 10. CDN/Object Storage promotion is a separate release gate from successful Kaggle artifact creation.
+
+### Release automation contract
+
+The existence of the pgvector/Gemma exporter and successful manual previews is not sufficient release evidence. F2 is complete only when the following chain works without an operator:
+
+```text
+effectful Smart Update create/update
+  -> event_vector_sync:prod after the short debounce
+  -> exact search_v3 + related_v1 hashes for the accepted catalogue snapshot
+  -> static_site_build:prod 15 minutes after the last effect
+  -> full active/future pgvector related graph
+  -> Gemma verification/reorder of changed candidate windows
+  -> checked immutable manifest/artifact
+  -> atomic CDN promotion
+```
+
+Required semantics:
+
+- every Smart Update that actually creates or changes a canonical event schedules both lanes; a no-effect retry does not create pointless provider/build work;
+- a burst of updates moves one `static_site_build:prod` to 15 minutes after the latest effect. An update received while a build is running creates exactly one deferred follow-up using a newer immutable snapshot;
+- the build has a vector-freshness barrier: every eligible event in its snapshot has matching `search_v3` and `related_v1` text hashes before related retrieval. A failed/incomplete vector projection retries/fails the candidate build rather than silently using stale embeddings;
+- the whole active/future graph is reconsidered. Recomputing only the new event's outgoing list is invalid because it would not place that event into older pages where it is now the closest candidate;
+- unchanged anchor/candidate fingerprints may reuse a Gemma verdict only when document hashes and the verifier policy signature match. Every changed candidate window is verified again;
+- public UI labelled `Похожие` contains only verifier-approved candidates. Provider failure cannot promote raw vector neighbours under that label; the last-good still-valid verified chain or an explicitly neutral/degraded continuation is used instead;
+- an independent periodic reconciliation compares the actionable catalogue/vector hashes with the current related/release manifest at least as often as `EVENT_VECTOR_SYNC_INTERVAL_MINUTES` (current default 180 minutes) and enqueues the coalesced build when drift is found;
+- time-only lifecycle expiry cannot depend on a new Smart Update. A scheduled full static reconciliation/build runs at the accepted daily or several-times-daily cadence so started/ended/cancelled eligibility and related cards cannot remain stale indefinitely;
+- automation is observable end to end: correlated evidence records Smart Update effect/event ids, vector `ops_run`, outbox job, Kaggle run/build id, snapshot/catalog/vector/policy hashes, coverage, anchors, Gemma provider calls/cache hits/rejects/errors, artifact checks and promoted release id;
+- alerts cover vector coverage/hash drift, a due build that did not start, a running build without heartbeat, failed strict verification, unpromoted checked artifacts and maximum related-manifest staleness. The catch-up command is tested.
+
+Release E2E covers create, factual update, burst coalescing, an update during a long build, vector failure and retry, verifier failure/fail-closed behavior, periodic drift recovery, time-based expiry and a no-effect Smart Update. The final assertion reads the promoted `/data/discovery/<event_id>.json` and rendered related block for both the changed anchor and at least one older anchor affected by the new event.
 
 ## Product surfaces
 

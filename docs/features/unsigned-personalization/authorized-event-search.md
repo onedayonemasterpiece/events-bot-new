@@ -14,7 +14,7 @@ Authenticated users get a one-line **Умный поиск** on a dedicated `/po
 
 When vector results are exhausted, the UI starts a separate section **«Возможно, вам будет интересно»**. This is fallback/discovery, not a continuation of exact search relevance.
 
-Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
+Anonymous users have quota `0`; search is not available until Supabase Auth has a valid session. **Current implementation limitation:** `/poisk/` still owns its Yandex login/account UI. For the public release it must consume the shared [site-wide identity shell](../site-user-identity/README.md#global-static-page-identity-shell-release-requirement): anonymous users can choose Yandex or verified passwordless email on any HTML page, and the restored session reaches search without a second login. Search-specific code must not remain a competing logout/session owner.
 
 ## Search feedback and public tag candidates
 
@@ -28,25 +28,47 @@ Migration `20260701_event_search_feedback_tags.sql` adds private
 `event_search_feedback` rows and aggregated `event_search_tag_candidates`.
 Raw feedback stays server-side: browser roles do not get table access, RLS is
 enabled, and the only browser grant is authenticated execute on the compact RPC.
-Positive feedback increments a candidate query hash; a later LLM/moderation job
-must canonicalize, merge and approve tags before a public static page is built.
+Positive feedback increments a candidate query hash; a later strict fully automated
+LLM curation job must canonicalize, merge and approve tags before a public static
+page is built. There is no required human moderation lane.
 
-## P1 product idea: saved search as public tag page
+## Release contract: saved search as a public tag page
 
-Registered users should be able to save a successful search as a compact public tag candidate:
+This capability is required for the public release; it is not only a future P1 idea. Current code records result feedback and private aggregate tag candidates, but the explicit save action, curation job, public-tag registry and static page generator are still missing.
+
+Registered users must be able to save a successful search as a compact public tag candidate:
 
 1. After useful results, the UI offers **«Сохранить как тег»**.
 2. The service thanks the user and adds the candidate to their visible saved-search/tag list.
-3. A background LLM curation job reviews the global candidate-tag pool with the smartest available reviewer lane, not the fast runtime verifier:
+3. Save an immutable evidence snapshot: normalized query, served event ids/hash/order, result count, algorithm/model/corpus versions and current user-owned save reference. Raw phrasing and user identity stay private.
+4. A background strict LLM curation job reviews the global candidate-tag pool with the strongest configured offline reviewer lane, not the fast runtime verifier and not a human moderation queue:
    - merge near-duplicates and strong overlaps;
    - keep names short, ёмкие and human-readable;
    - reject private/overly narrow/noisy wording;
    - preserve raw user phrasing only as private audit, not public page copy.
-4. Accepted tags become non-individual static pages, for example `/t/dzhaz-na-vyhodnyh/` or `/tag/detyam-v-vyhodnye/`.
-5. The tag job runs the same vector + Gemma/LLM verification pipeline deeply enough to produce several dozen ordered cards. The public page is then rebuilt regularly and is available to anonymous users without spending per-view embedding/LLM quota.
-6. Personalization on a tag page is mostly subtractive/ordering: hide `Не интересно`, demote negative interests, optionally top-up from the already materialized tag result set. It must not call LLM on ordinary page views.
+5. Idempotency and novelty are checked against every accepted/pending tag using all three signals: exact normalized-intent hash, semantic intent similarity and result-set overlap (`top-K` intersection/Jaccard plus served-list fingerprint). Exact or materially equivalent searches attach the user's save to the existing tag instead of creating a second public page.
+6. A new tag is accepted only when its verified result set is materially different from existing public tags and produces a useful stable set of eligible events. The implementation task must approve numerical overlap/novelty thresholds on a golden multi-user query pack; wording difference alone is never sufficient.
+7. Accepted tags become non-individual canonical static pages, for example `/t/dzhaz-na-vyhodnyh/` or `/tag/detyam-v-vyhodnye/`, and may enter navigation/sitemap only after automated acceptance.
+8. On every relevant static-site generation, the tag job reruns the saved normalized intent through the current vector + LLM verification pipeline, producing several dozen ordered current cards and a manifest with tag/version, corpus watermark, result fingerprint and comparison evidence. It must not freeze the original user's stale results.
+9. The public page is available to anonymous users without spending per-view embedding/LLM quota and contains no creator identity, private query history or personalization profile.
+10. Personalization on a tag page is mostly subtractive/ordering: hide `Не интересно`, demote negative interests, optionally top-up only from the already materialized public tag set. It must not call LLM on ordinary page views.
 
-This is intentionally separate from per-user saved searches. The public tag page exists only after curation accepts the phrase as broadly useful.
+Supabase owns the private save/candidate/curation registry and idempotency state. Object Storage/CDN owns generated public tag HTML/JSON. The public tag page exists only after curation accepts the intent as broadly useful and demonstrably non-duplicate; a rejected/merged candidate remains visible to its owner with the final outcome and, when merged, a link to the existing public tag.
+
+### Strict automated LLM publication gate
+
+The system has no routine manual review step. Automation must therefore fail closed:
+
+1. deterministic normalization and exact/result-fingerprint dedupe select the closest existing tags;
+2. an LLM normalization pass returns a short canonical intent/name and structured evidence;
+3. a separate strict LLM audit compares the candidate with the closest tags and classifies `accept | merge | reject | pending`, checking semantic equivalence, meaningful result novelty, public usefulness, privacy/safety and noisy/overly narrow phrasing;
+4. deterministic overlap/quality thresholds verify the LLM decision; an LLM cannot waive hard duplicate, safety, catalog-eligibility or minimum-result checks;
+5. disagreement between passes, low confidence, invalid schema, provider failure or stale catalog produces `pending` and **no public page**; the next scheduled curation may retry automatically;
+6. every automated decision stores compact model/prompt/schema versions, closest-tag ids, overlap metrics, decision/reason codes and result fingerprint for audit/E2E, without creator identity on the public page.
+
+Release E2E must prove automatic accept, automatic merge, automatic reject and fail-closed pending/retry paths. “Needs a human” is not a production state transition.
+
+Release acceptance requires save/retry idempotency, multi-user equivalent-query merge, semantically different wording with equivalent results merge, genuinely novel result-set acceptance, catalog-change rebuild, empty/stale tag suppression, public anonymous view and no creator-data leakage.
 
 ## Auth design: Yandex through Supabase custom OAuth
 

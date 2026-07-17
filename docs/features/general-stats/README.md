@@ -5,6 +5,8 @@
 > **Плановый запуск:** 07:30 `Europe/Kaliningrad`  
 > **Назначение:** ежедневная “операторская” сводка по ключевым пайплайнам и техническим метрикам за **прошлые сутки**.
 
+`/general_stats` is a current reporting primitive, not the future unified operations dashboard. The [operations control dashboard](../../backlog/features/operations-control-dashboard/README.md) will reconcile expected slot → run → accepted delivery across event ingestion, video, promo, transport, static promotion and image dedup. A compact protected readiness scorecard is required before the first public presentation; the full web dashboard is a separate post-release release.
+
 ## 1) Поведение и маршрутизация
 
 ### 1.1. Период отчёта (“прошлые сутки”)

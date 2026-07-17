@@ -15,6 +15,11 @@
 - Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
 - Poll to Repost (опрос в TG -> репост события): `docs/backlog/features/poll-to-forward/README.md`
 - Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
+- Operations control dashboard (post-release protected admin status for ingestion/video/promo/transport/static/image quality): `docs/backlog/features/operations-control-dashboard/README.md`
+- Interest clubs (post-release read-only catalog research first, then an evidence-gated auto-growing static section): `docs/backlog/features/interest-clubs/README.md`
+  - copy-ready research/code-agent prompt: `docs/backlog/features/interest-clubs/research-prompt.md`
+- Post-event attendance feedback for recurring events (green/yellow/red email rating, reply or public-review link): `docs/backlog/features/post-event-attendance-feedback/README.md`
+- Event Comment Feedback post-release (verified decision facts → deterministic «Важно знать»; separately calibrated «Активно обсуждают» medallion): `docs/features/event-comment-feedback/probe-plan.md`
 
 ## Implemented (для ориентира)
 

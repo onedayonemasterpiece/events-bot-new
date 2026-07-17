@@ -1,10 +1,8 @@
 # Сигналы обсуждения события
 
-> Canonical slug: `event-comment-feedback`. English working name: **Event Comment Feedback**. Status: **docs-first design + stale branch-only offline probe**; production YDB collection, export and Astro UI are not implemented in `origin/main`.
+> Canonical slug: `event-comment-feedback`. English working name: **Event Comment Feedback**. Status: **explicit post-release research/implementation scope**; live canary proved non-zero decision-fact value, but production YDB collection, typed fact ledger, static block and discussion medallion are not implemented. This capability is not a blocker for the first public static-site presentation.
 
-**Короткое название фичи:** **Сигналы обсуждения**. Оно намеренно не использует слово “отзывы”: фича показывает не оценки посетителей и не рейтинг, а агрегированные смысловые сигналы из открытых комментариев к источникам события.
-
-Публичная формула блока: **“В комментариях отмечают, что …”** / **“В комментариях спрашивают …”** / **“В комментариях обсуждают …”**.
+**Короткое название фичи:** **Сигналы обсуждения**. После продуктового аудита фича разделена на два независимых публичных продукта: **подтверждённые практические факты** и краткоживущий медальон **«Активно обсуждают»**. Ни один из них не называется отзывом, рейтингом или редакционной рекомендацией.
 
 ## Документы фичи
 
@@ -13,18 +11,31 @@
 - [YDB schema draft](ydb-schema.md) — sidecar-хранилище комментариев, embeddings, matches, verifier cache и public state.
 - [LLM verifier contract](llm-verifier-contract.md) — group-level batch verifier, cache keys, forbidden patterns.
 - [Static-site contract](static-site-contract.md) — JSON manifest, UI block, carousel, icon semantics.
-- [Probe/evaluation plan](probe-plan.md) — first offline probe and acceptance gates.
+- [Research and minimal implementation plan](probe-plan.md) — live-canary evidence, 30-day research programme, BGE/E5 gates, typed-fact lifecycle, minimal post-release slices and acceptance checklist.
+- [Region Talk reuse audit and skill-first gate](region-talk-reuse-audit.md) — mandatory F14-0 audit, adoption matrix and reusable-skill creation before implementation.
 
 ## Product intent
 
-Фича добавляет на статическую страницу события компактный блок **“Что видно по обсуждению”**:
+### Primary: verified decision facts
+
+The highest-value surface is a compact static block **«Важно знать»** containing only a new, official, typed practical fact that can change attendance, registration or ticket-purchase behavior:
 
 ```text
-🙂 В комментариях отмечают, что это очень ожидаемое мероприятие
-На основе 6 комментариев из 2 источников
+Важно знать
+Организатор уточнил: продолжительность спектакля — около одного часа.
 ```
 
-Цель — помочь пользователю быстрее понять общественный контекст события: ожидание, интерес к артисту/программе, вопросы о билетах, практические уточнения, сомнения или барьеры. Это качественное продолжение post-metrics: количественные `views/likes` показывают “сколько внимания”, а **Сигналы обсуждения** показывают “о чём именно говорят”.
+Initial families are deliberately narrow: duration/intermission, transfer, doors/entry/parking, venue format, accessibility and TTL-controlled ticket-sector rules. Extraction is BGE/E5 closed-taxonomy routing plus deterministic exact-span slot parsing; no comment LLM extraction is allowed.
+
+### Secondary: «Активно обсуждают»
+
+A separate rolling attention projection may render the medallion **«Активно обсуждают»** with tooltip «За последние 7 дней событие активно обсуждали в открытых источниках». It is not a quality claim, fact, recommendation or ranking input in the first experiment. Giveaways, polls, engagement bait, bots, official answers, duplicates, crossposts, shared-series ambiguity and controversy-dominated threads are suppressed.
+
+### Deferred product surface
+
+The earlier carousel **«Что видно по обсуждению»** with broad positive/neutral/concern phrases remains design evidence, not the minimal implementation target. It may return only after the decision-fact block and medallion have real product metrics and safety evidence.
+
+The canonical research sequence and go/no-go thresholds are in [the probe plan](probe-plan.md).
 
 ## Non-goals
 
@@ -32,8 +43,9 @@
 - Не создавать новые SQLite-таблицы для комментариев, embeddings, phrase matches, verifier cache или public feedback.
 - Не называть блок “отзывы посетителей”, “рейтинг”, “оценка события”, “зрители говорят”, если событие ещё не прошло.
 - Не публиковать прямые цитаты, имена, user ids, аватары, ссылки на отдельные комментарии, raw payload/debug fields.
-- Не использовать LLM на каждый комментарий и не давать LLM генерировать публичный summary.
-- Не обновлять `Event.ticket_status`, `is_free`, факты события или Smart Update writer output на основе комментариев без отдельной source-grounded repair workflow.
+- Не использовать LLM для извлечения фактов из комментариев и не давать LLM генерировать публичный summary.
+- Не иметь ручной production-очереди: полностью автоматический режим обязан быть fail-closed и жертвовать recall. Ручная разметка допустима только в research/calibration/canary evidence.
+- Не передавать raw comment blob в обычный Smart Update extraction/matching path. Critical fields (`date/time/place/cancellation`) остаются в существующем repair/incident workflow.
 - Не использовать обсуждения как автоматическое разрешение на acquisition replies/спам.
 
 ## Relationship to existing internal features
@@ -71,7 +83,7 @@ Relevant current anchors in `models.py`:
 - `EventSource`: canonical multi-source table with `event_id`, `source_type`, `source_url`, `source_chat_username`, `source_chat_id`, `source_message_id`, `source_text`, `trust_level`.
 - `EventSourceFact`: source-scoped fact log with statuses `added|duplicate|conflict|note`.
 
-Comment-feedback evidence must anchor to `event_source` / structured TG/VK post keys, not only legacy `Event.source_post_url`. Discussion signals are **not canonical event facts**; if later reflected in source facts, `note` is the safer conceptual status.
+Comment evidence must anchor to `event_source` / structured TG/VK post keys, not only legacy `Event.source_post_url`. Attention signals are **never canonical event facts**. An official decision fact may become a public typed fact only through a dedicated authority/scope/TTL/retraction ledger; the current flat `EventSourceFact(fact,status)` is insufficient and must not silently absorb comment text.
 
 ### Unsigned personalization / semantic retrieval
 
@@ -98,6 +110,12 @@ Related docs/code: [`docs/operations/kaggle-static-site-builder.md`](../../opera
 
 The discovery job should be a separate offline job, proposed job kind: `event_comment_feedback_discovery` (short CLI/module alias: `comment_feedback_discovery`). It should publish run/audit state through the same status-ledger style as other Kaggle jobs and feed the static-site builder by manifest artifact, not by runtime API.
 
+### Region Talk experience
+
+Region Talk is mandatory prior art, not a merge dependency. Before implementing this feature, audit its compact YDB state, queue/funnel orchestration, stable identities, pre-network dedup, vector-first/LLM-late gates, Telegram cooldown/session discipline, data minimization, compaction and delivery metrics. Classify each pattern as `reuse|adapt|reject|defer`, then create and validate the required reusable project skills.
+
+Do not copy Region Talk's source frontier, blogger/nonlocal gates, image pipeline, publication queue or generated post writer: F14 starts from current `EventSource` rows and exports only fixed-phrase aggregate feedback to static event pages. The complete pre-implementation contract is [Region Talk reuse audit and skill-first gate](region-talk-reuse-audit.md).
+
 ## External references
 
 These references inform product/safety trade-offs; they are not copied as architecture.
@@ -110,7 +128,9 @@ These references inform product/safety trade-offs; they are not copied as archit
 - [Telegram discussion groups/comments](https://core.telegram.org/api/discussion): channel comments depend on linked discussion groups/message threads and may be unavailable per post. Technical lesson: keep per-source capability state and skip unavailable threads gracefully.
 - [YDB TTL/table docs](https://yandex.cloud/en/docs/ydb/terraform/tables) and [YDB secondary indexes](https://ydb.tech/docs/en/reference/ydb-cli/commands/secondary_index): schema should model TTL/index needs explicitly, but queries must still filter obsolete state because TTL deletion is asynchronous.
 
-## Core architectural decision
+## Deferred carousel architecture (not the minimal post-release target)
+
+This section preserves the earlier broad phrase-carousel design as future research. PFR-1–PFR-4 follow the typed-fact/medallion plan in [probe-plan.md](probe-plan.md) and do not use the optional LLM verifier below.
 
 Forbidden design:
 
@@ -143,7 +163,7 @@ LLM calls scale with risky publishable phrase groups, not with raw comments.
 not: 100 comments → 20 LLM calls
 ```
 
-## Data flow
+## Deferred carousel data flow
 
 The monitoring source list is **not a manually maintained chat/community list**. For each one-off Kaggle discovery run the job builds a bounded seed list from the current event database/static export: future/current active events that are renderable on the static site, plus their linked source posts. The run answers “which comments attached to current event sources should be analyzed now?”, not “which social spaces should we monitor forever?”.
 
@@ -160,11 +180,11 @@ The monitoring source list is **not a manually maintained chat/community list**.
 11. **Export static manifest** with aggregate items only.
 12. **Render static site**; browser never calls YDB/LLM/VK/TG for this block.
 
-## YDB storage model
+## Deferred carousel YDB storage model
 
 All new persistent data lives in the YDB sidecar described in [YDB schema draft](ydb-schema.md): crawl source state, normalized comments, hashes/dedup, comment embeddings, phrase-bank snapshots/prototypes, vector matches, phrase groups, verifier cache, current public feedback state and run/audit rows. Core Fly SQLite remains the canonical event/source/publication DB and may be read only as an input snapshot.
 
-## Prototype / embedding strategy
+## Deferred carousel prototype / embedding strategy
 
 - Phrase prototypes are curated examples from [phrase bank v1](phrase-bank-v1.md), embedded with the same model/dimension/document version recorded in YDB.
 - Comment embedding input is the normalized comment text; a compact event-context prefix may be tested only if the probe proves quality gain without overfitting.
@@ -172,7 +192,7 @@ All new persistent data lives in the YDB sidecar described in [YDB schema draft]
 - Do not mix embedding models in one score set; each run records model id and dimensions.
 - Phrase bank is small, so matching runs offline in Kaggle/Python memory; YDB is a cache/store, not a required ANN/vector-search engine for MVP.
 
-## Incremental pipeline design
+## Deferred carousel incremental pipeline design
 
 Proposed job kind: `event_comment_feedback_discovery` (`comment_feedback_discovery` as a short module/CLI alias). It runs offline/Kaggle and is not part of the public-page hot path.
 
@@ -188,7 +208,7 @@ Proposed job kind: `event_comment_feedback_discovery` (`comment_feedback_discove
 10. **Export static JSON** allowlisted aggregate items only.
 11. **Trigger/hand off static-site rebuild** through the existing Kaggle/static-site builder protocol when public state changes.
 
-## Vector matching strategy
+## Deferred carousel vector matching strategy
 
 The phrase bank is not a keyword list. Each public phrase has positive prototypes, hard negatives and policy thresholds.
 
@@ -217,7 +237,7 @@ Risk classes:
 
 Deterministic rules are guardrails only: dedup, source caps, min evidence, author diversity, PII/link filtering, retention, conflict suppression. They must not become broad semantic regex classifiers.
 
-## Aggregation strategy
+## Deferred carousel aggregation strategy
 
 A public phrase is an aggregate claim. Do not publish “В комментариях отмечают…” from one weak comment.
 
@@ -242,7 +262,7 @@ Default publication thresholds:
 - phrase must pass its `min_evidence_count`, `min_unique_authors`, confidence threshold and conflict checks;
 - max 5 public items per event, preferably 1–3 in MVP.
 
-## No-LLM/vector-only mode
+## Deferred carousel no-LLM/vector-only mode
 
 If LLM verifier is unavailable:
 
@@ -319,76 +339,34 @@ Allowed framing:
 | Overly deterministic semantics | Regex rules can silently change meaning. | Vector prototypes primary; deterministic logic only guardrails. |
 | Vague UX | “Людям нравится” adds little value. | Specific phrase categories: tickets, artist, organizers, age limits, time, sold-out friction. |
 
-## Open questions
+## Open decisions before post-release implementation
 
-1. Which YDB database/folder/credentials lane will own this sidecar, and what env naming convention should be used?
-2. What first-source allowlist is approved for comment fetching: only event-owned sources, public Telegram channel discussions, VK community posts, or broader discovered surfaces?
-3. What is the exact retention window for raw normalized comments: 30/60/90 days?
-4. Should production UI show evidence counts (“6 комментариев из 2 источников”) for all items, or hide counts for low evidence/high sensitivity items?
-5. Who approves medium/high-risk phrase groups during canary if LLM verifier says `needs_review`?
+1. Approve the isolated YDB folder/database and production credential/session lane; no Region Talk `DISCOVERY1/2`, E2E or S22 bundle reuse.
+2. Approve raw/redacted comment retention after measuring the 30-day shadow footprint.
+3. Decide whether PFR-3 may use the existing Smart Update writer only to format already verified typed facts; PFR-1/PFR-2 remain zero-LLM extraction and deterministic public rendering.
+4. Approve the first public fact-family allowlist after per-family precision evidence.
+5. Approve the medallion entry/exit thresholds only after a real 30-day source/age-bucket baseline.
 
-## Suggested implementation milestones
+## Post-release delivery order
 
-### MVP-0 Documentation
+The detailed work packages, metrics, thresholds and stop/go gates are canonical in [Research and minimal implementation plan](probe-plan.md). The release order is:
 
-- docs only;
-- phrase bank v1;
-- YDB schema draft;
-- verifier contract;
-- static JSON contract;
-- probe plan;
-- architecture review checklist.
-
-### MVP-1 Offline probe
-
-- `scripts/probe_event_comment_feedback.py` with manually loaded sample comments or a limited real-comment sample;
-- vector matching in a script/notebook;
-- no public site change;
-- probe report under `artifacts/codex/` or `docs/features/event-comment-feedback/` if curated.
-
-### MVP-2 YDB storage + incremental fetch skeleton
-
-- YDB adapter;
-- source state;
-- comments storage;
-- embeddings storage;
-- no UI.
-
-### MVP-3 Aggregation + static export
-
-- phrase groups;
-- vector-only low-risk publication;
-- static JSON export;
-- schema checks.
-
-### MVP-4 Optional LLM group verifier
-
-- only medium/high-risk phrase groups;
-- batch/cached verifier;
-- no per-comment LLM.
-
-### MVP-5 Site carousel
-
-- `EventCommentFeedbackCarousel` component;
-- green/gray/red icons;
-- static JSON read;
-- accessibility and reduced-motion checks;
-- preview checks.
-
-### MVP-6 QA and rollout
-
-- probe on real future events;
-- manual top-N review;
-- canary static preview;
-- production gate.
+1. **PFR-1 — collector and typed shadow ledger:** daily EventSource-derived TG/VK delta fetch, full Q/A/authority metadata, isolated YDB, BGE/E5 routing, literal slots, no public UI.
+2. **PFR-2 — deterministic «Важно знать»:** publish 1–3 active verified facts through a separate static manifest; changed fact-set hash schedules one checked rebuild; no main-description/JSON-LD/critical-field changes.
+3. **PFR-3 — Smart Update shadow experiment:** dedicated verified snapshot ingress that bypasses event matching and comment LLM extraction; public prose only after retraction/idempotency/last-good acceptance.
+4. **PFR-4 — «Активно обсуждают»:** independent qualified-human rolling score and medallion, no initial ranking effect.
+5. **Deferred:** broad discussion carousel, arbitrary fact extraction, generated summaries, critical field repair, ranking boost and «Особо обсуждают».
 
 ## First implementation acceptance checklist
 
-- [ ] No new SQLite tables for comments/embeddings/matches/verifier/public feedback.
+- [ ] Region Talk reuse/adoption audit and clean-port boundary are exact-SHA-bound and accepted; required project skills pass their canonical validation/forward tests.
+- [ ] 30-day daily shadow proves collection health, authority metadata, product yield and fact lifecycle.
+- [ ] No new SQLite comment store; isolated YDB state remains compact and independently retained.
 - [ ] No public page runtime dependency on YDB/LLM/VK/TG/embedding provider.
-- [ ] No per-comment LLM architecture.
-- [ ] No generated public phrases outside phrase bank.
-- [ ] Static export contains no raw comments, author names, user ids or private ids.
-- [ ] Medium/high-risk phrases require verifier/manual review or are suppressed.
-- [ ] Ticket/sold-out conflict policy is tested.
-- [ ] Phrase precision and unsafe-publication gates pass in probe.
+- [ ] No LLM comment extraction, raw-comment Smart Update input or manual production review queue.
+- [ ] Accepted-fact precision is `>=0.99` per family with zero wrong-author/event/question/uncertainty/negation/stale-current failures.
+- [ ] Static export contains no raw comments, names, ids, comment links, phone numbers or debug/provider payloads.
+- [ ] Duplicate/unchanged runs are no-ops; correction/retraction/expiry removes stale active state.
+- [ ] PFR-2 does not modify the main description, JSON-LD, critical fields or public source count.
+- [ ] «Активно обсуждают» has a real baseline, giveaway/spam/crosspost suppression and no initial ranking effect.
+- [ ] Separate post-release RC, checked preview, accessibility/no-JS/mobile evidence, canary, rollback and owner sign-off exist.

@@ -4,6 +4,8 @@ Status: open
 Owner: product/engineering
 Created: 2026-06-08
 
+This debt is a mandatory dependency of the [separate post-release static festival release](../../../features/festivals/static-site-release.md), not a blocker for the first F1–F18 presentation by itself.
+
 ## Summary
 
 Фестивальный контур пока не считается production-complete. До закрытия этого долга:
@@ -37,6 +39,10 @@ Created: 2026-06-08
    публичное festival name покрывает разные типы программы. До появления
    отдельного поля допускается LLM-first/semantic filter, но не ручной frozen
    `event_id` список как основной дизайн.
+7. Universal Festival Parser сейчас является one-shot разбором переданного URL, а не постоянным мониторингом сайтов. Нужны source registry, cadence, content fingerprint/change-only skip, last attempt/success/change, atomic last-good snapshot and freshness/alert state.
+8. Website monitor должен поддерживать rendered HTML и при необходимости PDF/programme documents через bounded Playwright fetch, но решение о фестивале/программе и semantic extraction остаются LLM-first с evidence/schema validation и fail-closed bounded-diff gate.
+9. Legacy Gemma 3 parser contract нельзя переносить в production monitoring без model migration/eval under the current project LLM policy.
+10. Queue handoff needs atomic claim/lease, normalized source idempotency, retry/quarantine and visible backlog/run evidence; an item must not stay silently `running` or be duplicated by repeated source monitoring.
 
 ## Acceptance Gates
 
@@ -56,12 +62,17 @@ Created: 2026-06-08
   imported lecture/talk under `event.festival="Кантата"` is eligible, while a
   concert under the same festival marker is not selected by that education
   programme campaign.
+- Registered official festival websites run on the approved schedule; unchanged content causes no Smart Update/static build, while a source-grounded programme change creates one idempotent queue/update handoff.
+- Empty/partial/layout-drift/provider-failed extraction cannot overwrite the accepted festival snapshot; stale age is visible and alerts before the approved limit.
+- Live VK, Telegram and external-site scenarios prove source → queue → parser → edition/event relation → checked static artifact. The currently missing `festival_queue.feature` and `festival_queue_prefilled.feature` must exist and be indexed before acceptance.
+- Aggregate VK festival posts remain a separately gated capability and are not required to launch the static festival section.
 
 ## Routing
 
 Canonical implemented docs:
 
 - `docs/features/festivals/README.md`
+- `docs/features/festivals/static-site-release.md`
 - `docs/features/telegram-monitoring/README.md`
 - `docs/features/smart-event-update/README.md`
 - `docs/features/vk-publishing/README.md`
