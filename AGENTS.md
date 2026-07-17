@@ -12,6 +12,14 @@
 6. Для production Telegram UI E2E (`@events_love39_bot`, `/tg`, `/vk_auto_import`, `/fest_queue`, live button checks) используй project skill `prod-telegram-e2e` и секцию `Production Telegram UI E2E` в `docs/operations/e2e-testing.md`.
 7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.
 8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `fly-prod-db-access`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
+9. Для любого изменения интерфейса статического сайта используй project skill `static-site-design-system` и канонический каталог `/lab/design-system/`.
+
+## Static-site design system (critical)
+
+- Новые страницы обязаны собираться из зарегистрированных токенов и компонентов дизайн-системы; page-local визуальный fork утверждённого компонента запрещён.
+- Материальная переработка утверждённого компонента создаёт следующую явную версию (`vN+1`) в реестре и каталоге. Старая и новая версии показываются рядом до sign-off; старая получает `deprecated` и ссылку на замену.
+- Изменение не завершено, пока все production consumers не переведены на новую версию, либо временное сосуществование не оформлено feature flag, списком consumers, owner и сроком удаления. Тихая смесь версий блокирует release.
+- В том же commit обновляются runtime-компонент, `/lab/design-system/`, version/migration contract checks, каноническая документация, test scenarios, release evidence и `CHANGELOG.md`.
 
 ## Incident Mode (critical)
 

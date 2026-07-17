@@ -13,8 +13,10 @@ The canonical component catalog is [the static-site design system](design-system
 - shared foundations come only from `site/src/styles/design-system.css`;
 - approved primitives come from `site/src/components/design-system/`;
 - approved product components have a visible registry row with runtime source and state coverage;
+- every registered component exposes an integer version; material redesigns add `vN+1`, keep `vN` as visibly deprecated with a replacement relation, and include a complete production-consumer migration;
 - any new pattern starts as an explicit lab/candidate and is promoted only after approval;
 - page-local forks of approved buttons, fields, badges, cards, feedback states or geometry block release;
+- mixed component versions without a named feature flag, consumer list, owner and removal deadline block release;
 - `npm run check:design-system` and the generated catalog assertions in `npm run check:preview` pass on the RC SHA.
 
 ## Required surfaces
@@ -42,8 +44,8 @@ The canonical component catalog is [the static-site design system](design-system
 
 ## Current component decisions
 
-- `EventCard split-actions` is the release baseline.
-- `EventCard overlay-controls` is deprecated and retained only in the catalog for regression comparison.
+- `EventCard split-actions` is the `v2` release baseline; production consumer migration is complete.
+- `EventCard overlay-controls` is deprecated `v1`, replaced by `EventCard v2`, and retained only in the catalog for regression comparison.
 - Hero families remain governed by `/lab/hero/`; the default used by real pages is also visible in the design-system catalog.
 - `Button`, `Badge`, `Field` and `StatePanel` are approved primitives. New visual variants require a registry/state/check update rather than local CSS.
 

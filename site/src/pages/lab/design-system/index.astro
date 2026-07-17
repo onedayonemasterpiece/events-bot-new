@@ -330,31 +330,34 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </div>
           <div class="ds-table-wrap" tabindex="0" role="region" aria-label="Реестр компонентов дизайн-системы">
             <table class="ds-registry">
-              <thead><tr><th>Компонент</th><th>Статус</th><th>Runtime source</th><th>Проверка</th></tr></thead>
+              <thead><tr><th>Компонент</th><th>Версия</th><th>Статус</th><th>Runtime source</th><th>Проверка / миграция</th></tr></thead>
               <tbody>
-                <tr><td>Button</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Button.astro</code></td><td>default/hover/focus/pressed/loading/disabled</td></tr>
-                <tr><td>CopyAction</td><td><Badge tone="warning">candidate</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>secondary/inverse + success/error + clipboard fallback</td></tr>
-                <tr><td>Badge</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Badge.astro</code></td><td>6 semantic tones</td></tr>
-                <tr><td>Field</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
-                <tr><td>StatePanel</td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>
-                <tr><td>EventHero</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventHero.astro</code></td><td><a href={withBase('/lab/hero/')}>hero lab</a></td></tr>
-                <tr><td>EventCard</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>split baseline + deprecated overlay</td></tr>
-                <tr><td>EventListItem</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>
-                <tr><td>EventCtaPanel</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>
-                <tr><td>CalendarLink</td><td><Badge tone="success">approved</Badge></td><td><code>components/CalendarLink.astro</code></td><td>eligible/ineligible via event contract</td></tr>
-                <tr><td>EventFacts</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventFacts.astro</code></td><td>date/place/admission/festival</td></tr>
-                <tr><td>EventTokenMedallions</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>organizer/source/program/semantic pills</td></tr>
-                <tr><td>EventMediaRail</td><td><Badge tone="success">approved</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>multi-image/overflow</td></tr>
-                <tr><td>InterestClubCard</td><td><Badge tone="accent">feature-gated</Badge></td><td><code>components/InterestClubCard.astro</code></td><td>current fixture + responsive</td></tr>
-                <tr><td>ListingPersonalFilter</td><td><Badge tone="warning">conditional</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>all/personal + sticky bar</td></tr>
-                <tr><td>PersonalFeedSlot</td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
-                <tr><td>AuthorizedEventSearch</td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
-                <tr><td>Icon / SocialIcon</td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>
-                <tr><td>AnnouncementsLockup</td><td><Badge tone="success">approved</Badge></td><td><code>components/brand/AnnouncementsLockup.astro</code></td><td>desktop/mobile/favicon sizes</td></tr>
+
+                <tr data-ds-component="Button" data-ds-version="1"><td>Button</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Button.astro</code></td><td>default/hover/focus/pressed/loading/disabled</td></tr>
+                <tr data-ds-component="CopyAction" data-ds-version="1"><td>CopyAction</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>secondary/inverse + success/error + clipboard fallback</td></tr>
+                <tr data-ds-component="Badge" data-ds-version="1"><td>Badge</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Badge.astro</code></td><td>6 semantic tones</td></tr>
+                <tr data-ds-component="Field" data-ds-version="1"><td>Field</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
+                <tr data-ds-component="StatePanel" data-ds-version="1"><td>StatePanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>
+                <tr data-ds-component="EventHero" data-ds-version="1"><td>EventHero</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventHero.astro</code></td><td><a href={withBase('/lab/hero/')}>hero lab</a></td></tr>
+                <tr data-ds-component="EventCard" data-ds-version="2"><td>EventCard · split-actions</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>production migration complete</td></tr>
+                <tr data-ds-component="EventCard" data-ds-version="1" data-ds-replaced-by="EventCard@2"><td>EventCard · overlay-controls</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCard.astro</code></td><td>replaced by EventCard v2; lab-only</td></tr>
+                <tr data-ds-component="EventListItem" data-ds-version="1"><td>EventListItem</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>
+                <tr data-ds-component="EventCtaPanel" data-ds-version="1"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>
+                <tr data-ds-component="CalendarLink" data-ds-version="1"><td>CalendarLink</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/CalendarLink.astro</code></td><td>eligible/ineligible via event contract</td></tr>
+                <tr data-ds-component="EventFacts" data-ds-version="1"><td>EventFacts</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventFacts.astro</code></td><td>date/place/admission/festival</td></tr>
+                <tr data-ds-component="EventTokenMedallions" data-ds-version="1"><td>EventTokenMedallions</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>organizer/source/program/semantic pills</td></tr>
+                <tr data-ds-component="EventMediaRail" data-ds-version="1"><td>EventMediaRail</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>multi-image/overflow</td></tr>
+                <tr data-ds-component="InterestClubCard" data-ds-version="1"><td>InterestClubCard</td><td><code>v1</code></td><td><Badge tone="accent">feature-gated</Badge></td><td><code>components/InterestClubCard.astro</code></td><td>current fixture + responsive</td></tr>
+                <tr data-ds-component="ListingPersonalFilter" data-ds-version="1"><td>ListingPersonalFilter</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>all/personal + sticky bar</td></tr>
+                <tr data-ds-component="PersonalFeedSlot" data-ds-version="1"><td>PersonalFeedSlot</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
+                <tr data-ds-component="AuthorizedEventSearch" data-ds-version="1"><td>AuthorizedEventSearch</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
+                <tr data-ds-component="IconSocialIcon" data-ds-version="1"><td>Icon / SocialIcon</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>
+                <tr data-ds-component="AnnouncementsLockup" data-ds-version="1"><td>AnnouncementsLockup</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/brand/AnnouncementsLockup.astro</code></td><td>desktop/mobile/favicon sizes</td></tr>
+
               </tbody>
             </table>
           </div>
-          <p class="muted-note">Правило: эксперимент сначала получает lab и owner; после утверждения он переносится в shared runtime component, получает все состояния, contract-check, документацию и changelog. Локальные копии утверждённой геометрии запрещены.</p>
+          <p class="muted-note">Правило: материальная переработка создаёт следующую версию компонента. Старая и новая версии остаются видимыми до sign-off, затем все production consumers переходят на новую версию, а старая становится deprecated и удаляется после нулевого consumer audit. Локальные копии утверждённой геометрии запрещены.</p>
         </div>
       </section>
     </div>
