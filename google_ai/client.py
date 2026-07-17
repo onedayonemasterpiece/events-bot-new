@@ -542,6 +542,28 @@ class GoogleAIClient:
             _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = None
             return None
 
+    def _provider_429_rotation_candidates(
+        self,
+        *,
+        explicit_candidate_key_ids: Optional[list[str]],
+        exclude: set[str],
+    ) -> list[str]:
+        """Return unused members of an explicitly configured normal pool.
+
+        Provider-side quota can drift from the shared reservation ledger when
+        another process/project consumer uses the same Google key.  Only a
+        declared normal pool may absorb that drift: emergency overflow remains
+        fail-fast, and an explicit caller scope is never widened.
+        """
+
+        if not self.reserve_key_envs:
+            return []
+        pool = self._resolve_normal_pool_candidate_key_ids() or []
+        if explicit_candidate_key_ids is not None:
+            allowed = set(explicit_candidate_key_ids)
+            pool = [key_id for key_id in pool if key_id in allowed]
+        return [key_id for key_id in pool if key_id not in exclude]
+
     @staticmethod
     def _rotated_normal_pool(candidate_key_ids: list[str]) -> list[str]:
         if not candidate_key_ids:
@@ -836,7 +858,11 @@ class GoogleAIClient:
                 reserved_tpm=reserved_tpm,
             )
 
-            for local_attempt_no in range(1, self.max_retries + 1):
+            local_attempt_no = 0
+            provider_429_excluded_key_ids: set[str] = set()
+            attempt_candidate_key_ids = candidate_key_ids
+            while True:
+                local_attempt_no += 1
                 attempt_cursor += 1
                 attempt_no = attempt_cursor
                 try:
@@ -847,7 +873,7 @@ class GoogleAIClient:
                         generation_config=generation_config,
                         safety_settings=safety_settings,
                         max_output_tokens=max_output_tokens,
-                        candidate_key_ids=candidate_key_ids,
+                        candidate_key_ids=attempt_candidate_key_ids,
                     )
                 except RateLimitError as e:
                     if (e.blocked_reason or "").strip().lower() in {"no_keys", "model_not_found"}:
@@ -873,10 +899,35 @@ class GoogleAIClient:
                     raise
                 except ProviderError as e:
                     last_error = e
-                    # Keep provider-side 429 fail-fast here. Higher-level flows
-                    # already decide whether to wait, defer, or retry, and an
-                    # extra retry loop in the client multiplies end-to-end delay.
                     if int(getattr(e, "status_code", 0) or 0) == 429:
+                        selected_key_id = (ctx.api_key_id or "").strip()
+                        selected_key_was_already_excluded = (
+                            selected_key_id in provider_429_excluded_key_ids
+                        )
+                        if selected_key_id:
+                            provider_429_excluded_key_ids.add(selected_key_id)
+                        remaining_key_ids = self._provider_429_rotation_candidates(
+                            explicit_candidate_key_ids=candidate_key_ids,
+                            exclude=provider_429_excluded_key_ids,
+                        )
+                        if (
+                            selected_key_id
+                            and not selected_key_was_already_excluded
+                            and remaining_key_ids
+                        ):
+                            self._log_event(
+                                "google_ai.provider_key_rotation",
+                                ctx,
+                                attempt_no=attempt_no,
+                                exhausted_api_key_id=selected_key_id,
+                                remaining_pool_members=len(remaining_key_ids),
+                                retry_after_ms=e.retry_after_ms,
+                            )
+                            attempt_candidate_key_ids = remaining_key_ids
+                            continue
+                        # Unpooled consumers and exhausted/explicitly scoped
+                        # pools keep the existing fail-fast contract. Higher
+                        # layers may wait, defer, or choose a model fallback.
                         raise
                     can_retry = bool(e.retryable) and local_attempt_no < self.max_retries
                     if can_retry:
@@ -1274,6 +1325,7 @@ class GoogleAIClient:
                 blocked_reason="reserve_rpc_missing",
             )
         
+        caller_candidate_scope_explicit = candidate_key_ids is not None
         scoped_candidate_key_ids = candidate_key_ids
         normal_pool_active = scoped_candidate_key_ids is None and bool(self.reserve_key_envs)
         if normal_pool_active:
@@ -1367,7 +1419,8 @@ class GoogleAIClient:
             # writes a request_attempts row, so there is no idempotency conflict.
             blocked = (result.blocked_reason or "").strip().lower()
             if (
-                isinstance(scoped_candidate_key_ids, list)
+                not caller_candidate_scope_explicit
+                and isinstance(scoped_candidate_key_ids, list)
                 and scoped_candidate_key_ids
                 and blocked in self._RESERVE_OVERFLOW_TRIGGER_REASONS
             ):

@@ -517,6 +517,28 @@ async def test_reserve_no_overflow_when_unconfigured(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
+async def test_reserve_does_not_expand_explicit_candidate_scope_to_overflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
+    client = _overflow_client(
+        supabase,
+        monkeypatch,
+        reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2",
+    )
+
+    reserve = await client._reserve(
+        _overflow_ctx("req-explicit-no-widen"),
+        attempt_no=1,
+        candidate_key_ids=["id-key1"],
+    )
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpd"
+    assert [call["p_candidate_key_ids"] for call in supabase.rpc_calls] == [["id-key1"]]
+
+
+@pytest.mark.asyncio
 async def test_reserve_overflow_not_triggered_on_per_minute_block(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -683,6 +705,133 @@ async def test_normal_pool_without_shared_limiter_fails_closed() -> None:
 
     assert reserve.ok is False
     assert reserve.blocked_reason == "normal_pool_limiter_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_normal_pool_rotates_to_another_key_on_provider_429(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    _NORMAL_POOL_CURSOR.clear()
+    client = GoogleAIClient(
+        supabase_client=_NormalPoolSupabase(),
+        consumer="smart_update",
+        reserve_key_envs=["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"],
+        reserve_overflow_key_envs=[],
+    )
+    # Smart Update deliberately caps ordinary same-key retries at one. A
+    # declared normal pool must still be able to move to its next member.
+    client.max_retries = 1
+    calls: list[list[str] | None] = []
+    events: list[tuple[str, dict]] = []
+
+    async def fake_attempt_generate(*, ctx, attempt_no, candidate_key_ids, **_kwargs):
+        calls.append(candidate_key_ids)
+        if len(calls) == 1:
+            ctx.api_key_id = "id-key4"
+            raise ProviderError(
+                error_type="ClientError",
+                error_message="429 RESOURCE_EXHAUSTED",
+                retryable=True,
+                status_code=429,
+                retry_after_ms=45000,
+            )
+        ctx.api_key_id = "id-key5"
+        return "ok", SimpleNamespace(total_tokens=1)
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    monkeypatch.setattr(
+        client,
+        "_log_event",
+        lambda event, _ctx, **payload: events.append((event, payload)),
+    )
+
+    text, _usage = await client.generate_content_async(
+        model="gemini-3.1-flash-lite",
+        prompt="bounded",
+        max_output_tokens=16,
+    )
+
+    assert text == "ok"
+    assert calls == [None, ["id-key5"]]
+    rotation = next(payload for event, payload in events if event == "google_ai.provider_key_rotation")
+    assert rotation["exhausted_api_key_id"] == "id-key4"
+    assert rotation["remaining_pool_members"] == 1
+    assert rotation["retry_after_ms"] == 45000
+
+
+@pytest.mark.asyncio
+async def test_provider_429_without_normal_pool_remains_fail_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = GoogleAIClient(
+        supabase_client=_FakeSupabaseClient(),
+        consumer="smart_update",
+        reserve_overflow_key_envs="GOOGLE_API_KEY4,GOOGLE_API_KEY5",
+    )
+    client.max_retries = 3
+    calls = 0
+
+    async def fake_attempt_generate(*, ctx, **_kwargs):
+        nonlocal calls
+        calls += 1
+        ctx.api_key_id = "id-key4"
+        raise ProviderError(
+            error_type="ClientError",
+            error_message="429 RESOURCE_EXHAUSTED",
+            retryable=True,
+            status_code=429,
+            retry_after_ms=45000,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+
+    with pytest.raises(ProviderError) as exc_info:
+        await client.generate_content_async(
+            model="gemini-3.1-flash-lite",
+            prompt="bounded",
+            max_output_tokens=16,
+        )
+
+    assert exc_info.value.status_code == 429
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_429_does_not_widen_explicit_candidate_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _NORMAL_POOL_ENV_CANDIDATE_CACHE.clear()
+    client = GoogleAIClient(
+        supabase_client=_NormalPoolSupabase(),
+        consumer="smart_update",
+        reserve_key_envs=["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"],
+    )
+    calls = 0
+
+    async def fake_attempt_generate(*, ctx, candidate_key_ids, **_kwargs):
+        nonlocal calls
+        calls += 1
+        assert candidate_key_ids == ["id-key4"]
+        ctx.api_key_id = "id-key4"
+        raise ProviderError(
+            error_type="ClientError",
+            error_message="429 RESOURCE_EXHAUSTED",
+            retryable=True,
+            status_code=429,
+        )
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+
+    with pytest.raises(ProviderError):
+        await client.generate_content_async(
+            model="gemini-3.1-flash-lite",
+            prompt="bounded",
+            max_output_tokens=16,
+            candidate_key_ids=["id-key4"],
+        )
+
+    assert calls == 1
 
 
 @pytest.mark.asyncio

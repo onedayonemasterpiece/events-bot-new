@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- **VK auto-import provider-quota false reject (INC-2026-07-17)**: allocate
+  Smart Update requests across the registered KEY1–KEY5 normal pool from the
+  first reserve and rotate to another pool member on provider-side `429`
+  without waiting or changing models, while keeping unpooled and explicit key
+  scopes fail-fast.
 - **Telegram source medallions (INC-2026-07-17)**: exclude `MEOW Афиша`
   and every other source/aggregator-channel identity from `@kldevents`
   graphical-medallion strips while retaining source-grounded organizer, venue,
