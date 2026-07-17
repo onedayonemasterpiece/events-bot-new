@@ -1,0 +1,39 @@
+---
+import type { KaupBusOption } from '../../lib/eventKaupTransport';
+
+interface Props { route: string; arrivalStop: string; options: KaupBusOption[]; }
+const { route, arrivalStop, options } = Astro.props;
+const visible = options.slice(0, 5);
+const additional = options.slice(5);
+---
+<section class="transport-treatment transport-board" data-transport-treatment="departure_board_v1" hidden aria-label={`Расписание автобуса № ${route}`}>
+  <table>
+    <thead><tr><th scope="col">Северный</th><th scope="col">{arrivalStop}</th><th scope="col">Кауп</th></tr></thead>
+    <tbody>
+      {visible.map((option) => <tr data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
+        <td data-terminal-departure={option.terminalDeparture}>{option.departureEstimated ? '≈' : ''}{option.departure}</td>
+        <td>≈{option.estimatedStopArrival}</td><td>≈{option.estimatedVenueArrival}{option.tight && <small>небольшой запас</small>}</td>
+      </tr>)}
+    </tbody>
+  </table>
+  {additional.length > 0 && <details data-transport-disclosure>
+    <summary data-transport-action="schedule_expand">Показать все {options.length} рейсов</summary>
+    <table><tbody>{additional.map((option) => <tr data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
+      <td data-terminal-departure={option.terminalDeparture}>{option.departureEstimated ? '≈' : ''}{option.departure}</td>
+      <td>≈{option.estimatedStopArrival}</td><td>≈{option.estimatedVenueArrival}{option.tight && <small>небольшой запас</small>}</td>
+    </tr>)}</tbody></table>
+  </details>}
+</section>
+
+<style>
+  .transport-treatment[hidden] { display:none !important; }
+  .transport-board { margin-top:.2rem; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+  th { padding:.38rem .25rem; color:#78685c; font-size:.68rem; font-weight:850; text-align:left; }
+  td { padding:.52rem .25rem; border-top:1px solid rgba(93,71,43,.12); color:#292119; font-size:.9rem; font-weight:800; white-space:nowrap; }
+  td small { display:block; color:#8e3d1e; font-size:.65rem; font-weight:800; white-space:normal; }
+  details table { margin-top:.05rem; }
+  summary { display:flex; align-items:center; min-height:44px; cursor:pointer; color:#8e3d1e; font-size:.78rem; font-weight:850; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  @container kaup-transport (max-width:360px) { th,td { padding-inline:.14rem; } td { font-size:.8rem; } th { font-size:.62rem; } }
+</style>

@@ -1,0 +1,153 @@
+---
+import Icon from './Icon.astro';
+import TransportIcon from './transport/TransportIcon.astro';
+import TransportTimetableExperiment from './transport/TransportTimetableExperiment.astro';
+import { getKaupTransportSuggestion } from '../lib/eventKaupTransport';
+import { normalizeTransportExperimentMode } from '../lib/transportExperiment';
+import type { PreviewEvent } from '../lib/types';
+
+interface Props { event: PreviewEvent; compact?: boolean; }
+const { event, compact = false } = Astro.props;
+const suggestion = getKaupTransportSuggestion(event);
+const headingId = suggestion ? `kaup-transport-${event.id}` : undefined;
+const experimentMode = normalizeTransportExperimentMode(import.meta.env.PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE);
+const experimentReleaseId = import.meta.env.PUBLIC_STATIC_RELEASE_ID || import.meta.env.PUBLIC_PREVIEW_BUILD_ID || 'unversioned';
+const personalizationSupabaseUrl = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '';
+const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+---
+{suggestion && (
+  <aside class:list={['kaup-transport', compact && 'kaup-transport--compact']} data-kaup-transport data-kaup-compact={compact ? '' : undefined} aria-labelledby={headingId}>
+    <header class="kaup-transport__header">
+      <div><p>Как добраться</p><h2 id={headingId}>Из Калининграда в Кауп</h2></div>
+      <Icon name="pin" />
+    </header>
+
+    <section class="kaup-transport__transfer" data-kaup-official-transfer>
+      <div class="kaup-transport__transfer-copy">
+        <h3>Официальный трансфер · {suggestion.transferPriceLabel}</h3>
+        <details class="kaup-transport__transfer-details">
+          <summary>Точки посадки и условия</summary>
+          <p>Место и номер микроавтобуса приходят на email после 19:00 накануне события. Посадка только по заранее купленному и распечатанному билету.</p>
+          <ul>{suggestion.transferBoardingPoints.map((point) => <li>{point}</li>)}</ul>
+        </details>
+      </div>
+      <a href={suggestion.transferBookingUrl} target="_blank" rel="noopener noreferrer nofollow" data-transport-action="official_transfer_booking_click"><Icon name="ticket" /> {compact ? 'Купить' : 'Купить трансфер'}</a>
+    </section>
+
+    <section class="kaup-transport__bus" data-kaup-public-bus>
+      <div class="kaup-transport__section-title">
+        <TransportIcon name="bus" />
+        <div><p class="kaup-transport__eyebrow">Самостоятельно</p><h3>Автобус № {suggestion.busRoute} + {suggestion.walkDistanceLabel.replace('около ', '')} пешком</h3></div>
+      </div>
+
+      <p class="kaup-transport__origin" data-kaup-bus-origin>
+        <span><strong>Посадка:</strong> {suggestion.busOriginName} · {suggestion.busOriginAddress} <small>(≈15 мин после автовокзала)</small></span>
+        <a href={suggestion.busOriginMapUrl} target="_blank" rel="noopener noreferrer nofollow" title="Открыть точку посадки на карте" aria-label={`${suggestion.busOriginName}, ${suggestion.busOriginAddress}: открыть на карте`} data-transport-action="bus_origin_map_click"><Icon name="pin" /></a>
+      </p>
+
+      {suggestion.outbound.length > 0 ? <TransportTimetableExperiment
+        eventId={event.id}
+        suggestion={suggestion}
+        mode={experimentMode}
+        releaseId={experimentReleaseId}
+        supabaseUrl={personalizationSupabaseUrl}
+        supabaseKey={personalizationSupabaseKey}
+      /> : <p>Подходящих рейсов к началу события не найдено.</p>}
+
+      <div class="kaup-transport__last-mile" data-kaup-last-mile>
+        <TransportIcon name="walk" />
+        <div>
+          <p><strong>Дальше пешком:</strong> {suggestion.walkDistanceLabel} (≈53 минуты). Короткого входа нет.</p>
+          <a class="kaup-transport__walk-link" href={suggestion.stopToVenueDirectionsUrl} target="_blank" rel="noopener noreferrer nofollow" title="Открыть пеший маршрут" aria-label={`Пешеходный маршрут от остановки ${suggestion.busArrivalStop} до Кауп: ${suggestion.walkDistanceLabel}`} data-transport-action="walk_route_click"><Icon name="pin" /></a>
+        </div>
+      </div>
+
+      {!suggestion.publicReturnAvailable && <p class="kaup-transport__warning kaup-transport__warning--strong">После события обратного автобуса нет. Только автомобиль или трансфер.</p>}
+    </section>
+
+    <section class="kaup-transport__car" data-kaup-car-route>
+      <TransportIcon name="car" />
+      <p><strong>На автомобиле</strong><span>Калининград → Кауп</span></p>
+      <a href={suggestion.directionsMapUrl} target="_blank" rel="noopener noreferrer nofollow" title="Открыть маршрут" aria-label="Открыть автомобильный маршрут из Калининграда в Кауп" data-transport-action="car_route_click"><Icon name="pin" /></a>
+    </section>
+
+    <footer><span class="kaup-transport__source-label">Источники:</span> <a href={suggestion.officialSourceUrl} target="_blank" rel="noopener noreferrer nofollow">официальный сайт Кауп</a> <span class="kaup-transport__source-separator" aria-hidden="true">·</span> <a href={suggestion.scheduleSourceUrl} target="_blank" rel="noopener noreferrer nofollow">расписание автобусов</a> <span class="kaup-transport__schedule-effective">(с {suggestion.scheduleEffectiveFrom}).</span></footer>
+  </aside>
+)}
+
+<style>
+  .kaup-transport { container:kaup-transport / inline-size; margin:1.25rem 0 0; overflow:hidden; border:1px solid rgba(93,71,43,.18); border-radius:18px; background:#f7efe3; color:#292119; }
+  .kaup-transport__header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.9rem 1rem .75rem; }
+  .kaup-transport__header p,.kaup-transport__eyebrow { margin:0; color:#91401f; font-size:.68rem; font-weight:900; letter-spacing:.075em; text-transform:uppercase; }
+  .kaup-transport__header h2 { margin:.1rem 0 0; font-size:clamp(1.35rem,2.4vw,1.8rem); line-height:1.12; }
+  .kaup-transport__header :global(.icon) { width:1.65rem; height:1.65rem; color:#a54821; }
+  .kaup-transport__transfer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.85rem 1rem; border-top:1px solid rgba(93,71,43,.14); background:#302b27; color:#fffaf2; }
+  .kaup-transport__transfer h3,.kaup-transport__bus h3 { margin:0; font-size:1.05rem; line-height:1.25; }
+  .kaup-transport__transfer-details { margin:.25rem 0 0; }
+  .kaup-transport__transfer-details summary { display:flex; align-items:center; gap:.55rem; width:max-content; min-height:44px; cursor:pointer; color:#e6d9cd; font-size:.78rem; font-weight:750; list-style:none; text-decoration:underline; text-decoration-color:rgba(255,255,255,.38); text-underline-offset:.16em; }
+  .kaup-transport__transfer-details summary::-webkit-details-marker { display:none; }
+  .kaup-transport__transfer-details summary::after { width:.42rem; height:.42rem; border-right:1.5px solid; border-bottom:1.5px solid; content:""; transform:rotate(45deg) translateY(-.1rem); }
+  .kaup-transport__transfer-details[open] summary::after { transform:rotate(225deg); }
+  .kaup-transport__transfer-details p { max-width:58rem; margin:.35rem 0; color:#e2d6ca; font-size:.8rem; line-height:1.4; }
+  .kaup-transport__transfer-details ul { display:flex; flex-wrap:wrap; gap:.3rem .85rem; margin:.35rem 0 0; padding:0; list-style:none; color:#fff; font-size:.78rem; }
+  .kaup-transport__transfer-details li::before { color:#d36c3c; content:"• "; }
+  .kaup-transport__transfer>a { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:44px; padding:.58rem .8rem; border-radius:11px; background:#bd4e20; color:#fff; font-size:.86rem; font-weight:900; text-decoration:none; white-space:nowrap; }
+  .kaup-transport__transfer>a :global(.icon) { width:1.1rem; height:1.1rem; }
+  .kaup-transport__bus { padding:.9rem 1rem .8rem; border-top:1px solid rgba(93,71,43,.14); }
+  .kaup-transport__section-title { display:flex; align-items:center; gap:.55rem; }
+  .kaup-transport__section-title>:global(.transport-icon) { width:1.4rem; height:1.4rem; flex:0 0 auto; color:#a54821; }
+  .kaup-transport__origin { display:flex; align-items:center; gap:.55rem; margin:.55rem 0 .25rem; color:#4f443c; font-size:.82rem; line-height:1.35; }
+  .kaup-transport__origin>span { min-width:0; }
+  .kaup-transport__origin strong,.kaup-transport__last-mile strong { margin-right:.18rem; }
+  .kaup-transport__origin small { color:#78685c; font-size:.75rem; }
+  .kaup-transport__origin a,.kaup-transport__car a,.kaup-transport__walk-link { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; width:44px; min-height:44px; margin-left:auto; border-radius:50%; color:#8e3d1e; text-decoration:none; }
+  .kaup-transport__origin a:hover,.kaup-transport__car a:hover,.kaup-transport__walk-link:hover { background:rgba(142,61,30,.09); }
+  .kaup-transport__origin a :global(.icon),.kaup-transport__car a :global(.icon),.kaup-transport__walk-link :global(.icon) { width:1.2rem; height:1.2rem; }
+  .kaup-transport ol { display:grid; margin:.1rem 0 0; padding:0; list-style:none; }
+  .kaup-transport ol>li { display:grid; grid-template-columns:4.2rem minmax(0,1fr) auto; gap:.1rem .55rem; align-items:center; padding:.5rem 0; border-top:1px solid rgba(93,71,43,.12); }
+  .kaup-transport ol>li>strong { font-size:1rem; font-variant-numeric:tabular-nums; }
+  .kaup-transport ol>li span { display:flex; flex-wrap:wrap; gap:.2rem .6rem; color:#51453d; }
+  .kaup-transport ol>li span b { color:#292119; font-size:.84rem; }
+  .kaup-transport ol>li span small { color:#6c5c51; font-size:.76rem; }
+  .kaup-transport ol>li em { color:#8e3d1e; font-size:.73rem; font-style:normal; font-weight:800; }
+  .kaup-transport__last-mile { display:flex; align-items:center; gap:.45rem; padding:.45rem 0 0; border-top:1px solid rgba(93,71,43,.12); color:#625249; font-size:.8rem; line-height:1.4; }
+  .kaup-transport__last-mile>:global(.transport-icon) { width:1.15rem; height:1.15rem; flex:0 0 auto; color:#a54821; }
+  .kaup-transport__last-mile>div { display:flex; min-width:0; flex:1; align-items:center; gap:.35rem; }
+  .kaup-transport__last-mile p { margin:0; }
+  .kaup-transport__warning { margin:.45rem 0 0; font-size:.8rem; line-height:1.4; }
+  .kaup-transport__warning--strong { padding:.5rem .62rem; border-left:3px solid #bb4f27; background:#ffe3d2; color:#78351f; font-weight:850; }
+  .kaup-transport__car { display:flex; align-items:center; gap:.55rem; padding:.55rem 1rem; border-top:1px solid rgba(93,71,43,.14); }
+  .kaup-transport__car>:global(.transport-icon) { width:1.25rem; height:1.25rem; flex:0 0 auto; color:#a54821; }
+  .kaup-transport__car p { display:flex; flex-wrap:wrap; gap:.2rem .55rem; margin:0; font-size:.82rem; }
+  .kaup-transport__car p span { color:#6c5c51; }
+  .kaup-transport footer { padding:.48rem 1rem; border-top:1px solid rgba(93,71,43,.12); color:#6c5c51; font-size:.7rem; line-height:1.35; }
+  .kaup-transport footer a { color:#8e3d1e; font-weight:800; }
+  .kaup-transport footer a,.kaup-transport footer .kaup-transport__schedule-effective { margin-left:.18rem; }
+  @container kaup-transport (max-width:560px) {
+    .kaup-transport__header { padding:.75rem .8rem .6rem; }
+    .kaup-transport__header h2 { font-size:1.18rem; }
+    .kaup-transport__header :global(.icon) { width:1.35rem; height:1.35rem; }
+    .kaup-transport__transfer { padding:.72rem .8rem; }
+    .kaup-transport__transfer h3 { font-size:.93rem; }
+    .kaup-transport__transfer>a { padding:.52rem .65rem; }
+    .kaup-transport__bus { padding:.72rem .8rem .65rem; }
+    .kaup-transport__bus h3 { font-size:.95rem; }
+    .kaup-transport__origin { margin:.4rem 0 .2rem; font-size:.77rem; }
+    .kaup-transport__origin small { display:block; font-size:.7rem; }
+    .kaup-transport ol>li { grid-template-columns:3.8rem minmax(0,1fr); padding:.42rem 0; }
+    .kaup-transport ol>li>strong { font-size:.93rem; }
+    .kaup-transport ol>li span { gap:.1rem .45rem; }
+    .kaup-transport ol>li span b { font-size:.78rem; }
+    .kaup-transport ol>li span small,.kaup-transport ol>li em { font-size:.7rem; }
+    .kaup-transport ol>li em { grid-column:2; }
+    .kaup-transport__last-mile,.kaup-transport__warning { font-size:.75rem; }
+    .kaup-transport__car { padding:.48rem .8rem; }
+    .kaup-transport footer { padding:.42rem .8rem; font-size:.65rem; }
+  }
+  .kaup-transport--compact { margin-top:1rem; border-radius:15px; background:#f9f2e8; }
+  .kaup-transport--compact .kaup-transport__transfer { background:#342f2b; }
+  @container kaup-transport (max-width:360px) {
+    .kaup-transport__transfer { grid-template-columns:minmax(0,1fr) auto; gap:.45rem; }
+    .kaup-transport__last-mile>div { align-items:flex-start; }
+  }
+</style>
