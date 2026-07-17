@@ -2681,6 +2681,96 @@ class Database:
                 """
             )
 
+            # Interest-club identities are owner-curated. Schema bootstrap is
+            # additive and deliberately does not seed or approve any identity.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS interest_club(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    slug TEXT NOT NULL UNIQUE,
+                    canonical_name TEXT NOT NULL,
+                    topic TEXT,
+                    description TEXT,
+                    city TEXT,
+                    typical_place TEXT,
+                    public_status TEXT NOT NULL DEFAULT 'shadow',
+                    identity_version INTEGER NOT NULL DEFAULT 1,
+                    policy_version TEXT NOT NULL DEFAULT 'interest-club-relation-v1',
+                    aliases_json JSON NOT NULL DEFAULT '[]',
+                    source_anchors_json JSON NOT NULL DEFAULT '[]',
+                    provenance_json JSON NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CHECK(public_status IN ('shadow','approved','archived','merged'))
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_interest_club_public_status ON interest_club(public_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_interest_club_updated_at ON interest_club(updated_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS interest_club_event(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    club_id INTEGER NOT NULL,
+                    event_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    decision_lane TEXT NOT NULL,
+                    evidence_quote TEXT,
+                    evidence_json JSON NOT NULL DEFAULT '{}',
+                    model TEXT,
+                    policy_version TEXT NOT NULL DEFAULT 'interest-club-relation-v1',
+                    input_hash TEXT NOT NULL,
+                    evaluated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(club_id, event_id),
+                    FOREIGN KEY(club_id) REFERENCES interest_club(id) ON DELETE CASCADE,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    CHECK(status IN ('active','deferred','review'))
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_interest_club_event_event_status ON interest_club_event(event_id,status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_interest_club_event_club_status ON interest_club_event(club_id,status)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS interest_club_evaluation(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    club_id INTEGER NOT NULL,
+                    event_id INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    verdict TEXT NOT NULL,
+                    decision_lane TEXT NOT NULL,
+                    evidence_quote TEXT,
+                    evidence_json JSON NOT NULL DEFAULT '{}',
+                    model TEXT,
+                    policy_version TEXT NOT NULL DEFAULT 'interest-club-relation-v1',
+                    input_hash TEXT NOT NULL,
+                    error_code TEXT,
+                    attempts INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(club_id, event_id),
+                    FOREIGN KEY(club_id) REFERENCES interest_club(id) ON DELETE CASCADE,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    CHECK(status IN ('accepted','no_match','review','deferred','ineligible'))
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_interest_club_evaluation_status ON interest_club_evaluation(status,updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_interest_club_evaluation_event ON interest_club_evaluation(event_id)"
+            )
+
             await conn.commit()
 
     async def _ensure_conn(self) -> aiosqlite.Connection:

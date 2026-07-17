@@ -16894,6 +16894,25 @@ async def _smart_event_update_impl(
             except Exception:
                 logger.warning("smart_update: schedule/update failed for event %s", new_event.id, exc_info=True)
 
+        # Interest-club relation verification is an optional shadow projection.
+        # It must never extend the Smart Update critical path or affect the
+        # canonical event transaction. The feature helper is a no-op unless its
+        # disabled-by-default flag is explicitly enabled.
+        try:
+            from interest_clubs import schedule_interest_club_evaluation
+
+            schedule_interest_club_evaluation(
+                db,
+                int(new_event.id or 0),
+                schedule_projection=schedule_tasks,
+            )
+        except Exception:
+            logger.warning(
+                "smart_update: failed to launch interest-club evaluation event=%s",
+                new_event.id,
+                exc_info=True,
+            )
+
         logger.info(
             "smart_update.created event_id=%s added_posters=%d added_sources=%s reason=%s",
             new_event.id,
@@ -18381,6 +18400,28 @@ async def _smart_event_update_impl(
                 await schedule_event_update_tasks(db, refreshed, **task_kwargs)
         except Exception:
             logger.warning("smart_update: schedule/update failed for event %s", existing.id, exc_info=True)
+
+    canonical_changed = bool(
+        updated_fields
+        or added_posters
+        or (added_sources and not same_source)
+        or holiday_changed
+    )
+    if canonical_changed:
+        try:
+            from interest_clubs import schedule_interest_club_evaluation
+
+            schedule_interest_club_evaluation(
+                db,
+                int(existing.id or 0),
+                schedule_projection=schedule_tasks,
+            )
+        except Exception:
+            logger.warning(
+                "smart_update: failed to launch interest-club evaluation event=%s",
+                existing.id,
+                exc_info=True,
+            )
 
     status = (
         "merged"
