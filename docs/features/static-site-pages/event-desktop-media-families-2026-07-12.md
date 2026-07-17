@@ -838,3 +838,34 @@ pixel, zero card-height deltas over one pixel, zero mixed row-ratio values, zero
 non-cover images, zero `document-natural` treatments and zero OCR crops over
 `20%`. The existing desktop routing contract and the real-event mobile V8 gate
 also remained green.
+
+## V12 correction: explicit hero/gallery matrix and portrait example
+
+The event-detail media contract no longer confuses a pending semantic role with
+OCR evidence. This corrects the visible regression on «Спектакль „Гараж“»
+(`5658`), whose six wide `visual_only` photographs had conservative
+`unknown_document/pending` role metadata and were therefore letterboxed.
+
+| Asset evidence | Bounded hero | Fullscreen gallery | Multi-image family |
+| --- | --- | --- | --- |
+| `visual_only`, landscape | `cover` in a viewport-bounded frame; reviewed focal position when available | `cover` | ordinary gallery/rail |
+| `visual_only`, portrait family (at least four useful portraits) | Split, never an oversized full-width portrait | height-fit multi-photo carousel | several images remain visible; paged prev/next and horizontal navigation |
+| `ocr_text` or unknown text/document | `contain` / natural document frame | `contain`, no pan | ordinary document viewer |
+| `visual_only` but positively classified non-photo document | document/companion frame | `contain` | semantic document viewer |
+| classified `event_identity_poster` plus a strong event photo | photo hero plus separate full-ratio poster companion | poster `contain`, photo `cover` | semantic companion board |
+
+`recommended_hero_fit=contain`, `safe_crop=false` or a pending
+`unknown_document` role cannot turn a positively no-text photograph into a
+document. They remain conservative enrichment hints, while `image_text_mode`
+is the fail-closed text-crop boundary. Conversely no role or fit hint may make
+an OCR slide cover, and a positively classified non-photo document remains contained.
+
+The lab index now contains a named real production example,
+`/lab/event-desktop/examples/portrait-carousel-production/`, based on event
+`4783`. It renders the seven quality-admitted images in the height-fit viewer,
+discloses that five weak renditions were excluded (`7 из 12`), and supplies an
+actual review target rather than leaving the vertical-carousel behavior hidden
+inside a generic Split specimen. The parallel design-system test-scenario file
+is absent on this integration base and must receive its catalog-level scenario
+when that branch is reconciled; this document is the canonical event-page
+behavior contract.

@@ -20,7 +20,7 @@ import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
 type EditorialMotion = 'pinned' | 'continuous';
-type EditorialCropPolicy = 'exact' | 'bottom-safe';
+type EditorialCropPolicy = 'bounded-cover' | 'bottom-safe';
 type OcrCompanionLayout = 'separate' | 'arrival';
 type SplitMediaFit = 'natural' | 'viewport-cover';
 type RelatedMediaTreatment = 'cover' | 'ambient' | 'hybrid';
@@ -83,7 +83,7 @@ const {
   heroObjectPosition,
   editorialRail = candidate === 'editorial' && mediaPolicy === 'non-ocr',
   editorialMotion = 'pinned',
-  editorialCropPolicy = 'exact',
+  editorialCropPolicy = 'bounded-cover',
   ocrCompanionImageIndex,
   ocrCompanionLayout = 'separate',
   autoRotate = candidate === 'editorial' && mediaPolicy === 'non-ocr',
@@ -155,7 +155,9 @@ const preferredPosition = heroObjectPosition || preferredAsset?.recommended_obje
 const selectedMediaMode = forcedOcrSourceIndexes.has(heroImageIndex)
   ? 'ocr_text'
   : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
-const selectedHeroIsOcr = selectedMediaMode !== 'visual_only';
+const selectedHeroIsOcr = selectedMediaMode !== 'visual_only'
+  || (preferredAsset?.media_semantic_status === 'classified'
+    && preferredAsset.media_role !== 'event_photo');
 const fallbackMediaRole = (mode: EventImageAsset['image_text_mode']): EventImageMediaRole => mode === 'visual_only' ? 'event_photo' : 'unknown_document';
 const mediaRoleLabel = (role: EventImageMediaRole) => ({
   event_identity_poster: 'Афиша',
@@ -245,12 +247,13 @@ const viewerRecommendationMeta = viewerRecommendation
   ? [displayDateTime(viewerRecommendation), viewerRecommendation.venue_name || viewerRecommendation.city].filter(Boolean).join(' · ')
   : '';
 const desktopTransportEvent = desktopEventWithExplicitEnd(event);
-const desktopGalleryFit = (image: GalleryImage) => image.media_semantic_status === 'classified'
-  && image.media_role === 'event_photo'
-  && image.recommended_hero_fit === 'cover'
-  && image.safe_crop === true
-    ? 'cover'
-    : 'contain';
+// Display crop follows the positive OCR boundary, not the asynchronous media-
+// role enrichment state. A `visual_only` asset is treated as an ordinary photo
+// while its role is pending; OCR and positively classified documents stay whole.
+const desktopGalleryFit = (image: GalleryImage) => image.image_text_mode !== 'visual_only'
+  || (image.media_semantic_status === 'classified' && image.media_role !== 'event_photo')
+    ? 'contain'
+    : 'cover';
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
@@ -292,6 +295,9 @@ const descriptionHtml = (event.description_html || '')
   data-desktop-family={candidate}
   data-media-policy={mediaPolicy}
   data-selected-media-policy={selectedMediaMode}
+  data-selected-media-role={preferredAsset?.media_role}
+  data-selected-media-semantic-status={preferredAsset?.media_semantic_status}
+  data-hero-render-fit={selectedHeroIsOcr ? 'contain' : 'cover'}
   data-editorial-motion={candidate === 'editorial' ? editorialMotion : undefined}
   data-editorial-crop={candidate === 'editorial' ? editorialCropPolicy : undefined}
   data-ocr-companion-layout={ocrCompanion ? ocrCompanionLayout : undefined}
@@ -605,7 +611,7 @@ const descriptionHtml = (event.description_html || '')
         <div class="hero-gallery__track" data-hero-gallery-track>
           {galleryImages.map((image, index) => (
             <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} data-source-index={image.sourceIndex} aria-hidden={index === 0 ? 'false' : 'true'}>
-              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
+              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
               <figcaption class="sr-only">Фото события: {event.title}</figcaption>
             </figure>
           ))}
@@ -1967,12 +1973,12 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --editorial-side:clamp(420px,32vw,560px); position:relative; display:grid; grid-template-columns:minmax(0,1fr) var(--editorial-side); grid-template-rows:auto; align-items:start; height:auto; min-height:calc(100svh + 520px); overflow:visible; background:#e2d4c1; }
     .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__media { grid-column:1/-1; grid-row:1; inset:auto; z-index:1; width:100%; height:calc(100svh - var(--desktop-header-height)); align-self:start; overflow:hidden; will-change:transform; }
     .desktop-clean-event--editorial[data-editorial-motion="pinned"] .desktop-prototype--editorial .desktop-prototype__media { position:sticky; top:var(--desktop-header-height); transform:none; }
-    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; height:calc(100vw / var(--image-ratio)); overflow:visible; transform:translate3d(0,0,0); }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial .desktop-prototype__media { position:absolute; inset:0 0 auto; top:0; left:0; height:calc(100svh - var(--desktop-header-height)); overflow:hidden; transform:translate3d(0,0,0); }
     .desktop-clean-event--editorial .desktop-prototype__media-opener { position:absolute; inset:0; }
     .desktop-clean-event--editorial .desktop-prototype__media-image,
     .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__media-image,
     .desktop-clean-event--editorial .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { position:absolute; inset:0 0 auto; width:100%; height:calc(100vw / var(--image-ratio)) !important; min-height:0; margin:0 !important; object-fit:cover !important; object-position:top center !important; background:#d9cbb8; transform:translate3d(0,var(--desktop-parallax-y,0),0) !important; transition:none; will-change:transform; }
-    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { inset:0; height:100% !important; object-fit:contain !important; transform:none !important; }
+    .desktop-clean-event--editorial[data-editorial-motion="continuous"] .desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { inset:0; height:100% !important; object-fit:cover !important; object-position:var(--image-position,50% 50%) !important; transform:none !important; }
     .desktop-clean-event--editorial .desktop-prototype__content-flow { grid-column:1; grid-row:1; display:block; z-index:5; width:min(820px,calc(100vw - var(--editorial-side) - 6vw)); min-width:0; min-height:0; margin:clamp(430px,67svh,720px) 0 0 3vw; background:var(--clean-paper); box-shadow:0 -18px 52px rgba(47,33,23,.18); }
     .desktop-clean-event--editorial .desktop-editorial-side { grid-column:2; grid-row:1; position:sticky; top:var(--desktop-floating-top); z-index:8; display:grid; justify-items:stretch; gap:.8rem; width:calc(100% - 1rem); max-height:calc(100svh - var(--desktop-floating-top) - var(--desktop-rail-inset)); margin:clamp(430px,67svh,720px) 1rem 3rem 0; overflow:auto; scrollbar-width:thin; }
     .desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side { margin-top:clamp(390px,57svh,620px); }

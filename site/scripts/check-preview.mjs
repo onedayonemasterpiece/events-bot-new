@@ -41,6 +41,7 @@ const required = [
   'lab/event-desktop/examples/editorial-photo-continuous/index.html',
   'lab/event-desktop/examples/split-low-resolution/index.html',
   'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
+  'lab/event-desktop/examples/portrait-carousel-production/index.html',
   'lab/event-mobile/index.html',
   ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8'].flatMap((variant) =>
     ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
@@ -214,6 +215,7 @@ const desktopV12Pages = {
   garage: readFileSync(join(root, 'lab/event-desktop/examples/editorial-photo-continuous/index.html'), 'utf8'),
   split: readFileSync(join(root, 'lab/event-desktop/examples/split-low-resolution/index.html'), 'utf8'),
   companion: readFileSync(join(root, 'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html'), 'utf8'),
+  portraitCarousel: readFileSync(join(root, 'lab/event-desktop/examples/portrait-carousel-production/index.html'), 'utf8'),
 };
 for (const [name, html] of Object.entries(desktopV12Pages)) {
   if (!html.includes('data-service-share-root') || !html.includes('data-service-share-intent="image"') || !html.includes('data-service-share-intent="text"')) {
@@ -247,6 +249,13 @@ for (const marker of ['waiting-media', 'gallery-open', 'manual-rail-interaction'
 if (desktopV12ScriptSource.includes('preload-failed')) throw new Error('Desktop v13 must not wait for or fail the whole autorotation set');
 if (!desktopV12Pages.split.includes('desktop-portrait-viewer__heading') || !desktopV12Pages.split.includes('<time datetime=')) {
   throw new Error('Desktop v13 efficient viewer must expose event title plus date/time');
+}
+const portraitCarouselItems = desktopV12Pages.portraitCarousel.match(/data-efficient-viewer-item/g)?.length || 0;
+if (!desktopV12Pages.portraitCarousel.includes('data-split-efficient-viewer="true"') || portraitCarouselItems !== 7) {
+  throw new Error(`Production portrait-carousel lab must expose seven quality-admitted height-fit items, got ${portraitCarouselItems}`);
+}
+if (!desktopV12Pages.portraitCarousel.includes('Показаны 7 из 12 изображений в лучшем качестве')) {
+  throw new Error('Production portrait-carousel lab must disclose quality filtering');
 }
 if (!desktopV12Pages.companion.includes('event-token--kaup') || !desktopV12Pages.companion.includes('/assets/festivals/kaup.svg')) {
   throw new Error('Desktop v13 OCR companion must retain the accepted Kaup venue-brand medallion');

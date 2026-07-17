@@ -57,6 +57,23 @@ for (const { slug, file } of eventFiles) {
   }
   const desktopHtml = html.slice(html.indexOf('<main class="desktop-clean-event'), html.indexOf('</main>', html.indexOf('<main class="desktop-clean-event')) + 7);
   const mobileHtml = html.slice(html.indexOf('<main class="mobile-event-production'), html.indexOf('</main>', html.indexOf('<main class="mobile-event-production')) + 7);
+  for (const imageTag of desktopHtml.match(/<img class="hero-gallery__image"[^>]+>/gu) || []) {
+    const textMode = imageTag.match(/data-image-text-mode="([^"]+)"/u)?.[1];
+    const fit = imageTag.match(/data-desktop-gallery-fit="([^"]+)"/u)?.[1];
+    const semanticStatus = imageTag.match(/data-media-semantic-status="([^"]+)"/u)?.[1];
+    const mediaRole = imageTag.match(/data-media-role="([^"]+)"/u)?.[1];
+    const expectedFit = textMode !== 'visual_only' || (semanticStatus === 'classified' && mediaRole !== 'event_photo') ? 'contain' : 'cover';
+    if (fit !== expectedFit) failures.push(`${slug}: desktop gallery ${textMode || 'missing'} image uses ${fit || 'missing'}, expected ${expectedFit}`);
+  }
+  const selectedMode = desktopHtml.match(/data-selected-media-policy="([^"]+)"/u)?.[1];
+  const selectedRole = desktopHtml.match(/data-selected-media-role="([^"]+)"/u)?.[1];
+  const selectedSemanticStatus = desktopHtml.match(/data-selected-media-semantic-status="([^"]+)"/u)?.[1];
+  const heroFit = desktopHtml.match(/data-hero-render-fit="([^"]+)"/u)?.[1];
+  const expectedHeroFit = selectedMode === 'visual_only' && !(selectedSemanticStatus === 'classified' && selectedRole !== 'event_photo') ? 'cover' : 'contain';
+  if (heroFit !== expectedHeroFit) failures.push(`${slug}: selected ${selectedMode || 'missing'} hero uses ${heroFit || 'missing'}, expected ${expectedHeroFit}`);
+  if (slug === 'spektakl-garazh-kaliningrad-5658' && (!desktopHtml.includes('data-editorial-crop="bounded-cover"') || heroFit !== 'cover')) {
+    failures.push(`${slug}: wide no-OCR photograph must use the bounded cover hero contract`);
+  }
   if (slug === 'zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756') {
     if (!desktopHtml.includes('data-selected-media-policy="visual_only"')) failures.push(`${slug}: classified horizontal photo was not selected as the desktop hero`);
     if (!desktopHtml.includes('data-desktop-gallery-fit="contain"')) failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);

@@ -12,7 +12,7 @@ export interface DesktopEventPresentation {
   heroObjectPosition?: string;
   editorialRail: boolean;
   editorialMotion: 'continuous';
-  editorialCropPolicy: 'exact' | 'bottom-safe';
+  editorialCropPolicy: 'bounded-cover' | 'bottom-safe';
   ocrCompanionImageIndex?: number;
   ocrCompanionLayout: 'separate' | 'arrival';
   autoRotate: boolean;
@@ -162,7 +162,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
         heroObjectPosition:objectPosition(event, hero, bottomSafe),
         editorialRail:false,
         editorialMotion:'continuous',
-        editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'exact',
+        editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'bounded-cover',
         ocrCompanionImageIndex:identityPosterIndex,
         ocrCompanionLayout:'arrival',
         autoRotate:false,
@@ -198,7 +198,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
         heroObjectPosition:objectPosition(event, hero, bottomSafe),
         editorialRail:true,
         editorialMotion:'continuous',
-        editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'exact',
+        editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'bounded-cover',
         ocrCompanionLayout:'separate',
         autoRotate:distinctIndexes.filter((index) => isReliableEditorialPhoto(assets[index])).length > 1,
         ocrSourceIndexes,
@@ -213,7 +213,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     }
   }
 
-  if (isEditorialLandscape(primary)) {
+  if (isEditorialLandscape(primary) && !isReliableNonIdentityDocument(primary)) {
     const bottomSafe = primaryRatio < NEAR_SQUARE_MAX_RATIO;
     const rotationEligibleCount = distinctIndexes.filter((index) => isEditorialLandscape(assets[index])).length;
     return {
@@ -225,7 +225,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
       heroObjectPosition:objectPosition(event, primary, bottomSafe),
       editorialRail:distinctIndexes.length > 1,
       editorialMotion:'continuous',
-      editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'exact',
+      editorialCropPolicy:bottomSafe ? 'bottom-safe' : 'bounded-cover',
       ocrCompanionLayout:'separate',
       autoRotate:rotationEligibleCount > 1,
       ocrSourceIndexes,
@@ -239,7 +239,9 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     };
   }
 
-  const selectedIsVisual = primary ? isVisual(primary) : event.image_text_mode === 'visual_only';
+  const selectedIsVisual = primary
+    ? isVisual(primary) && !isReliableNonIdentityDocument(primary)
+    : event.image_text_mode === 'visual_only';
   const selectedRatio = primaryRatio || 0;
   return {
     candidate:'split',
@@ -250,7 +252,7 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     heroObjectPosition:objectPosition(event, primary, false),
     editorialRail:false,
     editorialMotion:'continuous',
-    editorialCropPolicy:'exact',
+    editorialCropPolicy:'bounded-cover',
     ocrCompanionLayout:'separate',
     autoRotate:false,
     ocrSourceIndexes,

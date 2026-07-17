@@ -3,12 +3,12 @@ import EventLayout from '../../../layouts/EventLayout.astro';
 import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/event-desktop/');
-const title = `Desktop media focus v11 | ${SITE_NAME}`;
+const title = `Desktop media focus v12 | ${SITE_NAME}`;
 const description = 'Desktop-only проверка нижнего старта CTA, плотного OCR-board, адаптивной ленты и эффективного многофотографийного viewer с рекомендацией. Mobile не изменён.';
 const examples = [
   ['editorial-photo', 'Editorial · закреплённый hero', 'Верх фотографии защищён от кропа; нижняя часть раскрывается внутренним параллаксом.'],
-  ['editorial-photo-continuous', 'Continuous · rail + CTA admission', 'Спектакль «Гараж»: лента остаётся сверху, CTA ждёт информационный блок и только затем присоединяется снизу.'],
-  ['editorial-photo-continuous-wide', 'Continuous · широкий 2,36:1', 'Pianissimo: естественная высота сильной широкой фотографии без ненужного увеличения.'],
+  ['editorial-photo-continuous', 'Continuous · bounded photo cover', 'Спектакль «Гараж»: обычная фотография заполняет ограниченный hero с аккуратным кропом; лента и CTA сохраняют принятую иерархию.'],
+  ['editorial-photo-continuous-wide', 'Continuous · широкий 2,36:1', 'Pianissimo: широкая фотография масштабируется в ограниченный hero; документный contain-контракт на неё не распространяется.'],
   ['editorial-photo-continuous-near-square', 'Continuous · 4:3 bottom-safe', '«Город в персональном зеркале»: не более 20% кропа только сверху, нижняя граница сохранена.'],
   ['editorial-ocr-companion', 'Service info · не афиша', '«Услуги в кемпинге» остаются полезным документом и больше не получают ложную метку «Афиша».'],
   ['editorial-ocr-companion-arrival', 'OCR companion · приезжает', 'CTA ждёт информационный блок внизу, затем media-board с афишей поднимается и стыкуется без пустых полей.'],
@@ -16,6 +16,7 @@ const examples = [
   ['split-portrait', 'Split · одна portrait-композиция', 'Семантически одинаковые варианты не создают ложную галерею.'],
   ['split-low-resolution', 'Split · низкое разрешение', 'Адаптивная лента использует всю ширину; любой кадр открывает height-fit просмотр нескольких изображений с рекомендацией в конце.'],
   ['split-multi-portrait', 'Split · много вертикальных фото', 'Нажатие на главный кадр или серию открывает несколько height-fit фотографий одновременно; частичный правый кадр становится первым.'],
+  ['portrait-carousel-production', 'Карусель · вертикальная серия (production)', '«Алые паруса»: семь качественных вертикальных и широких кадров показаны в одной height-fit ленте с постраничной навигацией; пять слабых rendition честно отфильтрованы.'],
   ['split-ocr-with-photos', 'Split · OCR + реальные фото', 'Читаемая главная афиша и дополнительные фотографии под ней с точным переходом в полноэкранный просмотр.'],
 ];
 const relatedExamples = [
@@ -26,7 +27,7 @@ const relatedExamples = [
 ---
 
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v11>
+  <main id="main" class="desktop-focus" data-desktop-event-lab data-desktop-media-families data-desktop-focus-v12>
     <div class="page-shell desktop-focus__shell">
       <nav class="crumbs" aria-label="Хлебные крошки"><a href={withBase('/__preview/')}>Афиша</a><span aria-hidden="true">/</span><span>Desktop event focus v11</span></nav>
 
@@ -73,10 +74,11 @@ const relatedExamples = [
         <div class="section-card__inner">
           <p class="eyebrow">media routing contract</p><h2 id="routing-title">Как выбирается семейство</h2>
           <div role="list">
-            <p role="listitem"><strong>Сильная horizontal ≥1200px и ratio ≥1,33</strong><span>Editorial</span></p>
+            <p role="listitem"><strong>Сильная horizontal ≥1200px и ratio ≥1,25 без OCR</strong><span>Editorial · bounded cover</span></p>
             <p role="listitem"><strong>OCR + сильная horizontal</strong><span>Editorial + отдельная OCR-афиша</span></p>
             <p role="listitem"><strong>OCR без сильной horizontal</strong><span>Split/Fallback</span></p>
             <p role="listitem"><strong>Portrait-only без OCR</strong><span>Split/Fallback</span></p>
+            <p role="listitem"><strong>Серия ≥4 вертикальных фото</strong><span>Height-fit multi-photo carousel</span></p>
             <p role="listitem"><strong>Горизонталь низкого разрешения</strong><span>Split/Fallback</span></p>
           </div>
           <small>Размеры — предварительный геометрический gate, а не замена смысловой оценки релевантности изображения событию.</small>

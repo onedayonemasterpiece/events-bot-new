@@ -45,6 +45,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-17: mobile review of v9 found that some dynamically rendered event cards could navigate to an older preview/root event UI. A poisoned-cache Playwright reproduction isolated cross-build personal-feed URL reuse; v10 scopes the cache to the current base and rebases same-site dynamic event/search links at render time.
 - 2026-07-17: the v10 product pass restored North-derived route-119 times, flattened KAUP into one concise journey hierarchy after Gemini 3.1 Pro (High) critique, and aligned the desktop phone control with the parallel design-system CopyAction contract: standard-size number, no phone glyph/helper copy, fixed icon-only copy→check feedback.
 - 2026-07-17: follow-up product review rejected v10's plain number plus detached copy utility as a loss of primary-action hierarchy. The correction restores the existing branded CTA styling: `Показать телефон` with a copy icon reveals and copies the normalized number in one click and reports `Номер скопирован` without moving the panel.
+- 2026-07-17: follow-up product review found that wide no-OCR event photographs were letterboxed in the desktop hero/fullscreen viewer because pending semantic-role hints overrode positive `visual_only` evidence; the carousel contract was separated into photo-cover, document-contain and efficient portrait-series families, with a named production-data portrait example.
 
 ## Root Cause
 
@@ -88,6 +89,12 @@ The full-catalog static preview exposed several user-visible regressions around 
     and replaced the already accepted primary CTA with plain number text plus a
     detached icon action. Although its geometry passed, it weakened the
     booking hierarchy and exposed the contact before the visitor expressed intent.
+19. The desktop detail renderer required `classified event_photo + safe_crop +
+    recommended cover` before a fullscreen image could cover, while Continuous
+    Editorial independently forced `contain`. Current exports can positively
+    classify a source as `visual_only` before the slower semantic-role pass;
+    wide photographs such as event `5658` therefore inherited conservative
+    `unknown_document/pending` hints and were displayed like OCR documents.
 
 ## Contributing Factors
 
@@ -134,6 +141,8 @@ The full-catalog static preview exposed several user-visible regressions around 
 - event `6851` initially exposes the established branded primary CTA `Показать телефон` with a copy icon and no handset/helper line; one click reveals the standard-size formatted number inside that same CTA, copies the normalized value and shows both transient `Номер скопирован` toast and polite live feedback;
 - event `6851` keeps admission, the one-line branded CTA and all action controls on the same visual row at `1366×768`, `1536×864` and `1920×1080`; its calendar is icon-only and the CTA/panel rectangles are stable before and after reveal/copy success;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
+- wide `visual_only` event-detail photos, including event `5658`, use a viewport-bounded `cover` hero and `cover` fullscreen slides even while semantic role enrichment is pending; OCR/unknown-text slides remain `contain` across the complete generated catalog;
+- the desktop lab exposes the real event `4783` as a named efficient vertical-series carousel with exactly seven quality-admitted items, `7 из 12` disclosure, height-fit multi-photo viewport and symmetric navigation;
 - insufficient-feedback placeholder copy is absent.
 - at phone widths `320` and `390`, a crawl of at least 36 event pages preserves the exact current preview prefix and the accepted mobile hero/action surface; actual hero-related, other-date, initial/load-more discovery and personal-feed clicks must be exercised;
 - a valid stale v7/root personal-feed cache and an old-prefix Authorized Search payload are either rejected or rebased: their rendered event, absolute/share and local calendar URLs stay in the current preview, while foreign organizer/ticket origins remain unchanged;
