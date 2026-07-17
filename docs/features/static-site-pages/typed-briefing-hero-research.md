@@ -70,7 +70,7 @@ Route:
 
 Final immutable review build:
 
-- current stripe/OCR/source-quality corrective candidate: immutable URL is added only after local acceptance and publication;
+- [current stripe/OCR/source-quality corrective candidate](https://kenigevents.ru/preview-20260717t0951-briefing-lab-21ca7a49/lab/briefing/?variant=c&scenario=weather_water_demo&pace=slow&replay=1);
 - [superseded: dramatic mosaic with opaque/overlapping stripe, low-resolution sources and insufficient OCR admission](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [superseded: rejected `12×4` checkerboard/distorted crop](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [desktop `8×3` mosaic + text-only mobile](https://kenigevents.ru/preview-20260715t2306-briefing-lab-7c2b2a30/lab/briefing/?variant=c&scenario=live_meeting_mosaic&pace=slow&replay=1);
@@ -107,7 +107,7 @@ Final immutable review build:
 - актуальная mosaic — адаптивная CSS-grid `16×5` / `18×5` / `20×5` для
   `1024–1535` / `1536–1791` / `≥1792px`. Она занимает правые `75vw` на любой
   desktop review-width, поэтому больше не сжимается до половины экрана из-за
-  `88px` cell-cap. Square cells, `3px` gutters и один cached raster сохранены;
+  `88px` cell-cap. Square cells, `3px` vertical gutters и один cached raster сохранены; горизонтальные gutters удалены;
 - final alpha выбирается из семи заметных bands через scenario-seeded,
   deterministic cell/cluster field. Последние два столбца всегда `1`, внутри
   есть длинные острова, локальные reversals, резкие провалы и вспышки; запрещены
@@ -205,6 +205,21 @@ exact WebM `#121`. Все receipts verified; post-send inspect вернул
 `360×450`/`478×317` источников и конфликт hero copy с текстом внутри poster.
 Новый gate не имеет права наследовать этот verdict: stripe occlusion, OCR и
 фактический upscale являются отдельными publish blockers.
+
+Финальный corrective prefix
+`preview-20260717t0951-briefing-lab-21ca7a49` построен из implementation source
+`21ca7a49`. Isolated build/check pass; Playwright `16/16` pass. Exact captures
+на `1920×900`, `1440×900`, `1366×768` и `390×844` подтвердили: `row-gap=0`,
+только вертикальный `column-gap=3px`, media заканчивается на physical right
+pixel, natural source `2560×1707`, cover-upscale `.422/.563`, `bodyWidth ==
+innerWidth`; mobile остаётся без raster URL. Named/rare/storm преднамеренно
+abstain и показывают text-only состояние. Gemini 3.1 Pro (High) blind-first
+gate `2026-07-17 09:48:55–09:50:39 UTC`, status `0`, empty stderr: R01–R04 и
+mobile/motion `PASS`, overall `PASS`, `PUBLISH FOR USER REVIEW: YES`, blockers
+none. Telegram topic `6`: scope/URL `#144`, desktop `#145–146`, mobile `#147`,
+WebM `#148`; receipts verified, post-send top message `148`, новых входящих
+комментариев после публикации не было. Это acceptance только isolated lab, не
+production homepage.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего

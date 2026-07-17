@@ -227,6 +227,28 @@ failed-review-process provenance. The next acceptance prompt treats stripe
 occlusion, visible raster text and actual cover-upscale as independent
 hard-fail criteria and does not inherit any earlier PASS.
 
+### Stripe / source-quality / OCR corrective gate
+
+После нового пользовательского отклонения прежний dramatic-mosaic PASS не
+переиспользовался. Финальный blind-first gate получил rejected baseline,
+exact candidate PNG на `1366/1440/1920`, text-only abstention states,
+`390×844`, `18s` WebM и browser geometry. Hard-fail критерии независимо
+запрещали opaque/overlapping/double stripe, плохую читаемость, raster OCR,
+видимый upscale/stretch, smooth/checkerboard alpha, inner-frame seam,
+mobile raster и потерю horizontal pending cursor.
+
+Запуск через `/home/dev/.local/bin/a-gemini`, display model Gemini **3.1 Pro
+(High)**: `2026-07-17 09:48:55–09:50:39 UTC`, provider status `0`, stderr
+empty. Вердикт: `R01 STRIPE: PASS`, `R02 QUALITY/CROP: PASS`, `R03 TILE DRAMA:
+PASS`, `R04 OCR/ABSTENTION: PASS`, `MOBILE/MOTION: PASS`, `OVERALL: PASS`,
+`PUBLISH FOR USER REVIEW: YES`, `BLOCKERS: none`. Acceptance относится только
+к публикации isolated lab для пользовательского ревью.
+
+| File | Role | SHA-256 |
+|---|---|---|
+| [`stripe-media-correction-acceptance-prompt.md`](stripe-media-correction-acceptance-prompt.md) | Blind-first stripe/OCR/upscale/motion hard-fail gate. | `6f96b5e2794e2b707fa718157c06b7995a30a4814aeaec8a6159f608b8bb8ecd` |
+| [`stripe-media-correction-acceptance-gemini.md`](stripe-media-correction-acceptance-gemini.md) | Final all-PASS answer. | `16c4dc384961f3c4bd411c82e71e09aba572c3324fa633ac5fd202576f670967` |
+
 ## Decision trace
 
 ### Accepted from Gemini

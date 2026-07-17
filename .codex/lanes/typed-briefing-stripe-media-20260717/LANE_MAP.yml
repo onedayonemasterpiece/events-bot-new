@@ -29,7 +29,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: reviewer findings delivered to the integrator
     verification_scope: inspection_only
-    status: spawned
+    status: superseded_by_integrator_audit
   - id: ui-integrator
     role: worker
     requirement_ids: [R01, R02, R03, R04]
@@ -52,7 +52,7 @@ lanes:
       - production homepage routes
     expected_output: committed implementation, docs, tests, evidence, and closure audit
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: external-acceptance
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04]
@@ -69,4 +69,4 @@ lanes:
       - site/src/**
     expected_output: explicit PASS/FAIL against stripe, OCR, resolution/crop, and tile drama
     verification_scope: inspection_only
-    status: planned
+    status: completed
