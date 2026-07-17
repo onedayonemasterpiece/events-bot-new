@@ -583,6 +583,7 @@ class Database:
                     focal_x REAL,
                     focal_y REAL,
                     safe_crop BOOLEAN,
+                    image_geometry_id INTEGER,
                     thumbnail_256_url TEXT,
                     thumbnail_256_path TEXT,
                     thumbnail_256_width INTEGER,
@@ -597,6 +598,7 @@ class Database:
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
                     FOREIGN KEY(duplicate_of_id) REFERENCES eventposter(id) ON DELETE SET NULL,
+                    FOREIGN KEY(image_geometry_id) REFERENCES event_image_geometry(id) ON DELETE SET NULL,
                     UNIQUE(event_id, poster_hash)
                 )
                 """
@@ -637,6 +639,7 @@ class Database:
             await _add_column(conn, "eventposter", "focal_x REAL")
             await _add_column(conn, "eventposter", "focal_y REAL")
             await _add_column(conn, "eventposter", "safe_crop BOOLEAN")
+            await _add_column(conn, "eventposter", "image_geometry_id INTEGER")
             await _add_column(conn, "eventposter", "thumbnail_256_url TEXT")
             await _add_column(conn, "eventposter", "thumbnail_256_path TEXT")
             await _add_column(conn, "eventposter", "thumbnail_256_width INTEGER")
@@ -665,10 +668,45 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_pixel_sha256 ON eventposter(event_id, pixel_sha256)"
             )
             await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_pixel_sha256_global ON eventposter(pixel_sha256)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_eventposter_image_geometry ON eventposter(image_geometry_id)"
+            )
+            await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_eventposter_media_semantic ON eventposter(event_id, media_semantic_status, media_role)"
             )
             await conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_eventposter_event_raw_sha256 ON eventposter(event_id, raw_sha256) WHERE raw_sha256 IS NOT NULL AND TRIM(raw_sha256) != ''"
+            )
+
+            dbg("event_image_geometry")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_image_geometry(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pixel_sha256 TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    prompt_version TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'classified',
+                    source_width INTEGER,
+                    source_height INTEGER,
+                    face_boxes_yxyx_json JSON,
+                    valuable_region_yxyx_json JSON,
+                    valuable_region_confidence REAL,
+                    reason_code TEXT,
+                    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                    completion_tokens INTEGER NOT NULL DEFAULT 0,
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    analyzed_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(pixel_sha256, model, prompt_version)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_image_geometry_status ON event_image_geometry(status, updated_at)"
             )
 
             dbg("event_media_review")

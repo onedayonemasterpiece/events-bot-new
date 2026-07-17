@@ -157,6 +157,18 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
     `google_ai_api_keys.env_var_name`; env-only ключ не виден атомарному reserve RPC. Успешный borrow запасного ключа
     пишет `google_ai.reserve_overflow_used` в structured log, но не отправляет operator-facing LLM incident: алерт нужен
     только когда рабочий ключ/модель не найдены или provider call реально завершился ошибкой.
+*   **Normal rotating pool**: consumer может передать
+    `GoogleAIClient(reserve_key_envs=[...])`. В отличие от emergency overflow,
+    это его обычный candidate set с самого первого reserve: process-wide cursor
+    меняет стартовый env на каждом запросе, а существующий atomic RPC проверяет
+    кандидатов по одному и при `rpm`/`tpm`/`rpd` пробует следующего участника той
+    же нормальной allocation. Каждый env обязан существовать и в runtime, и как
+    active `google_ai_api_keys.env_var_name`; отсутствие shared Supabase limiter
+    или registry member завершает pool fail-closed, без local/bypass fallback.
+    API-key rotation распределяет только наши ledger counters: по контракту
+    Google AI квоты принадлежат Cloud project, поэтому несколько ключей одного
+    project не создают несколько независимых RPD. Feature-specific total caps
+    всё равно обязательны.
 *   **Smart Update 4o fallback budget**: 4o остаётся аварийным fallback после Gemma/Gemini ошибок, но массовые Smart Update
     переливы можно ограничить `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=N`. `SMART_UPDATE_4O_FALLBACK=0` — временный
     incident kill-switch, не steady-state policy.
@@ -245,3 +257,10 @@ local limiter fallback, 100 primary + 25 escalation calls per UTC day and at
 most three automatic attempts. Primary budget exhaustion does not consume the
 escalation allowance. Pair/result cache and daily counters live in Fly SQLite;
 unresolved media stays non-public. Full contract: [Event media](../event-media/README.md).
+
+`smart_update_image_geometry` — отдельный event-media consumer для face/value
+metadata. Он с первого запроса использует normal pool KEY4+KEY5 (не overflow),
+не видит KEY1–KEY3, не имеет model/local fallback, делает максимум одну provider
+попытку на durable item и по умолчанию ограничен `100` calls/UTC day. External
+backfill дополнительно capped на `400` total calls/day и paced `>=6s`, поэтому
+не предполагает, что пять env keys автоматически означают пять provider quotas.

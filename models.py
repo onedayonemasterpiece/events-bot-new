@@ -791,6 +791,8 @@ class EventPoster(SQLModel, table=True):
         Index("ix_eventposter_review_status", "event_id", "review_status"),
         Index("ix_eventposter_raw_sha256", "event_id", "raw_sha256"),
         Index("ix_eventposter_pixel_sha256", "event_id", "pixel_sha256"),
+        Index("ix_eventposter_pixel_sha256_global", "pixel_sha256"),
+        Index("ix_eventposter_image_geometry", "image_geometry_id"),
         Index("ix_eventposter_media_semantic", "event_id", "media_semantic_status", "media_role"),
         UniqueConstraint("event_id", "poster_hash", name="ux_eventposter_event_hash"),
     )
@@ -840,6 +842,9 @@ class EventPoster(SQLModel, table=True):
     focal_x: Optional[float] = None
     focal_y: Optional[float] = None
     safe_crop: Optional[bool] = None
+    image_geometry_id: Optional[int] = Field(
+        default=None, foreign_key="event_image_geometry.id"
+    )
     thumbnail_256_url: Optional[str] = None
     thumbnail_256_path: Optional[str] = None
     thumbnail_256_width: Optional[int] = None
@@ -851,6 +856,51 @@ class EventPoster(SQLModel, table=True):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventImageGeometry(SQLModel, table=True):
+    """Versioned, content-addressed crop-safety geometry for one physical image."""
+
+    __tablename__ = "event_image_geometry"
+    __table_args__ = (
+        UniqueConstraint(
+            "pixel_sha256",
+            "model",
+            "prompt_version",
+            name="ux_event_image_geometry_version",
+        ),
+        Index("ix_event_image_geometry_status", "status", "updated_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    pixel_sha256: str
+    model: str
+    prompt_version: str
+    status: str = "classified"
+    source_width: Optional[int] = None
+    source_height: Optional[int] = None
+    # Compact normalized [ymin, xmin, ymax, xmax] arrays in the 0..1 range.
+    # [] means analyzed and no faces; NULL means no valid analysis.
+    face_boxes_yxyx_json: Optional[list[list[float]]] = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    valuable_region_yxyx_json: Optional[list[float]] = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    valuable_region_confidence: Optional[float] = None
+    reason_code: Optional[str] = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    analyzed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
     updated_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )

@@ -64,3 +64,9 @@ per-event raw-SHA uniqueness, `event_media_pair_review` and
 compatibility migration: later restarts must not reset
 `pending_review`/`duplicate`/`rejected`/`unavailable` decisions. Regression:
 `tests/test_event_media_gate.py::test_review_status_migration_is_one_time_and_restart_safe`.
+
+`Database.init()` также идемпотентно создаёт `event_image_geometry` и nullable
+`EventPoster.image_geometry_id`. Cache имеет unique key
+`(pixel_sha256, model, prompt_version)` и хранит нормализованные face/value
+`yxyx` boxes; глобальный индекс `EventPoster.pixel_sha256` позволяет связать с
+одним результатом все строки с идентичными ориентированными RGB-пикселями.

@@ -162,12 +162,93 @@ export: только `lifecycle_status=active`, `silent=0` и события, к
 Повторное выполнение не переотправляет rows с актуальной версией/input hash;
 `--retry-errors` разрешён только для контролируемого повторного прогона.
 
+### Face boxes and viewer-value region
+
+После role-classification тот же durable `event_media_review` worker отдельно
+обогащает каждое подходящее изображение геометрией. Smart Update только ставит
+job в outbox и никогда не ждёт скачивание/provider inline. Один короткий
+`gemma-4-31b-it` запрос возвращает одновременно:
+
+- `face_boxes_yxyx_json` — tight bbox до 25 крупнейших/наиболее различимых
+  человеческих лиц (мелкие лица толпы не должны раздувать ответ без пользы для
+  защиты crop);
+- `valuable_region_yxyx_json` — минимальный связный прямоугольник с главным
+  объектом/людьми, визуальной идентичностью и действительно важным текстом;
+- confidence и короткий `reason_code`.
+
+Обе координаты хранятся как нормализованные `[ymin, xmin, ymax, xmax]` в
+диапазоне `0..1`. Это только reusable metadata: stage не выбирает aspect ratio,
+не вычисляет конечный crop и не диктует downstream-механизмам, как обрезать
+изображение. Компактный native `response_schema`, проверенный Gemma sampling
+envelope, `thinking_level=MINIMAL`, отключённые thoughts и лимит `768` output
+tokens не дают задаче уходить в длинное reasoning. Диапазоны/длина/порядок bbox
+дополнительно валидируются приложением: JSON-Schema-only keywords hosted Gemma
+endpoint не принимает. Лимит 25 лиц задаётся одновременно коротким prompt
+contract и application validator: это сохраняет полезные для crop лица и не
+позволяет массовой сцене оборвать structured JSON по `MAX_TOKENS`.
+Provider deadline по умолчанию равен `90` секундам: hosted vision inference
+иногда законно дольше прежних 45 секунд. Внутри одного item по-прежнему только
+одна попытка; timeout сохраняется как item-level error, а повтор выполняет
+durable worker/backfill отдельным paced запуском, без retry burst.
+
+`event_image_geometry` — глобальный versioned cache по точному
+`pixel_sha256 + model + prompt_version`; `EventPoster.image_geometry_id`
+ссылается на него. Поэтому один и тот же ориентированный набор RGB-пикселей в
+разных событиях оплачивается один раз, а re-encode/crop с другими пикселями не
+получает потенциально неверные координаты из perceptual-hash cache.
+
+Consumer `smart_update_image_geometry` использует normal pool
+`GOOGLE_API_KEY4,GOOGLE_API_KEY5` с ротацией с первого reserve. Это не emergency
+overflow и он не заимствует KEY1–KEY3. Отсутствующий limiter/registry member
+останавливает stage fail-closed. Production defaults: `100` новых provider calls
+за UTC-day и не чаще одного outbox item в `7` секунд; cache hits квоту не тратят.
+
+Исторический backfill не скачивает изображения с Fly. Работать нужно на копии
+production SQLite локально или в Kaggle; JSONL fsync-ится после каждого item и
+затем импортируется в production маленькой fingerprint-guarded транзакцией:
+
+```bash
+# plan/canary на рабочей копии snapshot; run по умолчанию ограничен 20 items
+python scripts/backfill_event_image_geometry.py \
+  --mode plan --db artifacts/codex/image-geometry/db.sqlite --limit 20
+python scripts/backfill_event_image_geometry.py \
+  --mode run --db artifacts/codex/image-geometry/db.sqlite \
+  --env-file /path/to/.env --limit 20 --min-delay 6 --jitter 1 \
+  --chunk-size 100 --chunk-pause 75 \
+  --output artifacts/codex/image-geometry/results.jsonl
+
+# обязательный visual gate: red=faces, green=viewer-value
+python scripts/render_event_image_geometry_contact_sheets.py \
+  --input artifacts/codex/image-geometry/results.jsonl \
+  --output-dir artifacts/codex/image-geometry/contact-sheets
+
+# сначала dry-run против свежей target DB; --apply только после stale=0/inspection
+python scripts/backfill_event_image_geometry.py \
+  --mode import --db /data/db.sqlite \
+  --input /tmp/image-geometry-results.jsonl
+python scripts/backfill_event_image_geometry.py \
+  --mode import --db /data/db.sqlite \
+  --input /tmp/image-geometry-results.jsonl --apply \
+  --backup-out /data/backups/image-geometry-import.json
+```
+
+Canary идёт ступенями `10–20 → visual review → около 100 → visual review →
+remainder`, с паузой не менее `5–7` секунд, `60–90` секунд после каждых `100`
+provider calls и немедленной остановкой на `429`. Дневной backfill cap по
+умолчанию `400` оставляет запас относительно Gemma lane; ключи дают независимую
+provider quota только если они принадлежат разным Google Cloud projects, поэтому
+общий cap нельзя умножать просто на число env-переменных. Устаревшие/404 URL
+фиксируются как item-level errors и не блокируют batch или повторно молотятся
+при resume с тем же checkpoint.
+
 ## Schema
 
 `EventPoster` дополняется `raw_sha256`, `pixel_sha256`, `perceptual_hash`,
 dimensions/MIME, `review_status`, `duplicate_of_id`, reason/time/order,
 semantic-role evidence/version/model/input hash/status/confidence,
-`focal_x`/`focal_y`/`safe_crop_json` и метаданными WebP derivatives `256`/`512`.
+`focal_x`/`focal_y`/`safe_crop_json`, ссылкой `image_geometry_id` и метаданными
+WebP derivatives `256`/`512`. `event_image_geometry` хранит versioned face/value
+boxes, исходные размеры, confidence, model/prompt и token usage.
 Старые rows переводятся в `approved` ровно при первом schema upgrade; повторный
 `Database.init()` не перезаписывает статусы. Таблицы `event_media_pair_review` и
 `event_media_review_usage` хранят решения/retry и независимые суточные бюджеты.
