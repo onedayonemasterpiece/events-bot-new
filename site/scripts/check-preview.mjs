@@ -50,6 +50,8 @@ if (!designSystemHtml.includes('EventCtaPanel.astro') || !designSystemHtml.inclu
 if (!designSystemHtml.includes('data-ke-copy-action') || !designSystemHtml.includes('icon--copy') || !designSystemHtml.includes('icon--check')) throw new Error('Design-system catalog misses the real icon-only CopyAction');
 if (!designSystemHtml.includes('ke-button--inverse') || !designSystemHtml.includes('data-copy-state="success"') || !designSystemHtml.includes('data-copy-state="error"')) throw new Error('Design-system catalog misses inverse/success/error CopyAction fixtures');
 if (!designSystemHtml.includes('role="status"') || !designSystemHtml.includes('aria-live="polite"') || !designSystemHtml.includes('design-system/CopyAction.astro')) throw new Error('Design-system CopyAction misses accessible feedback or registry evidence');
+if (!designSystemHtml.includes('data-ds-component="EventCard" data-ds-version="2"') || !designSystemHtml.includes('data-ds-replaced-by="EventCard@2"')) throw new Error('Generated design-system registry misses EventCard v1 -> v2 migration contract');
+if (!/<th[^>]*>Версия<\/th>/u.test(designSystemHtml) || !designSystemHtml.includes('production migration complete')) throw new Error('Generated design-system registry misses visible version/migration status');
 if (interestClubsData.schema_version !== 'interest-clubs-static-v1' || interestClubsData.projection_version !== 1) {
   throw new Error('Interest-clubs projection contract is not interest-clubs-static-v1');
 }

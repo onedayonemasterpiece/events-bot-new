@@ -17,7 +17,8 @@
 - runtime catalog всех foundations, interaction/data states и реальных product components: `/lab/design-system/`;
 - component promotion lifecycle и реестр: [design-system contract](../features/static-site-pages/design-system/README.md);
 - source/AA/state check: `npm run check:design-system`; generated route входит в `check:preview`;
-- `EventCard split-actions` зафиксирован как baseline, overlay помечен deprecated/regression-only.
+- обязательный version/migration contract: материальная переработка создаёт `vN+1`, а release блокируется до полного перехода production consumers;
+- `EventCard split-actions` зафиксирован как `v2` baseline, `overlay-controls v1` помечен deprecated/regression-only с явной заменой.
 
 Это закрывает архитектурную основу унификации UI, но **не переводит F5 в Done**: до release freeze всё ещё нужны merge в `origin/main`, immutable preview build id, visual baselines на acceptance matrix, real-device/a11y evidence и явный product/design sign-off SHA. Общий verdict полного релиза остаётся **NO-GO**.
 
@@ -282,7 +283,7 @@ Smart Update является владельцем семантического 
 - [ ] Clean `origin/main`-reachable RC SHA; no release fixes only in side branches.
 - [ ] Full site build/check from clean checkout passes.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
-- [ ] `/lab/design-system/` на точном RC SHA принят product/design owner: все approved/candidate/deprecated statuses и состояния совпадают с release UI contract.
+- [ ] `/lab/design-system/` на точном RC SHA принят product/design owner: все версии, replacements, migration statuses, approved/candidate/deprecated states совпадают с release UI contract; production consumer audit не находит старых callers после `migration complete`.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
 - [ ] 7-day limited canary with event-quality and availability dashboards.
@@ -314,7 +315,7 @@ Smart Update является владельцем семантического 
 - [ ] files changed and canonical docs updated;
 - [ ] unit/contract/replay/E2E commands with terminal result;
 - [ ] preview/canary URL and immutable build/release id;
-- [ ] design-system catalog URL, `npm run check:design-system` result and owner sign-off for every changed approved component;
+- [ ] design-system catalog URL, component version/replacement, production consumer migration evidence, `npm run check:design-system` result and owner sign-off for every changed approved component;
 - [ ] production config diff without secrets;
 - [ ] DB migration/RLS/grant evidence when applicable;
 - [ ] release manifest and catalog parity report;

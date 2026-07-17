@@ -95,6 +95,21 @@ A registry row in `/lab/design-system/#registry` links status, runtime source an
 
 Use `secondary` on light surfaces and `inverse` on a dark or brand surface. Both variants inherit the `44px` minimum target, focus ring and motion rules from `Button`. Product components must consume `CopyAction` rather than adding another Clipboard API listener or a page-local copy glyph. The component remains `candidate` until its immutable preview and real product integration receive owner sign-off.
 
+## Component versions and mandatory migration
+
+Every registered component has an explicit integer version (`v1`, `v2`, ...). A material change to public API, geometry, hierarchy, visual language or interaction behavior never silently rewrites an approved version: it creates `vN+1`.
+
+Version transition contract:
+
+1. render the old and new runtime versions side by side in `/lab/design-system/` with the same representative content and state matrix;
+2. mark the old row `deprecated` and set a visible `replaced by <component> vN+1` relation;
+3. inventory all production consumers and move them to the new version in the same delivery;
+4. if an atomic move is unsafe, use a feature flag and record consumers, owner, deadline and rollback; undocumented mixed versions block release;
+5. declare migration complete only after source search plus preview/E2E evidence show zero production callers of the old version;
+6. retain the deprecated version only for catalog/regression comparison, then delete it when sign-off and rollback window are closed.
+
+Non-contract accessibility/browser corrections may stay on the same version. Any change in component API, layout geometry, information hierarchy or interaction semantics requires a new version. `EventCard overlay-controls` is recorded as `v1`; `split-actions` is `v2`, and production consumers are required to use `v2`.
+
 ## Brand architecture
 
 The visible service name is **«Полюбить Калининград Анонсы»**:
@@ -115,9 +130,10 @@ Canonical brand documents:
 1. **Experiment:** build in `/lab/<topic>/`; assign owner, use case and reject criteria. Do not ship page-local copies as production primitives.
 2. **Candidate:** add every relevant state, narrow/mobile/desktop examples, keyboard behavior, accessible names and reduced-motion/no-JS behavior.
 3. **Approval:** product/design owner approves an immutable preview build id and git SHA; deviations are written down.
-4. **Promotion:** move reusable geometry/behavior into `site/src/components/design-system/` or register the shared product component; replace local copies.
-5. **Contract:** update this registry, `check-design-system.mjs`, `check-preview.mjs`, canonical feature docs, release docs and `CHANGELOG.md`.
-6. **Deprecation:** mark the old variant visibly in the catalog, name its replacement and delete it after callers and regression evidence are migrated.
+4. **Version:** assign `v1` to a new component or `vN+1` to a material redesign; keep the prior version visible beside it.
+5. **Promotion:** move reusable geometry/behavior into `site/src/components/design-system/` or register the shared product component; replace local copies and migrate every production consumer.
+6. **Contract:** update this registry, version/migration assertions in `check-design-system.mjs` and `check-preview.mjs`, canonical feature docs, release docs and `CHANGELOG.md`.
+7. **Deprecation:** mark the old version visibly in the catalog, name its replacement and delete it after zero-caller and regression evidence.
 
 A component is not approved merely because it appears on one production page. Conversely, an approved component may not be changed silently inside a page stylesheet.
 
@@ -143,3 +159,4 @@ Automated checks are necessary but do not replace real Safari iOS/Chrome Android
 4. Historical labs cannot silently redefine the approved baseline.
 5. Product/design sign-off records exact branch, SHA and immutable preview URL in [the release UI contract](../release-ui-contract.md) and [the release readiness plan](../../../reports/static-personal-announcements-release-readiness-2026-07-11.md).
 6. Any production UI behavior change updates canonical docs and `CHANGELOG.md` in the same commit.
+7. A material redesign increments the component version and includes complete consumer migration; untracked coexistence of old and new versions is a release blocker.

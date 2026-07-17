@@ -1,0 +1,4 @@
+interface:
+  display_name: "Static Site Design System"
+  short_description: "Govern and migrate KenigEvents static-site UI components"
+  default_prompt: "Use the KenigEvents static-site design-system governance workflow for this UI change."

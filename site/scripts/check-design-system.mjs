@@ -58,6 +58,32 @@ if (!catalog.includes('AuthorizedEventSearch.astro')) throw new Error('Catalog r
 for (const section of ['foundations', 'actions', 'fields', 'states', 'product-components', 'registry']) {
   if (!catalog.includes(`id="${section}"`)) throw new Error(`Catalog misses section #${section}`);
 }
+if (!catalog.includes('<th>Версия</th>') || !catalog.includes('Проверка / миграция')) {
+  throw new Error('Design-system registry must expose component version and migration status');
+}
+const registryRows = [...catalog.matchAll(/<tr data-ds-component="([^"]+)" data-ds-version="(\d+)"([^>]*)>/gu)];
+if (registryRows.length < 18) throw new Error(`Design-system registry has only ${registryRows.length} versioned rows`);
+const registryKeys = new Set();
+for (const [, component, version] of registryRows) {
+  const key = `${component}@${version}`;
+  if (registryKeys.has(key)) throw new Error(`Duplicate design-system component version: ${key}`);
+  registryKeys.add(key);
+}
+for (const line of catalog.split(/\r?\n/u).filter((item) => item.includes('>deprecated</'))) {
+  if (!line.includes('data-ds-replaced-by=')) throw new Error('Deprecated component version must name its replacement');
+}
+if (!registryKeys.has('EventCard@1') || !registryKeys.has('EventCard@2') || !catalog.includes('data-ds-replaced-by="EventCard@2"')) {
+  throw new Error('EventCard v1 -> v2 migration is missing from the versioned registry');
+}
+const productionConsumerSources = [
+  'src/pages/sobytiya/[slug].astro',
+  'src/pages/[preview]/index.astro',
+  'src/components/PersonalFeedSlot.astro',
+  'src/components/AuthorizedEventSearch.astro',
+].map(read).join('\n');
+if (/variant="overlay-controls"|data-feed-card-variant="overlay-controls"/u.test(productionConsumerSources)) {
+  throw new Error('Deprecated EventCard v1 remains in a production consumer');
+}
 
 function hexToRgb(hex) {
   const value = hex.replace('#', '');
@@ -86,4 +112,4 @@ for (const [name, foreground, background] of contrastPairs) {
   if (ratio < 4.5) throw new Error(`${name} contrast ${ratio.toFixed(2)} is below WCAG AA 4.5:1`);
 }
 
-console.log(`Design-system check passed: ${requiredTokens.length} core tokens, ${componentPaths.length} primitives, ${contrastPairs.length} AA contrast pairs.`);
+console.log(`Design-system check passed: ${requiredTokens.length} core tokens, ${componentPaths.length} primitives, ${registryRows.length} versioned registry rows, ${contrastPairs.length} AA contrast pairs.`);
