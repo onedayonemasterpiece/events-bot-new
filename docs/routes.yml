@@ -36,6 +36,7 @@ sections:
     sqlite_db_init: docs/operations/sqlite-db-init.md
     vk_metrics: docs/operations/vk-metrics.md
     supabase_storage: docs/operations/supabase-storage.md
+    personalization_storage_budget: docs/operations/personalization-storage-budget.md
   llm:
     prompts: docs/llm/prompts.md
     admin_actions: docs/llm/admin-actions.md
@@ -425,7 +426,7 @@ features:
       - tests/e2e/features/static_site_personalization.feature
       - tests/playwright/static_personalization_contract.spec.ts
   site_user_identity:
-    status: partial_design
+    status: controller_rpc_foundation_unapplied
     docs: docs/features/site-user-identity/README.md
     vk_message_link_postrelease: docs/features/site-user-identity/vk-message-link.md
     vk_personal_data_store: ydb_ru_central1_isolated
@@ -434,20 +435,31 @@ features:
     related_favorites: docs/features/event-favorites-calendar/README.md
     capabilities:
       yandex_login_logout: partial
-      verified_email_identity: design
-      profile_linking: design
+      verified_email_identity: code_unapplied
+      profile_linking: code_unapplied
       vk_message_link_and_friend_signals: postrelease_design
+    migration: supabase/migrations/20260717170000_site_identity_saved_occurrence_v1.sql
+    edge_function: supabase/functions/identity-control/index.ts
+    browser_controller: site/src/lib/site-identity.js
+    sql_contract: supabase/tests/site_identity_saved_occurrence_contract.sql
+    node_contract: tests/node/site_identity_controller.test.mjs
 
   event_favorites_calendar:
-    status: design_with_ics_preview
+    status: saved_occurrence_rpc_foundation_unapplied
     docs: docs/features/event-favorites-calendar/README.md
     related_identity: docs/features/site-user-identity/README.md
     related_static_site: docs/features/static-site-pages/README.md
     related_transactional_email: docs/features/event-email-notifications/README.md
     capabilities:
       ics_export: preview
-      durable_favorite: design
-      calendar_favorite_atomic_state: design
+      durable_favorite: code_unapplied
+      calendar_favorite_atomic_state: code_unapplied
+      d1_reminder: code_unapplied
+    migration: supabase/migrations/20260717170000_site_identity_saved_occurrence_v1.sql
+    sql_contract: supabase/tests/site_identity_saved_occurrence_contract.sql
+    node_contract: tests/node/site_identity_controller.test.mjs
+    playwright_contract: tests/playwright/site_identity_saved_events_contract.spec.ts
+    gherkin_contract: tests/e2e/features/static_site_identity_saved_events.feature
 
   personal_email_announcements:
     status: design_v3_provider_routing_accepted
@@ -474,10 +486,16 @@ features:
     postbox_worker_tests: email_control/tests/test_worker.py
 
   event_transport:
-    status: branch_candidate_refresh_blocked_by_wip
+    status: refresh_foundation_controlled_canary_real_sources_blocked
     docs: docs/features/event-transport/README.md
     related_static_site: docs/features/static-site-pages/README.md
-    implementation_branch: integration/event-transport-schedule
+    schedule_contract: docs/features/static-site-pages/event-transport-schedule.md
+    refresh_package: transport_refresh/
+    kppk_runner: scripts/run_kppk_transport_refresh_kaggle.py
+    bus_runner: scripts/run_bus_transport_refresh_kaggle.py
+    publisher: scripts/publish_transport_schedule.py
+    tests: tests/test_transport_refresh.py
+    production_activation: false
 
   event_comment_feedback:
     status: design_probe_port_required

@@ -1,6 +1,9 @@
 # Site user identity and profile linking
 
-> Status: **partial/design**. Yandex login/logout exists in the authorized-search surface; verified-email identity and durable profile linking are not production-complete.
+> Status: **unapplied control-plane foundation**. Supabase Auth identity,
+> verified-email and durable profile-linking code/contracts exist, but the new
+> migration, Edge Function and activation configuration are not applied in
+> production.
 
 ## Scope
 

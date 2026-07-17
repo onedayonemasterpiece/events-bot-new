@@ -1,6 +1,8 @@
 # Event favorites and calendar
 
-> Status: **design with ICS preview already implemented**. Durable favorite state and cross-device behavior are missing.
+> Status: **unapplied control-plane foundation**. ICS remains available in the
+> static site; durable favorite/cross-device/reminder behavior is implemented as
+> code and contracts but is not migrated, deployed or activated in production.
 
 ## Product contract
 
@@ -67,9 +69,11 @@ layout-neutral RPCs:
 - the browser controller exposes `saveOccurrence`, `refreshSavedCount`, `setLike`
   and `setReminder` for parallel UI work.
 
-ICS remains a static, Supabase-independent fallback. `site/src/lib/ics.ts` now emits
-an occurrence UID, `X-KENIGEVENTS-OCCURRENCE-ID`, lifecycle `STATUS`, `TRANSP` and
-`LAST-MODIFIED`; no failed dynamic save may suppress the `.ics` link/download.
+ICS remains a static, Supabase-independent fallback. `site/src/lib/ics.ts` preserves
+the existing stable `event-<id>@kenigevents.ru` UID so a release cannot create a
+second calendar entry for an already imported event, and adds
+`X-KENIGEVENTS-OCCURRENCE-ID`, lifecycle `STATUS`, `TRANSP` and `LAST-MODIFIED`.
+No failed dynamic save may suppress the `.ics` link/download.
 
 The schema stores identifiers, occurrence time and state only. It intentionally does
 not duplicate event title, description, poster, venue or ticket facts from Fly.
