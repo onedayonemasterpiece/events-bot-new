@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
+import CopyAction from './design-system/CopyAction.astro';
 import type { PreviewEvent } from '../lib/types';
 import {
   displayDateTime,
@@ -50,9 +51,10 @@ const shareFileName = `kenigevents-${event.slug}`;
   {calendarPrimary ? (
     <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
   ) : ctaIsTelephone && phoneValue ? (
-    <button type="button" class="desktop-prototype__primary-action desktop-prototype__phone-copy" data-desktop-phone-copy data-phone-copy-value={phoneValue} aria-label={`Скопировать номер организатора ${phoneDisplay}`}>
-      <Icon name="phone" /><span><strong>{phoneDisplay}</strong><small data-phone-copy-label aria-live="polite">Скопировать номер</small></span>
-    </button>
+    <div class="desktop-prototype__phone-control" data-desktop-phone-control>
+      <strong data-desktop-phone-number>{phoneDisplay}</strong>
+      <CopyAction value={phoneValue} ariaLabel={`Скопировать номер организатора ${phoneDisplay}`} successLabel="Номер скопирован" variant="inverse" className="desktop-prototype__phone-copy" />
+    </div>
   ) : ctaHref ? (
     <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
       <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
@@ -138,10 +140,9 @@ const shareFileName = `kenigevents-${event.slug}`;
   }
   :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }
   :global(button.desktop-prototype__primary-action) { border:0; font:inherit; cursor:pointer; }
-  .desktop-prototype__phone-copy > span { display:grid; gap:.08rem; text-align:left; }
-  .desktop-prototype__phone-copy strong { display:block; white-space:nowrap; font-size:clamp(.86rem,1.18cqi,1.02rem); font-variant-numeric:tabular-nums; user-select:all; }
-  .desktop-prototype__phone-copy small { color:rgba(255,255,255,.82); font-size:.72rem; font-weight:800; }
-  .desktop-prototype__phone-copy.is-copied { background:#2d6f58; box-shadow:0 12px 24px rgba(26,88,67,.24); }
+  .desktop-prototype__phone-control { min-width:0; display:flex; align-items:center; justify-content:flex-start; gap:.5rem; }
+  .desktop-prototype__phone-control>strong { min-width:0; display:block; overflow:hidden; white-space:nowrap; color:#fffaf2; font-size:var(--ke-font-size-300,1rem); font-variant-numeric:tabular-nums; text-overflow:clip; user-select:all; }
+  .desktop-prototype__phone-control :global(.desktop-prototype__phone-copy) { flex:0 0 auto; }
   :global(.desktop-prototype__primary-action.is-disabled) { opacity: .7; }
   .desktop-prototype__action-row { display: flex; gap: .45rem; }
   :global(.desktop-prototype__icon-action) {
@@ -200,7 +201,7 @@ const shareFileName = `kenigevents-${event.slug}`;
     row-gap:0;
   }
   .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { grid-column:1; grid-row:1; min-width:4.75rem; }
-  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-copy { grid-column:2; grid-row:1; min-width:0; overflow:hidden; }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-control { grid-column:2; grid-row:1; min-width:0; overflow:hidden; }
   .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__action-row { grid-column:3; grid-row:1; justify-self:end; }
   :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) {
     width:52px;

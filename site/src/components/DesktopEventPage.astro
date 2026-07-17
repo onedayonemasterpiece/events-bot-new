@@ -633,39 +633,6 @@ const descriptionHtml = (event.description_html || '')
     const desktopViewport = window.matchMedia('(min-width: 1024px)');
     if (cleanRoot && desktopViewport.matches) {
       document.body.classList.add('desktop-clean-event-page');
-      const copyPlainText = async (value:string) => {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(value);
-          return;
-        }
-        const fallback = document.createElement('textarea');
-        fallback.value = value;
-        fallback.setAttribute('readonly', '');
-        fallback.style.position = 'fixed';
-        fallback.style.opacity = '0';
-        document.body.appendChild(fallback);
-        fallback.select();
-        const copied = document.execCommand('copy');
-        fallback.remove();
-        if (!copied) throw new Error('clipboard unavailable');
-      };
-      cleanRoot.querySelectorAll<HTMLButtonElement>('[data-desktop-phone-copy]').forEach((button) => {
-        button.addEventListener('click', async () => {
-          const value = button.dataset.phoneCopyValue || '';
-          const label = button.querySelector<HTMLElement>('[data-phone-copy-label]');
-          try {
-            await copyPlainText(value);
-            button.classList.add('is-copied');
-            if (label) label.textContent = 'Номер скопирован';
-            window.setTimeout(() => {
-              button.classList.remove('is-copied');
-              if (label) label.textContent = 'Скопировать номер';
-            }, 2600);
-          } catch {
-            if (label) label.textContent = 'Выделите номер вручную';
-          }
-        });
-      });
       const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
       const fitActionPanel = (panel:HTMLElement) => {
         const phonePanel = panel.dataset.primaryActionKind === 'phone';

@@ -75,6 +75,29 @@ test('dynamic recommendation media reserves geometry through load and failure', 
   assert.match(layout, /aspect-ratio: var\(--dynamic-media-ratio, 4 \/ 5\)/u);
 });
 
+test('desktop telephone uses the shared non-shifting copy action', async () => {
+  const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const copyAction = await read('src/components/design-system/CopyAction.astro');
+  const icon = await read('src/components/Icon.astro');
+
+  assert.match(panel, /<CopyAction[^>]*variant="inverse"/u);
+  assert.match(panel, /data-desktop-phone-number/u);
+  assert.doesNotMatch(panel, /<Icon name="phone" \/><span><strong>\{phoneDisplay\}/u);
+  assert.doesNotMatch(panel, />Скопировать номер<\/small>/u);
+  assert.match(panel, /font-size:var\(--ke-font-size-300,1rem\)/u);
+  assert.doesNotMatch(desktop, /querySelectorAll<HTMLButtonElement>\('\[data-desktop-phone-copy\]'/u);
+  assert.match(copyAction, /data-ke-copy-action/u);
+  assert.match(copyAction, /navigator\.clipboard\?\.writeText/u);
+  assert.match(copyAction, /document\.execCommand\('copy'\)/u);
+  assert.match(copyAction, /data-copy-status role="status" aria-live="polite"/u);
+  assert.match(copyAction, /max\(44px, var\(--ke-control-min, 44px\)\)/u);
+  assert.match(copyAction, /Icon name="copy"/u);
+  assert.match(copyAction, /Icon name="check"/u);
+  assert.match(icon, /name === 'copy'/u);
+  assert.match(icon, /name === 'check'/u);
+});
+
 test('Dramatic Theatre medallion is present in the accepted manifest', async () => {
   const manifest = JSON.parse(await read('src/data/organizerMedallions.json'));
   const item = manifest.items.find((candidate) => candidate.slug === 'dramteatr39');
