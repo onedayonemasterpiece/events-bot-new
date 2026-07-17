@@ -9,21 +9,23 @@ visual quality from filenames or from implementation claims.
 
 ## Rejected baseline
 
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-90e0/rejected-live-1440.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-90e0/rejected-weather-1440.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/rejected-baseline/rejected-live-1440.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/rejected-baseline/rejected-weather-1440.png`
 
 ## Corrective candidate
 
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/weather-water-1440.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/forwarded-1920.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/named-abstains-1440.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/rare-abstains-1440.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/storm-abstains-1366.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/mobile-390.png`
-- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-c5df/desktop-1366-stripe-ocr-safe.webm`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/weather-water-1440.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/forwarded-1920.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/named-abstains-1440.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/rare-abstains-1440.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/storm-abstains-1366.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/mobile-390.png`
+- `/home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration/artifacts/codex/typed-briefing-stripe-media-20260717/evidence-21ca/desktop-1366-stripe-ocr-safe.webm`
 
 After the visual pass, reconcile observations against the captured browser
-facts in `evidence-c5df/geometry.json`. If a local image/video cannot be opened,
+facts in `evidence-21ca/geometry.json`. In particular, the final grid has
+`rowGap == 0px` and only vertical `columnGap == 3px`, so a horizontal mosaic
+gutter cannot masquerade as a second text underline. If a local image/video cannot be opened,
 return `BLOCKED: media not inspected`; do not infer from a filename. Do not call
 the physical-right-edge criterion failed when the inspected raster reaches the
 last screenshot pixel and `mediaRect.right == innerWidth`.
@@ -51,8 +53,8 @@ Return FAIL if **any** item is true:
 8. The WebM does not show irregular reveal/exit, retains the raster after the
    scene should leave, or loses the pending horizontal cursor **after the
    current sentence is complete and while the next scenario timer is active**.
-   A vertical/bar cursor during fragment-by-fragment sentence formation is an
-   intentional scenario variant and is not itself a failure.
+   For the two shown media scenarios, the horizontal underscore should also remain
+   visible during fragment formation rather than reverting to a bar.
 
 It is intentionally acceptable for named/rare/storm scenes to abstain and be
 text-only. Do not penalize fewer images: safety and source quality outrank the
