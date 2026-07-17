@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createSiteIdentityController, maskEmail, siteIdentityStorageKeys } from '../../site/src/lib/site-identity.js';
 
@@ -55,6 +56,15 @@ function controller({ storage = new Storage(), now = { value: 1_000_000 }, user 
 }
 
 test('maskEmail never exposes the full local part', () => assert.equal(maskEmail('Person.Name@Example.test'), 'p***@example.test'));
+
+test('identity Edge boundary is personalization-only and rejects anonymous Auth users', () => {
+  const source = readFileSync(new URL('../../supabase/functions/identity-control/index.ts', import.meta.url), 'utf8');
+  for (const key of ['PERSONALIZATION_SUPABASE_URL', 'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY', 'PERSONALIZATION_SUPABASE_SECRET_KEY']) {
+    assert.match(source, new RegExp(`value\\("${key}"\\)`));
+  }
+  assert.doesNotMatch(source, /value\("(?:SUPABASE_URL|SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY)"\)/u);
+  assert.match(source, /userData\.user\.is_anonymous/u);
+});
 
 test('email code and link share one bounded transaction: cooldown, TTL, attempts and replay', async () => {
   const ctx = controller();

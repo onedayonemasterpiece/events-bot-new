@@ -12,16 +12,22 @@ preserved without reset/clean/delete. Starting `HEAD` was
 `d169004376c309dc487fa6b48a7aae4a8ed7dea3`). The checkpoint includes the eight
 modified foundation/docs/SQL files plus the four untracked lane report, storage
 budget, Gherkin and Playwright contract paths shown by `git status`.
+Recovery commit: `01a4bef5`. The crash lane was intentionally not rebased after
+`origin/main` advanced; integration owns cherry-picking its accepted commits onto
+the fresh main-based integration branch.
 
 ## Requirement matrix
 
 | ID | Status | Evidence |
 |---|---|---|
-| B1 site-wide Yandex/email/device identity | **Done (code), Partial (production activation)** | Layout-neutral `site/src/lib/site-identity.js`; Yandex readiness probes pass; Node contract covers OTP TTL/cooldown/attempt/replay, remember/forget, reload and account switch. Live email template and new Edge deployment are not changed by this branch. |
-| B2 anonymous → auth merge | **Done (code), Partial (production activation)** | 256-bit device proof, consent version, service-only idempotent merge RPC, structural profile/link/save uniqueness, conflict/unlink/purge policy and transactional SQL contract. Production schema is not applied. |
-| B3 durable saved occurrence + count/RLS | **Done (code), Partial (production activation)** | Private schemas, idempotent save/undo, separate signal, unique-event count RPC, lifecycle state, RLS/grant assertions and SQL transaction contract. Production schema is not applied. |
-| B4 occurrence ICS + D-1/Postbox | **Done (foundation), Partial (canonical producer/activation)** | Occurrence ICS remains static; explicit masked-email consent; quiet hours/catch-up; one D-1 guard; reschedule/cancel/completed transitions; existing Postbox suppression path. Generic messages contain server-owned ids/times; enriched copy still needs a canonical Fly producer. Scheduler/Edge not deployed. |
-| B5 storage/retention/growth | **Done** | Live read-only size measurement (36 MB, ~462 MB decimal headroom), conservative growth model, service cleanup RPC and gates in `docs/operations/personalization-storage-budget.md`. |
+| ID-1 saved-occurrence schema | **Done (code), Partial (production)** | Private `site_identity`/`saved_events` schemas model account/device identity, durable occurrence saves, separate signals, consent evidence, reminder subscriptions/deliveries and bounded audit/retention state. Production migration is not applied. |
+| ID-2 RLS/grants | **Done (code), Partial (production)** | RLS is enabled on every private table; browser roles have no schema/table access; every `SECURITY DEFINER` function has PUBLIC execution revoked and a fixed empty `search_path`; only four owner RPCs are granted to `authenticated`, while service mutations are `service_role`-only. Supabase anonymous Auth tokens fail closed despite using the authenticated DB role. |
+| ID-3 idempotent RPCs/merge | **Done (code), Partial (production)** | Save/repeat/undo/count contracts pass. Device materialization requires a random 256-bit proof; merge replay is bound to device/user/consent, cross-device duplicates collapse structurally, authenticated explicit state wins, and credential replacement/account conflict fail closed. |
+| ID-4 separate semantics | **Done (code), Partial (final UI)** | Favorite/save, like/not-interested, transactional purpose consent, reminder consent and reminder delivery are separate relations and RPCs. This lane intentionally does not implement final cards/header/detail composition. |
+| ID-5 explicit D-1 consent/masked verified email | **Done (code), Partial (production)** | An idempotent consent request requires the synchronized verified `email_control` identity plus matching active transactional purpose consent. Only a masked address snapshot and verification timestamp are stored in the reminder row; plaintext remains in `email_control`. |
+| ID-6 exactly-once D-1/lifecycle/Postbox | **Done (foundation), Partial (activation/enriched producer)** | Six-hour catch-up bound, 22:00–08:00 Kaliningrad quiet hours, stale expiry, retry dedupe, pending-reminder replacement after reschedule, no repeat after delivery, cancellation/completed stop, and suppression isolation pass transactionally. Existing Postbox consent/suppression/bounce/complaint/unsubscribe/ambiguous-delivery controls remain authoritative. Generic copy still needs the server-owned canonical Fly enrichment producer; scheduler and delivery switches stay off. |
+| ID-7 migration-ledger reconciliation | **Done (read-only/local recovery), Partial (release gates)** | Live ledger row `20260717074903|event_search_age_fields|1` was recovered exactly as `supabase/migrations/20260717074903_event_search_age_fields.sql` from `b01b02ae`; file/live statement SHA-256 is `2b57c2013673eac74b0d391ac3d463c87b83c39e3b1d6a14be1a1f9516ff288b`. Live columns/default/constraints match. New identity migration remains unapplied pending backup, staging and advisors. |
+| ID-8 contracts/no final layout | **Done** | Node and rollback SQL/security contracts pass; Playwright/Gherkin contracts cover representative families without implementing/asserting the final header, `/izbrannoe/`, listing cards or event-detail layout. |
 
 No release claim is made for unapplied/deactivated production components.
 
@@ -31,11 +37,13 @@ Passed:
 
 ```text
 node --test tests/node/site_identity_controller.test.mjs
-# 7 passed, 0 failed
+# 8 passed, 0 failed
 
 migration + supabase/tests/site_identity_saved_occurrence_contract.sql
 # executed in one transaction against the current personalization Postgres schema;
 # sql_contract_transaction=ok; unconditional ROLLBACK
+# follow-up read-only check: live_identity_saved_schemas=0,
+# live_identity_migration_ledger_rows=0
 
 python3 scripts/check_authorized_search_readiness.py \
   --env-file /home/dev/projects/events-bot-new/.env \
@@ -47,9 +55,12 @@ git diff --check
 node --check site/src/lib/site-identity.js
 ```
 
-The SQL contract covers raw-table denial, RPC grants, merge replay/dedup/conflict,
-save/repeat/undo/count, separate like, consent evidence/masking, quiet hours,
-catch-up, exactly-one D-1 enqueue, Postbox payload schema and cancellation.
+The SQL contract covers RLS on every private table; raw-table and PUBLIC-function
+denial; authenticated/service RPC grants; supporting FK indexes; anonymous Auth
+rejection; merge replay/dedup/credential/account conflict; save/repeat/undo/count;
+separate like; idempotent consent and stored masked verified-address evidence;
+quiet hours; six-hour producer/dispatcher catch-up bounds; retry dedupe; suppression;
+pending and delivered reschedule cases; cancellation; and completed-event no-send.
 
 Written for integration/CI (not executed locally because this lane intentionally did
 not install Node dependencies under the low-space worktree):
@@ -60,16 +71,23 @@ not install Node dependencies under the low-space worktree):
 
 ## Production migration/config status
 
-**Not applied/deployed.** The live personalization database is reachable, but its
-migration ledger contains `20260717074903`, which is absent from this checkout.
-Applying another production migration before reconciling that drift is unsafe.
+**Not applied/deployed.** Read-only reconciliation found exactly one live ledger row
+in the `20260716..20260718` window:
+`20260717074903|event_search_age_fields|1`. The exact 48-line migration was recovered
+from historical commit `b01b02ae`, which is reachable from
+`origin/integration/static-event-v10-system-routing` and related side refs but not
+from `origin/main`. Its one live statement has the same SHA-256 as the recovered
+file; read-only schema checks confirmed both age columns, the `unknown` default and
+the two accepted-value constraints. This closes the missing-file diagnosis, not the
+production release gates. `20260717170000` has zero live ledger rows and both new
+schemas remain absent after the rollback contract.
 
-Exact activation handoff after reconciliation:
+Exact activation handoff:
 
-1. register/apply
+1. create and verify a current backup, then run
    `supabase/migrations/20260717170000_site_identity_saved_occurrence_v1.sql` to the
-   personalization project and run `supabase/tests/site_identity_saved_occurrence_contract.sql`
-   on staging/local;
+   staging personalization project and rerun
+   `supabase/tests/site_identity_saved_occurrence_contract.sql` transactionally;
 2. run Supabase security/performance advisors and confirm no new RLS/function warnings;
 3. deploy `supabase/functions/identity-control` with `--no-verify-jwt`; its code
    manually validates bearer tokens and uses only personalization env keys;
@@ -82,6 +100,12 @@ Exact activation handoff after reconciliation:
    feedback correlation, then separately approve enabling transactional delivery;
 7. inject only publishable personalization URL/key and identity-control URL into the
    static build; never expose the secret key.
+
+The Edge must receive only `PERSONALIZATION_SUPABASE_URL`,
+`PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` and
+`PERSONALIZATION_SUPABASE_SECRET_KEY`; generic legacy Supabase variables are not a
+fallback. Add an external rate limit for the unauthenticated device-materialization
+action before activation.
 
 ## Rollback
 

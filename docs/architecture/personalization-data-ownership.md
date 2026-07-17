@@ -165,3 +165,6 @@ They deliberately contain no canonical event content. Public browser access is o
 through authenticated owner RPCs; service-only mutation is reserved for device-proof
 merge, lifecycle sync, purge/retention and Postbox enqueue. This preserves the Fly
 SQLite event SOR and prevents a second profile owner in YDB.
+The identity Edge boundary accepts only `PERSONALIZATION_SUPABASE_*` configuration;
+falling back to generic/legacy Supabase credentials is a fail-closed configuration
+error, not a supported compatibility mode.

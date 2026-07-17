@@ -36,9 +36,11 @@ function savedRows(input: unknown): Array<Record<string, unknown>> {
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  const supabaseUrl = value("PERSONALIZATION_SUPABASE_URL") || value("SUPABASE_URL");
-  const publishableKey = value("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY") || value("SUPABASE_ANON_KEY");
-  const serviceKey = value("PERSONALIZATION_SUPABASE_SECRET_KEY") || value("SUPABASE_SERVICE_ROLE_KEY");
+  // This boundary is personalization-only. Never fall back to the repository's
+  // legacy Supabase project credentials.
+  const supabaseUrl = value("PERSONALIZATION_SUPABASE_URL");
+  const publishableKey = value("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY");
+  const serviceKey = value("PERSONALIZATION_SUPABASE_SECRET_KEY");
   if (!supabaseUrl || !publishableKey || !serviceKey) return json({ error: "server_config_missing" }, 503);
 
   let body: Record<string, unknown>;
@@ -66,7 +68,7 @@ Deno.serve(async (request) => {
   if (!token) return json({ error: "auth_required" }, 401);
   const auth = createClient(supabaseUrl, publishableKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   const { data: userData, error: userError } = await auth.auth.getUser(token);
-  if (userError || !userData.user) return json({ error: "auth_required" }, 401);
+  if (userError || !userData.user || userData.user.is_anonymous) return json({ error: "auth_required" }, 401);
   const userId = userData.user.id;
 
   if (action === "merge_device") {
@@ -79,7 +81,9 @@ Deno.serve(async (request) => {
     return json({ ok: true, merge: Array.isArray(data) ? data[0] : data });
   }
   if (action === "unlink_device") {
-    const { data, error } = await service.rpc("personalization_unlink_device_v1", { p_user_id: userId, p_device_id: deviceId });
+    const { data, error } = await service.rpc("personalization_unlink_device_v1", {
+      p_user_id: userId, p_device_id: deviceId, p_credential_hash_hex: credentialHash,
+    });
     if (error) return json({ error: "unlink_failed" }, 400);
     return json({ ok: true, unlinked: Boolean(data) });
   }

@@ -7,8 +7,8 @@
 
 The redacted dual-DB probe against the personalization project on 2026-07-17 reported:
 
-- current database: **37,948,563 bytes (~36 MB)**;
-- headroom to 500,000,000 bytes: **462,051,437 bytes (~462 MB)**;
+- current database: **38,759,571 bytes (~37 MB)**;
+- headroom to 500,000,000 bytes: **461,240,429 bytes (~461 MB)**;
 - largest relation: `public.event_embeddings`, ~17 MB;
 - `email_control` is already present; `site_identity`/`saved_events` are not yet live.
 
@@ -31,7 +31,7 @@ TOAST/page slack and audit rows (conservative planning numbers, not exact row si
 | reminder subscription + one terminal delivery | 1.2 KiB/opt-in save |
 | merge/purge audit amortization | 0.3 KiB/user/year |
 
-Examples above the 36 MB baseline:
+Examples above the measured ~37 MB baseline:
 
 - 10,000 users × 10 saves, 20% reminders, 30% signals: about **112 MB** total;
 - 25,000 users × 10 saves under the same mix: about **226 MB** total;
