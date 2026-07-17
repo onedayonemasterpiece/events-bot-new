@@ -1,3 +1,5 @@
+import type { ImageBox } from '../lib/types';
+
 export type BriefingLabFragment = {
   text: string;
   accent?: boolean;
@@ -49,6 +51,12 @@ export type BriefingLabScenario = {
     ocrSafe?: boolean;
     /** Runtime fail-closed ceiling for cover upscaling. */
     maxUpscale?: number;
+    /**
+     * Lab-only stand-in until Smart Update exports per-asset face_boxes.
+     * Keys are stable source_order values and coordinates are normalized in
+     * the upright source raster. Production metadata always wins when present.
+     */
+    labFaceBoxesBySourceOrder?: Readonly<Record<number, readonly ImageBox[]>>;
   };
 };
 
@@ -255,7 +263,21 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'Ивана Купала.', accent: true, eventId: 6525, breakAfter: true }, { text: 'Поедем?' }],
     ctaLabel: 'Открыть праздник', ctaEventId: 6525,
-    media: { eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 50, ocrSafe: true },
+    media: {
+      eventId: 6525, mode: 'mosaic', assetSourceOrder: 0, focusX: 52, focusY: 50, ocrSafe: true,
+      labFaceBoxesBySourceOrder: { 0: [
+        { x: .18, y: .12, w: .10, h: .17, confidence: 1 },
+        { x: .43, y: .08, w: .10, h: .18, confidence: 1 },
+        { x: .61, y: .29, w: .09, h: .16, confidence: 1 },
+        { x: .70, y: .30, w: .08, h: .15, confidence: 1 },
+        { x: .20, y: .45, w: .09, h: .15, confidence: 1 },
+        { x: .36, y: .44, w: .08, h: .14, confidence: 1 },
+        { x: .46, y: .44, w: .08, h: .15, confidence: 1 },
+        { x: .58, y: .44, w: .09, h: .15, confidence: 1 },
+        { x: .75, y: .44, w: .09, h: .15, confidence: 1 },
+        { x: .88, y: .42, w: .09, h: .15, confidence: 1 },
+      ] },
+    },
   },
   {
     id: 'media_review_region_80', label: 'Фото 03 · 80 лет области', family: 'signal', reviewOnly: true,
@@ -269,7 +291,13 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: '«Пишу сегодня', breakAfter: true }, { text: 'из Калининграда…»', accent: true, eventId: 6611 }],
     ctaLabel: 'Открыть программу', ctaEventId: 6611,
-    media: { eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, mosaicColumns: 16, focusX: 56, focusY: 6, ocrSafe: true },
+    media: {
+      eventId: 6611, mode: 'mosaic', assetSourceOrder: 0, mosaicColumns: 16, focusX: 56, focusY: 6, ocrSafe: true,
+      labFaceBoxesBySourceOrder: { 0: [
+        { x: .28, y: .07, w: .19, h: .40, confidence: 1 },
+        { x: .58, y: .11, w: .21, h: .39, confidence: 1 },
+      ] },
+    },
   },
   {
     id: 'media_review_swan_lake', label: 'Фото 05 · Лебединое озеро', family: 'signal', reviewOnly: true,
@@ -297,7 +325,14 @@ export const briefingLabMediaReviewScenarios = [
     cooldownDays: 0, cursor: 'underscore',
     fragments: [{ text: 'День валяния', breakAfter: true }, { text: 'в сене.', accent: true, eventId: 6365 }, { text: 'Серьёзно.' }],
     ctaLabel: 'Открыть необычное', ctaEventId: 6365,
-    media: { eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 50, ocrSafe: true },
+    media: {
+      eventId: 6365, mode: 'mosaic', assetSourceOrder: 0, focusX: 55, focusY: 50, ocrSafe: true,
+      labFaceBoxesBySourceOrder: { 0: [
+        { x: .11, y: .23, w: .24, h: .38, confidence: 1 },
+        { x: .36, y: .28, w: .22, h: .35, confidence: 1 },
+        { x: .62, y: .20, w: .21, h: .35, confidence: 1 },
+      ] },
+    },
   },
   {
     id: 'media_review_ship_quay', label: 'Фото 09 · Набережная кораблей', family: 'signal', reviewOnly: true,
@@ -342,6 +377,9 @@ export const briefingLabMediaReviewScenarios = [
     media: {
       eventId: 5894, mode: 'mosaic', assetSourceOrders: [6, 10, 11], layout: 'portrait-collage', fit: 'cover',
       focusX: 50, focusY: 50, minSourceWidth: 900, ocrSafe: true,
+      labFaceBoxesBySourceOrder: { 6: [
+        { x: .46, y: .36, w: .17, h: .15, confidence: 1 },
+      ] },
     },
   },
 ] as const satisfies readonly BriefingLabScenario[];

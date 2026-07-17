@@ -29,7 +29,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: algorithm, edge cases and test assertions
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: face-bbox-contract-audit
     role: reviewer
     requirement_ids: [R02]
@@ -43,7 +43,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: schema, coordinate mapping, overlap rule, fallback and tests
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: kinetics-easing-audit
     role: reviewer
     requirement_ids: [R03]
@@ -57,7 +57,7 @@ lanes:
     forbidden_files: ['**/*']
     expected_output: easing verdict, timing bounds, selection algorithm and tests
     verification_scope: inspection_only
-    status: planned
+    status: merged
   - id: serial-integrator
     role: worker
     requirement_ids: [R01, R02, R03]
@@ -83,4 +83,4 @@ lanes:
       - production database
     expected_output: corrected lab, future-compatible bbox contract, tests and public review evidence
     verification_scope: full_local
-    status: planned
+    status: committed

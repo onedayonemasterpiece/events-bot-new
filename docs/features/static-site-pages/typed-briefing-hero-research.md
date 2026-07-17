@@ -618,6 +618,62 @@ The earlier full static build failed because the host filesystem was at `99–10
 
 The large decorative `о` is a separate `aria-hidden` image whose SVG contains only the exact two-contour O subpath from the master announcement wordmark (`viewBox="2571 410 1600 1104"`). `<use>` compound path всего слова и текстовая подделка удалены.
 
+## Phrase-shaped mosaic light, face safety and kinetic accents — 2026-07-17
+
+Последняя desktop-mosaic итерация больше не строит осветление от фиксированной
+левой границы. После формирования фактической фразы браузер собирает
+`getClientRects()` всех `[data-reveal-fragment]`, объединяет их в визуальные
+строки и для каждой строки ставит начало light field сразу после её реального
+правого края. Поэтому короткая строка открывает фотографию раньше длинной, а
+контур прозрачности следует текущему сгенерированному тексту, включая переносы.
+Геометрия пересчитывается через один coalesced `requestAnimationFrame` после:
+
+- замены/мутации текста;
+- изменения размеров message или mosaic root;
+- загрузки шрифтов;
+- resize viewport.
+
+Диагностический контракт lab: `data-copy-line-count`,
+`data-copy-line-rights`, `data-copy-geometry-revision` на mosaic root и
+`data-copy-line`, `data-illumination-origin-x`, `data-field-progress` на
+клетках. Эти атрибуты являются QA hooks, а не production analytics.
+
+Face safety применяется после copy shield и после точного расчёта
+`cover`/`contain` геометрии каждого source panel. Нормализованный bbox
+проецируется только в панель своего `source_order`, расширяется небольшим
+padding и помечает все пересекающиеся клетки. Их итоговая opacity не может быть
+ниже `0.50`, даже если клетка одновременно находится под текстом: paper stripe
+сохраняет читаемость текста, а лицо не распадается на пустые отверстия. В
+portrait collage metadata источников не смешивается. Текущие четыре набора
+ручных bbox нужны только как явно помеченный `lab-fixture`; когда массив
+`image_assets[].face_boxes` приходит из exporter, он имеет приоритет.
+Канонический будущий producer/exporter contract: [face bbox contract](./typed-briefing-face-bbox-contract.md).
+
+Основная tile-кинематика остаётся управляемой symmetric ease-in-out
+`cubic-bezier(.65,0,.35,1)`. После фильтрации text/face cells детерминированно
+выбираются 2–3 разнесённые source-backed клетки для позднего design beat:
+примерно `900–980ms` delay и `380–500ms` duration, не позднее общего
+`1560ms` entry budget. Если двух безопасных клеток нет, эффект не создаётся за
+счёт лица или текста. Exit использует ту же кривую, отдельные более короткие
+тайминги и запускается только перед реальным автоматическим successor.
+`prefers-reduced-motion` остаётся мгновенным, mobile/короткий desktop не
+запрашивают narrative raster.
+
+Acceptance evidence:
+
+- isolated build/allowlist: PASS;
+- Playwright: `18/18`, включая реальную мутацию длины второй строки,
+  per-source face floor, collage isolation, deterministic accents, computed
+  easing, resize/font/mutation recalculation и mobile silence;
+- Gemini 3.1 Pro (High), strict pixel/code gate: `PASS`, blockers `0`;
+- локальные screenshots/WebM и redacted diagnostics:
+  `artifacts/codex/typed-briefing-dynamic-shield-face-kinetics-20260717/`.
+
+Это по-прежнему isolated lab, а не разрешение на rollout homepage. Значение
+`0.50` нельзя автоматически понижать ради большей «драмы»: такое изменение
+требует нового face-legibility A/B review и не должно возвращать уже отвергнутые
+пустые клетки на лицах.
+
 ## Experiment sequence
 
 Do not launch A/B/C/D simultaneously without traffic/MDE evidence.

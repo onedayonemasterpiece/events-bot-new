@@ -69,6 +69,13 @@ const resolveScenario = (item: BriefingLabScenario) => {
         height: asset.height,
         imageTextMode: asset.image_text_mode,
         imageKind: asset.image_kind,
+        assetKey: asset.asset_key ?? null,
+        faceBoxes: Array.isArray(asset.face_boxes)
+          ? asset.face_boxes
+          : item.media?.labFaceBoxesBySourceOrder?.[asset.source_order] ?? null,
+        faceBoxStatus: Array.isArray(asset.face_boxes)
+          ? 'complete'
+          : item.media?.labFaceBoxesBySourceOrder?.[asset.source_order] ? 'lab-fixture' : 'missing',
       })),
       cropStrategy: item.media.layout === 'portrait-collage'
         ? 'curated-contiguous-portrait-collage'
@@ -432,6 +439,39 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         return (hash >>> 0) / 4294967295;
       };
       const nearestMosaicLevel = (value) => MOSAIC_LEVELS.reduce((best, level) => Math.abs(level - value) < Math.abs(best - value) ? level : best, MOSAIC_LEVELS[0]);
+      const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+      const smoothstep = (value) => {
+        const progress = clamp(value, 0, 1);
+        return progress * progress * (3 - 2 * progress);
+      };
+      let mosaicGeometryRevision = 0;
+      const measuredCopyLines = () => {
+        const rects = fragments()
+          .flatMap((node) => [...node.getClientRects()])
+          .filter((rect) => rect.width > 1 && rect.height > 1)
+          .sort((left, right) => left.top - right.top || left.left - right.left);
+        const lines = [];
+        rects.forEach((rect) => {
+          const centerY = (rect.top + rect.bottom) / 2;
+          let line = lines.find((candidate) => {
+            const overlap = Math.min(candidate.bottom, rect.bottom) - Math.max(candidate.top, rect.top);
+            return overlap >= Math.min(candidate.height, rect.height) * .45
+              || Math.abs(candidate.centerY - centerY) <= Math.max(candidate.height, rect.height) * .48;
+          });
+          if (!line) {
+            line = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, height: rect.height, centerY, rects: [] };
+            lines.push(line);
+          }
+          line.left = Math.min(line.left, rect.left);
+          line.right = Math.max(line.right, rect.right);
+          line.top = Math.min(line.top, rect.top);
+          line.bottom = Math.max(line.bottom, rect.bottom);
+          line.height = line.bottom - line.top;
+          line.centerY = (line.top + line.bottom) / 2;
+          line.rects.push(rect);
+        });
+        return lines.sort((left, right) => left.top - right.top).map((line, index) => ({ ...line, index }));
+      };
       const configureMosaic = (media, loadedImages) => {
         const images = Array.isArray(loadedImages) ? loadedImages : [loadedImages];
         const sources = Array.isArray(media?.sources) && media.sources.length ? media.sources : [{ src: media?.src }];
@@ -439,7 +479,6 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         const columns = mosaicColumnsForViewport(media);
         const activeCount = columns * MOSAIC_ROWS;
         const phase = hashUnit(currentScenario.id, 'phase') * Math.PI * 2;
-        const copyRects = fragments().flatMap((node) => [...node.getClientRects()]);
         mediaShell.style.setProperty('--mosaic-columns', String(columns));
         mosaicRoot.style.setProperty('--mosaic-columns', String(columns));
         mosaicRoot.style.setProperty('--mosaic-image', `url(${JSON.stringify(media.src)})`);
@@ -459,39 +498,12 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           if (!active) return;
           const column = index % columns;
           const row = Math.floor(index / columns);
-          const progress = column / (columns - 1);
-          const base = .04 + .82 * (progress ** .82);
-          const cellNoise = (hashUnit(currentScenario.id, 'cell', row, column) - .5) * .38;
-          const clusterNoise = (hashUnit(currentScenario.id, 'cluster', Math.floor(row / 2), Math.floor(column / 3)) - .5) * .44;
-          const wave = Math.sin(column * .83 + row * 1.47 + phase) * .08;
-          const rawOpacity = Math.max(.02, Math.min(.97, base + cellNoise + clusterNoise + wave));
-          let opacity = nearestMosaicLevel(rawOpacity);
-          const contrastRoll = hashUnit(currentScenario.id, 'contrast-accent', row, column);
-          let contrastAccent = 'none';
-          if (column < columns - 3 && contrastRoll <= .09) { opacity = .03; contrastAccent = 'washed'; }
-          else if (column < columns - 3 && contrastRoll >= .91) { opacity = .96; contrastAccent = 'bright'; }
-          if (column === columns - 3) opacity = Math.max(.74, opacity);
-          if (column >= columns - 2) opacity = 1;
-          const tileRect = tile.getBoundingClientRect();
-          const copyShield = copyRects.some((rect) => tileRect.right > rect.left - 4 && tileRect.left < rect.right + 4 && tileRect.bottom > rect.top - 3 && tileRect.top < rect.bottom + 3);
-          if (copyShield) opacity = Math.min(opacity, .24);
-          const beat = column >= columns - 2 ? 2 : Math.floor(hashUnit(currentScenario.id, 'entry-beat', Math.floor(row / 2), Math.floor(column / 4)) * 3);
-          const entryDelay = 40 + beat * 260 + Math.floor(hashUnit(currentScenario.id, 'entry-delay', row, column) * 140);
-          const entryDuration = 360 + Math.floor(hashUnit(currentScenario.id, 'entry-duration', row, column) * 400);
-          const exitBeat = Math.floor(hashUnit(currentScenario.id, 'exit-beat', Math.floor(row / 2), Math.floor(column / 3)) * 3);
-          const exitDelay = exitBeat * 100 + Math.floor(hashUnit(currentScenario.id, 'exit-delay', row, column) * 80);
-          const exitDuration = 180 + Math.floor(hashUnit(currentScenario.id, 'exit-duration', row, column) * 180);
           tile.dataset.tileColumn = String(column);
           tile.dataset.tileRow = String(row);
-          tile.dataset.entryBeat = String(beat);
-          tile.dataset.exitBeat = String(exitBeat);
-          tile.dataset.contrastAccent = contrastAccent;
-          tile.dataset.copyShield = String(copyShield);
-          tile.style.setProperty('--tile-opacity', String(opacity));
-          tile.style.setProperty('--tile-in-delay', `${entryDelay}ms`);
-          tile.style.setProperty('--tile-in-duration', `${entryDuration}ms`);
-          tile.style.setProperty('--tile-out-delay', `${exitDelay}ms`);
-          tile.style.setProperty('--tile-out-duration', `${exitDuration}ms`);
+          ['sourceIndex', 'faceShieldSourceIndex', 'copyLine', 'illuminationOriginX', 'fieldProgress'].forEach((key) => delete tile.dataset[key]);
+          tile.dataset.copyShield = 'false';
+          tile.dataset.faceShield = 'false';
+          tile.dataset.entryAccent = 'false';
         });
         const rootRect = mosaicRoot.getBoundingClientRect();
         mosaicRoot.style.setProperty('--mosaic-render-width', `${rootRect.width}px`);
@@ -516,9 +528,10 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           return { sourceIndex, start, end: Math.min(columns, start + clusterColumns) };
         });
         let maximumScale = 0;
-        panelIndexes.forEach(({ sourceIndex, start, end }) => {
+        let allFacesCropSafe = true;
+        const panelGeometry = panelIndexes.map(({ sourceIndex, start, end }) => {
           const panelTiles = activeTiles.filter((tile) => Number(tile.dataset.tileColumn) >= start && Number(tile.dataset.tileColumn) < end);
-          if (!panelTiles.length) return;
+          if (!panelTiles.length) return null;
           const rects = panelTiles.map((tile) => tile.getBoundingClientRect());
           const panelLeft = Math.min(...rects.map((rect) => rect.left));
           const panelRight = Math.max(...rects.map((rect) => rect.right));
@@ -528,6 +541,25 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
             ? Math.min(panelWidth / image.naturalWidth, rootRect.height / image.naturalHeight)
             : Math.max(panelWidth / image.naturalWidth, rootRect.height / image.naturalHeight);
           maximumScale = Math.max(maximumScale, scale);
+          const renderedWidth = image.naturalWidth * scale;
+          const renderedHeight = image.naturalHeight * scale;
+          const focusX = clamp(Number(media.focusX ?? 50) / 100, 0, 1);
+          const focusY = clamp(Number(media.focusY ?? 50) / 100, 0, 1);
+          const imageLeft = panelLeft + (panelWidth - renderedWidth) * focusX;
+          const imageTop = rootRect.top + (rootRect.height - renderedHeight) * focusY;
+          const faceBoxes = Array.isArray(sources[sourceIndex].faceBoxes) ? sources[sourceIndex].faceBoxes : [];
+          const faceRects = faceBoxes.flatMap((box) => {
+            if (![box?.x, box?.y, box?.w, box?.h].every(Number.isFinite) || box.w <= 0 || box.h <= 0) return [];
+            const padX = clamp(box.w * .12, .012, .04);
+            const padY = clamp(box.h * .12, .012, .04);
+            const left = imageLeft + clamp(box.x - padX, 0, 1) * image.naturalWidth * scale;
+            const top = imageTop + clamp(box.y - padY, 0, 1) * image.naturalHeight * scale;
+            const right = imageLeft + clamp(box.x + box.w + padX, 0, 1) * image.naturalWidth * scale;
+            const bottom = imageTop + clamp(box.y + box.h + padY, 0, 1) * image.naturalHeight * scale;
+            const cropSafe = left >= panelLeft - 1 && right <= panelRight + 1 && top >= rootRect.top - 1 && bottom <= rootRect.bottom + 1;
+            allFacesCropSafe = allFacesCropSafe && cropSafe;
+            return [{ left, top, right, bottom, cropSafe }];
+          });
           panelTiles.forEach((tile) => {
             const tileRect = tile.getBoundingClientRect();
             tile.dataset.sourceIndex = String(sourceIndex);
@@ -537,8 +569,100 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
             tile.style.setProperty('--tile-render-width', `${panelWidth.toFixed(3)}px`);
             tile.style.setProperty('--tile-render-height', `${rootRect.height.toFixed(3)}px`);
           });
+          return { sourceIndex, start, end, panelLeft, panelRight, panelWidth, imageLeft, imageTop, renderedWidth, renderedHeight, faceRects };
+        }).filter(Boolean);
+        activeTiles.filter((tile) => !tile.dataset.sourceIndex).forEach((tile) => {
+          tile.style.setProperty('--tile-image', 'none');
+          ['--tile-image-left', '--tile-image-top', '--tile-render-width', '--tile-render-height'].forEach((name) => tile.style.removeProperty(name));
         });
-        activeTiles.filter((tile) => !tile.dataset.sourceIndex).forEach((tile) => tile.style.setProperty('--tile-image', 'none'));
+        const copyLines = measuredCopyLines();
+        const copyRects = copyLines.flatMap((line) => line.rects);
+        const geometryRevision = ++mosaicGeometryRevision;
+        mosaicRoot.dataset.copyLineCount = String(copyLines.length);
+        mosaicRoot.dataset.copyGeometryRevision = String(geometryRevision);
+        mosaicRoot.dataset.copyLineRights = copyLines.map((line) => Math.round(line.right)).join(',');
+        mosaicRoot.dataset.faceMetadata = sources.map((source) => source.faceBoxStatus || 'missing').join(',');
+        mosaicRoot.dataset.faceBoxCount = String(panelGeometry.reduce((sum, panel) => sum + panel.faceRects.length, 0));
+        const tileRecords = activeTiles.map((tile) => {
+          const column = Number(tile.dataset.tileColumn);
+          const row = Number(tile.dataset.tileRow);
+          const tileRect = tile.getBoundingClientRect();
+          const tileCenterX = (tileRect.left + tileRect.right) / 2;
+          const tileCenterY = (tileRect.top + tileRect.bottom) / 2;
+          const copyLine = copyLines
+            .filter((line) => tileRect.bottom > line.top - 3 && tileRect.top < line.bottom + 3)
+            .sort((left, right) => Math.abs(left.centerY - tileCenterY) - Math.abs(right.centerY - tileCenterY))[0]
+            || [...copyLines].sort((left, right) => Math.abs(left.centerY - tileCenterY) - Math.abs(right.centerY - tileCenterY))[0];
+          const illuminationOriginX = copyLine
+            ? copyLine.right + Math.max(14, tileRect.width * .35)
+            : rootRect.left + rootRect.width * .18;
+          const fadeWidth = Math.max(rootRect.width * .34, tileRect.width * 4);
+          const fieldProgress = smoothstep((tileCenterX - illuminationOriginX) / fadeWidth);
+          const base = .06 + .86 * fieldProgress;
+          const noiseStrength = .22 + .16 * fieldProgress;
+          const cellNoise = (hashUnit(currentScenario.id, 'cell', row, column) - .5) * noiseStrength * 2;
+          const clusterNoise = (hashUnit(currentScenario.id, 'cluster', Math.floor(row / 2), Math.floor(column / 3)) - .5) * .40;
+          const wave = Math.sin(column * .83 + row * 1.47 + phase) * .08;
+          const rawOpacity = clamp(base + cellNoise + clusterNoise + wave, .02, .97);
+          let opacity = nearestMosaicLevel(rawOpacity);
+          const contrastRoll = hashUnit(currentScenario.id, 'contrast-accent', row, column);
+          let contrastAccent = 'none';
+          if (column < columns - 3 && contrastRoll <= .09) { opacity = .03; contrastAccent = 'washed'; }
+          else if (column < columns - 3 && contrastRoll >= .91) { opacity = .96; contrastAccent = 'bright'; }
+          if (column === columns - 3) opacity = Math.max(.78, opacity);
+          if (column >= columns - 2) opacity = 1;
+          const copyShield = copyRects.some((rect) => tileRect.right > rect.left - 4 && tileRect.left < rect.right + 4 && tileRect.bottom > rect.top - 3 && tileRect.top < rect.bottom + 3);
+          if (copyShield) opacity = Math.min(opacity, .24);
+          const panel = panelGeometry.find((candidate) => candidate.sourceIndex === Number(tile.dataset.sourceIndex));
+          const faceShield = Boolean(panel?.faceRects.some((rect) => {
+            const overlapWidth = Math.min(tileRect.right, rect.right) - Math.max(tileRect.left, rect.left);
+            const overlapHeight = Math.min(tileRect.bottom, rect.bottom) - Math.max(tileRect.top, rect.top);
+            return overlapWidth > 0 && overlapHeight > 0 && overlapWidth * overlapHeight > 1;
+          }));
+          if (faceShield) opacity = Math.max(.5, opacity);
+          const beat = column >= columns - 2 ? 2 : Math.floor(hashUnit(currentScenario.id, 'entry-beat', Math.floor(row / 2), Math.floor(column / 4)) * 3);
+          let entryDelay = 40 + beat * 260 + Math.floor(hashUnit(currentScenario.id, 'entry-delay', row, column) * 140);
+          let entryDuration = 360 + Math.floor(hashUnit(currentScenario.id, 'entry-duration', row, column) * 400);
+          const exitBeat = Math.floor(hashUnit(currentScenario.id, 'exit-beat', Math.floor(row / 2), Math.floor(column / 3)) * 3);
+          const exitDelay = exitBeat * 100 + Math.floor(hashUnit(currentScenario.id, 'exit-delay', row, column) * 80);
+          const exitDuration = 180 + Math.floor(hashUnit(currentScenario.id, 'exit-duration', row, column) * 180);
+          tile.dataset.entryBeat = String(beat);
+          tile.dataset.exitBeat = String(exitBeat);
+          tile.dataset.contrastAccent = contrastAccent;
+          tile.dataset.copyShield = String(copyShield);
+          tile.dataset.faceShield = String(faceShield);
+          if (faceShield && panel) tile.dataset.faceShieldSourceIndex = String(panel.sourceIndex);
+          tile.dataset.copyLine = copyLine ? String(copyLine.index) : '-1';
+          tile.dataset.illuminationOriginX = illuminationOriginX.toFixed(2);
+          tile.dataset.fieldProgress = fieldProgress.toFixed(4);
+          tile.style.setProperty('--tile-opacity', String(opacity));
+          tile.style.setProperty('--tile-in-delay', `${entryDelay}ms`);
+          tile.style.setProperty('--tile-in-duration', `${entryDuration}ms`);
+          tile.style.setProperty('--tile-out-delay', `${exitDelay}ms`);
+          tile.style.setProperty('--tile-out-duration', `${exitDuration}ms`);
+          return { tile, column, row, opacity, copyShield, faceShield, sourceBacked: tile.dataset.sourceIndex !== undefined, entryDelay, entryDuration };
+        });
+        const accentTarget = 2 + (hashUnit(currentScenario.id, 'accent-count') >= .5 ? 1 : 0);
+        const accentCandidates = tileRecords
+          .filter((record) => record.sourceBacked && !record.copyShield && !record.faceShield && record.opacity >= .5 && record.column < columns - 2)
+          .sort((left, right) => hashUnit(currentScenario.id, 'accent-rank', left.row, left.column) - hashUnit(currentScenario.id, 'accent-rank', right.row, right.column));
+        const accents = [];
+        accentCandidates.forEach((candidate) => {
+          if (accents.length >= accentTarget) return;
+          const separated = accents.every((chosen) => Math.abs(chosen.row - candidate.row) + Math.abs(chosen.column - candidate.column) >= 4
+            && Math.floor(chosen.column / 3) !== Math.floor(candidate.column / 3));
+          if (separated) accents.push(candidate);
+        });
+        if (accents.length < 2) accents.splice(0);
+        accents.forEach((record, index) => {
+          record.entryDelay = 900 + index * 35 + Math.floor(hashUnit(currentScenario.id, 'accent-delay', record.row, record.column) * 46);
+          record.entryDuration = 380 + Math.floor(hashUnit(currentScenario.id, 'accent-duration', record.row, record.column) * 120);
+          record.tile.dataset.entryAccent = 'true';
+          record.tile.style.setProperty('--tile-in-delay', `${record.entryDelay}ms`);
+          record.tile.style.setProperty('--tile-in-duration', `${record.entryDuration}ms`);
+        });
+        mosaicRoot.dataset.entryAccentCount = String(accents.length);
+        mosaicRoot.dataset.faceCropSafe = String(allFacesCropSafe);
         const primaryRatio = images[0].naturalWidth / images[0].naturalHeight;
         const primaryPanel = panelIndexes[0];
         const primaryPanelTiles = activeTiles.filter((tile) => Number(tile.dataset.tileColumn) >= primaryPanel.start && Number(tile.dataset.tileColumn) < primaryPanel.end);
@@ -566,10 +690,13 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       const clearMosaicSource = () => {
         mosaicRoot?.style.removeProperty('--mosaic-image');
         mosaicTiles.forEach((tile) => {
-          delete tile.dataset.sourceIndex;
+          ['sourceIndex', 'faceShieldSourceIndex', 'copyLine', 'illuminationOriginX', 'fieldProgress'].forEach((key) => delete tile.dataset[key]);
+          tile.dataset.copyShield = 'false';
+          tile.dataset.faceShield = 'false';
+          tile.dataset.entryAccent = 'false';
           ['--tile-image', '--tile-image-left', '--tile-image-top', '--tile-render-width', '--tile-render-height'].forEach((name) => tile.style.removeProperty(name));
         });
-        if (mosaicRoot) ['naturalWidth', 'naturalHeight', 'coverWidth', 'coverHeight', 'upscaleRatio', 'cropStrategy', 'ocrSafe', 'mediaRejection', 'layout', 'fit', 'sourceCount'].forEach((key) => delete mosaicRoot.dataset[key]);
+        if (mosaicRoot) ['naturalWidth', 'naturalHeight', 'coverWidth', 'coverHeight', 'upscaleRatio', 'cropStrategy', 'ocrSafe', 'mediaRejection', 'layout', 'fit', 'sourceCount', 'copyLineCount', 'copyGeometryRevision', 'copyLineRights', 'faceMetadata', 'faceBoxCount', 'faceCropSafe', 'entryAccentCount'].forEach((key) => delete mosaicRoot.dataset[key]);
       };
       const mediaCacheKey = (media) => (media?.sources || []).map((source) => source.src).join('|') || media?.src || '';
       const preloadScenarioMedia = (scenario) => {
@@ -929,12 +1056,21 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       reduced.addEventListener?.('change', () => reduced.matches ? complete('reduced_motion') : undefined);
       desktopMedia.addEventListener?.('change', () => renderMedia());
       mosaicMedia.addEventListener?.('change', () => renderMedia());
-      window.addEventListener('resize', () => {
+      const scheduleMosaicReconfigure = () => {
         cancelAnimationFrame(mosaicResizeFrame);
         mosaicResizeFrame = requestAnimationFrame(() => {
-          if (currentScenario.media?.mode === 'mosaic' && mediaAllowed(currentScenario.media) && mediaImage?.naturalWidth) configureMosaic(currentScenario.media, mediaImage);
+          const media = currentScenario.media;
+          if (media?.mode !== 'mosaic' || !mediaAllowed(media)) return;
+          const cached = mediaPreloadCache.get(mediaCacheKey(media));
+          if (cached?.images) configureMosaic(media, cached.images);
         });
-      }, { passive: true });
+      };
+      window.addEventListener('resize', scheduleMosaicReconfigure, { passive: true });
+      new ResizeObserver(scheduleMosaicReconfigure).observe(message);
+      new ResizeObserver(scheduleMosaicReconfigure).observe(mosaicRoot);
+      new MutationObserver(scheduleMosaicReconfigure).observe(message, { childList: true, subtree: true, characterData: true });
+      document.fonts?.ready?.then(scheduleMosaicReconfigure);
+      document.fonts?.addEventListener?.('loadingdone', scheduleMosaicReconfigure);
       lab.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
         const blob = new Blob([`${JSON.stringify(telemetry, null, 2)}\n`], { type: 'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `briefing-lab-${variant}-${currentScenario.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 0);
@@ -1052,9 +1188,9 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
     .briefing-stage__mosaic-tile::before { content: ""; position: absolute; left: var(--tile-image-left); top: var(--tile-image-top); width: var(--tile-render-width, var(--mosaic-render-width)); height: var(--tile-render-height, var(--mosaic-render-height)); background-image: var(--tile-image, var(--mosaic-image)); background-repeat: no-repeat; background-size: var(--mosaic-fit, cover); background-position: var(--mosaic-focus-x, 50%) var(--mosaic-focus-y, 50%); }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); }
     .briefing-stage__media[data-media-mode="mosaic"].is-entering .briefing-stage__mosaic-tile { opacity: 0; transition: none; }
-    .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile[data-copy-shield="true"] { transition: none !important; }
     .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile[data-copy-shield="true"] { opacity: min(var(--tile-opacity), .24); }
-    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: var(--tile-out-duration); transition-delay: var(--tile-out-delay); }
+    .briefing-stage__media[data-media-mode="mosaic"].is-present .briefing-stage__mosaic-tile[data-face-shield="true"] { opacity: max(var(--tile-opacity), .5); }
+    .briefing-stage__media[data-media-mode="mosaic"].is-exiting .briefing-stage__mosaic-tile { opacity: 0; transition-duration: var(--tile-out-duration); transition-delay: var(--tile-out-delay); transition-timing-function: cubic-bezier(.65,0,.35,1); }
     [data-briefing-variant="static"] .briefing-stage__media[data-media-mode="mosaic"] .briefing-stage__mosaic-tile { opacity: var(--tile-opacity); transition: none; }
     [data-briefing-scenario-id="weather_water_demo"] .briefing-stage__message h1,
     [data-briefing-scenario-id^="storm_"] .briefing-stage__message h1,

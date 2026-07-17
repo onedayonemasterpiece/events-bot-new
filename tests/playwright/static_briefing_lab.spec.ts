@@ -571,9 +571,11 @@ test('manual media-review deck exposes fourteen grounded layouts, persists, and 
     await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
     await expect(desktop.page.locator('[data-media-image]')).toHaveAttribute('src', contract[index].src);
     await expect(desktop.page.locator('[data-media-review-progress]')).toHaveText(`${index + 1} из ${mediaReviewScenarioIds.length}`);
-    const copyShield = await desktop.page.locator('[data-mosaic-tile][data-copy-shield="true"]:not([hidden])').evaluateAll((tiles) => tiles.map((tile) => Number.parseFloat(getComputedStyle(tile).opacity)));
+    const copyShield = await desktop.page.locator('[data-mosaic-tile][data-copy-shield="true"][data-face-shield="false"]:not([hidden])').evaluateAll((tiles) => tiles.map((tile) => Number.parseFloat(getComputedStyle(tile).opacity)));
     expect(copyShield.length).toBeGreaterThan(0);
     expect(Math.max(...copyShield)).toBeLessThanOrEqual(.24);
+    const copyAndFace = await desktop.page.locator('[data-mosaic-tile][data-copy-shield="true"][data-face-shield="true"]:not([hidden])').evaluateAll((tiles) => tiles.map((tile: HTMLElement) => Number.parseFloat(tile.style.getPropertyValue('--tile-opacity'))));
+    expect(copyAndFace.every((opacity) => opacity >= .5)).toBeTruthy();
   }
   await desktop.page.locator('[data-media-review-previous]').click();
   await expect(desktop.page.locator('[data-briefing-lab]')).toHaveAttribute('data-briefing-scenario-id', mediaReviewScenarioIds.at(-2)!);
@@ -637,6 +639,58 @@ test('manual media-review deck exposes fourteen grounded layouts, persists, and 
   await mobile.context.close();
 });
 
+test('actual rendered phrase geometry drives illumination and face bbox tiles remain visible', async ({ browser }) => {
+  const desktop = await freshPage(browser, { width: 1920, height: 900 });
+  const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1707"><rect width="2560" height="1707" fill="#758b83"/><circle cx="1660" cy="760" r="420" fill="#bd7d62"/></svg>';
+  await desktop.page.route(/https:\/\/(storage\.yandexcloud\.net|sun9-[^.]+\.userapi\.com|kaliningrad\.tretyakovgallery\.ru)\//u, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: imageBody }));
+  await open(desktop.page, 'b', 'media_review_writing_kaliningrad', '&review=media');
+  const root = desktop.page.locator('[data-media-mosaic]');
+  await expect(root).toHaveAttribute('data-copy-line-count', '2');
+  await expect(root).toHaveAttribute('data-face-box-count', '2');
+  await expect(root).toHaveAttribute('data-face-metadata', 'lab-fixture');
+  const before = await root.evaluate((node: HTMLElement) => ({
+    revision: Number(node.dataset.copyGeometryRevision),
+    rights: (node.dataset.copyLineRights || '').split(',').map(Number),
+  }));
+  const beforeLineTwo = await desktop.page.locator('[data-mosaic-tile][data-copy-line="1"]:not([hidden])').last().evaluate((tile: HTMLElement) => ({
+    origin: Number(tile.dataset.illuminationOriginX),
+    progress: Number(tile.dataset.fieldProgress),
+  }));
+  await desktop.page.locator('[data-reveal-fragment]').nth(1).evaluate((node) => { node.textContent = 'из К.'; });
+  await expect.poll(() => root.evaluate((node: HTMLElement) => Number(node.dataset.copyGeometryRevision))).toBeGreaterThan(before.revision);
+  const after = await root.evaluate((node: HTMLElement) => ({ rights: (node.dataset.copyLineRights || '').split(',').map(Number) }));
+  const afterLineTwo = await desktop.page.locator('[data-mosaic-tile][data-copy-line="1"]:not([hidden])').last().evaluate((tile: HTMLElement) => ({
+    origin: Number(tile.dataset.illuminationOriginX),
+    progress: Number(tile.dataset.fieldProgress),
+  }));
+  expect(after.rights[1]).toBeLessThan(before.rights[1]);
+  expect(afterLineTwo.origin).toBeLessThan(beforeLineTwo.origin);
+  expect(afterLineTwo.progress).toBeGreaterThanOrEqual(beforeLineTwo.progress);
+
+  for (const [scenario, expectedFaces] of [
+    ['media_review_ivana_kupala', 10],
+    ['media_review_writing_kaliningrad', 2],
+    ['media_review_hay_day', 3],
+  ] as const) {
+    await desktop.page.locator(`[data-media-review-scenario="${scenario}"]`).click();
+    await expect(root).toHaveAttribute('data-face-box-count', String(expectedFaces));
+    const protectedTiles = desktop.page.locator('[data-mosaic-tile][data-face-shield="true"]:not([hidden])');
+    expect(await protectedTiles.count()).toBeGreaterThan(0);
+    expect(await protectedTiles.evaluateAll((tiles) => tiles.every((tile) => Number.parseFloat(getComputedStyle(tile).opacity) >= .5))).toBeTruthy();
+    expect(await desktop.page.locator('[data-mosaic-tile][data-face-shield="false"]:not([hidden])').evaluateAll((tiles) => tiles.some((tile) => Number.parseFloat(getComputedStyle(tile).opacity) < .5))).toBeTruthy();
+  }
+
+  await desktop.page.locator('[data-media-review-scenario="media_review_portrait_collage"]').click();
+  await expect(root).toHaveAttribute('data-face-box-count', '1');
+  expect(await desktop.page.locator('[data-mosaic-tile][data-face-shield="true"]:not([hidden])').evaluateAll((tiles) => [...new Set(tiles.map((tile: HTMLElement) => tile.dataset.sourceIndex))])).toEqual(['0']);
+
+  await open(desktop.page, 'b', 'weather_water_demo');
+  await expect(root).toHaveAttribute('data-face-box-count', '0');
+  await expect(root).toHaveAttribute('data-face-metadata', 'missing');
+  await expect(desktop.page.locator('[data-mosaic-tile][data-face-shield="true"]:not([hidden])')).toHaveCount(0);
+  await desktop.context.close();
+});
+
 test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful, mobile-silent and fail-closed', async ({ browser }) => {
   const mosaicAsset = /401da1cf03c707138f810f094708b7939710e3707c913fa12fd029502b1c7c1e\.webp/u;
   const imageBody = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600"><rect width="1600" height="600" fill="#705045"/><circle cx="1100" cy="225" r="180" fill="#c58f82"/></svg>';
@@ -655,6 +709,10 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
       entryBeat: node.dataset.entryBeat,
       exitBeat: node.dataset.exitBeat,
       contrastAccent: node.dataset.contrastAccent,
+      entryAccent: node.dataset.entryAccent,
+      copyShield: node.dataset.copyShield,
+      faceShield: node.dataset.faceShield,
+      transitionTimingFunction: getComputedStyle(node).transitionTimingFunction,
     }));
     const mediaStyle = getComputedStyle(document.querySelector('[data-narrative-media]')!);
     const pseudoStyle = getComputedStyle(tiles.length ? allTiles.find((node) => !node.hidden)! : allTiles[0], '::before');
@@ -785,6 +843,11 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
   expect(new Set(geometry.tiles.map((tile) => `${tile.entryDelay}/${tile.entryDuration}`)).size).toBeGreaterThan(60);
   expect(new Set(geometry.tiles.map((tile) => `${tile.exitDelay}/${tile.exitDuration}`)).size).toBeGreaterThan(60);
   expect(geometry.tiles.map((tile) => tile.exitBeat)).not.toEqual(geometry.tiles.map((tile) => tile.entryBeat).reverse());
+  const entryAccents = geometry.tiles.filter((tile) => tile.entryAccent === 'true');
+  expect(entryAccents.length).toBeGreaterThanOrEqual(2);
+  expect(entryAccents.length).toBeLessThanOrEqual(3);
+  expect(entryAccents.every((tile) => tile.copyShield === 'false' && tile.faceShield === 'false')).toBeTruthy();
+  expect(entryAccents.every((tile) => Number.parseInt(tile.entryDelay) >= 900 && Number.parseInt(tile.entryDelay) + Number.parseInt(tile.entryDuration) <= 1450)).toBeTruthy();
   await desktop.page.reload({ waitUntil: 'networkidle' });
   const timingAfterReload = (await inspectMosaic(desktop.page)).tiles.map((tile) => [tile.entryDelay, tile.entryDuration, tile.exitDelay, tile.exitDuration, tile.entryBeat, tile.exitBeat]);
   expect(timingAfterReload).toEqual(timingBeforeReload);
@@ -810,6 +873,11 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
   const partial = await animated.page.locator('[data-mosaic-tile]:not([hidden])').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) > .01).length);
   expect(partial).toBeGreaterThan(0);
   expect(partial).toBeLessThan(80);
+  const animatedAccents = animated.page.locator('[data-mosaic-tile][data-entry-accent="true"]:not([hidden])');
+  expect(await animatedAccents.count()).toBeGreaterThanOrEqual(2);
+  expect(await animatedAccents.count()).toBeLessThanOrEqual(3);
+  expect(await animatedAccents.evaluateAll((nodes) => nodes.every((node) => Number.parseFloat(getComputedStyle(node).opacity) <= .01))).toBeTruthy();
+  expect(await animated.page.locator('[data-mosaic-tile]:not([hidden])').first().evaluate((node) => getComputedStyle(node).transitionTimingFunction)).toBe('cubic-bezier(0.65, 0, 0.35, 1)');
   await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-cursor', 'underscore');
   const typingCursor = await animated.page.locator('.briefing-fragment.is-active').evaluate((node) => {
     const style = getComputedStyle(node, '::after');
