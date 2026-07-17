@@ -81,7 +81,7 @@ lanes:
     forbidden_files: []
     expected_output: Dramatic source-faithful 16x5 mosaic with exact local/public evidence and critical consultant gate.
     verification_scope: full_local
-    status: spawned
+    status: committed
   - id: closure-review
     role: merge_reviewer
     effort: high
@@ -95,4 +95,4 @@ lanes:
     forbidden_files: [site/**, docs/**, CHANGELOG.md]
     expected_output: Done/Partial/Missing/Blocked matrix with publication recommendation.
     verification_scope: full_local
-    status: planned
+    status: committed

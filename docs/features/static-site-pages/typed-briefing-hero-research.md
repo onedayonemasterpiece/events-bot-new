@@ -70,6 +70,7 @@ Route:
 
 Final immutable review build:
 
+- [desktop adaptive `16–20×5` dramatic mosaic + source-faithful crop](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [superseded: rejected `12×4` checkerboard/distorted crop](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [desktop `8×3` mosaic + text-only mobile](https://kenigevents.ru/preview-20260715t2306-briefing-lab-7c2b2a30/lab/briefing/?variant=c&scenario=live_meeting_mosaic&pace=slow&replay=1);
 - [conditional storm → future lecture + pending cursor](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=storm_weekend_demo&pace=slow&replay=1);
@@ -159,6 +160,25 @@ captures на `1440×900`, `1366×768`, `390×844`, `320×568` вернули HT
 три последовательных mosaic-сценария с reveal/hold/exit, а не один пример.
 Build сохраняется только как rejected regression evidence и больше не является
 рекомендуемым URL для пользовательского просмотра.
+
+Исправленный immutable prefix
+`preview-20260717t0754-briefing-lab-902829dd` построен из source `902829dd`.
+Isolated build/check pass; Playwright `15/15` и повтор playback-control
+regression `3/3`. Exact public captures на `1920×900`, `1440×900`,
+`1366×768`, `390×844`, `320×568` вернули HTTP 200, нулевые page/console errors
+и `bodyWidth == innerWidth`. На desktop media начинается ровно с `25vw` и
+заканчивается на правом pixel; последние два столбца fully opaque. Natural и
+cover dimensions доказывают одинаковый X/Y scale для portrait `360×450` и
+horizontal `478×317`; mobile остаётся `data-media-mode=none` без source.
+Public `20.5s` WebM показывает три последовательных scenario-seeded поля.
+
+Blind-first Gemini 3.1 Pro (High) exact gate сравнил rejected/candidate pixels,
+шесть entry/exit фаз и WebM без заранее сообщённых success-метрик: `MOSAIC
+DRAMATIC CORRECTION: PASS`, все шесть пользовательских требований `PASS`,
+`PUBLISH FOR USER REVIEW: YES`. Scope/URL опубликован в Telegram topic `6` как
+`#113`; desktop finals `#114–116`, entry/exit `#117–118`, mobile `#119–120`,
+exact WebM `#121`. Все receipts verified; post-send inspect вернул
+`top_message=121` без нового пользовательского комментария.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего
