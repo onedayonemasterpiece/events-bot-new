@@ -70,7 +70,7 @@ Route:
 
 Immutable review builds:
 
-- corrective conditional-motion build: URL is recorded after immutable publish;
+- [current corrective conditional-motion build](https://kenigevents.ru/preview-20260717t1346-briefing-lab-85f5a9ee/lab/briefing/?variant=c&review=media&scenario=media_review_writing_kaliningrad&pace=slow&replay=1);
 - [superseded: 14-scenario deck that retained terminal media by removing entry/exit motion](https://kenigevents.ru/preview-20260717t1237-briefing-lab-139d9809/lab/briefing/?variant=c&review=media&scenario=media_review_writing_kaliningrad&pace=slow&replay=1);
 - [superseded: manual 12-image deck without sequence/portrait contracts](https://kenigevents.ru/preview-20260717t1049-briefing-lab-38425f28/lab/briefing/?variant=c&review=media&scenario=media_review_planet_ocean&pace=slow&replay=1);
 - [current stripe/OCR/source-quality corrective candidate](https://kenigevents.ru/preview-20260717t0951-briefing-lab-21ca7a49/lab/briefing/?variant=c&scenario=weather_water_demo&pace=slow&replay=1);
@@ -153,6 +153,16 @@ Immutable review builds:
   восстановленные сцены `02/08` и заполненный three-source collage. Gemini 3.1
   Pro High gate сохранён как честная последовательность `FAIL` → correction →
   `PASS`, а не как перенос старого approval;
+- immutable corrective build
+  `preview-20260717t1346-briefing-lab-85f5a9ee` построен из implementation
+  source `85f5a9ee`: isolated allowlist `6 files`, public verification и exact
+  noindex passed. Public captures повторили четыре desktop finals; WebM
+  фиксируют `entry → hold → exit → next entry` и отдельный terminal state,
+  который остаётся с media после `6.5s`. Mobile `320×568`/`390×844` имеет
+  `bodyWidth == innerWidth`, `14` review buttons, `mediaMode=none` и `src=null`.
+  URL, четыре desktop PNG, два WebM и два mobile PNG отправлены в Telegram
+  topic `6` как сообщения `191–199`; delivery verified, повторное чтение до
+  `top_message=199` не обнаружило новых входящих комментариев;
 - актуальная mosaic — адаптивная CSS-grid `16×5` / `18×5` / `20×5` для
   `1024–1535` / `1536–1791` / `≥1792px`. Она занимает правые `75vw` на любой
   desktop review-width, поэтому больше не сжимается до половины экрана из-за

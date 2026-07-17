@@ -1,7 +1,7 @@
 # Lane typed-briefing-motion-crop-corrective-20260717 Results
 
 ## Status
-committed (pending final closure commit at report creation)
+committed and published as an immutable isolated lab
 
 ## Requirement IDs
 - R01 restore irregular entry animation
@@ -19,7 +19,7 @@ committed (pending final closure commit at report creation)
 `87dd727bc032c43d453b018b292df42e51d95343`
 
 ## Head SHA
-Recorded by the integration commit containing this report.
+Implementation: `85f5a9eed5ae7fb06d22c57578ac282e3df54dee`.
 
 ## Files changed
 - `site/src/data/briefingLab.ts`
@@ -41,6 +41,7 @@ Recorded by the integration commit containing this report.
 - `git diff --check`: passed
 - visual evidence: four 1920×900 scenes, entry→hold→exit→next-entry WebM, terminal-persistence WebM
 - Gemini 3.1 Pro High: initial `FAIL`; concrete collage/pause correction plus factual recheck; final nine-contract `PASS`
+- immutable public build: `preview-20260717t1346-briefing-lab-85f5a9ee`; Telegram topic `6`, messages `191–199`, verified
 
 ## Risks
 - Isolated lab only; production homepage remains unchanged.

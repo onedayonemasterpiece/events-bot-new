@@ -5,7 +5,7 @@
 | motion-contract-audit | advisory-R01, advisory-R02 | integration/typed-briefing-motion-crop-corrective-20260717 | merged | read-only | advice incorporated serially | lifecycle regression located at atomic-swap/removed-exit overcorrection |
 | crop-regression-audit | advisory-R03 | integration/typed-briefing-motion-crop-corrective-20260717 | merged | read-only | advice incorporated serially | exact 38425f28 baseline values restored; only two head-safe exceptions retained |
 | portrait-fill-audit | advisory-R04 | integration/typed-briefing-motion-crop-corrective-20260717 | merged | read-only | advice incorporated serially | contiguous source panels, cover geometry, all active columns owned |
-| serial-integrator | R01, R02, R03, R04 | integration/typed-briefing-motion-crop-corrective-20260717 | merged | this report commit | direct integration | Playwright 17/17 + 2/2; Gemini FAIL→PASS; screenshots/WebM |
+| serial-integrator | R01, R02, R03, R04 | integration/typed-briefing-motion-crop-corrective-20260717 | merged | `85f5a9ee` | direct integration | Playwright 17/17 + 2/2; Gemini FAIL→PASS; immutable public screenshots/WebM; Telegram `191–199` |
 
 ## Closure audit
 
