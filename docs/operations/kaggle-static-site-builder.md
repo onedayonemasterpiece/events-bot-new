@@ -2,6 +2,12 @@
 
 Status: implementation spike / production-publish gate pending.
 
+Current event-page release sequencing, top-five platform backlog and the planned
+10-day Telegraph coexistence/cutover are canonical in
+[`docs/features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md).
+The mode names described there are a required implementation contract, not
+already-existing production env flags.
+
 ## Position
 
 Kaggle is an accepted **batch executor** in this project because the repo already uses Kaggle for monitored parser/video/social jobs. For static pages it may build Astro HTML, related/discovery manifests, golden-facet manifests, share-card artifacts and offline evaluation reports.

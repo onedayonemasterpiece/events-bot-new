@@ -14,6 +14,11 @@
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Static-site documentation and E2E index**: corrected the earlier narrow
+  top-five plan to an explicitly scoped platform workstream, restored the full
+  release scenario inventory, distinguished preview/mocked/draft checks from
+  runnable release evidence, and aligned post-presentation T0 with the reversible
+  D0-to-D10 event-detail Telegraph coexistence contract.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
   truncating the structured JSON at the bounded 768-token output ceiling.
@@ -23,6 +28,10 @@
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
+- **Static-site full release-context recovery**: restore the 233-item
+  F1–F18/H1/M1–M6 Stage 0–11 checklist, the missing feature/operations/backlog
+  contracts, the source/status recovery report, official presentation gate and
+  208 stable acceptance scenario IDs as the umbrella release plan.
 - **Static identity, saved occurrences and D-1 reminder foundation**: add a
   Supabase Auth/RPC/Edge boundary with private RLS-protected schemas, secure
   device-to-account merge, separate save/like/consent/reminder state, masked

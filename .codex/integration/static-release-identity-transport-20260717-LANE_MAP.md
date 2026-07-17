@@ -13,6 +13,11 @@ global_constraints:
   - transport schedules and activation default off before controlled canary
   - no final identity/header/listing/event-detail or transport-card UI work
 verification_owner: root integrator
+release_umbrella:
+  source: origin/docs/static-site-release-plan-20260717@8fecf7da
+  merge_target: integration/static-release-identity-transport-20260717
+  status: merged_with_current_foundation_status
+  excluded_side_candidate: "PR #43 production publisher; conflicting/current-main re-port required"
 stop_conditions:
   - unreconciled production migration 20260717074903
   - failed RLS/grant/security assertion

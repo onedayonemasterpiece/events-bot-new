@@ -6,6 +6,8 @@ Integration branch: `integration/static-release-identity-transport-20260717`
 
 Fresh base: `origin/main@2822a91d6173883fca36ccf135802280ba4ab09d`
 
+Release umbrella source: `origin/docs/static-site-release-plan-20260717@8fecf7da`
+
 ## Recovery and accepted commits
 
 Both pre-existing crash worktrees were inventoried and committed before further
@@ -22,6 +24,15 @@ header, `/izbrannoe/`, listing-card, transport-card or event-detail layout was
 introduced. During integration the ICS UID was restored to the pre-existing stable
 `event-<id>@kenigevents.ru` value while retaining lifecycle/occurrence metadata, so
 existing calendar imports are not duplicated.
+
+The recovered full static-site release plan was subsequently merged into this
+integration branch. Conflicts were resolved by retaining the complete 233-item
+umbrella/208-scenario inventory while updating its identity and transport rows to
+the accepted implementation evidence and honest unapplied/blocked status. Open
+production-publisher PR `#43` was inspected but not folded in: it is a distinct
+four-commit side candidate, 66 commits behind current `main` and conflicting, so it
+requires a separate current-main re-port and validation rather than an implicit
+merge.
 
 ## Requirement closure
 
