@@ -290,6 +290,11 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-A11Y-04 — No-JS.** Основные страницы, факты, ссылки, похожий static fallback, navigation и SEO-content остаются доступными без JS; enhancement не оставляет пустые обязательные блоки.
 - **ADD-UI-03 — Длинный и экстремальный контент.** Проверить длинные названия, площадки/адреса, несколько медальонов, отсутствие цены, пять возрастных вариантов, много дат и 1/10+ изображений.
 - **ADD-UI-04 — Browser/device matrix.** Финальный RC проверить минимум в актуальных Chrome/Edge/Firefox на Windows, Safari/Chrome/Firefox на macOS и Safari iOS/Chrome Android; native share/clipboard/calendar проверять на реальных ОС, не только Playwright mocks.
+- **ADD-UI-05 — CTA по фактической геометрии компонента.** Desktop action panel
+  измеряет собственную inline-композицию после рендера и при изменении ширины
+  или текста; если цена/основной CTA/calendar/share/like не помещаются, panel
+  переходит в stacked layout до появления horizontal overflow. Решение не
+  привязано только к viewport breakpoint.
 
 ### SEO/GEO, безопасность и наблюдаемость
 

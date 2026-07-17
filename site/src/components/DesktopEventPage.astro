@@ -643,12 +643,31 @@ const descriptionHtml = (event.description_html || '')
     if (cleanRoot && desktopViewport.matches) {
       document.body.classList.add('desktop-clean-event-page');
       const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
-      const fitActionPanel = (panel:HTMLElement) => {
+      const actionPanelWidths = new WeakMap<HTMLElement, number>();
+      const fitActionPanel = (panel:HTMLElement, force = false) => {
+        const width = panel.getBoundingClientRect().width;
+        const previousWidth = actionPanelWidths.get(panel);
+        if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
+        actionPanelWidths.set(panel, width);
         const phonePanel = panel.dataset.primaryActionKind === 'phone';
+        // Measure the real inline composition, including the current calendar
+        // label and counters. CSS breakpoints cannot know this component width
+        // inside the half-canvas split family.
         panel.dataset.actionLayout = 'inline';
         panel.dataset.actionDensity = phonePanel ? 'compact' : 'comfortable';
+        const overflows = panel.scrollWidth > panel.clientWidth + 1;
+        panel.dataset.actionLayout = overflows ? 'stacked' : 'inline';
+        if (overflows) panel.dataset.actionDensity = 'compact';
       };
-      actionPanels.forEach(fitActionPanel);
+      actionPanels.forEach((panel) => {
+        fitActionPanel(panel, true);
+        new ResizeObserver(() => fitActionPanel(panel)).observe(panel);
+        new MutationObserver(() => fitActionPanel(panel, true)).observe(panel, {
+          childList:true,
+          characterData:true,
+          subtree:true,
+        });
+      });
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');

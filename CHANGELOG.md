@@ -23,7 +23,9 @@
   quality-fallback matrix is rendered by the accepted family router; identify
   real-event acceptance specimens by stable event id instead of mutable slug,
   and keep the fullscreen gallery brand link on the active site profile instead
-  of leaking production users into `__preview`.
+  of leaking production users into `__preview`; action panels now switch to the
+  stacked layout from their measured component geometry instead of a viewport
+  guess, preventing the split portrait family from overflowing at 1366px.
 - **Secret candidate Astro assets**: keep candidate CSS/JS under the immutable
   bearer prefix and resolve `{buildId}` for production asset templates; release
   checks now reject unresolved or external candidate `_astro` references.
