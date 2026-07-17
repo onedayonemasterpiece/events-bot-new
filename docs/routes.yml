@@ -529,8 +529,10 @@ features:
     docs: docs/features/post-metrics/README.md
     entrypoints:
       - source_parsing/post_metrics.py
+      - social_metrics_batch.py
       - reaction_counter_sync.py
       - scripts/sync_reaction_counters_to_supabase.py
+      - site/scripts/export-production-preview-data.py
       - db.py
   smart_event_update:
     status: implemented

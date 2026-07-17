@@ -637,6 +637,9 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function eventPopularityScore(event: PreviewEvent): number {
+  if (Number.isFinite(event.popularity_signal_score) && Number(event.popularity_signal_score) > 0) {
+    return Number(event.popularity_signal_score);
+  }
   const activeEvents = getEvents().filter((candidate) => eventIntersectsDateRange(candidate, getCurrentDate(), '9999-12-31'));
   const medianLikes = median(activeEvents.map((candidate) => candidate.source_likes_count || candidate.likes_count || 0));
   const medianShares = median(activeEvents.map((candidate) => candidate.shares_count || 0));
@@ -654,7 +657,7 @@ export function eventPopularityScore(event: PreviewEvent): number {
   return Number((likeScore * 0.38 + shareScore * 0.24 + viewScore * 0.24 + sourceScore * 0.10 + localScore * 0.04).toFixed(4));
 }
 
-export function getPopularEvents(limit = 60): PreviewEvent[] {
+export function getPopularEvents(limit = 20): PreviewEvent[] {
   return getEvents()
     .filter((event) => eventIntersectsDateRange(event, getCurrentDate(), '9999-12-31'))
     .map((event) => ({ event, score: eventPopularityScore(event) }))

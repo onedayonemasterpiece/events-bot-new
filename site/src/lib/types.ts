@@ -133,6 +133,9 @@ export interface PreviewEvent {
   source_views_count?: number;
   source_engagement_sources_count?: number;
   shares_count?: number;
+  /** Explainable batch-derived reasons; absent/empty means legacy aggregate fallback. */
+  popularity_reason_codes?: Array<'fast_growth' | 'frequently_shared' | 'discussed' | 'multi_source'>;
+  popularity_signal_score?: number;
   pushkin_card: boolean;
   other_date_ids: number[];
   source_prod_id: number;

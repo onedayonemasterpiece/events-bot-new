@@ -1135,6 +1135,7 @@ class TelegramPostMetric(SQLModel, table=True):
     views: Optional[int] = None
     likes: Optional[int] = None
     comments: Optional[int] = None
+    forwards: Optional[int] = None
     reactions_json: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
 
 
@@ -1157,6 +1158,45 @@ class VkPostMetric(SQLModel, table=True):
     likes: Optional[int] = None
     comments: Optional[int] = None
     reposts: Optional[int] = None
+
+
+class SocialMetricSnapshot(SQLModel, table=True):
+    __tablename__ = "social_metric_snapshot"
+    __table_args__ = (
+        Index(
+            "ix_social_metric_due",
+            "platform",
+            "publisher_id",
+            "post_id",
+            "age_bucket",
+            "status",
+        ),
+        Index("ix_social_metric_url", "source_url", "collected_ts"),
+        UniqueConstraint(
+            "platform",
+            "publisher_id",
+            "post_id",
+            "age_bucket",
+            name="ux_social_metric_post_bucket",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    platform: str
+    publisher_id: str
+    post_id: int
+    age_bucket: str
+    publication_kind: str = "external_event_source"
+    source_url: Optional[str] = None
+    post_ts: Optional[int] = None
+    collected_ts: int = Field(default_factory=lambda: int(utc_now().timestamp()))
+    views: Optional[int] = None
+    likes: Optional[int] = None
+    comments: Optional[int] = None
+    shares: Optional[int] = None
+    reactions_json: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    status: str = "collected"
+    error_code: Optional[str] = None
 
 
 class TomorrowPage(SQLModel, table=True):

@@ -1100,6 +1100,7 @@ class Database:
                     views INTEGER,
                     likes INTEGER,
                     comments INTEGER,
+                    forwards INTEGER,
                     reactions_json JSON,
                     UNIQUE(source_id, message_id, age_day),
                     FOREIGN KEY(source_id) REFERENCES telegram_source(id) ON DELETE CASCADE
@@ -1113,7 +1114,44 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_tg_metric_source_message ON telegram_post_metric(source_id, message_id)"
             )
             await _add_column(conn, "telegram_post_metric", "comments INTEGER")
+            await _add_column(conn, "telegram_post_metric", "forwards INTEGER")
             await _add_column(conn, "telegram_post_metric", "reactions_json JSON")
+
+            dbg("social_metric_snapshot")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS social_metric_snapshot(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform TEXT NOT NULL,
+                    publisher_id TEXT NOT NULL,
+                    post_id INTEGER NOT NULL,
+                    age_bucket TEXT NOT NULL,
+                    publication_kind TEXT NOT NULL DEFAULT 'external_event_source',
+                    source_url TEXT,
+                    post_ts INTEGER,
+                    collected_ts INTEGER NOT NULL,
+                    views INTEGER,
+                    likes INTEGER,
+                    comments INTEGER,
+                    shares INTEGER,
+                    reactions_json JSON,
+                    status TEXT NOT NULL DEFAULT 'collected',
+                    error_code TEXT,
+                    UNIQUE(platform, publisher_id, post_id, age_bucket)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_social_metric_due ON social_metric_snapshot(platform, publisher_id, post_id, age_bucket, status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_social_metric_url ON social_metric_snapshot(source_url, collected_ts)"
+            )
+            await _add_column(
+                conn,
+                "social_metric_snapshot",
+                "publication_kind TEXT NOT NULL DEFAULT 'external_event_source'",
+            )
 
             dbg("guide_profile")
             await conn.execute(
