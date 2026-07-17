@@ -70,7 +70,8 @@ Route:
 
 Final immutable review build:
 
-- [desktop adaptive `16–20×5` dramatic mosaic + source-faithful crop](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
+- current stripe/OCR/source-quality corrective candidate: immutable URL is added only after local acceptance and publication;
+- [superseded: dramatic mosaic with opaque/overlapping stripe, low-resolution sources and insufficient OCR admission](https://kenigevents.ru/preview-20260717t0754-briefing-lab-902829dd/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [superseded: rejected `12×4` checkerboard/distorted crop](https://kenigevents.ru/preview-20260716t0544-briefing-lab-4c2caa60/lab/briefing/?variant=c&scenario=anticipated_person_named&pace=slow&replay=1);
 - [desktop `8×3` mosaic + text-only mobile](https://kenigevents.ru/preview-20260715t2306-briefing-lab-7c2b2a30/lab/briefing/?variant=c&scenario=live_meeting_mosaic&pace=slow&replay=1);
 - [conditional storm → future lecture + pending cursor](https://kenigevents.ru/preview-20260715t2212-briefing-lab-53c3021d/lab/briefing/?variant=c&scenario=storm_weekend_demo&pace=slow&replay=1);
@@ -96,10 +97,13 @@ Final immutable review build:
 - Variant C сам проигрывает конечную цепочку максимум из трёх связанных сцен с
   readable hold; публичная кнопка `Показать следующее` скрыта во время цепочки и
   появляется только в terminal state;
-- в follow-up `13/19` selectable-сцен используют существующую grounded media
-  события как desktop mosaic, поэтому эффект можно оценить на последовательной
-  цепочке, а не на единственном редком экране. Teaser и action-education сцены
-  остаются text-only, если изображение испортило бы смысл или раскрыло ответ;
+- предыдущая цель `13/19` media-сцен **superseded безопасностью источника**.
+  Текущий admission оставляет mosaic только у `7/19` сценариев: картинка
+  должна одновременно иметь ручное `ocrSafe`, exporter metadata
+  `image_text_mode=visual_only`, `image_kind=photo`, `safe_crop=true`,
+  `recommended_hero_fit=cover`, ширину не менее `1000px` и площадь не менее
+  `1MP`. Если любой сигнал отсутствует, lab показывает полноценный text-only
+  narrative вместо случайного постера или нерелевантной подмены;
 - актуальная mosaic — адаптивная CSS-grid `16×5` / `18×5` / `20×5` для
   `1024–1535` / `1536–1791` / `≥1792px`. Она занимает правые `75vw` на любой
   desktop review-width, поэтому больше не сжимается до половины экрана из-за
@@ -110,14 +114,22 @@ Final immutable review build:
   parity-gap/checkerboard и требование «каждый сосед обязан отличаться», которое
   и породило предыдущую шахматную доску;
 - текст остаётся на той же shared-shell позиции, что и text-only hero:
-  mosaic не меняет stage/message width, font или alignment, а добавляет только
-  cloned paper stripe фрагментам и CTA. Viewport-bound media shell начинается
+  mosaic не меняет stage/message width, font или alignment. Старые `96%`
+  background-плашки, `0.08em` padding и четыре расширяющих box-shadow удалены:
+  fragment/CTA получают один узкий `42%` paper wash только в средней части
+  строки, `1px` glyph halo и нулевой box-shadow; inline event link сохраняет
+  один underline, отделённый от wash. Viewport-bound media shell начинается
   ровно около `25vw` (`x=360` при 1440, `x=480` при 1920) и заканчивается на
   физическом правом pixel без horizontal scroll;
 - каждая клетка клипует один общий виртуальный image-layer с `background-size:
   cover`; исходный aspect ratio больше не приводится к grid ratio. Для каждого
   lab media указана ручная focal position, а runtime фиксирует natural и cover
-  dimensions для regression-проверки равного X/Y scale;
+  dimensions для regression-проверки равного X/Y scale. До reveal runtime
+  вычисляет фактический cover-upscale и скрывает mosaic при значении `>1.35`,
+  поэтому ошибочная exporter metadata не может легализовать размытый raster;
+- поверх scenario-seeded поля добавлены редкие независимые contrast accents:
+  отдельные клетки принудительно уходят в `.03` (washed) или `.96` (bright),
+  не меняя непрозрачный двухколоночный right anchor и не создавая parity pattern;
 - mosaic разрешена только при `(min-width:1024px) and (min-height:650px)`.
   На mobile и коротком desktop она превращается в обычную text-only сцену и
   URL изображения вообще не назначается. Variant B/reduced-motion показывают
@@ -179,6 +191,14 @@ DRAMATIC CORRECTION: PASS`, все шесть пользовательских �
 `#113`; desktop finals `#114–116`, entry/exit `#117–118`, mobile `#119–120`,
 exact WebM `#121`. Все receipts verified; post-send inspect вернул
 `top_message=121` без нового пользовательского комментария.
+
+Этот `PASS` также признан **невалидным и superseded** после следующего
+пользовательского visual review. Reviewer не сделал hard-fail на три дефекта,
+видимые в переданных pixels: перекрывающиеся непрозрачные fragment slabs и
+двойной горизонтальный ритм рядом с underline, растягивание низкоразрешённых
+`360×450`/`478×317` источников и конфликт hero copy с текстом внутри poster.
+Новый gate не имеет права наследовать этот verdict: stripe occlusion, OCR и
+фактический upscale являются отдельными publish blockers.
 
 Реальная погода, promo overlay, runtime writer и video не включены. Weather
 scenes маркируются `DEMO-СИГНАЛ`; production-формулировки требуют свежего
@@ -421,7 +441,9 @@ Contract:
 - no Gemini-generated output is admitted automatically.
 - optional `next_scenario_id` резолвится только в другой compiled eligible node;
 - optional media содержит canonical `event_id`, validated derivative и
-  `small|wide|mosaic` mode; отсутствие/ошибка media не инвалидирует text/link;
+  `small|wide|mosaic` mode; mosaic дополнительно требует explicit OCR-safe
+  curation, photo/visual-only metadata, safe cover crop, `≥1000px`, `≥1MP` и
+  runtime upscale `≤1.35`; отсутствие/ошибка media не инвалидирует text/link;
 - `next_scenario_id` задаёт automatic edge; runtime останавливает chain после
   третьей сцены даже при циклическом графе;
 - public `Показать следующее` доступен только после terminal stop и начинает
@@ -443,7 +465,8 @@ Contract:
   `18×5` или `20×5` квадратных cells с `3px` paper-gutters и занимает правые
   `75vw` при `1366`, `1440`, `1600` и `1920px`;
   text остаётся на общей desktop-позиции, media пересекает его только визуально
-  и читается за счёт stripe. Viewport shell заканчивается точно на правом pixel,
+  и читается за счёт узкого полупрозрачного wash/glyph halo, а не сплошных
+  paper blocks. Viewport shell заканчивается точно на правом pixel,
   body width не увеличивается. Каждая cell клипует общий source-faithful
   `cover` layer с ручным focal point; один raster URL загружается один раз,
   decode/404 скрывает mosaic без пустого frame.

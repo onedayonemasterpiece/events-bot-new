@@ -33,6 +33,10 @@ export type BriefingLabScenario = {
     assetSourceOrder?: number;
     focusX?: number;
     focusY?: number;
+    /** Explicit lab curation: raster was checked to contain no competing text. */
+    ocrSafe?: boolean;
+    /** Runtime fail-closed ceiling for cover upscaling. */
+    maxUpscale?: number;
   };
 };
 
@@ -63,7 +67,7 @@ export const briefingLabScenarios = [
       { text: 'С чего' }, { text: 'начнём?' },
     ],
     ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/', nextScenarioId: 'weather_water_demo',
-    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 3, focusX: 54, focusY: 45 },
+    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 2, focusX: 54, focusY: 45, ocrSafe: true },
   },
   {
     id: 'greeting_day', label: 'Добрый день', family: 'welcome', cooldownDays: 1, cursor: 'bar',
@@ -72,7 +76,7 @@ export const briefingLabScenarios = [
       { text: 'Что сегодня' }, { text: 'вас удивит?' },
     ],
     ctaLabel: 'Посмотреть идеи', ctaHref: '/segodnya/', nextScenarioId: 'today_count',
-    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50 },
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50, ocrSafe: true },
   },
   {
     id: 'local_keska', label: 'По-калининградски', family: 'welcome', cooldownDays: 60, maxExposuresPerYear: 3, cursor: 'underscore',
@@ -128,7 +132,7 @@ export const briefingLabScenarios = [
       { text: 'Заглянем?' },
     ],
     ctaLabel: 'Открыть «Планету Океан»', ctaEventId: 6466, nextScenarioId: 'anticipated_person',
-    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50 },
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50, ocrSafe: true },
   },
   {
     id: 'anticipated_person', label: 'Кого особенно ждут', family: 'signal', cooldownDays: 30,
@@ -168,7 +172,7 @@ export const briefingLabScenarios = [
       { text: 'Вертинский.', accent: true, eventId: 5373 }, { text: 'Идём?' },
     ],
     ctaLabel: 'Открыть кабаре', ctaEventId: 5373, nextScenarioId: 'festival_demo',
-    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 3, focusX: 54, focusY: 45 },
+    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 2, focusX: 54, focusY: 45, ocrSafe: true },
   },
   {
     id: 'weather_water_demo', label: 'Погода → море', family: 'signal', cooldownDays: 7,
@@ -178,7 +182,7 @@ export const briefingLabScenarios = [
       { text: 'Махнём' }, { text: 'на море?', accent: true, href: '/poisk/' },
     ],
     ctaLabel: 'Найти событие у моря', ctaHref: '/poisk/',
-    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50 },
+    media: { eventId: 6466, mode: 'mosaic', assetSourceOrder: 0, focusX: 58, focusY: 50, ocrSafe: true },
   },
   {
     id: 'storm_weekend_demo', label: 'Если шторм → в уют', family: 'signal', cooldownDays: 7,
@@ -188,7 +192,7 @@ export const briefingLabScenarios = [
       { text: 'может, в уют?' },
     ],
     ctaLabel: 'Показать лекцию', ctaEventId: 5803,
-    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43 },
+    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43, ocrSafe: true },
   },
   {
     id: 'storm_lecture_science_demo', label: 'Шторм → лекция', family: 'signal', cooldownDays: 7,
@@ -198,7 +202,7 @@ export const briefingLabScenarios = [
       { text: 'Суперспособности.', accent: true, eventId: 5803 },
     ],
     ctaLabel: 'Открыть лекцию', ctaEventId: 5803,
-    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43 },
+    media: { eventId: 5803, mode: 'mosaic', assetSourceOrder: 1, focusX: 50, focusY: 43, ocrSafe: true },
   },
   {
     id: 'festival_demo', label: 'Pianissimo', family: 'signal', cooldownDays: 7,

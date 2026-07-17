@@ -24,9 +24,15 @@ const eventHref = (eventId: number) => {
 };
 const resolveScenario = (item: BriefingLabScenario) => {
   const mediaEvent = item.media ? byId.get(item.media.eventId) : undefined;
-  const mediaAsset = mediaEvent?.image_assets?.find((asset) => asset.source_order === item.media?.assetSourceOrder && asset.safe_crop && asset.recommended_hero_fit === 'cover')
-    || mediaEvent?.image_assets?.find((asset) => asset.safe_crop && asset.recommended_hero_fit === 'cover')
-    || mediaEvent?.image_assets?.find((asset) => asset.safe_crop)
+  const eligibleMediaAsset = (asset: NonNullable<typeof mediaEvent>['image_assets'][number]) => item.media?.ocrSafe === true
+    && asset.image_text_mode === 'visual_only'
+    && asset.image_kind === 'photo'
+    && asset.safe_crop === true
+    && asset.recommended_hero_fit === 'cover'
+    && asset.width >= 1000
+    && asset.width * asset.height >= 1_000_000;
+  const mediaAsset = mediaEvent?.image_assets?.find((asset) => asset.source_order === item.media?.assetSourceOrder && eligibleMediaAsset(asset))
+    || mediaEvent?.image_assets?.find(eligibleMediaAsset)
     || undefined;
   return {
     ...item,
@@ -40,6 +46,12 @@ const resolveScenario = (item: BriefingLabScenario) => {
       src: mediaAsset.src,
       alt: mediaAsset.alt || `Афиша события «${mediaEvent.title}»`,
       href: eventHref(item.media.eventId),
+      sourceWidth: mediaAsset.width,
+      sourceHeight: mediaAsset.height,
+      imageTextMode: mediaAsset.image_text_mode,
+      imageKind: mediaAsset.image_kind,
+      maxUpscale: item.media.maxUpscale ?? 1.35,
+      cropStrategy: 'curated-focal-cover',
     } : undefined,
   };
 };
@@ -347,7 +359,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       const mosaicMedia = matchMedia('(min-width: 1024px) and (min-height: 650px)');
       const mediaAllowed = (media) => media?.mode === 'mosaic' ? mosaicMedia.matches : desktopMedia.matches;
       const MOSAIC_ROWS = 5;
-      const MOSAIC_LEVELS = [.04, .12, .26, .48, .74, .94];
+      const MOSAIC_LEVELS = [.03, .1, .24, .5, .78, .96];
       const mosaicColumnsForViewport = () => innerWidth >= 1792 ? 20 : innerWidth >= 1536 ? 18 : 16;
       const hashUnit = (...parts) => {
         const input = parts.join('|');
@@ -362,7 +374,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
       };
       const nearestMosaicLevel = (value) => MOSAIC_LEVELS.reduce((best, level) => Math.abs(level - value) < Math.abs(best - value) ? level : best, MOSAIC_LEVELS[0]);
       const configureMosaic = (media, image) => {
-        if (!mosaicRoot || !mediaShell || !image?.naturalWidth || !image?.naturalHeight) return;
+        if (!mosaicRoot || !mediaShell || !image?.naturalWidth || !image?.naturalHeight) return false;
         const columns = mosaicColumnsForViewport();
         const activeCount = columns * MOSAIC_ROWS;
         const phase = hashUnit(currentScenario.id, 'phase') * Math.PI * 2;
@@ -388,6 +400,10 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           const wave = Math.sin(column * .83 + row * 1.47 + phase) * .08;
           const rawOpacity = Math.max(.02, Math.min(.97, base + cellNoise + clusterNoise + wave));
           let opacity = nearestMosaicLevel(rawOpacity);
+          const contrastRoll = hashUnit(currentScenario.id, 'contrast-accent', row, column);
+          let contrastAccent = 'none';
+          if (column < columns - 3 && contrastRoll <= .09) { opacity = .03; contrastAccent = 'washed'; }
+          else if (column < columns - 3 && contrastRoll >= .91) { opacity = .96; contrastAccent = 'bright'; }
           if (column === columns - 3) opacity = Math.max(.74, opacity);
           if (column >= columns - 2) opacity = 1;
           const beat = column >= columns - 2 ? 2 : Math.floor(hashUnit(currentScenario.id, 'entry-beat', Math.floor(row / 2), Math.floor(column / 4)) * 3);
@@ -400,6 +416,7 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
           tile.dataset.tileRow = String(row);
           tile.dataset.entryBeat = String(beat);
           tile.dataset.exitBeat = String(exitBeat);
+          tile.dataset.contrastAccent = contrastAccent;
           tile.style.setProperty('--tile-opacity', String(opacity));
           tile.style.setProperty('--tile-in-delay', `${entryDelay}ms`);
           tile.style.setProperty('--tile-in-duration', `${entryDuration}ms`);
@@ -413,17 +430,27 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         const rootRatio = rootRect.width / rootRect.height;
         const coverWidth = sourceRatio >= rootRatio ? rootRect.height * sourceRatio : rootRect.width;
         const coverHeight = sourceRatio >= rootRatio ? rootRect.height : rootRect.width / sourceRatio;
+        const upscaleRatio = Math.max(coverWidth / image.naturalWidth, coverHeight / image.naturalHeight);
         mosaicRoot.dataset.coverWidth = coverWidth.toFixed(3);
         mosaicRoot.dataset.coverHeight = coverHeight.toFixed(3);
+        mosaicRoot.dataset.upscaleRatio = upscaleRatio.toFixed(3);
+        mosaicRoot.dataset.cropStrategy = media.cropStrategy || 'curated-focal-cover';
+        mosaicRoot.dataset.ocrSafe = String(media.ocrSafe === true && media.imageTextMode === 'visual_only');
+        if (upscaleRatio > Number(media.maxUpscale || 1.35)) {
+          mosaicRoot.dataset.mediaRejection = 'upscale';
+          return false;
+        }
+        delete mosaicRoot.dataset.mediaRejection;
         mosaicTiles.slice(0, activeCount).forEach((tile) => {
           const tileRect = tile.getBoundingClientRect();
           tile.style.setProperty('--tile-image-left', `${(rootRect.left - tileRect.left).toFixed(3)}px`);
           tile.style.setProperty('--tile-image-top', `${(rootRect.top - tileRect.top).toFixed(3)}px`);
         });
+        return true;
       };
       const clearMosaicSource = () => {
         mosaicRoot?.style.removeProperty('--mosaic-image');
-        if (mosaicRoot) ['naturalWidth', 'naturalHeight', 'coverWidth', 'coverHeight'].forEach((key) => delete mosaicRoot.dataset[key]);
+        if (mosaicRoot) ['naturalWidth', 'naturalHeight', 'coverWidth', 'coverHeight', 'upscaleRatio', 'cropStrategy', 'ocrSafe', 'mediaRejection'].forEach((key) => delete mosaicRoot.dataset[key]);
       };
       const hideMedia = ({ removeSource = false } = {}) => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
@@ -456,10 +483,13 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
         mediaImage.onerror = revealFailed;
         if (media.mode === 'mosaic') {
           clearMosaicSource();
-          mediaImage.onload = () => { configureMosaic(media, mediaImage); revealLoaded(); };
+          mediaImage.onload = () => { if (configureMosaic(media, mediaImage)) revealLoaded(); else revealFailed(); };
         } else clearMosaicSource();
         if (mediaImage.getAttribute('src') !== media.src) mediaImage.src = media.src;
-        if (mediaImage.complete && mediaImage.naturalWidth) { if (media.mode === 'mosaic') configureMosaic(media, mediaImage); revealLoaded(); }
+        if (mediaImage.complete && mediaImage.naturalWidth) {
+          if (media.mode !== 'mosaic' || configureMosaic(media, mediaImage)) revealLoaded();
+          else revealFailed();
+        }
       };
       const scheduleMediaExit = () => {
         clearTimeout(mediaExitTimer); mediaExitTimer = 0;
@@ -759,11 +789,13 @@ const mosaicTiles = Array.from({ length: mosaicColumns * mosaicRows }, (_, index
     .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { font-size: clamp(2.8rem, 4vw, 3rem); line-height: 1.05; }
     .briefing-stage[data-media-mode="small"] .briefing-stage__message h1 { max-width: 100%; font-size: clamp(3.5rem, 4.1vw, 4rem); line-height: 1.02; }
     .briefing-stage[data-media-mode="wide"] .briefing-stage__message h1 { max-width: 100%; }
-    .briefing-stage[data-media-mode="wide"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-    .briefing-stage[data-media-mode="wide"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
+    .briefing-stage[data-media-mode="wide"] .briefing-fragment,
+    .briefing-stage[data-media-mode="mosaic"] .briefing-fragment { padding: 0 .015em; background: linear-gradient(to bottom, transparent 30%, rgba(255,253,248,.42) 30%, rgba(255,253,248,.42) 74%, transparent 74%); box-shadow: none; text-shadow: -1px 0 rgba(255,253,248,.92), 1px 0 rgba(255,253,248,.92), 0 -1px rgba(255,253,248,.92), 0 1px rgba(255,253,248,.92); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .briefing-stage[data-media-mode="wide"] a.briefing-fragment,
+    .briefing-stage[data-media-mode="mosaic"] a.briefing-fragment { text-decoration-thickness: .045em; text-underline-offset: .16em; }
+    .briefing-stage[data-media-mode="wide"] .briefing-stage__cta,
+    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__cta { padding: 0 .04em; background: linear-gradient(to bottom, transparent 34%, rgba(255,253,248,.42) 34%, rgba(255,253,248,.42) 76%, transparent 76%); text-shadow: -1px 0 rgba(255,253,248,.9), 1px 0 rgba(255,253,248,.9), 0 1px rgba(255,253,248,.9); }
     .briefing-stage[data-media-mode="mosaic"] .briefing-stage__brand-o { display: none; }
-    .briefing-stage[data-media-mode="mosaic"] .briefing-fragment { padding: 0 .08em; background: rgba(255,253,248,.96); box-shadow: .1em 0 0 rgba(255,253,248,.96), -.1em 0 0 rgba(255,253,248,.96), 0 .065em 0 rgba(255,253,248,.96), 0 -.045em 0 rgba(255,253,248,.96); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-    .briefing-stage[data-media-mode="mosaic"] .briefing-stage__cta { padding: .08em .18em; background: rgba(255,253,248,.94); }
     .briefing-stage__media[data-media-mode="mosaic"] { --mosaic-columns: 16; top: 50%; right: calc(50% - 50vw); bottom: auto; width: 75vw; height: calc(75vw * 5 / var(--mosaic-columns)); max-height: 100%; overflow: hidden; opacity: 1; transform: translateY(-50%); transition: none; pointer-events: none; }
     .briefing-stage__media[data-media-mode="mosaic"].is-present,
     .briefing-stage__media[data-media-mode="mosaic"].is-exiting { opacity: 1; transform: translateY(-50%); pointer-events: none; }

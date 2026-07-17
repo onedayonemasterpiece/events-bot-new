@@ -218,6 +218,15 @@ entry/exit rhythm. Это не production approval и не desirability evidence
 | [`mosaic-dramatic-correction-acceptance-prompt.md`](mosaic-dramatic-correction-acceptance-prompt.md) | Blind-first rejected/candidate screenshot and motion gate. | `cea95059edd10870a257d36c681626d811e9aa517d256b3cb001bbe5c7f8b35e` |
 | [`mosaic-dramatic-correction-acceptance-gemini.md`](mosaic-dramatic-correction-acceptance-gemini.md) | Final `MOSAIC DRAMATIC CORRECTION: PASS`. | `3f9042ff0402189c4594f17527b106dbcefb1605387ec770dd1563a3c2e7ca2f` |
 
+The verdict above is now **invalid and superseded**. A later user pixel review
+identified three publish blockers that the prompt and reviewer did not reject:
+opaque overlapping paper slabs/double horizontal bands around linked copy,
+low-resolution `360×450` and `478×317` sources enlarged across the hero, and
+hero copy competing with raster OCR/poster typography. It is retained only as
+failed-review-process provenance. The next acceptance prompt treats stripe
+occlusion, visible raster text and actual cover-upscale as independent
+hard-fail criteria and does not inherit any earlier PASS.
+
 ## Decision trace
 
 ### Accepted from Gemini
