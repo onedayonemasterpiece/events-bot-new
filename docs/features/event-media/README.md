@@ -202,6 +202,9 @@ Consumer `smart_update_image_geometry` использует normal pool
 overflow и он не заимствует KEY1–KEY3. Отсутствующий limiter/registry member
 останавливает stage fail-closed. Production defaults: `100` новых provider calls
 за UTC-day и не чаще одного outbox item в `7` секунд; cache hits квоту не тратят.
+Если более ранний semantic-role pass не продвинулся из-за своего отдельного
+суточного бюджета, тот же durable worker turn продолжает geometry candidate:
+pending semantic row не может заблокировать bbox lane.
 
 Исторический backfill не скачивает изображения с Fly. Работать нужно на копии
 production SQLite локально или в Kaggle; JSONL fsync-ится после каждого item и
