@@ -13,7 +13,8 @@ export interface ListingImagePresentation {
   asset: EventImageAsset | null;
   src: string | null;
   ratio: number;
-  mode: 'poster-natural' | 'photo-natural' | 'photo-crop' | 'unknown-natural';
+  mode: 'poster-natural' | 'photo-natural' | 'photo-crop' | 'visual-crop' | 'unknown-natural';
+  adaptiveCrop: boolean;
   objectPosition: string;
 }
 
@@ -97,7 +98,7 @@ function assetRatio(asset: EventImageAsset): number {
 }
 
 function usableAsset(asset: EventImageAsset): boolean {
-  return Boolean(asset?.src && asset.width >= 320 && asset.height >= 240);
+  return Boolean(asset?.src && asset.width >= 180 && asset.height >= 180);
 }
 
 function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventImageAsset | null {
@@ -109,7 +110,7 @@ function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventIma
   })[0] || null;
 }
 
-export function selectListingImage(event: PreviewEvent): ListingImagePresentation {
+export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65): ListingImagePresentation {
   const assets = (event.image_assets || []).filter(usableAsset);
   const posters = assets.filter((asset) => (
     asset.media_semantic_status === 'classified'
@@ -127,17 +128,32 @@ export function selectListingImage(event: PreviewEvent): ListingImagePresentatio
     && asset.safe_crop === true
     && Boolean(asset.focal_point)
   ));
+  const visualOnly = assets.filter((asset) => (
+    (asset.image_text_mode || event.image_text_mode) === 'visual_only'
+  ));
 
   // A classified wide poster keeps more of its own title readable. It wins over
   // a portrait/square poster but never over a different semantic media family.
   const selectedPoster = bestWideAsset(posters, 2);
   const preferredPhotos = photos.filter((asset) => assetRatio(asset) >= 1);
   const selectedPhoto = bestWideAsset(preferredPhotos.length ? preferredPhotos : photos, preferredPhotos.length ? 1.5 : 0.8);
+  const preferredVisuals = visualOnly.filter((asset) => assetRatio(asset) >= 1);
+  const selectedVisual = bestWideAsset(preferredVisuals.length ? preferredVisuals : visualOnly, visualCropRatio);
   const primary = assets[0] || null;
-  const asset = selectedPoster || selectedPhoto || primary;
+  const asset = selectedPoster || selectedVisual || selectedPhoto || primary;
   const src = asset?.src || event.image_url || null;
   const rawRatio = asset ? assetRatio(asset) : 0.8;
   const isPhoto = Boolean(selectedPhoto && asset === selectedPhoto);
+  const isVisualOnly = Boolean(
+    asset
+    && asset === selectedVisual
+    && (asset.image_text_mode || event.image_text_mode) === 'visual_only'
+  );
+  const visualRatio = isVisualOnly && asset
+    ? (asset.safe_crop === true && Boolean(asset.focal_point)
+      ? visualCropRatio
+      : Math.min(visualCropRatio, Math.max(1.33, rawRatio)))
+    : visualCropRatio;
   const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
   const wideCropIsSafe = isPhoto && rawRatio > 1 && Math.min(rawRatio / 1.5, 1.5 / rawRatio) >= 0.8;
   const photoRatio = rawRatio < 0.8 ? 0.8 : wideCropIsSafe ? 1.5 : Math.min(rawRatio, 2.2);
@@ -145,10 +161,19 @@ export function selectListingImage(event: PreviewEvent): ListingImagePresentatio
   return {
     asset,
     src,
-    ratio: isPhoto
+    ratio: isVisualOnly
+      ? visualRatio
+      : isPhoto
       ? photoRatio
       : Math.max(0.2, Math.min(3.2, rawRatio || 0.8)),
-    mode: isPhoto ? (photoNeedsCrop ? 'photo-crop' : 'photo-natural') : isPoster ? 'poster-natural' : 'unknown-natural',
+    mode: isVisualOnly
+      ? 'visual-crop'
+      : isPhoto
+        ? (photoNeedsCrop ? 'photo-crop' : 'photo-natural')
+        : isPoster
+          ? 'poster-natural'
+          : 'unknown-natural',
+    adaptiveCrop: Boolean(isVisualOnly && asset?.safe_crop === true && asset.focal_point),
     objectPosition: asset?.recommended_object_position || event.image_object_position || '50% 50%',
   };
 }

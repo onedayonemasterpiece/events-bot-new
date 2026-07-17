@@ -1,0 +1,64 @@
+---
+import ListingEventCard from './ListingEventCard.astro';
+import type { ListingTimeGroup } from '../../lib/listingPresentation';
+import { eventCountLabel, listingDaypart } from '../../lib/listingPresentation';
+
+interface DayInput {
+  key: 'sat' | 'sun';
+  title: string;
+  date: string;
+  groups: ListingTimeGroup[];
+}
+interface Props { days: DayInput[] }
+const { days } = Astro.props;
+const groupMaps = new Map(days.map((day) => [day.key, new Map(day.groups.map((group) => [group.key, group]))]));
+const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.key)))]
+  .sort((left, right) => left === 'untimed' ? 1 : right === 'untimed' ? -1 : left.localeCompare(right));
+---
+<div class="ke-weekend-matrix" data-ds-component="WeekendTimeMatrix" data-ds-version="1">
+  {keys.map((key) => {
+    const groups = days.map((day) => groupMaps.get(day.key)?.get(key));
+    const count = groups.reduce((sum, group) => sum + (group?.events.length || 0), 0);
+    const label = key === 'untimed' ? 'Без времени' : key;
+    const daypart = listingDaypart(key === 'untimed' ? null : key);
+    return (
+      <section
+        id={`weekend-time-${key}`}
+        class="ke-weekend-time-row"
+        data-weekend-time-row
+        data-listing-daypart={daypart}
+        aria-labelledby={`weekend-time-${key}-title`}
+      >
+        {days.map((day, index) => {
+          const group = groups[index];
+          return (
+            <div class:list={['ke-weekend-time-cell', `ke-weekend-time-cell--${day.key}`]}>
+              <div
+                id={`weekend-${day.key}-${key}`}
+                class="ke-weekend-time-cell__content"
+                data-listing-time-group
+                data-listing-date={day.date}
+                data-listing-day={day.key}
+                data-listing-time={key}
+                data-listing-daypart={daypart}
+                hidden={!group?.events.length}
+              >
+                <div class="ke-time-group__flow">
+                  {group?.events.map((event) => <ListingEventCard event={event} density="weekend" />)}
+                </div>
+              </div>
+            </div>
+          );
+        }).flatMap((cell, index) => index === 0 ? [
+          cell,
+          <header class="ke-weekend-time-rail">
+            <div>
+              <h3 id={`weekend-time-${key}-title`} tabindex="-1">{label}</h3>
+              <span data-listing-weekend-row-count>{count} {eventCountLabel(count)}</span>
+            </div>
+          </header>,
+        ] : [cell])}
+      </section>
+    );
+  })}
+</div>

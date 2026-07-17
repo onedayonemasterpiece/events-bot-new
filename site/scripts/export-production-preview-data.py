@@ -1251,10 +1251,10 @@ def fetch_rows(
         ordered_rows.append(row)
         return True
 
-    def add_query(query: str, params: tuple[Any, ...] = ()) -> None:
+    def add_query(query: str, params: tuple[Any, ...] = (), *, stop_at_limit: bool = True) -> None:
         for row in con.execute(query, params):
             add_row(row)
-            if len(ordered_rows) >= limit:
+            if stop_at_limit and len(ordered_rows) >= limit:
                 break
 
     event_columns = {
@@ -1271,6 +1271,9 @@ def fetch_rows(
         "coalesce(nullif(time,''),'23:59') asc, " if "time" in event_columns else ""
     )
     today_time_order = f"{time_order}id asc"
+    # A focus range is a completeness contract for date listings, not merely a
+    # preference for single-day rows.  Short multi-day festivals may start in
+    # the range and must not be displaced by the later bounded future fill.
     single_day_clause = (
         "and (end_date is null or trim(end_date) = '' or end_date = date)"
         if "end_date" in event_columns
@@ -1284,11 +1287,10 @@ def fetch_rows(
             select * from event
             where {active}
               and date between ? and ?
-              {single_day_clause}
             order by date asc, {time_order}id asc
-            limit ?
             """,
-            (focus_from, focus_to, max(limit * 2, 80)),
+            (focus_from, focus_to),
+            stop_at_limit=False,
         )
     elif focus_from:
         add_query(
@@ -1339,7 +1341,7 @@ def fetch_rows(
             f"select * from event where {active} order by date asc, {time_order}id asc limit ?",
             (max(limit * 3, limit + len(include_ids) + 20),),
         )
-    return ordered_rows[:limit]
+    return ordered_rows if len(ordered_rows) > limit else ordered_rows[:limit]
 
 
 def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
@@ -2927,8 +2929,9 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
     parser.add_argument("--current-datetime", default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""), help="Optional local YYYY-MM-DDTHH:MM cutoff; same-day events that already started are excluded")
-    parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
-    parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
+    parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize all events starting on/after this date before the normal future fill")
+    parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize all events starting on/before this date before the normal future fill")
+    parser.add_argument("--source-snapshot-captured-at", default=os.getenv("STATIC_SITE_SOURCE_SNAPSHOT_CAPTURED_AT", ""), help="UTC timestamp of the source DB capture, distinct from JSON generation time")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
     parser.add_argument("--related-mode", choices=["sparse", "pgvector"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
@@ -2979,6 +2982,7 @@ def main() -> int:
         "build": {
             "generated_at": generated_at,
             "source": "prod-sqlite-static-site-export-v1",
+            "source_snapshot_captured_at": args.source_snapshot_captured_at or None,
             "current_date": args.current_date,
             "current_datetime": args.current_datetime or None,
             "effective_current_date": effective_date,

@@ -56,11 +56,11 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Desktop date-listing focus candidate `DATE-LISTING TH-P1 · V10`:
-[Сегодня](https://kenigevents.ru/preview-20260717-date-listings-v10/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260717-date-listings-v10/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260717-date-listings-v10/vyhodnye/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260717-date-listings-v10/lab/design-system/).
+Desktop date-listing structural correction candidate `DATE-LISTING TH-P1 · V11`:
+[Сегодня](https://kenigevents.ru/preview-20260717-date-listings-v11/segodnya/),
+[Завтра](https://kenigevents.ru/preview-20260717-date-listings-v11/zavtra/),
+[Выходные](https://kenigevents.ru/preview-20260717-date-listings-v11/vyhodnye/) и
+[общий DS catalog](https://kenigevents.ru/preview-20260717-date-listings-v11/lab/design-system/).
 Это immutable review prefix, а не production promotion.
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
@@ -408,7 +408,7 @@ Operational rule:
 
 Date listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) should be indexable in production: they answer real date-intent queries and provide internal links to canonical event pages. The SEO risk is not the listings themselves, but mass outbound links from every card to ticket/social/source services. Therefore listing cards should not show direct external ticket/source CTAs. They keep internal event links and optional same-origin `.ics`; the external ticket/registration/source action lives on the event detail page, where context, JSON-LD and `rel="noopener noreferrer nofollow"` can be controlled. Do **not** solve outbound-link concerns by `noindex` for production listing pages. Preview builds remain `noindex,nofollow` only because they are preview prefixes.
 
-The current desktop product candidate is `DATE-LISTING TH-P1 · V10`:
+The current desktop product candidate is `DATE-LISTING TH-P1 · V11`:
 
 - time groups use intrinsic-width, wrapping event cards rather than equal grid
   columns or a row that escapes the viewport;
@@ -416,20 +416,24 @@ The current desktop product candidate is `DATE-LISTING TH-P1 · V10`:
   periods with counts and reveals exact times only for dense periods;
 - Today keeps completed/started groups above the current-time marker in a
   collapsed block. Tomorrow has no meaningless `Начались ранее` affordance;
-- Weekend keeps one combined time navigation and two day columns so several
-  dozen events remain comparable without a second click to a `Смотреть все`
-  page;
+- Weekend uses one union exact-time axis between persistent Saturday/Sunday
+  background surfaces. Each time is printed once and every next row stays
+  aligned even when the two day cells contain different numbers of cards;
 - exhibitions are omitted from these primary date flows when ordinary events
   provide enough inventory. Short multi-day festivals are retained when they
   start on the selected date;
-- one compact city multi-select and the conditional `Для меня / Полный список`
-  v2 enhancement intersect client-side. Full inventory is always the initial
-  state and static/no-JS fallback;
-- all listing media is chosen by the shared semantic asset selector. Wide
-  identity posters have priority over portrait alternatives; square/wide photos
-  are preferred and only explicitly safe classified photos may be cropped
-  (`3:2` near-wide, minimum `4:5` for a vertical fallback); other assets preserve
-  their natural aspect ratio;
+- always-visible direct city chips and the conditional `Для меня / Полный
+  список` v2 enhancement intersect client-side. Full inventory is always the
+  initial state and static/no-JS fallback;
+- card, media and base copy widths are identical and derive only from selected
+  media geometry. Wide no-OCR alternatives have priority; safe+focal visuals
+  may expand adaptively, while unverified no-OCR visuals use a conservative
+  fixed crop and OCR media keeps its natural ratio. A final-frame skeleton is
+  visible until load/decode;
+- focus-window rows are exported exhaustively before the general bounded fill;
+  QA records source snapshot time separately from generated JSON time. The V11
+  fixture therefore restores the short multi-day House Vibe ONEGIN start and
+  yields 17 Today, 37 Tomorrow and 62 Weekend consumer cards after route rules;
 - reusable layout, navigation, filtering and card rules belong to the global
   design-system catalog and checks, not to a local three-page stylesheet.
 

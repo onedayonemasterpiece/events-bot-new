@@ -24,6 +24,7 @@ import ExactTimeTimeline from '../../../components/listings/ExactTimeTimeline.as
 import ListingTimeNav from '../../../components/listings/ListingTimeNav.astro';
 import ListingControls from '../../../components/listings/ListingControls.astro';
 import ListingPageHeader from '../../../components/listings/ListingPageHeader.astro';
+import WeekendTimeMatrix from '../../../components/listings/WeekendTimeMatrix.astro';
 import type { PreviewEvent } from '../../../lib/types';
 import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../lib/events';
 import { getInterestClubs } from '../../../lib/clubs';
@@ -304,6 +305,10 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
               <ListingTimeNav groups={listingGroups} idPrefix="ds-time" />
               <ExactTimeTimeline groups={listingGroups} idPrefix="ds-time" date="2026-07-17" />
               <ListingEventCard event={baseEvent} />
+              <WeekendTimeMatrix days={[
+                { key: 'sat', title: 'Суббота', date: '2026-07-18', groups: listingGroups.slice(0, 2) },
+                { key: 'sun', title: 'Воскресенье', date: '2026-07-19', groups: listingGroups.slice(2, 4) },
+              ]} />
             </div>
           </article>
 
@@ -363,9 +368,11 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="EventCard" data-ds-version="2"><td>EventCard · split-actions</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>production migration complete</td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="1" data-ds-replaced-by="EventCard@2"><td>EventCard · overlay-controls</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCard.astro</code></td><td>replaced by EventCard v2; lab-only</td></tr>
                 <tr data-ds-component="ListingPageHeader" data-ds-version="1"><td>ListingPageHeader</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingPageHeader.astro</code></td><td>Today/Tomorrow/Weekend shared shell</td></tr>
-                <tr data-ds-component="ListingControls" data-ds-version="1"><td>ListingControls</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>city intersection + personal/full mode</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="2"><td>ListingControls · direct city chips</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>visible city intersection + personal/full mode</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="1" data-ds-replaced-by="ListingControls@2"><td>ListingControls · city disclosure</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>replaced by ListingControls v2; catalog record only</td></tr>
                 <tr data-ds-component="ListingTimeNav" data-ds-version="1"><td>ListingTimeNav</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingTimeNav.astro</code></td><td>period baseline + dense exact disclosures</td></tr>
                 <tr data-ds-component="ExactTimeTimeline" data-ds-version="1"><td>ExactTimeTimeline</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ExactTimeTimeline.astro</code></td><td>exact groups + intrinsic wrap</td></tr>
+                <tr data-ds-component="WeekendTimeMatrix" data-ds-version="1"><td>WeekendTimeMatrix</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/WeekendTimeMatrix.astro</code></td><td>one union time axis + two day surfaces</td></tr>
                 <tr data-ds-component="ListingEventCard" data-ds-version="1"><td>ListingEventCard · TH-P1</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>wide poster / safe 3:2 photo / natural fallback</td></tr>
                 <tr data-ds-component="EventListItem" data-ds-version="1"><td>EventListItem</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>
                 <tr data-ds-component="EventCtaPanel" data-ds-version="1"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>

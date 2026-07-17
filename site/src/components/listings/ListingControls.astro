@@ -14,26 +14,23 @@ const showCities = cities.length > 1;
   class="ke-listing-controls"
   aria-label="Фильтры списка"
   data-ds-component="ListingControls"
-  data-ds-version="1"
+  data-ds-version="2"
   data-listing-controls
 >
   {showCities ? (
-    <details class="ke-city-picker" data-listing-city-picker>
-      <summary>Города <span data-listing-city-summary>все</span><span aria-hidden="true">⌄</span></summary>
-      <fieldset class="ke-city-filter" data-listing-city-filter>
-        <legend>Показывать события в городах</legend>
-        <label class="ke-filter-chip ke-filter-chip--all">
-          <input type="checkbox" value="all" checked data-listing-city-all />
-          <span>Все города</span><strong>{total}</strong>
+    <fieldset class="ke-city-filter ke-city-filter--direct" data-listing-city-filter>
+      <legend>Города</legend>
+      <label class="ke-filter-chip ke-filter-chip--all">
+        <input type="checkbox" value="all" checked data-listing-city-all />
+        <span>Все</span><strong>{total}</strong>
+      </label>
+      {cities.map((city) => (
+        <label class="ke-filter-chip">
+          <input type="checkbox" value={cityKey(city.name)} data-listing-city-input />
+          <span>{city.name}</span><strong>{city.count}</strong>
         </label>
-        {cities.map((city) => (
-          <label class="ke-filter-chip">
-            <input type="checkbox" value={cityKey(city.name)} checked data-listing-city-input />
-            <span>{city.name}</span><strong>{city.count}</strong>
-          </label>
-        ))}
-      </fieldset>
-    </details>
+      ))}
+    </fieldset>
   ) : null}
   <ListingPersonalFilter total={total} label={label} version={2} />
   <p class="ke-visually-hidden" role="status" aria-live="polite" data-listing-result-status></p>
@@ -116,11 +113,17 @@ const showCities = cities.length > 1;
       const countNode = earlier.querySelector('[data-listing-earlier-count]');
       if (countNode) countNode.textContent = `${count} ${eventCountLabel(count)}`;
     });
-    document.querySelectorAll('[data-weekend-day]').forEach((column) => {
-      const count = [...column.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
-      const countNode = column.querySelector('[data-weekend-day-count]');
+    document.querySelectorAll('[data-weekend-day-head]').forEach((head) => {
+      const key = head.dataset.weekendDayHead;
+      const count = [...document.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
+      const countNode = head.querySelector('[data-weekend-day-count]');
       if (countNode) countNode.textContent = String(count);
-      column.classList.toggle('is-empty', count === 0);
+    });
+    document.querySelectorAll('[data-weekend-time-row]').forEach((row) => {
+      const count = [...row.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
+      row.hidden = count === 0;
+      const countNode = row.querySelector('[data-listing-weekend-row-count]');
+      if (countNode) countNode.textContent = `${count} ${eventCountLabel(count)}`;
     });
     document.querySelectorAll('[data-date-listing="today"], [data-date-listing="tomorrow"]').forEach((surface) => {
       const upcoming = surface.querySelector('[data-listing-upcoming-groups]');
@@ -142,20 +145,16 @@ const showCities = cities.length > 1;
     const controls = document.querySelector('[data-listing-controls]');
     if (!controls) return;
     const cityInputs = [...controls.querySelectorAll('[data-listing-city-input]')];
+    const all = controls.querySelector('[data-listing-city-all]');
+    const useAll = !all || all.checked;
     const enabled = new Set(cityInputs.filter((input) => input.checked).map((input) => input.value));
     const hasCityFilter = cityInputs.length > 0;
     document.querySelectorAll('[data-listing-item]').forEach((item) => {
-      const cityMatch = !hasCityFilter || enabled.has(item.dataset.listingCity || '');
+      const cityMatch = !hasCityFilter || useAll || enabled.has(item.dataset.listingCity || '');
       const personalMatch = item.dataset.personalHidden !== 'true';
       item.hidden = !(cityMatch && personalMatch);
     });
-    const all = controls.querySelector('[data-listing-city-all]');
-    if (all) {
-      all.checked = enabled.size === cityInputs.length;
-      all.indeterminate = enabled.size > 0 && enabled.size < cityInputs.length;
-    }
-    const citySummary = controls.querySelector('[data-listing-city-summary]');
-    if (citySummary) citySummary.textContent = enabled.size === cityInputs.length ? 'все' : `${enabled.size} выбрано`;
+    if (all) all.indeterminate = false;
     syncTimeGroups();
     const visible = visibleListingItems().length;
     const total = document.querySelectorAll('[data-listing-item]').length;
@@ -176,23 +175,37 @@ const showCities = cities.length > 1;
     if (!controls || controls.dataset.listingControlsReady === 'true') return;
     controls.dataset.listingControlsReady = 'true';
     const cityInputs = [...controls.querySelectorAll('[data-listing-city-input]')];
+    const all = controls.querySelector('[data-listing-city-all]');
     const stored = readCitySelection();
-    if (stored !== null) {
+    if (stored !== null && !stored.has('all') && stored.size !== cityInputs.length) {
       cityInputs.forEach((input) => { input.checked = stored.has(input.value); });
       if (cityInputs.length > 0 && !cityInputs.some((input) => input.checked)) {
-        cityInputs.forEach((input) => { input.checked = true; });
+        if (all) all.checked = true;
+      } else if (all) {
+        all.checked = false;
       }
     }
     controls.addEventListener('change', (event) => {
       const input = event.target.closest('input');
       if (!input) return;
-      if (input.matches('[data-listing-city-all]')) cityInputs.forEach((item) => { item.checked = input.checked; });
-      writeCitySelection(new Set(cityInputs.filter((item) => item.checked).map((item) => item.value)));
+      if (input.matches('[data-listing-city-all]')) {
+        input.checked = true;
+        cityInputs.forEach((item) => { item.checked = false; });
+      } else if (input.matches('[data-listing-city-input]')) {
+        if (all) all.checked = false;
+        if (!cityInputs.some((item) => item.checked)) {
+          if (all) all.checked = true;
+        }
+      }
+      writeCitySelection(all?.checked
+        ? new Set(['all'])
+        : new Set(cityInputs.filter((item) => item.checked).map((item) => item.value)));
       applyListingFilters();
     });
     controls.querySelector('[data-listing-enable-all]')?.addEventListener('click', () => {
-      cityInputs.forEach((item) => { item.checked = true; });
-      writeCitySelection(new Set(cityInputs.map((item) => item.value)));
+      cityInputs.forEach((item) => { item.checked = false; });
+      if (all) all.checked = true;
+      writeCitySelection(new Set(['all']));
       applyListingFilters();
     });
 
@@ -218,13 +231,13 @@ const showCities = cities.length > 1;
       });
     }, true);
     document.addEventListener('pointerdown', (event) => {
-      document.querySelectorAll('[data-time-nav-disclosure][open], [data-listing-city-picker][open]').forEach((details) => {
+      document.querySelectorAll('[data-time-nav-disclosure][open]').forEach((details) => {
         if (!details.contains(event.target)) details.removeAttribute('open');
       });
     });
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
-      const opened = document.querySelector('[data-time-nav-disclosure][open], [data-listing-city-picker][open]');
+      const opened = document.querySelector('[data-time-nav-disclosure][open]');
       if (!opened) return;
       opened.removeAttribute('open');
       opened.querySelector('summary')?.focus();

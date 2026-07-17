@@ -1,7 +1,8 @@
 {
   "build": {
-    "generated_at": "2026-07-17T21:11:35.104412+00:00",
+    "generated_at": "2026-07-17T22:03:20.319870+00:00",
     "source": "prod-sqlite-static-site-export-v1",
+    "source_snapshot_captured_at": "2026-07-17T19:28:12Z",
     "current_date": "2026-07-17",
     "current_datetime": null,
     "effective_current_date": "2026-07-17",
@@ -1968,6 +1969,148 @@
       "popularity_signal_score": 3.5
     },
     {
+      "id": 6517,
+      "source_prod_id": 6517,
+      "title": "V фестиваль женской культуры и дружбы Красный Шатёр",
+      "slug": "v-festival-zhenskoy-kultury-i-druzhby-krasnyy-shater-baltiysk-6517",
+      "event_type": "фестиваль",
+      "festival": "Красный шатёр",
+      "status_label": "Условия уточняются",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-17T18:00:00+02:00",
+      "start_date": "2026-07-17",
+      "start_time": "18:00",
+      "end_date": "2026-07-19",
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-17",
+      "display_time": "18:00",
+      "city": "Балтийск",
+      "venue_name": "глэмпинг «Территория Я»",
+      "address": null,
+      "map_query": "Балтийск, глэмпинг «Территория Я»",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://t.me/redshater39",
+        "status": null,
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/meowafisha/7791",
+      "source_urls": [
+        "https://t.me/meowafisha/7791",
+        "https://vk.com/wall-231920894_7582",
+        "https://t.me/c/3954607218/1641",
+        "https://t.me/kulturnaya_chaika/7787",
+        "https://t.me/kulturnaya_chaika/8040"
+      ],
+      "source_count": 5,
+      "telegraph_url": "https://telegra.ph/Krasnyj-shatyor-06-29",
+      "image_url": "https://static.kenigevents.ru/p/dh16/00/001000102800d40c04860043002b850bd804c0e0c860e0c03a00084004000000.webp",
+      "image_alt": "Афиша события «V фестиваль женской культуры и дружбы Красный Шатёр»",
+      "image_text_mode": "ocr_text",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/001000102800d40c04860043002b850bd804c0e0c860e0c03a00084004000000.webp",
+          "width": 1102,
+          "height": 1280,
+          "alt": "Фотография события «V фестиваль женской культуры и дружбы Красный Шатёр»",
+          "image_text_mode": "ocr_text",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/24/245d55fae576735354a8cda8e1da8a43e3bab855a37f27ac2f76477b8a2e173f/256.webp",
+              "width": 220,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/24/245d55fae576735354a8cda8e1da8a43e3bab855a37f27ac2f76477b8a2e173f/512.webp",
+              "width": 441,
+              "height": 512
+            }
+          ],
+          "asset_key": "245d55fae576735354a8cda8e1da8a43e3bab855a37f27ac2f76477b8a2e173f",
+          "quality_score": 14.1595
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/08/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7.webp",
+          "width": 180,
+          "height": 320,
+          "alt": "Фотография события «V фестиваль женской культуры и дружбы Красный Шатёр»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/77/7736620241426a0acbc36193ea3925b604973c04188c90e77364273c99d3f447/256.webp",
+              "width": 144,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/77/7736620241426a0acbc36193ea3925b604973c04188c90e77364273c99d3f447/512.webp",
+              "width": 180,
+              "height": 320
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "85c812f826e3bb8c6e8d52c0bfe7a1ce780a1e9fbed2af8ff4d00bf7461d33c1",
+          "quality_score": 7.5613
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Пятый фестиваль женской культуры объединяет участниц для обмена опытом через творческие мастер-классы и живое общение.",
+      "meta_description": "Пятый фестиваль женской культуры объединяет участниц для обмена опытом через творческие мастер-классы и живое общение.",
+      "description_html": "<blockquote>Красный шатёр — фестиваль женской культуры и дружбы</blockquote>\n<p>Пятый юбилейный фестиваль «Красный Шатёр» — это полномасштабный open air, объединяющий женщин разных поколений для отдыха, обмена мудростью и вдохновения. Событие длится три дня и ориентировано на участниц из разных уголков страны и мира, предлагая полное погружение в живую среду. 🌿</p>\n<h3>Программа и активности</h3>\n<p>На фестивале организованы лекции, мастер-классы и общение на актуальные темы для женщин. Программа включает следующие направления:</p>\n<ul>\n<li>Живая музыка и танцы.</li>\n<li>Арт-инсталляции и уникальные локации от художников.</li>\n<li>Детская зона с творческими, игровыми и познавательными активностями на свежем воздухе.</li>\n<li>Вкусная еда и напитки.</li>\n<li>Базар с украшениями, одеждой, травяными чаями и продуктами ручной работы.</li>\n<li>Тематические кэмпы от танцевальных, творческих сообществ, арт-проектов, семейных и авторских инициатив.</li>\n</ul>\n<h3>Банный отдых и SPA</h3>\n<p>На пляже фестиваля работает банный городок, где представлены ритуалы парения от пар мастериц Калининграда. Также на территории функционирует SPA-пространство MASPA.</p>",
+      "topics": [
+        "OPEN_AIR",
+        "LECTURES",
+        "MASTERCLASS",
+        "HANDMADE",
+        "FAMILY"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-06-29 23:55:56.516728",
+      "likes_count": 1,
+      "source_likes_count": 1,
+      "service_likes_count": 0,
+      "source_views_count": 12,
+      "source_engagement_sources_count": 1,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
       "id": 6908,
       "source_prod_id": 6908,
       "title": "фестиваль Pianissmo",
@@ -3367,6 +3510,116 @@
       "service_likes_count": 0,
       "source_views_count": 53,
       "source_engagement_sources_count": 2,
+      "shares_count": 1,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 6912,
+      "source_prod_id": 6912,
+      "title": "«Татьяна танцует» под хит-парад: ночная часть",
+      "slug": "tatyana-tantsuet-pod-hit-parad-nochnaya-chast-kaliningrad-6912",
+      "event_type": "дискотека",
+      "festival": null,
+      "status_label": "Билеты",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-17T23:00:00+02:00",
+      "start_date": "2026-07-17",
+      "start_time": "23:00",
+      "end_date": "2026-07-18",
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-17",
+      "display_time": "23:00",
+      "city": "Калининград",
+      "venue_name": "Паб London",
+      "address": "Мира 33",
+      "map_query": "Калининград, Паб London, Мира 33",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://kdmarket.ru",
+        "status": "sale",
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "assessed",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-decision-v1",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/meowafisha/7943",
+      "source_urls": [
+        "https://t.me/meowafisha/7943",
+        "https://vk.com/wall-231920894_7585",
+        "https://t.me/tatianaabar/555",
+        "https://vk.com/wall-231920894_7629"
+      ],
+      "source_count": 4,
+      "telegraph_url": "https://telegra.ph/Tatyana-tancuet-pod-hit-parad-nochnaya-chast-07-15",
+      "image_url": "https://static.kenigevents.ru/p/dh16/91/918256d2a50a0d3b0d3b198139917ad3124b09938913b0c383c623068d0e9982.webp",
+      "image_alt": "Афиша события ««Татьяна танцует» под хит-парад: ночная часть»",
+      "image_text_mode": "ocr_text",
+      "image_media_role": "program_or_schedule",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/91/918256d2a50a0d3b0d3b198139917ad3124b09938913b0c383c623068d0e9982.webp",
+          "width": 1024,
+          "height": 1280,
+          "alt": "Расписание события ««Татьяна танцует» под хит-парад: ночная часть»",
+          "image_text_mode": "ocr_text",
+          "media_role": "program_or_schedule",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/f5/f54d9b71ec7929002bb0c8b38dbf13d3e1955cb17919f5284a5d31117b7f991b/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/f5/f54d9b71ec7929002bb0c8b38dbf13d3e1955cb17919f5284a5d31117b7f991b/512.webp",
+              "width": 410,
+              "height": 512
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.45
+          },
+          "recommended_object_position": "50% 45%",
+          "asset_key": "ba7540c9c595f2297d67b77ea36a9d6e943714ea756c79c6b1b5c496a8b82246",
+          "quality_score": 14.0861
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Ночная часть события Татьяна танцует проходит под музыкальный хит-парад с элементами стиля нулевых.",
+      "meta_description": "Ночная часть события Татьяна танцует проходит под музыкальный хит-парад с элементами стиля нулевых.",
+      "description_html": "<p>Ночная часть события «Татьяна танцует» проходит под музыкальный хит-парад. Техническое обеспечение мероприятия осуществляет «КОНТАКТ МЕДИА».</p>\n<p>Дресс-код включает элементы стиля нулевых: дерзкие джинсы, стразы и низкую посадку.</p>",
+      "topics": [
+        "PARTIES",
+        "FASHION"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-15 23:55:38.493004",
+      "likes_count": 2,
+      "source_likes_count": 2,
+      "service_likes_count": 0,
+      "source_views_count": 34,
+      "source_engagement_sources_count": 1,
       "shares_count": 1,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
@@ -8374,6 +8627,109 @@
       "popularity_signal_score": 3.5
     },
     {
+      "id": 6642,
+      "source_prod_id": 6642,
+      "title": "House Vibe ONEGIN",
+      "slug": "house-vibe-onegin-kaliningrad-6642",
+      "event_type": "концерт",
+      "festival": null,
+      "status_label": "1000 ₽",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-18T21:00:00+02:00",
+      "start_date": "2026-07-18",
+      "start_time": "21:00",
+      "end_date": "2026-07-19",
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-18",
+      "display_time": "21:00",
+      "city": "Калининград",
+      "venue_name": "ONEGIN bar",
+      "address": "проспект Мира, 4",
+      "map_query": "Калининград, ONEGIN bar, проспект Мира, 4",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://kaliningrad.qtickets.events/244510-house-vibe-onegin",
+        "status": "available",
+        "is_free": false,
+        "price_label": "1000 ₽",
+        "note": null
+      },
+      "age_restriction": "18+",
+      "age_restriction_status": "declared",
+      "age_restriction_provenance": "official_structured",
+      "age_restriction_decision_version": "event-age-decision-v1",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://kaliningrad.qtickets.events/244510-house-vibe-onegin",
+      "source_urls": [
+        "https://kaliningrad.qtickets.events/244510-house-vibe-onegin",
+        "https://vk.com/wall-231920894_7416",
+        "https://t.me/c/3954607218/1825"
+      ],
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/House-Vibe-ONEGIN-07-03",
+      "image_url": "https://static.kenigevents.ru/p/dh16/02/02000100016000200080498805801fc00ce01722173607f805dc01cd01e700fe.webp",
+      "image_alt": "Афиша события «House Vibe ONEGIN»",
+      "image_text_mode": "ocr_text",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/02/02000100016000200080498805801fc00ce01722173607f805dc01cd01e700fe.webp",
+          "width": 445,
+          "height": 556,
+          "alt": "Фотография события «House Vibe ONEGIN»",
+          "image_text_mode": "ocr_text",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "error",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/4e/4e61cb769f558a2d0c8258843f034e5d21c4c128caac9e37053b238bae63767a/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/4e/4e61cb769f558a2d0c8258843f034e5d21c4c128caac9e37053b238bae63767a/512.webp",
+              "width": 410,
+              "height": 512
+            }
+          ],
+          "asset_key": "21a5a9feca49553ea755c9ef0d7bd8653724bbb6c5fd02fe82d716dc317789c3",
+          "quality_score": 11.1188
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Ежемесячная вечеринка в баре Онегин с электронной музыкой и авторскими коктейлями для танцевальной атмосферы.",
+      "meta_description": "Ежемесячная вечеринка в баре Онегин с электронной музыкой и авторскими коктейлями для танцевальной атмосферы.",
+      "description_html": "<p>House Vibe ONEGIN — ежемесячная вечеринка, меняющая привычный уклад бара «Онегин» (ONEGIN bar) на танцевальную атмосферу. В этот вечер пространство наполняется электронной музыкой и авторскими коктейлями, создавая формат настоящей вечеринки.</p>\n<h3>Музыкальная программа</h3>\n<p>Центральным событием ночи станет дебютный авторский dj-сет владельца заведения Юрия. Музыкальное сопровождение вечера включает в себя:<br />* House music<br />* KIKI<br />* SOUL MOVE<br />* AMORE<br />* MIRAU</p>\n<h3>Атмосфера</h3>\n<p>Мероприятие отходит от стандартного режима работы бара, предлагая гостям смену обстановки раз в месяц. В дополнение к танцевальной программе посетителям предложены авторские коктейли.</p>",
+      "topics": [
+        "PARTIES"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-03 13:34:35.958308",
+      "likes_count": 2,
+      "source_likes_count": 2,
+      "service_likes_count": 0,
+      "source_views_count": 47,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
       "id": 6923,
       "source_prod_id": 6923,
       "title": "Кинопоказ «Генерал»",
@@ -9034,6 +9390,115 @@
         "multi_source"
       ],
       "popularity_signal_score": 1.0
+    },
+    {
+      "id": 6902,
+      "source_prod_id": 6902,
+      "title": "Диалоги",
+      "slug": "dialogi-svetlogorsk-6902",
+      "event_type": "выставка",
+      "festival": null,
+      "status_label": "Условия уточняются",
+      "lifecycle_status": "active",
+      "starts_at": null,
+      "start_date": "2026-07-18",
+      "start_time": null,
+      "end_date": "2026-08-07",
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-18",
+      "display_time": null,
+      "city": "Светлогорск",
+      "venue_name": "Янтарь холл",
+      "address": "Ленина 11",
+      "map_query": "Светлогорск, Янтарь холл, Ленина 11",
+      "ticket": {
+        "kind": "status",
+        "label": "Условия уточняются",
+        "href": null,
+        "status": null,
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/kulturnaya_chaika/8037",
+      "source_urls": [
+        "https://t.me/kulturnaya_chaika/8037",
+        "https://vk.com/wall-231920894_7574",
+        "https://t.me/c/3954607218/2493",
+        "https://vk.com/wall-231920894_7587"
+      ],
+      "source_count": 4,
+      "telegraph_url": "https://telegra.ph/Dialogi-07-15",
+      "image_url": "https://static.kenigevents.ru/p/dh16/80/80008008c04a8800c90585309350c6310f100669046301ca0196978284e009ed.webp",
+      "image_alt": "Афиша события «Диалоги»",
+      "image_text_mode": "ocr_text",
+      "image_media_role": "event_identity_poster",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/80/80008008c04a8800c90585309350c6310f100669046301ca0196978284e009ed.webp",
+          "width": 904,
+          "height": 1280,
+          "alt": "Афиша события «Диалоги»",
+          "image_text_mode": "ocr_text",
+          "media_role": "event_identity_poster",
+          "media_role_confidence": 1.0,
+          "media_semantic_status": "classified",
+          "image_kind": "poster",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/2c/2c79451021c22e60a2c5ff947940f884b4a242819debdf3af01b58aba9b4031b/256.webp",
+              "width": 181,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/2c/2c79451021c22e60a2c5ff947940f884b4a242819debdf3af01b58aba9b4031b/512.webp",
+              "width": 362,
+              "height": 512
+            }
+          ],
+          "focal_point": {
+            "x": 0.65,
+            "y": 0.6
+          },
+          "recommended_object_position": "65% 60%",
+          "asset_key": "d638f78af82476c9df3ecc50f0696a9b70802adbd1f5f4ea38f7c714686d8926",
+          "quality_score": 13.8814
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Выставка быстрых набросков и портретов с натуры представляет собой живой разговор между моделью и художником.",
+      "meta_description": "Выставка быстрых набросков и портретов с натуры представляет собой живой разговор между моделью и художником.",
+      "description_html": "<p>Выставка представляет собой собрание быстрых набросков и портретов, выполненных с натуры. Автор работ — художница Екатерина Гурина.</p>\n<p>Экспозиция раскрывает искусство портрета как живой разговор, возникающий в процессе взаимодействия между моделью и художником.</p>",
+      "topics": [
+        "EXHIBITIONS"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-15 23:00:29.519134",
+      "likes_count": 11,
+      "source_likes_count": 11,
+      "service_likes_count": 0,
+      "source_views_count": 633,
+      "source_engagement_sources_count": 3,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6869,
@@ -12195,258 +12660,6 @@
       "source_views_count": 78,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 6517,
-      "source_prod_id": 6517,
-      "title": "V фестиваль женской культуры и дружбы Красный Шатёр",
-      "slug": "v-festival-zhenskoy-kultury-i-druzhby-krasnyy-shater-baltiysk-6517",
-      "event_type": "фестиваль",
-      "festival": "Красный шатёр",
-      "status_label": "Условия уточняются",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-17T18:00:00+02:00",
-      "start_date": "2026-07-17",
-      "start_time": "18:00",
-      "end_date": "2026-07-19",
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-17",
-      "display_time": "18:00",
-      "city": "Балтийск",
-      "venue_name": "глэмпинг «Территория Я»",
-      "address": null,
-      "map_query": "Балтийск, глэмпинг «Территория Я»",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://t.me/redshater39",
-        "status": null,
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://t.me/meowafisha/7791",
-      "source_urls": [
-        "https://t.me/meowafisha/7791",
-        "https://vk.com/wall-231920894_7582",
-        "https://t.me/c/3954607218/1641",
-        "https://t.me/kulturnaya_chaika/7787",
-        "https://t.me/kulturnaya_chaika/8040"
-      ],
-      "source_count": 5,
-      "telegraph_url": "https://telegra.ph/Krasnyj-shatyor-06-29",
-      "image_url": "https://static.kenigevents.ru/p/dh16/00/001000102800d40c04860043002b850bd804c0e0c860e0c03a00084004000000.webp",
-      "image_alt": "Афиша события «V фестиваль женской культуры и дружбы Красный Шатёр»",
-      "image_text_mode": "ocr_text",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/001000102800d40c04860043002b850bd804c0e0c860e0c03a00084004000000.webp",
-          "width": 1102,
-          "height": 1280,
-          "alt": "Фотография события «V фестиваль женской культуры и дружбы Красный Шатёр»",
-          "image_text_mode": "ocr_text",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/24/245d55fae576735354a8cda8e1da8a43e3bab855a37f27ac2f76477b8a2e173f/256.webp",
-              "width": 220,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/24/245d55fae576735354a8cda8e1da8a43e3bab855a37f27ac2f76477b8a2e173f/512.webp",
-              "width": 441,
-              "height": 512
-            }
-          ],
-          "asset_key": "245d55fae576735354a8cda8e1da8a43e3bab855a37f27ac2f76477b8a2e173f",
-          "quality_score": 14.1595
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/08/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7.webp",
-          "width": 180,
-          "height": 320,
-          "alt": "Фотография события «V фестиваль женской культуры и дружбы Красный Шатёр»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/77/7736620241426a0acbc36193ea3925b604973c04188c90e77364273c99d3f447/256.webp",
-              "width": 144,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/77/7736620241426a0acbc36193ea3925b604973c04188c90e77364273c99d3f447/512.webp",
-              "width": 180,
-              "height": 320
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "85c812f826e3bb8c6e8d52c0bfe7a1ce780a1e9fbed2af8ff4d00bf7461d33c1",
-          "quality_score": 7.5613
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Пятый фестиваль женской культуры объединяет участниц для обмена опытом через творческие мастер-классы и живое общение.",
-      "meta_description": "Пятый фестиваль женской культуры объединяет участниц для обмена опытом через творческие мастер-классы и живое общение.",
-      "description_html": "<blockquote>Красный шатёр — фестиваль женской культуры и дружбы</blockquote>\n<p>Пятый юбилейный фестиваль «Красный Шатёр» — это полномасштабный open air, объединяющий женщин разных поколений для отдыха, обмена мудростью и вдохновения. Событие длится три дня и ориентировано на участниц из разных уголков страны и мира, предлагая полное погружение в живую среду. 🌿</p>\n<h3>Программа и активности</h3>\n<p>На фестивале организованы лекции, мастер-классы и общение на актуальные темы для женщин. Программа включает следующие направления:</p>\n<ul>\n<li>Живая музыка и танцы.</li>\n<li>Арт-инсталляции и уникальные локации от художников.</li>\n<li>Детская зона с творческими, игровыми и познавательными активностями на свежем воздухе.</li>\n<li>Вкусная еда и напитки.</li>\n<li>Базар с украшениями, одеждой, травяными чаями и продуктами ручной работы.</li>\n<li>Тематические кэмпы от танцевальных, творческих сообществ, арт-проектов, семейных и авторских инициатив.</li>\n</ul>\n<h3>Банный отдых и SPA</h3>\n<p>На пляже фестиваля работает банный городок, где представлены ритуалы парения от пар мастериц Калининграда. Также на территории функционирует SPA-пространство MASPA.</p>",
-      "topics": [
-        "OPEN_AIR",
-        "LECTURES",
-        "MASTERCLASS",
-        "HANDMADE",
-        "FAMILY"
-      ],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-06-29 23:55:56.516728",
-      "likes_count": 1,
-      "source_likes_count": 1,
-      "service_likes_count": 0,
-      "source_views_count": 12,
-      "source_engagement_sources_count": 1,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 6912,
-      "source_prod_id": 6912,
-      "title": "«Татьяна танцует» под хит-парад: ночная часть",
-      "slug": "tatyana-tantsuet-pod-hit-parad-nochnaya-chast-kaliningrad-6912",
-      "event_type": "дискотека",
-      "festival": null,
-      "status_label": "Билеты",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-17T23:00:00+02:00",
-      "start_date": "2026-07-17",
-      "start_time": "23:00",
-      "end_date": "2026-07-18",
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-17",
-      "display_time": "23:00",
-      "city": "Калининград",
-      "venue_name": "Паб London",
-      "address": "Мира 33",
-      "map_query": "Калининград, Паб London, Мира 33",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://kdmarket.ru",
-        "status": "sale",
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "assessed",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-decision-v1",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://t.me/meowafisha/7943",
-      "source_urls": [
-        "https://t.me/meowafisha/7943",
-        "https://vk.com/wall-231920894_7585",
-        "https://t.me/tatianaabar/555",
-        "https://vk.com/wall-231920894_7629"
-      ],
-      "source_count": 4,
-      "telegraph_url": "https://telegra.ph/Tatyana-tancuet-pod-hit-parad-nochnaya-chast-07-15",
-      "image_url": "https://static.kenigevents.ru/p/dh16/91/918256d2a50a0d3b0d3b198139917ad3124b09938913b0c383c623068d0e9982.webp",
-      "image_alt": "Афиша события ««Татьяна танцует» под хит-парад: ночная часть»",
-      "image_text_mode": "ocr_text",
-      "image_media_role": "program_or_schedule",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/91/918256d2a50a0d3b0d3b198139917ad3124b09938913b0c383c623068d0e9982.webp",
-          "width": 1024,
-          "height": 1280,
-          "alt": "Расписание события ««Татьяна танцует» под хит-парад: ночная часть»",
-          "image_text_mode": "ocr_text",
-          "media_role": "program_or_schedule",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/f5/f54d9b71ec7929002bb0c8b38dbf13d3e1955cb17919f5284a5d31117b7f991b/256.webp",
-              "width": 205,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/f5/f54d9b71ec7929002bb0c8b38dbf13d3e1955cb17919f5284a5d31117b7f991b/512.webp",
-              "width": 410,
-              "height": 512
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.45
-          },
-          "recommended_object_position": "50% 45%",
-          "asset_key": "ba7540c9c595f2297d67b77ea36a9d6e943714ea756c79c6b1b5c496a8b82246",
-          "quality_score": 14.0861
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Ночная часть события Татьяна танцует проходит под музыкальный хит-парад с элементами стиля нулевых.",
-      "meta_description": "Ночная часть события Татьяна танцует проходит под музыкальный хит-парад с элементами стиля нулевых.",
-      "description_html": "<p>Ночная часть события «Татьяна танцует» проходит под музыкальный хит-парад. Техническое обеспечение мероприятия осуществляет «КОНТАКТ МЕДИА».</p>\n<p>Дресс-код включает элементы стиля нулевых: дерзкие джинсы, стразы и низкую посадку.</p>",
-      "topics": [
-        "PARTIES",
-        "FASHION"
-      ],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-07-15 23:55:38.493004",
-      "likes_count": 2,
-      "source_likes_count": 2,
-      "service_likes_count": 0,
-      "source_views_count": 34,
-      "source_engagement_sources_count": 1,
-      "shares_count": 1,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
     },
@@ -30375,359 +30588,6 @@
       "service_likes_count": 0,
       "source_views_count": 3,
       "source_engagement_sources_count": 1,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 5937,
-      "source_prod_id": 5937,
-      "title": "13",
-      "slug": "13-kaliningrad-5937",
-      "event_type": "театр",
-      "festival": null,
-      "status_label": "Условия уточняются",
-      "lifecycle_status": "active",
-      "starts_at": null,
-      "start_date": "2026-08-30",
-      "start_time": null,
-      "end_date": null,
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-08-30",
-      "display_time": null,
-      "city": "Калининград",
-      "venue_name": "Драматический театр",
-      "address": "Мира 4",
-      "map_query": "Калининград, Драматический театр, Мира 4",
-      "ticket": {
-        "kind": "status",
-        "label": "Условия уточняются",
-        "href": null,
-        "status": null,
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://t.me/dramteatr39/4384",
-      "source_urls": [
-        "https://t.me/dramteatr39/4384",
-        "https://vk.com/wall-231920894_4045",
-        "https://t.me/c/3954607218/1062",
-        "https://t.me/dramteatr39/4402"
-      ],
-      "source_count": 4,
-      "telegraph_url": "https://telegra.ph/13-06-11-19",
-      "image_url": "https://static.kenigevents.ru/p/dh16/88/888081048080cab001e446a40601d42091000008000000000000000000000000.webp",
-      "image_alt": "Афиша события «13»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/88/888081048080cab001e446a40601d42091000008000000000000000000000000.webp",
-          "width": 757,
-          "height": 800,
-          "alt": "Фотография события «13»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "error",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/32/32f215c4dbd21cf55b3364ff497b518719dab1db56f4f3066696e84f7d89f3d2/256.webp",
-              "width": 242,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/32/32f215c4dbd21cf55b3364ff497b518719dab1db56f4f3066696e84f7d89f3d2/512.webp",
-              "width": 484,
-              "height": 512
-            }
-          ],
-          "asset_key": "6f3998d209d20038007a8e86b143491e9b85d66e065b387afe5ed9771bd914de",
-          "quality_score": 13.464
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/a5/a520b528f532f723f725e72ee73fe73aeb06eb66d970d8704a706a30a630aa30.webp",
-          "width": 1280,
-          "height": 720,
-          "alt": "Фотография события «13»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/77/775e1776c929c1fa4f5d7424e6f1d8c4d6891537326487f437c2b9c8347613c9/256.webp",
-              "width": 256,
-              "height": 144
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/77/775e1776c929c1fa4f5d7424e6f1d8c4d6891537326487f437c2b9c8347613c9/512.webp",
-              "width": 512,
-              "height": 288
-            }
-          ],
-          "focal_point": {
-            "x": 0.58,
-            "y": 0.55
-          },
-          "recommended_object_position": "58% 55%",
-          "asset_key": "be9b0ee3ef1fe1761123738cdf7146d49a21fb94df47d2213262dfb9d08711a3",
-          "quality_score": 14.3339
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "30.08 | № 13.",
-      "meta_description": "30.08 | № 13.",
-      "description_html": "<p>30.08 | № 13</p>",
-      "topics": [
-        "THEATRE"
-      ],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-06-11 23:54:57.820759",
-      "likes_count": 1,
-      "source_likes_count": 1,
-      "service_likes_count": 0,
-      "source_views_count": 258,
-      "source_engagement_sources_count": 2,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 6821,
-      "source_prod_id": 6821,
-      "title": "«Линия соприкосновения»",
-      "slug": "liniya-soprikosnoveniya-kaliningrad-6821",
-      "event_type": "спектакль",
-      "festival": null,
-      "status_label": "Билеты",
-      "lifecycle_status": "active",
-      "starts_at": "2026-09-04T19:00:00+02:00",
-      "start_date": "2026-09-04",
-      "start_time": "19:00",
-      "end_date": null,
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-09-04",
-      "display_time": "19:00",
-      "city": "Калининград",
-      "venue_name": "Музыкальный театр",
-      "address": "Мира 87",
-      "map_query": "Калининград, Музыкальный театр, Мира 87",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://muzteatr39.ru/spektakli/arxiv/liniya-soprikosnoveniya/",
-        "status": "available",
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://muzteatr39.ru/spektakli/arxiv/liniya-soprikosnoveniya/",
-      "source_urls": [
-        "https://muzteatr39.ru/spektakli/arxiv/liniya-soprikosnoveniya/",
-        "https://vk.com/wall-231920894_7121",
-        "https://t.me/c/3954607218/2271"
-      ],
-      "source_count": 3,
-      "telegraph_url": "https://telegra.ph/Liniya-soprikosnoveniya-07-11",
-      "image_url": "https://static.kenigevents.ru/p/dh16/1a/1a120c130c4b046304e504c4078d0f8c0fc00a401a403240e2c0c98249034403.webp",
-      "image_alt": "Афиша события ««Линия соприкосновения»»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/1a/1a120c130c4b046304e504c4078d0f8c0fc00a401a403240e2c0c98249034403.webp",
-          "width": 861,
-          "height": 1024,
-          "alt": "Фотография события ««Линия соприкосновения»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 3,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/35/35db5413e3d6ea0d61be314022cd7d2f4abd42884cfa878d3b22043a5d2a7924/256.webp",
-              "width": 215,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/35/35db5413e3d6ea0d61be314022cd7d2f4abd42884cfa878d3b22043a5d2a7924/512.webp",
-              "width": 430,
-              "height": 512
-            }
-          ],
-          "asset_key": "0d0ca9a7d648260e5a9a95d2a7d2f9b5ca3ba5dd373aa6ea7ce52f0daf8baf4e",
-          "quality_score": 13.8396
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/003040324036403641364c86248620663166314e336ea36da34c224c338c123c.webp",
-          "width": 300,
-          "height": 200,
-          "alt": "Фотография события ««Линия соприкосновения»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/01/013b4afb6bfd04bf87bc36a76499a9053858f521b6b53638e06a96cd30f203b4/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/01/013b4afb6bfd04bf87bc36a76499a9053858f521b6b53638e06a96cd30f203b4/512.webp",
-              "width": 300,
-              "height": 200
-            }
-          ],
-          "asset_key": "013b4afb6bfd04bf87bc36a76499a9053858f521b6b53638e06a96cd30f203b4",
-          "quality_score": 7.1521
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/000000081c080c10ac30ac30cc309cd8b6d1b691b48291671b16921e249c309c.webp",
-          "width": 300,
-          "height": 200,
-          "alt": "Фотография события ««Линия соприкосновения»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d4/d4d7f2ab5ad55e4f57e6aaca158ec7febd7c099032a38eadaa8c40db51233f01/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d4/d4d7f2ab5ad55e4f57e6aaca158ec7febd7c099032a38eadaa8c40db51233f01/512.webp",
-              "width": 300,
-              "height": 200
-            }
-          ],
-          "asset_key": "d4d7f2ab5ad55e4f57e6aaca158ec7febd7c099032a38eadaa8c40db51233f01",
-          "quality_score": 7.1521
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/10/10001200122092200130851c830c820cc61c833c021c809c811c09921b1206b3.webp",
-          "width": 300,
-          "height": 200,
-          "alt": "Фотография события ««Линия соприкосновения»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 2,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/96/9675efb9b07f03a7a0f6d0721dab710b337c1fd802720ba8c051b53c15516975/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/96/9675efb9b07f03a7a0f6d0721dab710b337c1fd802720ba8c051b53c15516975/512.webp",
-              "width": 300,
-              "height": 200
-            }
-          ],
-          "asset_key": "d84f6e1088c592041213ca5d1e51b823e4c3005aa30329a24a1192462d1ea516",
-          "quality_score": 7.1521
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/20/200020002000a00c620c211d311c163d861d965d965911273177486524c721c3.webp",
-          "width": 300,
-          "height": 200,
-          "alt": "Фотография события ««Линия соприкосновения»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 4,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/60/60c33ce1ec6fc08b17ef1325d6768fc33c5a34d5744fbde3854355c2a4ccb695/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/60/60c33ce1ec6fc08b17ef1325d6768fc33c5a34d5744fbde3854355c2a4ccb695/512.webp",
-              "width": 300,
-              "height": 200
-            }
-          ],
-          "asset_key": "a382f299b9eb90c4b175a2f238631600382f1bb55dc711171b8184c1b7dc68e4",
-          "quality_score": 7.1521
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Спектакль основан на сборнике рассказов о столкновении человека с неотвратимостью и собственной судьбой.",
-      "meta_description": "Спектакль основан на сборнике рассказов о столкновении человека с неотвратимостью и собственной судьбой.",
-      "description_html": "<p>Спектакль «Линия соприкосновения» представляет собой сценическое прочтение одноименного сборника рассказов, исследующего темы столкновения человека с неотвратимостью и собственной судьбой. Повествование выстроено в стиле репортажных наблюдений, исключающих пафос, назидание и браваду.</p>\n<h3>Особенности постановки</h3>\n<p>В спектакле отсутствуют боевые сцены, выстрелы и описания военных действий. В центре внимания — судьбы мирных жителей, волонтёров, солдат и членов их семей. Авторы постановки обращаются к фундаментальным вопросам человеческого бытия:<br />* Способны ли мы любить?<br />* Можем ли прощать?<br />* Владеем ли судьбой?<br />* Что есть жизнь?</p>\n<h3>Признание литературного первоисточника</h3>\n<p>Сборник рассказов, легший в основу спектакля, получил высокую оценку критиков и профессионального сообщества:<br />* В апреле 2025 года «Литературная газета» охарактеризовала книгу как «недооценённую и на данный момент лучшую книгу об СВО».<br />* В январе 2026 года произведение вошло в шорт-лист Федеральной литературной премии «Главная книга».</p>",
-      "topics": [
-        "THEATRE",
-        "THEATRE_MODERN"
-      ],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-07-11 12:52:57.972054",
-      "likes_count": 3,
-      "source_likes_count": 3,
-      "service_likes_count": 0,
-      "source_views_count": 51,
-      "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0

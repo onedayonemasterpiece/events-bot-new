@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Static date listings / V11 structural correction**: made the shared desktop header sticky with reserved height and tokenized stacked offsets; replaced the city disclosure with always-visible v2 chips; restored media-owned card widths and bounded copy; added conservative/adaptive no-OCR crop modes and final-frame skeletons; rebuilt Weekend on one union time axis with two persistent day surfaces; and made focus-range export include short multi-day starts before the bounded catalog fill.
 - **Static date listings / shared V10 candidate**: rebuilt Today, Tomorrow and Weekend on one global design-system surface with intrinsic exact-time flows, hybrid period/exact navigation and counts, collapsed earlier starts/current marker, compact city intersection, conditional full-list-first personalization v2, dense two-day weekend layout and sparse-result optical centering.
 - **Static listing media / semantic width priority**: prefer adequate classified wide identity posters, crop only safe focal classified photos to 3:2, keep unknown/poster-like media natural, and evaluate the fail-closed venue medallion against the selected asset rather than the first image.
 - **Static Today / intrinsic hour flow**: replaced the equal-column Today listing with an intrinsic-width exact-time flow, keeping earlier starts collapsed, excluding long-running exhibitions from the primary flow and removing exact title/time/venue duplicates.

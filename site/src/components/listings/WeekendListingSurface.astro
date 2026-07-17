@@ -4,7 +4,7 @@ import { deduplicateListingEvents, groupListingEvents } from '../../lib/listingP
 import ListingControls from './ListingControls.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
-import ExactTimeTimeline from './ExactTimeTimeline.astro';
+import WeekendTimeMatrix from './WeekendTimeMatrix.astro';
 
 interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; }
 const { events: rawEvents, start, end, dateLabel } = Astro.props;
@@ -25,14 +25,17 @@ function dayDateLabel(date: string): string {
   <ListingControls cities={cities} total={events.length} label="на выходных" />
   <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', groups: day.groups }))} />
   <div class="ke-weekend-board">
-    {days.map((day) => (
-      <section class="ke-weekend-day" data-weekend-day={day.key} aria-labelledby={`weekend-${day.key}-title`}>
-        <header class="ke-weekend-day__head">
-          <div><h2 id={`weekend-${day.key}-title`}>{day.title}</h2><p>{dayDateLabel(day.date)}</p></div>
-          <span class="ke-weekend-day__count" data-weekend-day-count>{day.events.length}</span>
-        </header>
-        <ExactTimeTimeline groups={day.groups} idPrefix={`weekend-${day.key}`} date={day.date} compact />
-      </section>
-    ))}
+    <div class="ke-weekend-heads">
+      <header class="ke-weekend-day__head ke-weekend-day__head--sat" data-weekend-day-head="sat">
+        <div><h2 id="weekend-sat-title">{days[0].title}</h2><p>{dayDateLabel(days[0].date)}</p></div>
+        <span class="ke-weekend-day__count" data-weekend-day-count="sat">{days[0].events.length}</span>
+      </header>
+      <div class="ke-weekend-heads__rail" aria-hidden="true"></div>
+      <header class="ke-weekend-day__head ke-weekend-day__head--sun" data-weekend-day-head="sun">
+        <div><h2 id="weekend-sun-title">{days[1].title}</h2><p>{dayDateLabel(days[1].date)}</p></div>
+        <span class="ke-weekend-day__count" data-weekend-day-count="sun">{days[1].events.length}</span>
+      </header>
+    </div>
+    <WeekendTimeMatrix days={days.map((day) => ({ key: day.key as 'sat' | 'sun', title: day.title, date: day.date, groups: day.groups }))} />
   </div>
 </div>

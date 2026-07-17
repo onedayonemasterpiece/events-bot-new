@@ -117,7 +117,9 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .skip-link:focus { transform: translateY(0); }
       .site-header {
-        position: relative;
+        position: sticky;
+        top: 0;
+        min-height: var(--ke-site-header-height);
         z-index: 20;
         border-bottom: 1px solid rgba(121, 48, 20, 0.12);
         background: rgba(255, 250, 242, 0.96);

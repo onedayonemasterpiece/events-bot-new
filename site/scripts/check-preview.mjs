@@ -370,7 +370,8 @@ const dateListings = [['today', todayHtml], ['tomorrow', tomorrowHtml], ['weeken
 for (const [name, html] of dateListings) {
   const visibleHtml = stripGeneratedCode(html);
   if (!visibleHtml.includes('data-date-listing=') || !visibleHtml.includes('data-listing-variant="TH-P1"')) throw new Error(`${name} listing misses the shared TH-P1 date-listing surface`);
-  if (!visibleHtml.includes('data-ds-component="ListingPageHeader"') || !visibleHtml.includes('data-ds-component="ListingControls"') || !visibleHtml.includes('data-ds-component="ExactTimeTimeline"')) throw new Error(`${name} listing bypasses registered shared design-system components`);
+  const timelineComponent = name === 'weekend' ? 'WeekendTimeMatrix' : 'ExactTimeTimeline';
+  if (!visibleHtml.includes('data-ds-component="ListingPageHeader"') || !visibleHtml.includes('data-ds-component="ListingControls"') || !visibleHtml.includes(`data-ds-component="${timelineComponent}"`)) throw new Error(`${name} listing bypasses registered shared design-system components`);
   if (!visibleHtml.includes('ke-time-group') || !visibleHtml.includes('ke-time-group__flow') || !visibleHtml.includes('ke-listing-card')) throw new Error(`${name} listing misses exact-time intrinsic flow`);
   if (visibleHtml.includes('TODAY-HOUR A') || visibleHtml.includes('АФИШНЫЙ ПОТОК') || visibleHtml.includes('V9')) throw new Error(`${name} consumer page leaks service/version copy`);
   const articles = [...html.matchAll(/<article[^>]+class="ke-listing-card"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
@@ -393,8 +394,9 @@ const nowPosition = todayVisibleHtml.indexOf('data-listing-now-marker');
 if (earlierPosition < 0 || nowPosition < 0 || earlierPosition > nowPosition || !todayVisibleHtml.includes('Начались ранее')) throw new Error('Today must place the truthful collapsed earlier-start disclosure above the current-time marker');
 if (!todayVisibleHtml.includes('data-listing-now-label') || !todayVisibleHtml.includes('Europe/Kaliningrad')) throw new Error('Today misses the Kaliningrad current-time marker contract');
 if (tomorrowHtml.includes('data-listing-earlier') || tomorrowHtml.includes('data-listing-now-marker')) throw new Error('Tomorrow must not render Today-only earlier/current-time UI');
-if (!weekendHtml.includes('data-weekend-day="sat"') || !weekendHtml.includes('data-weekend-day="sun"') || !weekendHtml.includes('Суббота') || !weekendHtml.includes('Воскресенье')) throw new Error('Weekend must render two independent Saturday/Sunday timelines');
-if (!weekendHtml.includes('data-time-nav-disclosure') || !weekendHtml.includes('Сб ') || !weekendHtml.includes('Вс ')) throw new Error('Dense Weekend time navigation must expose day-qualified exact-time disclosures');
+if (!weekendHtml.includes('data-listing-day="sat"') || !weekendHtml.includes('data-listing-day="sun"') || !weekendHtml.includes('Суббота') || !weekendHtml.includes('Воскресенье')) throw new Error('Weekend must render two day surfaces on one matrix');
+if (!weekendHtml.includes('data-weekend-time-row') || !weekendHtml.includes('ke-weekend-time-rail') || !weekendHtml.includes('data-time-nav-disclosure')) throw new Error('Dense Weekend must expose one union exact-time axis and exact-time navigation');
+if (weekendHtml.includes('ke-city-picker') || !weekendHtml.includes('ke-city-filter--direct') || !weekendHtml.includes('data-ds-version="2"')) throw new Error('Weekend must use visible ListingControls v2 city chips without a disclosure');
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
 if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes('usesExplicitFullDefault') || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');

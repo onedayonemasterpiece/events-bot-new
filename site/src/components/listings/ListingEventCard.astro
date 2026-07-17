@@ -6,10 +6,10 @@ import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
 
-interface Props { event: PreviewEvent }
-const { event } = Astro.props;
+interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' }
+const { event, density = 'regular' } = Astro.props;
 const href = eventHref(event);
-const image = selectListingImage(event);
+const image = selectListingImage(event, density === 'weekend' ? 1.5 : 1.65);
 const imageUrl = eventImageUrl(image.src);
 const medallion = image.mode.startsWith('photo-') ? getListingVenueMedallion(event, image.asset) : null;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
@@ -34,10 +34,12 @@ const medallionStyle = medallion
   data-linked-event-ids={(event.other_date_ids || []).join(',')}
   data-listing-city={cityKey(event.city)}
   data-listing-image-mode={image.mode}
+  data-listing-crop-adaptive={image.adaptiveCrop ? 'true' : 'false'}
+  data-listing-density={density}
   data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
   data-venue-medallion={medallion?.slug}
 >
-  <a class="ke-listing-card__media" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+  <a class="ke-listing-card__media ke-skeleton" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`} data-listing-media-loading>
     {imageUrl ? (
       <img
         src={imageUrl}
@@ -64,3 +66,27 @@ const medallionStyle = medallion
     {place ? <p>{place}</p> : null}
   </div>
 </article>
+
+<script>
+  function initListingMediaSkeletons(root = document) {
+    root.querySelectorAll('[data-listing-media-loading]').forEach((frame) => {
+      if (frame.dataset.listingMediaReady === 'true') return;
+      const image = frame.querySelector(':scope > img');
+      if (!image) {
+        frame.classList.remove('ke-skeleton');
+        frame.dataset.listingMediaReady = 'true';
+        return;
+      }
+      const finish = () => {
+        frame.classList.remove('ke-skeleton');
+        frame.dataset.listingMediaReady = 'true';
+      };
+      if (image.complete) finish();
+      else {
+        image.addEventListener('load', finish, { once: true });
+        image.addEventListener('error', finish, { once: true });
+      }
+    });
+  }
+  initListingMediaSkeletons();
+</script>
