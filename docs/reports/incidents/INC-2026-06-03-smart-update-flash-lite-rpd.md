@@ -1,10 +1,10 @@
 # INC-2026-06-03-smart-update-flash-lite-rpd Smart Update flash-lite RPD exhaustion → 4o bleed
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Smart Update LLM pipeline (`smart_update` consumer) on Fly app `events-bot-new-wngqia`
 Opened: 2026-06-03
-Closed: —
+Closed: 2026-07-17
 Owners: bot operator / incident owner
 Related incidents: —
 Related docs: `docs/llm/request-guide.md`, `google_ai/client.py`, `smart_event_update.py`
@@ -113,14 +113,14 @@ It was **not** an infinite hammer loop and **not** a real provider lockout: the 
 ## Corrective Actions
 
 - (done) Idle third key registered; scope opened to use full pooled flash-lite capacity (~886 rpd free today).
-- (done, code — pending deploy) Two-phase emergency overflow in `google_ai/client.py`: `_reserve` reserves
+- (done, deployed) Two-phase emergency overflow in `google_ai/client.py`: `_reserve` reserves
   within the scoped lane first; only on a day-level block (`rpd`/`no_keys`) does it retry once with the
   scoped + reserve keys merged (RPC skips the exhausted scoped key, borrows the cheapest spare). Per-minute
   blocks (`rpm`/`tpm`) never overflow. New `GoogleAIClient(reserve_overflow_key_envs=...)` /
   `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS`; `smart_update` opts in via `SMART_UPDATE_RESERVE_OVERFLOW_KEY_ENVS`
   (default `GOOGLE_API_KEY3,GOOGLE_API_KEY2`). Successful borrows emit a `reserve_overflow_used` warning.
   Tests in `tests/test_google_ai_client.py`.
-- (2026-07-17, code pending deploy) Image geometry uses a distinct normal
+- (2026-07-17, deployed) Image geometry uses a distinct normal
   KEY4+KEY5 pool from its first reservation, with no emergency/local/model
   fallback. Tests cover round-robin, blocked-member advance and fail-closed
   registry/limiter behavior. Production is capped at 100 new calls/UTC day;
@@ -130,8 +130,8 @@ It was **not** an infinite hammer loop and **not** a real provider lockout: the 
 ## Follow-up Actions
 
 - [x] operator — decided: restore `scope=1` + ship two-phase overflow (code landed, tests green).
-- [ ] deploy the overflow fix, then set `GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV=1` (restore lane isolation)
-      and confirm a real `reserve_overflow_used` event during the next flash-lite exhaustion window.
+- [x] deployed the overflow fix, restored `GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV=1`, and confirmed
+      real `reserve_overflow_used` events in the production file mirror (including KEY5 on 2026-07-15).
 - [ ] add a check/alert when a `GOOGLE_API_KEY*` Fly secret has no matching active `google_ai_api_keys` row.
 - [ ] consider per-day RPD headroom alert for `gemini-3.1-flash-lite` before peak windows.
 
@@ -141,6 +141,22 @@ It was **not** an infinite hammer loop and **not** a real provider lockout: the 
   restarted healthy 2026-06-03 23:27:37 UTC.
 - regression checks: read-only `google_ai_reserve` selection reproduction (KEY3 first for flash-lite).
 - post-deploy verification: `SCOPE=0` and `GOOGLE_API_KEY3` length 39 confirmed in the running container.
+- 2026-07-17 regression release: image-geometry feature SHA `b54b3319` and
+  queue-starvation fix `c62042c7` are reachable from `origin/main` merge SHA
+  `8e0ebabcd8577563c5b264f62016fcb3484d49dd`; Fly machine
+  `2860d45f312248`, release `1690`, image
+  `deployment-01KXRRM020EQ2VFGRDQQEC2H1R`, health check passing.
+- current registry/Fly key set was reconciled as KEY1–KEY5; production has
+  `GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV=1`. Before deploy the exhausted
+  flash-lite lanes were KEY1/KEY4, while KEY2/KEY3/KEY5 retained aggregate
+  `529` RPD headroom and the deployed two-phase overflow supplied the normal
+  Smart Update lane.
+- the new normal geometry pool was exercised through the real outbox worker:
+  three successful reservations rotated `KEY4 → KEY5 → KEY4`, all on the first
+  attempt with consumer `smart_update_image_geometry`; no unrelated key or
+  fallback lane was used. Tests cover first-allocation rotation,
+  blocked-member advance, fail-closed registry/limiter behavior and exhausted
+  semantic-role budget not starving geometry.
 
 ## Prevention
 
