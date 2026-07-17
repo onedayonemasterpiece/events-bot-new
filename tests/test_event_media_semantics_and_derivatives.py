@@ -342,3 +342,57 @@ async def test_geometry_error_followup_waits_until_retry_window(
         ).scalar_one()
     await db.engine.dispose()
     assert job.next_run_at >= before.replace(tzinfo=None) + event_media.timedelta(hours=20)
+
+
+@pytest.mark.asyncio
+async def test_pending_semantic_role_does_not_starve_geometry(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "geometry-semantic-budget.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Independent geometry budget",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="e" * 64,
+            supabase_url="https://static.kenigevents.ru/geometry.webp",
+            review_status="approved",
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = (int(event.id), int(poster.id))
+
+    calls: list[tuple[str, int]] = []
+
+    async def exhausted_semantic(event_id, poster_id, _db):
+        calls.append(("semantic", int(poster_id)))
+        return False
+
+    async def classify_geometry(event_id, poster_id, _db):
+        calls.append(("geometry", int(poster_id)))
+        return event_media.ImageGeometryOutcome(
+            "classified", poster_id, provider_called=True
+        )
+
+    monkeypatch.setattr(
+        event_media, "_classify_event_poster_role", exhausted_semantic
+    )
+    monkeypatch.setattr(
+        event_media, "analyze_event_poster_geometry", classify_geometry
+    )
+
+    changed = await event_media.review_next_event_media_pair(ids[0], db)
+
+    await db.engine.dispose()
+    assert changed is True
+    assert calls == [("semantic", ids[1]), ("geometry", ids[1])]

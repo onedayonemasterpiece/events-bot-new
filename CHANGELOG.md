@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Smart Update image geometry queue starvation**: let the independent Gemma
+  geometry stage proceed when the earlier semantic-role stage remains pending
+  because its separate daily budget is exhausted.
+
 ### Changed
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without

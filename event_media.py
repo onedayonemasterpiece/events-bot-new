@@ -1717,12 +1717,16 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                 classified = await _classify_event_poster_role(
                     int(event_id), int(role_candidate_id), db
                 )
-                async with db.get_session() as followup_session:
-                    await _enqueue_geometry_followup_if_needed(
-                        followup_session, int(event_id)
-                    )
-                    await followup_session.commit()
-                return bool(projection_changed or classified)
+                if classified:
+                    async with db.get_session() as followup_session:
+                        await _enqueue_geometry_followup_if_needed(
+                            followup_session, int(event_id)
+                        )
+                        await followup_session.commit()
+                    return bool(projection_changed or classified)
+                # Semantic role and geometry have independent daily budgets.
+                # If role classification cannot make progress, fall through
+                # so its still-pending first poster cannot starve geometry.
             if geometry_candidate_id is not None:
                 outcome = await analyze_event_poster_geometry(
                     int(event_id), int(geometry_candidate_id), db
