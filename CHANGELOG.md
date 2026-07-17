@@ -2,7 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
+
 ### Changed
+- **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added

@@ -3,10 +3,16 @@
 > **Status:** Astro SSG production integration candidate locally verified; desktop continuous Editorial composition and media-role safety implemented, production promotion pending
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
+> **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
 ## Implementation status
 
-В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
+В `events-bot-new` есть **Astro SSG preview vertical slice** в `site/`: он строит
+статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
+production SQLite export и публикуется под noindex-prefix в bucket
+`kenigevents.ru`. Это ещё не event-page production rollout: production
+build/indexability profile, manifest/promotion/rollback и корневые canonical URL
+`/sobytiya/<slug>/` не включены.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
@@ -56,7 +62,13 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
+Latest main-reachable checked public preview evidence as of 2026-07-17 is
+`preview-20260717-interest-clubs-prod-canary`: 303 current/future events, checked
+Astro output and the gated club projection. Exact SHA/counts/manifest/HTTP evidence
+is recorded in `docs/features/interest-clubs/release-plan.md#production-evidence-2026-07-17`.
+It is still a noindex preview and does not close the event-page production gates.
+
+Historical v44 CDN/Kaggle baseline: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 
 
 - Preview index: <https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/__preview/>
@@ -190,12 +202,17 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Публикуем только **будущие активные события**.
 - Публичный static fallback не требует авторизации; optional authorized search/identity surfaces do not change crawlable HTML availability.
 - Anonymous local personalization допустима только после consent; remote telemetry/profile materialization remains a separate gated capability.
-- Telegraph остаётся временным compatibility/fallback layer примерно на **1 месяц** после включения статических страниц.
+- Telegraph event-detail остаётся временным compatibility/fallback layer на
+  **10 дней после фактического T0**, затем новые event Telegraph pages больше не
+  создаются; month/weekend/festival surfaces выключаются отдельно после появления
+  static replacements.
 - Доступы к Yandex Cloud/Object Storage будут выданы отдельным шагом; до этого проектируем контракт и пайплайн без привязки к конкретным credentials.
 
 ## Связанные документы
 
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
+- Event-page production release and 10-day Telegraph cutover: `docs/features/static-site-pages/release-plan.md`.
+- Test/release scenario inventory: `docs/features/static-site-pages/test-scenarios.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
@@ -537,23 +554,19 @@ Rebuild triggers:
 
 ## Telegraph coexistence
 
-Период dual-run: ориентир **1 месяц**.
+Канонический период dual-run для **event-detail pages** — 10 дней после
+фактического production `T0`, а не месяц и не десять дней от даты написания
+документа. D0 начинается только после production profile, stable URL registry,
+catalog parity, manifest/promotion/rollback и downstream resolver gates.
 
-На период coexistence:
+Переход: D0 10% static links → D2 25% → D4 50% → D6 100% → D7–D9 72-hour
+soak → D10 static-only outward links и Telegraph `existing_only`. На D10 запрещены
+create и fallback-recreate новых event pages, но старые `telegraph_url/path` и
+старые Telegram/VK посты сохраняются. Aggregate month/weekend/festival Telegraph
+pages остаются отдельным scope до появления их static replacements.
 
-- Telegraph остаётся fallback/compatibility для уже опубликованных постов и админских flows;
-- новые публичные links должны постепенно переключаться на `kenigevents.ru` canonical URL;
-- отчёты должны показывать оба URL, пока migration flag не выключит Telegraph;
-- старые Telegram/VK посты не переписываются массово без отдельной задачи.
-
-Exit criteria для отключения Telegraph как основного event page target:
-
-- event pages успешно генерируются и публикуются для будущих событий;
-- sitemap/robots работают;
-- Rich Results/URL Inspection smoke на нескольких страницах пройден;
-- Telegram/VK preview не хуже текущего;
-- fallback/error handling проверен;
-- 1 месяц dual-run не выявил критических регрессий.
+Flags, измеримые go/no-go thresholds, rollback и обязательные cutover-тесты
+зафиксированы в [release-plan.md](release-plan.md#десятидневный-telegraph-coexistence).
 
 ## Yandex Cloud/Object Storage notes
 

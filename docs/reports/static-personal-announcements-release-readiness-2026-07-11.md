@@ -8,6 +8,13 @@
 >
 > Назначение: единый release-readiness checklist. Он связывает канонические feature/operations/incident-документы, но не заменяет их.
 
+> **Актуализация 2026-07-17:** этот документ сохраняется как полный F1–F17 audit
+> baseline. Текущий event-page platform delta, изменения 15–17 июля, top-5
+> platform tasks и 10-дневный Telegraph cutover зафиксированы в
+> [`docs/features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md).
+> Они не снимают NO-GO полного umbrella release и не превращают side-branch work
+> в release truth.
+
 ## 1. Как читать статусы
 
 - **Done** — код находится в `origin/main`, есть автоматические проверки и актуальное production/canary evidence.

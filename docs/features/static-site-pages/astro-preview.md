@@ -1,14 +1,15 @@
 # Astro SSG preview — event pages
 
-> **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** current full-catalog review target `preview-20260702t1536-merged-vector-medallions` (399 active/future events from the 2026-07-02 production snapshot through event id `6613`, merged vector-identity gate + medallion SVG branches, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, smart-search UI). Historical same-day target: `preview-20260702t0755-fresh-ui-fixes`; historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
-> **Preview index target:** <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are part of the deploy verification gate; current preview HTML/CSS/JS, partner logos, medallion assets and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are publicly testable after `npm --prefix site run deploy:preview`.
+> **Status:** implemented preview vertical slice, production rollout pending.
+> **Latest main-reachable integration canary:** `preview-20260717-interest-clubs-prod-canary` (303 current/future events, checked static build plus gated club projection); exact evidence is in `docs/features/interest-clubs/release-plan.md#production-evidence-2026-07-17`.
+> **Latest detailed full-catalog review documented below:** `preview-20260702t1536-merged-vector-medallions` (399 active/future events from the 2026-07-02 production snapshot through event id `6613`, merged vector-identity gate + medallion SVG branches, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, smart-search UI). It is historical release evidence, not the current catalog.
+> **Preview index target:** <https://kenigevents.ru/preview-20260717-interest-clubs-prod-canary/__preview/>. Event-page production profile/promotion remains blocked by `release-plan.md`.
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
 ## Public URLs
 
-Required URLs for the current preview:
+Required URLs for the historical 2026-07-02 detailed review target:
 
 - Preview index: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>
 - Today listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/segodnya/>
