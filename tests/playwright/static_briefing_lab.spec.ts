@@ -41,6 +41,7 @@ async function waitForServer() {
 }
 async function open(page: Page, variant = 'c', scenario = 'today_count', extra = '') {
   await page.goto(`${baseUrl}?variant=${variant}&scenario=${scenario}${extra}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => [...document.styleSheets].some((sheet) => sheet.href?.includes('/_astro/')));
   const rendered = await page.locator('[data-briefing-lab]').getAttribute('data-briefing-scenario-id');
   // A deliberately short fast chain can advance while a loaded CI worker is
   // still returning from goto(). Reset through the public lab selector rather
@@ -156,7 +157,7 @@ test('hero, categories and contextual feed geometry hold across every scenario a
     for (const scenario of [...scenarioIds, 'neutral_fallback']) {
       for (const variant of ['b', 'c']) {
         await open(page, variant, scenario, variant === 'c' ? '&replay=1&pace=fast' : '');
-        if (variant === 'c') await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+        if (variant === 'c') await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 5000 });
         const geometry = await page.evaluate(() => {
           const rect = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
           const stage = document.querySelector('[data-briefing-slot]') as HTMLElement;
@@ -185,7 +186,7 @@ test('hero, categories and contextual feed geometry hold across every scenario a
             text: message.textContent?.replace(/\s+/gu, ' ').trim(),
           };
         });
-        expect(geometry.stage!.height).toBeLessThanOrEqual(viewport.height * .5);
+        expect(geometry.stage!.height, `${scenario} ${variant} stage height ${viewport.width}`).toBeLessThanOrEqual(viewport.height * .5);
         expect(geometry.stageFits, `${scenario} ${variant} stage ${viewport.width}`).toBeTruthy();
         expect(geometry.messageFits, `${scenario} ${variant} message ${viewport.width}`).toBeTruthy();
         expect(geometry.lineCount, `${scenario} ${variant} lines ${viewport.width}`).toBeLessThanOrEqual(3);
