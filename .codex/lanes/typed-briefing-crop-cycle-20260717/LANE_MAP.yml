@@ -1,0 +1,90 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 522c65983d2cec08ec1fe5f9ef376a64780dcb15
+base_branch: origin/feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-crop-cycle-20260717
+global_constraints:
+  - isolated lab only; no production homepage change
+  - imagery must communicate the current narrative and never disappear into an empty hold
+  - no face/head crop may be accepted without face-safe crop evidence
+  - multi-image portrait composition must preserve each source aspect ratio and OCR admission
+  - no paid OpenAI image generation
+  - mobile remains text-first unless separately accepted
+verification_owner: root
+stop_conditions:
+  - review mode still schedules an unpaired image exit
+  - public exit is not causally coupled to the next narrative transition
+  - a detected face intersects the crop boundary or top safe margin
+  - multi-image mode stretches, silently substitutes, or duplicates a source
+  - model output cannot be schema-validated or source dimensions are unknown
+lanes:
+  - id: motion-product-audit
+    role: reviewer
+    requirement_ids: [advisory-R01, advisory-R03]
+    target: read-only state-machine and product-value audit
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-crop-cycle-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: failure analysis, state contract, acceptance tests
+    verification_scope: inspection_only
+    status: spawned
+  - id: face-crop-audit
+    role: reviewer
+    requirement_ids: [advisory-R02, advisory-R03]
+    target: read-only per-scene face/crop and portrait-layout audit
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-crop-cycle-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: per-scenario focal findings and crop/layout guardrails
+    verification_scope: inspection_only
+    status: spawned
+  - id: crop-model-probe
+    role: reviewer
+    requirement_ids: [advisory-R04]
+    target: read-only minimal Gemma 4 focal/crop schema probe
+    depends_on: []
+    execution_mode: parallel
+    effort: extra-high
+    branch: integration/typed-briefing-crop-cycle-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: exact prompt/model/output/latency and limitations
+    verification_scope: inspection_only
+    status: spawned
+  - id: serial-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04]
+    primary: true
+    target: integrate motion lifecycle, face-safe crop, portrait collage prototype and reproducible model contract
+    depends_on: [motion-product-audit, face-crop-audit, crop-model-probe]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: integration/typed-briefing-crop-cycle-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - scripts/inspect/**
+      - tests/**
+      - docs/features/static-site-pages/**
+      - docs/llm/**
+      - CHANGELOG.md
+      - .codex/lanes/typed-briefing-crop-cycle-20260717/**
+      - .codex/integration/typed-briefing-crop-cycle-20260717-INTEGRATION_REPORT.md
+    forbidden_files:
+      - production database
+      - production homepage routes
+      - runtime LLM call from a page view
+    expected_output: committed lab implementation, prompt/probe evidence, docs, tests and closure audit
+    verification_scope: full_local
+    status: planned
