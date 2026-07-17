@@ -530,6 +530,8 @@ features:
     entrypoints:
       - source_parsing/post_metrics.py
       - social_metrics_batch.py
+      - social_metrics_kaggle.py
+      - kaggle/SocialMetricsCollector/
       - reaction_counter_sync.py
       - scripts/sync_reaction_counters_to_supabase.py
       - site/scripts/export-production-preview-data.py
