@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-17-vk-auto-provider-quota-false-reject.md`
+  - Scope: manual/scheduled VK auto-import, Smart Update Google key allocation,
+    provider-side 429 handling, grounding and post-create image geometry.
+  - Must not regress: Smart Update uses KEY1–KEY5 as a normal pool from the
+    first reserve; one provider-exhausted member cannot turn a grounded event
+    into `create_bundle_grounding:llm_ungrounded`; explicit/unpooled lanes are
+    never widened; recovery replay must import the original VK post and enqueue
+    its geometry job.
 - `INC-2026-07-17-meow-source-medallion-telegram.md`
   - Scope: `@kldevents` RichMessage medallion selection and the boundary between static-page provenance badges and Telegram event attributes.
   - Must not regress: source/aggregator-channel badges such as `MEOW Афиша` never enter Telegram graphical strips; legitimate organizer, venue, festival, program and Pushkin-card medallions remain available; affected public posts are replaced through send-first/delete-after-success and DB mappings point only to the clean replacements.

@@ -131,7 +131,10 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
     *   *Успех:* Получает `api_key` и разрешение.
     *   *Отказ:* Получает `RateLimitError` (Fail Fast, NO_WAIT).
 2.  **Execute**: Вызов API провайдера (Google AI Studio).
-    *   *Ошибка:* Если 5xx — ретрай. Если 429 — немедленный проброс ошибки наверх без внутреннего sleep/retry.
+    *   *Ошибка:* Если 5xx — ретрай. Если 429 — немедленный проброс ошибки
+        наверх без sleep; единственное исключение — явно объявленный normal
+        pool, где клиент сразу резервирует следующего ещё не использованного
+        участника того же пула и не меняет модель.
     *   *Пустой ответ:* трактуется как `ProviderError(empty_response)` и ретраится.
 3.  **Finalize**: Клиент отправляет реальную статистику (`input_tokens`, `output_tokens`) в БД для корректировки квот.
 
@@ -139,7 +142,10 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 *   **Multi-Account Sharding**: Поддержка ротации ключей/аккаунтов через переменную `GOOGLE_API_LOCALNAME`.
 *   **Atomic Counting**: Исключает Race Conditions при параллельных запросах.
 *   **Fail Fast**: Не ждет в очереди (чтобы не вешать воркера), а сразу падает, позволяя планировщику (JobOutbox) перезапустить задачу позже.
-    * Для provider-side `429` это тоже правило: ждать/деферить должен вызывающий workflow (`event_parse`, `vk_auto_queue`, Smart Update), а не сам `GoogleAIClient`.
+    * Для provider-side `429` unpooled consumer по-прежнему fail-fast. В
+      объявленном normal pool клиент без sleep исключает перегруженный key id и
+      пробует следующий pool member; после исчерпания пула ошибка уходит
+      вызывающему workflow. Emergency overflow сам по себе этого права не даёт.
 *   **Structured Logging**: Все вызовы логируются в формате JSON Lines для анализа.
 *   **Operational visibility**: bypass reserve логируется отдельным событием `google_ai.reserve_fallback_no_rpc` — это сигнал, что RPC-схему нужно починить.
     * `google_ai.reserve_ok` в production не должен иметь `api_key_id=null` /
@@ -165,6 +171,11 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
     же нормальной allocation. Каждый env обязан существовать и в runtime, и как
     active `google_ai_api_keys.env_var_name`; отсутствие shared Supabase limiter
     или registry member завершает pool fail-closed, без local/bypass fallback.
+    Provider-side `429`, возникший из-за дрейфа внешнего provider quota
+    относительно shared ledger, также остаётся внутри этой allocation: текущий
+    key id исключается, следующий участник резервируется атомарно, событие
+    `google_ai.provider_key_rotation` сохраняет причину и размер остатка пула.
+    Явный `candidate_key_ids` никогда не расширяется за пределы caller scope.
     API-key rotation распределяет только наши ledger counters: по контракту
     Google AI квоты принадлежат Cloud project, поэтому несколько ключей одного
     project не создают несколько независимых RPD. Feature-specific total caps

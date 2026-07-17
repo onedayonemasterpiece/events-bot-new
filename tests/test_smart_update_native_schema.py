@@ -183,8 +183,9 @@ def test_smart_update_4o_fallback_budget_limits_mass_fallback(monkeypatch):
 
 def test_smart_update_gemma_client_uses_mass_task_retry_cap(monkeypatch):
     class FakeGoogleAIClient:
-        def __init__(self, **_kwargs):
+        def __init__(self, **kwargs):
             self.max_retries = 3
+            self.init_kwargs = kwargs
 
     fake_google_ai = types.ModuleType("google_ai")
     fake_google_ai.GoogleAIClient = FakeGoogleAIClient
@@ -195,6 +196,10 @@ def test_smart_update_gemma_client_uses_mass_task_retry_cap(monkeypatch):
     monkeypatch.setitem(sys.modules, "google_ai", fake_google_ai)
     monkeypatch.setitem(sys.modules, "main", fake_main)
     monkeypatch.setenv("SMART_UPDATE_GOOGLE_AI_MAX_RETRIES", "1")
+    monkeypatch.setenv(
+        "SMART_UPDATE_GOOGLE_KEY_ENVS",
+        "GOOGLE_API_KEY,GOOGLE_API_KEY2,GOOGLE_API_KEY3",
+    )
 
     su._get_gemma_client.cache_clear()
     try:
@@ -203,6 +208,9 @@ def test_smart_update_gemma_client_uses_mass_task_retry_cap(monkeypatch):
         su._get_gemma_client.cache_clear()
 
     assert client.max_retries == 1
+    assert client.init_kwargs["reserve_key_envs"] == (
+        "GOOGLE_API_KEY,GOOGLE_API_KEY2,GOOGLE_API_KEY3"
+    )
 
 
 @pytest.mark.asyncio
