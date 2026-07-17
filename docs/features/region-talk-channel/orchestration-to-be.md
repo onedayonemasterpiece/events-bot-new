@@ -130,6 +130,11 @@ also share `image_queue_item` in YDB. Writer ownership is therefore explicit:
   such row at most once per run. It must never replay every historical image
   row from its start-of-run snapshot, because that can overwrite an
   `actual_scored` result written concurrently by ImageDiagnostic.
+- A current fused E5+BGE text acceptance is allowed to replace a prior soft
+  `deferred_text_gate` with `needs_actual_image_fetch` even when the old row has
+  metadata-probe diagnostic fields. The merge still preserves every actual
+  album/frame score, but it cannot restore the stale pre-BGE queue status or
+  eligibility reason and delay media work by another main-notebook cycle.
 
 The final `report_written` business heartbeat is also a durable orchestration
 contract. It receives a bounded extra retry budget on transient YDB

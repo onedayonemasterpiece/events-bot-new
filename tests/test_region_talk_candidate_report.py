@@ -6339,6 +6339,107 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["image_queue_product_eligible_total"], 0)
         self.assertEqual(mod.image_queue_rows_for_ydb_write(rows, run_now=run_now), [row])
 
+    def test_fused_candidate_memory_reactivates_deferred_image_row_in_same_build(self) -> None:
+        mod = load_module()
+        run_now = "2026-07-17T09:30:00+00:00"
+        post_url = "https://t.me/external_blog/12"
+        previous = {
+            "unified_source_queue": {
+                "telegram:external_blog": {
+                    "canonical_source_key": "telegram:external_blog",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/external_blog",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger",
+                    "source_quick_class": "candidate_keep",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "posts_scanned": 10,
+                    "ko_posts_found": 1,
+                    "candidate_posts_found": 1,
+                }
+            },
+            "processed_posts": {
+                "tg:external_blog:12": {
+                    "post_id": "tg:external_blog:12",
+                    "post_url": post_url,
+                    "source_url": "https://t.me/external_blog",
+                    "has_media": True,
+                    "media_count": 1,
+                    "vector_gate_status": "vector_defer_wait_bge_m3",
+                    "text_vector_fusion_status": "missing_bge_m3_enrichment",
+                }
+            },
+            "image_candidate_queue": {
+                post_url: {
+                    "image_queue_id": "imgq_deferred_then_fused",
+                    "image_queue_order": 1,
+                    "post_id": "tg:external_blog:12",
+                    "post_url": post_url,
+                    "source_url": "https://t.me/external_blog",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "posts_scanned": 10,
+                    "ko_posts_found": 1,
+                    "candidate_posts_found": 1,
+                    "has_media": True,
+                    "media_count": 1,
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "current_stage": "image_fetch_retry_needed",
+                    "vector_gate_status": "vector_defer_wait_bge_m3",
+                    "text_vector_fusion_status": "missing_bge_m3_enrichment",
+                    "image_queue_status": "deferred_text_gate",
+                    "image_product_gate_status": "deferred_before_image",
+                    "image_product_gate_reason": "vector_defer_wait_bge_m3",
+                    "image_eligibility_status": "deferred",
+                    "image_eligibility_reason": "vector_defer_wait_bge_m3",
+                    "last_image_diag_run_id": "metadata-probe",
+                    "images_scored_actual_count": 0,
+                    "next_action": "complete_dual_text_gate",
+                }
+            },
+        }
+        fused_memory = {
+            "post_id": "tg:external_blog:12",
+            "post_url": post_url,
+            "source_url": "https://t.me/external_blog",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "source_queue_status": "processed_found_ko_candidate",
+            "posts_scanned": 10,
+            "ko_posts_found": 1,
+            "candidate_posts_found": 1,
+            "has_media": True,
+            "media_count": 1,
+            "image_model_input_type": "metadata_only",
+            "image_url_or_local_path": post_url + "#media",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "image_fetch_retry_needed",
+            "current_lifecycle_status": "image_fetch_retry_needed",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+        }
+        rows, _top, metrics = mod.build_image_candidate_queue(
+            previous, [], [fused_memory], [], "candidate-run", run_now
+        )
+        row = next(r for r in rows if r.get("post_url") == post_url)
+        self.assertEqual(row["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["previous_image_queue_status"], "deferred_text_gate")
+        self.assertEqual(row["status_changed_this_run"], "true")
+        self.assertEqual(row["image_product_gate_status"], "accepted_for_image_analysis")
+        self.assertEqual(row["image_product_gate_reason"], "")
+        self.assertEqual(row["image_eligibility_status"], "")
+        self.assertEqual(row["image_eligibility_reason"], "")
+        self.assertEqual(row["next_action"], "download_actual_image_bytes_next")
+        self.assertEqual(metrics["image_queue_deferred_text_gate_total"], 0)
+        self.assertEqual(metrics["image_queue_product_eligible_total"], 1)
+        self.assertEqual(mod.image_queue_rows_for_ydb_write(rows, run_now=run_now), [row])
+
     def test_image_queue_source_join_is_case_insensitive_by_canonical_key(self) -> None:
         mod = load_module()
         post_url = "https://t.me/krasivoOrussia/6344"
@@ -8138,6 +8239,42 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         )
         self.assertEqual(merged["image_queue_status"], "deferred_text_gate")
         self.assertEqual(merged["next_action"], "complete_dual_text_gate")
+
+    def test_candidate_image_write_reactivates_soft_gate_after_dual_text_accept(self) -> None:
+        mod = load_module()
+        latest = {
+            "image_queue_status": "deferred_text_gate",
+            "previous_image_queue_status": "deferred_text_gate",
+            "last_image_diag_run_id": "image-metadata-probe",
+            "images_scored_actual_count": 0,
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "image_product_gate_status": "deferred_before_image",
+            "image_product_gate_reason": "vector_accept_candidate_required",
+            "image_eligibility_status": "deferred",
+            "image_eligibility_reason": "vector_accept_candidate_required",
+            "next_action": "complete_dual_text_gate",
+        }
+        merged = mod.merge_candidate_image_payload_with_latest(
+            {
+                "image_queue_status": "needs_actual_image_fetch",
+                "previous_image_queue_status": "deferred_text_gate",
+                "status_changed_this_run": "true",
+                "last_status_changed_at": "2026-07-17T09:30:00+00:00",
+                "publication_eligibility_decision": "accept",
+                "image_product_gate_status": "accepted_for_image_analysis",
+                "image_product_gate_reason": "",
+                "image_eligibility_status": "",
+                "image_eligibility_reason": "",
+                "next_action": "download_actual_image_bytes_next",
+            },
+            latest,
+        )
+        self.assertEqual(merged["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(merged["next_action"], "download_actual_image_bytes_next")
+        self.assertEqual(merged["image_product_gate_status"], "accepted_for_image_analysis")
+        self.assertEqual(merged["image_product_gate_reason"], "")
+        self.assertEqual(merged["image_eligibility_status"], "")
+        self.assertEqual(merged["image_eligibility_reason"], "")
 
     def test_image_online_writer_merges_latest_diagnostic_row_before_bulk_upsert(self) -> None:
         mod = load_module()

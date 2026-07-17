@@ -3678,7 +3678,7 @@ def merge_candidate_image_payload_with_latest(
     latest_status = str(latest.get("image_queue_status") or "")
     candidate_repairs_soft_gate = bool(
         latest_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
-        and candidate_status in {"actual_scored", "deferred_text_gate"}
+        and candidate_status in {"actual_scored", "deferred_text_gate", "needs_actual_image_fetch"}
         and (
             (
                 candidate_status == "actual_scored"
@@ -3690,6 +3690,10 @@ def merge_candidate_image_payload_with_latest(
             or (
                 candidate_status == "deferred_text_gate"
                 and str(candidate.get("publication_eligibility_decision") or "").startswith("needs_")
+            )
+            or (
+                candidate_status == "needs_actual_image_fetch"
+                and str(candidate.get("publication_eligibility_decision") or "") == "accept"
             )
         )
         and str(candidate.get("status_changed_this_run") or "").lower() == "true"
@@ -9266,6 +9270,10 @@ def build_image_candidate_queue(
             status = previous_status
         else:
             status = "needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media"
+        reactivated_from_soft_gate = bool(
+            previous_status in {"rejected_text_gate", "rejected_publication_eligibility", "deferred_text_gate"}
+            and status in {"actual_scored", "needs_actual_image_fetch"}
+        )
         color = "green_found_ko" if status == "actual_scored" else ("blue_cursor" if status == "image_analysis_in_progress" else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko"))
         status_changed = bool(previous_status and previous_status != status)
         direct_image_ref = (
@@ -9329,6 +9337,17 @@ def build_image_candidate_queue(
             "text_hash": row.get("text_hash") or entries[key].get("text_hash", ""),
             "image_product_gate_status": "accepted_for_image_analysis",
             "image_product_gate_reason": "",
+            # ImageDiagnostic owns the versioned image-eligibility audit.  A
+            # row that was deferred before BGE/text completion must not carry
+            # that old defer reason into its newly actionable media attempt.
+            # The worker will write a fresh accepted/blocked audit from the
+            # current publication-eligibility fields when it leases the row.
+            "image_eligibility_decision": "" if reactivated_from_soft_gate else entries[key].get("image_eligibility_decision", ""),
+            "image_eligibility_gate_version": "" if reactivated_from_soft_gate else entries[key].get("image_eligibility_gate_version", ""),
+            "image_eligibility_expected_gate_version": "" if reactivated_from_soft_gate else entries[key].get("image_eligibility_expected_gate_version", ""),
+            "image_eligibility_reason": "" if reactivated_from_soft_gate else entries[key].get("image_eligibility_reason", ""),
+            "image_eligibility_status": "" if reactivated_from_soft_gate else entries[key].get("image_eligibility_status", ""),
+            "image_eligibility_checked_at": "" if reactivated_from_soft_gate else entries[key].get("image_eligibility_checked_at", ""),
             "publication_eligibility_decision": eligibility.get("decision"),
             "publication_eligibility_gate_version": eligibility.get("gate_version"),
             "publication_eligibility_reason": eligibility.get("primary_reason"),

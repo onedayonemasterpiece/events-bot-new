@@ -908,6 +908,13 @@ incomplete, a later eligible pass reactivates it as
 `needs_actual_image_fetch`; only confirmed no-media or unsupported-media
 outcomes remain terminal. This also applies when the eligible row exists only
 in the durable previous image queue and is not repeated in the current batch.
+The reactivation is authoritative at the final YDB merge too: a metadata-only
+ImageDiagnostic probe or old `deferred_text_gate` audit must not restore the
+pre-BGE status over a now-fused `vector_accept_candidate`. CandidateReport
+clears that stale image-audit reason while handing off
+`needs_actual_image_fetch`; ImageDiagnostic then writes a fresh versioned
+eligibility audit when it leases the actionable row. This preserves the dual
+E5+BGE gate and removes the otherwise unnecessary extra CandidateReport cycle.
 CandidateReport also preserves durable actual-image evidence and scores across
 later metadata-only source rescans; it cannot downgrade `actual_image` to
 `metadata_only` or erase `images_scored_actual_count`.
