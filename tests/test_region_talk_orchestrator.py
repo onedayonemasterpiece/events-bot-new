@@ -1320,6 +1320,50 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["finalizer_pending_url_total"], 1)
         self.assertEqual(metrics["finalizer_pending_urls"], [url])
 
+    def test_current_vlm_accept_reopens_stale_visual_review_publication(self) -> None:
+        mod = load_module()
+        url = "https://t.me/travel/11"
+        image = {
+            "post_url": url,
+            "image_queue_status": "actual_scored",
+            "image_model_input_type": "actual_image",
+            "image_quality_decision": "vlm_visual_accept",
+            "image_vlm_status": "completed",
+            "image_vlm_decision": "accept",
+            "image_vlm_prompt_version": "region_talk_visual_adjudicator_v1",
+            "image_vlm_decision_version": "region_talk_visual_decision_v1",
+            "image_vlm_request_fingerprint": "current-fingerprint",
+            "image_vlm_media_manifest_hash": "album-hash",
+            "input_media_manifest_hash": "album-hash",
+            "expected_image_count": 2,
+            "fetched_image_count": 2,
+            "image_component_bundle_complete": "true",
+            "publication_eligibility_decision": "accept",
+            "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "kaliningrad_oblast_only_scope": "true",
+            "kaliningrad_mention_role": "main_subject",
+            "image_acquisition_status": "complete",
+        }
+        with mock.patch.object(mod, "_image_vlm_verdict_is_current", return_value=True):
+            metrics = mod._publication_handoff_metrics(
+                [image],
+                [{
+                    "post_url": url,
+                    "publication_status": "needs_visual_review",
+                    "publication_candidate_status": "visual_review_pending",
+                    "publication_eligibility_verdict": "review",
+                    "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+                }],
+                [],
+                [],
+            )
+        self.assertEqual(metrics["publication_visual_review_pending_total"], 1)
+        self.assertEqual(metrics["publication_visual_review_resolved_ready_for_finalizer_total"], 1)
+        self.assertEqual(metrics["publication_visual_review_resolved_ready_for_finalizer_urls"], [url])
+        self.assertEqual(metrics["finalizer_pending_urls"], [url])
+
     def test_image_review_metrics_separate_active_work_from_historical_ledger(self) -> None:
         mod = load_module()
         images = [

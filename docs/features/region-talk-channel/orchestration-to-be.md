@@ -233,6 +233,15 @@ finalizer even if the older publication row still says `awaiting_text_restore`.
 Without restored text the finalizer remains suppressed, so the queue cannot hot
 loop or bypass Telegram request governance.
 
+The same current-state rule applies to visual review. A historical publication
+row may still say `visual_review_pending` after ImageDiagnostic has produced a
+current `legacy_auto_accept` or manifest-bound `vlm_visual_accept`. The
+orchestrator reports this as
+`publication_visual_review_resolved_ready_for_finalizer_total` and immediately
+reopens the finalizer; it does not wait for CandidateReport to rewrite the old
+publication snapshot and does not treat a stale review label as a terminal
+verdict.
+
 If Telegram/VK media resolves to a video/non-image file or an image decoder
 cannot open the downloaded payload, ImageDiagnostic must write a terminal
 `image_queue_status=not_reviewable_unsupported_media` with

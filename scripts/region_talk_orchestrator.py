@@ -2244,6 +2244,13 @@ def _publication_handoff_metrics(
         memory = candidate_by_url.get(url) or {}
         return bool(str(memory.get("full_text") or memory.get("text") or "").strip())
 
+    def visual_review_is_now_accepted(url: str) -> bool:
+        image = actual_by_url.get(url) or {}
+        decision = str(image.get("image_quality_decision") or "").lower()
+        if decision == "vlm_visual_accept":
+            return _image_vlm_verdict_is_current(image)
+        return decision == "legacy_auto_accept"
+
     def needs_finalizer(url: str, row: dict[str, Any] | None) -> bool:
         if not row:
             return True
@@ -2275,6 +2282,12 @@ def _publication_handoff_metrics(
             # stale publication status leaves a completed restore in a
             # permanent no-action gap.
             return restored_text_is_ready(url)
+        if publication_status == "needs_visual_review" or candidate_status == "visual_review_pending":
+            # The publication row is a snapshot of the old image outcome. A
+            # later bounded album/VLM pass can resolve that review without
+            # changing the publication row itself. Re-enter the finalizer when
+            # the current image ledger now carries a valid accept attestation.
+            return visual_review_is_now_accepted(url)
         llm_terminal_non_candidate = (
             candidate_status in {"llm_rejected", "llm_needs_review"}
             or publication_status in {"gemini_reject", "gemini_needs_review"}
@@ -2342,6 +2355,14 @@ def _publication_handoff_metrics(
         )
         and restored_text_is_ready(url)
     )
+    visual_review_resolved_urls = sorted(
+        url for url, row in publication_by_url.items()
+        if (
+            str(row.get("publication_status") or "").lower() == "needs_visual_review"
+            or str(row.get("publication_candidate_status") or "").lower() == "visual_review_pending"
+        )
+        and visual_review_is_now_accepted(url)
+    )
 
     confirmed_urls = {url for url, row in publication_by_url.items() if is_confirmed_publication(row)}
     unsent_confirmed_urls = {url for url in confirmed_urls if is_unsent_confirmed_publication(publication_by_url[url])}
@@ -2385,6 +2406,8 @@ def _publication_handoff_metrics(
         "publication_text_restore_pending_total": sum(1 for status in status_by_url.values() if status == "awaiting_text_restore"),
         "publication_text_restore_ready_for_finalizer_total": len(text_restore_ready_urls),
         "publication_text_restore_ready_for_finalizer_urls": text_restore_ready_urls,
+        "publication_visual_review_resolved_ready_for_finalizer_total": len(visual_review_resolved_urls),
+        "publication_visual_review_resolved_ready_for_finalizer_urls": visual_review_resolved_urls,
         "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"visual_review_pending", "llm_needs_review", "llm_budget_deferred", "llm_error"}),
         "publication_rejected_total": sum(1 for status in status_by_url.values() if status in {"filtered_before_llm", "llm_rejected"}),
         "publication_source_evidence_backlog_total": len(source_evidence_urls),
