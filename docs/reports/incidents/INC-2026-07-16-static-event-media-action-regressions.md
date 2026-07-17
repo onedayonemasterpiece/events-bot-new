@@ -34,6 +34,7 @@ The full-catalog static preview exposed several user-visible regressions around 
 - 2026-07-16: incident opened; canonical data and shared-component repair started in an isolated worktree.
 - 2026-07-17: backed up and reconciled Epidemia EventPoster row `8622` against canonical row `7824`, rebuilt its Telegraph projection, and exported a fresh 303-event future/ongoing catalog.
 - 2026-07-17: published noindex preview `preview-20260717t-static-personalization-v4`; public HTTP and browser acceptance covered medallions, desktop calendar states, duplicate removal, stable failed-image geometry, personal-feed lazy loading/dedup, gallery parity and desktop/mobile transport.
+- 2026-07-17: completed the repaired full vector sync and replaced the temporary sparse catalog with noindex preview `preview-20260717t-static-personalization-v5-vector`: `303` events, `40` pgvector/HNSW candidates per event and no underfilled chains.
 
 ## Root Cause
 
@@ -105,10 +106,10 @@ The full-catalog static preview exposed several user-visible regressions around 
 ## Release And Closure Evidence
 
 - deployed SHA: recorded by the final branch commit for this preview; production root was not promoted
-- deploy path: `https://kenigevents.ru/preview-20260717t-static-personalization-v4/__preview/` (noindex preview only)
-- generated catalog: `303` future/ongoing event pages; fresh sparse related chains are present for every event while the full pgvector refresh continues as a separate operational lane
+- deploy path: `https://kenigevents.ru/preview-20260717t-static-personalization-v5-vector/__preview/` (noindex preview only; production root unchanged)
+- generated catalog: `303` future/ongoing event pages; `event_pgvector_related_chain_v2_two_doc` over `supabase_pgvector_hnsw_cosine_v1`, semantic embeddings enabled, exactly `40` candidates for every event and `0` underfilled chains
 - regression checks: Node source/build contracts `7/7`, preview check, desktop full-catalog contract (`303` pages), bus and rail directory checks, desktop-gallery contract and `git diff --check` passed
-- post-deploy verification: public HTTP `200` for index, events `5756`/`4671`, personal-feed JSON and theatre SVG; Playwright confirmed one visible `dramteatr39` medallion, calendar fresh/regular/stale modes, ten unique Epidemia gallery assets with removed row absent, fixed failed-image geometry, lazy six-card `Для вас` chunk with no overlap, desktop terminal recommendation and desktop/mobile rail transport
+- post-deploy verification: public HTTP `200` for the v5 index, events `5756`/`4671`/`3103`, personal-feed JSON and theatre SVG; prior Playwright acceptance on the identical application code confirmed one visible `dramteatr39` medallion, calendar fresh/regular/stale modes, ten unique Epidemia gallery assets with removed row absent, fixed failed-image geometry, lazy six-card `Для вас` chunk with no overlap, desktop terminal recommendation and desktop/mobile rail transport
 
 ## Prevention
 
