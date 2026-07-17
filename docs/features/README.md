@@ -55,6 +55,7 @@
 - `docs/features/event-email-notifications/README.md` — transactional followed-event confirmation/reminder/cancellation/reschedule email
 - `docs/features/event-transport/README.md` — source-backed rail/bus guidance and transport ICS for eligible event pages
 - `docs/features/event-comment-feedback/README.md` — explicit post-release plan for official typed decision facts, deterministic «Важно знать», Smart Update shadow ingress and independently calibrated «Активно обсуждают» medallion; broad discussion carousel is deferred
+- `docs/backlog/features/interest-clubs/README.md` — separate post-release research-first release for detecting recurring interest-club meetings and building an evidence-backed auto-growing static section
 - `docs/features/event-issue-reporting/README.md` — admin event-problem report and ArtKodex repair/history workflow
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
 

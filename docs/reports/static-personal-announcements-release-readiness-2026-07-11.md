@@ -493,6 +493,19 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] Store only compact current rows and bounded transition history with TTL; do not duplicate raw logs/provider payloads/history or expose PII/secrets/service keys.
 - [ ] Add mutation/retry/catch-up/kill-switch controls only as a later separately accepted phase with confirmation, idempotency and immutable audit. Canonical plan: [operations control dashboard](../backlog/features/operations-control-dashboard/README.md).
 
+### Stage 11 — Отдельный пострелизный релиз «Клубы по интересам»
+
+Эта стадия начинается с исследования и не является GO-блокером первой публичной презентации. Каноника и готовый handoff: [interest clubs](../backlog/features/interest-clubs/README.md) и [research prompt](../backlog/features/interest-clubs/research-prompt.md).
+
+- [ ] Создать и рано запушить `feature/interest-clubs-postrelease` от свежего `origin/main`; весь durable research/ADR context сводить в этой ветке, raw evidence держать только в `artifacts/`.
+- [ ] Провести read-only аудит явно указанного прошлого и будущего периода и выпустить evidence-backed список `confirmed|probable|rejected|needs_evidence` с точными counts, уникальными датами, cities/venues/sources и event ids/URLs.
+- [ ] Зафиксировать taxonomy/golden pack, который отличает клубную identity от M6 linked occurrences, дублей, разовых/многодневных событий, venue/organizer series и фестивалей.
+- [ ] Выполнить past→future time-split проверку: identities/policy выводятся на прошлом периоде, затем измеряется распознавание новых/будущих встреч и false merge/split без label leakage.
+- [ ] Сравнить deterministic/existing-vector baseline и BGE candidate lane на Kaggle CPU по precision/recall or named proxies, cluster purity, future coverage, runtime/memory/storage; не выбирать BGE production architecture до owner review.
+- [ ] После принятого research GO утвердить identity/schema/ownership, freshness/retention, LLM-first verdict, merge/split/redirect и ecological storage ADR.
+- [ ] Только затем реализовать shadow incremental pipeline и отдельный static index/detail slice с checked artifact, coalesced rebuild, atomic promotion, last-good/rollback, UI freeze, a11y/no-JS и SEO/GEO evidence.
+- [ ] Закрывать feature отдельным RC/canary: zero confirmed false public merge, no dangling relation и новая встреча подтверждённого клуба появляется в принятом freshness SLO.
+
 ## 8. Reliability objectives to approve
 
 Это **предложения**, а не уже принятые SLO:
@@ -558,6 +571,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 17. **Homepage «Городской обзор» — preliminary Conditional Go:** release planning includes H1, but the owner has not yet selected it for shipment. First build/compare categories-first, V1 static and V2 semantic-motion prototypes without personalization/runtime LLM; then decide `ship|defer` before F5 UI freeze. Open subdecisions: desktop autoplay vs manual-only, first-session generic copy, available grounded facts/freshness SLA and whether the decorative wide-«о» motif is worth a design-system exception.
 18. **Event age rating — решено на product level:** when a confirmed canonical restriction exists it is visible on every concrete-event public representation; unknown is unlabelled and never becomes `0+`. Implementation/evaluation must settle the schema/provenance migration and explicit treatment of conflicting event/programme/door restrictions without weakening the LLM-first fail-closed boundary.
 19. **Linked occurrences — решено на product level:** one programme repeated at different confirmed dates/times remains several occurrence-specific canonical events joined by a symmetric relation. Every card visibly exposes eligible alternatives; the complete list stays on detail. Same-slot rows merge, `Похожие` remains separate, and exact compact card geometry is selected during F5 freeze.
+20. **Interest clubs — research boundary fixed:** это отдельный post-release release, сначала только read-only каталог прошлого/будущего и owner review. Открыты minimum recurrence/evidence, public index vs detail pages, stale/archive policy, canonical identity owner и BGE-vs-existing-vector choice по measured time-split evidence.
 
 ## 11. Следующие отдельные задачи в рекомендуемом порядке
 
@@ -573,10 +587,11 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 10. **P2 — transport:** land the validated preliminary slice through PR #37 only after release-UI placement is accepted; separately prototype/accept-or-defer the optional «Как добраться» gallery slide; F11 becomes production-safe only after the nightly source pipeline/atomic last-good gate is closed.
 11. **Post-release — verified comment facts + medallion:** F14 follows [the canonical research/minimal implementation plan](../features/event-comment-feedback/probe-plan.md): Region Talk clean-port boundary → 30-day daily authority/Q-A/BGE+E5 shadow → typed YDB ledger → deterministic «Важно знать» → Smart Update shadow ingress → separately calibrated «Активно обсуждают». It is not required before presentation GO.
 12. **P0 final gate — SEO/GEO:** only after presentation-scope steps 1–10 are integrated and the resulting UI/UX is immutably owner-accepted, M4 runs Codex + approved `agy` Gemini Pro + `a-opus` independent audits over crawl/index/schema/internal-link/performance and AI transparency/citability, then re-reviews the exact final RC after remediation.
+13. **Post-release — clubs by interest:** create `feature/interest-clubs-postrelease` from fresh `origin/main`, execute the [read-only catalog research prompt](../backlog/features/interest-clubs/research-prompt.md), review the exact club list/counts and time-split/BGE comparison, then decide technology and implementation scope. Do not start public pages or automation from an assumed club count.
 
-Шаги 1–10 и 12 остаются presentation blockers. Шаг 11 — явный F14 post-release stream и не блокирует GO.
+Шаги 1–10 и 12 остаются presentation blockers. Шаги 11 и 13 — явные post-release streams и не блокируют GO.
 
-После presentation GO идут три самостоятельных важных релиза: **PR-F14** по verified comment facts/medallion, **PR-FEST** по [static festival section](../features/festivals/static-site-release.md) и **PR-OPS** по [operations control dashboard](../backlog/features/operations-control-dashboard/README.md). Минимальный operator scorecard из Stage 2 при этом остаётся текущим release blocker.
+После presentation GO идут самостоятельные важные релизы: **PR-F14** по verified comment facts/medallion, **PR-FEST** по [static festival section](../features/festivals/static-site-release.md), **PR-OPS** по [operations control dashboard](../backlog/features/operations-control-dashboard/README.md) и research-first **PR-CLUBS** по [interest clubs](../backlog/features/interest-clubs/README.md). Минимальный operator scorecard из Stage 2 при этом остаётся текущим release blocker.
 
 ## 12. Closure checklist этого аудита
 
@@ -594,6 +609,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 | F14 post-release | Live-canary evidence, research work packages, minimum typed-fact implementation, Smart Update shadow boundary, «Активно обсуждают» calibration and separate Stage 8A routed | **Done (planning only; 30-day shadow/implementation/RC missing; not presentation blocker)** |
 | PR-FEST | Separate festival release has R01–R06 scope, stages, decisions, evidence and canonical routing | **Done (planning only; release missing)** |
 | PR-OPS | Pre-release scorecard boundary and separate protected dashboard release documented | **Done (planning only; implementation missing)** |
+| PR-CLUBS | Separate research-first release, exact branch handoff, club taxonomy, evidence/count/time-split audit, BGE comparison and production stop gate documented | **Done (planning only; research/catalog/technology decision/implementation missing)** |
 | Документация | Main docs и side-branch feature homes разведены; gaps перечислены | **Done (planning only)** |
 | M4 SEO/GEO | Post-UI/UX sequence, three independent audit lanes, detailed scope, synthesis and acceptance gates documented | **Done (planning only)** |
 | Реализация | В этой задаче намеренно не менялась | **Not in scope** |

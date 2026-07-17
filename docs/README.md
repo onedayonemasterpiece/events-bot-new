@@ -45,6 +45,7 @@
   - post-release recurring-event attendance feedback: `docs/backlog/features/post-event-attendance-feedback/README.md`
   - separate post-release static festival section: `docs/features/festivals/static-site-release.md`
   - important post-release operations control dashboard: `docs/backlog/features/operations-control-dashboard/README.md`
+  - post-release interest-club catalog and research prompt: `docs/backlog/features/interest-clubs/README.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
