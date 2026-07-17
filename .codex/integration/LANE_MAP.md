@@ -57,5 +57,5 @@ lanes:
     expected_output: merged production implementation and evidence
     verification_scope: full_local
     effort: extra-high
-    status: in_progress
+    status: completed
 ```

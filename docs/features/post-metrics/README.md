@@ -204,3 +204,15 @@ ENV (общие для TG/VK):
    - Сигналы: уровни `⭐/👍`, плюс возможные будущие агрегаты по нескольким источникам одного события.
 
 Важно: статистика “постов” сама по себе не цель. Цель: **маркировать и ранжировать события**, а пост‑метрики являются входным сигналом.
+
+### Production canary 2026-07-17
+
+Release `v1686` (`origin/main@0804df65`) ran the real Kaggle batch
+`social-metrics:991268`: it collected all `36/36` exact ledger-backed posts from
+VK `231828790`, raised current/future resolved `klgdevents` metric coverage to
+`172/303` events, and returned `154 published / 114 missing / 4 ambiguous / 0
+error` resolver decisions. The official group had zero current/future exact
+repost mappings at the cut, so its historical backfill proves the transport and
+future automatic collection without pretending that digest/video engagement
+belongs to current events. Status callbacks included start, preflight, alive,
+terminal report and both lease releases; temporary datasets were deleted.
