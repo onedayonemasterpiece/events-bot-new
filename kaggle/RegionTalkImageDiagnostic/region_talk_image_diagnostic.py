@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, base64, hashlib, html, json, os, random, re, subprocess, sys, time, urllib.parse
+import asyncio, base64, hashlib, html, io, json, os, random, re, subprocess, sys, time, urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, median, pstdev
@@ -35,7 +35,10 @@ IMAGE_AUTH_RETRY_RESET_VERSION = "vk_service_read_token_v1"
 IMAGE_LEGACY_SCORER_VERSION = "region_talk_cv_clip_laion_nima_legacy_v1"
 IMAGE_QUALITY_NEEDS_REVIEW = "needs_visual_review"
 IMAGE_QUALITY_LEGACY_ACCEPT = "legacy_auto_accept"
+IMAGE_QUALITY_VLM_ACCEPT = "vlm_visual_accept"
 IMAGE_QUALITY_SCORING_RETRY = "scoring_retry"
+IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v1"
+IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v1"
 LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS = {
     "region_talk_publication_eligibility_v2",
     "region_talk_publication_eligibility_v3",
@@ -44,11 +47,24 @@ LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS = {
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PROCESSED_IMAGE_KEYS: set[str] = set()
+IMAGE_VLM_RUNTIME: dict = {}
+IMAGE_VLM_STATS = {
+    "backlog_seen": 0,
+    "attempted": 0,
+    "replayed": 0,
+    "accepted": 0,
+    "rejected": 0,
+    "review": 0,
+    "errors": 0,
+    "budget_deferred": 0,
+    "run_limit_deferred": 0,
+}
 HEARTBEAT_EVENTS = {
     "kernel_started", "image_queue_poll", "image_batch_started", "image_batch_done",
     "media_fetch_started", "media_fetch_done", "image_inference_current", "image_inference_result",
     "model_load_started", "model_load_done", "model_unavailable",
     "ydb_source_visual_rollup_written", "report_written", "image_queue_poll_finished_empty",
+    "image_vlm_started", "image_vlm_done", "image_vlm_deferred",
 }
 IMAGE_DIAG_HEARTBEAT_FIELDS = (
     "run_id", "event_name", "created_at", "phase", "reason", "attempt",
@@ -66,6 +82,7 @@ IMAGE_DIAG_HEARTBEAT_FIELDS = (
     "telegram", "vk", "actual_downloaded", "status", "final_visual_score",
     "cv_score", "clip_score", "laion_score", "nima_score", "download_seconds",
     "decode_seconds", "inference_seconds", "total_processing_seconds", "width", "height",
+    "vlm_decision", "vlm_status", "vlm_model", "vlm_calls", "vlm_max_calls", "vlm_backlog",
 )
 
 
@@ -83,6 +100,104 @@ def max_images_per_post() -> int:
 
 def legacy_publication_media_threshold() -> float:
     return float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE") or "0.66")
+
+
+def image_vlm_enabled() -> bool:
+    return str(os.getenv("REGION_TALK_IMAGE_VLM_ENABLED") or "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def image_vlm_max_calls_per_run() -> int:
+    return max(0, min(10, int(os.getenv("REGION_TALK_IMAGE_VLM_MAX_CALLS_PER_RUN") or "2")))
+
+
+def image_vlm_model() -> str:
+    return str(os.getenv("REGION_TALK_IMAGE_VLM_MODEL") or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite").strip()
+
+
+def _row_float(row: dict, *keys: str) -> float:
+    for key in keys:
+        try:
+            value = row.get(key)
+            if value not in (None, ""):
+                return float(value)
+        except (TypeError, ValueError):
+            continue
+    return 0.0
+
+
+def image_vlm_request_fingerprint(row: dict, *, model: str | None = None) -> str:
+    payload = {
+        "stage": "region_talk_complete_album_visual_adjudication",
+        "post_url": str(row.get("post_url") or "").strip().lower().rstrip("/"),
+        "media_manifest_hash": str(row.get("input_media_manifest_hash") or ""),
+        "expected_image_count": int(row.get("expected_image_count") or 0),
+        "fetched_image_count": int(row.get("fetched_image_count") or 0),
+        "image_decision_contract_version": str(row.get("image_decision_contract_version") or ""),
+        "prompt_version": IMAGE_VLM_PROMPT_VERSION,
+        "model": model or image_vlm_model(),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def image_vlm_current_verdict(row: dict) -> bool:
+    decision = str(row.get("image_vlm_decision") or "").strip().lower()
+    return bool(
+        str(row.get("image_vlm_status") or "").strip().lower() == "completed"
+        and decision in {"accept", "reject", "review", "needs_review"}
+        and str(row.get("image_vlm_prompt_version") or "") == IMAGE_VLM_PROMPT_VERSION
+        and str(row.get("image_vlm_model") or "") == image_vlm_model()
+        and str(row.get("image_vlm_media_manifest_hash") or "") == str(row.get("input_media_manifest_hash") or "")
+        and str(row.get("image_vlm_request_fingerprint") or "") == image_vlm_request_fingerprint(row)
+    )
+
+
+def image_row_needs_vlm_review(row: dict) -> bool:
+    """Return true only for complete, strict-funnel rows with a useful visual signal."""
+
+    if not image_vlm_enabled():
+        return False
+    if str(row.get("image_quality_decision") or "") != IMAGE_QUALITY_NEEDS_REVIEW:
+        return False
+    if str(row.get("image_quality_reason") or "") != "uncalibrated_legacy_low_score_requires_visual_review":
+        return False
+    if publication_eligibility_gate_reason(row):
+        return False
+    if str(row.get("vector_gate_status") or "") != "vector_accept_candidate":
+        return False
+    if str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
+        return False
+    if str(row.get("image_model_input_type") or "") != "actual_image":
+        return False
+    expected = int(row.get("expected_image_count") or 0)
+    fetched = int(row.get("fetched_image_count") or 0)
+    if expected <= 0 or expected != fetched:
+        return False
+    if str(row.get("image_acquisition_status") or "") != "complete":
+        return False
+    if str(row.get("image_component_bundle_complete") or "").strip().lower() != "true":
+        return False
+    if not str(row.get("input_media_manifest_hash") or "").strip():
+        return False
+    if image_vlm_current_verdict(row):
+        return False
+    overall = _row_float(row, "overall_media_score", "final_visual_score")
+    postcard = _row_float(row, "postcardness_score", "clip_postcardness_score", "cv_postcardness_score")
+    best = _row_float(row, "shadow_best_frame_score")
+    # This lane recovers scorer false negatives, not every weak image.  It is
+    # deliberately wider than the legacy 0.66 boundary while still requiring
+    # a near-threshold anchor, strong postcard semantics, or one strong frame.
+    return overall >= 0.58 or postcard >= 0.85 or best >= 0.66
+
+
+def image_vlm_priority(row: dict) -> tuple[float, float, float, int]:
+    return (
+        _row_float(row, "shadow_best_frame_score"),
+        _row_float(row, "postcardness_score", "clip_postcardness_score", "cv_postcardness_score"),
+        _row_float(row, "overall_media_score", "final_visual_score"),
+        -int(row.get("image_queue_order") or 10**9),
+    )
 
 
 def _media_ref_list(value) -> list[str]:
@@ -744,6 +859,285 @@ def ydb_connect():
     driver.wait(timeout=int(os.getenv("REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS") or "20"), fail_fast=True)
     return ydb, driver, table_path
 
+
+def ensure_region_talk_llm_runtime_import_path() -> None:
+    candidates = [Path.cwd(), Path(__file__).resolve().parents[2], Path("/kaggle/working")]
+    input_root = Path("/kaggle/input")
+    if input_root.exists():
+        candidates.extend(path.parent for path in input_root.rglob("region_talk_llm_runtime.py"))
+        candidates.extend(path.parent.parent for path in input_root.rglob("google_ai/__init__.py"))
+    for parent in candidates:
+        if str(parent) not in sys.path and (
+            (parent / "region_talk_llm_runtime.py").exists()
+            or (parent / "google_ai" / "__init__.py").exists()
+        ):
+            sys.path.insert(0, str(parent))
+
+
+def get_image_vlm_runtime() -> dict:
+    if IMAGE_VLM_RUNTIME:
+        return IMAGE_VLM_RUNTIME
+    ensure_region_talk_llm_runtime_import_path()
+    try:
+        from region_talk_llm_runtime import DurableGeminiBudget, build_google_ai_client
+    except Exception as exc:
+        raise RuntimeError(f"region_talk_llm_runtime_missing: {type(exc).__name__}: {str(exc)[:240]}") from exc
+    try:
+        from google import genai as _genai  # noqa: F401
+    except Exception:
+        if str(os.getenv("REGION_TALK_AUTO_INSTALL") or "1").lower() in {"1", "true", "yes", "on"}:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "google-genai"])
+        else:
+            raise
+    os.environ.setdefault("GOOGLE_AI_MAX_RETRIES", "1")
+    os.environ.setdefault("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", os.getenv("REGION_TALK_IMAGE_VLM_TIMEOUT_SECONDS") or "45")
+    ydb, driver, table_path = ydb_connect()
+    try:
+        pool = ydb.SessionPool(driver)
+        default_env = str(os.getenv("REGION_TALK_IMAGE_VLM_DEFAULT_ENV_VAR_NAME") or os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3").strip()
+        client = build_google_ai_client(default_env_var_name=default_env, consumer="region_talk_image_visual_adjudicator")
+        timeout = max(1.0, float(os.getenv("REGION_TALK_IMAGE_VLM_TIMEOUT_SECONDS") or "45"))
+        if hasattr(client, "provider_timeout_seconds"):
+            client.provider_timeout_seconds = timeout
+        budget_id = str(os.getenv("REGION_TALK_LLM_BUDGET_ID") or datetime.now(timezone.utc).strftime("region-talk-debug-%Y%m%d"))
+        budget = DurableGeminiBudget(
+            pool,
+            ydb,
+            table_path,
+            budget_id=budget_id,
+            budget_max=min(100, max(0, int(os.getenv("REGION_TALK_LLM_BUDGET_MAX") or "100"))),
+            owner_prefix="image-vlm",
+        )
+    except Exception:
+        try:
+            driver.stop(timeout=5)
+        except Exception:
+            pass
+        raise
+    IMAGE_VLM_RUNTIME.update({
+        "ydb": ydb,
+        "driver": driver,
+        "pool": pool,
+        "table": table_path,
+        "client": client,
+        "budget": budget,
+        "default_env_var_name": default_env,
+        "timeout_seconds": timeout,
+    })
+    return IMAGE_VLM_RUNTIME
+
+
+def close_image_vlm_runtime() -> None:
+    driver = IMAGE_VLM_RUNTIME.pop("driver", None)
+    if driver is not None:
+        try:
+            driver.stop(timeout=5)
+        except Exception:
+            pass
+    IMAGE_VLM_RUNTIME.clear()
+
+
+def _vlm_json(raw: str) -> dict:
+    text = str(raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
+        text = re.sub(r"\s*```$", "", text)
+    parsed = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise ValueError("visual adjudicator returned a non-object JSON value")
+    return parsed
+
+
+def _vlm_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _vlm_image_parts(media_paths: list[str]) -> list:
+    from google.genai import types
+    from PIL import Image
+
+    parts = []
+    max_side = max(512, min(1600, int(os.getenv("REGION_TALK_IMAGE_VLM_MAX_SIDE") or "1024")))
+    for ordinal, media_path in enumerate(media_paths, 1):
+        with Image.open(media_path) as source:
+            image = source.convert("RGB")
+            image.thumbnail((max_side, max_side))
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=82, optimize=True)
+        parts.append(types.Part.from_text(text=f"IMAGE {ordinal} OF {len(media_paths)}"))
+        parts.append(types.Part.from_bytes(data=buffer.getvalue(), mime_type="image/jpeg"))
+    return parts
+
+
+def _visual_adjudication_prompt(row: dict, image_count: int) -> str:
+    return f"""Ты — строгий визуальный редактор Region Talk. Перед тобой полный набор из {image_count} изображений одного поста.
+Оцени только визуальную пригодность для редакционной публикации о путешествии по Калининградской области. Текст поста проверяется отдельно и не должен влиять на визуальный вердикт.
+
+ACCEPT: в полном наборе есть хотя бы один действительно сильный, технически читаемый и привлекательный кадр, который передаёт место/атмосферу и годится как самостоятельное открыточное изображение.
+REJECT: все кадры явно слабые, нечитаемые, бытовые без выразительного места, скриншоты/афиши/новостная графика, доминирующая реклама или водяные знаки мешают публикации.
+REVIEW: изображений недостаточно для уверенного решения или сигналы противоречивы.
+
+Верни ТОЛЬКО JSON:
+{{
+  "decision": "accept|reject|review",
+  "strong_publishable_image": true,
+  "best_image_ordinal": 1,
+  "postcardness_score": 0.0,
+  "technical_quality_score": 0.0,
+  "commercial_overlay": false,
+  "screenshot_or_graphic": false,
+  "reason": "краткое проверяемое объяснение"
+}}
+
+Правила согласованности:
+- accept требует strong_publishable_image=true и best_image_ordinal от 1 до {image_count};
+- оцени весь альбом, но выбери лучший кадр;
+- не выдумывай содержание за пределами видимого;
+- source={str(row.get('source_title') or '')[:120]}; post={str(row.get('post_url') or '')[:200]}; prompt_version={IMAGE_VLM_PROMPT_VERSION}.
+"""
+
+
+def apply_image_vlm_result(row: dict, result: dict, *, fingerprint: str) -> dict:
+    status = str(result.get("vlm_gate_status") or result.get("llm_gate_status") or "error").strip().lower()
+    decision = str(result.get("vlm_decision") or result.get("decision") or "review").strip().lower()
+    if decision == "needs_review":
+        decision = "review"
+    image_count = max(0, int(row.get("fetched_image_count") or 0))
+    try:
+        best_ordinal = int(result.get("best_image_ordinal") or 0)
+    except (TypeError, ValueError):
+        best_ordinal = 0
+    accept_consistent = bool(
+        status == "ok"
+        and decision == "accept"
+        and _vlm_bool(result.get("strong_publishable_image"))
+        and 1 <= best_ordinal <= image_count
+    )
+    if status == "ok" and decision == "accept" and not accept_consistent:
+        decision = "review"
+        result["reason"] = ("accept_consistency_guard; " + str(result.get("reason") or ""))[:500]
+    row.update({
+        "image_vlm_status": "completed" if status == "ok" else status,
+        "image_vlm_decision": decision,
+        "image_vlm_model": image_vlm_model(),
+        "image_vlm_prompt_version": IMAGE_VLM_PROMPT_VERSION,
+        "image_vlm_decision_version": IMAGE_VLM_DECISION_VERSION,
+        "image_vlm_request_fingerprint": fingerprint,
+        "image_vlm_media_manifest_hash": str(row.get("input_media_manifest_hash") or ""),
+        "image_vlm_best_image_ordinal": best_ordinal,
+        "image_vlm_strong_publishable_image": str(_vlm_bool(result.get("strong_publishable_image"))).lower(),
+        "image_vlm_postcardness_score": result.get("postcardness_score", ""),
+        "image_vlm_technical_quality_score": result.get("technical_quality_score", ""),
+        "image_vlm_commercial_overlay": str(_vlm_bool(result.get("commercial_overlay"))).lower(),
+        "image_vlm_screenshot_or_graphic": str(_vlm_bool(result.get("screenshot_or_graphic"))).lower(),
+        "image_vlm_reason": str(result.get("reason") or result.get("llm_reason") or "")[:500],
+        "image_vlm_updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    if accept_consistent:
+        row["image_quality_decision"] = IMAGE_QUALITY_VLM_ACCEPT
+        row["image_quality_reason"] = "complete_album_accepted_by_multimodal_visual_adjudicator"
+        row["image_quality_terminality"] = "contract_version"
+        row["image_model_type"] = "versioned_album_legacy_diagnostics_plus_vlm"
+        row["next_action"] = "publication_verification"
+        IMAGE_VLM_STATS["accepted"] += 1
+    else:
+        row["image_quality_decision"] = IMAGE_QUALITY_NEEDS_REVIEW
+        row["image_quality_terminality"] = "nonterminal"
+        row["next_action"] = "visual_review_nonterminal"
+        if status != "ok":
+            IMAGE_VLM_STATS["errors"] += 1
+        elif decision == "reject":
+            IMAGE_VLM_STATS["rejected"] += 1
+        else:
+            IMAGE_VLM_STATS["review"] += 1
+    return row
+
+
+def maybe_adjudicate_image_with_vlm(row: dict, media_paths: list[str]) -> dict:
+    if not image_row_needs_vlm_review(row):
+        return row
+    max_calls = image_vlm_max_calls_per_run()
+    if int(IMAGE_VLM_STATS["attempted"]) >= max_calls:
+        IMAGE_VLM_STATS["run_limit_deferred"] += 1
+        row["image_vlm_status"] = "deferred_run_limit"
+        row["image_vlm_prompt_version"] = IMAGE_VLM_PROMPT_VERSION
+        row["next_action"] = "visual_review_wait_vlm_capacity"
+        log_event("image_vlm_deferred", phase="vlm", post_url=row.get("post_url"), image_queue_id=row.get("image_queue_id"), vlm_status="run_limit", vlm_calls=IMAGE_VLM_STATS["attempted"], vlm_max_calls=max_calls)
+        return row
+    fingerprint = image_vlm_request_fingerprint(row)
+    try:
+        runtime = get_image_vlm_runtime()
+        budget = runtime["budget"]
+        reservation = budget.reserve(fingerprint)
+        reservation_status = str(reservation.get("status") or "")
+        if reservation_status == "replay":
+            IMAGE_VLM_STATS["replayed"] += 1
+            result = dict(reservation.get("result") or {})
+            apply_image_vlm_result(row, result, fingerprint=fingerprint)
+            return row
+        if reservation_status in {"busy", "exhausted"}:
+            IMAGE_VLM_STATS["budget_deferred"] += 1
+            row["image_vlm_status"] = "budget_" + reservation_status
+            row["image_vlm_prompt_version"] = IMAGE_VLM_PROMPT_VERSION
+            row["image_vlm_request_fingerprint"] = fingerprint
+            row["next_action"] = "visual_review_wait_shared_gemini_budget"
+            log_event("image_vlm_deferred", phase="vlm", post_url=row.get("post_url"), image_queue_id=row.get("image_queue_id"), vlm_status=reservation_status, vlm_calls=IMAGE_VLM_STATS["attempted"], vlm_max_calls=max_calls)
+            return row
+        IMAGE_VLM_STATS["attempted"] += 1
+        log_event("image_vlm_started", phase="vlm", post_url=row.get("post_url"), image_queue_id=row.get("image_queue_id"), vlm_model=image_vlm_model(), vlm_calls=IMAGE_VLM_STATS["attempted"], vlm_max_calls=max_calls)
+        from google.genai import types
+        prompt_parts = [types.Part.from_text(text=_visual_adjudication_prompt(row, len(media_paths)))]
+        prompt_parts.extend(_vlm_image_parts(media_paths))
+
+        async def _call():
+            return await runtime["client"].generate_content_async(
+                model=image_vlm_model(),
+                prompt=prompt_parts,
+                generation_config={"temperature": 0.0, "response_mime_type": "application/json"},
+                max_output_tokens=500,
+            )
+
+        raw, usage = asyncio.run(_call())
+        data = _vlm_json(raw)
+        result = {
+            "llm_gate_status": "ok",
+            "vlm_gate_status": "ok",
+            "vlm_decision": str(data.get("decision") or "review").strip().lower(),
+            "strong_publishable_image": data.get("strong_publishable_image"),
+            "best_image_ordinal": data.get("best_image_ordinal"),
+            "postcardness_score": data.get("postcardness_score"),
+            "technical_quality_score": data.get("technical_quality_score"),
+            "commercial_overlay": data.get("commercial_overlay"),
+            "screenshot_or_graphic": data.get("screenshot_or_graphic"),
+            "reason": str(data.get("reason") or "")[:500],
+            "llm_model": image_vlm_model(),
+            "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
+            "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
+            "llm_usage_total_tokens": getattr(usage, "total_tokens", ""),
+        }
+        budget.complete(fingerprint, result)
+        apply_image_vlm_result(row, result, fingerprint=fingerprint)
+        log_event("image_vlm_done", phase="vlm", post_url=row.get("post_url"), image_queue_id=row.get("image_queue_id"), vlm_model=image_vlm_model(), vlm_status=row.get("image_vlm_status"), vlm_decision=row.get("image_vlm_decision"), vlm_calls=IMAGE_VLM_STATS["attempted"], vlm_max_calls=max_calls)
+    except Exception as exc:
+        result = {
+            "llm_gate_status": "error",
+            "vlm_gate_status": "error",
+            "vlm_decision": "review",
+            "reason": f"{type(exc).__name__}: {str(exc)[:400]}",
+            "llm_model": image_vlm_model(),
+        }
+        try:
+            runtime = IMAGE_VLM_RUNTIME
+            if runtime.get("budget") and fingerprint:
+                runtime["budget"].complete(fingerprint, result)
+        except Exception:
+            pass
+        apply_image_vlm_result(row, result, fingerprint=fingerprint)
+        log_event("image_vlm_done", phase="vlm", post_url=row.get("post_url"), image_queue_id=row.get("image_queue_id"), vlm_model=image_vlm_model(), vlm_status="error", vlm_decision="review", error=result["reason"], vlm_calls=IMAGE_VLM_STATS["attempted"], vlm_max_calls=max_calls)
+    return row
+
 def write_region_talk_image_diag_heartbeat(payload: dict):
     if (os.getenv("REGION_TALK_IMAGE_DIAG_HEARTBEAT_YDB") or "1").lower() in {"0","false","no"}: return
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").lower() != "ydb" and not os.getenv("REGION_TALK_YDB_ENDPOINT"): return
@@ -952,7 +1346,7 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'im
             # Kaggle-local paths are transient and unusable after the notebook
             # exits. Persist compact manifest hashes/scores, not filesystem
             # names or duplicated path lists.
-            for transient_key in ("actual_media_path", "actual_media_paths", "thumbnail_path", "unsupported_media_path"):
+            for transient_key in ("actual_media_path", "actual_media_paths", "thumbnail_path", "unsupported_media_path", "vlm_revisit_requested"):
                 payload.pop(transient_key, None)
             tx.execute(query,{"$pk":"image_queue_item:"+key.replace("image_queue_item:",""),"$payload_json":json.dumps(payload,ensure_ascii=False),"$updated_at":now},commit_tx=False)
         tx.commit()
@@ -1085,7 +1479,16 @@ def ydb_rows_for_diagnostic(limit_n: int):
         lease=str(r.get("lease_run_id") or "")
         needs_contract_rescore = image_row_needs_contract_rescore(r)
         needs_acquisition_repair = image_row_needs_acquisition_repair(r)
-        if status == "actual_scored" and input_type == "actual_image" and not needs_contract_rescore and not needs_acquisition_repair:
+        needs_vlm_review = image_row_needs_vlm_review(r)
+        if needs_vlm_review:
+            IMAGE_VLM_STATS["backlog_seen"] += 1
+            r["previous_image_queue_status"] = status
+            r["image_queue_status"] = "needs_actual_image_fetch"
+            r["media_acquisition_status"] = "needs_actual_image_fetch"
+            r["actual_image_retry_reason"] = "complete_album_vlm_visual_adjudication"
+            r["vlm_revisit_requested"] = "true"
+            status = "needs_actual_image_fetch"
+        if status == "actual_scored" and input_type == "actual_image" and not needs_contract_rescore and not needs_acquisition_repair and not needs_vlm_review:
             continue
         if status in IMAGE_TERMINAL_SKIP_STATUSES and not (
             status == IMAGE_TERMINAL_ELIGIBILITY_STATUS and needs_contract_rescore
@@ -1103,7 +1506,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
                 r["media_fetch_retry_exhausted"] = "false"
                 r["media_fetch_retry_reset_version"] = IMAGE_AUTH_RETRY_RESET_VERSION
                 r["media_fetch_retry_reset_reason"] = "ip_bound_vk_token_replaced_by_service_read_token"
-        elif status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal":
+        elif status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal" and not needs_vlm_review:
             continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
             r["image_queue_status"] = "needs_visual_review"
@@ -1153,7 +1556,15 @@ def ydb_rows_for_diagnostic(limit_n: int):
         refresh_deferred=refresh_deferred,
         soft_deferred=soft_deferred,
     )
-    pending=sorted(pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))[:limit_n]
+    ordinary_pending = [row for row in pending if str(row.get("vlm_revisit_requested") or "").lower() != "true"]
+    vlm_pending = [row for row in pending if str(row.get("vlm_revisit_requested") or "").lower() == "true"]
+    ordinary_pending = sorted(ordinary_pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))
+    vlm_slots = max(0, image_vlm_max_calls_per_run() - int(IMAGE_VLM_STATS["attempted"]))
+    vlm_pending = sorted(vlm_pending, key=image_vlm_priority, reverse=True)[:vlm_slots]
+    # Reserve at most the bounded VLM slots for historical re-downloads while
+    # leaving the rest of the batch available for genuinely new image work.
+    pending = vlm_pending[:limit_n]
+    pending.extend(ordinary_pending[: max(0, limit_n - len(pending))])
     now=datetime.now(timezone.utc).isoformat()
     for r in pending:
         r["image_queue_status"]="image_analysis_in_progress"; r["lease_run_id"]=RUN_ID; r["lease_at"]=now
@@ -1866,13 +2277,17 @@ def apply_image_queue_status(r):
         else:
             r["image_queue_status"] = "actual_scored"
         r["image_model_input_type"] = "actual_image"
-        r["image_model_type"] = "versioned_album_legacy_diagnostics"
+        r["image_model_type"] = (
+            "versioned_album_legacy_diagnostics_plus_vlm"
+            if quality_decision == IMAGE_QUALITY_VLM_ACCEPT
+            else "versioned_album_legacy_diagnostics"
+        )
         r["media_acquisition_status"] = (
             "actual_album_downloaded_and_scored"
             if str(r.get("image_acquisition_status") or "") == "complete"
             else "partial_album_requires_retry_or_review"
         )
-        if quality_decision == IMAGE_QUALITY_LEGACY_ACCEPT:
+        if quality_decision in {IMAGE_QUALITY_LEGACY_ACCEPT, IMAGE_QUALITY_VLM_ACCEPT}:
             r["next_action"] = "publication_verification"
         elif quality_decision == IMAGE_QUALITY_SCORING_RETRY:
             r["next_action"] = "retry_required_image_components"
@@ -2002,6 +2417,7 @@ def process_batch(batch_rows, batch_index: int):
             finalize(r)
         else:
             apply_album_quality_decision(r, frame_scores)
+            maybe_adjudicate_image_with_vlm(r, media_paths)
         apply_image_queue_status(r)
         ydb_upsert_image_rows([r], stage="scored_or_retry")
         log_event("image_inference_result", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("final_visual_status"), image_quality_decision=r.get("image_quality_decision"), image_quality_reason=r.get("image_quality_reason"), actual_images=r.get("images_scored_actual_count"), expected_images=r.get("expected_image_count"), final_visual_score=r.get("final_visual_score"), shadow_best_frame_score=r.get("shadow_best_frame_score"), cv_score=r.get("cv_overall_media_score"), clip_score=r.get("clip_postcardness_score"), laion_score=r.get("laion_aesthetic_score"), nima_score=r.get("nima_quality_score"), download_seconds=r.get("media_download_seconds"), decode_seconds=r.get("image_decode_seconds"), inference_seconds=r.get("total_inference_seconds"), total_processing_seconds=r.get("total_processing_seconds"), width=r.get("image_width"), height=r.get("image_height"))
@@ -2076,6 +2492,15 @@ summary=[
     {"metric":"publication_eligibility_pending_count","value":int(input_payload.get("publication_eligibility_pending_count") or 0)},
     {"metric":"publication_eligibility_blocked_count","value":int(input_payload.get("publication_eligibility_blocked_count") or 0)},
     {"metric":"publication_eligibility_refresh_deferred_count","value":int(input_payload.get("publication_eligibility_refresh_deferred_count") or 0)},
+    {"metric":"image_vlm_backlog_seen_count","value":int(IMAGE_VLM_STATS["backlog_seen"])},
+    {"metric":"image_vlm_attempted_count","value":int(IMAGE_VLM_STATS["attempted"])},
+    {"metric":"image_vlm_replayed_count","value":int(IMAGE_VLM_STATS["replayed"])},
+    {"metric":"image_vlm_accepted_count","value":int(IMAGE_VLM_STATS["accepted"])},
+    {"metric":"image_vlm_rejected_nonterminal_count","value":int(IMAGE_VLM_STATS["rejected"])},
+    {"metric":"image_vlm_review_count","value":int(IMAGE_VLM_STATS["review"])},
+    {"metric":"image_vlm_error_count","value":int(IMAGE_VLM_STATS["errors"])},
+    {"metric":"image_vlm_budget_deferred_count","value":int(IMAGE_VLM_STATS["budget_deferred"])},
+    {"metric":"image_vlm_run_limit_deferred_count","value":int(IMAGE_VLM_STATS["run_limit_deferred"])},
     {"metric":"elapsed_seconds","value":round(time.monotonic()-RUN_STARTED,3)}, {"metric":"generated_at","value":datetime.now(timezone.utc).isoformat()},
 ]
 for field in ("media_download_seconds","image_decode_seconds","cv_inference_seconds","clip_inference_seconds","laion_inference_seconds","nima_inference_seconds","total_inference_seconds","total_processing_seconds"):
@@ -2121,4 +2546,5 @@ best="blend(" + ", ".join(available_names) + ")" if available_names else "no vis
 timing_lines="\n".join(f"- {x['metric']}: {x['value']}" for x in summary if any(s in str(x.get("metric")) for s in ("_mean","_median","_p90","throughput_actual_images_per_min")))
 summary_md.write_text(f"""# Region Talk image diagnostic - {RUN_ID}\n\n- Input post rows: {len(rows)} from image_candidate_queue.\n- Posts with actual decoded media scored: {len(actual_rows)}.\n- Distinct actual frames scored across those posts: {actual_frame_count}.\n- Metadata-only/failed post rows: {len(rows)-len(actual_rows)}.\n- Elapsed seconds: {round(time.monotonic()-RUN_STARTED,3)}.\n\n## Models that worked\n\n```json\n{json.dumps(model_availability,ensure_ascii=False,indent=2)}\n```\n\n## Timing / throughput\n\n{timing_lines}\n\n## What worked\n\nThis run did not scan sources or comments; it only acquired media for queued image rows and scored actual decoded images.\n\n## What was weak\n\nRows without decoded actual images have no final visual score. Any unavailable model above is recorded with its exact loader error, not substituted with metadata heuristics.\n\n## Visually most convincing scoring\n\nCurrent recommendation: {best}. See `contact_sheet.html`.\n\n## Production recommendations\n\n1. Keep metadata-only rows out of visual ranking.\n2. Package LAION/NIMA weights as stable Kaggle model/input assets if live installs are too slow or flaky.\n3. Use CLIP prompt score as second opinion, not as sole score.\n4. Add screenshot/text/watermark/face/news detectors before publication readiness.\n""",encoding="utf-8")
 (OUT/"scored_images.json").write_text(json.dumps({"run_id":RUN_ID,"summary":summary,"model_availability":model_availability,"rows":rows,"errors":errors},ensure_ascii=False,indent=2),encoding="utf-8")
-log_event("report_written", phase="report", status="done", run_id=RUN_ID, actual_images=len(actual_rows), actual_posts=len(actual_rows), actual_frames=actual_frame_count, rows=len(rows), xlsx=str(xlsx), html=str(html_path), summary=str(summary_md), failures=len(errors), ydb_write="attempted")
+close_image_vlm_runtime()
+log_event("report_written", phase="report", status="done", run_id=RUN_ID, actual_images=len(actual_rows), actual_posts=len(actual_rows), actual_frames=actual_frame_count, rows=len(rows), xlsx=str(xlsx), html=str(html_path), summary=str(summary_md), failures=len(errors), ydb_write="attempted", vlm_calls=IMAGE_VLM_STATS["attempted"], vlm_max_calls=image_vlm_max_calls_per_run(), vlm_backlog=IMAGE_VLM_STATS["backlog_seen"])

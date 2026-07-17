@@ -622,7 +622,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         (
             "Медиа — исторических постов / ждут оценки / отложено до полного text/source gate / постов реально оценено / отдельных кадров оценено / "
             "legacy auto-accept / visual-review raw/active/tombstoned / partial albums raw/active / "
-            "scoring retry / видео вручную: "
+            "scoring retry / VLM backlog/completed/accept/reject/review/error-or-budget / видео вручную: "
             f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
             f"{value('image_deferred_text_gate_total')}/"
@@ -635,6 +635,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('image_partial_album_acquisition_total')}/"
             f"{value('image_partial_album_active_total')}/"
             f"{value('image_scoring_retry_total')}/"
+            f"{value('image_vlm_backlog_total')}/"
+            f"{value('image_vlm_completed_total')}/"
+            f"{value('image_vlm_accept_total')}/"
+            f"{value('image_vlm_reject_nonterminal_total')}/"
+            f"{value('image_vlm_review_total')}/"
+            f"{value('image_vlm_error_or_budget_deferred_total')}/"
             f"{value('video_manual_review_candidate_urls_total')}"
         ),
         (
@@ -1197,6 +1203,53 @@ LEGACY_IMAGE_PUBLICATION_GATES = frozenset({
     "region_talk_publication_eligibility_v3",
     "region_talk_publication_eligibility_v4",
 })
+IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v1"
+IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v1"
+
+
+def _image_vlm_verdict_is_current(row: dict[str, Any]) -> bool:
+    return bool(
+        str(row.get("image_vlm_status") or "").lower() == "completed"
+        and str(row.get("image_vlm_decision") or "").lower() in {"accept", "reject", "review", "needs_review"}
+        and str(row.get("image_vlm_prompt_version") or "") == IMAGE_VLM_PROMPT_VERSION
+        and str(row.get("image_vlm_decision_version") or "") == IMAGE_VLM_DECISION_VERSION
+        and str(row.get("image_vlm_request_fingerprint") or "").strip()
+        and str(row.get("image_vlm_media_manifest_hash") or "").strip()
+        == str(row.get("input_media_manifest_hash") or "").strip()
+    )
+
+
+def _image_vlm_backlog_candidate(row: dict[str, Any]) -> bool:
+    """Mirror the Kaggle visual-adjudicator admission contract for planning."""
+
+    if str(row.get("image_quality_decision") or "") != "needs_visual_review":
+        return False
+    if str(row.get("image_quality_reason") or "") != "uncalibrated_legacy_low_score_requires_visual_review":
+        return False
+    if str(row.get("publication_eligibility_decision") or "") != "accept":
+        return False
+    if str(row.get("publication_eligibility_gate_version") or "") != CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION:
+        return False
+    if str(row.get("vector_gate_status") or "") != "vector_accept_candidate":
+        return False
+    if str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
+        return False
+    if str(row.get("image_model_input_type") or "") != "actual_image":
+        return False
+    if str(row.get("image_acquisition_status") or "") != "complete":
+        return False
+    if str(row.get("image_component_bundle_complete") or "").lower() != "true":
+        return False
+    expected = _safe_int(row.get("expected_image_count"))
+    fetched = _safe_int(row.get("fetched_image_count"))
+    if expected <= 0 or expected != fetched or not str(row.get("input_media_manifest_hash") or "").strip():
+        return False
+    if _image_vlm_verdict_is_current(row):
+        return False
+    overall = _safe_float(row.get("overall_media_score") or row.get("final_visual_score")) or 0.0
+    postcard = _safe_float(row.get("postcardness_score") or row.get("clip_postcardness_score") or row.get("cv_postcardness_score")) or 0.0
+    best = _safe_float(row.get("shadow_best_frame_score")) or 0.0
+    return overall >= 0.58 or postcard >= 0.85 or best >= 0.66
 
 
 def _image_contract_rescore_candidate(row: dict[str, Any]) -> bool:
@@ -3502,6 +3555,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_visual_review = [r for r in images if str(r.get("image_quality_decision") or "") == "needs_visual_review"]
     image_scoring_retry = [r for r in images if str(r.get("image_quality_decision") or "") == "scoring_retry"]
     image_legacy_accept = [r for r in images if str(r.get("image_quality_decision") or "") == "legacy_auto_accept"]
+    image_vlm_accept = [r for r in images if str(r.get("image_quality_decision") or "") == "vlm_visual_accept"]
+    image_vlm_backlog = [r for r in images if _image_vlm_backlog_candidate(r)]
+    image_vlm_completed = [r for r in images if _image_vlm_verdict_is_current(r)]
+    image_vlm_reject = [r for r in image_vlm_completed if str(r.get("image_vlm_decision") or "").lower() == "reject"]
+    image_vlm_review = [r for r in image_vlm_completed if str(r.get("image_vlm_decision") or "").lower() in {"review", "needs_review"}]
+    image_vlm_error = [r for r in images if str(r.get("image_vlm_status") or "").lower() in {"error", "rate_limited", "budget_busy", "budget_exhausted"}]
     image_partial_acquisition = [r for r in images if str(r.get("image_acquisition_status") or "") == "partial"]
     image_contract_rescore = [row for row in images if _image_contract_rescore_candidate(row)]
     image_product_eligible = [
@@ -3811,9 +3870,15 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_visual_review_pending_total": len(image_visual_review),
         "image_scoring_retry_total": len(image_scoring_retry),
         "image_legacy_auto_accept_total": len(image_legacy_accept),
+        "image_vlm_backlog_total": len(image_vlm_backlog),
+        "image_vlm_completed_total": len(image_vlm_completed),
+        "image_vlm_accept_total": len(image_vlm_accept),
+        "image_vlm_reject_nonterminal_total": len(image_vlm_reject),
+        "image_vlm_review_total": len(image_vlm_review),
+        "image_vlm_error_or_budget_deferred_total": len(image_vlm_error),
         "image_partial_album_acquisition_total": len(image_partial_acquisition),
         "image_contract_rescore_backlog_total": len(image_contract_rescore),
-        "image_actionable_work_total": len(image_pending) + len(image_scoring_retry) + len(image_contract_rescore),
+        "image_actionable_work_total": len(image_pending) + len(image_scoring_retry) + len(image_contract_rescore) + len(image_vlm_backlog),
         **image_terminal_metrics,
         "image_legacy_diagnostic_ge_0_66_total": len(strong_images_ge_066),
         "image_legacy_diagnostic_ge_0_70_total": len(strong_images),
@@ -4107,14 +4172,20 @@ def build_decision_plan(
                 "--image-poll-interval-seconds", "30", "--no-wait",
             ],
             (
-                "text-confirmed image work is pending (new/retry/versioned album rescore="
+                "text-confirmed image work is pending (new/retry/versioned album rescore/VLM review="
                 f"{int(metrics.get('image_pending_total') or 0)}/"
                 f"{int(metrics.get('image_scoring_retry_total') or 0)}/"
-                f"{int(metrics.get('image_contract_rescore_backlog_total') or 0)}); uses DISCOVERY2"
+                f"{int(metrics.get('image_contract_rescore_backlog_total') or 0)}/"
+                f"{int(metrics.get('image_vlm_backlog_total') or 0)}); uses DISCOVERY2"
             ),
             resource="telegram:DISCOVERY2",
             parallel_safe=True,
             timeout_seconds=300,
+            env={
+                "REGION_TALK_IMAGE_VLM_ENABLED": "1",
+                "REGION_TALK_IMAGE_VLM_MAX_CALLS_PER_RUN": str(max(0, _env_int("REGION_TALK_ORCHESTRATOR_IMAGE_VLM_MAX_CALLS_PER_RUN", 2))),
+                "REGION_TALK_LLM_BUDGET_MAX": str(min(100, max(0, _env_int("REGION_TALK_LLM_BUDGET_MAX", 100)))),
+            },
         ))
     if int(metrics.get("publication_source_evidence_backlog_total") or 0) > 0:
         actions.append(_action(

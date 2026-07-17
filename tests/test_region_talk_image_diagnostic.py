@@ -505,6 +505,96 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertEqual(leased[0]["actual_image_retry_reason"], "partial_album_requires_acquisition_repair")
             self.assertTrue(any(stage == "leased_for_image_analysis" for stage, _batch in writes))
 
+    def test_complete_strict_dual_visual_review_enters_bounded_vlm_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "post_url": "https://t.me/travelcase/album",
+                "image_queue_id": "travelcase-album",
+                "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image",
+                "image_quality_decision": "needs_visual_review",
+                "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "kaliningrad_oblast_only_scope": "true",
+                "kaliningrad_mention_role": "main_subject",
+                "image_acquisition_status": "complete",
+                "expected_image_count": 3,
+                "fetched_image_count": 3,
+                "image_component_bundle_complete": "true",
+                "input_media_manifest_hash": "album-hash",
+                "overall_media_score": 0.61,
+                "postcardness_score": 0.93,
+                "shadow_best_frame_score": 0.68,
+            }
+            self.assertTrue(mod.image_row_needs_vlm_review(row))
+            fingerprint = mod.image_vlm_request_fingerprint(row)
+            accepted = mod.apply_image_vlm_result(
+                dict(row),
+                {
+                    "vlm_gate_status": "ok",
+                    "vlm_decision": "accept",
+                    "strong_publishable_image": True,
+                    "best_image_ordinal": 2,
+                    "postcardness_score": 0.9,
+                    "technical_quality_score": 0.8,
+                    "reason": "сильный атмосферный кадр",
+                },
+                fingerprint=fingerprint,
+            )
+            self.assertEqual(accepted["image_quality_decision"], "vlm_visual_accept")
+            self.assertEqual(accepted["next_action"], "publication_verification")
+            self.assertTrue(mod.image_vlm_current_verdict(accepted))
+            self.assertFalse(mod.image_row_needs_vlm_review(accepted))
+
+            rejected = mod.apply_image_vlm_result(
+                dict(row),
+                {
+                    "vlm_gate_status": "ok",
+                    "vlm_decision": "reject",
+                    "strong_publishable_image": False,
+                    "best_image_ordinal": 1,
+                    "reason": "все кадры — скриншоты",
+                },
+                fingerprint=fingerprint,
+            )
+            self.assertEqual(rejected["image_quality_decision"], "needs_visual_review")
+            self.assertEqual(rejected["image_quality_terminality"], "nonterminal")
+
+    def test_vlm_lane_excludes_partial_nondual_and_weak_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            base = {
+                "post_url": "https://t.me/travelcase/album",
+                "image_quality_decision": "needs_visual_review",
+                "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "kaliningrad_oblast_only_scope": "true",
+                "kaliningrad_mention_role": "main_subject",
+                "image_model_input_type": "actual_image",
+                "image_acquisition_status": "complete",
+                "expected_image_count": 2,
+                "fetched_image_count": 2,
+                "image_component_bundle_complete": "true",
+                "input_media_manifest_hash": "hash",
+                "overall_media_score": 0.60,
+            }
+            self.assertFalse(mod.image_row_needs_vlm_review({**base, "image_acquisition_status": "partial"}))
+            self.assertFalse(mod.image_row_needs_vlm_review({**base, "text_vector_fusion_status": "missing_bge_m3_enrichment"}))
+            self.assertFalse(mod.image_row_needs_vlm_review({**base, "overall_media_score": 0.4}))
+
+    def test_launcher_ships_shared_llm_runtime_for_kaggle_vlm(self) -> None:
+        source = EXECUTOR_PATH.read_text(encoding="utf-8")
+        self.assertIn('PROJECT_ROOT / "region_talk_llm_runtime.py"', source)
+        self.assertIn('"REGION_TALK_IMAGE_VLM_MAX_CALLS_PER_RUN"', source)
+        self.assertIn('"region_talk_llm_runtime.py"]', source)
+
     def test_exhausted_ip_bound_vk_album_gets_one_service_token_retry_reset(self) -> None:
         old_service = os.environ.get("VK_SERVICE_KEY")
         os.environ["VK_SERVICE_KEY"] = "test-service-token"

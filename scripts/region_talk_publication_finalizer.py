@@ -22,7 +22,6 @@ import os
 import re
 import sys
 import time
-import uuid
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,6 +39,10 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport"))
 import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
+from region_talk_llm_runtime import (  # noqa: E402
+    DurableGeminiBudget,
+    completed_llm_result_is_replayable,
+)
 
 
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
@@ -135,12 +138,7 @@ def gemini_source_context_fingerprint(row: dict[str, Any]) -> str:
 
 
 def _completed_llm_result_is_replayable(result: dict[str, Any]) -> bool:
-    gate_status = str(result.get("llm_gate_status") or "").strip().lower()
-    if gate_status == "ok":
-        return True
-    if gate_status in {"error", "rate_limited", "unknown"}:
-        return False
-    return str(result.get("llm_decision") or "").strip().lower() in {"accept", "reject", "review"}
+    return completed_llm_result_is_replayable(result)
 
 
 def require_google_genai_runtime() -> None:
@@ -154,131 +152,6 @@ def require_google_genai_runtime() -> None:
         raise RuntimeError(
             "Region Talk finalizer requires the official google-genai runtime before reserving Gemini budget"
         )
-
-
-class DurableGeminiBudget:
-    """Atomic, cumulative Region Talk request budget layered over Supabase.
-
-    Supabase remains the cross-service RPM/TPM/RPD authority. This ledger adds
-    the product/debug ceiling (never above 100) and a deterministic request key
-    so completed final-verifier calls can be replayed without another provider
-    request.
-    """
-
-    def __init__(self, pool: Any, ydb: Any, table: str, *, budget_id: str, budget_max: int) -> None:
-        self.pool = pool
-        self.ydb = ydb
-        self.table = table
-        self.budget_id = re.sub(r"[^A-Za-z0-9_.:-]+", "-", budget_id).strip("-") or "region-talk-debug"
-        self.budget_max = min(100, max(0, int(budget_max)))
-        self.owner = "finalizer-" + uuid.uuid4().hex
-        self.used_total = 0
-        self.replayed_total = 0
-        self.blocked_total = 0
-        self._request_payloads: dict[str, dict[str, Any]] = {}
-
-    @property
-    def budget_pk(self) -> str:
-        return "region_talk_llm_budget_item:" + self.budget_id
-
-    def request_pk(self, fingerprint: str) -> str:
-        return f"region_talk_llm_request_item:{self.budget_id}:{fingerprint}"
-
-    @staticmethod
-    def _payload(result_sets: Any) -> dict[str, Any]:
-        rows = result_sets[0].rows if result_sets else []
-        if not rows:
-            return {}
-        value = rows[0].payload_json
-        return json.loads(value) if isinstance(value, str) else dict(value or {})
-
-    def reserve(self, fingerprint: str) -> dict[str, Any]:
-        now = datetime.now(timezone.utc)
-        now_iso = now.isoformat()
-        lease_until = (now + timedelta(minutes=10)).isoformat()
-        request_pk = self.request_pk(fingerprint)
-
-        def op(session: Any) -> dict[str, Any]:
-            select = session.prepare(
-                f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{self.table}` WHERE pk = $pk;"
-            )
-            upsert = session.prepare(
-                f"DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8; "
-                f"UPSERT INTO `{self.table}` (pk, kind, payload_json, updated_at) VALUES ($pk, $kind, $payload_json, $updated_at);"
-            )
-            tx = session.transaction(self.ydb.SerializableReadWrite())
-            budget = self._payload(tx.execute(select, {"$pk": self.budget_pk}, commit_tx=False))
-            request = self._payload(tx.execute(select, {"$pk": request_pk}, commit_tx=False))
-            if (
-                str(request.get("status") or "") == "completed"
-                and isinstance(request.get("result"), dict)
-                and _completed_llm_result_is_replayable(request["result"])
-            ):
-                tx.commit()
-                return {"status": "replay", "result": request["result"], "request": request, "budget": budget}
-            lease = _parse_time(request.get("lease_until"))
-            if request and lease and lease > now and str(request.get("lease_owner") or "") != self.owner:
-                tx.commit()
-                return {"status": "busy", "request": request, "budget": budget}
-            used = int(budget.get("reserved_total") or 0)
-            is_new = not bool(request)
-            if is_new and used >= self.budget_max:
-                tx.commit()
-                return {"status": "exhausted", "budget": budget}
-            if is_new:
-                used += 1
-            budget = {
-                **budget,
-                "budget_id": self.budget_id,
-                "budget_max": self.budget_max,
-                "reserved_total": used,
-                "remaining": max(0, self.budget_max - used),
-                "updated_at": now_iso,
-            }
-            request = {
-                **request,
-                "budget_id": self.budget_id,
-                "request_fingerprint": fingerprint,
-                "status": "reserved",
-                "lease_owner": self.owner,
-                "lease_until": lease_until,
-                "reserved_at": request.get("reserved_at") or now_iso,
-                "updated_at": now_iso,
-            }
-            tx.execute(upsert, {"$pk": self.budget_pk, "$kind": "region_talk_llm_budget_item", "$payload_json": json.dumps(budget, ensure_ascii=False), "$updated_at": now_iso}, commit_tx=False)
-            tx.execute(upsert, {"$pk": request_pk, "$kind": "region_talk_llm_request_item", "$payload_json": json.dumps(request, ensure_ascii=False), "$updated_at": now_iso}, commit_tx=False)
-            tx.commit()
-            return {"status": "reserved", "request": request, "budget": budget}
-
-        result = self.pool.retry_operation_sync(op)
-        self.used_total = int((result.get("budget") or {}).get("reserved_total") or self.used_total)
-        if result.get("status") == "replay":
-            self.replayed_total += 1
-        elif result.get("status") in {"busy", "exhausted"}:
-            self.blocked_total += 1
-        if isinstance(result.get("request"), dict):
-            self._request_payloads[fingerprint] = dict(result["request"])
-        return result
-
-    def complete(self, fingerprint: str, result: dict[str, Any]) -> None:
-        now = datetime.now(timezone.utc).isoformat()
-        request = {
-            **self._request_payloads.get(fingerprint, {}),
-            "budget_id": self.budget_id,
-            "request_fingerprint": fingerprint,
-            "status": "completed",
-            "result": result,
-            "completed_at": now,
-            "lease_until": "",
-            "updated_at": now,
-        }
-        pk = self.request_pk(fingerprint)
-
-        def op(session: Any) -> None:
-            rt.ydb_upsert_json(session, self.ydb, self.table, pk, "region_talk_llm_request_item", request, now, timeout_seconds=8)
-
-        self.pool.retry_operation_sync(op)
-        self._request_payloads[fingerprint] = request
 
 
 def load_env(path: Path) -> None:

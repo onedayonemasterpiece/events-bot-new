@@ -8706,6 +8706,41 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(decision["media_review_mode"], "visual_review_pending")
         self.assertEqual(decision["evidence"]["images_scored_actual_count"], 6)
 
+    def test_publication_eligibility_accepts_current_complete_album_vlm_attestation(self) -> None:
+        mod = load_module()
+        row = {
+            "post_url": "https://t.me/travelcase/vlm",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "personal_blog",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "image_decision_contract_version": "region_talk_image_album_guard_v2",
+            "image_quality_decision": "vlm_visual_accept",
+            "image_vlm_status": "completed",
+            "image_vlm_decision": "accept",
+            "image_vlm_prompt_version": "region_talk_visual_adjudicator_v1",
+            "image_vlm_decision_version": "region_talk_visual_decision_v1",
+            "image_vlm_request_fingerprint": "fingerprint",
+            "input_media_manifest_hash": "album-hash",
+            "image_vlm_media_manifest_hash": "album-hash",
+            "image_vlm_strong_publishable_image": "true",
+            # Deliberately below the legacy threshold: only the complete-album
+            # multimodal attestation is allowed to recover this row.
+            "overall_media_score": 0.59,
+            "postcardness_score": 0.50,
+        }
+        accepted = mod.publication_eligibility(row)
+        stale = mod.publication_eligibility({**row, "image_vlm_media_manifest_hash": "old-album"})
+        self.assertTrue(accepted["eligible"])
+        self.assertFalse(stale["eligible"])
+        self.assertEqual(stale["primary_reason"], "image_vlm_accept_attestation_invalid")
+
     def test_final_verifier_prompt_does_not_treat_short_author_footer_as_ad(self) -> None:
         mod = load_module()
         prompt = mod.llm_text_gate_prompt({

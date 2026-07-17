@@ -9634,6 +9634,23 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         return False, "image_quality_needs_visual_review"
     if image_quality_decision == "scoring_retry":
         return False, "image_quality_scoring_retry"
+    if image_quality_decision == "vlm_visual_accept":
+        vlm_attestation_ok = bool(
+            str(row.get("image_vlm_status") or "") == "completed"
+            and str(row.get("image_vlm_decision") or "") == "accept"
+            and str(row.get("image_vlm_prompt_version") or "") == "region_talk_visual_adjudicator_v1"
+            and str(row.get("image_vlm_decision_version") or "") == "region_talk_visual_decision_v1"
+            and str(row.get("image_vlm_request_fingerprint") or "").strip()
+            and str(row.get("image_vlm_media_manifest_hash") or "").strip()
+            == str(row.get("input_media_manifest_hash") or "").strip()
+            and str(row.get("image_vlm_strong_publishable_image") or "").lower() == "true"
+        )
+        if not vlm_attestation_ok:
+            return False, "image_vlm_accept_attestation_invalid"
+        # The multimodal adjudicator saw the complete album itself.  Do not
+        # reapply the uncalibrated legacy scalar threshold that caused this
+        # bounded false-negative recovery lane in the first place.
+        return True, ""
     if (
         str(row.get("image_decision_contract_version") or "") == "region_talk_image_album_guard_v2"
         and image_quality_decision not in {"legacy_auto_accept"}

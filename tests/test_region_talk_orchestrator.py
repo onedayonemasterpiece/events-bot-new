@@ -1338,6 +1338,57 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["image_partial_album_active_total"], 1)
         self.assertEqual(metrics["publication_lifecycle_contradiction_total"], 2)
 
+    def test_vlm_backlog_requires_strict_dual_complete_album_and_current_gate(self) -> None:
+        mod = load_module()
+        row = {
+            "image_quality_decision": "needs_visual_review",
+            "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+            "publication_eligibility_decision": "accept",
+            "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "actual_image",
+            "image_acquisition_status": "complete",
+            "expected_image_count": 4,
+            "fetched_image_count": 4,
+            "image_component_bundle_complete": "true",
+            "input_media_manifest_hash": "album-hash",
+            "overall_media_score": 0.60,
+            "postcardness_score": 0.90,
+        }
+        self.assertTrue(mod._image_vlm_backlog_candidate(row))
+        self.assertFalse(mod._image_vlm_backlog_candidate({**row, "text_vector_fusion_status": "missing_bge"}))
+        self.assertFalse(mod._image_vlm_backlog_candidate({**row, "fetched_image_count": 3}))
+        self.assertFalse(mod._image_vlm_backlog_candidate({**row, "overall_media_score": 0.4, "postcardness_score": 0.4}))
+        completed = {
+            **row,
+            "image_vlm_status": "completed",
+            "image_vlm_decision": "reject",
+            "image_vlm_prompt_version": mod.IMAGE_VLM_PROMPT_VERSION,
+            "image_vlm_decision_version": mod.IMAGE_VLM_DECISION_VERSION,
+            "image_vlm_request_fingerprint": "fingerprint",
+            "image_vlm_media_manifest_hash": "album-hash",
+        }
+        self.assertTrue(mod._image_vlm_verdict_is_current(completed))
+        self.assertFalse(mod._image_vlm_backlog_candidate(completed))
+
+    def test_vlm_backlog_launches_image_worker_with_two_call_cap(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "publication_sent_total": 0,
+                "publication_confirmed_total": 0,
+                "image_vlm_backlog_total": 3,
+                "image_actionable_work_total": 3,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        image_action = next(action for action in actions if action["action"] == "launch_image_diagnostic")
+        self.assertEqual(image_action["env"]["REGION_TALK_IMAGE_VLM_ENABLED"], "1")
+        self.assertEqual(image_action["env"]["REGION_TALK_IMAGE_VLM_MAX_CALLS_PER_RUN"], "2")
+
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()
         metrics = {

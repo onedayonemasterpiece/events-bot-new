@@ -186,6 +186,30 @@ publication must not remain an active image-review backlog merely because its
 historical image row is retained. `publication_lifecycle_contradiction_total`
 must be zero after finalizer reconciliation.
 
+`needs_visual_review` is not allowed to remain a product dead end for a fully
+acquired strict-funnel album. ImageDiagnostic therefore has a bounded
+multimodal adjudication lane for rows that already have current fused E5+BGE,
+current publication eligibility, a complete album/manifest and all legacy
+diagnostic components, but missed only the uncalibrated legacy scalar image
+threshold. Gemini receives the actual resized images from the complete album,
+not post text or metadata. A consistent `accept` produces the versioned
+`vlm_visual_accept` attestation and may proceed to the normal final publication
+verifier. `reject`, `review`, provider errors and budget deferrals remain
+non-terminal visual-review outcomes during rollout; they do not become
+automatic publication tombstones.
+
+This lane is deliberately small: the orchestrator defaults to at most two new
+VLM calls per ImageDiagnostic run. It shares the same durable daily Region Talk
+budget (hard ceiling 100), Supabase Google-AI limiter and request ledger as the
+publication finalizer. Request identity includes normalized post URL, complete
+media-manifest hash, album cardinality, prompt/decision contract and model, so
+a completed unchanged verdict replays without another paid call while provider
+errors remain retryable under the original reservation. The scorecard exposes
+`image_vlm_backlog_total`, `image_vlm_completed_total`,
+`image_vlm_accept_total`, `image_vlm_reject_nonterminal_total`,
+`image_vlm_review_total` and
+`image_vlm_error_or_budget_deferred_total` without hiding the legacy counters.
+
 A producer gate-version bump is not a quality rejection. Missing/stale
 attestations are written as `deferred_refresh`; existing actual-image evidence
 is preserved for CandidateReport to re-attest. Runtime heartbeats separate

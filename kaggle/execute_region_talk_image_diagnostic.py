@@ -105,6 +105,11 @@ def main() -> int:
             "REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK",
             "REGION_TALK_IMAGE_DIAG_STALE_LEASE_SECONDS",
             "REGION_TALK_IMAGE_MAX_IMAGES_PER_POST",
+            "REGION_TALK_IMAGE_VLM_ENABLED", "REGION_TALK_IMAGE_VLM_MAX_CALLS_PER_RUN",
+            "REGION_TALK_IMAGE_VLM_MODEL", "REGION_TALK_IMAGE_VLM_DEFAULT_ENV_VAR_NAME",
+            "REGION_TALK_IMAGE_VLM_TIMEOUT_SECONDS", "REGION_TALK_IMAGE_VLM_MAX_SIDE",
+            "REGION_TALK_LLM_MODEL", "REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME",
+            "REGION_TALK_LLM_BUDGET_ID", "REGION_TALK_LLM_BUDGET_MAX",
             "REGION_TALK_CLIP_MODEL_LOCAL_PATH", "REGION_TALK_CLIP_REQUIRE_LOCAL_MODEL",
             "REGION_TALK_CLIP_KAGGLE_MODEL_SOURCE",
             "REGION_TALK_STATE_BACKEND", "REGION_TALK_REQUIRE_YDB_STATE",
@@ -125,8 +130,9 @@ def main() -> int:
         runtime_env["REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS"]=str(args.wait_after_drain_seconds)
         runtime_env["REGION_TALK_IMAGE_DIAG_POLL_INTERVAL_SECONDS"]=str(args.image_poll_interval_seconds)
         (folder/"region_talk_run_config.json").write_text(json.dumps({"run_id":run_id,"source":args.source,"env":runtime_env},ensure_ascii=False,indent=2),encoding="utf-8")
+        shutil.copy2(PROJECT_ROOT / "region_talk_llm_runtime.py", folder / "region_talk_llm_runtime.py")
     diag_ref=create_or_replace_dataset(client, username, f"rt-img-diag-{run_id[-18:].lower().replace(':','').replace('_','-')}", "RT image diag input", write_input)
-    wait_dataset_ready(client, diag_ref, expected_files=["image_diag_input.json", "region_talk_run_config.json"])
+    wait_dataset_ready(client, diag_ref, expected_files=["image_diag_input.json", "region_talk_run_config.json", "region_talk_llm_runtime.py"])
     dataset_sources=build_input_datasets(client, run_id=run_id, username=username)+[diag_ref]
     kernel_path=stage_kernel(run_id,args.kernel_slug); kernel_ref=f"{username}/{args.kernel_slug}"
     candidate_kernel_ref=f"{username}/region-talk-candidate-report"

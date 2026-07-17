@@ -102,6 +102,9 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertFalse(self.mod._completed_llm_result_is_replayable({
             "llm_gate_status": "rate_limited", "llm_reason": "429",
         }))
+        self.assertTrue(self.mod._completed_llm_result_is_replayable({
+            "vlm_gate_status": "ok", "vlm_decision": "accept",
+        }))
 
     def test_provider_preflight_fails_before_budget_reservation(self) -> None:
         with mock.patch.object(self.mod.importlib.util, "find_spec", return_value=None):

@@ -565,10 +565,23 @@ contract is:
 ```text
 CandidateReport text/vector rows + image_queue_item
   → RegionTalkImageDiagnostic actual_scored image_queue_item rows
+     → bounded complete-album visual adjudication for strict dual-vector rows
+       stranded only by the uncalibrated legacy image score
   → publication finalizer reads live YDB, verifies top actual-image rows,
      writes publication_candidate_item, and optionally exports a lightweight
      XLSX/CSV review artifact
 ```
+
+The bounded visual adjudicator is not a replacement for E5+BGE or the final
+Gemini text/product verifier. Admission requires current fused
+`fused_e5_bge_m3`, `vector_accept_candidate`, current source/text/publication
+eligibility, actual images, complete acquisition and an unchanged media
+manifest. It sees all album images but no post text. Only a structurally
+consistent versioned `accept` can recover the row as `vlm_visual_accept`;
+`reject`, `review`, provider failures and budget deferrals remain non-terminal
+for operator/calibration review. Calls share the finalizer's durable <=100
+Region Talk budget and are capped at two new requests per image run by default.
+Completed unchanged requests are replayed by fingerprint and never paid twice.
 
 `build_report(...)` may still be the historical function name around the
 bounded scoring code, but product completion must be judged from live YDB rows:
