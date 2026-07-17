@@ -240,28 +240,45 @@ Existing vector baseline нельзя объявлять «хуже»: его и
 
 ### Стенд известного клуба: Gemma 4 31B → Gemini 3.1 Flash-Lite
 
-После owner feedback СИНЕМАНГО исправлен с `rejected` на `confirmed`: пять исходных постов прямо называют его киноклубом/клубом любителей азиатского кино, а не только библиотечной кинопрограммой. Все приведённые выше counts и fixture пересчитаны.
+После owner feedback СИНЕМАНГО исправлен с `rejected` на `confirmed`: пять исходных постов прямо называют его киноклубом/клубом любителей азиатского кино. Все counts и fixture выше пересчитаны.
 
-Для предполагаемого Smart Update matcher выполнен отдельный direct-REST live-стенд на том же runtime key lane `GOOGLE_API_KEY`, без записи в production, без gateway limiter и без изменения Smart Update. Candidate retrieval считался уже выполненным: на вход LLM давался **один известный CLUB** и один реальный post packet. Проверены 8 постов: 4 positive (`СИНЕМАНГО #1694`, `Game Vibes #6929`, `English Cafe #6572`, `АвтоРетроКлуб #6853`) и 4 hard negative (упоминание организатора `Поэты39 #6027`, внешняя лекция инициатора EEE `#6573`, одноимённое комедийное шоу `#6866`, фестиваль фотосообществ `#6742`).
+Первый direct-REST smoke на 8 cases действительно был слишком мал и обходил gateway limiter. Поэтому выполнен новый controlled stand на **48 реальных event/candidate pairs**: 24 accepted memberships из reviewed ledger и 24 researcher-adjudicated hard negatives (другая identity на той же площадке/источнике, похожее имя, venue leakage, упоминание, festival/program child). Это ещё не owner-approved gold.
 
-Максимально короткая system instruction — **165 символов**, native JSON schema имеет только `v` и `q`:
+Попытка решать все случаи одним универсальным prompt дала false positives. Финальный безопасный contract поэтому разбит на три очень коротких lane:
 
 ```text
-v=yes, только если INPUT явно сообщает о событии именно CLUB. Упоминание, площадка, фестиваль или шоу ≠ yes; сомнение=unclear. q=точная цитата из INPUT до 60 знаков.
+source=yes уже доказан. v=no ТОЛЬКО если title — отдельный пункт общей программы (артист/йога и т.п.) или чужой crosspost; иначе v=yes. q=дословно 3–8 слов INPUT.
 ```
 
-Обе модели вызывались с `thinkingLevel=minimal`, `temperature=0`, `maxOutputTokens=96`; input составил 302–757 tokens, медиана 489. Итог финального прогона:
+```text
+name=yes,source=no. v=yes только если CLUB явно организует title. CLUB лишь venue/инициатор/упоминание/список активностей → no. Сомнение=unclear. q=дословно 3–8 слов INPUT.
+```
 
-| Модель | Provider/schema | Correct + exact grounded quote | Latency median/max | Ошибки |
-|---|---:|---:|---:|---|
-| `gemma-4-31b-it` | 8/8 | **8/8** | **1.519 / 1.671 s** | 0 |
-| `gemini-3.1-flash-lite` shadow | 8/8 | **5/8** | **0.569 / 0.621 s** | false positive `#6027`; false negatives `#6929`, `#6853` |
+Если нет ни canonical-source, ни curated-name/alias match, relation fail-closes в `no` **без LLM-вызова**. Это не широкая keyword-классификация смысла: deterministic слой только отсекает candidate без identity evidence, а спорную organizer/program semantics решает LLM. URL targets удаляются из bounded packet, остальной текст не переписывается. Native schema остаётся `v + q`; `thinking=minimal`, `temperature=0`, `maxOutputTokens=96`.
 
-На этом маленьком стенде Gemma не показала длинного хвоста, но 8 вызовов не доказывают production p95/p99. Естественный fallback не сработал ни разу, потому что primary завершил все 8 запросов; Lite был вызван shadow на тех же packet/prompt и поэтому измеряет качество возможного fallback, а не transport recovery.
+Финальный Gemma run:
 
-**Вывод:** `gemma-4-31b-it` подходит как primary для bounded verifier известного клуба. `gemini-3.1-flash-lite` **не подходит как автоматический positive fallback**: он пропустил два настоящих события и один раз привязал чужой open mic к клубу только из-за упоминания организатора. Безопасный provider-failure contract: `deferred` + повтор Gemma; Lite можно использовать только fail-closed (`no/unclear` или очередь review), но его `yes` не создаёт relation. Это также сохраняет regression contract `INC-2026-05-05-smart-update-gemma3-fallback-hallucination`: fallback получает тот же source-bound packet и не переходит в широкий writer prompt.
+| Метрика | Результат |
+|---|---:|
+| Frozen cases | 48 = 24 positive + 24 hard negative |
+| Deterministic no-match skips | 17 |
+| Gemma provider calls | 31/31 succeeded |
+| Accepted positives (`yes` + verbatim packet substring) | **22/24 = 91.7%** |
+| Unsafe false positives | **0/24** |
+| Safe relation decisions overall | **46/48 = 95.8%** |
+| Quote validation failures | **0** |
+| Provider latency p50 / p95 / max | **1.682 / 2.242 / 5.586 s** |
+| Supabase NO_WAIT blocks handled outside client | 1 |
 
-Raw runner/result: `artifacts/codex/interest-clubs-audit-20260717/benchmarks/run_known_club_llm_stand.py` и `known-club-llm-stand-20260717.json` (не коммитятся).
+Два false negatives — `АвтоРетроКлуб #6853` и `relation_club #3463`. Для `#6853` fail-closed результат объясним: source в основном рассказывает о прошедшем выезде в Светлый и лишь тизерит следующую дату в Янтарном. Для `#3463` название конкретной встречи не несёт identity клуба достаточно явно. Автоматического relation для них пока быть не должно; они идут в review/deferred, а не исправляются расширением prompt ценой false positives.
+
+На 12 самых рискованных cases сделаны ещё два Gemma повтора (24 calls): **12/12 cases дали одинаковый, правильный и grounded verdict во всех трёх наблюдениях**. Итого именно финальный acceptance run прошёл через `GoogleAIClient` с `55/55` успешными `google_ai_reserve`, `google_ai_mark_sent` и `google_ai_finalize`; reserve/local/model fallback были выключены, key lane был строго `GOOGLE_API_KEY`. После перехода на controlled runner весь накопленный stand ledger за день содержит 549 succeeded Gemma requests и 131 succeeded Lite requests; пять Lite rows завершены как `failed_provider`, незавершённых `sent` rows после cleanup нет.
+
+Для Lite сохранён полноценный earlier controlled shadow на 48 cases: `48/48` provider success, но только `39/48` correct+grounded, с **4 false positives**, 3 false negatives и 3 quote failures. Повтор final-v7 shadow не форсировался: default Lite lane достиг Supabase `RPD=450/450`, и limiter остановил новые calls; overflow/bypass не включался. Этого уже достаточно для NO-GO на positive fallback.
+
+**Вывод:** `gemma-4-31b-it` можно брать primary только в таком split-lane, evidence-bound и fail-closed verifier. Даже Gemma не создаёт relation при `no/unclear` или invalid quote. `gemini-3.1-flash-lite` не подтверждает positive relation: provider failure → `deferred`/повтор Gemma, а Lite допустим только как отрицательный/review probe. Это сохраняет regression contract `INC-2026-05-05-smart-update-gemma3-fallback-hallucination`: никакого широкого writer fallback.
+
+Tracked label manifest: `tests/fixtures/interest_clubs_known_match_eval_v1.json`. Raw runner/results: `artifacts/codex/interest-clubs-audit-20260717/benchmarks/` (не коммитятся).
 
 Честный следующий benchmark обязан:
 
