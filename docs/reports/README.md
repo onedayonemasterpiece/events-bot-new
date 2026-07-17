@@ -12,6 +12,7 @@
 - Gemma 4 migration research: `gemma-4-migration-research-2026-04-19.md`
 - Gemma 4 migration repo-wide status: `gemma-4-migration-status-2026-04-22.md`
 - Static personal announcements public-release readiness audit/checklist (2026-07-11): `static-personal-announcements-release-readiness-2026-07-11.md`
+- Static-site release context/source/current-status recovery (2026-07-17): `static-site-release-context-recovery-2026-07-17.md`
 - Static personal announcements feature-branch refresh decisions (2026-07-11): `static-personal-announcements-branch-refresh-2026-07-11.md`
 - Event age-rating Gemini Pro architecture consultation (2026-07-15): `event-age-rating-gemini-consultation-2026-07-15.md`
 - Interest-clubs read-only catalog audit (2026-07-17): `interest-clubs-catalog-audit-2026-07-17.md`

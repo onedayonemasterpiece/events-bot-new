@@ -4,8 +4,9 @@
 
 > **Статус:** канонический acceptance inventory, а не журнал уже пройденных
 > тестов. Наличие ID не означает, что функция реализована, автоматизирована или
-> принята в production. Current release scope и gates определяет
-> [release-plan.md](release-plan.md).
+> принята в production. Full release scope определяет
+> [Stage 0–11 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
+> [release-plan.md](release-plan.md) владеет только platform/Telegraph slice.
 
 ## Уровни доказательства
 
@@ -25,7 +26,7 @@
 |---|---|---|---|---|
 | Preview build, files, routes, JSON-LD, ICS, media/static related | `ADD-BUILD-*`, `ADD-SEO-*`, часть `ADD-EVENT/MEDIA-*` | Automated component | `npm --prefix site run build:preview && npm --prefix site run check:preview` | production root, full live catalog, interaction, promotion/rollback |
 | Public projection eligibility/media safety | `ADD-BUILD-03/04`, `ADD-MEDIA-*` | Automated component | `pytest -q tests/test_static_site_public_gate.py` | whole-catalog reconciliation and live HTTP |
-| Kaggle command handoff | `ADD-BUILD-01` | Automated component | `pytest -q tests/test_static_site_build_handoff.py` | real Kaggle → promotion/catch-up |
+| Kaggle command handoff | `ADD-BUILD-08` | Automated component | `pytest -q tests/test_static_site_build_handoff.py` | real Kaggle → promotion/catch-up; ID must be added to the runnable test name |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -155,6 +156,14 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 
 ### Regression-сценарии изменений 15–17 июля
 
+- **ADD-DS-01 — Каталог собирается из runtime-компонентов.** `/lab/design-system/` содержит foundations, primitives, feedback states, product components и registry; product components импортированы из runtime source, а не скопированы как demo HTML.
+- **ADD-DS-02 — Полные состояния primitives.** Button/Field и feedback components показывают accepted default/hover/focus/pressed/loading/disabled/selected/error states с корректными ARIA semantics.
+- **ADD-DS-03 — Token-only shared primitives.** Shared primitives используют `--ke-*` tokens, не локальные raw-значения, а text/background pairs проходят AA contract.
+- **ADD-DS-04 — Responsive component catalog.** Acceptance widths `320/360/390/430/768/1024/1366/1440/1920` не дают page-level overflow или сломанных product fixtures.
+- **ADD-DS-05 — Promotion governance.** Новый shared pattern имеет status/owner/runtime path, states, immutable preview/SHA sign-off, contract check, docs и changelog; утверждённый page-local дубль блокирует release.
+- **ADD-DS-06 — Deprecated variant is explicit.** `EventCard overlay-controls` остаётся deprecated/regression-only, а `split-actions` — baseline до нового зафиксированного решения.
+- **ADD-DS-07 — Reduced motion and keyboard.** Catalog actions доступны с клавиатуры; focus видим; `prefers-reduced-motion` отключает необязательное движение без потери статуса/контента.
+
 - **ADD-RECENT-01 — Interest-club projection gate.** В public manifest и sitemap
   попадают только approved/fresh club identities и accepted event relations;
   deferred/review/festival-only/устаревшие identities не протекают, а failed club
@@ -227,6 +236,123 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-SEC-02 — Auth/admin boundaries.** Обычная авторизация, знание event id или `noindex` не открывают admin report/history; повторный report защищён от двойного запуска и показывает реальный статус/результат нескольких incidents.
 - **ADD-OBS-01 — Ошибки видимы и коррелируются.** Build/search/share/email/transport/personalization failure оставляет run/request correlation evidence без PII; UI не сообщает успех, если backend действие не принято.
 - **ADD-OBS-02 — Чистая клиентская сессия.** На каждой page family нет неожиданных console errors, unhandled rejections, failed first-party requests, hydration mismatch и повторяющегося telemetry spam.
+
+## Release-orchestration scenarios из полного Stage 0–11 checklist
+
+Эти IDs восстанавливают требования, которые не помещались в прежние широкие
+`ADD-*` families. Они остаются `Planned`, пока ID не связан с runnable test/manual
+evidence row на frozen SHA.
+
+### Scope, quality и RC
+
+- **ADD-RC-01 — Scope freeze.** Mandatory scope F1–F13/F15–F18, H1 decision, M1–M6 и post-release exclusions зафиксированы без тихого сокращения.
+- **ADD-RC-02 — Main reachability ledger.** Каждый candidate commit достижим из `origin/main` либо имеет явный `reject|supersede|clean-port` disposition.
+- **ADD-RC-03 — Immutable versions and sign-off.** UI, data/schema versions, preview/build ID и owner sign-off относятся к одному SHA.
+- **ADD-RC-04 — Evidence pack completeness.** Manifest, commands, checks, screenshots/native evidence, production probes, reviewer и rollback target присутствуют и взаимно согласованы.
+- **ADD-RC-05 — Limited canary and quality window.** Canary выдерживает полные 14 дней без critical event defect или recurrence закрытого root cause.
+- **ADD-RC-06 — Launch closure.** Rollback/on-call drill, noindex removal, 72-hour hypercare и 14-day review привязаны к точному release.
+- **ADD-QUALITY-01 — Audit cadence.** Все новые/изменённые события проверяются ежедневно, active/future inventory — по принятому полному cadence.
+- **ADD-QUALITY-02 — Closure-grade replay.** Исправление проходит реальный import boundary → Smart Update → DB → static/Telegram/VK/Telegraph/ICS surfaces.
+- **ADD-QUALITY-03 — Incident regression pack.** Канонические duplicate/location/date/recurrence/venue incidents воспроизводятся и не регрессируют.
+- **ADD-QUALITY-04 — Zero-critical stability.** Четырнадцать последовательных дней имеют ноль новых critical и ноль recurrence/reopen; нарушение перезапускает окно.
+
+### Production build, URLs и related/search
+
+- **ADD-BUILD-07 — Production profile isolation.** Production build indexable/canonical/full-catalog, preview остаётся noindex и не смешивает lab/fixture routes.
+- **ADD-BUILD-08 — Immutable Kaggle handoff.** Snapshot → unique Kaggle input → heartbeat/lease → checked artifact коррелируются одним build ID.
+- **ADD-BUILD-09 — Release manifest parity.** Manifest хранит repo/snapshot/schema/schedule hashes, page/event counts, checks, freshness и asset hashes; фактический tree совпадает.
+- **ADD-BUILD-10 — Staging/current/rollback.** Failed candidate не меняет current; promotion reader-atomic; one-command rollback возвращает полностью согласованный last-good tree.
+- **ADD-BUILD-11 — Canonical delivery.** TLS/CDN/MIME/cache проверены для HTML/JSON/sitemap/robots/ICS/assets; raster budget соблюдён WebP, SVG безопасен.
+- **ADD-BUILD-12 — Capacity preflight.** Disk/volume/Object Storage/Kaggle/Supabase budgets и retention позволяют build, last-good и rollback без eviction нужных артефактов.
+- **ADD-BUILD-13 — Freshness alert and catch-up.** Missed/stale build видим, max-staleness alert срабатывает, bounded catch-up публикует newest eligible snapshot.
+- **ADD-BUILD-14 — Operator readiness scorecard.** Expected slot → run → checked artifact → delivery отображаются с owner/SLO/reason/evidence; отсутствие evidence не бывает green.
+- **ADD-URL-01 — Persisted canonical slug.** Изменение title/location не ломает существующий canonical event URL.
+- **ADD-URL-02 — Alias and lifecycle.** Rename/merge/delete/ineligible переходы создают принятые alias/redirect/410/retention без потери старых ссылок.
+- **ADD-URL-03 — Collision and sitemap identity.** Slug collision/idempotent rebuild безопасны; sitemap содержит только текущие canonical eligible URLs.
+- **ADD-RELATED-01 — Correlated related pipeline.** Effectful Smart Update автоматически достигает vector sync, full graph, LLM verification, checked build и atomic promotion.
+- **ADD-RELATED-02 — Hash barrier and reverse anchors.** Публикация ждёт нужную vector revision и пересчитывает события, для которых изменённое событие было reverse candidate.
+- **ADD-RELATED-03 — Model/provider fail-closed.** Vector/LLM timeout, invalid output и partial coverage сохраняют честный static last-good и не публикуют неверные связи.
+- **ADD-RELATED-04 — Reconciliation and expiry.** Periodic job чинит missed triggers/drift и обновляет lifecycle/time-only expiry без ручного Smart Update.
+- **ADD-RELATED-05 — Retrieval quality.** Current coverage `>=95%`, golden/hard-negative pack и verified labels проходят accepted thresholds.
+- **ADD-SEARCH-01 — Live authorized search.** Production mobile login → quota → search → useful result/fallback → logout работает с реальным auth/backend и текущим catalog.
+- **ADD-TAG-01 — Public saved-tag curation.** Save/normalize/merge/reject idempotent; LLM-first golden evaluation и current-catalog static generation не публикуют private query data.
+
+### Supabase, personalization, reminders и homepage
+
+- **ADD-CAP-01 — Storage baseline and Green band.** Текущие размеры и рост держат personalization project ниже принятой доли 500 MB с измеримым запасом.
+- **ADD-CAP-02 — Compact current state.** Один current row/aggregate заменяет unbounded raw event history там, где история не нужна продукту.
+- **ADD-CAP-03 — Retention and compaction.** TTL/compaction/reconciliation удаляют disposable telemetry, но сохраняют durable favorites/consent и audit minimum.
+- **ADD-CAP-04 — Fail-safe shedding.** Near-cap отключает disposable writes до user-critical state; статический сайт и ICS продолжают работать.
+- **ADD-CAP-05 — Capacity simulation.** Synthetic 1k/10k profiles, cleanup dry-run и restorable snapshot доказывают бюджет/rollback.
+- **ADD-PERS-09 — Strict RC relevance KPI.** Для eligible mature golden personas `cards_to_first_relevant <=20`; исходный `USR-11 <=30` остаётся отдельным пользовательским ceiling.
+- **ADD-PERS-10 — Real correlated personalization E2E.** Browser local state → authorized DB/profile evidence → generation → next feed доказаны на isolated real backend одним correlation ID.
+- **ADD-REM-01 — Calendar-to-reminder delivery.** Explicit save/consent → due scheduler → Postbox MessageId/provider event → delivered/suppressed/cancelled/rescheduled/rollback проверены end-to-end.
+- **ADD-HOME-01 — H1 decision.** До F5 freeze owner фиксирует `ship|defer`; defer полностью исключает experimental code/manifest из RC.
+- **ADD-HOME-02 — Static first scene.** Accepted H1 полезен без JS, не выталкивает categories/feed за budgets и не создаёт пустой hero.
+- **ADD-HOME-03 — Semantic motion safety.** Stable hitboxes, `CLS=0`, interruptibility и reduced-motion contract проходят mobile/desktop/keyboard.
+- **ADD-HOME-04 — Grounded deterministic claims.** Briefing manifest имеет source/provenance/`safe_until`; просроченные/неподтверждённые claims fail closed.
+- **ADD-HOME-05 — Discovery experiment.** Control/V1/V2 сравниваются по downstream discovery, performance, novelty и accessibility до ship decision.
+
+### Exact Stage 6 gates
+
+- **ADD-MEDALLION-01 — P0 shortlist and provenance.** Accepted organizer/venue/festival medallions имеют source, alias boundaries, current gap audit и owner disposition.
+- **ADD-MEDALLION-02 — Exhaustive target inventory.** Каждая фактическая medallion surface/renderer имеет URL inventory и captures на 390/1440 плюс критические breakpoints.
+- **ADD-MEDALLION-03 — Zero visual defects.** Нет clipping, alpha matte, dirty shadow, overflow, unreadable artwork или capture failure.
+- **ADD-MEDIA-05 — Full-catalog duplicate closure.** Active/future ledger имеет ноль confirmed duplicates и ноль unreviewed visual clusters после rebuild всех public surfaces.
+- **ADD-MEDIA-06 — Focus metadata producer.** Face/focal/saliency producer, confidence/fail-closed, manual override и golden crop corpus согласованы со всеми consumers.
+- **ADD-AGE-01 — Age source reconciliation.** Source→canonical/backfill/conflict ledger не теряет reliable declared values и не принимает programme/door/audience age за event rating.
+- **ADD-AGE-02 — Age all-renderer RC matrix.** Пять accepted values плюс unknown проверены на каждой card/list/detail/search/related/personal/favorite/festival/transport/share/structured derivative.
+- **ADD-OCC-01 — Canonical linked graph parity.** Symmetric no-self/no-dangling core graph точно совпадает со static artifact и не использует title-only inference.
+- **ADD-OCC-02 — Occurrence-specific actions.** URL/ICS/favorite/reminder/ticket/transport относятся к выбранной дате, а не к случайному sibling.
+- **ADD-OCC-03 — All-card occurrence matrix.** Альтернативы доступны на всех card families/states/timezones/no-JS; same-slot duplicate не становится другой датой.
+- **ADD-TR-06 — Provider fan-in.** Независимые KPPK/bus jobs → одна versioned schema → validation/last-good fan-in → один changed-hash rebuild, zero unchanged rebuild.
+- **ADD-TR-07 — Exact-date and bounded ICS.** Route calendar соответствует дате, filename type-prefix верен, event caps 4/6 соблюдены, orphan ICS отсутствуют.
+- **ADD-TR-08 — Stable real-event fixtures.** Presentation fixtures 6510/6397/6710/Yantarny и unsupported Kaliningrad проверяют расписание, no-return, conflicts и eligibility.
+- **ADD-ADMIN-01 — Report queue safety.** Admin allowlist, unique active key, idempotent enqueue и atomic poller claim не создают двойной repair.
+- **ADD-ADMIN-02 — Repair lifecycle.** Crash/retry/structured result → canonical repair → rebuild → immutable history проходят без ложного success.
+- **ADD-ADMIN-03 — Real ArtKodex owner E2E.** Реальный accepted report доходит до правильного owner/worker и возвращает проверяемый result на public surface.
+- **ADD-EVENT-SHARE-04 — Stable event assets.** 1200×630, 1080×1350 и 1080² assets deterministic/hash-bound/CDN-ready, CORS/freshness/rollback проверены.
+- **ADD-EVENT-SHARE-05 — Native event-share matrix.** Telegram/VK/MAX на реальных mobile/desktop targets получают правильный event URL/image/text; API success не равен paste/send success.
+- **ADD-SERVICE-SHARE-01 — Service share placements.** Mobile menu и footer присутствуют на всех page families; mobile native share и desktop copy behavior не смешиваются.
+- **ADD-SERVICE-SHARE-02 — Service-card manifest.** WebP/PNG одного payload deterministic, metric/copy versions и hashes записаны, asset загружен до atomic promotion.
+- **ADD-SERVICE-SHARE-03 — Native clipboard matrix.** Final RC проходит Windows/macOS × accepted browsers × plain/image/Telegram/VK/MAX targets с 2/2 repeatability.
+- **ADD-SERVICE-SHARE-04 — Claim evidence.** Catalog metrics и обещания на service card имеют dated reproducible evidence; unsupported superlatives не публикуются.
+
+### Final SEO/security/performance and Telegraph schedule
+
+- **ADD-SEO-04 — Frozen neutral audit pack.** Crawl/render/status/canonical/robots/sitemap/schema/link/no-JS/mobile/media/performance evidence снято с immutable feature-complete SHA.
+- **ADD-SEO-05 — Three independent audits.** Codex, approved Gemini Pro и Opus получают один evidence pack; failed/low-class lane не подменяет review.
+- **ADD-SEO-06 — Reconciled zero-high ledger.** Findings воспроизведены/опровергнуты, Critical/High закрыты, visible/schema conflicts отсутствуют, final exact-SHA rerun принят.
+- **ADD-SEO-07 — GEO transparency.** What/where/when/who/price/status, source/freshness/entity clarity, crawler policy и representative regional query pack доказаны без AI-only filler.
+- **ADD-SEC-03 — Release security review.** RLS/grants/auth callbacks/tokens/admin/webhooks/secrets/abuse limits проходят review на точном RC.
+- **ADD-PERF-01 — Full-catalog load.** CDN, Edge search, telemetry, provider fan-in и atomic promotion выдерживают принятый каталог/traffic budget.
+- **ADD-CUTOVER-08 — Exact T0 record.** UTC/Kaliningrad timestamps, mode flags, SHA/snapshot/build/manifest и rollback target записаны до dual-run.
+- **ADD-CUTOVER-09 — Ramp evidence.** D0/D2/D4/D6 percentages, resolver parity и реальные Telegram/VK/MAX unfurl probes проходят без broken outward links.
+- **ADD-CUTOVER-10 — D7–D9 soak.** 72 часа на 100% static outward links имеют ноль release-critical errors и полную reconciliation.
+- **ADD-CUTOVER-11 — D10 no-create audit.** Mode становится static/existing-only, create/recreate counters после cutoff равны нулю, legacy fields/URLs сохранены.
+- **ADD-CUTOVER-12 — Aggregate Telegraph separation.** Month/weekend/festival Telegraph выключаются только собственным switch после отдельного static parity/acceptance pack.
+
+### Separate post-release release scenarios
+
+- **ADD-COMMENT-01 — F14 clean-port boundary.** Exact-SHA reuse/adapt/reject matrix сохраняет authority/thread/session/privacy boundaries и не merge-ит divergent Region Talk wholesale.
+- **ADD-COMMENT-02 — 30-day fact shadow.** Daily collection по current/future events сохраняет parent/reply/source-owner metadata и классифицирует fetch failures.
+- **ADD-COMMENT-03 — Precision and product GO.** Accepted-fact precision `>=0.99`, zero wrong-author/event/question/uncertainty failures и доказанная decision usefulness.
+- **ADD-COMMENT-04 — Typed fact lifecycle.** Exact-span authority/scope/TTL/correction/retraction ledger идемпотентен и не переписывает critical event fields.
+- **ADD-COMMENT-05 — F14 own RC.** Deterministic «Важно знать»/medallion проходит own static preview, privacy, a11y, canary and rollback without ranking effect.
+- **ADD-FEST-01 — Festival queue safety.** Atomic claim/idempotency/retry/quarantine/stale recovery и live source E2E закрыты.
+- **ADD-FEST-02 — Official-site monitoring.** Registry/cadence/fingerprint/fetch/LLM-first extraction/last-good/freshness alerts доказаны.
+- **ADD-FEST-03 — Stable edition identity.** Rename/merge redirects и versioned event↔edition projection сохраняют permanent identity.
+- **ADD-FEST-04 — Festival pages and relations.** Index/detail/archive, distinct card и bidirectional programme links согласованы с event cards.
+- **ADD-FEST-05 — Festival own RC.** Standard build/promotion/rollback, UI/a11y/no-JS and final SEO/GEO pass for the new page family.
+- **ADD-OPS-01 — Versioned check registry.** Owner/criticality/slot/freshness/SLO/attempt/success/delivery/status/reason/evidence нормализованы.
+- **ADD-OPS-02 — Cross-pipeline reconciliation.** Ingestion/video/promo/transport/static/media/quality/email/capacity дают согласованный score, missing evidence не green.
+- **ADD-OPS-03 — Protected read-only dashboard.** Admin access, redacted drill-down, bounded history и no PII/secrets проверены.
+- **ADD-OPS-04 — Mutating controls separate.** Retry/catch-up/kill-switch появляются только после отдельного confirmation/idempotency/audit acceptance.
+- **ADD-CLUB-02 — Club taxonomy/time split.** Stable community отделена от linked occurrence/festival/duplicate/venue series на past→future validation.
+- **ADD-CLUB-03 — False merge/split closure.** Canary имеет zero confirmed false public merge, no dangling relation и accepted split/redirect behavior.
+- **ADD-CLUB-04 — Club freshness.** Новая встреча accepted club появляется в SLO, stale/deferred identity fail closed и не блокирует base event build.
+- **ADD-CLUB-05 — Club stable release.** Семидневное observation, rollback, UI/a11y/no-JS/SEO and owner decision закрывают отдельный canary release.
+
 
 ## Правило исполнения
 

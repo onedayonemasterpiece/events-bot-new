@@ -3,8 +3,22 @@
 > **Срез:** 2026-07-17
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
-> с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
+> с Telegraph. Полный релиз F1–F18/H1/M1–M6 и post-release stages остаётся отдельным
 > umbrella-gate в [Static personal announcements](../static-personal-announcements/README.md).
+
+## Важное восстановление scope
+
+Этот файл — **не весь релизный план** и не сокращает его до пяти задач. После
+повторного аудита истории найден базовый checklist из 228 требований; после добавления пяти D0–D10 rows текущий реестр содержит 233 требования:
+
+- [полный Stage 0–11 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
+- [отчёт восстановления источников и статусов](../../reports/static-site-release-context-recovery-2026-07-17.md);
+- [presentation-day gate](presentation-release-checklist.md);
+- [208 стабильных test scenario IDs](test-scenarios.md).
+
+Ниже описан только зависимый platform/cutover workstream. Его нельзя использовать
+как доказательство готовности identity, favorites, email/reminders,
+personalization, transport, media, age/occurrences, SEO/GEO или других release gates.
 
 ## Где находится release truth
 
@@ -133,9 +147,10 @@ STATIC_SITE_CANARY_PERCENT=0..100
 только явным операторским решением и bounded backfill пропущенных eligible events.
 Ни один rollback не очищает legacy Telegraph fields.
 
-## Top-5 задач, которые можно запускать сейчас
+## Первая волна platform-задач (не полный backlog)
 
-Задачи не включают проектирование UI листингов или event detail.
+Это пять параллельно стартуемых work packages из полного реестра, выбранных с
+учётом запрета на UI листингов/event detail. Они не являются «всем оставшимся».
 
 | Priority | Задача | Зависимости | Acceptance |
 |---|---|---|---|

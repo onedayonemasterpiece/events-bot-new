@@ -3,10 +3,10 @@
 ## [Unreleased]
 
 ### Added
-- **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
+- **Static-site full release-context recovery**: restored the 228-item F1–F18/H1/M1–M6 Stage 0–11 checklist and 18 missing feature/operations/backlog contracts from the surviving release branch, added a source/status recovery report and the official presentation gate, reconciled five new D0–D10 Telegraph requirements (233 total), and expanded the acceptance inventory to 208 stable scenario IDs including design-system, RC, quality, capacity, exact media/transport and post-release families.
 
 ### Changed
-- **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
+- **Static-site documentation and E2E index**: corrected the earlier narrow top-five plan to an explicitly scoped platform workstream, merged the design-system and recent-change scenario branches, routed the recovered contracts, distinguished preview component checks/mocked demos/draft Gherkin from `0/208` runnable-ID traceability, reconciled current desktop/age/M2/social/clubs evidence, and aligned post-presentation T0 with the reversible D0-to-D10 event-detail Telegraph coexistence contract.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added

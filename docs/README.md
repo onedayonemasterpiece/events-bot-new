@@ -31,7 +31,9 @@
 - Фичи: `docs/features/`
 - Interest clubs implementation RC, identity ADR and gated release plan: `docs/features/interest-clubs/README.md`
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
-- Static event-page production plan, 10-day Telegraph cutover and tests: `docs/features/static-site-pages/release-plan.md`, `docs/features/static-site-pages/test-scenarios.md`
+- Full static-site release scope (233 current requirements; 228 recovered baseline): `docs/reports/static-personal-announcements-release-readiness-2026-07-11.md`
+- Recovery/source/status audit: `docs/reports/static-site-release-context-recovery-2026-07-17.md`
+- Event-page production slice, presentation gate, 10-day Telegraph cutover and 208 test scenarios: `docs/features/static-site-pages/release-plan.md`, `docs/features/static-site-pages/presentation-release-checklist.md`, `docs/features/static-site-pages/test-scenarios.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
