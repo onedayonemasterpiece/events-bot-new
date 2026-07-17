@@ -67,7 +67,7 @@ export const briefingLabScenarios = [
       { text: 'С чего' }, { text: 'начнём?' },
     ],
     ctaLabel: 'Собрать выходные', ctaHref: '/vyhodnye/', nextScenarioId: 'weather_water_demo',
-    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 2, focusX: 54, focusY: 45, ocrSafe: true },
+    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 2, focusX: 54, focusY: 45 },
   },
   {
     id: 'greeting_day', label: 'Добрый день', family: 'welcome', cooldownDays: 1, cursor: 'bar',
@@ -172,7 +172,7 @@ export const briefingLabScenarios = [
       { text: 'Вертинский.', accent: true, eventId: 5373 }, { text: 'Идём?' },
     ],
     ctaLabel: 'Открыть кабаре', ctaEventId: 5373, nextScenarioId: 'festival_demo',
-    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 2, focusX: 54, focusY: 45, ocrSafe: true },
+    media: { eventId: 5373, mode: 'mosaic', assetSourceOrder: 2, focusX: 54, focusY: 45 },
   },
   {
     id: 'weather_water_demo', label: 'Погода → море', family: 'signal', cooldownDays: 7,

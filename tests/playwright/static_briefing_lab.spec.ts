@@ -455,7 +455,7 @@ test('eligible scenarios use desktop mosaic media without moving the established
     const deck = JSON.parse(node.textContent || '[]');
     return { total: deck.filter((item: any) => item.id !== 'neutral_fallback').length, mosaic: deck.filter((item: any) => item.id !== 'neutral_fallback' && item.media?.mode === 'mosaic').length };
   });
-  expect(mediaCoverage).toEqual({ total: 19, mosaic: 7 });
+  expect(mediaCoverage).toEqual({ total: 19, mosaic: 5 });
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveAttribute('data-media-mode', 'mosaic');
   await expect(desktop.page.locator('[data-narrative-media]')).toHaveClass(/is-present/u);
 
@@ -500,11 +500,11 @@ test('narrative media is explicitly OCR-safe, photo-only, high-resolution and ab
     const enabled = deck.filter((item: any) => item.media?.mode === 'mosaic');
     return {
       enabled: enabled.map((item: any) => ({ id: item.id, media: item.media })),
-      abstained: Object.fromEntries(['today_count', 'smart_search_education', 'anticipated_person_named', 'live_meeting_mosaic', 'festival_demo', 'unusual_format_demo'].map((id) => [id, Boolean(deck.find((item: any) => item.id === id)?.media)])),
+      abstained: Object.fromEntries(['today_count', 'weekend_count', 'smart_search_education', 'anticipated_person_named', 'live_meeting_mosaic', 'rare_event', 'festival_demo', 'unusual_format_demo'].map((id) => [id, Boolean(deck.find((item: any) => item.id === id)?.media)])),
     };
   });
-  expect(contract.enabled).toHaveLength(7);
-  expect(contract.abstained).toEqual({ today_count: false, smart_search_education: false, anticipated_person_named: false, live_meeting_mosaic: false, festival_demo: false, unusual_format_demo: false });
+  expect(contract.enabled).toHaveLength(5);
+  expect(contract.abstained).toEqual({ today_count: false, weekend_count: false, smart_search_education: false, anticipated_person_named: false, live_meeting_mosaic: false, rare_event: false, festival_demo: false, unusual_format_demo: false });
   expect(contract.enabled.every(({ media }) => media.ocrSafe === true && media.imageTextMode === 'visual_only' && media.imageKind === 'photo')).toBeTruthy();
   expect(contract.enabled.every(({ media }) => media.sourceWidth >= 1000 && media.sourceWidth * media.sourceHeight >= 1_000_000)).toBeTruthy();
   expect(contract.enabled.every(({ media }) => media.cropStrategy === 'curated-focal-cover' && media.maxUpscale === 1.35)).toBeTruthy();

@@ -98,7 +98,7 @@ Final immutable review build:
   readable hold; публичная кнопка `Показать следующее` скрыта во время цепочки и
   появляется только в terminal state;
 - предыдущая цель `13/19` media-сцен **superseded безопасностью источника**.
-  Текущий admission оставляет mosaic только у `7/19` сценариев: картинка
+  Текущий admission оставляет mosaic только у `5/19` сценариев: картинка
   должна одновременно иметь ручное `ocrSafe`, exporter metadata
   `image_text_mode=visual_only`, `image_kind=photo`, `safe_crop=true`,
   `recommended_hero_fit=cover`, ширину не менее `1000px` и площадь не менее
