@@ -6,6 +6,8 @@ entrypoints:
   agent_routes: AGENTS.md
 
 sections:
+  tools:
+    static_listing_visual_lab: docs/tools/static-listing-visual-lab.md
   architecture:
     overview: docs/architecture/overview.md
     personalization_data_ownership: docs/architecture/personalization-data-ownership.md

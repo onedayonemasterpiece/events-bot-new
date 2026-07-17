@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
+
 ### Changed
 - **Popular feed / all owned channels and compact VK resolution**: connected the
   exact single-event repost ledger for the second managed VK community

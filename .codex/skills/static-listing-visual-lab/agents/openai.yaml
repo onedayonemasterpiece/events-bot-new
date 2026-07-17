@@ -1,0 +1,4 @@
+interface:
+  display_name: "Static Listing Visual Lab"
+  short_description: "Real-media product prototypes for event lists"
+  default_prompt: "Use $static-listing-visual-lab to create and validate real-media listing-card concepts for KenigEvents."

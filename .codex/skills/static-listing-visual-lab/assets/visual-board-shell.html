@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KenigEvents — visual decision board</title>
+<style>
+:root{--paper:#f3efe7;--ink:#20201d;--muted:#716e67;--card:#fffdf8;--accent:#d35f3e;--line:#d7d0c4}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.35 system-ui,sans-serif}
+main{max-width:1440px;margin:auto;padding:32px}.board-head{display:grid;grid-template-columns:1fr minmax(300px,.55fr);gap:24px;align-items:end;margin-bottom:28px}
+h1{font-size:clamp(36px,5vw,72px);line-height:.95;margin:0}.note{border-left:3px solid var(--accent);padding-left:16px;color:var(--muted)}
+.variant{margin:28px 0 56px}.variant>header{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--line);padding-top:14px}
+.canvas{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px;min-height:360px;overflow:hidden}
+@media(max-width:640px){main{padding:18px}.board-head{grid-template-columns:1fr}.variant>header{display:block}.canvas{padding:12px;border-radius:16px}}
+</style></head><body><main>
+<header class="board-head"><h1>Visual decision board</h1><p class="note">Replace this shell with real ranked event data and real media. Annotate each decision beside the pixels it affects.</p></header>
+<section class="variant"><header><div><b>Concept 01</b><h2>Surface / user job</h2></div><p>New user · returning user · media rule · MVP cost</p></header><div class="canvas">Real prototype goes here.</div></section>
+</main></body></html>
