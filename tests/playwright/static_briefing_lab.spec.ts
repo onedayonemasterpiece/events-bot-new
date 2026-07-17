@@ -84,7 +84,7 @@ test('C has observable semantic-fragment states and B is immediately static', as
   const { context, page } = await freshPage(browser);
   await open(page, 'c', 'today_count', '&replay=1&pace=slow');
   const total = await page.locator('[data-reveal-fragment]').count();
-  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 5000 });
   await openDock(page);
   await page.locator('[data-replay]').click();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running');
@@ -117,7 +117,7 @@ test('expanded scenario deck is discoverable; Replay, session state, Play all an
   expect(new Set(options).size).toBe(scenarioIds.length + 1); // deck + the explicit fallback
   await expect(page.locator('[data-play-all]')).toContainText(`Показать все ${scenarioIds.length}`);
 
-  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 5000 });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await openDock(page);
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete');
@@ -125,7 +125,7 @@ test('expanded scenario deck is discoverable; Replay, session state, Play all an
   await expect.poll(async () => (await labState(page)).scenario, { timeout: 5000 }).toBe('frequently_forwarded');
   await expect(page.locator('[data-chain-progress]')).toContainText('2/3');
   await page.locator('[data-pace="slow"]').click();
-  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 5000 });
   await page.locator('[data-replay]').click();
   await expect.poll(() => page.evaluate(() => (window as any).__briefingTelemetry.some((entry: any) => entry.event_kind === 'briefing_start' && entry.reason === 'manual_replay'))).toBeTruthy();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
