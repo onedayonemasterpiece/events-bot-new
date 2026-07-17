@@ -6,12 +6,19 @@ import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
 
-interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' }
-const { event, density = 'regular' } = Astro.props;
+interface Props { event: PreviewEvent; density?: 'regular' | 'weekend'; priority?: boolean }
+const { event, density = 'regular', priority = false } = Astro.props;
 const href = eventHref(event);
-const image = selectListingImage(event, density === 'weekend' ? 1.5 : 1.65);
-const imageUrl = eventImageUrl(image.src);
-const medallion = image.mode.startsWith('photo-') ? getListingVenueMedallion(event, image.asset) : null;
+const image = selectListingImage(event, 1.65);
+const derivatives = [...(image.asset?.thumbnail_sources || [])]
+  .filter((item) => item.src && item.width > 0 && item.height > 0)
+  .sort((left, right) => left.width - right.width);
+const responsiveSrc = derivatives.at(-1)?.src || image.src;
+const imageUrl = eventImageUrl(responsiveSrc);
+const responsiveSrcset = derivatives.length
+  ? derivatives.map((item) => `${eventImageUrl(item.src)} ${item.width}w`).join(', ')
+  : undefined;
+const medallion = getListingVenueMedallion(event, image.asset);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const style = `--ke-listing-image-ratio:${image.ratio.toFixed(5)};--ke-listing-object-position:${image.objectPosition}`;
 const medallionFallbackSrc = medallion?.avatarUrl.endsWith('.webp')
@@ -28,7 +35,7 @@ const medallionStyle = medallion
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
-  data-ds-version="1"
+  data-ds-version="2"
   data-listing-item
   data-event-id={event.id}
   data-linked-event-ids={(event.other_date_ids || []).join(',')}
@@ -41,12 +48,24 @@ const medallionStyle = medallion
 >
   <a class="ke-listing-card__media ke-skeleton" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`} data-listing-media-loading>
     {imageUrl ? (
+      <>
       <img
-        src={imageUrl}
+        src={priority ? imageUrl : undefined}
+        srcset={priority ? responsiveSrcset : undefined}
+        data-listing-src={priority ? undefined : imageUrl}
+        data-listing-srcset={priority ? undefined : responsiveSrcset}
+        sizes="(max-width: 720px) 38vw, 256px"
+        width={image.asset?.width || undefined}
+        height={image.asset?.height || undefined}
         alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
-        loading="lazy"
+        loading={priority ? 'eager' : 'lazy'}
+        fetchpriority={priority ? 'high' : 'auto'}
         decoding="async"
       />
+      {!priority ? (
+        <noscript><img src={imageUrl} srcset={responsiveSrcset} sizes="256px" width={image.asset?.width || undefined} height={image.asset?.height || undefined} alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`} /></noscript>
+      ) : null}
+      </>
     ) : (
       <span class="ke-listing-card__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
     )}
@@ -81,12 +100,32 @@ const medallionStyle = medallion
         frame.classList.remove('ke-skeleton');
         frame.dataset.listingMediaReady = 'true';
       };
-      if (image.complete) finish();
+      const decodeAndFinish = () => image.decode?.().catch(() => {}).finally(finish) || finish();
+      if (image.dataset.listingSrc && !image.currentSrc) {
+        image.addEventListener('load', decodeAndFinish, { once: true });
+        image.addEventListener('error', finish, { once: true });
+      } else if (image.complete) decodeAndFinish();
       else {
-        image.addEventListener('load', finish, { once: true });
+        image.addEventListener('load', decodeAndFinish, { once: true });
         image.addEventListener('error', finish, { once: true });
       }
     });
   }
   initListingMediaSkeletons();
+
+  if ('IntersectionObserver' in window) {
+    const priorityObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const image = entry.target.querySelector(':scope > img');
+        if (image?.loading === 'lazy') {
+          image.fetchPriority = 'high';
+          if (image.dataset.listingSrcset) image.srcset = image.dataset.listingSrcset;
+          if (image.dataset.listingSrc) image.src = image.dataset.listingSrc;
+        }
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '200px 0px' });
+    document.querySelectorAll('[data-listing-media-loading]').forEach((frame) => priorityObserver.observe(frame));
+  }
 </script>

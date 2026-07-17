@@ -56,12 +56,21 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Desktop date-listing structural correction candidate `DATE-LISTING TH-P1 · V11`:
-[Сегодня](https://kenigevents.ru/preview-20260717-date-listings-v11/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260717-date-listings-v11/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260717-date-listings-v11/vyhodnye/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260717-date-listings-v11/lab/design-system/).
+Desktop date-listing correction candidate `DATE-LISTING TH-P1 · V12`:
+[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v12/segodnya/),
+[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v12/zavtra/),
+[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v12/vyhodnye/) и
+[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v12/lab/design-system/).
 Это immutable review prefix, а не production promotion.
+
+V12 возвращает точную desktop-шапку (`57px` sticky bar и выступающий до
+`88px` brand tag), использует near-viewport thumbnail `srcset` вместо очереди оригиналов,
+сохраняет реальные пропорции слабых fallback-ассетов и увеличивает listing
+media/copy. Weekend теперь читает одну ось `время слева → суббота →
+воскресенье`: два дня остаются синхронны по точному часу, но вместо центральной
+рейки и строк-клеток лежат две непрерывные editorial lane-поверхности. Полное
+название разрешается singleton/последней карточке фактического ряда только в
+измеренное свободное пространство и не меняет packing.
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 

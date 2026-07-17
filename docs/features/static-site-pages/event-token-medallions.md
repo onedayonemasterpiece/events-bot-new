@@ -20,11 +20,11 @@ The medallion row is informational and belongs to the event detail page; it is n
 Current scope:
 
 - **P0:** medallions on the concrete event page only;
-- **Candidate compact exception:** on the V10 Today/Tomorrow/Weekend date-listing family, one named venue medallion may be placed at the bottom-right edge of an event image only when the selected asset passes the strict photo/no-OCR gate below;
+- **Candidate compact exception:** on the V12 Today/Tomorrow/Weekend date-listing family, one named venue medallion may be placed at the bottom-right edge of an event image only when the selected asset passes the no-OCR gate below;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
 - **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
 
-### `DATE-LISTING TH-P1 · V10` venue-overlay candidate
+### `DATE-LISTING TH-P1 · V12` venue-overlay candidate
 
 This is not a general permission to decorate posters. It is a fail-closed
 location cue for the dense exact-time desktop flow:
@@ -33,21 +33,23 @@ location cue for the dense exact-time desktop flow:
   ring/shadow; the title and venue text remain below the image;
 - semantics: the matched token must be a curated **venue/location brand** and
   must match the normalized event venue by an exact or bounded alias;
-- required media evidence: the event and the asset selected by the shared
-  listing-media selector are both `image_text_mode=visual_only`; that asset is also
-  `media_role=event_photo`, `media_semantic_status=classified` and
-  `image_kind=photo`;
+- required media evidence: the selected asset is `image_text_mode=visual_only`.
+  Normally it must also be a classified `event_photo`; a manifest item may set
+  `listingVisualOnlyOverlay=true` only after its venue asset and exact aliases
+  receive source/provenance review. This narrow opt-in covers the requested
+  Третьяковка, Музыкальный театр and Калининградский зоопарк experiment while
+  their older event assets are being semantically backfilled;
 - forbidden shortcuts: `safe_crop`, OCR length alone, filename, event title or
   an inferred organizer are not sufficient evidence;
-- if any field is absent, unknown or contradictory, render no medallion;
+- OCR/unknown text mode, missing venue match or missing curated asset always
+  renders no medallion; semantic pending/error also fails closed unless the
+  matched manifest item carries that explicit source-reviewed opt-in;
 - poster-like images, including short-text posters that legacy OCR marked as
   `visual_only`, remain excluded even if the venue has a curated mark.
 
-V9 demonstrated the gate on «Алые паруса», but that page remains historical
-research rather than approval. V10 evaluates the selected asset after wide-poster
-priority: choosing a poster therefore suppresses the overlay even when another
-photo exists. The candidate still requires immutable preview review before it
-can be promoted beyond date listings.
+The candidate still requires immutable preview review before it can be promoted
+beyond date listings. The opt-in never treats `safe_crop`, filename or venue
+name as proof that an image has no OCR: `visual_only` remains mandatory.
 
 ## Visual contract
 
@@ -144,6 +146,7 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Остров Канта | `kant-island` | `/assets/organizers/kant-island.svg` (`.png` fallback/QA) | official `sobor39.ru` SVG logo; the exact cathedral-mark path is embedded directly into the medallion SVG |
 | Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.webp` (`.png` fallback) | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains WebP-first raster for now |
 | Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
+| Калининградский зоопарк | `kldzoo` | `/assets/organizers/kldzoo.webp` (`.png` fallback) | official square PNG mark from `https://kldzoo.ru/local/templates/s1/img/logo.png`; locally converted without redesign |
 | Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
 | Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.svg` (`.png` fallback/QA) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`, replacing the octopus symbol, with `АКТ` inset inside the circle |
 | Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the enlarged white internal `З` symbol as a root-clipped group, optically centered and clipped by the lower circle edge |

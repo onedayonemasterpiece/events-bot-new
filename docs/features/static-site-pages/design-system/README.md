@@ -85,7 +85,7 @@ Current registry:
 - `EventListItem` — approved compact listing row;
 - `CalendarLink`, `EventMediaRail`, `Icon`, `SocialIcon` and `AnnouncementsLockup` — approved supporting components with visible catalog examples;
 - `InterestClubCard` — feature-gated product component;
-- `ListingPageHeader v1`, `ListingControls v2`, `ListingTimeNav v1`, `ExactTimeTimeline v1`, `WeekendTimeMatrix v1` and `ListingEventCard v1` — candidate shared date-listing family; `ListingControls v2` exposes city chips directly and deprecates the v1 disclosure, while Weekend uses one union time axis across two day surfaces;
+- `ListingPageHeader v1`, `ListingControls v3`, `ListingTimeNav v1`, `ExactTimeTimeline v1`, `WeekendEditorialTimeline v1` and `ListingEventCard v2` — candidate shared date-listing family. `ListingControls v3` keeps all cities directly visible and adds a non-colour-only selected marker; `WeekendEditorialTimeline` replaces the deprecated centre-rail matrix with one time-left union axis and two continuous day lanes; `ListingEventCard v2` uses responsive derivatives, intrinsic geometry and measured row-end title expansion. `ListingControls v1/v2`, `WeekendTimeMatrix v1` and `ListingEventCard v1` remain registry-only deprecated records;
 - `ListingPersonalFilter v2` — candidate full-list-first wording and behavior for date listings; `v1` is deprecated, retained in the catalog only for migration comparison and blocked from production callers;
 - `PersonalFeedSlot` and `AuthorizedEventSearch` — conditional client-enhancement components; the catalog exposes their static/forced state and links to the dedicated auth/search surface, while live network/auth states remain in feature E2E.
 

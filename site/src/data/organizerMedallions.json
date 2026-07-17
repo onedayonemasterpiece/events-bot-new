@@ -171,7 +171,8 @@
       "retrievedAt": "2026-07-01",
       "brandBackgroundSource": "https://t.me/tretyakovka_kaliningrad",
       "backgroundEvidence": "Public Telegram profile avatar uses light warm background with gold Tretyakovka T mark; sampled/used source image from t.me/tretyakovka_kaliningrad OG image on 2026-07-01.",
-      "assetFormat": "svg"
+      "assetFormat": "svg",
+      "listingVisualOnlyOverlay": true
     },
     {
       "slug": "konb",
@@ -349,7 +350,37 @@
       "sourcePath": "site/src/assets/organizers/source/muzteatr39.logo2.png",
       "retrievedAt": "2026-07-03",
       "assetFormat": "webp-source-png",
-      "fallbackPngUrl": "/assets/organizers/muzteatr39.png"
+      "fallbackPngUrl": "/assets/organizers/muzteatr39.png",
+      "listingVisualOnlyOverlay": true
+    },
+    {
+      "slug": "kldzoo",
+      "name": "Калининградский зоопарк",
+      "shortName": "Зоопарк",
+      "aliases": [
+        "Калининградский зоопарк",
+        "Зоопарк",
+        "kldzoo",
+        "Калининградский зоопарк, проспект Мира"
+      ],
+      "sourcePage": "https://kldzoo.ru/",
+      "sourceUrl": "https://kldzoo.ru/local/templates/s1/img/logo.png",
+      "sourceFile": "kldzoo.logo.png",
+      "background": "#F7F5E9",
+      "ring": "#D8D1BE",
+      "logoCrop": "official-square-logo",
+      "fitBox": [
+        452,
+        452
+      ],
+      "ariaLabel": "Площадка: Калининградский зоопарк",
+      "renderNote": "Официальный квадратный PNG-логотип зоопарка увеличен примерно на 30% относительно первой версии; конкурирующая салатовая внешняя обводка убрана, потому что у исходного знака есть собственная круговая рамка.",
+      "avatarUrl": "/assets/organizers/kldzoo.webp",
+      "sourcePath": "site/src/assets/organizers/source/kldzoo.logo.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/kldzoo.png",
+      "listingVisualOnlyOverlay": true
     }
   ]
 }

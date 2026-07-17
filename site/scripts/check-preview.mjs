@@ -370,7 +370,7 @@ const dateListings = [['today', todayHtml], ['tomorrow', tomorrowHtml], ['weeken
 for (const [name, html] of dateListings) {
   const visibleHtml = stripGeneratedCode(html);
   if (!visibleHtml.includes('data-date-listing=') || !visibleHtml.includes('data-listing-variant="TH-P1"')) throw new Error(`${name} listing misses the shared TH-P1 date-listing surface`);
-  const timelineComponent = name === 'weekend' ? 'WeekendTimeMatrix' : 'ExactTimeTimeline';
+  const timelineComponent = name === 'weekend' ? 'WeekendEditorialTimeline' : 'ExactTimeTimeline';
   if (!visibleHtml.includes('data-ds-component="ListingPageHeader"') || !visibleHtml.includes('data-ds-component="ListingControls"') || !visibleHtml.includes(`data-ds-component="${timelineComponent}"`)) throw new Error(`${name} listing bypasses registered shared design-system components`);
   if (!visibleHtml.includes('ke-time-group') || !visibleHtml.includes('ke-time-group__flow') || !visibleHtml.includes('ke-listing-card')) throw new Error(`${name} listing misses exact-time intrinsic flow`);
   if (visibleHtml.includes('TODAY-HOUR A') || visibleHtml.includes('АФИШНЫЙ ПОТОК') || visibleHtml.includes('V9')) throw new Error(`${name} consumer page leaks service/version copy`);
@@ -396,7 +396,14 @@ if (!todayVisibleHtml.includes('data-listing-now-label') || !todayVisibleHtml.in
 if (tomorrowHtml.includes('data-listing-earlier') || tomorrowHtml.includes('data-listing-now-marker')) throw new Error('Tomorrow must not render Today-only earlier/current-time UI');
 if (!weekendHtml.includes('data-listing-day="sat"') || !weekendHtml.includes('data-listing-day="sun"') || !weekendHtml.includes('Суббота') || !weekendHtml.includes('Воскресенье')) throw new Error('Weekend must render two day surfaces on one matrix');
 if (!weekendHtml.includes('data-weekend-time-row') || !weekendHtml.includes('ke-weekend-time-rail') || !weekendHtml.includes('data-time-nav-disclosure')) throw new Error('Dense Weekend must expose one union exact-time axis and exact-time navigation');
-if (weekendHtml.includes('ke-city-picker') || !weekendHtml.includes('ke-city-filter--direct') || !weekendHtml.includes('data-ds-version="2"')) throw new Error('Weekend must use visible ListingControls v2 city chips without a disclosure');
+if (weekendHtml.includes('ke-city-picker') || !weekendHtml.includes('ke-city-filter--direct') || !weekendHtml.includes('data-ds-component="ListingControls" data-ds-version="3"')) throw new Error('Weekend must use visible ListingControls v3 multi-city chips without a disclosure');
+if (!weekendHtml.includes('data-listing-srcset=') || !weekendHtml.includes('<noscript><img') || !weekendHtml.includes('width=') || !weekendHtml.includes('height=')) throw new Error('Weekend cards must emit intrinsic responsive thumbnails with a no-JS fallback');
+for (const slug of ['kldzoo', 'muzteatr39', 'tretyakovka-kaliningrad']) {
+  if (!weekendHtml.includes(`data-venue-medallion="${slug}"`)) throw new Error(`Weekend misses positive visual-only medallion control: ${slug}`);
+}
+const organCard = tomorrowHtml.match(/<article[^>]+data-event-id="3794"[\s\S]*?<\/article>/u)?.[0] || '';
+if (!organCard.includes('--ke-listing-image-ratio:1.724') || !organCard.includes('data-listing-image-mode="unknown-natural"')) throw new Error('Event 3794 must preserve its known 300:174 natural ratio');
+if (!bundledCss.includes('--ke-site-header-bar-height:57px') || !bundledCss.includes('--ke-site-header-stack-height:88px')) throw new Error('Date listings must preserve the exact desktop header bar/tag clearance split');
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
 if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes('usesExplicitFullDefault') || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');

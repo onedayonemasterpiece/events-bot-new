@@ -69,6 +69,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
+    <link rel="preconnect" href="https://static.kenigevents.ru" crossorigin="anonymous" />
     {structuredData.map((item) => (
       <script type="application/ld+json" set:html={JSON.stringify(item)} />
     ))}
@@ -1556,6 +1557,14 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         .site-header__inner { gap: 2rem; }
         .site-nav { gap: 0; }
         .site-nav a { padding-inline: 0.7rem; font-size: 0.86rem; }
+      }
+      @media (min-width: 1024px) {
+        .site-header { min-height: var(--ke-site-header-bar-height); height: var(--ke-site-header-bar-height); }
+        .site-header__inner {
+          width: calc(100% - (2 * clamp(24px, 3vw, 48px)));
+          height: var(--ke-site-header-bar-height);
+          min-height: var(--ke-site-header-bar-height);
+        }
       }
       @media (max-width: 1023px) {
         .side-col { display: none; }

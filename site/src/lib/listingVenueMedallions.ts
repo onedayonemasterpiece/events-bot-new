@@ -24,6 +24,7 @@ interface ManifestMedallion {
   ring?: string;
   ariaLabel?: string;
   category?: string;
+  listingVisualOnlyOverlay?: boolean;
 }
 
 function normalize(value: unknown): string {
@@ -66,17 +67,18 @@ const venueBrandItems = ((festivalMedallions as { items?: ManifestMedallion[] })
 export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
   if (!event.image_url || !event.venue_name) return null;
   const primaryAsset = selectedAsset || event.image_assets?.[0];
-  if (
-    !primaryAsset
-    || primaryAsset.image_text_mode !== 'visual_only'
-    || primaryAsset.media_role !== 'event_photo'
-    || primaryAsset.media_semantic_status !== 'classified'
-    || primaryAsset.image_kind !== 'photo'
-  ) return null;
-
   const item = [...organizerItems, ...venueBrandItems]
     .find((candidate) => matchesVenue(candidate, event.venue_name || ''));
-  if (!item) return null;
+  if (!item || !primaryAsset || primaryAsset.image_text_mode !== 'visual_only') return null;
+
+  const classifiedPhoto = (
+    primaryAsset.media_role === 'event_photo'
+    && primaryAsset.media_semantic_status === 'classified'
+    && primaryAsset.image_kind === 'photo'
+  );
+  // Source-reviewed branded venues may opt into a visual-only fallback while
+  // the semantic classifier is pending. OCR media still fail closed.
+  if (!classifiedPhoto && item.listingVisualOnlyOverlay !== true) return null;
 
   return {
     slug: item.slug,

@@ -4,7 +4,7 @@ import { deduplicateListingEvents, groupListingEvents } from '../../lib/listingP
 import ListingControls from './ListingControls.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
-import WeekendTimeMatrix from './WeekendTimeMatrix.astro';
+import WeekendEditorialTimeline from './WeekendEditorialTimeline.astro';
 
 interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; }
 const { events: rawEvents, start, end, dateLabel } = Astro.props;
@@ -26,16 +26,16 @@ function dayDateLabel(date: string): string {
   <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', groups: day.groups }))} />
   <div class="ke-weekend-board">
     <div class="ke-weekend-heads">
+      <div class="ke-weekend-heads__time" aria-hidden="true"></div>
       <header class="ke-weekend-day__head ke-weekend-day__head--sat" data-weekend-day-head="sat">
-        <div><h2 id="weekend-sat-title">{days[0].title}</h2><p>{dayDateLabel(days[0].date)}</p></div>
+        <div><p class="ke-weekend-day__label" id="weekend-sat-label">{days[0].title}</p><p>{dayDateLabel(days[0].date)}</p></div>
         <span class="ke-weekend-day__count" data-weekend-day-count="sat">{days[0].events.length}</span>
       </header>
-      <div class="ke-weekend-heads__rail" aria-hidden="true"></div>
       <header class="ke-weekend-day__head ke-weekend-day__head--sun" data-weekend-day-head="sun">
-        <div><h2 id="weekend-sun-title">{days[1].title}</h2><p>{dayDateLabel(days[1].date)}</p></div>
+        <div><p class="ke-weekend-day__label" id="weekend-sun-label">{days[1].title}</p><p>{dayDateLabel(days[1].date)}</p></div>
         <span class="ke-weekend-day__count" data-weekend-day-count="sun">{days[1].events.length}</span>
       </header>
     </div>
-    <WeekendTimeMatrix days={days.map((day) => ({ key: day.key as 'sat' | 'sun', title: day.title, date: day.date, groups: day.groups }))} />
+    <WeekendEditorialTimeline days={days.map((day) => ({ key: day.key as 'sat' | 'sun', title: day.title, date: day.date, groups: day.groups }))} />
   </div>
 </div>

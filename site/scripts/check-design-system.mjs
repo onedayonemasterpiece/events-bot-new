@@ -21,6 +21,7 @@ const componentPaths = [
   'src/components/listings/ListingControls.astro',
   'src/components/listings/ListingPageHeader.astro',
   'src/components/listings/WeekendTimeMatrix.astro',
+  'src/components/listings/WeekendEditorialTimeline.astro',
 ];
 
 for (const path of componentPaths) {
@@ -57,7 +58,7 @@ for (const marker of ['data-ke-copy-action', 'navigator.clipboard?.writeText', "
 if (!copyAction.includes("'ke-button--icon'") || !css.includes('.ke-button--icon { width: var(--ke-control-min)')) throw new Error('CopyAction must consume the fixed 44px icon-only button contract');
 if (!css.includes('.ke-copy-action__check-icon') || !css.includes('content: "!"')) throw new Error('CopyAction success/error cannot rely on color alone');
 if (!catalog.includes('<CopyAction') || !catalog.includes('variant="inverse"') || !catalog.includes('design-system/CopyAction.astro')) throw new Error('Catalog misses the real CopyAction fixtures or registry row');
-for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'ListingPageHeader', 'ListingControls', 'ListingTimeNav', 'ExactTimeTimeline', 'WeekendTimeMatrix', 'ListingEventCard', 'PersonalFeedSlot', 'SocialIcon']) {
+for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'ListingPageHeader', 'ListingControls', 'ListingTimeNav', 'ExactTimeTimeline', 'WeekendEditorialTimeline', 'ListingEventCard', 'PersonalFeedSlot', 'SocialIcon']) {
   if (!catalog.includes(`<${component}`)) throw new Error(`Catalog misses real product component: ${component}`);
 }
 if (!catalog.includes('AuthorizedEventSearch.astro')) throw new Error('Catalog registry misses conditional AuthorizedEventSearch surface');
@@ -81,9 +82,11 @@ for (const line of catalog.split(/\r?\n/u).filter((item) => item.includes('>depr
 if (!registryKeys.has('ListingPersonalFilter@1') || !registryKeys.has('ListingPersonalFilter@2') || !catalog.includes('data-ds-replaced-by="ListingPersonalFilter@2"')) {
   throw new Error('ListingPersonalFilter v1 -> v2 migration is missing from the versioned registry');
 }
-if (!registryKeys.has('ListingControls@1') || !registryKeys.has('ListingControls@2') || !catalog.includes('data-ds-replaced-by="ListingControls@2"')) {
-  throw new Error('ListingControls v1 -> v2 migration is missing from the versioned registry');
+if (!registryKeys.has('ListingControls@1') || !registryKeys.has('ListingControls@2') || !registryKeys.has('ListingControls@3') || !catalog.includes('data-ds-replaced-by="ListingControls@3"')) {
+  throw new Error('ListingControls v1 -> v2 -> v3 migration is missing from the versioned registry');
 }
+if (!registryKeys.has('WeekendEditorialTimeline@1') || !catalog.includes('data-ds-replaced-by="WeekendEditorialTimeline@1"')) throw new Error('WeekendTimeMatrix replacement is missing from the registry');
+if (!registryKeys.has('ListingEventCard@1') || !registryKeys.has('ListingEventCard@2') || !catalog.includes('data-ds-replaced-by="ListingEventCard@2"')) throw new Error('ListingEventCard v1 -> v2 migration is missing from the registry');
 if (!registryKeys.has('EventCard@1') || !registryKeys.has('EventCard@2') || !catalog.includes('data-ds-replaced-by="EventCard@2"')) {
   throw new Error('EventCard v1 -> v2 migration is missing from the versioned registry');
 }

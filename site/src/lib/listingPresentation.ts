@@ -13,7 +13,7 @@ export interface ListingImagePresentation {
   asset: EventImageAsset | null;
   src: string | null;
   ratio: number;
-  mode: 'poster-natural' | 'photo-natural' | 'photo-crop' | 'visual-crop' | 'unknown-natural';
+  mode: 'poster-natural' | 'photo-natural' | 'photo-crop' | 'visual-natural' | 'visual-crop' | 'unknown-natural';
   adaptiveCrop: boolean;
   objectPosition: string;
 }
@@ -101,6 +101,10 @@ function usableAsset(asset: EventImageAsset): boolean {
   return Boolean(asset?.src && asset.width >= 180 && asset.height >= 180);
 }
 
+function knownAsset(asset: EventImageAsset): boolean {
+  return Boolean(asset?.src && asset.width > 0 && asset.height > 0);
+}
+
 function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventImageAsset | null {
   if (!assets.length) return null;
   return [...assets].sort((left, right) => {
@@ -111,7 +115,11 @@ function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventIma
 }
 
 export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65): ListingImagePresentation {
-  const assets = (event.image_assets || []).filter(usableAsset);
+  // Preserve the measured geometry even when an asset misses the quality
+  // threshold. A small known fallback must never be stretched into an
+  // invented portrait frame (event 3794 is the regression contract).
+  const knownAssets = (event.image_assets || []).filter(knownAsset);
+  const assets = knownAssets.filter(usableAsset);
   const posters = assets.filter((asset) => (
     asset.media_semantic_status === 'classified'
     && asset.media_role === 'event_identity_poster'
@@ -139,8 +147,8 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65):
   const selectedPhoto = bestWideAsset(preferredPhotos.length ? preferredPhotos : photos, preferredPhotos.length ? 1.5 : 0.8);
   const preferredVisuals = visualOnly.filter((asset) => assetRatio(asset) >= 1);
   const selectedVisual = bestWideAsset(preferredVisuals.length ? preferredVisuals : visualOnly, visualCropRatio);
-  const primary = assets[0] || null;
-  const asset = selectedPoster || selectedVisual || selectedPhoto || primary;
+  const primary = knownAssets[0] || null;
+  const asset = selectedPoster || selectedPhoto || selectedVisual || primary;
   const src = asset?.src || event.image_url || null;
   const rawRatio = asset ? assetRatio(asset) : 0.8;
   const isPhoto = Boolean(selectedPhoto && asset === selectedPhoto);
@@ -149,10 +157,11 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65):
     && asset === selectedVisual
     && (asset.image_text_mode || event.image_text_mode) === 'visual_only'
   );
+  const visualCanCrop = Boolean(isVisualOnly && asset?.safe_crop === true && asset.focal_point);
   const visualRatio = isVisualOnly && asset
-    ? (asset.safe_crop === true && Boolean(asset.focal_point)
+    ? (visualCanCrop
       ? visualCropRatio
-      : Math.min(visualCropRatio, Math.max(1.33, rawRatio)))
+      : rawRatio)
     : visualCropRatio;
   const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
   const wideCropIsSafe = isPhoto && rawRatio > 1 && Math.min(rawRatio / 1.5, 1.5 / rawRatio) >= 0.8;
@@ -167,13 +176,13 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65):
       ? photoRatio
       : Math.max(0.2, Math.min(3.2, rawRatio || 0.8)),
     mode: isVisualOnly
-      ? 'visual-crop'
+      ? (visualCanCrop ? 'visual-crop' : 'visual-natural')
       : isPhoto
         ? (photoNeedsCrop ? 'photo-crop' : 'photo-natural')
         : isPoster
           ? 'poster-natural'
           : 'unknown-natural',
-    adaptiveCrop: Boolean(isVisualOnly && asset?.safe_crop === true && asset.focal_point),
+    adaptiveCrop: visualCanCrop,
     objectPosition: asset?.recommended_object_position || event.image_object_position || '50% 50%',
   };
 }

@@ -1,8 +1,8 @@
 {
   "build": {
-    "generated_at": "2026-07-17T22:03:20.319870+00:00",
+    "generated_at": "2026-07-17T23:08:23.854054+00:00",
     "source": "prod-sqlite-static-site-export-v1",
-    "source_snapshot_captured_at": "2026-07-17T19:28:12Z",
+    "source_snapshot_captured_at": "2026-07-17T23:08:22Z",
     "current_date": "2026-07-17",
     "current_datetime": null,
     "effective_current_date": "2026-07-17",
@@ -17,532 +17,32 @@
   },
   "events": [
     {
-      "id": 698,
-      "source_prod_id": 698,
-      "title": "Древние воины Янтарного края",
-      "slug": "drevnie-voiny-yantarnogo-kraya-kaliningrad-698",
-      "event_type": "выставка",
-      "festival": null,
-      "status_label": "Условия уточняются",
-      "lifecycle_status": "active",
-      "starts_at": "2025-09-16T00:00:00+02:00",
-      "start_date": "2025-09-16",
-      "start_time": "00:00",
-      "end_date": "2026-09-30",
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2025-09-16",
-      "display_time": "00:00",
-      "city": "Калининград",
-      "venue_name": "Историко-художественный музей",
-      "address": "Клиническая 21",
-      "map_query": "Калининград, Историко-художественный музей, Клиническая 21",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://vk.cc/cPDWRM",
-        "status": null,
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "assessed",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": null,
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://vk.com/wall-194467353_8190",
-      "source_urls": [
-        "https://vk.com/wall-194467353_8190",
-        "https://vk.com/wall-231920894_7502",
-        "https://vk.com/wall-231920894_388",
-        "https://vk.com/wall-29891284_13606",
-        "https://vk.com/wall-29891284_13681",
-        "legacy:event_description:698",
-        "https://vk.com/wall-231920894_7532"
-      ],
-      "source_count": 7,
-      "telegraph_url": "https://telegra.ph/Drevnie-voiny-YAntarnogo-kraya-09-19",
-      "image_url": "https://static.kenigevents.ru/p/dh16/9f/9f0a8f699e649672967886498c6c8d2c8d2485349b6d894991d1934193019341.webp",
-      "image_alt": "Афиша события «Древние воины Янтарного края»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/9f/9f0a8f699e649672967886498c6c8d2c8d2485349b6d894991d1934193019341.webp",
-          "width": 1620,
-          "height": 1080,
-          "alt": "Фотография события «Древние воины Янтарного края»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d7/d77d9a3aea188525320d25b8fb430152872cdcc33d0ffd1995eaa59955377078/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d7/d77d9a3aea188525320d25b8fb430152872cdcc33d0ffd1995eaa59955377078/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "0df0e148fa74167ea778d044c143b5df3b57974e18ce709353303d6d916027ef",
-          "quality_score": 14.5249
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/a2/a200a000a00092825a9b1a99351b770b310a3a4b320362036613c6d3d3174197.webp",
-          "width": 1620,
-          "height": 1080,
-          "alt": "Фотография события «Древние воины Янтарного края»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e2/e294438bdea153067c6e289494f8199cd0a80a2fbaf149732230ffe98f994bfc/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e2/e294438bdea153067c6e289494f8199cd0a80a2fbaf149732230ffe98f994bfc/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "61a45434357e7e2c2c74a4b246d9540ee14034d11efd7aaf7d487a7f9fa705e6",
-          "quality_score": 14.5249
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/04/046c109614310d331a9c1a3198391336313211183098b078220b30af31632063.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Древние воины Янтарного края»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 2,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/1a/1add4f52aa9b3dff9ffa9490e6664aacaa1c5a90649f8c5fa3b75950e02478ae/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/1a/1add4f52aa9b3dff9ffa9490e6664aacaa1c5a90649f8c5fa3b75950e02478ae/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "9771c452618f72a5b5c8dcb5c801d46a4778f933e8514864af0ff767b4547875",
-          "quality_score": 14.0534
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Выставка представляет четыреста артефактов, раскрывающих быт и военное искусство жителей Янтарного края эпохи Великого переселения.",
-      "meta_description": "Выставка представляет четыреста артефактов, раскрывающих быт и военное искусство жителей Янтарного края эпохи Великого переселения.",
-      "description_html": "<p>Около 400 артефактов из собраний КОИХМ и ГИМ рассказывают историю эпохи Великого переселения народов и Тёмных веков. Эта выставка погружает в быт и военное искусство жителей Янтарного края конца IV–VII века. ⚔</p>\n<h3>Артефакты эпохи</h3>\n<p>Экспозиция объединяет находки из фондов двух крупных музеев — Калининградского областного историко-художественного и Государственного исторического музея в Москве. Представленные предметы охватывают широкий спектр материальной культуры того времени:</p>\n<ul>\n<li>боевое оружие;</li>\n<li>элементы конской упряжи;</li>\n<li>украшения;</li>\n<li>предметы быта.</li>\n</ul>\n<h3>Исторический контекст</h3>\n<p>Собранная коллекция позволяет проследить развитие ремесел и военного дела в период, ставший переломным для европейской истории. Около 400 экспонатов наглядно демонстрируют уровень мастерства древних воинов и эстетические предпочтения населения региона в IV–VII веках. 🛡</p>",
-      "topics": [
-        "EXHIBITIONS",
-        "KRAEVEDENIE_KALININGRAD_OBLAST"
-      ],
-      "pushkin_card": true,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2025-09-19 14:20:22.885382",
-      "likes_count": 38,
-      "source_likes_count": 38,
-      "service_likes_count": 0,
-      "source_views_count": 2214,
-      "source_engagement_sources_count": 3,
-      "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
-    },
-    {
-      "id": 4913,
-      "source_prod_id": 4913,
-      "title": "Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»",
-      "slug": "vystavki-pionery-sovetskoy-arheologicheskoy-nauki-v-kaliningradskoy-oblast-kaliningrad-4913",
-      "event_type": "выставка",
-      "festival": "80-летие Калининградской области",
-      "status_label": "Условия уточняются",
-      "lifecycle_status": "active",
-      "starts_at": null,
-      "start_date": "2026-05-15",
-      "start_time": null,
-      "end_date": "2026-07-31",
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-05-15",
-      "display_time": null,
-      "city": "Калининград",
-      "venue_name": "Историко-художественный музей",
-      "address": "Клиническая 21",
-      "map_query": "Калининград, Историко-художественный музей, Клиническая 21",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://vk.cc/cXPwuv",
-        "status": null,
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "assessed",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": null,
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://t.me/koihm/5586",
-      "source_urls": [
-        "https://t.me/koihm/5586",
-        "https://vk.com/wall-231920894_1350",
-        "https://t.me/koihm/5591",
-        "https://vk.com/wall-29891284_13587",
-        "https://vk.com/wall-29891284_13606",
-        "https://vk.com/wall-29891284_13681"
-      ],
-      "source_count": 6,
-      "telegraph_url": "https://telegra.ph/Pionery-sovetskoj-arheologicheskoj-nauki-v-Kaliningradskoj-oblasti-05-14",
-      "image_url": "https://static.kenigevents.ru/p/dh16/04/04970447049d2611261d0e4f6c6944e9d669a66ccd39c62b624a611b61b660ac.webp",
-      "image_alt": "Афиша события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/04/04970447049d2611261d0e4f6c6944e9d669a66ccd39c62b624a611b61b660ac.webp",
-          "width": 1919,
-          "height": 2560,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 6,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/1c/1c768c1c12cc9ff105b4d3ead4d463cb8e01371a077fc2a7b3153d5aa9933576/256.webp",
-              "width": 192,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/1c/1c768c1c12cc9ff105b4d3ead4d463cb8e01371a077fc2a7b3153d5aa9933576/512.webp",
-              "width": 384,
-              "height": 512
-            }
-          ],
-          "asset_key": "54d0ac53afc2d5189f5e08405d8ac78657280b4861fbaa827ad2facf8a147dee",
-          "quality_score": 15.5573
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/005982dc095cc5b834f034e124f264a6009b010c006600440020002201060023.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/dd/dd6a7806a52dd782ddc01e1dc17be4d9a9c90930a4a7c7cb694282da9bdabb10/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/dd/dd6a7806a52dd782ddc01e1dc17be4d9a9c90930a4a7c7cb694282da9bdabb10/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "35c68f14a30de22d62c860d10be94463f6c251cf3ca9170d98a07e896e99d833",
-          "quality_score": 14.5034
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/4a/4a82c693c69ac69ac68747864b0a8301839083104b914b04030006a11c201ca4.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": false,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d8/d8dd9d2789d695fc8a62b707155ea230ee102eeb9f4e3964833b1445ac9734ba/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d8/d8dd9d2789d695fc8a62b707155ea230ee102eeb9f4e3964833b1445ac9734ba/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "focal_point": {
-            "x": 0.32,
-            "y": 0.45
-          },
-          "recommended_object_position": "32% 45%",
-          "asset_key": "196bbf3e152b2b7b40b9622ca502e374a9b9dad38644b850157634acfd140e0e",
-          "quality_score": 14.5034
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/22/2212221c866ca364d366d34e935c133cb212608e409ca19d411d412d21291339.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 2,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e6f4c6a54b8eee9155326e8064c1a7eb665fa8f42c175fa2998f34aac7a1f661/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e6f4c6a54b8eee9155326e8064c1a7eb665fa8f42c175fa2998f34aac7a1f661/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "1ba5f2db57e57f930bc033c21d7f0d63b70d2373df7870f468452c9ac803e57b",
-          "quality_score": 14.5034
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/50/50c1814510edc0cd65186120c141476067206919fb199a32c9333d3306530073.webp",
-          "width": 1223,
-          "height": 793,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 3,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c1/c15531db04b0d62f4bb090d80ce119aaf0ea460b59260152bbb250cc6d912884/256.webp",
-              "width": 256,
-              "height": 166
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c1/c15531db04b0d62f4bb090d80ce119aaf0ea460b59260152bbb250cc6d912884/512.webp",
-              "width": 512,
-              "height": 332
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "16583c79a60ad4646aaaefcccf0a1efb1f418914bd30a6093b03d6f18022833b",
-          "quality_score": 14.3849
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/000024127031f168c86cccee94da8cc2ccc2d4c0d0ece9787031121205200400.webp",
-          "width": 770,
-          "height": 438,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 4,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/7b/7b2be16e64a480bcceb7565ccf54c89181f64af253c6e04e19e3b494ff2cbed4/256.webp",
-              "width": 256,
-              "height": 146
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/7b/7b2be16e64a480bcceb7565ccf54c89181f64af253c6e04e19e3b494ff2cbed4/512.webp",
-              "width": 512,
-              "height": 291
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.45
-          },
-          "recommended_object_position": "50% 45%",
-          "asset_key": "158971e7dca0012cd97ca99117105533503cb6abd5bc8d3bce92c822e92fa78d",
-          "quality_score": 12.0286
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/06/060400e261e581e521e511e511e910e911c911c900c918d809990d890889200a.webp",
-          "width": 1188,
-          "height": 906,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 5,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/23/237f25c582a0284ed222ac94fbe7b963d212513444c4733ed2308f66394eb70d/256.webp",
-              "width": 256,
-              "height": 195
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/23/237f25c582a0284ed222ac94fbe7b963d212513444c4733ed2308f66394eb70d/512.webp",
-              "width": 512,
-              "height": 390
-            }
-          ],
-          "focal_point": {
-            "x": 0.48,
-            "y": 0.45
-          },
-          "recommended_object_position": "48% 45%",
-          "asset_key": "bf5d81d4622b4300a672c2459214529ec864c4496dd61a93fcf5c2d45d1cc8d9",
-          "quality_score": 14.4891
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/24/24cf243b345d131b330b231f431f08771673d27b594f68cf18f710b682cf8693.webp",
-          "width": 1247,
-          "height": 1052,
-          "alt": "Фотография события «Выставки «Пионеры советской археологической науки в Калининградской области» и «Материальные свидетельства контактов пруссов с Русью»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 7,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/69/69f85c2cbc2b552fb2e7c6bc5fd8ad9e5f480a0fa8072f6b2b769f7abd0aa5c8/256.webp",
-              "width": 256,
-              "height": 216
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/69/69f85c2cbc2b552fb2e7c6bc5fd8ad9e5f480a0fa8072f6b2b769f7abd0aa5c8/512.webp",
-              "width": 512,
-              "height": 432
-            }
-          ],
-          "asset_key": "f40f182ad301bb09c3c392ccaeaa0b717921af991e098007a249cf85261765ee",
-          "quality_score": 14.2369
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Выставки представляют археологические находки первых советских исследователей региона и материальные свидетельства контактов пруссов с Русью.",
-      "meta_description": "Выставки представляют археологические находки первых советских исследователей региона и материальные свидетельства контактов пруссов с Русью.",
-      "description_html": "<p>К 80-летию образования Калининградской области открываются две археологические экспозиции. В их состав вошли более 200 предметов из фондов музея 🖼.</p>\n<blockquote>Русская армия в эпоху императрицы Елизаветы Петровны (к 270-летию вступления России в Семилетнюю войну (1756–1763))</blockquote>\n<p>Посетители увидят архивные документы, фотографии, а также предметы вооружения и быта, обнаруженные в ходе первых раскопок в регионе. Часть экспонатов будет представлена общественности впервые.</p>\n<h3>Пионеры советской археологической науки в Калининградской области 📚</h3>\n<p>Эта часть выставки посвящена деятельности Калининградского отряда Славянской экспедиции при Институте истории материальной культуры АН СССР (Ленинград). Работа отряда под руководством Фриды Давыдовны Гуревич основывалась на гипотезе о связях славянских народов с древним населением Восточной Пруссии.</p>\n<p>Первые исследования в области начались в 1949 году. За трёхлетний период были изучены 24 памятника, в том числе: * городища Грачевка, Заозерье и Логвиново; * селища Кострово; * курганный могильник Светлогорск-Отрадное.</p>\n<p>Все найденные артефакты впоследствии поступили в фонды музея.</p>\n<h3>Материальные свидетельства контактов пруссов с Русью 🖼</h3>\n<p>Вторая экспозиция демонстрирует результаты работы Самбийской экспедиции Института археологии РАН. Находки подтверждают тесные связи между племенами пруссов и северо-западными регионами Древней Руси.</p>\n<p>В залах представлены следующие предметы: * бронзовые и серебряные украшения; * предметы быта; * фрагменты керамических сосудов; * куски янтаря; * свинцовые пломбы дрогичинского типа; * серебряные монеты.</p>\n<p>В рамках программы «Ночь музеев-2026» для гостей будут организованы лекции и экскурсии.</p>\n<p>Для посещения экспозиций доступна оплата по Пушкинской карте.</p>",
-      "topics": [
-        "EXHIBITIONS",
-        "LECTURES",
-        "KRAEVEDENIE_KALININGRAD_OBLAST"
-      ],
-      "pushkin_card": true,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-05-14 00:07:41.203895",
-      "likes_count": 58,
-      "source_likes_count": 58,
-      "service_likes_count": 0,
-      "source_views_count": 3633,
-      "source_engagement_sources_count": 5,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 5370,
-      "source_prod_id": 5370,
-      "title": "Точка и линия",
-      "slug": "tochka-i-liniya-kaliningrad-5370",
-      "event_type": "выставка",
+      "id": 3794,
+      "source_prod_id": 3794,
+      "title": "Концерт участников XI Международных органных Ассамблей",
+      "slug": "kontsert-uchastnikov-xi-mezhdunarodnyh-organnyh-assambley-kaliningrad-3794",
+      "event_type": "концерт",
       "festival": null,
       "status_label": "Билеты",
       "lifecycle_status": "active",
-      "starts_at": "2026-06-12T12:00:00+02:00",
-      "start_date": "2026-06-12",
-      "start_time": "12:00",
-      "end_date": "2027-03-28",
+      "starts_at": "2026-07-18T18:00:00+02:00",
+      "start_date": "2026-07-18",
+      "start_time": "18:00",
+      "end_date": null,
       "end_at": null,
       "time_range_end": null,
       "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-06-12",
-      "display_time": "12:00",
+      "display_date": "2026-07-18",
+      "display_time": "18:00",
       "city": "Калининград",
-      "venue_name": "Филиал Третьяковской галереи",
-      "address": "Парадная наб. 3",
-      "map_query": "Калининград, Филиал Третьяковской галереи, Парадная наб. 3",
+      "venue_name": "Кафедральный собор, Остров Канта",
+      "address": "Остров Канта",
+      "map_query": "Калининград, Кафедральный собор, Остров Канта, Остров Канта",
       "ticket": {
         "kind": "ticket",
         "label": "Купить билет",
-        "href": "https://kaliningrad.tretyakovgallery.ru/exhibitions/609/",
-        "status": "paid",
+        "href": "https://sobor39.ru/events/concerts/night/",
+        "status": "available",
         "is_free": false,
         "price_label": null,
         "note": null
@@ -553,206 +53,324 @@
       "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
       "age_recommendation": null,
       "age_recommendation_label": null,
-      "source_url": "https://vk.com/wall-212760444_5103",
+      "source_url": "https://sobor39.ru/events/concerts/night/",
       "source_urls": [
-        "https://vk.com/wall-212760444_5103",
-        "https://vk.com/wall-231920894_2706",
-        "https://t.me/c/3954607218/243",
-        "https://t.me/kulturnaya_chaika/7803",
-        "https://t.me/meowafisha/7624",
-        "https://t.me/tretyakovka_kaliningrad/3028",
-        "https://t.me/tretyakovka_kaliningrad/3125",
-        "https://t.me/tretyakovka_kaliningrad/3157",
-        "https://t.me/tretyakovka_kaliningrad/3167",
-        "https://t.me/tretyakovka_kaliningrad/3208",
-        "https://t.me/tretyakovka_kaliningrad/3259",
-        "https://t.me/tretyakovka_kaliningrad/3260",
-        "https://t.me/tretyakovka_kaliningrad/3304",
-        "https://t.me/tretyakovka_kaliningrad/3340",
-        "https://t.me/tretyakovka_kaliningrad/3370",
-        "https://vk.com/wall-212760444_5323",
-        "https://vk.com/wall-212760444_5352"
+        "https://sobor39.ru/events/concerts/night/",
+        "https://vk.com/wall-231920894_7449",
+        "https://t.me/c/3954607218/2562"
       ],
-      "source_count": 17,
-      "telegraph_url": "https://telegra.ph/Vystavka-Tochka-i-liniya-05-27",
-      "image_url": "https://static.kenigevents.ru/p/dh16/51/518730973017921f31071a735c1e000f200f4025106228c911b4319a12ce016c.webp",
-      "image_alt": "Афиша события «Точка и линия»",
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/Koncert-uchastnikov-XI-Mezhdunarodnyh-organnyh-Assamblej-04-27",
+      "image_url": "https://static.kenigevents.ru/p/dh16/20/20033303669b069e66930c9f6c900e8f66934307862cd33013371b26188d080c.webp",
+      "image_alt": "Афиша события «Концерт участников XI Международных органных Ассамблей»",
       "image_text_mode": "visual_only",
       "image_media_role": "unknown_document",
       "image_assets": [
         {
-          "src": "https://static.kenigevents.ru/p/dh16/51/518730973017921f31071a735c1e000f200f4025106228c911b4319a12ce016c.webp",
-          "width": 2560,
-          "height": 1707,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/20/20033303669b069e66930c9f6c900e8f66934307862cd33013371b26188d080c.webp",
+          "width": 300,
+          "height": 174,
+          "alt": "Фотография события «Концерт участников XI Международных органных Ассамблей»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/3a/3a46a09154d89e8a9434e2c59242b332136f6d362cb08f80b9ad18f4facf0065/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/3a/3a46a09154d89e8a9434e2c59242b332136f6d362cb08f80b9ad18f4facf0065/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "3a46a09154d89e8a9434e2c59242b332136f6d362cb08f80b9ad18f4facf0065",
-          "quality_score": 15.4403
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/06/06418d07991c919164cf4c7860c963611f63364b336f31ae31ae133c1b1c8b38.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Точка и линия»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
+          "media_semantic_status": "error",
           "image_kind": "mixed",
           "recommended_hero_fit": "contain",
           "safe_crop": false,
           "source_order": 0,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/b3/b3946560e4d0d3ef85b56ab298471108d1d84c30244cc3f16ac6f09dbf166d45/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/a7/a7b5aceb84f6710f895e0a1966fe00c1176eda77212e952b7a16619e2d198130/256.webp",
               "width": 256,
-              "height": 171
+              "height": 148
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/b3/b3946560e4d0d3ef85b56ab298471108d1d84c30244cc3f16ac6f09dbf166d45/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/a7/a7b5aceb84f6710f895e0a1966fe00c1176eda77212e952b7a16619e2d198130/512.webp",
+              "width": 300,
+              "height": 174
             }
           ],
-          "asset_key": "b3946560e4d0d3ef85b56ab298471108d1d84c30244cc3f16ac6f09dbf166d45",
-          "quality_score": 14.0534
+          "asset_key": "c22a69022d7ae2988c6e41483576eb4c946a48375ad1791d9dec0b45efe3df87",
+          "quality_score": 7.0129
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "В этом концерте талантливые молодые органисты представят произведения, исполненные после обучения в Летней академии музыки.",
+      "meta_description": "В этом концерте талантливые молодые органисты представят произведения, исполненные после обучения в Летней академии музыки.",
+      "description_html": "<p>Концерт продемонстрирует выступления участников Летней академии органной музыки. 🎼 В числе преподавателей – главный органист собора Нотр-дам-де-Виктуар, который также является профессором Санкт-Петербургской консерватории.</p>\n<h3>Преподаватели</h3>\n<p>В концерте примут участие преподаватели, среди которых главный органист собора Нотр-дам-де-Виктуар. Он также является профессором Санкт-Петербургской консерватории, признанным специалистом в области органной музыки.</p>\n<h3>О программе</h3>\n<p>Концерт представляет собой демонстрацию достижений участников Летней академии органной музыки. В программе – выступления молодых музыкантов, прошедших обучение под руководством опытных педагогов.</p>",
+      "topics": [],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-04-10 12:55:36.465794",
+      "likes_count": 0,
+      "source_likes_count": 0,
+      "service_likes_count": 0,
+      "source_views_count": 3,
+      "source_engagement_sources_count": 1,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 4783,
+      "source_prod_id": 4783,
+      "title": "Мюзикл «Алые паруса»",
+      "slug": "myuzikl-alye-parusa-kaliningrad-4783",
+      "event_type": "спектакль",
+      "festival": null,
+      "status_label": "Билеты",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-17T19:00:00+02:00",
+      "start_date": "2026-07-17",
+      "start_time": "19:00",
+      "end_date": "2026-07-17",
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-17",
+      "display_time": "19:00",
+      "city": "Калининград",
+      "venue_name": "Музыкальный театр",
+      "address": "Мира 87",
+      "map_query": "Калининград, Музыкальный театр, Мира 87",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+        "status": "available",
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": "16+",
+      "age_restriction_status": "declared",
+      "age_restriction_provenance": "official_structured",
+      "age_restriction_decision_version": "event-age-decision-v1",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+      "source_urls": [
+        "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+        "https://vk.com/wall-231920894_7143",
+        "https://t.me/c/3954607218/1553",
+        "https://t.me/muztear39/10123"
+      ],
+      "source_count": 4,
+      "telegraph_url": "https://telegra.ph/Spektakl--Muzykalnyj-teatr-05-10-5",
+      "image_url": "https://static.kenigevents.ru/p/dh16/02/02904290029024902510258024603260e6380c1858d8182c0e9414020c000600.webp",
+      "image_alt": "Афиша события «Мюзикл «Алые паруса»»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "event_photo",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/02/02904290029024902510258024603260e6380c1858d8182c0e9414020c000600.webp",
+          "width": 819,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/24/24d73900870e8c230a3507b692f60fceaf12324772c05c1dd8b991f7f9083f49/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/24/24d73900870e8c230a3507b692f60fceaf12324772c05c1dd8b991f7f9083f49/512.webp",
+              "width": 409,
+              "height": 512
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "74dcda2975885260da9c6ae41497a883c9ecd7278fc5ede88acf14cd1b579e34",
+          "quality_score": 14.2396
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/40/40028009400748494cc19dc909710a61cc615a611b60392c1d2c1f3c19e41e66.webp",
-          "width": 2560,
-          "height": 1707,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/44/440c43180318860c0608460cda0c9399969986492459465d077a4d5a644f0467.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c9/c9577b98eabf03855a99321d22f6ec3e358d05affc3d3c13ef72d7d014c713ca/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c9/c9577b98eabf03855a99321d22f6ec3e358d05affc3d3c13ef72d7d014c713ca/512.webp",
+              "width": 300,
+              "height": 199
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.6
+          },
+          "recommended_object_position": "50% 60%",
+          "asset_key": "8c1b116917a116d0d61f2dc3f6cc66b11f92db8cd6bba0fe73529957ef0fc28c",
+          "quality_score": 7.5971
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/09/091a050a090f092e0b2e0a2f420f4207864f960c062d0e6d4e6d4c4d0c5c0c4d.webp",
+          "width": 300,
+          "height": 204,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
           "source_order": 2,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/84/8447bd04c356cf51af0fbc66fe7d4731d61959b35777ae4565a815cdd77cf670/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c4/c43cd4489ce6ecd3f85d9744c8280d090765fe72744db58c6507369220d0619e/256.webp",
               "width": 256,
-              "height": 171
+              "height": 174
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/84/8447bd04c356cf51af0fbc66fe7d4731d61959b35777ae4565a815cdd77cf670/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c4/c43cd4489ce6ecd3f85d9744c8280d090765fe72744db58c6507369220d0619e/512.webp",
+              "width": 300,
+              "height": 204
             }
           ],
-          "asset_key": "8447bd04c356cf51af0fbc66fe7d4731d61959b35777ae4565a815cdd77cf670",
-          "quality_score": 15.4403
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "3460dc448944d2c333b915fe180f2917b6d0fbb357d96ad3ded8a81d4fce44e4",
+          "quality_score": 7.6219
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/06/0610165133513333a2d372d3f311c311a293d693f493fe53611363c41a373a87.webp",
-          "width": 2560,
-          "height": 1707,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/1f/1f273f273f273b173b073f135db45f109d109d319db1be32122a1e331e320e30.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
+          "media_role": "event_photo",
+          "media_role_confidence": 1.0,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
           "source_order": 3,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d4/d49829ef4d4698d80969f6e4c90dabe622fa618bd6f18fbcc3400aeeef7bcc46/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/b0/b02d234e61fabde772f2600311345dde35e97b6677aa784003577becfa78d193/256.webp",
               "width": 256,
-              "height": 171
+              "height": 170
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d4/d49829ef4d4698d80969f6e4c90dabe622fa618bd6f18fbcc3400aeeef7bcc46/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/b0/b02d234e61fabde772f2600311345dde35e97b6677aa784003577becfa78d193/512.webp",
+              "width": 300,
+              "height": 199
             }
           ],
-          "asset_key": "d49829ef4d4698d80969f6e4c90dabe622fa618bd6f18fbcc3400aeeef7bcc46",
-          "quality_score": 15.4403
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "12eb97a4ffd6bdb399184fe8a41e7e7f4a8ed6db804750b0ad01224943977708",
+          "quality_score": 7.5971
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/8b/8b98ab888b48aa482ac88ac8b2c833e430d030d038f033687078c0096401e0a9.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/e5/e5c0c460c26042706270667020eda2cda64ce4ec44dc64d824b224b804b806b4.webp",
+          "width": 819,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
           "source_order": 4,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/5d/5d29249d6b01e28e841ed2051b3492146ca37e6972dd07505c1112a7f603dfb1/256.webp",
-              "width": 256,
-              "height": 171
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e0/e0f115aeeab9825aac7e8d96b3a061f126d44c31728a532c2dbf5837079d1b0b/256.webp",
+              "width": 205,
+              "height": 256
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/5d/5d29249d6b01e28e841ed2051b3492146ca37e6972dd07505c1112a7f603dfb1/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e0/e0f115aeeab9825aac7e8d96b3a061f126d44c31728a532c2dbf5837079d1b0b/512.webp",
+              "width": 409,
+              "height": 512
             }
           ],
-          "asset_key": "5d29249d6b01e28e841ed2051b3492146ca37e6972dd07505c1112a7f603dfb1",
-          "quality_score": 14.0534
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.25
+          },
+          "recommended_object_position": "50% 25%",
+          "asset_key": "13df6b62a843526c8637712f4f06e0cfa77484997a0f12496f4f53d558bad134",
+          "quality_score": 14.2396
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/10/102700e708c709c70e67234722cb62cb62c323410069823901f90078003c007c.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/14/1409151b0b190b3103330b3903390b310d1128591d4918495249535952495049.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
           "source_order": 5,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d8/d8b2ed80c2b2e9ca23455a61c576cda61f1071165eed06790bcfc64a8df77d3d/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/5b/5be2f0dc38933636c2b004b9e9041c7339fa5c592a1e23c139fae556a622fd8b/256.webp",
               "width": 256,
-              "height": 171
+              "height": 170
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d8/d8b2ed80c2b2e9ca23455a61c576cda61f1071165eed06790bcfc64a8df77d3d/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/5b/5be2f0dc38933636c2b004b9e9041c7339fa5c592a1e23c139fae556a622fd8b/512.webp",
+              "width": 300,
+              "height": 199
             }
           ],
-          "asset_key": "d8b2ed80c2b2e9ca23455a61c576cda61f1071165eed06790bcfc64a8df77d3d",
-          "quality_score": 14.0534
+          "focal_point": {
+            "x": 0.65,
+            "y": 0.5
+          },
+          "recommended_object_position": "65% 50%",
+          "asset_key": "3ecb315ad121b0f5835017581315c174b7bed35b7cdfba16b19e061ab366577b",
+          "quality_score": 7.5971
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/00/003f007f007f18271867186718671ae71a2718a7192510ed182910e7005f009f.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/00/000000000000008001c001c004c006d0399007b0033000300020072801800000.webp",
+          "width": 683,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
@@ -763,24 +381,24 @@
           "source_order": 6,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/83/830ef7d95ea6c2143a9d2ad95f6d8ed87de99041e3a851a8e7792af174072752/256.webp",
-              "width": 256,
-              "height": 171
+              "src": "https://static.kenigevents.ru/p/thumb/v1/af/af0d7d271a79680a023f3811ed7d8eded2772d270302055c7af10d5361063bab/256.webp",
+              "width": 171,
+              "height": 256
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/83/830ef7d95ea6c2143a9d2ad95f6d8ed87de99041e3a851a8e7792af174072752/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/af/af0d7d271a79680a023f3811ed7d8eded2772d270302055c7af10d5361063bab/512.webp",
+              "width": 341,
+              "height": 512
             }
           ],
-          "asset_key": "830ef7d95ea6c2143a9d2ad95f6d8ed87de99041e3a851a8e7792af174072752",
-          "quality_score": 14.0534
+          "asset_key": "b910276d593be2c7681c77f9f327927f80c0f8c932061cd5dcbce582b33eb027",
+          "quality_score": 13.608
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/00/003f003f003f101338033c03386338c3390338e33cc3308320db31131011007d.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/1a/1a591a590a592efd04ed04dd0685048d0599059995989198119e91321592059b.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
@@ -791,24 +409,24 @@
           "source_order": 7,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/4d/4de98f8880704781cf6e1a218e2b43a1a1cb0c2fbff2aecd260c35df008fbdb6/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d07e8907db9fdf1bbe1cef8949dade7e0d3a61c895c2c215a5dbeef5701aeb81/256.webp",
               "width": 256,
-              "height": 171
+              "height": 170
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/4d/4de98f8880704781cf6e1a218e2b43a1a1cb0c2fbff2aecd260c35df008fbdb6/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d07e8907db9fdf1bbe1cef8949dade7e0d3a61c895c2c215a5dbeef5701aeb81/512.webp",
+              "width": 300,
+              "height": 199
             }
           ],
-          "asset_key": "9e7c0c349a8c95a0b8d23b3bd86f4136ea54857af352c741e1d2dee25f88d249",
-          "quality_score": 14.0534
+          "asset_key": "be051c7bce177cfbc772a34d862a46e47c342852d19071177b0c15200977db60",
+          "quality_score": 7.1471
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/c0/c05961e9102918f9185949c99d8b8ca92c89a85b087b097902c90cc51883018b.webp",
-          "width": 2560,
-          "height": 1707,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/c9/c901610071a082f2827082548f1c9e0c0b18d593d362c29996e08cf07e217f20.webp",
+          "width": 819,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
@@ -819,24 +437,24 @@
           "source_order": 8,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/2d/2d461f870fec53a226b317032695d88f3f37cfd0cc82ded0e8c5bbbe0588c7da/256.webp",
-              "width": 256,
-              "height": 171
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e650f647d0a087e0c7a5543f8458292a03d37acf76db97c7c5f67b160e377a54/256.webp",
+              "width": 205,
+              "height": 256
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/2d/2d461f870fec53a226b317032695d88f3f37cfd0cc82ded0e8c5bbbe0588c7da/512.webp",
-              "width": 512,
-              "height": 341
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e650f647d0a087e0c7a5543f8458292a03d37acf76db97c7c5f67b160e377a54/512.webp",
+              "width": 409,
+              "height": 512
             }
           ],
-          "asset_key": "2d461f870fec53a226b317032695d88f3f37cfd0cc82ded0e8c5bbbe0588c7da",
-          "quality_score": 15.4403
+          "asset_key": "98e44e56cdf06761aadcd3b1c6c966eb03ce8e4c95fe5922a67f9f2fc50f38ae",
+          "quality_score": 13.7896
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/62/62086e80048048016589514b5946252601a7130305126c524237112d830c4ccd.webp",
-          "width": 865,
-          "height": 1080,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/42/4230b0d0b2261226126e513b39333973a3634373e343a647a6d3666307336313.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
@@ -847,24 +465,24 @@
           "source_order": 9,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/ff/ff6ca838533bb00ad7d99cf8e0c737fcd1cfbd36c397984691851ccb46434376/256.webp",
-              "width": 205,
-              "height": 256
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c7/c782800a602bc4838827ea3a967a00f31f2a8a32b74d26ec20f6145c49f01cfc/256.webp",
+              "width": 256,
+              "height": 171
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/ff/ff6ca838533bb00ad7d99cf8e0c737fcd1cfbd36c397984691851ccb46434376/512.webp",
-              "width": 410,
-              "height": 512
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c7/c782800a602bc4838827ea3a967a00f31f2a8a32b74d26ec20f6145c49f01cfc/512.webp",
+              "width": 512,
+              "height": 341
             }
           ],
-          "asset_key": "ff6ca838533bb00ad7d99cf8e0c737fcd1cfbd36c397984691851ccb46434376",
-          "quality_score": 13.8974
+          "asset_key": "76a50db2e73557338306c7e7c2d5e0900608b4187e855a275ff160417e593766",
+          "quality_score": 14.0534
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/00/00010011080102390039023802ba02b8033902390239023a02ba001908420008.webp",
-          "width": 2560,
-          "height": 1707,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/01/010020a030301030123092b16ad56c632423a19d93d9881887188b4b49461023.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
@@ -875,24 +493,24 @@
           "source_order": 10,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/78/788486f86d2cae188ecfe5d6747e3c185898be293ca4ed2e7742e1b64c9f94b7/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fee3e380cc4438e26e672b171b1bc11fd3ad99946f54d6abd160403fd01e0cd/256.webp",
               "width": 256,
               "height": 171
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/78/788486f86d2cae188ecfe5d6747e3c185898be293ca4ed2e7742e1b64c9f94b7/512.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fee3e380cc4438e26e672b171b1bc11fd3ad99946f54d6abd160403fd01e0cd/512.webp",
               "width": 512,
               "height": 341
             }
           ],
-          "asset_key": "788486f86d2cae188ecfe5d6747e3c185898be293ca4ed2e7742e1b64c9f94b7",
-          "quality_score": 15.4403
+          "asset_key": "f80327a7d9aa62f3f6e45a6ab19e0864bcf8266b86b833a389ed7b1ca30ab445",
+          "quality_score": 14.0534
         },
         {
-          "src": "https://static.kenigevents.ru/p/dh16/12/1208922a1032080b18c004f20ba21b135a901a925ca0203148405d855db359b3.webp",
-          "width": 1179,
-          "height": 786,
-          "alt": "Фотография события «Точка и линия»",
+          "src": "https://static.kenigevents.ru/p/dh16/30/30c430c830cc2cc62d4e1a4e1a6e0a260e2e2e6e086e2e4d2a4d4a4e4a4e224d.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
           "image_text_mode": "visual_only",
           "media_role": "unknown_document",
           "media_role_confidence": 0.0,
@@ -903,18 +521,337 @@
           "source_order": 11,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/ce/ce077072d343277134ef72e357345af081849bbae085945d948b0404fbaada0c/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/53/5378606d0da1b9a9c0a7019ae6475bc77e640d0b6c74fe417e76eb08327a7f63/256.webp",
               "width": 256,
               "height": 171
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/ce/ce077072d343277134ef72e357345af081849bbae085945d948b0404fbaada0c/512.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/53/5378606d0da1b9a9c0a7019ae6475bc77e640d0b6c74fe417e76eb08327a7f63/512.webp",
               "width": 512,
               "height": 341
             }
           ],
-          "asset_key": "ce077072d343277134ef72e357345af081849bbae085945d948b0404fbaada0c",
-          "quality_score": 13.8894
+          "asset_key": "576fabb1d1aec002790fec75e2c8d63deebc5efd8bf86e25aa86489e1b1d7307",
+          "quality_score": 14.0534
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": true,
+      "summary": "Музыкальный спектакль по мотивам повести Александра Грина рассказывает историю веры в мечту и любовь Ассоль.",
+      "meta_description": "Музыкальный спектакль по мотивам повести Александра Грина рассказывает историю веры в мечту и любовь Ассоль.",
+      "description_html": "<blockquote>«Повесть Александра Грина &quot;Алые паруса&quot; — история о девушке Ассоль и капитане Грее»</blockquote>\n<p>В центре сценического повествования — море, становящееся главным ведущим обстоятельством в судьбах героев. Этот спектакль, основанный на мюзикле Максима Дунаевского, пьесе Михаила Бартенева и стихах Андрея Усачева, уже более 5 лет занимает свое место в репертуаре театра. ⚓</p>\n<h3>Смысловые акценты</h3>\n<p>В постановке исследуются ключевые темы, раскрывающие внутренний мир персонажей и их путь:<br />* любовь;<br />* вера в чудо;<br />* надежда;<br />* мистика и реальность.</p>\n<h3>Сюжетная линия</h3>\n<p>История сосредоточена на судьбе Ассоль, которой приходится преодолевать жизненные трудности и предательство. Все испытания героиня проходит ради спасения своего отца, сохраняя верность мечте.</p>",
+      "topics": [
+        "THEATRE",
+        "THEATRE_CLASSIC",
+        "FAMILY"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-05-10 14:53:26.534250",
+      "likes_count": 4,
+      "source_likes_count": 4,
+      "service_likes_count": 0,
+      "source_views_count": 55,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 5297,
+      "source_prod_id": 5297,
+      "title": "Фестиваль Pianissimo: Игорь Сидоров",
+      "slug": "festival-pianissimo-igor-sidorov-kaliningrad-5297",
+      "event_type": "концерт",
+      "festival": "Pianissimo",
+      "status_label": "1500–2000 ₽",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-30T20:00:00+02:00",
+      "start_date": "2026-07-30",
+      "start_time": "20:00",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-30",
+      "display_time": "20:00",
+      "city": "Калининград",
+      "venue_name": "Филиал Третьяковской галереи",
+      "address": "Парадная наб. 3",
+      "map_query": "Калининград, Филиал Третьяковской галереи, Парадная наб. 3",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
+        "status": "available",
+        "is_free": false,
+        "price_label": "1500–2000 ₽",
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
+      "source_urls": [
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
+        "https://vk.com/wall-231920894_7398",
+        "https://t.me/c/3954607218/2509"
+      ],
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/Festival-Pianissimo-Igor-Sidorov-05-25",
+      "image_url": "https://static.kenigevents.ru/p/dh16/00/0000000000200060002000380038003c003600120072006900d900d9005900d1.webp",
+      "image_alt": "Афиша события «Фестиваль Pianissimo: Игорь Сидоров»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "event_photo",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/0000000000200060002000380038003c003600120072006900d900d9005900d1.webp",
+          "width": 3072,
+          "height": 1307,
+          "alt": "Фотография события «Фестиваль Pianissimo: Игорь Сидоров»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d9/d967cb4dee7a1894ba02815d29f037a42c7fad0e09519a43f5b390df97ad0c44/256.webp",
+              "width": 256,
+              "height": 109
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d9/d967cb4dee7a1894ba02815d29f037a42c7fad0e09519a43f5b390df97ad0c44/512.webp",
+              "width": 512,
+              "height": 218
+            }
+          ],
+          "focal_point": {
+            "x": 0.65,
+            "y": 0.35
+          },
+          "recommended_object_position": "65% 35%",
+          "asset_key": "37a01ac271c5437e2f3207d96382a73d5aa8c404df54cb36ebfca239a976a25e",
+          "quality_score": 15.8056
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": true,
+      "summary": "Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи.",
+      "meta_description": "Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи.",
+      "description_html": "<p>Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи. Программа вечера включает произведения Фредерика Шопена, демонстрирующие мастерство молодого исполнителя.</p>\n<h3>Об исполнителе</h3>\n<p>Игорь Сидоров родился в Санкт-Петербурге в 2010 году. В настоящее время пианист обучается в музыкальной школе им. Ю. А. Шапорина при Московском институте музыки им. А. Г. Шнитке в классе Веры Сергеевны Каменевой. Среди достижений музыканта:<br />* Обладание грантом мэра Москвы в сфере культуры и искусства.<br />* Звание лауреата XXVII Международного конкурса пианистов Santa Cecilia JUNIOR Piano Competition (Португалия, 2025).<br />* Звание лауреата XXIX Международного конкурса молодых музыкантов им. Д. Б. Кабалевского (Самара, 2024).<br />Игорь Сидоров совершенствовал мастерство на мастер-классах Г. И. Грузмана, Ю. С. Слесарева, Э. К. Вирсаладзе, М. В. Культышева, М. М. Александрова и Л. И. Ангерт.</p>\n<h3>Программа концерта</h3>\n<p>В исполнении Игоря Сидорова прозвучат следующие сочинения:<br />* Полонез ля-бемоль мажор, соч. 53 («Героический»)<br />* Ноктюрн № 2 фа-диез мажор, соч. 15<br />* Большой вальс ля-бемоль мажор, соч. 42<br />* Ноктюрн № 2 ре-бемоль мажор, соч. 27</p>\n<h3>Организация пространства</h3>\n<p>Рассадка в секторах партер и лестница является свободной. Для зрителей, выбирающих места на лестнице, рекомендуется комфортная форма одежды.</p>",
+      "topics": [],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-05-25 14:15:25.287455",
+      "likes_count": 2,
+      "source_likes_count": 2,
+      "service_likes_count": 0,
+      "source_views_count": 31,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 5298,
+      "source_prod_id": 5298,
+      "title": "Концерт «Фестиваль Pianissimo: Джан Сарач»",
+      "slug": "kontsert-festival-pianissimo-dzhan-sarach-kaliningrad-5298",
+      "event_type": "концерт",
+      "festival": "Pianissimo",
+      "status_label": "1500–2000 ₽",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-31T20:00:00+02:00",
+      "start_date": "2026-07-31",
+      "start_time": "20:00",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-31",
+      "display_time": "20:00",
+      "city": "Калининград",
+      "venue_name": "Филиал Третьяковской галереи",
+      "address": "Парадная наб. 3",
+      "map_query": "Калининград, Филиал Третьяковской галереи, Парадная наб. 3",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
+        "status": "available",
+        "is_free": false,
+        "price_label": "1500–2000 ₽",
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
+      "source_urls": [
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
+        "https://vk.com/wall-231920894_7528",
+        "https://t.me/c/3954607218/2484"
+      ],
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/Koncert-Festival-Pianissimo-Dzhan-Sarach-05-25",
+      "image_url": "https://static.kenigevents.ru/p/dh16/00/0000001000480098009800180018001c005e00de009601820187008301830183.webp",
+      "image_alt": "Афиша события «Концерт «Фестиваль Pianissimo: Джан Сарач»»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "event_photo",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/0000001000480098009800180018001c005e00de009601820187008301830183.webp",
+          "width": 3072,
+          "height": 1304,
+          "alt": "Фотография события «Концерт «Фестиваль Pianissimo: Джан Сарач»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/b9/b9592052a6e865ef2986da2b113a6ac62db63cf1d958fa06577c673eaa7f0e06/256.webp",
+              "width": 256,
+              "height": 109
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/b9/b9592052a6e865ef2986da2b113a6ac62db63cf1d958fa06577c673eaa7f0e06/512.webp",
+              "width": 512,
+              "height": 217
+            }
+          ],
+          "focal_point": {
+            "x": 0.65,
+            "y": 0.35
+          },
+          "recommended_object_position": "65% 35%",
+          "asset_key": "33f7bdca956173f3e896e322853a908fbedfc03cef58771138c2bc6590d8e4a3",
+          "quality_score": 15.8033
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": true,
+      "summary": "Сольный концерт молодого турецкого пианиста Джана Сарача с программой из произведений Баха, Бетховена и Шопена.",
+      "meta_description": "Сольный концерт молодого турецкого пианиста Джана Сарача с программой из произведений Баха, Бетховена и Шопена.",
+      "description_html": "<p>Концерт в рамках фестиваля Pianissimo.</p>\n<h3>Программа и участники</h3>\n<ul>\n<li>Исполнитель: Джан Сарач, пианист</li>\n<li>Формат рассадки включает партер (стулья) и зону лестницы (мягкие подушки)</li>\n<li>Рассадка в секторах свободная</li>\n<li>Джан Сарач начал обучение музыке в возрасте пяти лет</li>\n<li>В 2023 году окончил Государственную консерваторию Стамбульского университета</li>\n<li>Обучался в Мюнхенском университете музыки и театра у профессора Михаэля Шефера</li>\n<li>С 2025 года обучается в Веймарской Высшей школе музыки им. Ф. Листа у профессора Михаила Лифица</li>\n<li>В 2022 году стал самым молодым участником фестиваля Pianissimo</li>\n<li>Победитель международных конкурсов в Болгарии, Македонии, Турции и Венгрии</li>\n<li>Чакона из скрипичной партиты ре минор №2 BWV 1004</li>\n<li>Соната № 30 ми мажор, соч. 109</li>\n<li>Соната №2 си-бемоль минор, соч. 36</li>\n</ul>",
+      "topics": [],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-05-25 14:17:10.389583",
+      "likes_count": 3,
+      "source_likes_count": 3,
+      "service_likes_count": 0,
+      "source_views_count": 52,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 6922,
+      "source_prod_id": 6922,
+      "title": "Экскурсия «Приматы: секреты их повседневной жизни»",
+      "slug": "ekskursiya-primaty-sekrety-ih-povsednevnoy-zhizni-kaliningrad-6922",
+      "event_type": "лекция",
+      "festival": null,
+      "status_label": "300–1100 ₽",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-18T10:00:00+02:00",
+      "start_date": "2026-07-18",
+      "start_time": "10:00",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-18",
+      "display_time": "10:00",
+      "city": "Калининград",
+      "venue_name": "Калининградский зоопарк",
+      "address": "пр-т Мира 26",
+      "map_query": "Калининград, Калининградский зоопарк, пр-т Мира 26",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://kldzoo.ru/visit-and-tickets/prices-and-tickets/",
+        "status": "available",
+        "is_free": false,
+        "price_label": "300–1100 ₽",
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "assessed",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-decision-v1",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://vk.com/wall-48383763_41562",
+      "source_urls": [
+        "https://vk.com/wall-48383763_41562",
+        "https://vk.com/wall-231920894_7625",
+        "https://t.me/c/3954607218/2541",
+        "https://t.me/kldzoo/7692",
+        "https://t.me/kldzoo/7695"
+      ],
+      "source_count": 5,
+      "telegraph_url": "https://telegra.ph/EHkskursiya-Primaty-sekrety-ih-povsednevnoj-zhizni-07-16",
+      "image_url": "https://static.kenigevents.ru/p/dh16/35/35c6b4cc96783830503e713b31187598764c7264735c73587333332733277316.webp",
+      "image_alt": "Афиша события «Экскурсия «Приматы: секреты их повседневной жизни»»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/35/35c6b4cc96783830503e713b31187598764c7264735c73587333332733277316.webp",
+          "width": 800,
+          "height": 533,
+          "alt": "Фотография события «Экскурсия «Приматы: секреты их повседневной жизни»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/0b/0b7901f94d367bb261df20ba17fe9fa4d9e435315ff98920d7e8359443a36d98/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/0b/0b7901f94d367bb261df20ba17fe9fa4d9e435315ff98920d7e8359443a36d98/512.webp",
+              "width": 512,
+              "height": 341
+            }
+          ],
+          "asset_key": "0b62893f2762c1ecf82baf9be5b19b938016378eb1dc3d69ca989aa51071c37a",
+          "quality_score": 11.8131
         }
       ],
       "face_boxes": [],
@@ -922,27 +859,133 @@
       "focal_point": null,
       "image_object_position": null,
       "safe_crop": false,
-      "summary": "Выставка представляет геометрическую абстракцию в русском искусстве через сто пятьдесят произведений из собрания Третьяковской галереи.",
-      "meta_description": "Выставка представляет геометрическую абстракцию в русском искусстве через сто пятьдесят произведений из собрания Третьяковской галереи.",
-      "description_html": "<p>Выставка «Точка и линия», организованная Государственной Третьяковской галереей, представляет геометрическую абстракцию в русском искусстве XX–XXI веков. Проект является третьим крупным событием филиала после выставок «Пять веков русского искусства» и «Великие учителя».</p>\n<blockquote>Выставка «Точка и линия» посвящена геометрической абстракции в русском искусстве XX–XXI веков.</blockquote>\n<h3>Состав и структура экспозиции</h3>\n<p>Экспозиция включает более 150 произведений из собрания Государственной Третьяковской галереи, охватывая широкий спектр видов искусства: живопись, скульптуру, графику, фотографию, инсталляцию и видео-арт. В залах представлены работы как прославленных мастеров, так и менее известных и молодых авторов, включая Малевича, Фалька, Лентулова, Родченко, Степанову и И. Клюна. Некоторые из представленных произведений экспонируются впервые. Подготовка выставки включает процесс распаковки и тщательного осмотра каждой работы перед монтажом.</p>\n<h3>Ключевые произведения</h3>\n<p>В пространстве выставки выделены следующие работы:<br />- «Движение I» Василия Кандинского (1935)<br />- «Пустота» Наталии Гончаровой (1913)<br />- «Живописная архитектоника» Любови Поповой (1918)<br />- «Встреча зари» Константина Рождественского (начало 1930-х)<br />- «Чёрный квадрат» Александра Юликова (2000)</p>\n<h3>Кураторская работа и события</h3>\n<p>Кураторами проекта выступили Игорь Волков, хранитель музейных предметов 1 категории Государственной Третьяковской галереи, и Катаринэ Булгадарова, научный сотрудник сектора новейших течений Государственной Третьяковской галереи. В рамках проекта состоялся круглый стол под модераторством Ольги Артёмовой, заведующей отделом просветительской деятельности филиала Государственной Третьяковской галереи, где обсуждались следующие темы:<br />- Проектирование выставок<br />- Этапы подготовки<br />- Уникальность проекта<br />- Понимание абстракции</p>\n<p>На вернисаже выступил Московский государственный академический симфонический оркестр с программой из произведений Игоря Стравинского и Дмитрия Шостаковича.</p>",
+      "summary": "Кипер Тропического дома рассказывает посетителям об особенностях содержания орангутанов и повседневной жизни приматов в условиях зоопарка.",
+      "meta_description": "Кипер Тропического дома рассказывает посетителям об особенностях содержания орангутанов и повседневной жизни приматов в условиях зоопарка.",
+      "description_html": "<blockquote>Событие является авторской экскурсией из цикла «Другой зоопарк».</blockquote>\n<p>Приглашаем на авторскую экскурсию «Приматы: секреты их повседневной жизни», которую проводит кипер Тропического дома Станислава Егорова. Сбор группы численностью до 25 человек проходит у вольера енотов. 🐒</p>\n<h3>Особенности содержания орангутанов</h3>\n<p>На экскурсии объяснят, почему в вольерах орангутанов стоят дорожные зеркала. Участники узнают о самочувствии подопечных:<br />- взрослеющего орангутана Оли;<br />- маленького орангутана.</p>\n<h3>Организационные сведения</h3>\n<p>Формат: авторская экскурсия.<br />Ведущий экскурсии: Станислава Егорова, кипер Тропического дома.</p>",
       "topics": [
-        "EXHIBITIONS"
+        "LECTURES",
+        "SCIENCE_POP",
+        "FAMILY"
       ],
-      "pushkin_card": true,
+      "pushkin_card": false,
       "other_date_ids": [],
       "data_quality_notes": [],
-      "updated_at": "2026-05-27 09:00:22.114199",
-      "likes_count": 374,
-      "source_likes_count": 374,
+      "updated_at": "2026-07-16 16:35:49.306813",
+      "likes_count": 52,
+      "source_likes_count": 52,
       "service_likes_count": 0,
-      "source_views_count": 26678,
-      "source_engagement_sources_count": 12,
-      "shares_count": 27,
+      "source_views_count": 2087,
+      "source_engagement_sources_count": 2,
+      "shares_count": 1,
       "popularity_reason_codes": [
-        "frequently_shared",
         "multi_source"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 1.0
+    },
+    {
+      "id": 6928,
+      "source_prod_id": 6928,
+      "title": "Фитодизайн террас",
+      "slug": "fitodizayn-terras-kaliningrad-6928",
+      "event_type": "мастер-класс",
+      "festival": null,
+      "status_label": "12000 ₽",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-26T10:00:00+02:00",
+      "start_date": "2026-07-26",
+      "start_time": "10:00",
+      "end_date": "2026-07-26",
+      "end_at": "2026-07-26T17:00:00+02:00",
+      "time_range_end": "17:00",
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-26",
+      "display_time": "10:00–17:00",
+      "city": "Калининград",
+      "venue_name": "Калининградский зоопарк",
+      "address": "пр-т Мира 26",
+      "map_query": "Калининград, Калининградский зоопарк, пр-т Мира 26",
+      "ticket": {
+        "kind": "phone",
+        "label": "Позвонить организатору",
+        "href": "tel:+79506767540",
+        "status": "registration",
+        "is_free": false,
+        "price_label": "12000 ₽",
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/kulturnaya_chaika/8043",
+      "source_urls": [
+        "https://t.me/kulturnaya_chaika/8043",
+        "https://vk.com/wall-231920894_7635",
+        "https://t.me/c/3954607218/2545",
+        "https://t.me/plantasutra/2613",
+        "https://vk.com/wall-231920894_7649"
+      ],
+      "source_count": 5,
+      "telegraph_url": "https://telegra.ph/Fitodizajn-terras-07-16",
+      "image_url": "https://static.kenigevents.ru/p/dh16/29/290f2d1a2716a20405814e986ac8266c6274e13c11bc299480366061b26c0006.webp",
+      "image_alt": "Афиша события «Фитодизайн террас»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/29/290f2d1a2716a20405814e986ac8266c6274e13c11bc299480366061b26c0006.webp",
+          "width": 178,
+          "height": 320,
+          "alt": "Фотография события «Фитодизайн террас»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/fa/fa440c8624b617cf4594166640e2b0ad274b6d632b49c81289ccbfa2b7790170/256.webp",
+              "width": 142,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/fa/fa440c8624b617cf4594166640e2b0ad274b6d632b49c81289ccbfa2b7790170/512.webp",
+              "width": 178,
+              "height": 320
+            }
+          ],
+          "asset_key": "fa440c8624b617cf4594166640e2b0ad274b6d632b49c81289ccbfa2b7790170",
+          "quality_score": 7.1001
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Трехдневный мастер-класс посвящен профессиональным методам проектирования и стилистического оформления открытых пространств террас и городских балконов.",
+      "meta_description": "Трехдневный мастер-класс посвящен профессиональным методам проектирования и стилистического оформления открытых пространств террас и городских балконов.",
+      "description_html": "<blockquote>Событие представляет собой трёхдневный семинар «Фитодизайн террас»</blockquote>\n<p>Greenstudio school приглашает на мастер-класс, предназначенный для тех, кто хочет разобраться в работе с террасами и балконами. Ведущие семинара — профессионалы фитодизайна Михаил Глазков и Андрей Филоненко из студии «Фернс».</p>\n<h3>Программа семинара</h3>\n<ul>\n<li>Первый день: стили фитодизайна террас и балконов, особенности этих пространств.</li>\n<li>Второй день: разбор проектов, ошибок, рабочих приёмов и логики ведения дизайн-проекта.</li>\n<li>Третий день: проектирование и практика.</li>\n</ul>\n<h3>Темы и стоимость</h3>\n<p>Темы охватывают стилистику, логику подбора растений, проектирование и типичные ошибки. Стоимость участия составляет 12 000 рублей. 🌿</p>",
+      "topics": [
+        "MASTERCLASS"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-16 23:12:57.637596",
+      "likes_count": 2,
+      "source_likes_count": 2,
+      "service_likes_count": 0,
+      "source_views_count": 18,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6679,
@@ -2223,7 +2266,7 @@
       "source_urls": [
         "https://t.me/meowafisha/7943",
         "https://vk.com/wall-231920894_7583",
-        "https://t.me/c/3954607218/2520",
+        "https://t.me/c/3954607218/2576",
         "https://t.me/tatianaabar/555",
         "https://vk.com/wall-231920894_7599"
       ],
@@ -2286,20 +2329,20 @@
       "likes_count": 2,
       "source_likes_count": 2,
       "service_likes_count": 0,
-      "source_views_count": 40,
-      "source_engagement_sources_count": 2,
+      "source_views_count": 36,
+      "source_engagement_sources_count": 1,
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
     },
     {
-      "id": 4783,
-      "source_prod_id": 4783,
-      "title": "Мюзикл «Алые паруса»",
-      "slug": "myuzikl-alye-parusa-kaliningrad-4783",
-      "event_type": "спектакль",
+      "id": 6859,
+      "source_prod_id": 6859,
+      "title": "Концерт «ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ»",
+      "slug": "kontsert-epidemiya-ognennaya-rukopis-kaliningrad-6859",
+      "event_type": "концерт",
       "festival": null,
-      "status_label": "Билеты",
+      "status_label": "3500 ₽",
       "lifecycle_status": "active",
       "starts_at": "2026-07-17T19:00:00+02:00",
       "start_date": "2026-07-17",
@@ -2311,430 +2354,93 @@
       "display_date": "2026-07-17",
       "display_time": "19:00",
       "city": "Калининград",
-      "venue_name": "Музыкальный театр",
-      "address": "Мира 87",
-      "map_query": "Калининград, Музыкальный театр, Мира 87",
+      "venue_name": "Поселение викингов \"Кауп\"",
+      "address": "п. Романово",
+      "map_query": "Калининград, Поселение викингов \"Кауп\", п. Романово",
       "ticket": {
         "kind": "ticket",
         "label": "Купить билет",
-        "href": "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+        "href": "https://kaliningrad.qtickets.events/233763-epidemiya-ognennaya-rukopis",
         "status": "available",
         "is_free": false,
-        "price_label": null,
+        "price_label": "3500 ₽",
         "note": null
       },
-      "age_restriction": "16+",
+      "age_restriction": "12+",
       "age_restriction_status": "declared",
       "age_restriction_provenance": "official_structured",
       "age_restriction_decision_version": "event-age-decision-v1",
       "age_recommendation": null,
       "age_recommendation_label": null,
-      "source_url": "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+      "source_url": "https://kaliningrad.qtickets.events/233763-epidemiya-ognennaya-rukopis",
       "source_urls": [
-        "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
-        "https://vk.com/wall-231920894_7143",
-        "https://t.me/c/3954607218/1553",
-        "https://t.me/muztear39/10123"
+        "https://kaliningrad.qtickets.events/233763-epidemiya-ognennaya-rukopis",
+        "https://vk.com/wall-231920894_7440",
+        "https://t.me/c/3954607218/2344",
+        "https://t.me/kenigevents/4453"
       ],
       "source_count": 4,
-      "telegraph_url": "https://telegra.ph/Spektakl--Muzykalnyj-teatr-05-10-5",
-      "image_url": "https://static.kenigevents.ru/p/dh16/02/02904290029024902510258024603260e6380c1858d8182c0e9414020c000600.webp",
-      "image_alt": "Афиша события «Мюзикл «Алые паруса»»",
+      "telegraph_url": "https://telegra.ph/Koncert-EHPIDEMIYA-OGNENNAYA-RUKOPIS-07-13",
+      "image_url": "https://static.kenigevents.ru/p/dh16/02/02e022f82674236d20cd22a526b326302671235323133196259725c323200000.webp",
+      "image_alt": "Афиша события «Концерт «ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ»»",
       "image_text_mode": "visual_only",
-      "image_media_role": "event_photo",
+      "image_media_role": "unknown_document",
       "image_assets": [
         {
-          "src": "https://static.kenigevents.ru/p/dh16/02/02904290029024902510258024603260e6380c1858d8182c0e9414020c000600.webp",
-          "width": 819,
-          "height": 1024,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "src": "https://static.kenigevents.ru/p/dh16/02/02e022f82674236d20cd22a526b326302671235323133196259725c323200000.webp",
+          "width": 638,
+          "height": 317,
+          "alt": "Фотография события «Концерт «ЭПИДЕМИЯ. ОГНЕННАЯ РУКОПИСЬ»»",
           "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "error",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
           "source_order": 0,
           "thumbnail_sources": [
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/24/24d73900870e8c230a3507b692f60fceaf12324772c05c1dd8b991f7f9083f49/256.webp",
-              "width": 205,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/24/24d73900870e8c230a3507b692f60fceaf12324772c05c1dd8b991f7f9083f49/512.webp",
-              "width": 409,
-              "height": 512
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "74dcda2975885260da9c6ae41497a883c9ecd7278fc5ede88acf14cd1b579e34",
-          "quality_score": 14.2396
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/44/440c43180318860c0608460cda0c9399969986492459465d077a4d5a644f0467.webp",
-          "width": 300,
-          "height": 199,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 1,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c9/c9577b98eabf03855a99321d22f6ec3e358d05affc3d3c13ef72d7d014c713ca/256.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8b/8b92d8d7bddc6bcce47ff611d7736fe8dffc70d979f0e65c7835d43973231fdf/256.webp",
               "width": 256,
-              "height": 170
+              "height": 127
             },
             {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c9/c9577b98eabf03855a99321d22f6ec3e358d05affc3d3c13ef72d7d014c713ca/512.webp",
-              "width": 300,
-              "height": 199
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.6
-          },
-          "recommended_object_position": "50% 60%",
-          "asset_key": "8c1b116917a116d0d61f2dc3f6cc66b11f92db8cd6bba0fe73529957ef0fc28c",
-          "quality_score": 7.5971
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/09/091a050a090f092e0b2e0a2f420f4207864f960c062d0e6d4e6d4c4d0c5c0c4d.webp",
-          "width": 300,
-          "height": 204,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 2,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c4/c43cd4489ce6ecd3f85d9744c8280d090765fe72744db58c6507369220d0619e/256.webp",
-              "width": 256,
-              "height": 174
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c4/c43cd4489ce6ecd3f85d9744c8280d090765fe72744db58c6507369220d0619e/512.webp",
-              "width": 300,
-              "height": 204
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "3460dc448944d2c333b915fe180f2917b6d0fbb357d96ad3ded8a81d4fce44e4",
-          "quality_score": 7.6219
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/1f/1f273f273f273b173b073f135db45f109d109d319db1be32122a1e331e320e30.webp",
-          "width": 300,
-          "height": 199,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 1.0,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 3,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/b0/b02d234e61fabde772f2600311345dde35e97b6677aa784003577becfa78d193/256.webp",
-              "width": 256,
-              "height": 170
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/b0/b02d234e61fabde772f2600311345dde35e97b6677aa784003577becfa78d193/512.webp",
-              "width": 300,
-              "height": 199
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "recommended_object_position": "50% 50%",
-          "asset_key": "12eb97a4ffd6bdb399184fe8a41e7e7f4a8ed6db804750b0ad01224943977708",
-          "quality_score": 7.5971
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/e5/e5c0c460c26042706270667020eda2cda64ce4ec44dc64d824b224b804b806b4.webp",
-          "width": 819,
-          "height": 1024,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 4,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e0/e0f115aeeab9825aac7e8d96b3a061f126d44c31728a532c2dbf5837079d1b0b/256.webp",
-              "width": 205,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e0/e0f115aeeab9825aac7e8d96b3a061f126d44c31728a532c2dbf5837079d1b0b/512.webp",
-              "width": 409,
-              "height": 512
-            }
-          ],
-          "focal_point": {
-            "x": 0.5,
-            "y": 0.25
-          },
-          "recommended_object_position": "50% 25%",
-          "asset_key": "13df6b62a843526c8637712f4f06e0cfa77484997a0f12496f4f53d558bad134",
-          "quality_score": 14.2396
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/14/1409151b0b190b3103330b3903390b310d1128591d4918495249535952495049.webp",
-          "width": 300,
-          "height": 199,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 5,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/5b/5be2f0dc38933636c2b004b9e9041c7339fa5c592a1e23c139fae556a622fd8b/256.webp",
-              "width": 256,
-              "height": 170
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/5b/5be2f0dc38933636c2b004b9e9041c7339fa5c592a1e23c139fae556a622fd8b/512.webp",
-              "width": 300,
-              "height": 199
-            }
-          ],
-          "focal_point": {
-            "x": 0.65,
-            "y": 0.5
-          },
-          "recommended_object_position": "65% 50%",
-          "asset_key": "3ecb315ad121b0f5835017581315c174b7bed35b7cdfba16b19e061ab366577b",
-          "quality_score": 7.5971
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/000000000000008001c001c004c006d0399007b0033000300020072801800000.webp",
-          "width": 683,
-          "height": 1024,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 6,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/af/af0d7d271a79680a023f3811ed7d8eded2772d270302055c7af10d5361063bab/256.webp",
-              "width": 171,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/af/af0d7d271a79680a023f3811ed7d8eded2772d270302055c7af10d5361063bab/512.webp",
-              "width": 341,
-              "height": 512
-            }
-          ],
-          "asset_key": "b910276d593be2c7681c77f9f327927f80c0f8c932061cd5dcbce582b33eb027",
-          "quality_score": 13.608
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/1a/1a591a590a592efd04ed04dd0685048d0599059995989198119e91321592059b.webp",
-          "width": 300,
-          "height": 199,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 7,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d07e8907db9fdf1bbe1cef8949dade7e0d3a61c895c2c215a5dbeef5701aeb81/256.webp",
-              "width": 256,
-              "height": 170
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d07e8907db9fdf1bbe1cef8949dade7e0d3a61c895c2c215a5dbeef5701aeb81/512.webp",
-              "width": 300,
-              "height": 199
-            }
-          ],
-          "asset_key": "be051c7bce177cfbc772a34d862a46e47c342852d19071177b0c15200977db60",
-          "quality_score": 7.1471
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/c9/c901610071a082f2827082548f1c9e0c0b18d593d362c29996e08cf07e217f20.webp",
-          "width": 819,
-          "height": 1024,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 8,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e650f647d0a087e0c7a5543f8458292a03d37acf76db97c7c5f67b160e377a54/256.webp",
-              "width": 205,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e650f647d0a087e0c7a5543f8458292a03d37acf76db97c7c5f67b160e377a54/512.webp",
-              "width": 409,
-              "height": 512
-            }
-          ],
-          "asset_key": "98e44e56cdf06761aadcd3b1c6c966eb03ce8e4c95fe5922a67f9f2fc50f38ae",
-          "quality_score": 13.7896
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/42/4230b0d0b2261226126e513b39333973a3634373e343a647a6d3666307336313.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 9,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c7/c782800a602bc4838827ea3a967a00f31f2a8a32b74d26ec20f6145c49f01cfc/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/c7/c782800a602bc4838827ea3a967a00f31f2a8a32b74d26ec20f6145c49f01cfc/512.webp",
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8b/8b92d8d7bddc6bcce47ff611d7736fe8dffc70d979f0e65c7835d43973231fdf/512.webp",
               "width": 512,
-              "height": 341
+              "height": 254
             }
           ],
-          "asset_key": "76a50db2e73557338306c7e7c2d5e0900608b4187e855a275ff160417e593766",
-          "quality_score": 14.0534
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/01/010020a030301030123092b16ad56c632423a19d93d9881887188b4b49461023.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 10,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fee3e380cc4438e26e672b171b1bc11fd3ad99946f54d6abd160403fd01e0cd/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fee3e380cc4438e26e672b171b1bc11fd3ad99946f54d6abd160403fd01e0cd/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "f80327a7d9aa62f3f6e45a6ab19e0864bcf8266b86b833a389ed7b1ca30ab445",
-          "quality_score": 14.0534
-        },
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/30/30c430c830cc2cc62d4e1a4e1a6e0a260e2e2e6e086e2e4d2a4d4a4e4a4e224d.webp",
-          "width": 1280,
-          "height": 853,
-          "alt": "Фотография события «Мюзикл «Алые паруса»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 11,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/53/5378606d0da1b9a9c0a7019ae6475bc77e640d0b6c74fe417e76eb08327a7f63/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/53/5378606d0da1b9a9c0a7019ae6475bc77e640d0b6c74fe417e76eb08327a7f63/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "576fabb1d1aec002790fec75e2c8d63deebc5efd8bf86e25aa86489e1b1d7307",
-          "quality_score": 14.0534
+          "asset_key": "322fc03dfdb1c30602a60f5693b5fb0d8c926b395dcb324f65a6cb8a7639eb23",
+          "quality_score": 8.3672
         }
       ],
       "face_boxes": [],
       "ocr_boxes": [],
       "focal_point": null,
       "image_object_position": null,
-      "safe_crop": true,
-      "summary": "Музыкальный спектакль по мотивам повести Александра Грина рассказывает историю веры в мечту и любовь Ассоль.",
-      "meta_description": "Музыкальный спектакль по мотивам повести Александра Грина рассказывает историю веры в мечту и любовь Ассоль.",
-      "description_html": "<blockquote>«Повесть Александра Грина &quot;Алые паруса&quot; — история о девушке Ассоль и капитане Грее»</blockquote>\n<p>В центре сценического повествования — море, становящееся главным ведущим обстоятельством в судьбах героев. Этот спектакль, основанный на мюзикле Максима Дунаевского, пьесе Михаила Бартенева и стихах Андрея Усачева, уже более 5 лет занимает свое место в репертуаре театра. ⚓</p>\n<h3>Смысловые акценты</h3>\n<p>В постановке исследуются ключевые темы, раскрывающие внутренний мир персонажей и их путь:<br />* любовь;<br />* вера в чудо;<br />* надежда;<br />* мистика и реальность.</p>\n<h3>Сюжетная линия</h3>\n<p>История сосредоточена на судьбе Ассоль, которой приходится преодолевать жизненные трудности и предательство. Все испытания героиня проходит ради спасения своего отца, сохраняя верность мечте.</p>",
+      "safe_crop": false,
+      "summary": "Масштабный концерт-постановка метал-опер группы Эпидемия с огненным шоу и выступлением группы Дом Ветров.",
+      "meta_description": "Масштабный концерт-постановка метал-опер группы Эпидемия с огненным шоу и выступлением группы Дом Ветров.",
+      "description_html": "<p>Концерт-постановка метал-опер группы «Эпидемия» под названием «Огненная рукопись» переносит зрителей в атмосферу «Эльфийского мира». Программа объединяет музыкальное выступление с масштабным пиротехническим шоу, разработанным индивидуально для каждой композиции, и погружает в средневековый сеттинг поселения викингов «Кауп».</p>\n<h3>Программа и участники</h3>\n<p>В мероприятии принимают участие группа «Эпидемия» совместно с ключевыми вокалистами метал-опер, которые исполнят лучшие хиты проекта. На отдельной сцене запланировано выступление группы «Дом Ветров». Постановка разворачивается в окружении персонажей «Эльфийского мира», включая эльфов, гномов, великанов и драконов.</p>\n<h3>Активности на площадке</h3>\n<p>Территория поселения викингов «Кауп» воссоздает историческую атмосферу средневековья. Помимо основной концертной программы, для посетителей организован уникальный квест с призами.</p>",
       "topics": [
-        "THEATRE",
-        "THEATRE_CLASSIC",
-        "FAMILY"
+        "CONCERTS",
+        "HISTORICAL_IMMERSION"
       ],
       "pushkin_card": false,
       "other_date_ids": [],
       "data_quality_notes": [],
-      "updated_at": "2026-05-10 14:53:26.534250",
-      "likes_count": 4,
-      "source_likes_count": 4,
+      "updated_at": "2026-07-13 13:29:41.749646",
+      "likes_count": 2,
+      "source_likes_count": 2,
       "service_likes_count": 0,
-      "source_views_count": 55,
+      "source_views_count": 295,
       "source_engagement_sources_count": 2,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
+      "shares_count": 3,
+      "popularity_reason_codes": [
+        "frequently_shared"
+      ],
+      "popularity_signal_score": 2.5
     },
     {
       "id": 4671,
@@ -3945,115 +3651,6 @@
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
-    },
-    {
-      "id": 6922,
-      "source_prod_id": 6922,
-      "title": "Экскурсия «Приматы: секреты их повседневной жизни»",
-      "slug": "ekskursiya-primaty-sekrety-ih-povsednevnoy-zhizni-kaliningrad-6922",
-      "event_type": "лекция",
-      "festival": null,
-      "status_label": "300–1100 ₽",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-18T10:00:00+02:00",
-      "start_date": "2026-07-18",
-      "start_time": "10:00",
-      "end_date": null,
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-18",
-      "display_time": "10:00",
-      "city": "Калининград",
-      "venue_name": "Калининградский зоопарк",
-      "address": "пр-т Мира 26",
-      "map_query": "Калининград, Калининградский зоопарк, пр-т Мира 26",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://kldzoo.ru/visit-and-tickets/prices-and-tickets/",
-        "status": "available",
-        "is_free": false,
-        "price_label": "300–1100 ₽",
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "assessed",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-decision-v1",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://vk.com/wall-48383763_41562",
-      "source_urls": [
-        "https://vk.com/wall-48383763_41562",
-        "https://vk.com/wall-231920894_7625",
-        "https://t.me/c/3954607218/2541",
-        "https://t.me/kldzoo/7692",
-        "https://t.me/kldzoo/7695"
-      ],
-      "source_count": 5,
-      "telegraph_url": "https://telegra.ph/EHkskursiya-Primaty-sekrety-ih-povsednevnoj-zhizni-07-16",
-      "image_url": "https://static.kenigevents.ru/p/dh16/35/35c6b4cc96783830503e713b31187598764c7264735c73587333332733277316.webp",
-      "image_alt": "Афиша события «Экскурсия «Приматы: секреты их повседневной жизни»»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/35/35c6b4cc96783830503e713b31187598764c7264735c73587333332733277316.webp",
-          "width": 800,
-          "height": 533,
-          "alt": "Фотография события «Экскурсия «Приматы: секреты их повседневной жизни»»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/0b/0b7901f94d367bb261df20ba17fe9fa4d9e435315ff98920d7e8359443a36d98/256.webp",
-              "width": 256,
-              "height": 171
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/0b/0b7901f94d367bb261df20ba17fe9fa4d9e435315ff98920d7e8359443a36d98/512.webp",
-              "width": 512,
-              "height": 341
-            }
-          ],
-          "asset_key": "0b62893f2762c1ecf82baf9be5b19b938016378eb1dc3d69ca989aa51071c37a",
-          "quality_score": 11.8131
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Кипер Тропического дома рассказывает посетителям об особенностях содержания орангутанов и повседневной жизни приматов в условиях зоопарка.",
-      "meta_description": "Кипер Тропического дома рассказывает посетителям об особенностях содержания орангутанов и повседневной жизни приматов в условиях зоопарка.",
-      "description_html": "<blockquote>Событие является авторской экскурсией из цикла «Другой зоопарк».</blockquote>\n<p>Приглашаем на авторскую экскурсию «Приматы: секреты их повседневной жизни», которую проводит кипер Тропического дома Станислава Егорова. Сбор группы численностью до 25 человек проходит у вольера енотов. 🐒</p>\n<h3>Особенности содержания орангутанов</h3>\n<p>На экскурсии объяснят, почему в вольерах орангутанов стоят дорожные зеркала. Участники узнают о самочувствии подопечных:<br />- взрослеющего орангутана Оли;<br />- маленького орангутана.</p>\n<h3>Организационные сведения</h3>\n<p>Формат: авторская экскурсия.<br />Ведущий экскурсии: Станислава Егорова, кипер Тропического дома.</p>",
-      "topics": [
-        "LECTURES",
-        "SCIENCE_POP",
-        "FAMILY"
-      ],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-07-16 16:35:49.306813",
-      "likes_count": 52,
-      "source_likes_count": 52,
-      "service_likes_count": 0,
-      "source_views_count": 2087,
-      "source_engagement_sources_count": 2,
-      "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
     },
     {
       "id": 4689,
@@ -5935,7 +5532,7 @@
       "source_urls": [
         "https://t.me/meowafisha/7954",
         "https://vk.com/wall-231920894_7641",
-        "https://t.me/c/3954607218/2548",
+        "https://t.me/c/3954607218/2578",
         "https://vk.com/wall-231920894_7656"
       ],
       "source_count": 4,
@@ -5998,7 +5595,7 @@
       "likes_count": 1,
       "source_likes_count": 1,
       "service_likes_count": 0,
-      "source_views_count": 21,
+      "source_views_count": 22,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [],
@@ -6327,107 +5924,6 @@
       "service_likes_count": 0,
       "source_views_count": 32,
       "source_engagement_sources_count": 2,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 3794,
-      "source_prod_id": 3794,
-      "title": "Концерт участников XI Международных органных Ассамблей",
-      "slug": "kontsert-uchastnikov-xi-mezhdunarodnyh-organnyh-assambley-kaliningrad-3794",
-      "event_type": "концерт",
-      "festival": null,
-      "status_label": "Билеты",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-18T18:00:00+02:00",
-      "start_date": "2026-07-18",
-      "start_time": "18:00",
-      "end_date": null,
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-18",
-      "display_time": "18:00",
-      "city": "Калининград",
-      "venue_name": "Кафедральный собор, Остров Канта",
-      "address": "Остров Канта",
-      "map_query": "Калининград, Кафедральный собор, Остров Канта, Остров Канта",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://sobor39.ru/events/concerts/night/",
-        "status": "available",
-        "is_free": false,
-        "price_label": null,
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://sobor39.ru/events/concerts/night/",
-      "source_urls": [
-        "https://sobor39.ru/events/concerts/night/",
-        "https://vk.com/wall-231920894_7449",
-        "https://t.me/c/3954607218/2562"
-      ],
-      "source_count": 3,
-      "telegraph_url": "https://telegra.ph/Koncert-uchastnikov-XI-Mezhdunarodnyh-organnyh-Assamblej-04-27",
-      "image_url": "https://static.kenigevents.ru/p/dh16/20/20033303669b069e66930c9f6c900e8f66934307862cd33013371b26188d080c.webp",
-      "image_alt": "Афиша события «Концерт участников XI Международных органных Ассамблей»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/20/20033303669b069e66930c9f6c900e8f66934307862cd33013371b26188d080c.webp",
-          "width": 300,
-          "height": 174,
-          "alt": "Фотография события «Концерт участников XI Международных органных Ассамблей»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "error",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/a7/a7b5aceb84f6710f895e0a1966fe00c1176eda77212e952b7a16619e2d198130/256.webp",
-              "width": 256,
-              "height": 148
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/a7/a7b5aceb84f6710f895e0a1966fe00c1176eda77212e952b7a16619e2d198130/512.webp",
-              "width": 300,
-              "height": 174
-            }
-          ],
-          "asset_key": "c22a69022d7ae2988c6e41483576eb4c946a48375ad1791d9dec0b45efe3df87",
-          "quality_score": 7.0129
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "В этом концерте талантливые молодые органисты представят произведения, исполненные после обучения в Летней академии музыки.",
-      "meta_description": "В этом концерте талантливые молодые органисты представят произведения, исполненные после обучения в Летней академии музыки.",
-      "description_html": "<p>Концерт продемонстрирует выступления участников Летней академии органной музыки. 🎼 В числе преподавателей – главный органист собора Нотр-дам-де-Виктуар, который также является профессором Санкт-Петербургской консерватории.</p>\n<h3>Преподаватели</h3>\n<p>В концерте примут участие преподаватели, среди которых главный органист собора Нотр-дам-де-Виктуар. Он также является профессором Санкт-Петербургской консерватории, признанным специалистом в области органной музыки.</p>\n<h3>О программе</h3>\n<p>Концерт представляет собой демонстрацию достижений участников Летней академии органной музыки. В программе – выступления молодых музыкантов, прошедших обучение под руководством опытных педагогов.</p>",
-      "topics": [],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-04-10 12:55:36.465794",
-      "likes_count": 0,
-      "source_likes_count": 0,
-      "service_likes_count": 0,
-      "source_views_count": 3,
-      "source_engagement_sources_count": 1,
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
@@ -7834,16 +7330,17 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-07-11 16:33:13.320581",
-      "likes_count": 29,
-      "source_likes_count": 29,
+      "likes_count": 35,
+      "source_likes_count": 35,
       "service_likes_count": 0,
-      "source_views_count": 491,
+      "source_views_count": 568,
       "source_engagement_sources_count": 4,
       "shares_count": 0,
       "popularity_reason_codes": [
+        "fast_growth",
         "multi_source"
       ],
-      "popularity_signal_score": 1.0
+      "popularity_signal_score": 4.0
     },
     {
       "id": 6877,
@@ -8104,7 +7601,7 @@
       "source_urls": [
         "https://t.me/meowafisha/7951",
         "https://vk.com/wall-231920894_7640",
-        "https://t.me/c/3954607218/2556",
+        "https://t.me/c/3954607218/2577",
         "https://vk.com/wall-231920894_7655"
       ],
       "source_count": 4,
@@ -8167,7 +7664,7 @@
       "likes_count": 1,
       "source_likes_count": 1,
       "service_likes_count": 0,
-      "source_views_count": 30,
+      "source_views_count": 31,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
       "popularity_reason_codes": [],
@@ -8834,7 +8331,7 @@
       "likes_count": 21,
       "source_likes_count": 21,
       "service_likes_count": 0,
-      "source_views_count": 1024,
+      "source_views_count": 1034,
       "source_engagement_sources_count": 4,
       "shares_count": 4,
       "popularity_reason_codes": [
@@ -12420,10 +11917,10 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-07-17 04:19:36.595122",
-      "likes_count": 1,
-      "source_likes_count": 1,
+      "likes_count": 3,
+      "source_likes_count": 3,
       "service_likes_count": 0,
-      "source_views_count": 166,
+      "source_views_count": 250,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [
@@ -12609,7 +12106,7 @@
       "source_urls": [
         "https://t.me/meowafisha/7913",
         "https://vk.com/wall-231920894_7550",
-        "https://t.me/c/3954607218/2496",
+        "https://t.me/c/3954607218/2575",
         "https://vk.com/wall-231920894_7551"
       ],
       "source_count": 4,
@@ -12657,7 +12154,7 @@
       "likes_count": 5,
       "source_likes_count": 5,
       "service_likes_count": 0,
-      "source_views_count": 78,
+      "source_views_count": 75,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [],
@@ -14397,17 +13894,18 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-07-14 08:21:29.442850",
-      "likes_count": 47,
-      "source_likes_count": 47,
+      "likes_count": 67,
+      "source_likes_count": 67,
       "service_likes_count": 0,
-      "source_views_count": 1525,
+      "source_views_count": 2355,
       "source_engagement_sources_count": 4,
-      "shares_count": 5,
+      "shares_count": 8,
       "popularity_reason_codes": [
+        "fast_growth",
         "frequently_shared",
         "multi_source"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 6.5
     },
     {
       "id": 5803,
@@ -16449,7 +15947,7 @@
       "likes_count": 4,
       "source_likes_count": 4,
       "service_likes_count": 0,
-      "source_views_count": 225,
+      "source_views_count": 243,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [
@@ -18313,122 +17811,18 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-07-17 17:02:21.289201",
-      "likes_count": 36,
-      "source_likes_count": 36,
+      "likes_count": 56,
+      "source_likes_count": 56,
       "service_likes_count": 0,
-      "source_views_count": 843,
+      "source_views_count": 1673,
       "source_engagement_sources_count": 3,
-      "shares_count": 4,
+      "shares_count": 7,
       "popularity_reason_codes": [
+        "fast_growth",
         "frequently_shared",
         "multi_source"
       ],
-      "popularity_signal_score": 3.5
-    },
-    {
-      "id": 6928,
-      "source_prod_id": 6928,
-      "title": "Фитодизайн террас",
-      "slug": "fitodizayn-terras-kaliningrad-6928",
-      "event_type": "мастер-класс",
-      "festival": null,
-      "status_label": "12000 ₽",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-26T10:00:00+02:00",
-      "start_date": "2026-07-26",
-      "start_time": "10:00",
-      "end_date": "2026-07-26",
-      "end_at": "2026-07-26T17:00:00+02:00",
-      "time_range_end": "17:00",
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-26",
-      "display_time": "10:00–17:00",
-      "city": "Калининград",
-      "venue_name": "Калининградский зоопарк",
-      "address": "пр-т Мира 26",
-      "map_query": "Калининград, Калининградский зоопарк, пр-т Мира 26",
-      "ticket": {
-        "kind": "phone",
-        "label": "Позвонить организатору",
-        "href": "tel:+79506767540",
-        "status": "registration",
-        "is_free": false,
-        "price_label": "12000 ₽",
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://t.me/kulturnaya_chaika/8043",
-      "source_urls": [
-        "https://t.me/kulturnaya_chaika/8043",
-        "https://vk.com/wall-231920894_7635",
-        "https://t.me/c/3954607218/2545",
-        "https://t.me/plantasutra/2613",
-        "https://vk.com/wall-231920894_7649"
-      ],
-      "source_count": 5,
-      "telegraph_url": "https://telegra.ph/Fitodizajn-terras-07-16",
-      "image_url": "https://static.kenigevents.ru/p/dh16/29/290f2d1a2716a20405814e986ac8266c6274e13c11bc299480366061b26c0006.webp",
-      "image_alt": "Афиша события «Фитодизайн террас»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "unknown_document",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/29/290f2d1a2716a20405814e986ac8266c6274e13c11bc299480366061b26c0006.webp",
-          "width": 178,
-          "height": 320,
-          "alt": "Фотография события «Фитодизайн террас»",
-          "image_text_mode": "visual_only",
-          "media_role": "unknown_document",
-          "media_role_confidence": 0.0,
-          "media_semantic_status": "pending",
-          "image_kind": "mixed",
-          "recommended_hero_fit": "contain",
-          "safe_crop": false,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/fa/fa440c8624b617cf4594166640e2b0ad274b6d632b49c81289ccbfa2b7790170/256.webp",
-              "width": 142,
-              "height": 256
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/fa/fa440c8624b617cf4594166640e2b0ad274b6d632b49c81289ccbfa2b7790170/512.webp",
-              "width": 178,
-              "height": 320
-            }
-          ],
-          "asset_key": "fa440c8624b617cf4594166640e2b0ad274b6d632b49c81289ccbfa2b7790170",
-          "quality_score": 7.1001
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": false,
-      "summary": "Трехдневный мастер-класс посвящен профессиональным методам проектирования и стилистического оформления открытых пространств террас и городских балконов.",
-      "meta_description": "Трехдневный мастер-класс посвящен профессиональным методам проектирования и стилистического оформления открытых пространств террас и городских балконов.",
-      "description_html": "<blockquote>Событие представляет собой трёхдневный семинар «Фитодизайн террас»</blockquote>\n<p>Greenstudio school приглашает на мастер-класс, предназначенный для тех, кто хочет разобраться в работе с террасами и балконами. Ведущие семинара — профессионалы фитодизайна Михаил Глазков и Андрей Филоненко из студии «Фернс».</p>\n<h3>Программа семинара</h3>\n<ul>\n<li>Первый день: стили фитодизайна террас и балконов, особенности этих пространств.</li>\n<li>Второй день: разбор проектов, ошибок, рабочих приёмов и логики ведения дизайн-проекта.</li>\n<li>Третий день: проектирование и практика.</li>\n</ul>\n<h3>Темы и стоимость</h3>\n<p>Темы охватывают стилистику, логику подбора растений, проектирование и типичные ошибки. Стоимость участия составляет 12 000 рублей. 🌿</p>",
-      "topics": [
-        "MASTERCLASS"
-      ],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-07-16 23:12:57.637596",
-      "likes_count": 2,
-      "source_likes_count": 2,
-      "service_likes_count": 0,
-      "source_views_count": 18,
-      "source_engagement_sources_count": 2,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
+      "popularity_signal_score": 6.5
     },
     {
       "id": 6835,
@@ -20213,10 +19607,10 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-06-21 15:31:33.904932",
-      "likes_count": 37,
-      "source_likes_count": 37,
+      "likes_count": 39,
+      "source_likes_count": 39,
       "service_likes_count": 0,
-      "source_views_count": 1883,
+      "source_views_count": 1928,
       "source_engagement_sources_count": 4,
       "shares_count": 3,
       "popularity_reason_codes": [
@@ -20550,112 +19944,6 @@
         "multi_source"
       ],
       "popularity_signal_score": 4.0
-    },
-    {
-      "id": 5297,
-      "source_prod_id": 5297,
-      "title": "Фестиваль Pianissimo: Игорь Сидоров",
-      "slug": "festival-pianissimo-igor-sidorov-kaliningrad-5297",
-      "event_type": "концерт",
-      "festival": "Pianissimo",
-      "status_label": "1500–2000 ₽",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-30T20:00:00+02:00",
-      "start_date": "2026-07-30",
-      "start_time": "20:00",
-      "end_date": null,
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-30",
-      "display_time": "20:00",
-      "city": "Калининград",
-      "venue_name": "Филиал Третьяковской галереи",
-      "address": "Парадная наб. 3",
-      "map_query": "Калининград, Филиал Третьяковской галереи, Парадная наб. 3",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
-        "status": "available",
-        "is_free": false,
-        "price_label": "1500–2000 ₽",
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
-      "source_urls": [
-        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-30/20:00:00",
-        "https://vk.com/wall-231920894_7398",
-        "https://t.me/c/3954607218/2509"
-      ],
-      "source_count": 3,
-      "telegraph_url": "https://telegra.ph/Festival-Pianissimo-Igor-Sidorov-05-25",
-      "image_url": "https://static.kenigevents.ru/p/dh16/00/0000000000200060002000380038003c003600120072006900d900d9005900d1.webp",
-      "image_alt": "Афиша события «Фестиваль Pianissimo: Игорь Сидоров»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "event_photo",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/0000000000200060002000380038003c003600120072006900d900d9005900d1.webp",
-          "width": 3072,
-          "height": 1307,
-          "alt": "Фотография события «Фестиваль Pianissimo: Игорь Сидоров»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d9/d967cb4dee7a1894ba02815d29f037a42c7fad0e09519a43f5b390df97ad0c44/256.webp",
-              "width": 256,
-              "height": 109
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/d9/d967cb4dee7a1894ba02815d29f037a42c7fad0e09519a43f5b390df97ad0c44/512.webp",
-              "width": 512,
-              "height": 218
-            }
-          ],
-          "focal_point": {
-            "x": 0.65,
-            "y": 0.35
-          },
-          "recommended_object_position": "65% 35%",
-          "asset_key": "37a01ac271c5437e2f3207d96382a73d5aa8c404df54cb36ebfca239a976a25e",
-          "quality_score": 15.8056
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": true,
-      "summary": "Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи.",
-      "meta_description": "Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи.",
-      "description_html": "<p>Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи. Программа вечера включает произведения Фредерика Шопена, демонстрирующие мастерство молодого исполнителя.</p>\n<h3>Об исполнителе</h3>\n<p>Игорь Сидоров родился в Санкт-Петербурге в 2010 году. В настоящее время пианист обучается в музыкальной школе им. Ю. А. Шапорина при Московском институте музыки им. А. Г. Шнитке в классе Веры Сергеевны Каменевой. Среди достижений музыканта:<br />* Обладание грантом мэра Москвы в сфере культуры и искусства.<br />* Звание лауреата XXVII Международного конкурса пианистов Santa Cecilia JUNIOR Piano Competition (Португалия, 2025).<br />* Звание лауреата XXIX Международного конкурса молодых музыкантов им. Д. Б. Кабалевского (Самара, 2024).<br />Игорь Сидоров совершенствовал мастерство на мастер-классах Г. И. Грузмана, Ю. С. Слесарева, Э. К. Вирсаладзе, М. В. Культышева, М. М. Александрова и Л. И. Ангерт.</p>\n<h3>Программа концерта</h3>\n<p>В исполнении Игоря Сидорова прозвучат следующие сочинения:<br />* Полонез ля-бемоль мажор, соч. 53 («Героический»)<br />* Ноктюрн № 2 фа-диез мажор, соч. 15<br />* Большой вальс ля-бемоль мажор, соч. 42<br />* Ноктюрн № 2 ре-бемоль мажор, соч. 27</p>\n<h3>Организация пространства</h3>\n<p>Рассадка в секторах партер и лестница является свободной. Для зрителей, выбирающих места на лестнице, рекомендуется комфортная форма одежды.</p>",
-      "topics": [],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-05-25 14:15:25.287455",
-      "likes_count": 2,
-      "source_likes_count": 2,
-      "service_likes_count": 0,
-      "source_views_count": 31,
-      "source_engagement_sources_count": 2,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
     },
     {
       "id": 6687,
@@ -21217,112 +20505,6 @@
       "service_likes_count": 0,
       "source_views_count": 2,
       "source_engagement_sources_count": 1,
-      "shares_count": 0,
-      "popularity_reason_codes": [],
-      "popularity_signal_score": 0
-    },
-    {
-      "id": 5298,
-      "source_prod_id": 5298,
-      "title": "Концерт «Фестиваль Pianissimo: Джан Сарач»",
-      "slug": "kontsert-festival-pianissimo-dzhan-sarach-kaliningrad-5298",
-      "event_type": "концерт",
-      "festival": "Pianissimo",
-      "status_label": "1500–2000 ₽",
-      "lifecycle_status": "active",
-      "starts_at": "2026-07-31T20:00:00+02:00",
-      "start_date": "2026-07-31",
-      "start_time": "20:00",
-      "end_date": null,
-      "end_at": null,
-      "time_range_end": null,
-      "timezone": "Europe/Kaliningrad",
-      "display_date": "2026-07-31",
-      "display_time": "20:00",
-      "city": "Калининград",
-      "venue_name": "Филиал Третьяковской галереи",
-      "address": "Парадная наб. 3",
-      "map_query": "Калининград, Филиал Третьяковской галереи, Парадная наб. 3",
-      "ticket": {
-        "kind": "ticket",
-        "label": "Купить билет",
-        "href": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
-        "status": "available",
-        "is_free": false,
-        "price_label": "1500–2000 ₽",
-        "note": null
-      },
-      "age_restriction": null,
-      "age_restriction_status": "insufficient_evidence",
-      "age_restriction_provenance": null,
-      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
-      "age_recommendation": null,
-      "age_recommendation_label": null,
-      "source_url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
-      "source_urls": [
-        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-07-31/20:00:00",
-        "https://vk.com/wall-231920894_7528",
-        "https://t.me/c/3954607218/2484"
-      ],
-      "source_count": 3,
-      "telegraph_url": "https://telegra.ph/Koncert-Festival-Pianissimo-Dzhan-Sarach-05-25",
-      "image_url": "https://static.kenigevents.ru/p/dh16/00/0000001000480098009800180018001c005e00de009601820187008301830183.webp",
-      "image_alt": "Афиша события «Концерт «Фестиваль Pianissimo: Джан Сарач»»",
-      "image_text_mode": "visual_only",
-      "image_media_role": "event_photo",
-      "image_assets": [
-        {
-          "src": "https://static.kenigevents.ru/p/dh16/00/0000001000480098009800180018001c005e00de009601820187008301830183.webp",
-          "width": 3072,
-          "height": 1304,
-          "alt": "Фотография события «Концерт «Фестиваль Pianissimo: Джан Сарач»»",
-          "image_text_mode": "visual_only",
-          "media_role": "event_photo",
-          "media_role_confidence": 0.95,
-          "media_semantic_status": "classified",
-          "image_kind": "photo",
-          "recommended_hero_fit": "cover",
-          "safe_crop": true,
-          "source_order": 0,
-          "thumbnail_sources": [
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/b9/b9592052a6e865ef2986da2b113a6ac62db63cf1d958fa06577c673eaa7f0e06/256.webp",
-              "width": 256,
-              "height": 109
-            },
-            {
-              "src": "https://static.kenigevents.ru/p/thumb/v1/b9/b9592052a6e865ef2986da2b113a6ac62db63cf1d958fa06577c673eaa7f0e06/512.webp",
-              "width": 512,
-              "height": 217
-            }
-          ],
-          "focal_point": {
-            "x": 0.65,
-            "y": 0.35
-          },
-          "recommended_object_position": "65% 35%",
-          "asset_key": "33f7bdca956173f3e896e322853a908fbedfc03cef58771138c2bc6590d8e4a3",
-          "quality_score": 15.8033
-        }
-      ],
-      "face_boxes": [],
-      "ocr_boxes": [],
-      "focal_point": null,
-      "image_object_position": null,
-      "safe_crop": true,
-      "summary": "Сольный концерт молодого турецкого пианиста Джана Сарача с программой из произведений Баха, Бетховена и Шопена.",
-      "meta_description": "Сольный концерт молодого турецкого пианиста Джана Сарача с программой из произведений Баха, Бетховена и Шопена.",
-      "description_html": "<p>Концерт в рамках фестиваля Pianissimo.</p>\n<h3>Программа и участники</h3>\n<ul>\n<li>Исполнитель: Джан Сарач, пианист</li>\n<li>Формат рассадки включает партер (стулья) и зону лестницы (мягкие подушки)</li>\n<li>Рассадка в секторах свободная</li>\n<li>Джан Сарач начал обучение музыке в возрасте пяти лет</li>\n<li>В 2023 году окончил Государственную консерваторию Стамбульского университета</li>\n<li>Обучался в Мюнхенском университете музыки и театра у профессора Михаэля Шефера</li>\n<li>С 2025 года обучается в Веймарской Высшей школе музыки им. Ф. Листа у профессора Михаила Лифица</li>\n<li>В 2022 году стал самым молодым участником фестиваля Pianissimo</li>\n<li>Победитель международных конкурсов в Болгарии, Македонии, Турции и Венгрии</li>\n<li>Чакона из скрипичной партиты ре минор №2 BWV 1004</li>\n<li>Соната № 30 ми мажор, соч. 109</li>\n<li>Соната №2 си-бемоль минор, соч. 36</li>\n</ul>",
-      "topics": [],
-      "pushkin_card": false,
-      "other_date_ids": [],
-      "data_quality_notes": [],
-      "updated_at": "2026-05-25 14:17:10.389583",
-      "likes_count": 3,
-      "source_likes_count": 3,
-      "service_likes_count": 0,
-      "source_views_count": 52,
-      "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
@@ -22041,7 +21223,7 @@
       "likes_count": 6,
       "source_likes_count": 6,
       "service_likes_count": 0,
-      "source_views_count": 65,
+      "source_views_count": 118,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
       "popularity_reason_codes": [],
@@ -30588,6 +29770,359 @@
       "service_likes_count": 0,
       "source_views_count": 3,
       "source_engagement_sources_count": 1,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 5937,
+      "source_prod_id": 5937,
+      "title": "13",
+      "slug": "13-kaliningrad-5937",
+      "event_type": "театр",
+      "festival": null,
+      "status_label": "Условия уточняются",
+      "lifecycle_status": "active",
+      "starts_at": null,
+      "start_date": "2026-08-30",
+      "start_time": null,
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-08-30",
+      "display_time": null,
+      "city": "Калининград",
+      "venue_name": "Драматический театр",
+      "address": "Мира 4",
+      "map_query": "Калининград, Драматический театр, Мира 4",
+      "ticket": {
+        "kind": "status",
+        "label": "Условия уточняются",
+        "href": null,
+        "status": null,
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/dramteatr39/4384",
+      "source_urls": [
+        "https://t.me/dramteatr39/4384",
+        "https://vk.com/wall-231920894_4045",
+        "https://t.me/c/3954607218/1062",
+        "https://t.me/dramteatr39/4402"
+      ],
+      "source_count": 4,
+      "telegraph_url": "https://telegra.ph/13-06-11-19",
+      "image_url": "https://static.kenigevents.ru/p/dh16/88/888081048080cab001e446a40601d42091000008000000000000000000000000.webp",
+      "image_alt": "Афиша события «13»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/88/888081048080cab001e446a40601d42091000008000000000000000000000000.webp",
+          "width": 757,
+          "height": 800,
+          "alt": "Фотография события «13»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "error",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/32/32f215c4dbd21cf55b3364ff497b518719dab1db56f4f3066696e84f7d89f3d2/256.webp",
+              "width": 242,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/32/32f215c4dbd21cf55b3364ff497b518719dab1db56f4f3066696e84f7d89f3d2/512.webp",
+              "width": 484,
+              "height": 512
+            }
+          ],
+          "asset_key": "6f3998d209d20038007a8e86b143491e9b85d66e065b387afe5ed9771bd914de",
+          "quality_score": 13.464
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/a5/a520b528f532f723f725e72ee73fe73aeb06eb66d970d8704a706a30a630aa30.webp",
+          "width": 1280,
+          "height": 720,
+          "alt": "Фотография события «13»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/77/775e1776c929c1fa4f5d7424e6f1d8c4d6891537326487f437c2b9c8347613c9/256.webp",
+              "width": 256,
+              "height": 144
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/77/775e1776c929c1fa4f5d7424e6f1d8c4d6891537326487f437c2b9c8347613c9/512.webp",
+              "width": 512,
+              "height": 288
+            }
+          ],
+          "focal_point": {
+            "x": 0.58,
+            "y": 0.55
+          },
+          "recommended_object_position": "58% 55%",
+          "asset_key": "be9b0ee3ef1fe1761123738cdf7146d49a21fb94df47d2213262dfb9d08711a3",
+          "quality_score": 14.3339
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "30.08 | № 13.",
+      "meta_description": "30.08 | № 13.",
+      "description_html": "<p>30.08 | № 13</p>",
+      "topics": [
+        "THEATRE"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-06-11 23:54:57.820759",
+      "likes_count": 1,
+      "source_likes_count": 1,
+      "service_likes_count": 0,
+      "source_views_count": 258,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
+      "id": 6821,
+      "source_prod_id": 6821,
+      "title": "«Линия соприкосновения»",
+      "slug": "liniya-soprikosnoveniya-kaliningrad-6821",
+      "event_type": "спектакль",
+      "festival": null,
+      "status_label": "Билеты",
+      "lifecycle_status": "active",
+      "starts_at": "2026-09-04T19:00:00+02:00",
+      "start_date": "2026-09-04",
+      "start_time": "19:00",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-09-04",
+      "display_time": "19:00",
+      "city": "Калининград",
+      "venue_name": "Музыкальный театр",
+      "address": "Мира 87",
+      "map_query": "Калининград, Музыкальный театр, Мира 87",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://muzteatr39.ru/spektakli/arxiv/liniya-soprikosnoveniya/",
+        "status": "available",
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://muzteatr39.ru/spektakli/arxiv/liniya-soprikosnoveniya/",
+      "source_urls": [
+        "https://muzteatr39.ru/spektakli/arxiv/liniya-soprikosnoveniya/",
+        "https://vk.com/wall-231920894_7121",
+        "https://t.me/c/3954607218/2271"
+      ],
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/Liniya-soprikosnoveniya-07-11",
+      "image_url": "https://static.kenigevents.ru/p/dh16/1a/1a120c130c4b046304e504c4078d0f8c0fc00a401a403240e2c0c98249034403.webp",
+      "image_alt": "Афиша события ««Линия соприкосновения»»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/1a/1a120c130c4b046304e504c4078d0f8c0fc00a401a403240e2c0c98249034403.webp",
+          "width": 861,
+          "height": 1024,
+          "alt": "Фотография события ««Линия соприкосновения»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 3,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/35/35db5413e3d6ea0d61be314022cd7d2f4abd42884cfa878d3b22043a5d2a7924/256.webp",
+              "width": 215,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/35/35db5413e3d6ea0d61be314022cd7d2f4abd42884cfa878d3b22043a5d2a7924/512.webp",
+              "width": 430,
+              "height": 512
+            }
+          ],
+          "asset_key": "0d0ca9a7d648260e5a9a95d2a7d2f9b5ca3ba5dd373aa6ea7ce52f0daf8baf4e",
+          "quality_score": 13.8396
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/003040324036403641364c86248620663166314e336ea36da34c224c338c123c.webp",
+          "width": 300,
+          "height": 200,
+          "alt": "Фотография события ««Линия соприкосновения»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/01/013b4afb6bfd04bf87bc36a76499a9053858f521b6b53638e06a96cd30f203b4/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/01/013b4afb6bfd04bf87bc36a76499a9053858f521b6b53638e06a96cd30f203b4/512.webp",
+              "width": 300,
+              "height": 200
+            }
+          ],
+          "asset_key": "013b4afb6bfd04bf87bc36a76499a9053858f521b6b53638e06a96cd30f203b4",
+          "quality_score": 7.1521
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/000000081c080c10ac30ac30cc309cd8b6d1b691b48291671b16921e249c309c.webp",
+          "width": 300,
+          "height": 200,
+          "alt": "Фотография события ««Линия соприкосновения»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d4/d4d7f2ab5ad55e4f57e6aaca158ec7febd7c099032a38eadaa8c40db51233f01/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d4/d4d7f2ab5ad55e4f57e6aaca158ec7febd7c099032a38eadaa8c40db51233f01/512.webp",
+              "width": 300,
+              "height": 200
+            }
+          ],
+          "asset_key": "d4d7f2ab5ad55e4f57e6aaca158ec7febd7c099032a38eadaa8c40db51233f01",
+          "quality_score": 7.1521
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/10/10001200122092200130851c830c820cc61c833c021c809c811c09921b1206b3.webp",
+          "width": 300,
+          "height": 200,
+          "alt": "Фотография события ««Линия соприкосновения»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 2,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/96/9675efb9b07f03a7a0f6d0721dab710b337c1fd802720ba8c051b53c15516975/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/96/9675efb9b07f03a7a0f6d0721dab710b337c1fd802720ba8c051b53c15516975/512.webp",
+              "width": 300,
+              "height": 200
+            }
+          ],
+          "asset_key": "d84f6e1088c592041213ca5d1e51b823e4c3005aa30329a24a1192462d1ea516",
+          "quality_score": 7.1521
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/20/200020002000a00c620c211d311c163d861d965d965911273177486524c721c3.webp",
+          "width": 300,
+          "height": 200,
+          "alt": "Фотография события ««Линия соприкосновения»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 4,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/60/60c33ce1ec6fc08b17ef1325d6768fc33c5a34d5744fbde3854355c2a4ccb695/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/60/60c33ce1ec6fc08b17ef1325d6768fc33c5a34d5744fbde3854355c2a4ccb695/512.webp",
+              "width": 300,
+              "height": 200
+            }
+          ],
+          "asset_key": "a382f299b9eb90c4b175a2f238631600382f1bb55dc711171b8184c1b7dc68e4",
+          "quality_score": 7.1521
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Спектакль основан на сборнике рассказов о столкновении человека с неотвратимостью и собственной судьбой.",
+      "meta_description": "Спектакль основан на сборнике рассказов о столкновении человека с неотвратимостью и собственной судьбой.",
+      "description_html": "<p>Спектакль «Линия соприкосновения» представляет собой сценическое прочтение одноименного сборника рассказов, исследующего темы столкновения человека с неотвратимостью и собственной судьбой. Повествование выстроено в стиле репортажных наблюдений, исключающих пафос, назидание и браваду.</p>\n<h3>Особенности постановки</h3>\n<p>В спектакле отсутствуют боевые сцены, выстрелы и описания военных действий. В центре внимания — судьбы мирных жителей, волонтёров, солдат и членов их семей. Авторы постановки обращаются к фундаментальным вопросам человеческого бытия:<br />* Способны ли мы любить?<br />* Можем ли прощать?<br />* Владеем ли судьбой?<br />* Что есть жизнь?</p>\n<h3>Признание литературного первоисточника</h3>\n<p>Сборник рассказов, легший в основу спектакля, получил высокую оценку критиков и профессионального сообщества:<br />* В апреле 2025 года «Литературная газета» охарактеризовала книгу как «недооценённую и на данный момент лучшую книгу об СВО».<br />* В январе 2026 года произведение вошло в шорт-лист Федеральной литературной премии «Главная книга».</p>",
+      "topics": [
+        "THEATRE",
+        "THEATRE_MODERN"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-11 12:52:57.972054",
+      "likes_count": 3,
+      "source_likes_count": 3,
+      "service_likes_count": 0,
+      "source_views_count": 51,
+      "source_engagement_sources_count": 2,
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0

@@ -17,7 +17,7 @@ const { groups, idPrefix, date, compact = false, className = '' } = Astro.props;
   data-ds-component="ExactTimeTimeline"
   data-ds-version="1"
 >
-  {groups.map((group) => (
+  {groups.map((group, groupIndex) => (
     <section
       id={`${idPrefix}-${group.key}`}
       class="ke-time-group"
@@ -32,9 +32,8 @@ const { groups, idPrefix, date, compact = false, className = '' } = Astro.props;
         <span data-listing-group-count>{group.events.length} {eventCountLabel(group.events.length)}</span>
       </header>
       <div class="ke-time-group__flow">
-        {group.events.map((event) => <ListingEventCard event={event} />)}
+        {group.events.map((event, eventIndex) => <ListingEventCard event={event} priority={groupIndex === 0 && eventIndex < 2} />)}
       </div>
     </section>
   ))}
 </div>
-
