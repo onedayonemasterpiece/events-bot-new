@@ -2,7 +2,7 @@
 
 ## Статус
 
-**Implementation RC approved; production disabled.** Владелец 2026-07-17 подтвердил переход от принятого research baseline PR #54 / `e1a14afc` к полной реализации release candidate. Это разрешение на код, fixtures, локальный/shadow pipeline и preview, но **не** разрешение на production migration, Smart Update enablement или публикацию.
+**Production rollout approved 2026-07-17.** После merge implementation PR #54 владелец явно уточнил, что «полностью внедрить» включает production delivery, а не только готовый PR. Release выполняется из `origin/main` по отдельным обратимым gates: additive schema/bootstrap, relation pipeline, checked static projection и public root publication. Точные SHA/build evidence дописываются в release plan по завершении rollout.
 
 Канонические документы:
 

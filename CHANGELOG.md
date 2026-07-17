@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
+
 ### Added
 - **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
 
