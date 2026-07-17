@@ -1,0 +1,37 @@
+---
+interface Props {
+  variant?: 'event-card' | 'event-list';
+  count?: number;
+  label?: string;
+  className?: string;
+}
+
+const {
+  variant = 'event-card',
+  count = 3,
+  label = 'Подбираем события',
+  className = '',
+} = Astro.props;
+const items = Array.from({ length: Math.max(1, Math.min(8, count)) });
+---
+
+<div
+  class:list={['ke-skeleton-list', `ke-skeleton-list--${variant}`, className]}
+  role="status"
+  aria-live="polite"
+  aria-busy="true"
+  data-ke-skeleton
+  data-skeleton-variant={variant}
+>
+  <span class="ke-visually-hidden">{label}</span>
+  <div class="ke-skeleton-list__items" aria-hidden="true">
+    {items.map(() => (
+      <article class="ke-skeleton-event-card">
+        <span class="ke-skeleton ke-skeleton-event-card__media"></span>
+        <span class="ke-skeleton ke-skeleton-event-card__title"></span>
+        <span class="ke-skeleton ke-skeleton-event-card__meta"></span>
+        <span class="ke-skeleton ke-skeleton-event-card__line"></span>
+      </article>
+    ))}
+  </div>
+</div>

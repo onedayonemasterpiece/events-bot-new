@@ -1,12 +1,83 @@
 # Static Site Event Pages
 
-> **Status:** Astro SSG production integration candidate locally verified; desktop continuous Editorial composition and media-role safety implemented, production promotion pending
+> **Status:** replacement Astro SSG production-integration candidate publicly verified under a noindex prefix; exact accepted desktop component, unchanged mobile v4 and rail/bus transport are combined on the full current catalog, production-root promotion pending product approval
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 
 ## Implementation status
 
-В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
+### 2026-07-15 replacement production integration candidate
+
+`preview-20260715t-production-desktop-contract-v2` is the replacement noindex
+review surface. Unlike the rejected v1 build, every generated desktop event
+route mounts the **same** `DesktopEventPage.astro` implementation used by the
+accepted laboratory scenarios; there is no legacy `EventHero + event-grid`
+desktop imitation. A geometry- and semantic-state-aware router selects only
+the accepted Continuous Editorial or Split family. Portrait and
+resolution-constrained media fail to Split; only a classified
+`event_identity_poster` can create an OCR companion. The unchanged mobile v4
+DOM is retained as a separate breakpoint surface. Rail/bus transport is added
+inside the accepted long reading flow rather than replacing its composition.
+
+The source snapshot contains `282` public future or ongoing events. The
+mandatory gate checks all `282` generated routes and pins four real specimens:
+Pianissimo `5294` (low-resolution Split), Blogger bus `6815` (portrait Split),
+«Гараж» `5658` (Continuous Editorial) and «Эпидемия» `4671` (Editorial with a
+classified poster companion).
+
+- index: <https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/__preview/>;
+- [Pianissimo](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294/);
+- [Блогерский автобус](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815/);
+- [«Гараж»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/spektakl-garazh-kaliningrad-5658/);
+- [«Эпидемия. Огненная рукопись»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/epidemiya-ognennaya-rukopis-kaliningrad-4671/).
+
+`preview-20260715t-production-transport-mobile-real-events-v1` is rejected by
+`INC-2026-07-15-static-desktop-template-regression`: it rendered the legacy
+production desktop DOM with approximation CSS, routed a `180×320` image into a
+full-width hero, and was never reviewed by Gemini against the mass-generated
+URLs. It must not be cited as desktop acceptance evidence.
+
+The offline related graph is `event_pgvector_related_chain_v2_two_doc`: all
+`282` anchors have `40` current candidates, no dangling ids, and the refresh
+reused `564` unchanged embeddings with `0` provider calls. Browser page views
+still consume only same-origin static discovery JSON. The replacement local
+acceptance covers the whole `282/282` catalog with no page errors, plus a
+`4 events × 3 viewports` (`1536×864`, `1920×1080`, `1440×650`) matrix with
+visible H1/CTA, action-panel child geometry and zero horizontal overflow.
+Phone variants must prove a one-line number and every calendar/share/like
+control inside the graphite panel; text presence alone is not acceptance.
+Interaction checks cover exact
+gallery indices, classified-poster opening, idle autorotation, CTA safe
+release, immutable thumbnail derivatives and both transport types. Public HTTP
+is `200` for the preview index, four pinned events and both transport examples;
+the public `4 × 3` matrix is `12/12` and the exact interaction suite has no
+failures. Gemini 3.1 Pro's direct browser attempt was correctly recorded as
+`BLOCKED` after its isolated Chromium crashed. It was not mislabeled as a pass;
+the follow-up screenshot-based review inspected exact public Playwright
+captures and evidence JSON and returned `ACCEPT`.
+
+This is a prefix-only review release. It does not promote or delete the
+production root and does not modify stable `/p/` media or `/ics/` calendars.
+Automatic root promotion remains the release-protocol gate.
+
+Mobile event-detail UI был отработан в контролируемом preview lab: четыре исходных
+варианта образуют матрицу `current/open prose × current/grouped actions`,
+`accepted-v2` сохраняет первый исправленный проход, `accepted-v3` — первый
+Android feedback, а `accepted-v4` фиксирует поправку владельца: сохраняет
+принятую weekday/date/time hierarchy, возвращает OCR-parallax без zoom и
+layout gap, упрощает selected-like до терракотовой заливки и белого solid
+heart и вводит явный вертикальный ритм между информационными поверхностями.
+V4 перенесён в общий integration preview; бирка, discovery cards и sticky CTA
+намеренно зафиксированы. Канонический scope
+и acceptance gate:
+[`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).
+
+В `events-bot-new` есть **Astro SSG production-integration preview** в `site/`:
+он строит статические страницы полного текущего публичного каталога,
+`event.ics`, transport ICS, `sitemap.xml`, `robots.txt` и публикуется под
+noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout:
+canonical остаётся preview-safe, а корневые production URL
+`/sobytiya/<slug>/` не продвигаются автоматически.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
@@ -22,6 +93,13 @@ Event gallery media имеет отдельный fail-closed CDN contract: expo
 не откатывается к `catbox_url`, source CDN, Supabase или legacy bucket. Silent
 rows исключаются тем же static predicate; продолжающиеся события остаются
 eligible по `end_date`.
+
+Footer service share использует отдельный от event-share контракт: на mobile —
+одна system-share action, на desktop — независимые `image/png` и plain-text +
+canonical URL intents. Каноника: [service-sharing.md](service-sharing.md),
+[desktop clipboard research](service-sharing-desktop-clipboard-research.md),
+[manual matrix](service-sharing-desktop-clipboard-manual-matrix.md) и
+[preview runbook](../../operations/service-sharing-preview.md).
 
 
 

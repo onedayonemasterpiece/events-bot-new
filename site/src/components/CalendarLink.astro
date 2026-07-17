@@ -1,11 +1,23 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventCalendarHref, isCalendarEligible } from '../lib/events';
-interface Props { event: PreviewEvent; className?: string; label?: string }
-const { event, className = 'secondary-button', label = 'В календарь' } = Astro.props;
+import { eventCalendarHref, eventCalendarStateExpiryDay, isCalendarEligible } from '../lib/events';
+interface Props { event: PreviewEvent; className?: string; label?: string; compact?: boolean }
+const { event, className = 'secondary-button', label = 'В календарь', compact = false } = Astro.props;
 const canAddToCalendar = isCalendarEligible(event);
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 ---
 {canAddToCalendar && (
-  <a class={className} href={eventCalendarHref(event)} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>{label}</span></a>
+  <a
+    class={className}
+    href={eventCalendarHref(event)}
+    type="text/calendar"
+    data-calendar-action
+    data-calendar-adaptive-label={compact ? '' : undefined}
+    data-calendar-event-id={event.id}
+    data-calendar-expiry-day={calendarExpiryDay}
+    data-calendar-event-title={event.title}
+    aria-label={`Добавить в календарь: ${event.title}`}
+    title={compact ? label : undefined}
+  ><Icon name="calendar" /> <span data-calendar-label>{label}</span></a>
 )}

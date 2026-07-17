@@ -1,11 +1,11 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 type CardVariant = 'overlay-controls' | 'split-actions';
-interface Props { event: PreviewEvent; label?: string; variant?: CardVariant }
-const { event, label, variant = 'split-actions' } = Astro.props;
+interface Props { event: PreviewEvent; label?: string; variant?: CardVariant; desktopRelatedCrop?: boolean }
+const { event, label, variant = 'split-actions', desktopRelatedCrop = false } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
@@ -27,11 +27,16 @@ function normalizeObjectPosition(value: string | null | undefined) {
   const raw = (value || '').trim();
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
 }
-// Cropping is unlocked only by the explicit LLM-authored event_photo role.
-// OCR/legacy `visual_only` is not reliable enough: a poster can be mislabelled
-// and horizontal cover would then destroy text along its left/right edges.
+// Shared/default cards unlock cropping only through the LLM-authored
+// event_photo role. The accepted desktop continuation has its own reviewed
+// OCR-first framing contract and opts in explicitly below.
 const imageMediaRole = event.image_media_role || 'unknown_document';
-const documentMedia = imageMediaRole !== 'event_photo';
+// The accepted desktop continuation contract is explicitly OCR-first: every
+// verified text-free image fills the shared row frame, while OCR/unknown media
+// keeps the bounded document crop budget. Other surfaces remain role-first.
+const documentMedia = desktopRelatedCrop
+  ? event.image_text_mode !== 'visual_only'
+  : imageMediaRole !== 'event_photo';
 const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
 const mediaShellClass = ['event-card__media-shell', documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover'].join(' ');
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
@@ -43,6 +48,7 @@ const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
 const canAddToCalendar = isCalendarEligible(event);
 const calendarHref = eventCalendarHref(event);
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const cardClass = ['event-card', `event-card--${variant}`].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
 const eventTypeTag = eventTypeLabel(event.event_type);
@@ -135,9 +141,9 @@ const otherTimeLabels = getOtherDates(event)
           <span>Не интересно</span>
         </button>
         {canAddToCalendar && (
-          <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}>
+          <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" data-calendar-action data-calendar-event-id={event.id} data-calendar-expiry-day={calendarExpiryDay} data-calendar-event-title={event.title} aria-label={`Добавить в календарь: ${event.title}`}>
             <Icon name="calendar" />
-            <span>В календарь</span>
+            <span data-calendar-label>В календарь</span>
           </a>
         )}
       </div>

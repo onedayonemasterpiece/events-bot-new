@@ -1,0 +1,71 @@
+mode: read_only_parallel_then_serial_integrator
+repo: events-bot-new
+base_ref: origin/feature/static-design-system-governance-20260717@efbfde30
+base_branch: feature/static-design-system-governance-20260717
+integration_branch: integration/static-design-system-desktop-parity-20260717
+global_constraints:
+  - preserve accepted desktop runtime integration/static-event-v10-system-routing@d5dab75a
+  - no production promotion; publish immutable noindex preview only
+  - apply INC-2026-07-02 and desktop incident regression contracts
+verification_owner: /root
+stop_conditions:
+  - unresolved merge conflict
+  - machine registry differs from runtime imports
+  - preview build or contract checks fail
+lanes:
+  - id: catalog-gap-audit
+    role: planner
+    requirement_ids: [R03, R06]
+    target: compare catalog with accepted desktop runtime and enforcement
+    depends_on: []
+    execution_mode: parallel
+    effort: medium
+    branch: null
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: parity and enforcement audit
+    verification_scope: inspection_only
+    status: merged
+  - id: desktop-inventory
+    role: planner
+    requirement_ids: [R01, R02]
+    target: inventory graphite CTA and poster/preview states
+    depends_on: []
+    execution_mode: parallel
+    effort: medium
+    branch: null
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: accepted desktop component/state inventory
+    verification_scope: inspection_only
+    status: merged
+  - id: loader-search-audit
+    role: planner
+    requirement_ids: [R04, R05]
+    target: find loader defect and real search progress states
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: null
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: root cause, incident contract and implementation guidance
+    verification_scope: inspection_only
+    status: merged
+  - id: serial-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: merge accepted runtime, implement catalog/runtime/registry/docs/tests, publish preview
+    depends_on: [catalog-gap-audit, desktop-inventory, loader-search-audit]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: integration/static-design-system-desktop-parity-20260717
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-design-system-desktop-parity-20260717
+    writable_files: ['site/**', 'docs/**', '.codex/**', '.codex/skills/static-site-design-system/**', 'AGENTS.md', 'CHANGELOG.md']
+    forbidden_files: []
+    expected_output: committed integration and immutable public preview
+    verification_scope: full_local
+    status: planned

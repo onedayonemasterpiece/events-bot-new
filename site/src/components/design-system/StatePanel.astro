@@ -4,17 +4,16 @@ import Button from './Button.astro';
 interface Props {
   title: string;
   message: string;
-  tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'loading';
+  tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
   mark?: string;
   actionLabel?: string;
   actionHref?: string;
 }
 const { title, message, tone = 'neutral', mark = '•', actionLabel, actionHref } = Astro.props;
 ---
-<section class={`ke-state-panel ke-state-panel--${tone}`} aria-live={tone === 'danger' ? 'assertive' : tone === 'loading' ? 'polite' : undefined} aria-busy={tone === 'loading' ? 'true' : undefined}>
+<section class={`ke-state-panel ke-state-panel--${tone}`} aria-live={tone === 'danger' ? 'assertive' : undefined}>
   <span class="ke-state-panel__mark" aria-hidden="true">{mark}</span>
   <h3>{title}</h3>
   <p>{message}</p>
   {actionLabel && <div><Button variant="secondary" size="compact" href={actionHref}>{actionLabel}</Button></div>}
 </section>
-

@@ -1,17 +1,22 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import DesktopEventPage from '../../components/DesktopEventPage.astro';
 import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
+import EventTransportSchedule from '../../components/EventTransportSchedule.astro';
+import EventBusTransportSchedule from '../../components/EventBusTransportSchedule.astro';
+import KaupTransportSchedule from '../../components/KaupTransportSchedule.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
-import EventCtaPanel from '../../components/EventCtaPanel.astro';
-import EventMediaRail from '../../components/EventMediaRail.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import MobileEventProductionStyles from '../../components/MobileEventProductionStyles.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
-import type { EventImageAsset } from '../../lib/types';
-import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-overrides.json';
+import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
+import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
+import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -32,6 +37,7 @@ if (!event) {
   return Astro.redirect(withBase('/__preview/'));
 }
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
+const desktopDiscoveryFeed = getPreloadedDiscoveryEvents(event, 30);
 const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
 const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
@@ -46,6 +52,7 @@ const stickyDateLabel = displayDateTime(event);
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const stickyIsTelephone = isTelephoneUrl(stickyHref);
 const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
@@ -66,106 +73,105 @@ const galleryCta = galleryCtaEvent ? {
   image_url: eventImageUrl(galleryCtaEvent.image_url),
   meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
 } : undefined;
-const heroGalleryId = `hero-gallery-${event.id}`;
-const imageAssets = event.image_assets || [];
-// Keep every external opener in the exact same order as EventHero's gallery:
-// primary first, then the remaining unique assets. Export normally guarantees
-// this already, but the page must also be correct for older preview snapshots.
-const galleryImageAssets = (() => {
-  const seen = new Set<string>();
-  const ordered: EventImageAsset[] = [];
-  const push = (asset: EventImageAsset | undefined) => {
-    if (!asset) return;
-    const resolved = eventImageUrl(asset.src) || asset.src;
-    if (!resolved || seen.has(resolved)) return;
-    seen.add(resolved);
-    ordered.push(asset);
-  };
-  const primaryUrl = eventImageUrl(event.image_url);
-  if (primaryUrl) {
-    const primaryAsset = imageAssets.find((asset) => (eventImageUrl(asset.src) || asset.src) === primaryUrl);
-    push(primaryAsset || {
-      src: primaryUrl,
-      width: 1080,
-      height: 1350,
-      alt: event.image_alt,
-      image_text_mode: event.image_text_mode,
-      media_role: event.image_media_role,
-      focal_point: event.focal_point,
-      safe_crop: event.safe_crop,
-    });
-  }
-  imageAssets.forEach(push);
-  return ordered;
-})();
-const identityPoster = galleryImageAssets.find((asset) => asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
-const identityPosterIndex = identityPoster ? galleryImageAssets.findIndex((asset) => asset.src === identityPoster.src) : -1;
-const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_media_role || (event.image_text_mode === 'visual_only' ? 'unknown_visual' : 'unknown_document'));
+// A handful of the accepted desktop specimens were enriched before their
+// derivative rows reached the current production snapshot. Reuse only those
+// immutable CDN thumbnails when the canonical asset still has no derivatives;
+// the mobile-v4 event object remains untouched below.
+const desktopThumbnailOverrides = (desktopThumbnailOverridesData.events as Record<string, Record<string, EventImageDerivative[]>>)[String(event.id)] || {};
+const desktopEvent: PreviewEvent = Object.keys(desktopThumbnailOverrides).length > 0
+  ? {
+      ...event,
+      image_assets:(event.image_assets || []).map((asset, index) => asset.thumbnail_sources?.length
+        ? asset
+        : ({ ...asset, thumbnail_sources:desktopThumbnailOverrides[String(index)] || asset.thumbnail_sources })),
+    }
+  : event;
+const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
-  <main id="main">
-    <div class="page-shell page-shell--event-impact">
-      <div class="desktop-event-reading-shell" data-desktop-event-reading data-desktop-media-family={primaryIsPhoto ? 'editorial' : 'split'} data-has-identity-poster={identityPoster ? 'true' : 'false'}>
-      <div class="event-grid">
-        <article class="main-col section-card section-card--hero section-card--impact-hero">
-          <div class="section-card__inner section-card__inner--hero">
-            <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} />
-          </div>
-        </article>
-        <div class="side-col">
-          <div class="desktop-side-stack" data-desktop-side-stack>
-            {!identityPoster && <EventMediaRail assets={galleryImageAssets} galleryId={heroGalleryId} eventTitle={event.title} />}
-            <div class="desktop-action-flow" data-desktop-action-flow>
-              <div class="desktop-cta-dock" data-desktop-cta-dock>
-                <EventCtaPanel event={event} />
-              </div>
-              {identityPoster && (
-                <div class="event-poster-companion" data-event-poster-companion>
-                  <button type="button" class="event-poster-companion__poster" data-hero-gallery-open={heroGalleryId} data-hero-gallery-index={Math.max(0, identityPosterIndex)} aria-label={`Открыть афишу события «${event.title}» полностью`}>
-                    <img src={eventImageUrl(identityPoster.src)} alt={identityPoster.alt || `Афиша события «${event.title}»`} width={identityPoster.width} height={identityPoster.height} loading="lazy" decoding="async" />
-                  </button>
-                  <EventMediaRail assets={galleryImageAssets} galleryId={heroGalleryId} eventTitle={event.title} />
-                </div>
-              )}
-            </div>
-          </div>
+  <MobileEventProductionStyles />
+  <div id="main">
+  <DesktopEventPage
+    event={desktopEvent}
+    related={desktopDiscoveryFeed}
+    candidate={desktopPresentation.candidate}
+    mediaPolicy={desktopPresentation.mediaPolicy}
+    heroImageIndex={desktopPresentation.heroImageIndex}
+    heroWidth={desktopPresentation.heroWidth}
+    heroHeight={desktopPresentation.heroHeight}
+    heroObjectPosition={desktopPresentation.heroObjectPosition}
+    editorialRail={desktopPresentation.editorialRail}
+    editorialMotion={desktopPresentation.editorialMotion}
+    editorialCropPolicy={desktopPresentation.editorialCropPolicy}
+    ocrCompanionImageIndex={desktopPresentation.ocrCompanionImageIndex}
+    ocrCompanionLayout={desktopPresentation.ocrCompanionLayout}
+    autoRotate={desktopPresentation.autoRotate}
+    ocrSourceIndexes={desktopPresentation.ocrSourceIndexes}
+    duplicateSourceIndexes={desktopPresentation.duplicateSourceIndexes}
+    splitMediaFit={desktopPresentation.splitMediaFit}
+    splitPortraitViewer={desktopPresentation.splitPortraitViewer}
+    splitPortraitSourceIndexes={desktopPresentation.splitPortraitSourceIndexes}
+    splitViewerHiddenSourceIndexes={desktopPresentation.splitViewerHiddenSourceIndexes}
+    relatedMediaTreatment={desktopPresentation.relatedMediaTreatment}
+    surface="production"
+    presentationReason={desktopPresentation.reason}
+    showTransport
+  />
+  <main
+    class="mobile-event-production"
+    data-production-mobile-event
+    data-mobile-event-production
+    data-mobile-review-variant="accepted-v8"
+    data-prose-treatment="open"
+    data-actions-treatment="dock"
+    data-mobile-review-revision="v4"
+    data-mobile-parallax-profile="photo-continuous-crop"
+  >
+    <div class="page-shell page-shell--event-impact mobile-event-production__shell">
+      <article class="main-col section-card section-card--hero section-card--impact-hero">
+        <div class="section-card__inner section-card__inner--hero">
+          <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} metaTreatment="weekday-panel" />
         </div>
-      </div>
+      </article>
 
-      <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        {event.city && <a href={withBase(`/__preview/?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
-        {event.city && <span aria-hidden="true">/</span>}
-        {event.event_type && <span>{event.event_type}</span>}
-      </nav>
+      <div class="mobile-event-production__continuation">
+        <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
+          <a href={withBase('/__preview/')}>Афиша</a>
+          <span aria-hidden="true">/</span>
+          {event.city && <a href={withBase(`/__preview/?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
+          {event.city && <span aria-hidden="true">/</span>}
+          {event.event_type && <span>{event.event_type}</span>}
+        </nav>
 
-      <div class="desktop-reading-medallions"><EventTokenMedallions event={event} /></div>
+        <div class="mobile-event-production__medallions"><EventTokenMedallions event={event} /></div>
 
-      <section class="section-card section-card--quiet section-card--event-details" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <h2>Описание</h2>
-          <div class="prose" set:html={event.description_html} />
-          <h2 style="margin-top: 1.2rem;">Коротко</h2>
-          <EventFacts event={event} />
-          {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
-        </div>
-        <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
-      </section>
-
-      {otherDates.length > 0 && (
-        <section class="section-card desktop-reading-other-dates" style="margin-top: 1rem;">
-          <div class="section-card__inner">
-            <h2>Другие даты</h2>
-            <div class="cards-grid cards-grid--immersive">
-              {otherDates.map((candidate) => <EventCard event={candidate} label="Другая дата" />)}
-            </div>
+        <section class="section-card section-card--quiet section-card--event-details mobile-event-production__details" style="margin-top: 1rem;">
+          <div class="section-card__inner mobile-event-production__prose">
+            <h2>Описание</h2>
+            <div class="prose" set:html={event.description_html} />
+            <h2 style="margin-top: 1.2rem;">Коротко</h2>
+            <EventFacts event={event} />
+            <EventTransportSchedule event={event} />
+            <EventBusTransportSchedule event={event} />
+            <KaupTransportSchedule event={event} compact />
+            {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
           </div>
+          <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
         </section>
-      )}
+
+        {otherDates.length > 0 && (
+          <section class="section-card mobile-event-production__other-dates" style="margin-top: 1rem;">
+            <div class="section-card__inner">
+              <h2>Другие даты</h2>
+              <div class="cards-grid cards-grid--immersive">
+                {otherDates.map((candidate) => <EventCard event={candidate} label="Другая дата" />)}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
 
-      <section id="discovery-feed" class="section-card" style="margin-top: 1rem;" data-hide-sticky-after>
+      <section id="discovery-feed" class="section-card mobile-event-production__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">
           <h2>Смотрите дальше</h2>
           <div
@@ -183,16 +189,21 @@ const primaryIsPhoto = ['event_photo', 'unknown_visual'].includes(event.image_me
           <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>
         </div>
       </section>
-
-      <PersonalFeedSlot context="event-detail" />
     </div>
   </main>
+  <PersonalFeedSlot context="event-detail" />
   {stickyHref && (
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">
         <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{stickyDateLabel}</span></div>
-        <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span>{stickyLabel}</span></a>
+        <a class="cta-button" href={stickyHref} type={stickyCalendarPrimary ? 'text/calendar' : undefined} target={stickyIsExternal && !stickyCalendarPrimary ? '_blank' : undefined} rel={stickyIsExternal && !stickyCalendarPrimary ? 'noopener noreferrer nofollow' : undefined} data-calendar-action={stickyCalendarPrimary ? true : undefined} data-calendar-event-id={stickyCalendarPrimary ? event.id : undefined} data-calendar-expiry-day={stickyCalendarPrimary ? calendarExpiryDay : undefined} data-calendar-event-title={stickyCalendarPrimary ? event.title : undefined} aria-label={stickyCalendarPrimary ? `Добавить в календарь: ${event.title}` : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span data-calendar-label={stickyCalendarPrimary ? true : undefined}>{stickyLabel}</span></a>
       </div>
     </div>
   )}
+  </div>
+  <style is:global>
+    @media (min-width: 1024px) {
+      [data-production-mobile-event] { display: none !important; }
+    }
+  </style>
 </EventLayout>

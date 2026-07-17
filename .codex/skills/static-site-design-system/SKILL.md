@@ -11,6 +11,9 @@ Use `docs/features/static-site-pages/design-system/README.md` as the normative c
 
 1. Inventory affected page families and every consumer of the component or visual pattern.
 2. Reuse approved `--ke-*` tokens and registered components. Do not create page-local equivalents.
+   - treat `site/src/data/design-system-registry.json` as the machine source/state/consumer inventory;
+   - the accepted desktop event baseline is `DesktopEventPage@14` with `DesktopEventActionPanel@2`, not the legacy `EventCtaPanel`/standalone `EventMediaRail` catalog proxies;
+   - content loading uses `Skeleton@1`; a submit progress bar may accompany it, but spinner panels and forced-visible runtime `[hidden]` blocks are forbidden.
 3. For a new pattern, add an `experimental`/`candidate` catalog entry with all applicable states before production adoption.
 4. For a material redesign of approved component `vN`, create `vN+1`:
    - show `vN` and `vN+1` side by side in the runtime catalog;
@@ -30,4 +33,5 @@ Use `docs/features/static-site-pages/design-system/README.md` as the normative c
 - mixed production versions without a documented rollout contract;
 - callers remain on the old version after migration is declared complete;
 - catalog/demo markup diverges from the runtime component;
+- accepted runtime component is replaced by a visually similar lab-only proxy, or the catalog does not render/link the exact poster/preview and search state surfaces;
 - missing immutable preview URL, git SHA, docs, tests or changelog.

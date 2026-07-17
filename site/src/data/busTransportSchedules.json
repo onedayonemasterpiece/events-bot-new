@@ -1,0 +1,203 @@
+{
+  "schema_version": "event_bus_transport_v1",
+  "generated_at": "2026-07-11T14:00:00Z",
+  "source": {
+    "name": "АО «Автовокзал»",
+    "url": "https://avl39.ru/routes/reg/kaliningrad/",
+    "effective_from": "2026-07-01",
+    "retrieved_at": "2026-07-11"
+  },
+  "routes": [
+    {
+      "id": "romanovo-holmogorye",
+      "cities": [
+        "Романово",
+        "пос. Романово"
+      ],
+      "venues": [
+        "Холмогорье",
+        "Сказочное Холмогорье"
+      ],
+      "event_start": "11:00",
+      "event_end": "16:00",
+      "origin_stop": "Автовокзал Калининград",
+      "preferred_boarding": {
+        "stop_name": "Северный вокзал",
+        "locality_label": "Калининград",
+        "offset_from_terminal_minutes": 15,
+        "time_is_estimated": true,
+        "map_url": "https://yandex.ru/maps/?text=%D0%A1%D0%B5%D0%B2%D0%B5%D1%80%D0%BD%D1%8B%D0%B9%20%D0%B2%D0%BE%D0%BA%D0%B7%D0%B0%D0%BB%2C%20%D0%9A%D0%B0%D0%BB%D0%B8%D0%BD%D0%B3%D1%80%D0%B0%D0%B4"
+      },
+      "venue_name": "Сказочное Холмогорье",
+      "venue_coordinates": [
+        54.8817051,
+        20.2792613
+      ],
+      "venue_map_url": "https://yandex.ru/maps/?pt=20.279261,54.881705&z=16&l=map",
+      "outbound_groups": [
+        {
+          "routes": "118/118А",
+          "departure_stop": "Автовокзал Калининград",
+          "arrival_stop": "Романовский поворот",
+          "walk_estimate_minutes": 52,
+          "walk_distance_km": 3.9,
+          "departures": [
+            "06:00",
+            "06:20",
+            "07:00",
+            "07:20",
+            "07:40",
+            "08:00",
+            "08:40",
+            "09:00",
+            "09:20",
+            "09:40",
+            "10:00",
+            "10:20",
+            "10:40",
+            "11:00",
+            "11:20",
+            "12:00",
+            "12:20",
+            "12:40",
+            "13:00",
+            "13:20",
+            "13:40",
+            "14:00",
+            "14:20",
+            "14:40",
+            "15:20",
+            "15:40",
+            "16:00",
+            "16:20",
+            "16:40",
+            "17:00",
+            "17:20",
+            "17:40",
+            "18:00",
+            "18:40",
+            "19:00",
+            "19:40",
+            "20:00",
+            "20:20",
+            "20:40",
+            "21:00",
+            "21:30",
+            "22:00",
+            "22:30"
+          ],
+          "ride_estimate_minutes": 65
+        },
+        {
+          "routes": "119",
+          "departure_stop": "Автовокзал Калининград",
+          "arrival_stop": "Романово",
+          "walk_estimate_minutes": 27,
+          "walk_distance_km": 2.0,
+          "departures": [
+            "06:55",
+            "08:10",
+            "10:25",
+            "11:50",
+            "13:55",
+            "16:30",
+            "17:55",
+            "20:05"
+          ],
+          "ride_estimate_minutes": 65
+        }
+      ],
+      "return_groups": [
+        {
+          "routes": "118/118А",
+          "departure_stop": "Романовский поворот",
+          "destination_stop": "Калининград",
+          "is_estimated": true,
+          "departures": [
+            "06:15",
+            "06:35",
+            "07:15",
+            "07:35",
+            "07:55",
+            "08:15",
+            "08:35",
+            "08:55",
+            "09:15",
+            "09:35",
+            "09:55",
+            "10:35",
+            "10:55",
+            "11:15",
+            "11:35",
+            "11:55",
+            "12:15",
+            "12:35",
+            "12:55",
+            "13:15",
+            "13:55",
+            "14:15",
+            "14:35",
+            "14:55",
+            "15:15",
+            "15:35",
+            "15:55",
+            "16:15",
+            "16:35",
+            "17:15",
+            "17:35",
+            "17:55",
+            "18:15",
+            "18:35",
+            "18:55",
+            "19:15",
+            "19:35",
+            "19:55",
+            "20:35",
+            "21:15",
+            "21:30",
+            "22:00",
+            "22:35"
+          ],
+          "walk_from_venue_minutes": 52
+        },
+        {
+          "routes": "119",
+          "departure_stop": "Романово",
+          "destination_stop": "Калининград",
+          "is_estimated": true,
+          "departures": [
+            "06:00",
+            "06:55",
+            "08:35",
+            "09:55",
+            "12:35",
+            "13:45",
+            "16:05",
+            "18:35",
+            "19:30",
+            "21:55"
+          ],
+          "walk_from_venue_minutes": 27
+        }
+      ],
+      "north_stop": "Северный вокзал",
+      "north_travel_estimate_label": "ориентировочно 10–15 минут",
+      "venue_hours_label": "Открыто по субботам с 11:00 до 16:00",
+      "walk_map_url": "https://yandex.ru/maps/?rtext=54.8958609%2C20.2759337~54.8817051%2C20.2792613&rtt=pd",
+      "shared_ride_estimate_label": "До Романово — около 1 часа в автобусе",
+      "venue_open_time": "11:00",
+      "venue_close_time": "16:00",
+      "return_max_wait_minutes": 75,
+      "map_square_image_url": "/assets/transport/romanovo-holmogorye-route-square.png",
+      "map_portrait_image_url": "/assets/transport/romanovo-holmogorye-route-portrait.png",
+      "outbound_min_arrival_lead_minutes": 20,
+      "outbound_max_arrival_lead_minutes": 90,
+      "return_min_visit_minutes": 75,
+      "route_directory_locality_id": "romanovo",
+      "venue_access_id": "romanovo-holmogorye",
+      "route_corridor_ids": [
+        "pionersky-romanovo"
+      ]
+    }
+  ]
+}

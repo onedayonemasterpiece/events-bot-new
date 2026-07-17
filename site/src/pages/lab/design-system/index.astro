@@ -4,10 +4,12 @@ import Badge from '../../../components/design-system/Badge.astro';
 import Button from '../../../components/design-system/Button.astro';
 import CopyAction from '../../../components/design-system/CopyAction.astro';
 import Field from '../../../components/design-system/Field.astro';
+import Skeleton from '../../../components/design-system/Skeleton.astro';
 import StatePanel from '../../../components/design-system/StatePanel.astro';
+import AuthorizedEventSearch from '../../../components/AuthorizedEventSearch.astro';
+import DesktopEventActionPanel from '../../../components/DesktopEventActionPanel.astro';
 import EventCard from '../../../components/EventCard.astro';
 import CalendarLink from '../../../components/CalendarLink.astro';
-import EventCtaPanel from '../../../components/EventCtaPanel.astro';
 import EventFacts from '../../../components/EventFacts.astro';
 import EventHero from '../../../components/EventHero.astro';
 import EventListItem from '../../../components/EventListItem.astro';
@@ -44,6 +46,46 @@ const soldOutEvent = eventVariant(990002, {
   title: 'Спектакль — билеты закончились',
   ticket: { kind: 'status', label: 'Билеты закончились', href: null, status: 'sold_out', is_free: false, price_label: null, note: 'Следите за дополнительными датами' },
 });
+const paidExactEvent = eventVariant(990003, {
+  title: 'Концерт с известной ценой',
+  ticket: { kind: 'ticket', label: 'Купить билет', href: 'https://example.org/tickets', status: 'available', is_free: false, price_label: 'от 1 200 ₽', note: '' },
+});
+const paidUnknownEvent = eventVariant(990004, {
+  title: 'Концерт без выгруженной цены',
+  ticket: { kind: 'ticket', label: 'Билеты', href: 'https://example.org/tickets', status: 'available', is_free: false, price_label: null, note: '' },
+});
+const registrationEvent = eventVariant(990005, {
+  title: 'Событие по регистрации',
+  ticket: { kind: 'registration', label: 'Зарегистрироваться', href: 'https://example.org/register', status: 'registration', is_free: false, price_label: null, note: '' },
+});
+const freeRegistrationEvent = eventVariant(990006, {
+  title: 'Бесплатно по регистрации',
+  ticket: { kind: 'registration', label: 'Зарегистрироваться', href: 'https://example.org/register', status: 'registration', is_free: true, price_label: null, note: '' },
+});
+const sourceEvent = eventVariant(990007, {
+  title: 'Уточнить у организатора',
+  ticket: { kind: 'source', label: 'Открыть источник', href: 'https://example.org/source', status: 'source', is_free: false, price_label: null, note: '' },
+});
+const phoneEvent = eventVariant(990008, {
+  title: 'Запись по телефону',
+  ticket: { kind: 'phone', label: 'Позвонить', href: 'tel:+79118688955', status: 'phone', is_free: false, price_label: null, note: '' },
+});
+const unavailableEvent = eventVariant(990009, {
+  title: 'Информация уточняется',
+  end_date: '2026-07-20',
+  ticket: { kind: 'status', label: 'Информация уточняется', href: null, status: 'unavailable', is_free: false, price_label: null, note: '' },
+});
+const actionStates = [
+  ['paid-price', 'Платно · известна цена', paidExactEvent],
+  ['paid-unknown', 'Платно · цена не выгружена', paidUnknownEvent],
+  ['registration', 'Регистрация', registrationEvent],
+  ['free-calendar', 'Бесплатно · календарь primary', freeEvent],
+  ['free-registration', 'Бесплатно · нужна регистрация', freeRegistrationEvent],
+  ['phone-copy', 'Телефон · copy → check/error', phoneEvent],
+  ['source', 'Внешний источник', sourceEvent],
+  ['sold-out', 'Билеты закончились', soldOutEvent],
+  ['unavailable', 'Информация уточняется', unavailableEvent],
+] as const;
 
 const buttonStates = [
   { state: 'default', label: 'Обычное' },
@@ -81,7 +123,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
         <div class="section-card__inner">
           <div class="ds-catalog__status-row">
             <Badge tone="success">Каноника</Badge>
-            <Badge tone="accent">Версия 1.0</Badge>
+            <Badge tone="accent">Release set 2.0 · Desktop v14</Badge>
             <Badge>Astro SSG</Badge>
           </div>
           <p class="eyebrow">KenigEvents UI</p>
@@ -239,18 +281,14 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </div>
           <div class="ds-panel-grid">
             <StatePanel title="Пока ничего нет" message="Измените фильтры или вернитесь ко всем событиям." actionLabel="Показать все" actionHref={withBase('/segodnya/')} mark="0" />
-            <StatePanel tone="loading" title="Подбираем события" message="Статический контент остаётся доступным, пока загружается персональное дополнение." />
             <StatePanel tone="danger" title="Не удалось обновить" message="Последняя проверенная версия сохранена. Можно повторить запрос." actionLabel="Повторить" mark="!" />
             <StatePanel tone="warning" title="Данные могут устареть" message="Уточните время и наличие билетов у организатора." mark="!" />
             <StatePanel tone="success" title="Добавлено в календарь" message="Файл готов. Событие можно открыть в системном календаре." mark="✓" />
             <StatePanel tone="info" title="Работаем без персонализации" message="Отказ от consent не мешает просмотру афиши, страниц событий и календаря." mark="i" />
           </div>
-          <h3>Skeleton</h3>
-          <div class="ds-skeleton-card" aria-label="Пример состояния загрузки">
-            <span class="ke-skeleton ds-skeleton-card__media">Изображение</span>
-            <span class="ke-skeleton ds-skeleton-card__title">Заголовок</span>
-            <span class="ke-skeleton ds-skeleton-card__line">Строка</span>
-          </div>
+          <h3>Единственный loading-паттерн для контента</h3>
+          <p class="muted-note">Карточки резервируют итоговую геометрию. Спиннер и вечный текст «Подбираем события» не используются.</p>
+          <Skeleton count={3} label="Подбираем события" />
         </div>
       </section>
 
@@ -274,9 +312,44 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
             <div class="ds-component-stage"><EventFacts event={medallionEvent} /><EventTokenMedallions event={medallionEvent} /></div>
           </article>
 
-          <article class="ds-component-block">
-            <div class="ds-component-block__head"><div><h3>CTA panel</h3><p>Платно, бесплатно и sold out — одна структура, разные честные состояния.</p></div><Badge tone="success">Approved</Badge></div>
-            <div class="ds-product-grid"><EventCtaPanel event={baseEvent} /><EventCtaPanel event={freeEvent} /><EventCtaPanel event={soldOutEvent} /></div>
+          <article class="ds-component-block" data-ds-runtime-component="DesktopEventActionPanel@2">
+            <div class="ds-component-block__head"><div><h3>Графитовый desktop CTA</h3><p>Тот же <code>DesktopEventActionPanel.astro</code>, который монтируется в production <code>/sobytiya/[slug]</code>. Состояния не имитируются отдельной карточкой.</p></div><Badge tone="success">Approved · v2</Badge></div>
+            <div class="ds-action-matrix">
+              {actionStates.map(([state, label, event]) => (
+                <section data-action-state={state}><p><code>{state}</code><strong>{label}</strong></p><DesktopEventActionPanel event={event} /></section>
+              ))}
+            </div>
+            <p class="muted-note">Дополнительные responsive-состояния: normal/compact/stacked и attached/sticky/released проверяются внутри реальных desktop-композиций ниже и в полном desktop lab.</p>
+          </article>
+
+          <article class="ds-component-block" data-ds-runtime-component="DesktopEventPage@14">
+            <div class="ds-component-block__head"><div><h3>Афиша + превью desktop-события</h3><p>Реальный блок <code>DesktopEventPage.astro</code>: identity poster, лента превью, точные gallery index, duplicate suppression, overflow и arrival/release CTA.</p></div><Badge tone="success">Approved · v14</Badge></div>
+            <div class="ds-desktop-compositions">
+              <div><strong>OCR companion arrival + previews</strong><iframe src={withBase('/lab/event-desktop/examples/editorial-ocr-companion-arrival/')} title="Desktop: афиша приезжает к превью и CTA" loading="lazy"></iframe></div>
+              <div><strong>Low-resolution split + grouped preview</strong><iframe src={withBase('/lab/event-desktop/examples/split-low-resolution/')} title="Desktop: split-композиция с превью" loading="lazy"></iframe></div>
+            </div>
+            <ul class="ds-contract-chips" aria-label="Состояния desktop media contract">
+              {['editorial-photo', 'editorial-ocr-companion', 'companion-arrival', 'split-ocr', 'split-portrait', 'split-low-resolution', 'multi-preview', 'duplicate-suppression', 'thumbnail-failure', 'gallery-index'].map((state) => <li><code>{state}</code></li>)}
+            </ul>
+            <div class="ds-state-links">
+              <Button variant="secondary" href={withBase('/lab/event-desktop/')}>Открыть матрицу из 14 desktop-сценариев</Button>
+              <Button variant="quiet" href={withBase('/lab/event-desktop/examples/editorial-photo-continuous/')}>CTA attached/released</Button>
+              <Button variant="quiet" href={withBase('/lab/event-desktop/examples/split-ocr-with-photos/')}>OCR + event photos</Button>
+            </div>
+          </article>
+
+          <article class="ds-component-block" data-ds-runtime-component="AuthorizedEventSearch@2">
+            <div class="ds-component-block__head"><div><h3>Форма умного поиска</h3><p>Реальный <code>AuthorizedEventSearch.astro</code>: вход, форма, progress внутри primary action, skeleton до первой карточки и результаты.</p></div><Badge tone="success">Approved · v2</Badge></div>
+            <div class="ds-search-matrix">
+              <section><code>anonymous</code><AuthorizedEventSearch compact previewState="anonymous" instanceId="anonymous" /></section>
+              <section><code>ready</code><AuthorizedEventSearch compact previewState="ready" instanceId="ready" /></section>
+              <section><code>progress · 74%</code><AuthorizedEventSearch compact previewState="progress" instanceId="progress" /></section>
+              <section><code>skeleton · 92%</code><AuthorizedEventSearch compact previewState="skeleton" instanceId="skeleton" /></section>
+              <section><code>results + pagination</code><AuthorizedEventSearch compact previewState="results" instanceId="results" /></section>
+              <section><code>empty</code><AuthorizedEventSearch compact previewState="empty" instanceId="empty" /></section>
+              <section><code>error</code><AuthorizedEventSearch compact previewState="error" instanceId="error" /></section>
+              <section><code>quota</code><AuthorizedEventSearch compact previewState="quota" instanceId="quota" /></section>
+            </div>
           </article>
 
           <article class="ds-component-block">
@@ -312,10 +385,10 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </article>
 
           <article class="ds-component-block">
-            <div class="ds-component-block__head"><div><h3>Personalization enhancements</h3><p>Принудительно раскрытые lab-состояния; в runtime они появляются только после успешной client-side и consent проверки.</p></div><Badge tone="warning">Conditional</Badge></div>
-            <div class="ds-component-stage ds-force-visible">
+            <div class="ds-component-block__head"><div><h3>Personalization enhancements</h3><p>Fixture-состояние не ломает runtime <code>hidden</code>: клиент игнорирует <code>data-personal-feed-fixture</code>.</p></div><Badge tone="warning">Conditional</Badge></div>
+            <div class="ds-component-stage">
               <ListingPersonalFilter total={12} label="каталоге" />
-              <PersonalFeedSlot context="today" />
+              <PersonalFeedSlot context="today" previewState="loading" />
             </div>
             <Button variant="secondary" href={withBase('/poisk/')}>Открыть auth/search surface</Button>
           </article>
@@ -337,20 +410,23 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="CopyAction" data-ds-version="1"><td>CopyAction</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>secondary/inverse + success/error + clipboard fallback</td></tr>
                 <tr data-ds-component="Badge" data-ds-version="1"><td>Badge</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Badge.astro</code></td><td>6 semantic tones</td></tr>
                 <tr data-ds-component="Field" data-ds-version="1"><td>Field</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
-                <tr data-ds-component="StatePanel" data-ds-version="1"><td>StatePanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>
+                <tr data-ds-component="Skeleton" data-ds-version="1"><td>Skeleton</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Skeleton.astro</code></td><td>event-card/event-list; shared search + personal feed loading</td></tr>
+                <tr data-ds-component="StatePanel" data-ds-version="2"><td>StatePanel</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/error/stale/success/offline; loading moved to Skeleton v1</td></tr>
                 <tr data-ds-component="EventHero" data-ds-version="1"><td>EventHero</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventHero.astro</code></td><td><a href={withBase('/lab/hero/')}>hero lab</a></td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="2"><td>EventCard · split-actions</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>production migration complete</td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="1" data-ds-replaced-by="EventCard@2"><td>EventCard · overlay-controls</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCard.astro</code></td><td>replaced by EventCard v2; lab-only</td></tr>
                 <tr data-ds-component="EventListItem" data-ds-version="1"><td>EventListItem</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>
-                <tr data-ds-component="EventCtaPanel" data-ds-version="1"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>
+                <tr data-ds-component="DesktopEventActionPanel" data-ds-version="2"><td>DesktopEventActionPanel</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/DesktopEventActionPanel.astro</code></td><td>9 CTA states; production consumer active</td></tr>
+                <tr data-ds-component="DesktopEventPage" data-ds-version="14"><td>DesktopEventPage</td><td><code>v14</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/DesktopEventPage.astro</code></td><td>14 media/action scenarios; production migration complete</td></tr>
+                <tr data-ds-component="EventCtaPanel" data-ds-version="1" data-ds-replaced-by="DesktopEventActionPanel@2"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>zero desktop-v14 consumers; replaced by DesktopEventActionPanel v2</td></tr>
                 <tr data-ds-component="CalendarLink" data-ds-version="1"><td>CalendarLink</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/CalendarLink.astro</code></td><td>eligible/ineligible via event contract</td></tr>
                 <tr data-ds-component="EventFacts" data-ds-version="1"><td>EventFacts</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventFacts.astro</code></td><td>date/place/admission/festival</td></tr>
                 <tr data-ds-component="EventTokenMedallions" data-ds-version="1"><td>EventTokenMedallions</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>organizer/source/program/semantic pills</td></tr>
-                <tr data-ds-component="EventMediaRail" data-ds-version="1"><td>EventMediaRail</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>multi-image/overflow</td></tr>
+                <tr data-ds-component="EventMediaRail" data-ds-version="1" data-ds-replaced-by="DesktopEventPage@14"><td>EventMediaRail · legacy standalone</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>zero desktop-v14 consumers; media companion is owned by DesktopEventPage v14</td></tr>
                 <tr data-ds-component="InterestClubCard" data-ds-version="1"><td>InterestClubCard</td><td><code>v1</code></td><td><Badge tone="accent">feature-gated</Badge></td><td><code>components/InterestClubCard.astro</code></td><td>current fixture + responsive</td></tr>
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="1"><td>ListingPersonalFilter</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>all/personal + sticky bar</td></tr>
                 <tr data-ds-component="PersonalFeedSlot" data-ds-version="1"><td>PersonalFeedSlot</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
-                <tr data-ds-component="AuthorizedEventSearch" data-ds-version="1"><td>AuthorizedEventSearch</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
+                <tr data-ds-component="AuthorizedEventSearch" data-ds-version="2"><td>AuthorizedEventSearch</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td>auth/ready/progress/skeleton/results/empty/error/quota; <a href={withBase('/poisk/')}>runtime route</a></td></tr>
                 <tr data-ds-component="IconSocialIcon" data-ds-version="1"><td>Icon / SocialIcon</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>
                 <tr data-ds-component="AnnouncementsLockup" data-ds-version="1"><td>AnnouncementsLockup</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/brand/AnnouncementsLockup.astro</code></td><td>desktop/mobile/favicon sizes</td></tr>
 
@@ -439,7 +515,19 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
   .ds-component-stage--narrow { max-width: 560px; }
   .ds-force-visible :global(.listing-filter[hidden]) { display: flex !important; }
   .ds-force-visible :global(.listing-filter-bar[hidden]) { position: static; display: block !important; }
-  .ds-force-visible :global(.personal-feed-section[hidden]) { display: block !important; }
+  .ds-action-matrix { display: grid; gap: var(--ke-space-4); }
+  .ds-action-matrix > section { min-width: 0; display: grid; grid-template-columns: minmax(180px, .35fr) minmax(0, 1fr); align-items: center; gap: var(--ke-space-4); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-3); background: var(--ke-color-surface-strong); }
+  .ds-action-matrix > section > p { display: grid; gap: var(--ke-space-1); margin: 0; }
+  .ds-action-matrix :global(.desktop-prototype__action) { border-radius: var(--ke-radius-lg); box-shadow: var(--ke-shadow-graphite); }
+  .ds-desktop-compositions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ke-space-4); }
+  .ds-desktop-compositions > div { min-width: 0; display: grid; gap: var(--ke-space-2); }
+  .ds-desktop-compositions iframe { width: 100%; min-height: 720px; border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); background: var(--ke-color-canvas); }
+  .ds-state-links { display: flex; flex-wrap: wrap; gap: var(--ke-space-2); }
+  .ds-contract-chips { display: flex; flex-wrap: wrap; gap: var(--ke-space-2); margin: 0; padding: 0; list-style: none; }
+  .ds-contract-chips li { border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-pill); padding: .35rem .62rem; background: var(--ke-color-canvas-soft); }
+  .ds-search-matrix { display: grid; gap: var(--ke-space-4); }
+  .ds-search-matrix > section { min-width: 0; display: grid; gap: var(--ke-space-2); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-4); background: var(--ke-color-surface-strong); }
+  .ds-search-matrix :global(.authorized-search) { margin: 0; }
   .ds-card-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ke-space-5); max-width: 840px; }
   .ds-card-comparison > div { min-width: 0; display: grid; gap: var(--ke-space-2); align-content: start; }
   .ds-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); }
@@ -455,7 +543,8 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
     .ds-foundation-grid,
     .ds-elevation-grid,
     .ds-brand-grid,
-    .ds-product-grid { grid-template-columns: 1fr; }
+    .ds-product-grid,
+    .ds-desktop-compositions { grid-template-columns: 1fr; }
     .ds-panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 680px) {
@@ -468,5 +557,6 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
     .ds-catalog__toc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ds-catalog__toc a { justify-content: center; }
     .ds-component-stage { margin-inline: calc(var(--ke-space-4) * -1); border-inline: 0; border-radius: 0; }
+    .ds-action-matrix > section { grid-template-columns: 1fr; }
   }
 </style>

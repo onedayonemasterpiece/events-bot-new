@@ -56,6 +56,8 @@ export interface EventImageAsset {
   recommended_object_position?: string;
   recommended_hero_fit?: 'contain' | 'cover';
   safe_crop?: boolean;
+  /** Build-time technical quality signal; it never replaces semantic LLM media classification. */
+  quality_score?: number;
 }
 
 export interface TicketInfo {

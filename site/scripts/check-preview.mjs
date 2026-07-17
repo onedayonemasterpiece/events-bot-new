@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
+import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -23,7 +24,16 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'assets/transport/kppk-lastochka.webp',
+  'assets/transport/bus-svgrepo-337651.svg',
+  'assets/transport/romanovo-holmogorye-route-square.png',
+  'assets/transport/romanovo-holmogorye-route-portrait.png',
   'brand/announcements-wordmark-ui.svg',
+  'assets/icons/link-minimalistic-svgrepo.svg',
+  'service-share/current/manifest.json',
+  'service-share/versions/20260715-896b8af26ac6679f/manifest.json',
+  'service-share/versions/20260715-896b8af26ac6679f/service-share-20260715-896b8af26ac6679f.png',
+  'service-share/versions/20260715-896b8af26ac6679f/service-share-20260715-896b8af26ac6679f.webp',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -31,6 +41,15 @@ const required = [
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
+  'lab/event-desktop/examples/editorial-photo-continuous/index.html',
+  'lab/event-desktop/examples/split-low-resolution/index.html',
+  'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html',
+  'lab/event-mobile/index.html',
+  ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8'].flatMap((variant) =>
+    ['photo-paid', 'visual-free', 'ocr-poster'].map((scenario) =>
+      `lab/event-mobile/examples/${variant}/${scenario}/index.html`,
+    ),
+  ),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -52,6 +71,10 @@ if (!designSystemHtml.includes('ke-button--inverse') || !designSystemHtml.includ
 if (!designSystemHtml.includes('role="status"') || !designSystemHtml.includes('aria-live="polite"') || !designSystemHtml.includes('design-system/CopyAction.astro')) throw new Error('Design-system CopyAction misses accessible feedback or registry evidence');
 if (!designSystemHtml.includes('data-ds-component="EventCard" data-ds-version="2"') || !designSystemHtml.includes('data-ds-replaced-by="EventCard@2"')) throw new Error('Generated design-system registry misses EventCard v1 -> v2 migration contract');
 if (!/<th[^>]*>Версия<\/th>/u.test(designSystemHtml) || !designSystemHtml.includes('production migration complete')) throw new Error('Generated design-system registry misses visible version/migration status');
+if (!designSystemHtml.includes('data-ds-runtime-component="DesktopEventActionPanel@2"') || !designSystemHtml.includes('data-action-state="phone-copy"') || !designSystemHtml.includes('data-action-state="unavailable"')) throw new Error('Design-system catalog misses the accepted graphite CTA state matrix');
+if (!designSystemHtml.includes('data-ds-runtime-component="DesktopEventPage@14"') || !designSystemHtml.includes('editorial-ocr-companion-arrival') || !designSystemHtml.includes('multi-preview')) throw new Error('Design-system catalog misses the accepted poster/preview desktop composition matrix');
+if (!designSystemHtml.includes('data-ds-runtime-component="AuthorizedEventSearch@2"') || !designSystemHtml.includes('data-search-preview-state="progress"') || !designSystemHtml.includes('data-search-preview-state="skeleton"') || !designSystemHtml.includes('--search-progress: 74%')) throw new Error('Design-system catalog misses real search form/progress/skeleton states');
+if (!designSystemHtml.includes('data-ke-skeleton') || designSystemHtml.includes('ke-state-panel--loading') || designSystemHtml.includes('ds-force-visible personal-feed-section')) throw new Error('Content loading must use shared skeleton without forcing hidden personal-feed UI');
 if (interestClubsData.schema_version !== 'interest-clubs-static-v1' || interestClubsData.projection_version !== 1) {
   throw new Error('Interest-clubs projection contract is not interest-clubs-static-v1');
 }
@@ -67,6 +90,204 @@ for (const club of interestClubsData.clubs) {
   if (!detailHtml.includes('BreadcrumbList') || !detailHtml.includes('application/ld+json')) throw new Error(`Club ${club.slug} misses structured data`);
   if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(detailHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
 }
+
+let transportEventCount = 0;
+let transportIcsTotal = 0;
+for (const event of eventsData.events) {
+  const eventHtmlPath = join(root, `sobytiya/${event.slug}/index.html`);
+  const html = readFileSync(eventHtmlPath, 'utf8');
+  if (
+    !html.includes('data-mobile-event-production')
+    || !html.includes('data-mobile-review-variant="accepted-v8"')
+    || !html.includes('data-mobile-review-revision="v4"')
+    || !html.includes('data-mobile-parallax-profile="photo-continuous-crop"')
+    || !html.includes('mobile-event-production__continuation')
+    || !html.includes('event-hero__meta-line--weekday-panel')
+  ) {
+    throw new Error(`Event ${event.id} misses the responsive accepted mobile-v8 production contract`);
+  }
+  const hasRail = html.includes('data-event-transport-schedule');
+  const hasBus = html.includes('data-event-bus-schedule');
+  if (hasRail || hasBus) {
+    transportEventCount += 1;
+    // Desktop and mobile are deliberately separate DOM surfaces. The shared
+    // accepted desktop component can render its additive transport block
+    // before the accepted mobile-v8 markup, so the mobile ordering contract
+    // must be evaluated inside the mobile root rather than against the first
+    // transport marker in the complete HTML document.
+    const mobileAt = html.indexOf('data-production-mobile-event');
+    const mobileHtml = mobileAt >= 0 ? html.slice(mobileAt) : '';
+    const factsAt = mobileHtml.indexOf('>Коротко</h2>');
+    const transportAt = hasRail ? mobileHtml.indexOf('data-event-transport-schedule') : mobileHtml.indexOf('data-event-bus-schedule');
+    if (factsAt < 0 || transportAt < factsAt) throw new Error(`Event ${event.id} transport must follow compact event facts`);
+    if (hasRail && (!mobileHtml.includes('event-transport__train') || !mobileHtml.includes('/assets/transport/kppk-lastochka.webp'))) {
+      throw new Error(`Rail event ${event.id} misses the visible train illustration in the accepted mobile surface`);
+    }
+  }
+  if (String(event.city || '').toLocaleLowerCase('ru-RU') === 'калининград' && hasRail) {
+    throw new Error(`Kaliningrad event ${event.id} must not render a coastal rail schedule`);
+  }
+  const transportDir = join(root, `sobytiya/${event.slug}/transport`);
+  const files = existsSync(transportDir) ? readdirSync(transportDir).filter((name) => name.endsWith('.ics')).sort() : [];
+  const linked = [...html.matchAll(/href="[^"]*\/transport\/([^"?#]+\.ics)(?:[?#][^"]*)?"/gu)].map((match) => match[1]);
+  const linkedUnique = [...new Set(linked)].sort();
+  if (files.length > 6) throw new Error(`Event ${event.id} exceeds the six-file transport ICS ceiling: ${files.length}`);
+  if (files.join('\n') !== linkedUnique.join('\n')) throw new Error(`Event ${event.id} transport ICS files must match interactive calendar links exactly`);
+  for (const name of files) {
+    if (!/^rzd-[a-z0-9-]+-\d{8}-[a-z0-9-]+\.ics$/u.test(name)) throw new Error(`Transport ICS filename is not concise semantic ASCII: ${name}`);
+  }
+  transportIcsTotal += files.length;
+}
+if (transportEventCount === 0 || transportIcsTotal === 0) throw new Error('Preview must include at least one factual transport event and linked transport ICS file');
+
+const romanovoRoute = busData.routes.find((route) => route.id === 'romanovo-holmogorye');
+const route119 = romanovoRoute?.outbound_groups.find((group) => group.routes === '119');
+if (!romanovoRoute || !route119) throw new Error('Romanovo route 119 transport source is missing');
+if (romanovoRoute.origin_stop !== 'Автовокзал Калининград' || route119.departure_stop !== 'Автовокзал Калининград') {
+  throw new Error('Route 119 must preserve the official raw terminal departure provenance');
+}
+if (!route119.departures.includes('16:30') || !route119.departures.includes('17:55')) {
+  throw new Error('Route 119 must preserve the raw 16:30/17:55 terminal departures used by the KAUP regression');
+}
+if (
+  romanovoRoute.preferred_boarding?.stop_name !== 'Северный вокзал'
+  || romanovoRoute.preferred_boarding?.offset_from_terminal_minutes !== 15
+  || romanovoRoute.preferred_boarding?.time_is_estimated !== true
+) throw new Error('Romanovo buses that serve North must prefer the estimated terminal +15 minute North boarding contract');
+
+const busDemoEvent = eventsData.events.find((event) => event.id === 6710);
+if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regression event');
+const busDemoHtml = readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8');
+for (const marker of [
+  'Северный вокзал → Сказочное Холмогорье',
+  'data-terminal-departure="08:10"',
+  'data-boarding-stop="Северный вокзал"',
+  '>≈ 08:25</time>',
+]) {
+  if (!busDemoHtml.includes(marker)) throw new Error(`Event 6710 preferred North boarding contract is missing ${marker}`);
+}
+
+const mobileReviewCases = {
+  control: readFileSync(join(root, 'lab/event-mobile/examples/control/photo-paid/index.html'), 'utf8'),
+  openProse: readFileSync(join(root, 'lab/event-mobile/examples/open-prose/photo-paid/index.html'), 'utf8'),
+  actionDock: readFileSync(join(root, 'lab/event-mobile/examples/action-dock/photo-paid/index.html'), 'utf8'),
+  combined: readFileSync(join(root, 'lab/event-mobile/examples/open-prose-action-dock/photo-paid/index.html'), 'utf8'),
+  acceptedV2: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/photo-paid/index.html'), 'utf8'),
+  acceptedV3: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/photo-paid/index.html'), 'utf8'),
+  acceptedV4: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/photo-paid/index.html'), 'utf8'),
+  acceptedV5: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v5/photo-paid/index.html'), 'utf8'),
+  acceptedV6: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v6/photo-paid/index.html'), 'utf8'),
+  acceptedV7: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v7/photo-paid/index.html'), 'utf8'),
+  acceptedV8: readFileSync(join(root, 'lab/event-mobile/examples/accepted-v8/photo-paid/index.html'), 'utf8'),
+};
+for (const [name, html] of Object.entries(mobileReviewCases)) {
+  if (!html.includes('data-mobile-event-review') || !html.includes('data-mobile-review-variant=')) {
+    throw new Error(`Mobile event review ${name} misses its variant marker`);
+  }
+}
+if (!mobileReviewCases.control.includes('data-prose-treatment="card"') || !mobileReviewCases.control.includes('data-actions-treatment="current"')) {
+  throw new Error('Mobile event control must preserve current prose and actions');
+}
+if (!mobileReviewCases.openProse.includes('data-prose-treatment="open"') || !mobileReviewCases.actionDock.includes('data-actions-treatment="dock"')) {
+  throw new Error('Mobile event single-factor variants must isolate open prose and grouped actions');
+}
+if (!mobileReviewCases.combined.includes('data-prose-treatment="open"') || !mobileReviewCases.combined.includes('data-actions-treatment="dock"')) {
+  throw new Error('Mobile event combined variant must enable both treatments');
+}
+if (!mobileReviewCases.acceptedV2.includes('data-mobile-review-revision="v2"') || !mobileReviewCases.acceptedV2.includes('data-compact-label-action=')) {
+  throw new Error('Mobile event accepted v2 must expose revision and deterministic compact-label markers');
+}
+if (!mobileReviewCases.acceptedV3.includes('data-mobile-review-revision="v3"') || !mobileReviewCases.acceptedV3.includes('event-hero__meta-line--weekday-panel') || !mobileReviewCases.acceptedV3.includes('event-hero__weekday')) {
+  throw new Error('Mobile event accepted v3 must expose the feedback revision and weekday-first metadata panel');
+}
+if (!mobileReviewCases.acceptedV4.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV4.includes('event-hero__meta-line--weekday-panel') || !mobileReviewCases.acceptedV4.includes('event-hero__weekday')) {
+  throw new Error('Mobile event accepted v4 must preserve the accepted weekday-first date/time panel');
+}
+if (!mobileReviewCases.acceptedV5.includes('data-mobile-review-variant="accepted-v5"') || !mobileReviewCases.acceptedV5.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV5.includes('event-hero__weekday') || !mobileReviewCases.acceptedV5.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v5 must preserve v4 controls and expose the gradient continuation surface');
+}
+if (!mobileReviewCases.acceptedV6.includes('data-mobile-review-variant="accepted-v6"') || !mobileReviewCases.acceptedV6.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV6.includes('event-hero__weekday') || !mobileReviewCases.acceptedV6.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v6 must preserve v5 controls and expose the seamless gradient continuation surface');
+}
+if (!mobileReviewCases.acceptedV6.includes('data-calendar-action') || !mobileReviewCases.acceptedV6.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV6.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v6 must expose the shared expiring calendar state contract');
+}
+if (!mobileReviewCases.acceptedV7.includes('data-mobile-review-variant="accepted-v7"') || !mobileReviewCases.acceptedV7.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV7.includes('data-mobile-parallax-profile="photo-velocity-matched"') || !mobileReviewCases.acceptedV7.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v7 must preserve v6 surfaces and expose the photo-velocity-matched parallax profile');
+}
+if (!mobileReviewCases.acceptedV7.includes('data-calendar-action') || !mobileReviewCases.acceptedV7.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV7.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v7 must preserve the shared expiring calendar state contract');
+}
+if (!mobileReviewCases.acceptedV8.includes('data-mobile-review-variant="accepted-v8"') || !mobileReviewCases.acceptedV8.includes('data-mobile-review-revision="v4"') || !mobileReviewCases.acceptedV8.includes('data-mobile-parallax-profile="photo-continuous-crop"') || !mobileReviewCases.acceptedV8.includes('mobile-event-review__continuation')) {
+  throw new Error('Mobile event accepted v8 must preserve v7 surfaces and expose the continuous crop-safe parallax profile');
+}
+if (!mobileReviewCases.acceptedV8.includes('data-calendar-action') || !mobileReviewCases.acceptedV8.includes('data-calendar-expiry-day=') || !mobileReviewCases.acceptedV8.includes('data-calendar-label')) {
+  throw new Error('Mobile event accepted v8 must preserve the shared expiring calendar state contract');
+}
+const mobileAcceptedV2OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v2/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV2OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV2OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v2 must render the misclassified text poster without photo-cover zoom');
+}
+const mobileAcceptedV3OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v3/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV3OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV3OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v3 must preserve the no-zoom text-poster override');
+}
+const mobileAcceptedV4OcrOverride = readFileSync(join(root, 'lab/event-mobile/examples/accepted-v4/visual-free/index.html'), 'utf8');
+if (!mobileAcceptedV4OcrOverride.includes('data-hero-mode="poster-stage"') || !mobileAcceptedV4OcrOverride.includes('data-hero-composition="poster-billboard"')) {
+  throw new Error('Mobile event accepted v4 must preserve the no-zoom text-poster override');
+}
+for (const variant of ['accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8']) {
+  const html = readFileSync(join(root, `lab/event-mobile/examples/${variant}/visual-free/index.html`), 'utf8');
+  if (!html.includes('data-hero-mode="poster-stage"') || !html.includes('data-hero-composition="poster-billboard"')) {
+    throw new Error(`Mobile event ${variant} must preserve the no-zoom text-poster override`);
+  }
+}
+
+const desktopV12Pages = {
+  garage: readFileSync(join(root, 'lab/event-desktop/examples/editorial-photo-continuous/index.html'), 'utf8'),
+  split: readFileSync(join(root, 'lab/event-desktop/examples/split-low-resolution/index.html'), 'utf8'),
+  companion: readFileSync(join(root, 'lab/event-desktop/examples/editorial-ocr-companion-arrival/index.html'), 'utf8'),
+};
+for (const [name, html] of Object.entries(desktopV12Pages)) {
+  if (!html.includes('data-service-share-root') || !html.includes('data-service-share-intent="image"') || !html.includes('data-service-share-intent="text"')) {
+    throw new Error(`Desktop v14 ${name} fixture must expose the approved footer service-share intents`);
+  }
+}
+if (!desktopV12Pages.garage.includes('data-auto-rotate="true"') || !desktopV12Pages.garage.includes('data-rotation-eligible="true"')) {
+  throw new Error('Desktop v12 Garage fixture must expose delayed autorotation with eligible event-photo candidates');
+}
+if (!desktopV12Pages.garage.includes('data-clean-hero-thumb') || !desktopV12Pages.garage.includes('data-src=')) {
+  throw new Error('Desktop v12 Garage fixture must keep thumbnail rail sources separate from fullscreen hero sources');
+}
+for (const [name, html] of Object.entries(desktopV12Pages)) {
+  if (!html.includes('/p/thumb/v1/') || !html.includes(' 512w')) {
+    throw new Error(`Desktop v12 ${name} fixture must use responsive immutable thumbnail derivatives`);
+  }
+}
+if (!desktopV12Pages.garage.includes('data-thumbnail-srcset') || !desktopV12Pages.split.includes('data-thumbnail-srcset')) {
+  throw new Error('Desktop v14 rails must defer responsive thumbnail sources until their cells are visible');
+}
+if (!desktopV12Pages.garage.includes('data-editorial-motion="continuous"') || !desktopV12Pages.companion.includes('data-editorial-motion="continuous"')) {
+  throw new Error('Desktop v12 Garage and OCR companion fixtures must share continuous editorial motion');
+}
+const desktopV12Script = readdirSync(join(root, '_astro'))
+  .find((name) => name.startsWith('DesktopEventPage.astro_astro_type_script_') && name.endsWith('.js'));
+if (!desktopV12Script) throw new Error('Desktop v12 behavior bundle is missing');
+const desktopV12ScriptSource = readFileSync(join(root, '_astro', desktopV12Script), 'utf8');
+for (const marker of ['waiting-media', 'gallery-open', 'manual-rail-interaction', 'pointer-move', 'autoRotateReady']) {
+  if (!desktopV12ScriptSource.includes(marker)) throw new Error(`Desktop v13 behavior bundle misses ${marker} idle-resume guard`);
+}
+if (desktopV12ScriptSource.includes('preload-failed')) throw new Error('Desktop v13 must not wait for or fail the whole autorotation set');
+if (!desktopV12Pages.split.includes('desktop-portrait-viewer__heading') || !desktopV12Pages.split.includes('<time datetime=')) {
+  throw new Error('Desktop v13 efficient viewer must expose event title plus date/time');
+}
+if (!desktopV12Pages.companion.includes('event-token--kaup') || !desktopV12Pages.companion.includes('/assets/festivals/kaup.svg')) {
+  throw new Error('Desktop v13 OCR companion must retain the accepted Kaup venue-brand medallion');
+}
+if (!/data-editorial-ocr-companion[^>]*data-source-index="0"[^>]*data-hero-gallery-index="1"/u.test(desktopV12Pages.companion)) {
+  throw new Error('Desktop v13 OCR companion poster must retain its exact source/gallery index mapping');
+}
+
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
@@ -179,6 +400,9 @@ if (eventJsonLd?.offers?.validFrom && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\
   throw new Error(`Event JSON-LD offer validFrom must be ISO 8601 with timezone, got: ${eventJsonLd.offers.validFrom}`);
 }
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
+for (const runtimeMarker of ['ke_calendar_saved_v1', 'CALENDAR_STATE_LIMIT = 256', 'data-calendar-action', 'triggerCalendarDownload', 'syncCalendarControls']) {
+  if (!controlHtml.includes(runtimeMarker)) throw new Error(`Shared calendar acknowledgement runtime misses ${runtimeMarker}`);
+}
 if (!controlHtml.includes('data-reset-personalization') || !controlHtml.includes('Персонализация сброшена')) throw new Error('Control page misses technical local personalization reset button/handler');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
@@ -216,7 +440,10 @@ if (controlVisibleHtml.includes('Telegraph')) throw new Error('Event pages must 
 if (controlVisibleHtml.includes('Просмотры в источниках') || controlVisibleHtml.includes('Источники')) throw new Error('Source count/views are gated and must not be shown in public compact facts');
 if (!controlVisibleHtml.includes('Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям')) throw new Error('Event page must show registered-user gate notice for sources/mentions/extended stats');
 if (!controlVisibleHtml.includes('event-info-block') || !controlVisibleHtml.includes('event-info-item__icon')) throw new Error('Compact facts must render icon-based event info block');
-if (!controlVisibleHtml.includes('event-source-gate--section') || !/<div class="event-info-block"[\s\S]*?<\/dl>\s*<\/div>\s*(?:<p class="event-description-meta"[^>]*>[\s\S]*?<\/p>\s*)?<\/div>\s*<p class="event-source-gate event-source-gate--section"/u.test(controlVisibleHtml)) throw new Error('Source/mentions auth gate must belong to the parent details section, not to the compact facts block');
+const detailsStart = controlVisibleHtml.indexOf('section-card--event-details');
+const factsStart = controlVisibleHtml.indexOf('class="event-info-block"', detailsStart);
+const sourceGateStart = controlVisibleHtml.indexOf('event-source-gate--section', detailsStart);
+if (detailsStart < 0 || factsStart < detailsStart || sourceGateStart < factsStart) throw new Error('Source/mentions auth gate must belong to the parent details section after compact facts and optional transport');
 if (controlVisibleHtml.includes('event-hero__facts')) throw new Error('Hero must not duplicate the compact facts block as a second info block');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
@@ -390,6 +617,10 @@ for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml], ['
   if (!html.includes('hidden') || !html.includes('Личная лента')) throw new Error(`${name} personal feed must be hidden until backend/cache returns cards`);
 }
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
+if (!controlHtml.includes(`data-site-base-path="/${buildId}"`) || !controlHtml.includes('KenigEventsNormalizeInternalEventUrl') || !controlHtml.includes('rebaseInternalEventUrl')) throw new Error('Layout misses current-preview dynamic event-link rebasing contract');
+if (!controlHtml.includes('cache.base_path !== CURRENT_BASE_PATH') || !controlHtml.includes('base_path: CURRENT_BASE_PATH') || !controlHtml.includes('ke_listing_personal_feed_cache_v1:${CURRENT_BASE_PATH')) throw new Error('Personal-feed cache must be scoped to and validated against the current preview base');
+const authorizedSearchSource = readFileSync(join(siteDir, 'src/components/AuthorizedEventSearch.astro'), 'utf8');
+if (!authorizedSearchSource.includes('currentPreviewEventUrl(display.href || candidate.href') || !authorizedSearchSource.includes('href: currentPreviewEventUrl(display.href || candidate?.href')) throw new Error('Authorized search must rebase both final and vector-preview event links to the current preview');
 if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes("explicitMode || (hiddenCount > 0 ? 'personal' : 'all')") || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');
 const icsBaseUrl = (process.env.PUBLIC_ICS_BASE_URL || (assetBaseUrl ? `${assetBaseUrl}/ics` : '')).replace(/\/+$/u, '');
@@ -435,7 +666,22 @@ if (/mobile-brand-title-sway|--brand-sway-x|hydrateMobileBrandSway/iu.test(`${cs
 if (!/mobile-discovery-menu__lockup\{[^}]*grid-template-rows:\s*18px auto[^}]*gap:\s*6px[^}]*width:\s*104px/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*width:\s*8rem[^}]*min-height:\s*calc\(6rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the approved 128×96 optical lockup geometry');
 if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
-if (!/--hero-parallax-y/iu.test(css) || !/--hero-poster-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = isPosterStage ? 56 : 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps and OCR posters must move as one full-width visual without gray internal gaps');
+if (
+  !/--hero-parallax-y/iu.test(css)
+  || !/--hero-poster-parallax-y/iu.test(css)
+  || !/--hero-poster-travel/iu.test(css)
+  || !controlHtml.includes('usesGapSafePosterParallax')
+  || !controlHtml.includes('usesReverseGapSafePosterParallax')
+  || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax')
+  || !controlHtml.includes('usesPhotoContinuousPosterParallax')
+  || !controlHtml.includes('referencePhotoVelocity')
+  || !controlHtml.includes('usesPhotoVelocityMatchedPosterParallax ? matchedPosterProgress : progress')
+  || !controlHtml.includes('continuousPosterProgress * maxOffset * 2')
+  || !controlHtml.includes('const gapSafePosterTravel = Math.min(48, Math.max(36, window.innerWidth * 0.11))')
+  || !controlHtml.includes('const continuousPosterTravel = Math.min(44, Math.max(32, window.innerWidth * 0.10))')
+  || !controlHtml.includes(': -maxOffset + progress * maxOffset * 2')
+  || controlHtml.includes('--hero-parallax-scale')
+) throw new Error('Hero parallax must preserve the accepted v8 constant-scale, crop-safe continuous motion profiles without layout gaps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*height:\s*100%[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, full-height, controlled and preserve OCR/text images with the base contain mode');
 if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
 if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');
@@ -507,6 +753,9 @@ for (const event of eventsData.events) {
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
   if (calendarEligible && !hasOwnCalendarLink) throw new Error(`Short event ${event.id} misses own calendar link`);
   if (!calendarEligible && hasOwnCalendarLink) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
+  if (calendarEligible && (!html.includes(`data-calendar-event-id="${event.id}"`) || !html.includes('data-calendar-expiry-day=') || !html.includes('data-calendar-label'))) {
+    throw new Error(`Short event ${event.id} misses shared calendar state markers`);
+  }
   for (const [label, pattern] of badHtmlPatterns) {
     if (pattern.test(visibleHtml)) throw new Error(`Rendered page ${event.id} contains ${label}`);
   }

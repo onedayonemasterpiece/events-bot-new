@@ -1,0 +1,226 @@
+---
+import Icon from './Icon.astro';
+import CalendarLink from './CalendarLink.astro';
+import CopyAction from './design-system/CopyAction.astro';
+import type { PreviewEvent } from '../lib/types';
+import {
+  displayDateTime,
+  eventAbsoluteUrl,
+  eventActionHref,
+  eventAdmissionLabel,
+  eventTicketActionLabel,
+  isCalendarEligible,
+  isExternalHttpUrl,
+  isTelephoneUrl,
+  isTicketSoldOut,
+} from '../lib/events';
+
+interface Props {
+  event: PreviewEvent;
+  shareImage?: string;
+  className?: string;
+}
+
+const { event, shareImage = event.image_url || '', className = '' } = Astro.props;
+const dateTimeLabel = displayDateTime(event);
+const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
+const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
+const ctaHref = eventActionHref(event);
+const ctaIsExternal = isExternalHttpUrl(ctaHref);
+const ctaIsTelephone = isTelephoneUrl(ctaHref);
+const phoneValue = ctaIsTelephone ? String(ctaHref || '').replace(/^tel:/iu, '').trim() : '';
+const phoneDigits = phoneValue.replace(/\D/gu, '');
+const phoneDisplay = phoneDigits.length === 11 && phoneDigits.startsWith('7')
+  ? `+7 ${phoneDigits.slice(1, 4)} ${phoneDigits.slice(4, 7)}-${phoneDigits.slice(7, 9)}-${phoneDigits.slice(9, 11)}`
+  : phoneValue;
+const soldOut = isTicketSoldOut(event);
+const canAddToCalendar = isCalendarEligible(event);
+const requiresExplicitBooking = event.ticket.kind === 'registration' || event.ticket.kind === 'phone';
+const calendarPrimary = canAddToCalendar && (!ctaHref || (event.ticket.is_free && !requiresExplicitBooking));
+const ctaLabel = !event.ticket.is_free && !event.ticket.price_label && ctaHref ? 'Билеты' : eventTicketActionLabel(event);
+const canonicalUrl = eventAbsoluteUrl(event);
+const likesCount = event.likes_count || 0;
+const sharesCount = event.shares_count || 0;
+const shareText = [event.title, dateTimeLabel, placeLabel, eventAdmissionLabel(event)].filter(Boolean).join('\n');
+const shareImageType = shareImage.toLowerCase().includes('.webp') ? 'image/webp' : shareImage.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
+const shareFileName = `kenigevents-${event.slug}`;
+---
+
+<aside class:list={['desktop-prototype__action', className]} data-feedback-scope data-desktop-action-panel data-primary-action-kind={ctaIsTelephone ? 'phone' : calendarPrimary ? 'calendar' : 'default'} aria-label="Действия события">
+  <p><span>вход</span><strong>{admissionLabel}</strong></p>
+  {calendarPrimary ? (
+    <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+  ) : ctaIsTelephone && phoneValue ? (
+    <div class="desktop-prototype__phone-control" data-desktop-phone-control>
+      <strong data-desktop-phone-number>{phoneDisplay}</strong>
+      <CopyAction value={phoneValue} ariaLabel={`Скопировать номер организатора ${phoneDisplay}`} successLabel="Номер скопирован" variant="inverse" className="desktop-prototype__phone-copy" />
+    </div>
+  ) : ctaHref ? (
+    <a class="desktop-prototype__primary-action" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>
+      <Icon name={ctaIsTelephone ? 'phone' : 'ticket'} /><span>{ctaLabel}</span>
+    </a>
+  ) : soldOut ? (
+    <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
+  ) : canAddToCalendar ? (
+    <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+  ) : (
+    <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
+  )}
+  <div class="desktop-prototype__action-row event-hero__metric-row">
+    {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
+    <button
+      type="button"
+      class="desktop-prototype__icon-action"
+      data-nosnippet
+      data-native-share
+      data-share-event-id={event.id}
+      data-share-event-title={event.title}
+      data-share-base-count={sharesCount}
+      data-share-title={event.title}
+      data-share-text={shareText}
+      data-share-url={canonicalUrl}
+      data-share-image={shareImage}
+      data-share-image-type={shareImageType}
+      data-share-file-name={shareFileName}
+      data-share-date-time={dateTimeLabel}
+      data-share-place={placeLabel}
+      data-share-admission={admissionLabel}
+      aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}
+      title="Поделиться"
+    ><Icon name="share" /><strong data-share-count>{sharesCount}</strong></button>
+    <button
+      type="button"
+      class="desktop-prototype__icon-action feedback-button--like"
+      data-nosnippet
+      data-feedback-action="like"
+      data-event-id={event.id}
+      data-event-title={event.title}
+      data-base-count={likesCount}
+      aria-pressed="false"
+      aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`}
+      title="Нравится"
+    ><Icon name="heart" /><strong data-feedback-count>{likesCount}</strong></button>
+  </div>
+</aside>
+
+<style>
+  .desktop-prototype__action {
+    z-index: 3;
+    display: grid;
+    align-content: start;
+    gap: clamp(.65rem, 1.6vh, 1rem);
+    padding: clamp(1rem, 2.2vw, 1.4rem);
+    color: var(--ke-color-graphite-text, #fffaf2);
+    background: var(--ke-color-graphite-surface, #292521);
+    container: desktop-actions / inline-size;
+  }
+  .desktop-prototype__action > p { display: grid; gap: .06rem; margin: 0; }
+  .desktop-prototype__action > p span {
+    color: var(--ke-color-graphite-muted, #d7c9bc);
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .desktop-prototype__action > p strong { font-size: clamp(1.1rem, 2vw, 1.42rem); line-height: 1.05; }
+  :global(.desktop-prototype__primary-action) {
+    min-height: 56px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .62rem;
+    padding: .7rem .9rem;
+    border-radius: 18px;
+    background: var(--clean-accent, #b54d22);
+    color: #fff;
+    font-size: .98rem;
+    font-weight: 900;
+    text-decoration: none;
+    box-shadow: 0 12px 24px rgba(124, 49, 20, .25);
+  }
+  :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }
+  :global(button.desktop-prototype__primary-action) { border:0; font:inherit; cursor:pointer; }
+  .desktop-prototype__phone-control { min-width:0; display:flex; align-items:center; justify-content:flex-start; gap:.5rem; }
+  .desktop-prototype__phone-control>strong { min-width:0; display:block; overflow:hidden; white-space:nowrap; color:var(--ke-color-graphite-text,#fffaf2); font-size:var(--ke-font-size-300,1rem); font-variant-numeric:tabular-nums; text-overflow:clip; user-select:all; }
+  .desktop-prototype__phone-control :global(.desktop-prototype__phone-copy) { flex:0 0 auto; }
+  :global(.desktop-prototype__primary-action.is-disabled) { opacity: .7; }
+  .desktop-prototype__action-row { display: flex; gap: .45rem; }
+  :global(.desktop-prototype__icon-action) {
+    min-width: 52px;
+    min-height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .28rem;
+    padding: .3rem;
+    border: 0;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .08);
+    color: var(--ke-color-graphite-text, #fffaf2);
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label]) {
+    width: auto;
+    padding-inline: .75rem;
+    transition: padding .18s ease, min-width .18s ease;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
+    max-width: 9rem;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: .88rem;
+    font-weight: 850;
+    opacity: 1;
+    transition: max-width .18s ease, opacity .12s ease;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label].is-calendar-label-compact) {
+    width: 52px;
+    min-width: 52px;
+    padding-inline: .3rem;
+  }
+  :global(.desktop-prototype__icon-action[data-calendar-adaptive-label].is-calendar-label-compact [data-calendar-label]) {
+    max-width: 0;
+    opacity: 0;
+  }
+  :global(.desktop-prototype__icon-action .icon) { width: 29px; height: 29px; }
+  :global(.desktop-prototype__icon-action strong) { font-size: .92rem; font-variant-numeric: tabular-nums; }
+  :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:52px; min-width:52px; padding-inline:.3rem; }
+  :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { max-width:0; opacity:0; }
+
+  /* A telephone is useful on desktop only when it remains visible and
+     copyable. Keep the whole action surface on one explicit row instead of
+     relying on CSS grid auto-placement, which previously pushed the metrics
+     to a second line when the empty live-status node occupied a grid cell. */
+  .desktop-prototype__action[data-primary-action-kind="phone"] {
+    grid-template-columns:minmax(76px,auto) minmax(190px,1fr) auto;
+    grid-template-rows:auto;
+    align-items:center;
+    column-gap:.7rem;
+    row-gap:0;
+  }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { grid-column:1; grid-row:1; min-width:4.75rem; }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-control { grid-column:2; grid-row:1; min-width:0; overflow:hidden; }
+  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__action-row { grid-column:3; grid-row:1; justify-self:end; }
+  :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) {
+    width:52px;
+    min-width:52px;
+    padding-inline:.3rem;
+  }
+  :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
+    max-width:0;
+    opacity:0;
+  }
+  @container desktop-actions (max-width:480px) {
+    .desktop-prototype__action[data-primary-action-kind="phone"] {
+      grid-template-columns:minmax(68px,auto) minmax(178px,1fr) auto;
+      column-gap:.5rem;
+      padding-inline:.9rem;
+    }
+    .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { min-width:4.25rem; }
+    .desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__action-row { gap:.32rem; }
+    :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action) { min-width:48px; min-height:48px; }
+    :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:48px; min-width:48px; }
+  }
+</style>

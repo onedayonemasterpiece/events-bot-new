@@ -1,6 +1,6 @@
 # KenigEvents static-site design system
 
-> **Status:** canonical foundation and component catalog implemented; product/design release sign-off remains pending.
+> **Status:** desktop-v14 parity and runtime enforcement implemented on the integration branch; immutable public preview and product/design release sign-off remain pending.
 > **Runtime catalog:** `/lab/design-system/` in every checked preview build.
 > **Source of truth:** `site/src/styles/design-system.css` + `site/src/components/design-system/`.
 
@@ -9,11 +9,13 @@ This directory is the normative home for reusable visual rules of the KenigEvent
 ## What is implemented
 
 - one semantic token layer for color, type, spacing, radii, elevation, motion, touch size and content width;
-- shared primitive Astro components: `Button`, `Badge`, `Field`, `StatePanel`, plus the candidate `CopyAction` clipboard affordance;
+- shared primitive Astro components: `Button`, `Badge`, `Field`, `StatePanel`, `Skeleton`, plus the candidate `CopyAction` clipboard affordance;
 - compatibility aliases for established product components, so the system can be adopted without a risky all-at-once rewrite;
 - shared token/action adoption by both `EventLayout` pages and the standalone root landing page;
 - a built Astro catalog at `/lab/design-system/`, linked from `/__preview/`;
-- real product fixtures for `EventHero`, `EventFacts`, `EventTokenMedallions`, `EventCtaPanel`, `EventCard` and `EventListItem`;
+- the accepted production desktop runtime: `DesktopEventPage@14`, `DesktopEventActionPanel@2`, poster/preview compositions and the complete desktop scenario lab;
+- the real `AuthorizedEventSearch@2` form with anonymous, ready, progress, skeleton, results, empty, error and quota fixtures;
+- real product fixtures for `EventHero`, `EventFacts`, `EventTokenMedallions`, `EventCard` and `EventListItem`; legacy `EventCtaPanel`/standalone `EventMediaRail` are visibly deprecated for desktop-v14;
 - visible default, hover, focus, pressed, loading, disabled, empty, error, stale/degraded, success and consent-free states;
 - automated source/contrast/state checks in `site/scripts/check-design-system.mjs` and generated-page assertions in `site/scripts/check-preview.mjs`.
 
@@ -70,22 +72,32 @@ Legacy aliases such as `--primary`, `--surface` and `--radius-md` remain tempora
 | CopyAction | `site/src/components/design-system/CopyAction.astro` | secondary/inverse; default, success, error; Clipboard API and deterministic fallback | candidate |
 | Badge | `site/src/components/design-system/Badge.astro` | neutral, brand, accent, success, warning, danger | approved |
 | Field | `site/src/components/design-system/Field.astro` | default, hover, focus, filled, error, disabled | approved |
-| StatePanel | `site/src/components/design-system/StatePanel.astro` | empty, loading, error, stale/degraded, success, informational | approved |
+| Skeleton | `site/src/components/design-system/Skeleton.astro` | event-card, event-list, reduced motion | approved |
+| StatePanel | `site/src/components/design-system/StatePanel.astro` | empty, error, stale/degraded, success, informational | approved v2; loading moved to Skeleton v1 |
 
 ### Product components
 
 Product components remain in `site/src/components/` while they are shared only by this product. “In the design system” means they are registered, rendered from their real source in the catalog, documented, checked and cannot be locally forked. Moving every file into a nested folder provides no consistency benefit by itself.
 
-Current registry:
+The machine-readable authority is `site/src/data/design-system-registry.json`. It records the accepted runtime base, source, version, states and production consumers. The generated catalog table is a human-readable projection verified against this manifest.
+
+Current registry highlights:
 
 - `EventHero` — approved default; composition families live in `/lab/hero/`;
 - `EventFacts` + `EventTokenMedallions` — approved quick-decision group;
-- `EventCtaPanel` — approved paid/free/sold-out state family;
+- `DesktopEventActionPanel@2` — approved graphite CTA with paid-price, paid-unknown, registration, free/calendar, free/registration, phone copy, external source, sold-out and unavailable states; responsive normal/compact/stacked plus attached/released behavior is covered by the desktop lab;
+- `DesktopEventPage@14` — approved production desktop composition. The catalog embeds the real OCR companion-arrival and low-resolution split routes and links the complete 14-scenario lab;
+- `EventCtaPanel@1` and standalone `EventMediaRail@1` — deprecated desktop proxies with zero desktop-v14 production consumers, replaced by `DesktopEventActionPanel@2` and `DesktopEventPage@14` respectively;
 - `EventCard` — `split-actions` is release baseline; `overlay-controls` is deprecated and retained only for regression/lab comparison;
 - `EventListItem` — approved compact listing row;
 - `CalendarLink`, `EventMediaRail`, `Icon`, `SocialIcon` and `AnnouncementsLockup` — approved supporting components with visible catalog examples;
 - `InterestClubCard` — feature-gated product component;
-- `ListingPersonalFilter`, `PersonalFeedSlot` and `AuthorizedEventSearch` — conditional client-enhancement components; the catalog exposes their static/forced state and links to the dedicated auth/search surface, while live network/auth states remain in feature E2E.
+- `AuthorizedEventSearch@2` — approved shared search surface. Its primary action keeps the existing progress fill while the content area uses `Skeleton@1` until the first vector/final cards arrive; pagination preserves existing cards and marks only “Показать ещё” busy;
+- `ListingPersonalFilter` and `PersonalFeedSlot` — conditional client enhancements. Catalog fixtures are explicitly marked and ignored by hydration; the catalog must never override runtime `[hidden]` CSS.
+
+### Loading contract
+
+`Skeleton@1` is the only content-loading pattern for event results and personal feed slots. A progress fill may remain inside a submit action to communicate stage/percentage, but it does not replace card-shaped skeletons. Spinner panels and a permanently visible “Подбираем события” status are prohibited. Search shows skeletons only for a new first page and removes them as soon as vector or final cards render; “load more” keeps the existing cards.
 
 A registry row in `/lab/design-system/#registry` links status, runtime source and coverage. Status vocabulary is `experimental`, `candidate`, `approved`, `deprecated`.
 
@@ -154,7 +166,7 @@ Automated checks are necessary but do not replace real Safari iOS/Chrome Android
 ## Governance
 
 1. New pages compose the registered system; they do not invent a second button, badge, card radius or feedback pattern.
-2. Raw colors are prohibited in shared primitive component files. Add/change a semantic token once in `design-system.css`.
+2. Raw colors are prohibited in shared primitive component files. The graphite desktop surface consumes `--ke-color-graphite-*` and `--ke-shadow-graphite`; add/change a semantic token once in `design-system.css`.
 3. A new state is incomplete until it is visible in `/lab/design-system/` and asserted by the contract checks.
 4. Historical labs cannot silently redefine the approved baseline.
 5. Product/design sign-off records exact branch, SHA and immutable preview URL in [the release UI contract](../release-ui-contract.md) and [the release readiness plan](../../../reports/static-personal-announcements-release-readiness-2026-07-11.md).

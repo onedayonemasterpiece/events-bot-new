@@ -179,6 +179,14 @@ export function eventCalendarHref(event: Pick<PreviewEvent, 'id' | 'slug'>): str
   return withBase(`/sobytiya/${event.slug}/event.ics`);
 }
 
+export function eventCalendarStateExpiryDay(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): number {
+  const value = event.end_date || event.start_date;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value || '');
+  if (!match) return 0;
+  const epochDay = Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
+  return Number.isFinite(epochDay) ? epochDay + 1 : 0;
+}
+
 export function isCalendarEligible(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): boolean {
   return !event.end_date || event.end_date === event.start_date;
 }
@@ -574,6 +582,8 @@ export interface DiscoveryEventPayloadItem {
   image_alt: string;
   image_text_mode: PreviewEvent['image_text_mode'];
   image_media_role?: PreviewEvent['image_media_role'];
+  image_width?: number | null;
+  image_height?: number | null;
   focal_y?: number | null;
   display_date: string;
   display_time: string | null;
@@ -595,6 +605,7 @@ export interface DiscoveryEventPayloadItem {
 
 export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayloadItem {
   const likesCount = event.likes_count || 0;
+  const primaryAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
   return {
     id: event.id,
     title: event.title,
@@ -605,6 +616,8 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
     image_media_role: event.image_media_role,
+    image_width: primaryAsset?.width || null,
+    image_height: primaryAsset?.height || null,
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,

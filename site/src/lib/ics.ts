@@ -1,5 +1,7 @@
 import type { PreviewEvent } from './types';
 import { eventAbsoluteUrl } from './events';
+import type { EventTrainOption, EventTransportDirection, EventTransportSuggestion } from './eventTransport';
+export { eventIcsDownloadFilename, transportIcsDownloadFilename } from './icsFilenames.mjs';
 
 function pad(value: number): string {
   return String(value).padStart(2, '0');
@@ -80,5 +82,43 @@ export function buildIcs(event: PreviewEvent): string {
     'END:VCALENDAR',
   );
 
+  return `${lines.map(foldLine).join('\r\n')}\r\n`;
+}
+
+export function buildTransportIcs(
+  event: PreviewEvent,
+  suggestion: EventTransportSuggestion,
+  direction: EventTransportDirection,
+  train: EventTrainOption,
+): string {
+  const now = new Date();
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const from = direction === 'outbound' ? suggestion.originStation : suggestion.destinationStation;
+  const to = direction === 'outbound' ? suggestion.destinationStation : suggestion.originStation;
+  const directionLabel = direction === 'outbound' ? 'К событию' : 'Обратно после события';
+  const safeNumber = train.number.replace(/[^a-zа-я0-9]+/giu, '-');
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KenigEvents//Event Transport//RU',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:transport-${event.id}-${direction}-${train.serviceDate}-${safeNumber}@kenigevents.ru`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART:${formatUtcDateTime(train.departureIso)}`,
+    `DTEND:${formatUtcDateTime(train.arrivalIso)}`,
+    `SUMMARY:${escapeIcsText(`${directionLabel}: электричка ${train.departure}, ${from} → ${to}`)}`,
+    `DESCRIPTION:${escapeIcsText([`Событие: ${event.title}`, `${train.trainType} № ${train.number}`, `Прибытие: ${train.arrival}`].join('\n'))}`,
+    `LOCATION:${escapeIcsText(from)}`,
+    `URL:${eventAbsoluteUrl(event)}`,
+    'BEGIN:VALARM',
+    'TRIGGER:-PT30M',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${escapeIcsText(`Электричка в ${train.departure}: пора собираться`)}`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
   return `${lines.map(foldLine).join('\r\n')}\r\n`;
 }

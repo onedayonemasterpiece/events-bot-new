@@ -29,6 +29,11 @@
   --ke-color-control-inverse-bg: rgba(255, 255, 255, 0.1);
   --ke-color-control-inverse-line: rgba(255, 255, 255, 0.34);
   --ke-color-control-inverse-hover: rgba(255, 255, 255, 0.18);
+  --ke-color-graphite-surface: #292521;
+  --ke-color-graphite-surface-strong: #15110f;
+  --ke-color-graphite-text: #fffaf2;
+  --ke-color-graphite-muted: #d7c9bc;
+  --ke-color-graphite-line: rgba(255, 255, 255, 0.16);
 
   /* Typography. The system font stack avoids a blocking font request. */
   --ke-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -62,6 +67,7 @@
   --ke-shadow-1: 0 8px 22px rgba(72, 45, 25, 0.08);
   --ke-shadow-2: 0 18px 45px rgba(72, 45, 25, 0.12);
   --ke-shadow-3: 0 24px 64px rgba(72, 45, 25, 0.18);
+  --ke-shadow-graphite: 0 18px 38px rgba(20, 16, 13, 0.3);
   --ke-duration-fast: 160ms;
   --ke-duration-base: 220ms;
   --ke-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -246,18 +252,32 @@
 .ke-state-panel--success .ke-state-panel__mark { background: var(--ke-color-success-50); color: var(--ke-color-success-700); }
 .ke-state-panel--warning .ke-state-panel__mark { background: var(--ke-color-warning-50); color: var(--ke-color-warning-800); }
 .ke-state-panel--danger .ke-state-panel__mark { background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
-.ke-state-panel--loading .ke-state-panel__mark { position: relative; overflow: hidden; color: transparent; }
-.ke-state-panel--loading .ke-state-panel__mark::after { content: ""; width: 18px; height: 18px; border: 3px solid var(--ke-color-brand-600); border-right-color: transparent; border-radius: 50%; animation: ke-spin 700ms linear infinite; }
-
 .ke-skeleton { position: relative; overflow: hidden; border-radius: var(--ke-radius-sm); background: #e5dbce; color: transparent; }
 .ke-skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,0.62), transparent); animation: ke-shimmer 1.35s ease-in-out infinite; }
+.ke-skeleton-list { width: 100%; }
+.ke-skeleton-list__items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ke-space-4); }
+.ke-skeleton-event-card { min-width: 0; display: grid; gap: var(--ke-space-3); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-3); background: var(--ke-color-surface-strong); box-shadow: var(--ke-shadow-1); }
+.ke-skeleton-event-card__media { min-height: 220px; border-radius: var(--ke-radius-md); }
+.ke-skeleton-event-card__title { width: 86%; min-height: 1.5rem; }
+.ke-skeleton-event-card__meta { width: 58%; min-height: .9rem; }
+.ke-skeleton-event-card__line { width: 72%; min-height: 1rem; }
+.ke-skeleton-list--event-list .ke-skeleton-list__items { grid-template-columns: 1fr; }
+.ke-skeleton-list--event-list .ke-skeleton-event-card { grid-template-columns: minmax(120px, 18%) minmax(0, 1fr); }
+.ke-skeleton-list--event-list .ke-skeleton-event-card__media { grid-row: 1 / span 3; min-height: 150px; }
 
 @keyframes ke-spin { to { transform: rotate(360deg); } }
 @keyframes ke-shimmer { to { transform: translateX(100%); } }
 
 @media (prefers-reduced-motion: reduce) {
   .ke-button { transition: none; }
-  .ke-button__spinner,
-  .ke-state-panel--loading .ke-state-panel__mark::after { animation-duration: 1.4s; }
+  .ke-button__spinner { animation-duration: 1.4s; }
   .ke-skeleton::after { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .ke-skeleton-list__items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .ke-skeleton-list__items { grid-template-columns: 1fr; }
 }

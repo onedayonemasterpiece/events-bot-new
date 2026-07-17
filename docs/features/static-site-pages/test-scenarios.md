@@ -127,6 +127,12 @@
 
 ### UI, accessibility и browser matrix
 
+- **ADD-DS-01 — Desktop design-system parity.** `/lab/design-system/` показывает реальный `DesktopEventPage@14`: OCR companion-arrival с афишей и превью, low-resolution split, ссылки на все desktop media families; production `/sobytiya/[slug]` импортирует тот же компонент без page-local копии.
+- **ADD-DS-02 — Графитовый CTA state matrix.** Реальный `DesktopEventActionPanel@2` проверяется для paid-price, paid-unknown, registration, free/calendar, free/registration, phone copy→check/error, source, sold-out, unavailable, а также normal/compact/stacked и attached/released.
+- **ADD-DS-03 — Поиск: progress плюс skeleton.** `AuthorizedEventSearch@2` показывает состояния anonymous, ready, progress 74%, skeleton 92%, results/pagination, empty, error и quota. Для первого запроса skeleton виден до первой vector/final карточки; load-more сохраняет уже показанные карточки.
+- **ADD-DS-04 — Нет вечного loader.** Каталог и runtime не используют `StatePanel`-spinner и не переопределяют `[hidden]` у personal feed. Loading personal feed использует `Skeleton@1`, а fixture помечен и не гидратируется.
+- **ADD-DS-05 — Версия и migration gate.** Материальное изменение создаёт `vN+1`; machine registry, видимая таблица, source/import graph и consumer inventory совпадают. Deprecated версия называет replacement и имеет ноль production callers до `migration complete`.
+
 - **ADD-UI-01 — Единая навигационная модель.** Mobile tag/menu и desktop header сохраняют одинаковые destinations, labels, порядок, active state, избранное и identity semantics.
 - **ADD-UI-02 — Граничные viewport.** Помимо обычных mobile/desktop проверить узкий телефон, landscape, tablet и ширины непосредственно до/после breakpoint; исключить horizontal overflow и скачки layout.
 - **ADD-A11Y-01 — Keyboard/focus.** Все ссылки, меню, карусель, modal/gallery, like/share/calendar, email form и undo доступны с клавиатуры; focus видим, не заперт и возвращается к trigger.

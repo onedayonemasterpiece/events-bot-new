@@ -1,0 +1,120 @@
+{
+  "schema_version": "kenigevents-design-system-v2",
+  "accepted_runtime_base": "integration/static-event-v10-system-routing@d5dab75a",
+  "catalog_route": "/lab/design-system/",
+  "components": [
+    {
+      "name": "DesktopEventPage",
+      "version": 14,
+      "status": "approved",
+      "source": "src/components/DesktopEventPage.astro",
+      "production_consumers": [
+        "src/pages/sobytiya/[slug].astro"
+      ],
+      "states": [
+        "editorial-photo",
+        "editorial-ocr-companion",
+        "companion-arrival",
+        "split-ocr",
+        "split-portrait",
+        "split-low-resolution",
+        "multi-preview",
+        "duplicate-suppression",
+        "thumbnail-failure",
+        "gallery-index"
+      ]
+    },
+    {
+      "name": "DesktopEventActionPanel",
+      "version": 2,
+      "status": "approved",
+      "source": "src/components/DesktopEventActionPanel.astro",
+      "production_consumers": [
+        "src/components/DesktopEventPage.astro"
+      ],
+      "states": [
+        "paid-price",
+        "paid-unknown",
+        "registration",
+        "free-calendar",
+        "free-registration",
+        "phone-copy",
+        "source",
+        "sold-out",
+        "unavailable",
+        "normal",
+        "compact",
+        "stacked",
+        "attached",
+        "released"
+      ]
+    },
+    {
+      "name": "AuthorizedEventSearch",
+      "version": 2,
+      "status": "approved",
+      "source": "src/components/AuthorizedEventSearch.astro",
+      "production_consumers": [
+        "src/pages/poisk/index.astro"
+      ],
+      "states": [
+        "anonymous",
+        "ready",
+        "progress",
+        "skeleton",
+        "results",
+        "empty",
+        "error",
+        "quota",
+        "pagination"
+      ]
+    },
+    {
+      "name": "Skeleton",
+      "version": 1,
+      "status": "approved",
+      "source": "src/components/design-system/Skeleton.astro",
+      "production_consumers": [
+        "src/components/AuthorizedEventSearch.astro",
+        "src/components/PersonalFeedSlot.astro"
+      ],
+      "states": [
+        "event-card",
+        "event-list",
+        "reduced-motion"
+      ]
+    },
+    {
+      "name": "StatePanel",
+      "version": 2,
+      "status": "approved",
+      "source": "src/components/design-system/StatePanel.astro",
+      "production_consumers": [],
+      "states": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    {
+      "name": "EventCtaPanel",
+      "version": 1,
+      "status": "deprecated",
+      "source": "src/components/EventCtaPanel.astro",
+      "production_consumers": [],
+      "replaced_by": "DesktopEventActionPanel@2",
+      "states": []
+    },
+    {
+      "name": "EventMediaRail",
+      "version": 1,
+      "status": "deprecated",
+      "source": "src/components/EventMediaRail.astro",
+      "production_consumers": [],
+      "replaced_by": "DesktopEventPage@14",
+      "states": []
+    }
+  ]
+}

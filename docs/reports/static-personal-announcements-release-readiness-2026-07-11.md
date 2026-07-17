@@ -22,7 +22,7 @@
 
 Публичный immutable review candidate опубликован из SHA `867f1328`: <https://kenigevents.ru/preview-design-system-867f1328/lab/design-system/>. Для него прошли full preview build (`424` pages), `check:design-system` (`20` versioned registry rows) и `check:preview`; это review evidence, но ещё не owner sign-off и не production release.
 
-Это закрывает архитектурную основу унификации UI, но **не переводит F5 в Done**: до release freeze всё ещё нужны merge в `origin/main`, immutable preview build id, visual baselines на acceptance matrix, real-device/a11y evidence и явный product/design sign-off SHA. Общий verdict полного релиза остаётся **NO-GO**.
+Это закрывает архитектурную основу унификации UI, но **не переводит F5 в Done**: desktop-v14 parity, graphite CTA state matrix, real search progress/skeleton states and machine consumer registry are now integrated, while merge in `origin/main`, immutable preview build id, visual baselines, real-device/a11y evidence and explicit product/design sign-off SHA are still required. Общий verdict полного релиза остаётся **NO-GO**.
 
 ## 1. Как читать статусы
 
@@ -71,7 +71,7 @@
 | **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
 | **F3** | Умный поиск | **Partial** | Search UI/Edge source/canary preview; unauth Edge request fail-closed | Production `/poisk/`, Yandex provider/Edge deploy, live mobile login→search E2E, quota/alert/fallback evidence |
 | **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
-| **F5** | UI отработан и зафиксирован | **Partial / candidate implemented** | Canonical tokens, primitives and `/lab/design-system/` runtime catalog with state/contrast checks; release UI contract updated | Merge to `origin/main`; immutable RC build/SHA owner sign-off; visual baselines 320–1920; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
+| **F5** | UI отработан и зафиксирован | **Partial / desktop parity implemented** | Canonical tokens/primitives; `DesktopEventPage@14`, graphite `DesktopEventActionPanel@2`, `AuthorizedEventSearch@2`, `Skeleton@1`; machine source/state/consumer registry and `/lab/design-system/` checks | Merge to `origin/main`; immutable RC build/SHA owner sign-off; visual baselines 320–1920; live auth/search and real-device/a11y evidence; no failing RC assertions |
 | **F6** | Views/list/detail/social-action personalization telemetry | **Partial** | Local profile/actions/served-list contract; remote browser writes запрещены/не включены | Consent-safe remote ingest, RLS/grants, bot/rate/dedupe/retention, list/detail/dwell/CTA/calendar/share/like/hide row evidence |
 | **F7** | Auth или verified-email user | **Partial** | Yandex PKCE login/logout code; email-only path design exists | Global identity layer; one-use email code/link with TTL/replay/rate limits; real-device proof |
 | **F8** | Sender subdomains, bounce/complaint handling | **Designed / Partial foundation** | Transactional email foundation находится в старой side branch и dry-run | Separate sender streams/subdomains; SPF/DKIM/DMARC; signed provider webhooks; suppression/unsubscribe/warmup/alerts; live canary |
@@ -286,6 +286,7 @@ Smart Update является владельцем семантического 
 - [ ] Full site build/check from clean checkout passes.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
 - [ ] `/lab/design-system/` на точном RC SHA принят product/design owner: все версии, replacements, migration statuses, approved/candidate/deprecated states совпадают с release UI contract; production consumer audit не находит старых callers после `migration complete`.
+- [ ] Desktop acceptance explicitly covers the embedded poster+preview compositions, all nine graphite CTA states and search anonymous/ready/progress/skeleton/results/empty/error/quota states; no hidden override or spinner loader remains.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
 - [ ] 7-day limited canary with event-quality and availability dashboards.

@@ -47,6 +47,33 @@ The current verified path produces a checked tarball artifact. CDN host `static.
 
 Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_bucket.py --db <snapshot> --active-on <date> --apply` so legacy `s3://kenigevents/p/...` objects referenced by active events exist in `s3://kenigevents.ru/p/...`.
 
+### Smart Update debounce and 2026-07-15 current-data evidence
+
+Smart Update enqueues `static_site_build:prod` for 15 minutes after the latest
+accepted event update. Repeated updates move the one pending job forward. If a
+build is already `running`, one deferred pending follow-up is retained instead
+of merging the update into the immutable running snapshot; later updates
+coalesce into that follow-up. Static-site builds use the task-specific maximum
+runtime rather than the historical ten-minute stale-owner constant, so a valid
+long Kaggle build is not rearmed as stale.
+
+The data/artifact portion of
+`preview-20260715t-production-transport-mobile-real-events-v1` exported `282`
+public future/ongoing events, refreshed both pgvector documents for every
+anchor, reused `564` unchanged embeddings (`0` provider calls) and generated
+`40` non-dangling candidates per event. Its desktop presentation evidence is
+**rejected** by `INC-2026-07-15-static-desktop-template-regression`: the build
+kept the legacy production DOM and the consultant did not review the generated
+mass-event URLs. The replacement
+`preview-20260715t-production-desktop-contract-v2` must pass
+`check:production-desktop`, full-catalog browser acceptance and exact public
+URL review. Either prefix proves only the noindex artifact path; neither removes
+the separate atomic production-root promotion gate described above.
+The integration branch stages the corresponding Fly non-secret env
+(`ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`, full-catalog limit, pgvector sync and
+CDN/ICS bases). It becomes active only after this branch is merged and deployed;
+the currently running Fly release does not contain that config yet.
+
 
 ## Current v59 strict pgvector evidence and open gate
 

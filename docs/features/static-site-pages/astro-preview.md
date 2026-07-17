@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
-> **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** current full-catalog review target `preview-20260702t1536-merged-vector-medallions` (399 active/future events from the 2026-07-02 production snapshot through event id `6613`, merged vector-identity gate + medallion SVG branches, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, smart-search UI). Historical same-day target: `preview-20260702t0755-fresh-ui-fixes`; historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
-> **Preview index target:** <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are part of the deploy verification gate; current preview HTML/CSS/JS, partner logos, medallion assets and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are publicly testable after `npm --prefix site run deploy:preview`.
+> **Status:** full-catalog production-integration preview implemented and publicly verified; production-root rollout pending.
+> **Build ID:** current review target `preview-20260715t-production-mobile-v8-related-transport-v3` (`282` public future/ongoing events from the 2026-07-15 production snapshot, accepted desktop Continuous Editorial/Split + exact accepted mobile V8 + rail/bus transport + normalized desktop discovery rows, `search_v3` + `related_v1`, static pgvector discovery, CDN media/ICS). Historical targets remain documented below.
+> **Preview index target:** <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are part of the deploy verification gate.
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
@@ -10,24 +10,25 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vyhodnye/>
-- Search page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/>
-- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vystavki/>
-- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/populyarnoe/>
-- Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partnerstvo/>
-- Information partners directory: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partners/>
-- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/lab/medallions/>
-- Broken-image regression event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/festival-pianissimo-kaliningrad-5264/>
-- Fresh merged-branch event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/detskaya-igrovaya-programma-s-animatorami-kaliningrad-6601/>
-- Fresh VK auto-import event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/semeynaya-sreda-atomy-semi-kaliningrad-6605/>
-- Latest snapshot event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/master-klass-po-igre-na-barabanah-ot-sergeya-lukinova-kaliningrad-6613/>
-- Golden related discovery JSON: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/data/discovery/5264.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260702t1536-merged-vector-medallions/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>
+- Desktop/media regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/spektakl-garazh-kaliningrad-5658/>
+- Real photo/mobile V8 regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294/>
+- OCR/mobile V8 regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/epidemiya-ognennaya-rukopis-kaliningrad-4671/>
+- Rail transport regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/joe-lynn-turner-i-j-l-t-band-svetlogorsk-5789/>
+- Bus transport regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/slet-babok-ezhek-romanovo-6710/>
+- Today listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/vyhodnye/>
+- Search page: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/poisk/>
+- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/vystavki/>
+- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/populyarnoe/>
+- Information partnership/reference block page: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/partnerstvo/>
+- Information partners directory: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/partners/>
+- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/lab/medallions/>
+- Current related discovery JSON: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/data/discovery/5658.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>
 
 CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
 

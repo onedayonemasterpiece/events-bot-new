@@ -48,6 +48,10 @@ The canonical component catalog is [the static-site design system](design-system
 - `EventCard overlay-controls` is deprecated `v1`, replaced by `EventCard v2`, and retained only in the catalog for regression comparison.
 - Hero families remain governed by `/lab/hero/`; the default used by real pages is also visible in the design-system catalog.
 - `Button`, `Badge`, `Field` and `StatePanel` are approved primitives. New visual variants require a registry/state/check update rather than local CSS.
+- `DesktopEventPage@14` is the accepted production desktop event shell; `/sobytiya/[slug]` must mount it directly. Its poster/preview families are reviewed in `/lab/design-system/` and `/lab/event-desktop/`, not represented by a parallel mock.
+- `DesktopEventActionPanel@2` is the graphite CTA baseline. `EventCtaPanel@1` is deprecated for desktop-v14 and has zero production consumers.
+- `AuthorizedEventSearch@2` owns the Yandex-auth search form and in-button progress. `Skeleton@1` owns first-page content loading for search and personal feed; spinner panels and forced-visible hidden runtime blocks are release blockers.
+- The machine registry `site/src/data/design-system-registry.json` must match visible catalog rows, source imports, state fixtures and production consumer inventory.
 
 ## Branch rule
 

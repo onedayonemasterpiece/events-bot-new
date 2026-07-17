@@ -23,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -432,6 +432,39 @@ def split_time(value: Any) -> tuple[str | None, str | None, str | None]:
                 end = f"{hh:02d}:{mm:02d}"
     display = raw if raw and not start else (f"{start}–{end}" if end else start)
     return start, end, display
+
+
+def explicit_event_duration_minutes(*values: Any) -> int | None:
+    """Extract only a source-labeled event duration, never infer one from prose."""
+    for value in values:
+        text = clean_text(value)
+        if not text:
+            continue
+        match = re.search(
+            r"продолжительность\s*:\s*(?:(\d{1,2})\s*(?:ч(?:ас(?:а|ов)?)?|h))?\s*(?:(\d{1,3})\s*(?:мин(?:ут(?:а|ы)?)?|m))?",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not match or not any(match.groups()):
+            continue
+        hours = int(match.group(1) or 0)
+        minutes = int(match.group(2) or 0)
+        duration = hours * 60 + minutes
+        if 0 < duration <= 24 * 60:
+            return duration
+    return None
+
+
+def event_end_from_duration(start_date: str, start_time: str | None, duration_minutes: int | None) -> tuple[str | None, str | None]:
+    """Return (end_date, end_time) only for a source-explicit duration."""
+    if not start_time or not duration_minutes:
+        return None, None
+    try:
+        start = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None, None
+    end = start + timedelta(minutes=duration_minutes)
+    return end.strftime("%Y-%m-%d"), end.strftime("%H:%M")
 
 
 def price_label(row: sqlite3.Row) -> str | None:
@@ -1354,6 +1387,15 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     start_date = normalize_date(row["date"]) or current_date
     end_date = normalize_date(row["end_date"])
     start_time, time_end, display_time = split_time(row["time"])
+    description = str(row["description"] or row["source_text"] or "").strip()
+    if description_looks_truncated(description, str(row["source_text"] or "")):
+        description = str(row["source_text"] or description).strip()
+    if not time_end and (not end_date or end_date == start_date):
+        duration_minutes = explicit_event_duration_minutes(row["source_text"], description)
+        derived_end_date, derived_end_time = event_end_from_duration(start_date, start_time, duration_minutes)
+        if derived_end_time:
+            time_end = derived_end_time
+            end_date = derived_end_date if derived_end_date != start_date else end_date
     starts_at = f"{start_date}T{start_time}:00+02:00" if start_time else None
     end_at = f"{end_date or start_date}T{time_end}:00+02:00" if time_end else None
     ticket = ticket_info(row)
@@ -1364,9 +1406,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     source_likes, source_views, source_shares, engagement_sources = source_metrics(con, source_urls)
     popularity_reason_codes, popularity_signal_score = popularity_signals(con, source_urls)
     summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
-    description = str(row["description"] or row["source_text"] or summary or "").strip()
-    if description_looks_truncated(description, str(row["source_text"] or "")):
-        description = str(row["source_text"] or description).strip()
+    description = description or summary
     slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None

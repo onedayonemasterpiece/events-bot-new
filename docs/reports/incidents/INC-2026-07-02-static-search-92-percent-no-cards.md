@@ -35,13 +35,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 - 2026-07-02 ~20:17 UTC: `в пятницу бесплатно` backend audit row `ok`, total `2507ms`, LLM `1164ms`.
 - 2026-07-02 investigation: Playwright reproduced all three queries on the fresh preview successfully; `искусство у моря` reproduced slower when the first Gemini Flash-Lite lane timed out at `3500ms` and the second lane succeeded.
 - 2026-07-02 investigation: `https://kenigevents.ru/poisk/` returned `404 NoSuchKey`; root CTA linked to `preview-20260628-event-pages-v48-pgvector-gemma-kaggle` where `/poisk/` is absent.
+- 2026-07-17 design-system parity audit: the current integrated component still contained skeleton markup, but `runSearch()` explicitly called `showSkeleton: false`; the catalog also failed to render the real search form. The integration fix restores first-page skeleton display via the shared `Skeleton@1` and adds deterministic real-component search fixtures. Public live auth/search evidence is still required before closure.
 
 ## Root Cause
 
 Open. Current evidence supports multiple contributing roots:
 
 1. The current JSON response path waits for embedding + vector RPC + digest fetch + LLM verifier before returning any cards, so users can sit at the synthetic frontend `92%` progress while the backend is still finishing LLM verification.
-2. The frontend has CSS for `.authorized-search__skeletons`, but no skeleton DOM/toggle is wired in `AuthorizedEventSearch.astro`; therefore there is no card-shaped shimmer/halo placeholder while results are being verified.
+2. Loading behavior regressed across branches: skeleton DOM existed, but a later caller explicitly disabled it with `showSkeleton: false`, while the design-system catalog showed only a link to search and could not catch the mismatch.
 3. Production entrypoint promotion is incomplete: root `/poisk/` is not published and root CTA points to an older preview build without the search page.
 4. Client-side observability is insufficient to prove whether reported stuck sessions failed on network delivery, stale JS, render exception, or user impatience during a slow LLM lane.
 
@@ -97,6 +98,8 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - Changed the Edge Function default verification window fallback from 20 to 10 and made pgvector search honor `offset` for subsequent batches.
 - Exposed `has_more` while later vector windows remain available.
 - Wired the existing shimmer-card CSS into actual search skeleton DOM/JS so users see card-shaped loading placeholders.
+- Replaced the parallel search skeleton markup with shared `Skeleton@1`; first-page requests call `showSkeleton: !append`, vector/final rendering hides it, and pagination preserves existing cards while only “Показать ещё” becomes busy.
+- Added real `AuthorizedEventSearch@2` catalog fixtures for anonymous, ready, 74% progress, 92% skeleton, results, empty, error and quota, plus machine assertions that reject another `showSkeleton: false` regression.
 
 ## Follow-up Actions
 

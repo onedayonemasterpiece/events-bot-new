@@ -1,0 +1,64 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/feature/static-desktop-v11-acceptance-20260715 plus origin/main
+base_branch: feature/static-desktop-v11-acceptance-20260715
+integration_branch: integration/static-site-transport-mobile-real-events-20260715
+global_constraints:
+  - Preserve the accepted desktop families and mobile v4 as separate responsive contracts.
+  - Reuse one rail/bus selector and fail closed outside reviewed schedule coverage.
+  - Use fresh Fly SQLite data and offline Supabase pgvector only; no LLM on page view.
+  - Publish only to a unique noindex preview prefix; do not promote production root.
+  - Never delete stable /p or /ics objects during preview retention cleanup.
+verification_owner: L02
+stop_conditions:
+  - Current-data export contains dangling related ids.
+  - Mobile or desktop acceptance has horizontal overflow.
+  - Cleanup prefix is not an exact unreferenced pre-July preview prefix.
+lanes:
+  - id: L01
+    role: worker
+    requirement_ids: [R01,R02,R03,R04,R05,R06,R07]
+    target: Integrate accepted UI, transport, current data/related graph, preview retention, docs and public handoff.
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: integration/static-site-transport-mobile-real-events-20260715
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files:
+      - site/**
+      - main.py
+      - tests/test_static_site_build_debounce.py
+      - tests/test_static_site_preview_duration.py
+      - docs/**
+      - CHANGELOG.md
+      - .codex/lanes/static-site-transport-mobile-real-events-20260715/**
+      - .codex/integration/static-site-transport-mobile-real-events-20260715/**
+    forbidden_files:
+      - supabase/**
+      - source_parsing/**
+      - kaggle/TelegramMonitor/**
+    expected_output: Public noindex full-catalog review build, tests, cleanup evidence and pushed integration branch.
+    verification_scope: full_local
+    effort: high
+    status: committed
+  - id: L02
+    role: reviewer
+    requirement_ids: []
+    target: Public desktop/mobile Playwright, transport/ICS, related integrity, docs and cleanup closure audit.
+    depends_on: [L01]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-transport-mobile-real-events-20260715
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Requirement-by-requirement closure and release boundary.
+    verification_scope: full_local
+    effort: high
+    status: merged
+
+# R01 combine accepted desktop/header/favicon and mobile v4 without cross-breakpoint regression.
+# R02 integrate reviewed rail and bus blocks into desktop and mobile production event pages.
+# R03 export and publish all current public future/ongoing events from a fresh production snapshot.
+# R04 refresh every static related chain and preserve one +15 minute coalesced follow-up after Smart Update.
+# R05 remove only safely unreferenced old preview prefixes and local temporary QA state.
+# R06 validate desktop/mobile, transport, ICS, footer share and related navigation publicly.
+# R07 update canonical docs/CHANGELOG, commit/push and send the final handoff to the correct Telegram topic.
