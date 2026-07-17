@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { buildIcs } from '../../../lib/ics';
+import { buildIcs, eventIcsDownloadFilename } from '../../../lib/ics';
 import { getEventBySlug, getEvents } from '../../../lib/events';
 
 export function getStaticPaths() {
@@ -14,7 +14,7 @@ export const GET: APIRoute = ({ params }) => {
   return new Response(buildIcs(event), {
     headers: {
       'content-type': 'text/calendar; charset=utf-8',
-      'content-disposition': `attachment; filename="kenigevents-${event.slug}.ics"`,
+      'content-disposition': `attachment; filename="${eventIcsDownloadFilename(event)}"`,
       'cache-control': 'public, max-age=300',
     },
   });

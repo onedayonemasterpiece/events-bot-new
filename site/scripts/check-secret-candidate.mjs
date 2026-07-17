@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CANDIDATE_MANIFEST_SCHEMA, candidateBasePath, fileInventory, safeCandidateToken, sha256, treeHash,
 } from './release-contract.mjs';
@@ -29,7 +30,11 @@ for (const file of files) {
 if (manifest.tree_sha256 !== treeHash(files)) fail('candidate tree hash mismatch');
 for (const key of files.map((file) => file.key)) if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || key === 'partnerstvo/index.html') fail(`QA route leaked ${key}`);
 for (const event of eventsData.events) {
-  source(`sobytiya/${event.slug}/index.html`); source(`sobytiya/${event.slug}/event.ics`); source(`data/discovery/${event.id}.json`);
+  const eventHtml = source(`sobytiya/${event.slug}/index.html`);
+  source(`sobytiya/${event.slug}/event.ics`); source(`data/discovery/${event.id}.json`);
+  if (!eventHtml.includes(`data-event-template-contract="${templateContract.contract_id}"`)) fail(`event ${event.id} misses accepted template contract marker`);
+  if (!eventHtml.includes(`data-event-template-source="${templateContract.accepted_source_sha}"`)) fail(`event ${event.id} misses accepted template source marker`);
+  if (!/data-desktop-family="(?:editorial|split)"/u.test(eventHtml)) fail(`event ${event.id} bypasses the accepted desktop family router`);
 }
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const html = source(file.key);

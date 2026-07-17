@@ -1,8 +1,9 @@
 ---
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
+import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref, withBase } from '../lib/events';
+import { displayDate, displayDateTime, displayDateWithWeekday, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
@@ -20,6 +21,7 @@ interface Props {
   composition?: HeroComposition;
   headingTag?: 'h1' | 'h2' | 'h3';
   galleryCta?: HeroGalleryCta;
+  metaTreatment?: 'standard' | 'weekday-panel' | 'responsive-weekday-panel';
 }
 
 type HeroGalleryImage = {
@@ -33,7 +35,7 @@ type HeroGalleryImage = {
   height?: number;
 };
 
-const { event, modeOverride, composition, headingTag = 'h1', galleryCta } = Astro.props;
+const { event, modeOverride, composition, headingTag = 'h1', galleryCta, metaTreatment = 'standard' } = Astro.props;
 const HeadingTag = headingTag;
 const primaryImageUrl = eventImageUrl(event.image_url);
 const primaryImageAsset = event.image_assets?.find((asset) => eventImageUrl(asset.src) === primaryImageUrl) || event.image_assets?.[0];
@@ -47,6 +49,11 @@ const derivedComposition: HeroComposition = heroMode === 'fallback-art'
     : 'poster-billboard';
 const heroComposition = composition || derivedComposition;
 const dateTimeLabel = displayDateTime(event);
+const dateLabel = displayDate(event);
+const dateWithWeekdayLabel = displayDateWithWeekday(event);
+const weekdayLabel = dateWithWeekdayLabel.endsWith(dateLabel)
+  ? dateWithWeekdayLabel.slice(0, -dateLabel.length).replace(/,\s*$/u, '')
+  : '';
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
@@ -199,7 +206,23 @@ const showTicketCta = Boolean(ctaHref);
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
     </div>
-    <p class="event-hero__meta-line">{[dateTimeLabel, placeLabel].filter(Boolean).join(' · ')}</p>
+    {metaTreatment !== 'standard' && (
+      <p class="event-hero__meta-line event-hero__meta-line--weekday-panel">
+        <span class="event-hero__when">
+          {weekdayLabel && <span class="event-hero__weekday">{weekdayLabel}</span>}
+          <span class="event-hero__date">{dateLabel}</span>
+          {event.display_time && <span class="event-hero__time">{event.display_time}</span>}
+        </span>
+        <span class="event-hero__where">{placeLabel}</span>
+      </p>
+    )}
+    {metaTreatment !== 'weekday-panel' && (
+      <p class="event-hero__meta-line event-hero__meta-line--standard">
+        <span class="event-hero__when">{dateTimeLabel}</span>
+        <span class="event-hero__meta-separator" aria-hidden="true">·</span>
+        <span class="event-hero__where">{placeLabel}</span>
+      </p>
+    )}
     {event.summary && <p class="event-hero__summary">{event.summary}</p>}
   </div>
 </section>
@@ -208,8 +231,7 @@ const showTicketCta = Boolean(ctaHref);
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
       <a class="hero-gallery__brand" href={siteHomeHref()} aria-label="Перейти к афише Полюбить Калининград Анонсы">
-        <span>Полюбить Калининград</span>
-        <strong>Анонсы</strong>
+        <AnnouncementsLockup variant="mobile" class="hero-gallery__lockup" />
       </a>
       <h2 id={heroGalleryTitleId} class="hero-gallery__event-title">{event.title}</h2>
       <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { HERO_REVIEW_CASES } from '../lib/heroReview';
+import { MOBILE_EVENT_REVIEW_CASES, mobileEventReviewPath } from '../lib/mobileEventReview';
 import { absoluteUrl, eventPath, getEvents, IS_PRODUCTION_FAMILY } from '../lib/events';
 import { getInterestClubs, interestClubPath, INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 
@@ -30,6 +31,11 @@ export const GET: APIRoute = () => {
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
     ...HERO_REVIEW_CASES.map((item) => ({ loc: absoluteUrl(`/lab/hero/review/${item.caseId}/`), lastmod: now })),
+    { loc: absoluteUrl('/lab/event-mobile/'), lastmod: now },
+    ...MOBILE_EVENT_REVIEW_CASES.map(({ variant, scenario }) => ({
+      loc: absoluteUrl(mobileEventReviewPath(variant.slug, scenario.slug)),
+      lastmod: now,
+    })),
   ];
   const entries = [
     ...(IS_PRODUCTION_FAMILY ? publicEntries : previewOnlyEntries),

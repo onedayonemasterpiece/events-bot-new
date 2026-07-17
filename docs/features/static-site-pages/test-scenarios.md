@@ -190,6 +190,12 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   подтверждённое declared значение `0+|6+|12+|16+|18+`; assessed-only/unknown не
   превращается в выдуманное ограничение, а видимый факт совпадает с export и
   structured data.
+- **ADD-RECENT-05 — Полная матрица event-detail v11.** Preview обязан собрать
+  каждый сценарий из `eventTemplateContract.json`: горизонтальное фото,
+  горизонтальное фото с отдельной OCR-афишей, OCR/document contain,
+  одиночные/серийные вертикальные изображения, low-resolution и
+  quality-fallback. Все сценарии и реальные event pages используют один
+  `DesktopEventPage`/`buildDesktopEventPresentation`, а не legacy desktop DOM.
 
 ### Статическая публикация, CDN и устойчивость
 
@@ -224,6 +230,11 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   секунд; retry bounded и классифицирован, stale/missed/deferred request после
   restart получает ровно один catch-up, а update во время running build — ровно
   один follow-up с более новым snapshot.
+- **ADD-BUILD-14 — Template provenance.** Production и secret manifest фиксируют
+  `static-event-detail-v11` и accepted source SHA `3b17e536…`; каждая страница
+  несёт те же markers и один из разрешённых `editorial|split` результатов.
+  Отсутствие хотя бы одного marker, lab-сценария или real-event family
+  останавливает build до Kaggle artifact publication.
 
 ### Related/vector barrier
 

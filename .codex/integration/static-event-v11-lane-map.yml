@@ -1,0 +1,60 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: d5dab75a
+base_branch: integration/static-event-v10-system-routing
+integration_branch: integration/static-event-v11-transport-phone-carousel
+global_constraints:
+  - preserve accepted mobile hero and current-preview routing
+  - no image generation
+  - docs and CHANGELOG required for behavior changes
+  - incident INC-2026-07-16 remains regression contract
+verification_owner: /root
+stop_conditions:
+  - no production-root promotion before product acceptance
+  - Telegram only after public noindex QA
+lanes:
+  - id: transport-infographic-research
+    role: planner
+    requirement_ids: [R01]
+    target: Pinterest/web reference funnel and 2-3 scalable alternatives
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v11/transport-infographic-research
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-transport-research
+    writable_files: [artifacts/codex/static-site-v11-transport-phone-carousel/research, .codex/lanes/transport-infographic-research/RESULTS.md]
+    forbidden_files: [site, docs, CHANGELOG.md]
+    expected_output: source-backed shortlist, contact sheet, scalable UI alternatives and self-review
+    verification_scope: inspection_only
+    effort: high
+    status: merged
+    integration_commit: 51f9c039
+  - id: phone-cta
+    role: worker
+    requirement_ids: [R02]
+    target: restore branded CTA; reveal phone then copy with toast/live feedback
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v11/phone-cta
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-phone
+    writable_files: [site/src/components/DesktopEventActionPanel.astro, site/src/components/design-system, site/src/components/Icon.astro, site/tests, site/scripts/check-production-desktop-contract.mjs, docs/features/static-site-pages/event-page-product-design.md, docs/reports/incidents/INC-2026-07-16-static-event-media-action-regressions.md, CHANGELOG.md, .codex/lanes/phone-cta/RESULTS.md]
+    forbidden_files: [site/src/components/DesktopEventPage.astro]
+    expected_output: committed component fix and focused tests
+    verification_scope: targeted
+    effort: high
+    status: merged
+    integration_commit: afbbd1ec
+  - id: carousel-contracts
+    role: worker
+    requirement_ids: [R03, R04]
+    target: restore wide non-OCR crop/scale rules and add efficient vertical-photo example
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v11/carousel-contracts
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-carousel
+    writable_files: [site/src/components, site/src/pages/lab/event-desktop, site/src/lib, site/tests, site/scripts/check-production-desktop-contract.mjs, docs/features/static-site-pages/event-page-product-design.md, docs/features/static-site-pages/test-scenarios.md, docs/reports/incidents/INC-2026-07-16-static-event-media-action-regressions.md, CHANGELOG.md, .codex/lanes/carousel-contracts/RESULTS.md]
+    forbidden_files: [site/src/components/DesktopEventActionPanel.astro, site/src/components/design-system]
+    expected_output: root-cause fix, explicit crop matrix, lab example and browser evidence
+    verification_scope: full_local
+    effort: extra-high
+    status: merged
+    integration_commit: 63e4c1b0

@@ -1,0 +1,201 @@
+{
+  "schema_version": "service_share_asset_manifest_v1",
+  "asset_version": "20260715-896b8af26ac6679f",
+  "visual_payload_hash": "896b8af26ac6679f18927583d490b021828703cbdb34a9dfddf0866735b48e00",
+  "canonical_url": "https://kenigevents.ru/",
+  "share_text": "Полюбить Калининград Анонсы — события всего региона",
+  "assets": {
+    "webp": {
+      "url": "../versions/20260715-896b8af26ac6679f/service-share-20260715-896b8af26ac6679f.webp",
+      "mime_type": "image/webp",
+      "byte_size": 72414,
+      "sha256": "ee8f8d78e1ce0d037a20b9e7331a42998cf4b39328539933ea6e7e243c091c10",
+      "filename": "service-share-20260715-896b8af26ac6679f.webp"
+    },
+    "png": {
+      "url": "../versions/20260715-896b8af26ac6679f/service-share-20260715-896b8af26ac6679f.png",
+      "mime_type": "image/png",
+      "byte_size": 826924,
+      "sha256": "e6335fa840aed21246dfd2b34078025fe19c99c08d5414271c01d788e330420d",
+      "filename": "service-share-20260715-896b8af26ac6679f.png"
+    }
+  },
+  "measured_at": "2026-07-15T07:10:00Z",
+  "timezone": "Europe/Kaliningrad",
+  "local_date": "2026-07-15",
+  "metrics": {
+    "eligible_event_count": 284,
+    "city_count": 15,
+    "recent_added_count": 84,
+    "catalog_hash": "29652023fd8e24edc76cf27ffaa71966e0d52381ac4f9037bd1221e7e4ab541c"
+  },
+  "selection": {
+    "event_ids": [
+      3216,
+      6811,
+      6849,
+      4517,
+      6776,
+      5459,
+      2601,
+      5370
+    ],
+    "groups": [
+      "popular",
+      "promoted",
+      "random",
+      "popular",
+      "random",
+      "popular",
+      "random",
+      "popular"
+    ],
+    "actual_mix": {
+      "popular": 4,
+      "promoted": 1,
+      "random": 3
+    },
+    "promo_status": {
+      "requested": 2,
+      "selected": 1,
+      "underfilled": true,
+      "missing": 1,
+      "fallback_mislabeled_as_promo": false,
+      "reason": "active_explicit_promo_targets_with_approved_posters_exhausted"
+    },
+    "promo_shortfall": {
+      "requested": 2,
+      "selected": 1,
+      "missing": 1,
+      "reason": "active_explicit_promo_targets_with_approved_posters_exhausted"
+    }
+  },
+  "composition": {
+    "chain_gaps": {
+      "A->B": 0.0,
+      "B->C": 0.0,
+      "BRIDGE->A": 0.0,
+      "HERO->BRIDGE": 0.0
+    },
+    "chain_overlap_ratios": {
+      "A->B": 0.1365,
+      "B->C": 0.334433,
+      "BRIDGE->A": 0.149866,
+      "HERO->BRIDGE": 0.439455
+    },
+    "chain_world_distance_ratios": {
+      "A->B": 1.181403,
+      "B->C": 1.434148,
+      "BRIDGE->A": 1.515056,
+      "HERO->BRIDGE": 1.28466
+    },
+    "family": "soft_s_curve",
+    "gates_passed": true,
+    "hero_exits": [
+      "right",
+      "bottom"
+    ],
+    "projected": {
+      "A": {
+        "bbox": [
+          0.57699,
+          0.57853,
+          0.66577,
+          0.64966
+        ],
+        "center": [
+          0.62138,
+          0.61409
+        ],
+        "clipped_area": 0.006314,
+        "clipped_bbox": [
+          0.57699,
+          0.57853,
+          0.66577,
+          0.64966
+        ]
+      },
+      "B": {
+        "bbox": [
+          0.52446,
+          0.61679,
+          0.59857,
+          0.68691
+        ],
+        "center": [
+          0.56151,
+          0.65185
+        ],
+        "clipped_area": 0.005197,
+        "clipped_bbox": [
+          0.52446,
+          0.61679,
+          0.59857,
+          0.68691
+        ]
+      },
+      "BRIDGE": {
+        "bbox": [
+          0.53441,
+          0.41981,
+          0.71475,
+          0.58919
+        ],
+        "center": [
+          0.62458,
+          0.5045
+        ],
+        "clipped_area": 0.030547,
+        "clipped_bbox": [
+          0.53441,
+          0.41981,
+          0.71475,
+          0.58919
+        ]
+      },
+      "C": {
+        "bbox": [
+          0.56375,
+          0.65212,
+          0.6276,
+          0.70885
+        ],
+        "center": [
+          0.59568,
+          0.68048
+        ],
+        "clipped_area": 0.003622,
+        "clipped_bbox": [
+          0.56375,
+          0.65212,
+          0.6276,
+          0.70885
+        ]
+      },
+      "HERO": {
+        "bbox": [
+          0.54729,
+          -0.03144,
+          1.10038,
+          0.49997
+        ],
+        "center": [
+          0.82384,
+          0.23426
+        ],
+        "clipped_area": 0.226341,
+        "clipped_bbox": [
+          0.54729,
+          0,
+          1,
+          0.49997
+        ]
+      }
+    },
+    "safe_zone_x": 0.435,
+    "seamless_cyclorama": true,
+    "seed": 3223940777870682008
+  },
+  "bundle_sha256": "82d19d5f18cec0e593eb1e9ba39986ef85d140163f51a51fa295e5497db1a035",
+  "result_sha256": "929579ec5319fc978d7dba639ce7c20f36647cffb8f27276412343285144f30a"
+}

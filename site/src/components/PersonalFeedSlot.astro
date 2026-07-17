@@ -1,15 +1,118 @@
 ---
+import { withBase } from '../lib/events';
+
 interface Props {
   context: 'today' | 'tomorrow' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular';
 }
 const { context } = Astro.props;
+const isEventDetail = context === 'event-detail';
+const eyebrow = isEventDetail ? 'Для вас' : 'Личная лента';
+const heading = isEventDetail ? 'По вашим интересам' : 'Дальше — под ваши интересы';
+const explanation = isEventDetail
+  ? 'Подборка учитывает ваши лайки и отметки «Не интересно» на этом устройстве.'
+  : 'События меняются с учётом ваших лайков и отметок «Не интересно».';
+const headingId = `personal-feed-${context}-title`;
 ---
-<section class="section-card personal-feed-section" data-personal-feed-section data-listing-context={context} hidden>
+<section
+  class:list={['section-card', 'personal-feed-section', { 'personal-feed-section--event-detail': isEventDetail }]}
+  data-personal-feed-section
+  data-personal-feed-src={withBase('/data/personal-feed.json')}
+  data-listing-context={context}
+  aria-labelledby={headingId}
+  hidden
+>
   <div class="section-card__inner">
-    <p class="eyebrow">Личная лента</p>
-    <h2>Дальше — под ваши интересы</h2>
-    <p class="muted-note personal-feed-section__status" data-personal-feed-status>Подбираем события…</p>
-    <div class="cards-grid cards-grid--personal-feed personal-feed-section__feed" data-personal-feed-slot data-feed-card-variant="split-actions" data-listing-context={context}></div>
+    <p class="eyebrow">{eyebrow}</p>
+    <h2 id={headingId}>{heading}</h2>
+    <p class="muted-note personal-feed-section__explanation" data-personal-feed-explanation>{explanation}</p>
+    <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite">Подбираем события…</p>
+    <div
+      class="cards-grid cards-grid--personal-feed personal-feed-section__feed"
+      data-personal-feed-slot
+      data-feed-card-variant="split-actions"
+      data-listing-context={context}
+      aria-live="polite"
+    ></div>
+    <button type="button" class="secondary-button personal-feed-section__load-more" data-personal-feed-load-more hidden>Показать ещё</button>
     <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
   </div>
 </section>
+
+<style>
+  .personal-feed-section[hidden] {
+    display: none;
+  }
+
+  .personal-feed-section--event-detail {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: clamp(2rem, 4vw, 4.5rem) max(16px, calc((100vw - min(1180px, calc(100vw - 32px))) / 2));
+    border: 0;
+    border-radius: 0;
+    background: #f5ede2;
+    box-shadow: none;
+  }
+
+  .personal-feed-section--event-detail > .section-card__inner {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .personal-feed-section--event-detail h2 {
+    font-size: clamp(2rem, 4vw, 4rem);
+  }
+
+  .personal-feed-section__explanation,
+  .personal-feed-section__status {
+    max-width: 46rem;
+    margin: 0.45rem 0 1rem;
+  }
+
+  .personal-feed-section__status {
+    margin-top: -0.35rem;
+  }
+
+  .personal-feed-section__feed {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(0.75rem, 1.8vw, 1.25rem);
+    align-items: stretch;
+  }
+
+  .personal-feed-section__load-more,
+  .personal-feed-section__refresh {
+    margin-top: 1rem;
+  }
+
+  .personal-feed-section__refresh:not([hidden]) {
+    margin-left: 0.5rem;
+  }
+
+  @media (max-width: 960px) {
+    .personal-feed-section__feed {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .personal-feed-section--event-detail {
+      margin-top: 1rem;
+      padding: 1.15rem 1rem 1.35rem;
+      border-radius: 24px;
+    }
+
+    .personal-feed-section__feed {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.85rem;
+    }
+
+    .personal-feed-section__load-more,
+    .personal-feed-section__refresh,
+    .personal-feed-section__refresh:not([hidden]) {
+      width: 100%;
+      margin: 0.85rem 0 0;
+    }
+  }
+</style>

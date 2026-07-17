@@ -36,6 +36,16 @@
 - `INC-2026-07-15-tg-rich-medallion-rendering-gaps.md`
   - Scope: canonical `@kldevents` RichMessage publishing, manifest-backed graphical medallion strips, footer spacing and retirement of custom-emoji medallion placement.
   - Must not regress: event `6811` semantics resolve KОНБ + KGD80 + Znanie; every approved event image is preserved above one standalone bottom strip; `Подробнее` and `Max` retain a 12-space non-collapsing one-row gap; RichMessages never enqueue or receive legacy emoji medallions.
+
+- `INC-2026-07-16-static-event-media-action-regressions.md`
+  - Scope: static event medallion inventory, legacy approved media duplicates, user-state-driven desktop calendar labels, stable dynamic-card media and desktop/mobile gallery-ending parity.
+  - Must not regress: Dramatic Theatre renders its accepted medallion; event `4671` exposes one canonical poster variant; mobile secondary actions never expand by event-id parity; delayed images reserve geometry; both galleries finish with a related event.
+- `INC-2026-07-15-static-production-v2-secondary-surfaces.md`
+  - Scope: generated desktop recommendation geometry, rail transport media, exact accepted mobile V8 integration and full-catalog preview acceptance.
+  - Must not regress: recommendation rows use one media ratio without fields, OCR crops stay at or below 20%, rail examples retain the train image, and production mobile routes reuse the accepted V8 behavior from `fd8766b1` rather than an older approximation.
+- `INC-2026-07-15-static-desktop-template-regression.md`
+  - Scope: exact accepted desktop event component, production media-family routing, full-catalog static generation and truthful consultant/release acceptance.
+  - Must not regress: generated desktop pages must mount the accepted Continuous Editorial/Split component rather than a CSS imitation; portrait/low-resolution media must fail to Split; all-page and representative Playwright evidence must cover the actual generated preview URLs while mobile v4 stays unchanged.
 - `INC-2026-07-15-fly-volume-critical.md`
   - Scope: Fly `/data` capacity, SQLite/runtime evidence retention, `/healthz` readiness and `/webhook` routing during deploys.
   - Must not regress: production must retain bounded runtime evidence without crossing the disk-critical readiness floor; every deploy must verify free space, SQLite integrity, `/healthz`, Fly checks and fresh disk-full/proxy logs; volume auto-extension stays bounded and cannot replace retention or DB/media hygiene.

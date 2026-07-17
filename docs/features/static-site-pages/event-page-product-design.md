@@ -199,7 +199,7 @@ Primary CTA is selected by event facts:
 | registration link | `Зарегистрироваться` | “может потребоваться регистрация” |
 | free + explicit registration link | `Зарегистрироваться` | admission property must still say `Бесплатно · регистрация` |
 | free without registration requirement | `В календарь` | calendar save is also the service saved-event action; source remains secondary |
-| phone-only booking | `Позвонить` on mobile, `Показать телефон` desktop | plain visible phone fallback |
+| phone-only booking | `Позвонить` on mobile, branded `Показать телефон` on desktop | the desktop copy-icon CTA reveals and copies the normalized number in one click, then confirms success without trying to open a dialer |
 | paid/ticketed, price unknown | `Билеты` | never invent `Узнать цену`, `Узнать условия` or `По билетам` |
 | source link only / unknown tickets | `Источник события` | honest secondary destination, no fake ticket CTA |
 | sold out | `Билеты закончились` as disabled/status | offer related events, not fake CTA |
@@ -208,6 +208,13 @@ Primary CTA is selected by event facts:
 Secondary CTAs:
 
 - **Добавить в календарь** — always if date exists; ICS download link; on mobile must open/download predictably.
+- On desktop, a secondary calendar action may adapt its visible label from local
+  usage history while preserving its accessible name: show `В календарь` for a
+  new user, fewer than three uses, or no use in the last 30 days; collapse to the
+  calendar icon for a regular recent user. Primary calendar CTA and mobile
+  actions do not use this adaptive desktop presentation rule. Successful or
+  fallback calendar clicks update a bounded local counter; saved-event expiry
+  remains a separate state.
 - **Поделиться** — use Web Share API on mobile; fallback to copy link on desktop/unsupported browsers.
 - **Скопировать ссылку** — visible fallback; toast “Ссылка скопирована”.
 - **Сохранить** — MVP can be local-only after consent; if no consent, show “сохранить в браузере?” prompt or keep for post-MVP.
@@ -294,6 +301,12 @@ not be reflowed by desktop experiments.
   graphite frame, with no copy, backdrop fields or crop. Other documents
   (services, schedule, wayfinding, sponsors) stay in the gallery/rail and are
   never called an афиша.
+- An `unknown_document`, attendee-information or other non-identity document
+  must not become the desktop hero merely because it is the first source image.
+  When the same event has an explicitly classified, safely coverable
+  horizontal `event_photo`, the Editorial family uses that photo and keeps the
+  document available in the rail/gallery. This is a role-first rule; OCR
+  emptiness, filename order and broad text heuristics do not promote media.
 - If no strong horizontal/photo hero is available, the split fallback keeps a
   document/portrait media column and a readable information column. OCR text is
   never horizontally cropped.
@@ -302,6 +315,28 @@ not be reflowed by desktop experiments.
   images; next/previous buttons, keyboard arrows and swipe all advance by a
   viewport group in both directions. It never silently falls back to a
   one-image viewer.
+- The efficient viewer is quality-aware. When at least four technically strong
+  assets exist (`long edge >= 720`, `>= 450k` pixels and imported quality score
+  `>= 10`), only that strong set participates in the grouped viewer and
+  the header discloses `Показаны N из M изображений в лучшем качестве`.
+  Materially weak media remains excluded when a strong set exists; if fewer
+  than four strong assets exist, the viewer keeps the full source set rather
+  than hiding the only available event evidence. This is a deterministic
+  presentation gate over upstream quality metadata, not a semantic substitute
+  for the LLM-first media-role pipeline.
+- Desktop fullscreen rendering is fail-closed: only a classified `event_photo`
+  with `recommended_hero_fit=cover` and `safe_crop=true` may fill by cover.
+  Posters and all OCR/document media use `contain`, do not auto-pan, and remain
+  fully readable. An un-dragged click on the displayed image or empty backdrop
+  closes the viewer in addition to `×` and `Escape`; clicks on navigation,
+  links or the terminal recommendation never close it.
+- Both desktop and mobile fullscreen galleries render the shared
+  `AnnouncementsLockup` (`240×88` desktop, `128×96` mobile). A hand-built copy
+  of the retired tag/wordmark is forbidden. This shared brand replacement is
+  the only mobile change in the 2026-07-17 desktop remediation.
+- The insufficient-evidence feedback placeholder (`Общего вывода пока нет` /
+  `Отзывов недостаточно`) is omitted. A future feedback block may render only
+  a substantive, evidence-backed aggregate.
 - Related cards use a common bounded media height. Documents/OCR are scaled to
   full card width and may overflow only vertically (centered, or shifted by a
   trusted focal Y); source left/right edges are never cut and no side fields are
@@ -312,6 +347,34 @@ not be reflowed by desktop experiments.
 Desktop header uses the shared announcement lockup at `240×88`, menu on the
 right, exact-listing active state only, and no selected item on event details.
 Keyboard navigation and visible focus remain required.
+
+The graphite desktop action panel is component-responsive, not only
+viewport-responsive. A phone action is a stricter exception: admission,
+branded phone CTA, calendar, share and like remain on one explicit grid row at
+`1366×768`, `1536×864` and `1920×1080`; it must never fall back to the generic
+stacked layout. The calendar is icon-only in this constrained phone panel even
+when bounded usage history would normally expand its wording. The desktop phone
+journey keeps the established branded primary CTA instead of plain contact text
+plus a detached utility icon. Its initial label is `Показать телефон`; the
+leading glyph is the standard copy icon, not a redundant handset. One click
+reveals the standard-size formatted number inside the same CTA and copies its
+normalized value. A transient non-layout toast says `Номер скопирован`, while a
+polite live region announces the same result. Subsequent clicks copy again. The
+outer CTA and graphite panel retain their dimensions through reveal and success.
+Browser acceptance compares child vertical
+centres/overlap and before/after-copy geometry; containment-only assertions are
+not sufficient.
+
+The exact-venue KAUP journey is not desktop-only. On the accepted phone event
+surface it appears after `Коротко` as one flat compact block with the same
+actionable order: recommended official transfer, the reviewed `Северный вокзал`
+boarding point with estimated `terminal + 15 min` departures, Romanovo-to-venue walk, explicit no-return warning
+and the car alternative. Only transfer boarding fine print is collapsed into a
+native `details` disclosure; origin, departures and the return risk remain
+visible without a tap. Transfer, bus, last mile, warning and car are flat rows,
+not nested cards; map actions are icon-only `44×44` pins with accessible names.
+This compact variant has no raw-coordinate label, pseudo-map decoration or
+button wall, and standard bus/walk/car/pin icons keep mode changes scannable.
 
 ## 8. Related events and personalization placement
 
@@ -455,6 +518,10 @@ Product/UI:
 
 - 375px: no horizontal scroll; primary CTA visible; touch targets >=44px;
 - desktop 1366px: two-column layout, not stretched mobile feed;
+- desktop phone/action regressions are additionally measured at `1366×768`,
+  `1536×864` and `1920×1080`: every action rectangle must remain inside the
+  graphite panel, both the initial label and revealed number must stay on one
+  line, and the document width must not exceed the viewport;
 - share works on phone via Web Share API or copy fallback;
 - calendar ICS works;
 - ticket/registration/source CTA matches event facts;

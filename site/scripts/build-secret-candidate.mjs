@@ -20,7 +20,7 @@ const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
 const transportExperimentMode = process.env.SECRET_CANDIDATE_TRANSPORT_EXPERIMENT_MODE || 'qa';
 if (!['qa', 'focus_group'].includes(transportExperimentMode)) throw new Error('Secret candidate transport experiment mode must be qa or focus_group');
-for (const key of ['production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
+for (const key of ['template_matrix','production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
   if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
 }
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
