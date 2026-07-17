@@ -484,7 +484,10 @@ Ops:
 - build log stores event ids/slugs/content hashes;
 - upload target is `kenigevents.ru`, not legacy media bucket;
 - rollback is possible by re-uploading previous static tree or disabling new links;
-- Telegraph URL remains as dual-run fallback for about one month.
+- Telegraph event-detail URL remains a dual-run fallback for 10 days after the
+  actual production T0, then new event Telegraph pages stop being created while
+  legacy URLs remain available; canonical gates and aggregate-surface boundary:
+  [`release-plan.md`](release-plan.md#десятидневный-telegraph-coexistence).
 
 ## 14. Implementation order
 

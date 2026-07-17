@@ -291,6 +291,10 @@ features:
   static_site_pages:
     status: preview
     docs: docs/features/static-site-pages/README.md
+    release_plan: docs/features/static-site-pages/release-plan.md
+    test_scenarios: docs/features/static-site-pages/test-scenarios.md
+    release_umbrella: docs/features/static-personal-announcements/README.md
+    release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
     design_system: docs/features/static-site-pages/design-system/README.md
     brand_lockups: docs/features/static-site-pages/design-system/brand-lockups.md
     favicon: docs/features/static-site-pages/design-system/favicon.md
@@ -311,9 +315,12 @@ features:
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
     image_framing: docs/features/static-site-pages/image-framing.md
+    listing_personal_feed: docs/features/static-site-pages/listing-personal-feed.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md
     related_event_issue_reporting: docs/features/event-issue-reporting/README.md
+    related_interest_clubs: docs/features/interest-clubs/README.md
+    related_interest_clubs_release: docs/features/interest-clubs/release-plan.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
@@ -324,11 +331,14 @@ features:
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
-    preview_url: https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/
+    preview_url: https://kenigevents.ru/preview-20260717-interest-clubs-prod-canary/__preview/
     capabilities:
       static_ssg_preview: preview
       smart_update_build_handoff: code_only_production_disabled
+      production_build_profile: missing
       production_atomic_promotion: missing
+      stable_event_page_registry: missing
+      telegraph_event_cutover: planned_10_day_after_t0
       catalog_freshness: partial_blocked
       release_ui: candidate_signoff_pending
       sharing: preview_canvas_offline_generator_missing
@@ -341,9 +351,17 @@ features:
       - site/scripts/export-production-preview-data.py
       - site/package.json
       - site/astro.config.mjs
+      - site/src/pages/index.astro
       - site/src/pages/[preview]/index.astro
       - site/src/pages/segodnya/index.astro
+      - site/src/pages/zavtra/index.astro
       - site/src/pages/vyhodnye/index.astro
+      - site/src/pages/vystavki/index.astro
+      - site/src/pages/populyarnoe/index.astro
+      - site/src/pages/poisk/index.astro
+      - site/src/pages/partners/index.astro
+      - site/src/pages/kluby-po-interesam/index.astro
+      - site/src/pages/kluby-po-interesam/[slug]/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
       - site/src/pages/data/discovery/[eventId].json.ts
@@ -367,7 +385,18 @@ features:
     tests:
       - tests/test_static_site_build_handoff.py
       - tests/test_static_site_public_gate.py
+      - tests/test_static_site_pgvector_export.py
+      - tests/test_interest_clubs_static_export.py
+      - tests/playwright/static_personalization_contract.spec.ts
+      - tests/e2e/features/static_site_personalization.feature
       - site/scripts/check-preview.mjs
+    test_maturity:
+      preview_check: automated_component
+      static_public_gate: automated_component
+      personalization_playwright: demo_only_9_tests
+      personalization_gherkin: draft_without_steps
+      production_release_e2e: missing
+      telegraph_cutover_e2e: missing
   unsigned_personalization:
     status: mixed_partial
     docs: docs/features/unsigned-personalization/README.md

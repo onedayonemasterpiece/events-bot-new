@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
+
 ### Fixed
 - **VK auto-import provider-quota false reject (INC-2026-07-17)**: allocate
   Smart Update requests across the registered KEY1–KEY5 normal pool from the
@@ -18,6 +21,7 @@
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
   truncating the structured JSON at the bounded 768-token output ceiling.
