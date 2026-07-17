@@ -155,3 +155,13 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - [Favorites and calendar](../features/event-favorites-calendar/README.md)
 - [Email delivery operations](../operations/email-delivery.md)
 - [Event comment feedback](../features/event-comment-feedback/README.md)
+
+## Identity/saved-event physical boundary (2026-07-17)
+
+The accepted ownership above is implemented by private Supabase schemas
+`site_identity` (profile, random device proof, provider link, merge/purge audit) and
+`saved_events` (saved occurrence, separate signal, reminder subscription/delivery).
+They deliberately contain no canonical event content. Public browser access is only
+through authenticated owner RPCs; service-only mutation is reserved for device-proof
+merge, lifecycle sync, purge/retention and Postbox enqueue. This preserves the Fly
+SQLite event SOR and prevents a second profile owner in YDB.

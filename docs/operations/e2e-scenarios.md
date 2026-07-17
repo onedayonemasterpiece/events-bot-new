@@ -34,3 +34,13 @@
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+### Static identity and saved-event browser contract
+
+- Gherkin: `tests/e2e/features/static_site_identity_saved_events.feature`
+- Executable representative-family harness: `tests/playwright/site_identity_saved_events_contract.spec.ts`
+- Layout-independent unit contract: `tests/node/site_identity_controller.test.mjs`
+- SQL transaction contract: `supabase/tests/site_identity_saved_occurrence_contract.sql`
+
+Covers `/segodnya/`, `/vystavki/`, `/sobytiya/<slug>/` and `/poisk/` without asserting
+final header, card, event-detail or `/izbrannoe/` composition.
