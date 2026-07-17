@@ -1326,7 +1326,11 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         return _source_has_primary_scan_evidence(row, cursor, status)
     # First complete the unscanned/retry queue. Only when there are no primary
     # pending publics left do we spend budget on processed-source delta rescans.
-    if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False):
+    confirmed_blogger_priority_enabled = getenv_bool(
+        "REGION_TALK_CONFIRMED_BLOGGER_PRIORITY_ENABLED",
+        True,
+    )
+    if confirmed_blogger_priority_enabled or getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False):
         confirmed_external_pairs = [
             (seed, due) for seed, due in annotated
             if bool(due.get("due"))
@@ -1436,6 +1440,9 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         for seed, due in annotated if not bool(due.get("due"))
     ][:20]
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_travel_priority_enabled"] = bool(prioritize_product_sources)
+    _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_priority_enabled"] = bool(
+        confirmed_blogger_priority_enabled
+    )
     _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_eligible_total"] = len(confirmed_external_priority)
     _REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"] = len(confirmed_external_selected)
     confirmed_pair_by_url = {seed.canonical_url: (seed, due) for seed, due in confirmed_external_pairs}

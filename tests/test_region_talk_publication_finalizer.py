@@ -295,7 +295,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
         ):
-            _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
 
         by_url = {row["post_url"]: row for row in rows}
         finalized = by_url["https://t.me/travelcase/10"]
@@ -347,7 +347,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
         ):
-            _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["media_kind"], "video")
@@ -406,7 +406,7 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {})),
             mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-15T06:00:00+00:00"),
         ):
-            _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
+            _ydb, _driver, _pool, _table, rows, _strict_priority = mod.read_live_rows(100, 100)
 
         self.assertEqual(len(rows), 1)
         row = rows[0]
@@ -415,6 +415,61 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         verdict = mod.rt.publication_eligibility(row, row["_authoritative_source"])
         self.assertFalse(verdict["eligible"])
         self.assertEqual(verdict["primary_reason"], "vector_reject_not_kaliningrad_oblast")
+
+    def test_read_live_rows_reuses_snapshot_for_pre_image_source_priority(self) -> None:
+        mod = self.mod
+        source = {
+            "canonical_source_key": "telegram:prioritycase",
+            "platform": "telegram",
+            "handle": "prioritycase",
+            "source_url": "https://t.me/prioritycase",
+            "source_queue_status": "processed_found_ko_candidate",
+            "posts_scanned": 1,
+            "ko_posts_found": 1,
+        }
+        kinds = {
+            "image_queue_item": {},
+            "candidate_memory_item": {
+                "memory:priority": {
+                    "post_url": "https://t.me/prioritycase/10",
+                    "canonical_source_key": "telegram:prioritycase",
+                    "current_stage": "image_fetch_retry_needed",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "kaliningrad_oblast_only_scope": True,
+                },
+            },
+            "publication_candidate_item": {},
+            "source_queue_item": {"source:prioritycase": source},
+            "source_status_item": {},
+            "online_source_item": {},
+            "source_onboarding_profile_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return Pool()
+
+        select_mock = mock.Mock(side_effect=lambda _s, _y, _t, kind, limit: kinds.get(kind, {}))
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", select_mock),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-17T18:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows, strict_priority = mod.read_live_rows(100, 100)
+
+        self.assertEqual(rows, [])
+        self.assertEqual(len(strict_priority), 1)
+        self.assertEqual(strict_priority[0]["priority_reason"], "strict_text_candidate_needs_source_attestation")
+        # One read per required kind. The removed post-snapshot pass used to
+        # read candidate/source/status a second time and caused the live YDB
+        # deadline failure.
+        self.assertEqual(select_mock.call_count, 7)
 
     def test_source_onboarding_evidence_is_compact_deduplicated_and_traceable(self) -> None:
         mod = self.mod

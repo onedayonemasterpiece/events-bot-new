@@ -205,6 +205,10 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # per run once the higher-priority confirmed-blogger cohort is drained.
     "REGION_TALK_FAST_CHECK_CONTINUATION_SOURCES_PER_RUN": "2",
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_ENABLED": "1",
+    # The curated confirmed-external registry is the highest-probability
+    # acquisition input.  Its first scans own the bounded history lane even
+    # when generic known-KO delta rescans are disabled.
+    "REGION_TALK_CONFIRMED_BLOGGER_PRIORITY_ENABLED": "1",
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_TABLE": "region_talk_external_blogger_evidence",
     "REGION_TALK_EXTERNAL_BLOGGER_EVIDENCE_MAX_ROWS": "2000",
     # The durable adaptive cursor preserves the full low-frequency place bank

@@ -246,6 +246,41 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len(selected_urls), 4)
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_history_selected_total"], 2)
 
+    def test_confirmed_blogger_priority_is_independent_of_known_ko_rescans(self) -> None:
+        mod = load_module()
+        confirmed = self._seed(mod, "@confirmedfirst", seed_id="confirmed")
+        ordinary = self._seed(mod, "@ordinaryfirst", seed_id="ordinary")
+        queue = {
+            "telegram:ordinaryfirst": {
+                "canonical_source_key": "telegram:ordinaryfirst",
+                "platform": "telegram",
+                "handle": ordinary.handle,
+                "source_url": ordinary.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": 1,
+            },
+            "telegram:confirmedfirst": {
+                "canonical_source_key": "telegram:confirmedfirst",
+                "platform": "telegram",
+                "handle": confirmed.handle,
+                "source_url": confirmed.canonical_url,
+                "source_queue_status": "pending_scan",
+                "queue_order": 2,
+                "external_blogger_evidence_status": "confirmed_external",
+                "priority_lane": "confirmed_external_blogger",
+            },
+        }
+        previous = {"unified_source_queue_cursor_position": 0, "unified_source_queue": queue}
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_CONFIRMED_BLOGGER_PRIORITY_ENABLED": "1",
+            "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": "0",
+            "REGION_TALK_CONFIRMED_BLOGGER_HISTORY_SLOTS_PER_RUN": "1",
+        }, clear=False):
+            selected = mod.selected_sources_for_run([ordinary, confirmed], 1, previous_state=previous)
+
+        self.assertEqual([seed.canonical_url for seed in selected], [confirmed.canonical_url])
+        self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["confirmed_external_blogger_priority_enabled"])
+
     def test_confirmed_blogger_history_slots_are_balanced_between_telegram_and_vk(self) -> None:
         mod = load_module()
         tg = self._seed(mod, "@evidencetg", seed_id="evidence_tg")

@@ -585,7 +585,12 @@ def _memory_rows_by_source(memory_rows: dict[str, dict[str, Any]]) -> dict[str, 
     return out
 
 
-def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: bool = False) -> tuple[Any, Any, Any, str, list[dict[str, Any]]]:
+def read_live_rows(
+    limit_images: int,
+    limit_memory: int,
+    *,
+    reverify_existing: bool = False,
+) -> tuple[Any, Any, Any, str, list[dict[str, Any]], list[dict[str, Any]]]:
     ydb, driver, cfg = rt.ydb_connect()
     table = rt.ydb_kv_table_path(cfg)
     pool = ydb.SessionPool(driver)
@@ -620,6 +625,18 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
     memory_by_url = _publication_by_normalized_url(memory_by_pk)
     publication_by_url = _publication_by_normalized_url(publications_by_pk)
     sources_by_key = authoritative_source_index(source_items, source_status_items, online_source_items)
+    # Reuse the one paginated live snapshot for pre-image source-attestation
+    # priority.  The previous implementation scanned candidate/source/status
+    # kinds a second time after this complete read.  On the live compact table
+    # that redundant pass could hit YDB DEADLINE_EXCEEDED even though the first
+    # snapshot had already succeeded, aborting the finalizer before any useful
+    # work.  Writes remain chunked separately; this change removes duplicate
+    # reads without weakening the strict text/source gate.
+    strict_source_priority_rows = strict_text_candidate_source_priority_updates(
+        list(memory_by_pk.values()),
+        sources_by_key,
+        now_iso=rt.utc_now_iso(),
+    )
     memory_by_source = _memory_rows_by_source(memory_by_pk)
     onboarding_profiles_by_source = _profile_index(onboarding_profile_items)
     now_iso = rt.utc_now_iso()
@@ -719,7 +736,7 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
             rows_by_url[post_url] = row
     rows = list(rows_by_url.values())
     rows.sort(key=lambda r: (-float(r.get("publication_pre_score") or 0), r.get("source_class_guess") != "nonlocal_travel_or_general_source"))
-    return ydb, driver, pool, table, rows
+    return ydb, driver, pool, table, rows, strict_source_priority_rows
 
 
 def _json_evidence(value: Any) -> str:
@@ -2139,16 +2156,21 @@ def main() -> int:
     run_id = args.run_id or "region-talk-finalizer-local-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     out_dir = args.output_dir / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    ydb, driver, pool, table, rows = read_live_rows(args.limit_images, args.limit_memory, reverify_existing=args.reverify_existing)
+    (
+        ydb,
+        driver,
+        pool,
+        table,
+        rows,
+        strict_source_priority_rows,
+    ) = read_live_rows(
+        args.limit_images,
+        args.limit_memory,
+        reverify_existing=args.reverify_existing,
+    )
     priority_now = rt.utc_now_iso()
     source_priority_rows = source_evidence_priority_updates(rows, now_iso=priority_now)
-    source_priority_rows.extend(read_strict_text_candidate_source_priority_rows(
-        pool,
-        ydb,
-        table,
-        limit=args.limit_memory,
-        now_iso=priority_now,
-    ))
+    source_priority_rows.extend(strict_source_priority_rows)
     source_priority_clear_rows = source_evidence_priority_clear_updates(rows, now_iso=priority_now)
     source_rows_by_key = {
         canonical_source_key_for_row(row): row

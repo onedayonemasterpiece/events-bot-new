@@ -287,6 +287,18 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   review. Newly-created candidate-memory rows still waiting for BGE, actual
   media acquisition or a policy refresh remain visible through
   `candidate_memory_new_this_run`, but are not called reviewable output.
+- Confirmed-blogger acquisition contract: the manually researched external
+  blogger registry is normalized into the same canonical source queue, not
+  kept as a passive list. Supported TG/VK identities carry
+  `priority_lane=confirmed_external_blogger`; their first history scans consume
+  the bounded high-probability slots before ordinary cold backlog regardless of
+  whether generic known-KO rescans are enabled. Registry records without a
+  supported TG/VK source stay visible as unsupported coverage, not fake queue
+  progress.
+- Finalizer YDB contract: kind reads are keyset-paginated and the successful
+  live snapshot is reused for pre-image source-attestation priority. Do not
+  repeat the complete candidate/source/status scan in the same finalizer run;
+  all finalizer writes remain bounded batch UPSERTs.
 - Orchestrator environment contract: an explicitly supplied `--env-file` must
   exist before any live action is planned or launched, and an existing relative
   path is normalized to an absolute path before it is passed to child launchers.

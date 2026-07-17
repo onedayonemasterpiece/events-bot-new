@@ -470,6 +470,17 @@ Important invariants:
   measured headroom on scanning more high-probability sources, not on deeper
   history, and automatically returns to four after the cohort drains or either
   runtime/BGE guardrail is hit.
+- The pre-researched `region_talk_external_blogger_evidence` registry is not a
+  side report. Every eligible confirmed non-local record with a supported
+  Telegram/VK identity is normalized and deduplicated into the one canonical
+  `source_queue_item` queue with `priority_lane=confirmed_external_blogger`.
+  `REGION_TALK_CONFIRMED_BLOGGER_PRIORITY_ENABLED=1` makes this cohort own the
+  bounded first-scan slots independently of the generic known-KO rescan flag.
+  Unsupported records remain visible in registry coverage metrics instead of
+  being falsely counted as queued sources. The 2026-07-17 live baseline was
+  196 eligible people/projects, 100 with a supported TG/VK identity, 142
+  deduplicated supported source surfaces in the queue, 103 source histories
+  scanned and 35 active confirmed-source first scans still pending.
 - Source-history work is first-pass idempotent. As long as any Telegram/VK row
   in the one canonical queue lacks durable primary-scan evidence, known-KO and
   confirmed-blogger delta rescans are suppressed globally. A dual-text
@@ -737,6 +748,13 @@ Important invariants:
   CandidateReport's Gemini modes are disabled in the orchestrated profile, so
   the local finalizer is the single verifier owner. It uses the shared Supabase
   limiter plus a durable daily/debug budget clamped to 100 requests.
+- Finalizer reads each required YDB kind through the existing keyset-paginated
+  selector and reuses that single snapshot for strict pre-image source
+  attestation. It must not rescan the full candidate/source/status kinds after
+  the snapshot has already succeeded. Source-priority, onboarding and
+  publication writes remain bounded UPSERT batches (20 rows per transaction by
+  default). This avoids the observed 2026-07-17 `DEADLINE_EXCEEDED` on the
+  redundant second candidate-memory pass without weakening any gate.
 - A strong actual-image finalist blocked only by sparse source evidence causes
   a marker on the existing source row. The next CandidateReport run selects
   this one bounded source-attestation scan before ordinary backlog; discovery,
