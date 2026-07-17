@@ -13,6 +13,12 @@ Related docs: `docs/features/static-site-pages/event-token-medallions.md`, `docs
 
 Telegram Afisha posts received semantically wrong custom-emoji medallions because ordinary venue aliases were matched against the whole event text, including `description` and `search_digest`, instead of only venue/location fields.
 
+Successor note (2026-07-15): `INC-2026-07-15-tg-rich-medallion-rendering-gaps.md`
+replaced event-medallion custom emoji with a graphical RichMessage strip. This
+incident's semantic guard remains mandatory in the new resolver: ordinary venue
+marks are location-scoped, while festival/program/source marks require explicit
+curated identity rather than incidental description text.
+
 Confirmed affected public posts:
 
 - `@kldevents/1916` (`event.id=6587`, `Таланты и покойники`) had `kant-island` plus `tretyakovka-kaliningrad`; the event location is `Филиал Третьяковской галереи`, while `Остров Канта` / `Кафедральный собор` appeared only as film/destination content in the description.
