@@ -70,6 +70,7 @@ lanes:
     branch: integration/typed-briefing-mosaic-dramatic-20260717
     worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
     writable_files:
+      - site/src/data/briefingLab.ts
       - site/src/pages/lab/briefing/index.astro
       - tests/playwright/static_briefing_lab.spec.ts
       - docs/features/static-site-pages/typed-briefing-hero-research.md
