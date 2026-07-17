@@ -76,5 +76,7 @@ in the existing `email_control` contour. Suppression or revoked consent pauses o
 the affected reminder and cannot abort the rest of a dispatcher batch.
 
 The generic foundation message intentionally contains only server-owned event id and
-occurrence timing. A later canonical Fly producer may enrich subject/body from a
-server-validated event snapshot; the browser must never provide mail facts.
+occurrence timing. Browser/device timestamps remain untrusted hints and cannot enable
+a reminder; the service lifecycle sync must first validate the canonical Fly start.
+A later canonical Fly producer may enrich subject/body from the same server-validated
+event snapshot; the browser must never provide mail facts.

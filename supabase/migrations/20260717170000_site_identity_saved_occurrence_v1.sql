@@ -92,6 +92,7 @@ create table saved_events.saved_occurrence (
   event_id bigint not null check (event_id > 0),
   occurrence_key text not null,
   occurrence_starts_at timestamptz,
+  occurrence_validated_at timestamptz,
   lifecycle_status text not null default 'upcoming' check (lifecycle_status in ('upcoming','rescheduled','cancelled','completed')),
   lifecycle_revision integer not null default 1 check (lifecycle_revision > 0),
   saved_at timestamptz not null default now(),
@@ -218,14 +219,15 @@ create or replace function public.personalization_save_occurrence_v1(
 language plpgsql security definer set search_path='' as $$
 declare v_user uuid := site_identity.current_user_v1(); v_profile uuid; v_row saved_events.saved_occurrence%rowtype;
 begin
-  if p_event_id <= 0 or length(trim(coalesce(p_occurrence_key,''))) not between 1 and 160 then
+  if p_saved is null or p_event_id <= 0 or length(trim(coalesce(p_occurrence_key,''))) not between 1 and 160 then
     raise exception 'valid occurrence required' using errcode='22023';
   end if;
+  -- Browser/static-page timestamps are untrusted hints. Only the service lifecycle
+  -- sync may populate the canonical time used for email scheduling.
   v_profile := site_identity.ensure_profile_v1(v_user);
   insert into saved_events.saved_occurrence(profile_id,event_id,occurrence_key,occurrence_starts_at,removed_at,updated_at)
-  values(v_profile,p_event_id,trim(p_occurrence_key),p_occurrence_starts_at,case when p_saved then null else now() end,now())
+  values(v_profile,p_event_id,trim(p_occurrence_key),null,case when p_saved then null else now() end,now())
   on conflict(profile_id,event_id,occurrence_key) do update set
-    occurrence_starts_at=coalesce(excluded.occurrence_starts_at,saved_events.saved_occurrence.occurrence_starts_at),
     removed_at=excluded.removed_at, updated_at=now()
   returning * into v_row;
   if not p_saved then
@@ -251,7 +253,7 @@ create or replace function public.personalization_set_event_signal_v1(
 ) returns boolean language plpgsql security definer set search_path='' as $$
 declare v_user uuid := site_identity.current_user_v1(); v_profile uuid;
 begin
- if p_event_id<=0 or p_signal not in ('like','not_interested') or length(trim(coalesce(p_occurrence_key,''))) not between 1 and 160 then
+ if p_active is null or p_event_id<=0 or p_signal not in ('like','not_interested') or length(trim(coalesce(p_occurrence_key,''))) not between 1 and 160 then
    raise exception 'invalid signal' using errcode='22023'; end if;
  v_profile:=site_identity.ensure_profile_v1(v_user);
  insert into saved_events.event_signal(profile_id,event_id,occurrence_key,signal,active)
@@ -298,7 +300,7 @@ declare
  v_subscription uuid;
  v_replay record;
 begin
- if p_request_id is null or length(trim(coalesce(p_terms_version,''))) not between 1 and 80 then raise exception 'consent evidence required' using errcode='22023'; end if;
+ if p_enabled is null or p_request_id is null or length(trim(coalesce(p_terms_version,''))) not between 1 and 80 then raise exception 'consent evidence required' using errcode='22023'; end if;
  select s.* into v_saved from saved_events.saved_occurrence s join site_identity.profile p on p.id=s.profile_id
  where p.user_id=v_user and s.event_id=p_event_id and s.occurrence_key=trim(p_occurrence_key) and s.removed_at is null for update;
  if v_saved.id is null then raise exception 'saved occurrence required' using errcode='P0002'; end if;
@@ -321,8 +323,8 @@ begin
  end if;
 
  if p_enabled then
-  if v_saved.lifecycle_status not in ('upcoming','rescheduled') then
-   raise exception 'reminder unavailable for terminal occurrence' using errcode='22023';
+  if v_saved.lifecycle_status not in ('upcoming','rescheduled') or v_saved.occurrence_validated_at is null then
+   raise exception 'canonical upcoming occurrence required' using errcode='22023';
   end if;
   select i.id,i.normalized_email,i.verified_at into v_identity,v_email,v_verified_at
   from email_control.recipient_identity i where i.user_id=v_user;
@@ -410,7 +412,7 @@ begin
  v_profile:=site_identity.ensure_profile_v1(p_user_id);
  if v_device.linked_profile_id is not null and v_device.linked_profile_id<>v_profile then raise exception 'device already linked to another account' using errcode='23505'; end if;
  insert into saved_events.saved_occurrence(profile_id,event_id,occurrence_key,occurrence_starts_at,removed_at)
- select v_profile,a.event_id,a.occurrence_key,a.occurrence_starts_at,a.removed_at from saved_events.anonymous_saved_occurrence a where a.device_id=p_device_id
+ select v_profile,a.event_id,a.occurrence_key,null,a.removed_at from saved_events.anonymous_saved_occurrence a where a.device_id=p_device_id
  on conflict on constraint saved_occurrence_profile_id_event_id_occurrence_key_key do nothing;
  get diagnostics v_count=row_count;
  update site_identity.device set linked_profile_id=v_profile,last_seen_at=now() where id=p_device_id;
@@ -471,6 +473,7 @@ begin
   update saved_events.saved_occurrence s set
    lifecycle_status=p_lifecycle_status,
    occurrence_starts_at=coalesce(p_occurrence_starts_at,s.occurrence_starts_at),
+   occurrence_validated_at=now(),
    lifecycle_revision=s.lifecycle_revision+1,
    updated_at=now()
   where s.event_id=p_event_id and s.occurrence_key=trim(p_occurrence_key)
@@ -478,6 +481,7 @@ begin
     and (
      s.lifecycle_status is distinct from p_lifecycle_status
      or (p_occurrence_starts_at is not null and s.occurrence_starts_at is distinct from p_occurrence_starts_at)
+     or s.occurrence_validated_at is null
     )
   returning s.id
  ) select count(*)::integer,coalesce(array_agg(id),'{}'::uuid[])
