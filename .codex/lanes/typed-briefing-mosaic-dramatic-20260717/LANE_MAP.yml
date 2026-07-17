@@ -1,0 +1,97 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 65b9248331ee3e9713ae1cc38ce63f69c1029a0f
+base_branch: feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-mosaic-dramatic-20260717
+global_constraints:
+  - Read Telegram topic 6 before implementation and after evidence publication.
+  - Preserve the established narrative text anchor; mosaic may add only the paper stripe.
+  - Mosaic remains desktop-only; mobile must assign no narrative image source.
+  - Use existing event media only; no paid image generation.
+  - Preserve source aspect ratio through a cover crop; never stretch the raster to the grid ratio.
+  - Code changes require canonical documentation and CHANGELOG synchronization.
+verification_owner: root serial integrator
+stop_conditions:
+  - Approved Telegram human session is unavailable for the mandatory review gate.
+  - A source image lacks dimensions or cannot produce a safe cover crop without falling back text-only.
+requirements:
+  - id: R01
+    requirement: Make the far-right mosaic cells fully bright instead of leaving visibly washed-out holes.
+    area: final opacity field
+    lane: ui-integrator
+    done_when: The two rightmost columns are fully opaque in every row and exact screenshots show an intact bright image edge.
+  - id: R02
+    requirement: Replace the checkerboard-looking final field with a deterministic random-looking distribution.
+    area: opacity topology
+    lane: ui-integrator
+    done_when: The matrix has no alternating row/column parity pattern and has mixed runs/clusters of different lengths.
+  - id: R03
+    requirement: Remove the overly smooth right-to-left lightening.
+    area: opacity topology
+    lane: ui-integrator
+    done_when: Local reversals and high-contrast pockets interrupt the broad left-side attenuation trend.
+  - id: R04
+    requirement: Add visual dynamics and drama to reveal and final transparency differences.
+    area: motion and composition
+    lane: ui-integrator
+    done_when: Reveal/exit use irregular clustered beats and the final field spans conspicuously separated opacity bands.
+  - id: R05
+    requirement: Extend the image farther left so it occupies roughly the right three quarters of the viewport.
+    area: viewport composition
+    lane: ui-integrator
+    done_when: Desktop media shell begins at 25 percent of viewport width within one cell tolerance and ends at the physical right edge.
+  - id: R06
+    requirement: Stop stretching and distorting images; use an intelligent source-preserving crop.
+    area: image rendering
+    lane: ui-integrator
+    done_when: Runtime dimensions implement cover scaling from naturalWidth/naturalHeight and Playwright proves scaleX equals scaleY.
+lanes:
+  - id: visual-audit
+    role: reviewer
+    effort: high
+    requirement_ids: []
+    target: Independently identify the current visual failure and propose an exact non-checkerboard acceptance contract.
+    depends_on: []
+    execution_mode: read_only_until_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Root causes, concrete visual strategy, measurable acceptance criteria and risks.
+    verification_scope: inspection_only
+    status: spawned
+  - id: ui-integrator
+    role: worker
+    effort: extra-high
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: Implement the coupled renderer, topology, motion, tests, documentation, immutable preview and Telegram evidence serially.
+    depends_on: [visual-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/typed-briefing-mosaic-dramatic-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files:
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/operations/mobile-ui-telegram-review.md
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - CHANGELOG.md
+      - .codex/**
+    forbidden_files: []
+    expected_output: Dramatic source-faithful 16x5 mosaic with exact local/public evidence and critical consultant gate.
+    verification_scope: full_local
+    status: planned
+  - id: closure-review
+    role: merge_reviewer
+    effort: high
+    requirement_ids: []
+    target: Audit R01-R06, exact screenshots/video, regressions and lab-only release boundary after implementation.
+    depends_on: [ui-integrator]
+    execution_mode: read_only_until_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: [site/**, docs/**, CHANGELOG.md]
+    expected_output: Done/Partial/Missing/Blocked matrix with publication recommendation.
+    verification_scope: full_local
+    status: planned
