@@ -363,6 +363,22 @@ def runtime_budget_ok(*, reserve_seconds: int = 120) -> bool:
     return runtime_remaining_seconds() > reserve_seconds
 
 
+def should_defer_acquisition_for_critical_work(posts_count: int) -> bool:
+    """Protect critical handoff without wasting the rest of a healthy run.
+
+    The previous boolean stopped every acquisition stage after a single exact
+    post, even with more than 17 minutes left.  E5 model startup dominates a
+    small batch, so scoring one post instead of a bounded high-probability batch
+    is product-negative.  Defer only when the critical batch is already useful
+    on its own or when the durable scoring/write tail is genuinely at risk.
+    """
+    if not getenv_bool("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK", True):
+        return False
+    min_posts = max(1, getenv_int("REGION_TALK_CRITICAL_WORK_DEFER_MIN_POSTS", 8))
+    min_remaining = max(0, getenv_int("REGION_TALK_CRITICAL_WORK_CONTINUE_MIN_REMAINING_SECONDS", 600))
+    return int(posts_count or 0) >= min_posts or runtime_remaining_seconds() <= min_remaining
+
+
 def runtime_aware_posts_to_score_limit(
     configured_max: int,
     posts_available: int,
@@ -13493,7 +13509,7 @@ async def fetch_telegram_posts(
             posts.extend(exact_posts)
             if exact_posts:
                 status.event("post_link_queue_exact_fetch_done", phase="fetch", status="running", run_id=run_id, exact_posts_fetched=len(exact_posts), exact_sources=len(exact_source_rows), progress_label=f"exact post links fetched {len(exact_posts)}")
-                if getenv_bool("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK", True):
+                if should_defer_acquisition_for_critical_work(len(exact_posts)):
                     status.event(
                         "discovery_deferred_critical_sla",
                         phase="fetch",
@@ -13504,6 +13520,16 @@ async def fetch_telegram_posts(
                         progress_label=f"exact SLA: score/handoff {len(exact_posts)} posts before more discovery",
                     )
                     return source_rows, posts
+                status.event(
+                    "critical_work_acquisition_continues",
+                    phase="fetch",
+                    status="running",
+                    run_id=run_id,
+                    critical_lane="exact_post_link",
+                    critical_posts=len(exact_posts),
+                    runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+                    progress_label=f"exact SLA retained; continue bounded high-probability acquisition after {len(exact_posts)} posts",
+                )
             if governor.degraded:
                 status.event("telegram_fetch_deferred_by_cooldown", phase="fetch", status="deferred", run_id=run_id, cooldown_until=governor.floodwait_cooldown_until, floodwait_method=governor.floodwait_method, max_floodwait_seconds=governor.max_floodwait_seconds, progress_label=f"Telegram cooldown active until {governor.floodwait_cooldown_until}; stopping Telethon fetch phases")
                 return source_rows, posts
@@ -13519,7 +13545,7 @@ async def fetch_telegram_posts(
             return source_rows, posts
         if fast_check_rows:
             source_rows.extend(fast_check_rows)
-        if fast_check_posts and getenv_bool("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK", True):
+        if fast_check_posts and should_defer_acquisition_for_critical_work(len(posts)):
             status.event(
                 "discovery_deferred_critical_sla",
                 phase="fast_check_ko",
@@ -13530,6 +13556,17 @@ async def fetch_telegram_posts(
                 progress_label=f"fast-check SLA: score/handoff {len(fast_check_posts)} posts before more discovery",
             )
             return source_rows, posts
+        if fast_check_posts:
+            status.event(
+                "critical_work_acquisition_continues",
+                phase="fast_check_ko",
+                status="running",
+                run_id=run_id,
+                critical_lane="fast_check_exact",
+                critical_posts=len(posts),
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+                progress_label=f"fast-check SLA retained; continue bounded confirmed-source acquisition after {len(posts)} posts",
+            )
         for idx, seed in enumerate(monitored, start=1):
             if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
                 status.event("runtime_budget_fetch_stop", phase="fetch", status="deferred", run_id=run_id, sources_done=idx - 1, sources_total=len(monitored), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label=f"runtime budget stop at sources {idx-1}/{len(monitored)}")
@@ -13847,7 +13884,7 @@ async def fetch_telegram_posts(
             or str(row.get("external_blogger_evidence_status") or "").lower()
             in {"confirmed_external", "confirmed", "verified", "accepted"}
         ]
-        if confirmed_history_posts and getenv_bool("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK", True):
+        if confirmed_history_posts and should_defer_acquisition_for_critical_work(len(posts)):
             status.event(
                 "discovery_deferred_critical_sla",
                 phase="fetch",

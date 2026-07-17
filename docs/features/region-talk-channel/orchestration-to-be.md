@@ -14,12 +14,17 @@ The normal `RegionTalkCandidateReport` run should remain queue-driven and opport
 6. only then spend remaining runtime on source/post discovery and new E5 scoring/enqueueing for BGE.
 
 When exact-post, fast-check or confirmed-external acquisition has already
-produced actionable post bodies, the run may stop Telegram acquisition at that
-boundary and immediately perform E5/state/image handoff. This is
-`REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK=1`. It does **not** disable
-discovery: the next cycle without critical acquired work executes the normal
-history/keyword/hashtag/similar tail. The purpose is to prevent a proven KO post
-from waiting behind lower-probability acquisition and another full YDB pass.
+produced actionable post bodies, the run protects enough time for the
+E5/state/image handoff. This is
+`REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK=1`, but the boundary is adaptive:
+one exact post must not stop the high-probability acquisition tail while more
+than ten minutes remain. By default acquisition is deferred only after a useful
+batch of eight actionable posts has accumulated, or when runtime remaining is
+at most 600 seconds. This prevents both failure modes observed live: losing a
+proven KO post behind lower-probability work and spending the E5 startup cost on
+one post while leaving about 17 minutes unused. Discovery stays enabled and
+continues in this run when headroom is healthy, or in the next cycle after a
+real critical batch/runtime boundary.
 
 This keeps every launch useful in several directions while still bounding one Kaggle run to about 20-30 minutes. Explicit modes remain useful only for probes, recovery and tests (`vector_probe_only`, BGE-only batch validation, no-discovery maintenance), not as the default product workflow.
 
@@ -615,9 +620,12 @@ Important invariants:
   cannot starve later ready work. Terminal, cooldown and entity-wait rows are excluded from the
   actionable head; ready rows are ordered cached-entity first, newest first and
   then by attempt count. This phase does not replace discovery globally. A
-  successful critical batch may defer the remaining acquisition phases for one
-  cycle so the post reaches E5/BGE handoff immediately; discovery remains
-  enabled and resumes in the next cycle without newly acquired critical work.
+  useful critical batch may defer the remaining acquisition phases for one
+  cycle so the posts reach E5/BGE handoff immediately. The default defer gate
+  is at least eight actionable posts or no more than 600 seconds remaining;
+  below eight posts with more headroom, bounded confirmed-source/fast-check
+  acquisition continues in the same run. Discovery remains enabled and resumes
+  in the next cycle after a real defer boundary.
 - The orchestrated source-selection profile is YDB-queue-only when durable queue
   rows are available. Static CSV seeds are fallback/bootstrap data, not a source
   of repeated scans once the live queue exists.

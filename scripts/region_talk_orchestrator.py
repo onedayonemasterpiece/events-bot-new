@@ -179,6 +179,8 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # highest-probability input.  Finish their E5/YDB handoff in the same run;
     # discovery remains enabled and runs in cycles without critical work.
     "REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK": "1",
+    "REGION_TALK_CRITICAL_WORK_DEFER_MIN_POSTS": "8",
+    "REGION_TALK_CRITICAL_WORK_CONTINUE_MIN_REMAINING_SECONDS": "600",
     "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "8",
     "REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT": "5000",
     "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
@@ -646,7 +648,7 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         (
             "Медиа — исторических постов / ждут оценки / отложено до полного text/source gate / постов реально оценено / отдельных кадров оценено / "
             "legacy auto-accept / visual-review raw/active/tombstoned / partial albums raw/active / "
-            "scoring retry / VLM backlog/completed/accept/reject/review/error-or-budget / видео вручную: "
+            "повторная оценка / визуальная проверка Gemini: очередь/завершено/принято/отклонено/нужен ручной просмотр/ошибка или лимит / видео вручную: "
             f"{value('image_ledger_rows_total')}/"
             f"{value('image_pending_total')}/"
             f"{value('image_deferred_text_gate_total')}/"
@@ -4347,7 +4349,7 @@ def build_decision_plan(
                 "--image-poll-interval-seconds", "30", "--no-wait",
             ],
             (
-                "text-confirmed image work is pending (new/retry/versioned album rescore/VLM review="
+                "ожидает проверка изображений после полного текстового фильтра (новые/повтор/переоценка альбома/визуальная проверка Gemini="
                 f"{int(metrics.get('image_pending_total') or 0)}/"
                 f"{int(metrics.get('image_scoring_retry_total') or 0)}/"
                 f"{int(metrics.get('image_contract_rescore_backlog_total') or 0)}/"

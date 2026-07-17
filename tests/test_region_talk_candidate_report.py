@@ -38,6 +38,34 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_single_critical_post_does_not_starve_high_probability_acquisition(self) -> None:
+        mod = load_module()
+        old_enabled = os.environ.get("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK")
+        old_min_posts = os.environ.get("REGION_TALK_CRITICAL_WORK_DEFER_MIN_POSTS")
+        old_min_remaining = os.environ.get("REGION_TALK_CRITICAL_WORK_CONTINUE_MIN_REMAINING_SECONDS")
+        original_remaining = mod.runtime_remaining_seconds
+        try:
+            os.environ["REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK"] = "1"
+            os.environ["REGION_TALK_CRITICAL_WORK_DEFER_MIN_POSTS"] = "8"
+            os.environ["REGION_TALK_CRITICAL_WORK_CONTINUE_MIN_REMAINING_SECONDS"] = "600"
+            mod.runtime_remaining_seconds = lambda: 1038.0
+
+            self.assertFalse(mod.should_defer_acquisition_for_critical_work(1))
+            self.assertTrue(mod.should_defer_acquisition_for_critical_work(8))
+            mod.runtime_remaining_seconds = lambda: 599.0
+            self.assertTrue(mod.should_defer_acquisition_for_critical_work(1))
+        finally:
+            mod.runtime_remaining_seconds = original_remaining
+            for name, value in [
+                ("REGION_TALK_DEFER_DISCOVERY_ON_CRITICAL_WORK", old_enabled),
+                ("REGION_TALK_CRITICAL_WORK_DEFER_MIN_POSTS", old_min_posts),
+                ("REGION_TALK_CRITICAL_WORK_CONTINUE_MIN_REMAINING_SECONDS", old_min_remaining),
+            ]:
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
     def test_image_scoring_review_fixture_locks_operator_regressions_and_compliance_non_negatives(self) -> None:
         fixture = json.loads(
             (ROOT / "tests" / "fixtures" / "region_talk_image_scoring_review_cases.json").read_text(encoding="utf-8")
