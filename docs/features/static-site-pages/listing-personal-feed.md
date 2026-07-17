@@ -11,12 +11,21 @@ This keeps SEO-safe deterministic listing content first, then adds a personal co
 ## Runtime behavior
 
 1. Page renders static listing sections only.
-2. JS looks for a cached `ke_listing_personal_feed_cache_v1` manifest in `localStorage`.
-3. Cache is shared across listing pages and has a short TTL of 30 minutes.
+2. JS looks for a base-scoped `ke_listing_personal_feed_cache_v1:<base-path>` manifest in `localStorage`.
+3. Cache is shared across listing/event pages only inside the same production or immutable-preview base and has a short TTL of 30 minutes. A manifest whose stored `base_path` differs from the current page is rejected.
 4. If cache is valid for the current compatible profile hash, the personal section renders immediately without another network call.
 5. If there is no cache, the browser first loads the bounded same-origin `/data/personal-feed.json` catalog and ranks it locally. A public Supabase RPC, when explicitly configured, is only a fallback if that static request fails.
 6. While browsing across listing pages, the same localStorage list is reused; “Обновить ленту” can force a refresh when backend config exists.
 7. If both sources fail, the section remains hidden; static listing UX is not degraded.
+
+Every dynamic event-card boundary rebases same-site `/sobytiya/<slug>/...`
+links to the base of the page that is currently open. This applies to cached
+personal feeds, discovery load-more manifests and Authorized Search results,
+including their absolute/share and local calendar projections. It prevents a
+manifest retained from preview v7 (or a search snapshot produced for the root)
+from navigating a v10 reviewer back to an older event UI. Absolute URLs on a
+different origin remain untouched because they may be real organizer/ticket
+destinations rather than KenigEvents event navigation.
 
 On event-detail pages the same surface is intentionally delayed until the
 visitor reaches `Смотрите дальше`; see
@@ -24,7 +33,7 @@ visitor reaches `Смотрите дальше`; see
 
 ## Why localStorage cache
 
-The goal is to avoid repeated Supabase reads on every static-page navigation. The feed is a **starter list** for the browsing session, not an exact real-time ranking. Local strong actions (`like`, `not_interested`, `share`) still update the local profile and can filter/reorder cached cards client-side.
+The goal is to avoid repeated Supabase reads on every static-page navigation without allowing a build-specific URL to outlive its preview. The feed is a **starter list** for the browsing session, not an exact real-time ranking. Local strong actions (`like`, `not_interested`, `share`) still update the local profile and can filter/reorder cached cards client-side.
 
 ## Supabase RPC option
 

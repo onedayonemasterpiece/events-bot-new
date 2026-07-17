@@ -582,6 +582,10 @@ for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml], ['
   if (!html.includes('hidden') || !html.includes('Личная лента')) throw new Error(`${name} personal feed must be hidden until backend/cache returns cards`);
 }
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
+if (!controlHtml.includes(`data-site-base-path="/${buildId}"`) || !controlHtml.includes('KenigEventsNormalizeInternalEventUrl') || !controlHtml.includes('rebaseInternalEventUrl')) throw new Error('Layout misses current-preview dynamic event-link rebasing contract');
+if (!controlHtml.includes('cache.base_path !== CURRENT_BASE_PATH') || !controlHtml.includes('base_path: CURRENT_BASE_PATH') || !controlHtml.includes('ke_listing_personal_feed_cache_v1:${CURRENT_BASE_PATH')) throw new Error('Personal-feed cache must be scoped to and validated against the current preview base');
+const authorizedSearchSource = readFileSync(join(siteDir, 'src/components/AuthorizedEventSearch.astro'), 'utf8');
+if (!authorizedSearchSource.includes('currentPreviewEventUrl(display.href || candidate.href') || !authorizedSearchSource.includes('href: currentPreviewEventUrl(display.href || candidate?.href')) throw new Error('Authorized search must rebase both final and vector-preview event links to the current preview');
 if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes("explicitMode || (hiddenCount > 0 ? 'personal' : 'all')") || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');
 const icsBaseUrl = (process.env.PUBLIC_ICS_BASE_URL || (assetBaseUrl ? `${assetBaseUrl}/ics` : '')).replace(/\/+$/u, '');
