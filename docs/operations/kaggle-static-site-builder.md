@@ -2,6 +2,12 @@
 
 Status: implementation spike / production-publish gate pending.
 
+Current event-page release sequencing, top-five platform backlog and the planned
+10-day Telegraph coexistence/cutover are canonical in
+[`docs/features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md).
+The mode names described there are a required implementation contract, not
+already-existing production env flags.
+
 ## Position
 
 Kaggle is an accepted **batch executor** in this project because the repo already uses Kaggle for monitored parser/video/social jobs. For static pages it may build Astro HTML, related/discovery manifests, golden-facet manifests, share-card artifacts and offline evaluation reports.
@@ -130,3 +136,22 @@ A production/Fly run must pass `/data/db.sqlite` as status DB and `/internal/kag
 - resource acquire/release for `static_site:builder`.
 
 A local manual run without callback/status DB is useful build evidence, but it is not production status-ledger evidence.
+
+## Transport refresh handoff
+
+Transport source refresh is a separate upstream CPU workload, not part of the Astro kernel:
+
+- KPPK: `scripts/run_kppk_transport_refresh_kaggle.py`;
+- buses: `scripts/run_bus_transport_refresh_kaggle.py`;
+- server fan-in: `scripts/publish_transport_schedule.py` / `TransportManifestStore`;
+- resource leases: `transport_schedule:kppk:refresh` and `transport_schedule:bus:refresh`.
+
+The provider runners reuse the same unique private input dataset, `create_kaggle_run_config`, status dataset, heartbeat and terminal report protocol as the static builder. With `--state-root` a waited run validates/fans in its output server-side; with `--publish-db` a changed combined semantic hash enqueues the existing `static_site_build:prod` coalesce key. An unchanged hash does not enqueue.
+
+The fan-in first persists `combined/rebuild.json` as pending, then atomically moves the validated combined pointer, then acknowledges the desired hash only after the SQLite outbox enqueue succeeds. A later unchanged refresh retries an unacknowledged hash. `enqueue_job` also gives a running `static_site_build:prod` owner exactly one deferred coalesced follow-up, so two provider updates cannot be lost or fan out into identical builds.
+
+Waited terminal transport runs delete their unique private input and status datasets by default. `--no-wait`, a nonterminal timeout, or explicit `--keep-input-datasets` retains them and transfers cleanup ownership to the operator. Official provider HTML/PDF adapters are not implemented by the generic JSON-normalization kernel; production/canary remains off until those concrete adapters and source rights are reviewed.
+
+The transport script imports the shared package only from its unique private input after checking the `kenigevents.transport_runtime_package.v1` allowlist and every file SHA-256. Do not depend on sibling files in the pushed kernel folder: the Kaggle script contract reliably exposes the declared `code_file`, while additional runtime code belongs in a declared `dataset_source`.
+
+The proposed nightly times and production-off canary gate are canonical in [the static transport schedule contract](../features/static-site-pages/event-transport-schedule.md). Do not activate cron merely because both kernels can be pushed successfully; first verify real provider output, last-good/failure recovery and a changed/unchanged rebuild pair.

@@ -1,0 +1,12 @@
+{
+  "id": "onedayonemasterpiece/kenigevents-transport-bus-refresh",
+  "title": "KenigEvents transport bus refresh",
+  "code_file": "transport_bus_refresh.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "events_bot_disable_status_instrumentation": true,
+  "dataset_sources": []
+}

@@ -46,3 +46,37 @@ does not authorize a client to supply event facts or enqueue arbitrary mail.
 ## Release gates
 
 See [email delivery operations](../../operations/email-delivery.md) and [favorites/calendar](../event-favorites-calendar/README.md).
+
+## Saved-event D-1 producer foundation (2026-07-17)
+
+The saved-occurrence migration adds explicit per-occurrence reminder consent. Save,
+like and reminder consent are independent. Enabling requires a synchronized verified
+`email_control.recipient_identity`, active `transactional_event` purpose consent and
+returns only a masked address.
+
+`saved_events.schedule_d1_v1` targets 24 hours before start, permits at most a
+six-hour catch-up, and shifts a due time out of 22:00–08:00
+`Europe/Kaliningrad` quiet hours. The dispatcher also expires work more than six
+hours overdue. Completed/cancelled occurrences stop pending work. Reschedule
+increments the schedule revision: an old-time D-1 that is still pending is skipped
+and replaced under the new revision, while a D-1 that has already reached delivery
+is never repeated. Reschedule/cancellation use separately keyed lifecycle messages.
+
+`personalization_enqueue_due_reminders_v1` is service-only and writes strict
+`transactional-plain-v1` payloads through the existing
+`email_enqueue_transactional_v1` path. The existing Postbox worker therefore keeps
+all claim-time verified-email, consent, suppression, hard-bounce, complaint,
+unsubscribe, kill-switch and ambiguous-delivery protections. The migration defaults
+producer calls to dry-run; activation needs a scheduled service call and existing
+Postbox runtime switches.
+
+The reminder row retains only the masked verified-address snapshot and verification
+timestamp needed for visible status. Plaintext delivery identity remains exclusively
+in the existing `email_control` contour. Suppression or revoked consent pauses only
+the affected reminder and cannot abort the rest of a dispatcher batch.
+
+The generic foundation message intentionally contains only server-owned event id and
+occurrence timing. Browser/device timestamps remain untrusted hints and cannot enable
+a reminder; the service lifecycle sync must first validate the canonical Fly start.
+A later canonical Fly producer may enrich subject/body from the same server-validated
+event snapshot; the browser must never provide mail facts.

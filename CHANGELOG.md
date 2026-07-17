@@ -3,11 +3,22 @@
 ## [Unreleased]
 
 ### Fixed
+- **Static event calendar identity**: preserve the existing
+  `event-<id>@kenigevents.ru` ICS UID while adding occurrence/lifecycle metadata,
+  preventing a release from creating duplicate external-calendar entries.
+- **Static-site build coalescing during transport refresh**: when a build already
+  owns the production coalesce key, retain exactly one deferred follow-up so a
+  changed accepted transport hash cannot be lost during the running build.
 - **Smart Update image geometry queue starvation**: let the independent Gemma
   geometry stage proceed when the earlier semantic-role stage remains pending
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Static-site documentation and E2E index**: corrected the earlier narrow
+  top-five plan to an explicitly scoped platform workstream, restored the full
+  release scenario inventory, distinguished preview/mocked/draft checks from
+  runnable release evidence, and aligned post-presentation T0 with the reversible
+  D0-to-D10 event-detail Telegraph coexistence contract.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
   truncating the structured JSON at the bounded 768-token output ceiling.
@@ -17,6 +28,21 @@
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
+- **Static-site full release-context recovery**: restore the 233-item
+  F1–F18/H1/M1–M6 Stage 0–11 checklist, the missing feature/operations/backlog
+  contracts, the source/status recovery report, official presentation gate and
+  208 stable acceptance scenario IDs as the umbrella release plan.
+- **Static identity, saved occurrences and D-1 reminder foundation**: add a
+  Supabase Auth/RPC/Edge boundary with private RLS-protected schemas, secure
+  device-to-account merge, separate save/like/consent/reminder state, masked
+  verified-email evidence and retry-safe lifecycle-aware Postbox scheduling.
+  Migration, Edge deployment, schedulers and delivery remain unapplied/off pending
+  backup, staging contracts and Supabase security-advisor gates.
+- **Transport refresh foundation**: add independent KPPK and bus Kaggle CPU jobs,
+  a shared versioned schema, validated per-provider last-known-good fan-in,
+  immutable manifests/current pointers and content-hash coalesced rebuild intent.
+  Controlled synthetic mechanics canaries passed; official-source adapters,
+  production status-ledger canary, schedule and activation remain blocked/off.
 - **Smart Update image geometry**: add an asynchronous, content-addressed
   `gemma-4-31b-it` stage that stores normalized face bboxes and a viewer-value
   region for event images, plus a resumable externally paced backfill,

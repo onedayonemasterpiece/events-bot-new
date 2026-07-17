@@ -53,6 +53,9 @@ export function buildIcs(event: PreviewEvent): string {
     'BEGIN:VEVENT',
     `UID:event-${event.id}@kenigevents.ru`,
     `DTSTAMP:${stamp}`,
+    `X-KENIGEVENTS-OCCURRENCE-ID:${event.id}`,
+    `STATUS:${String(event.lifecycle_status || '').toLowerCase() === 'cancelled' ? 'CANCELLED' : 'CONFIRMED'}`,
+    'TRANSP:OPAQUE',
   ];
 
   if (event.starts_at) {
@@ -62,6 +65,10 @@ export function buildIcs(event: PreviewEvent): string {
     }
   } else {
     lines.push(`DTSTART;VALUE=DATE:${formatDateOnly(event.start_date)}`);
+  }
+
+  if (event.updated_at) {
+    lines.push(`LAST-MODIFIED:${formatUtcDateTime(event.updated_at)}`);
   }
 
   lines.push(

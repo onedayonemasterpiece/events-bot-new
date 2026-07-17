@@ -1,6 +1,9 @@
 # Site user identity and profile linking
 
-> Status: **partial/design**. Yandex login/logout exists in the authorized-search surface; verified-email identity and durable profile linking are not production-complete.
+> Status: **unapplied control-plane foundation**. Supabase Auth identity,
+> verified-email and durable profile-linking code/contracts exist, but the new
+> migration, Edge Function and activation configuration are not applied in
+> production.
 
 ## Scope
 
@@ -62,3 +65,71 @@ See [personalization data ownership](../../architecture/personalization-data-own
 See the umbrella [global product decisions](../static-personal-announcements/global-product-decisions.md), especially verified-email UX and profile-link consent.
 
 The VK message-link extension additionally requires approved retention, a dedicated VK inbox, a purpose-specific VK-link consent, a personal-data processing policy and a user agreement. Its live identity/friend graph is pseudonymous personal data, not anonymous data, and its canonical store is an isolated Managed Service for YDB personal-data contour in `ru-central1`, not Supabase.
+
+## Shared controller and control plane (2026-07-17 foundation)
+
+The layout-independent browser entry point is `site/src/lib/site-identity.js`. A page
+family may subscribe to its state and render its own controls; this module does not
+own the final header, cards, event-detail composition or `/izbrannoe/` layout.
+
+Implemented contracts:
+
+- Yandex PKCE login/logout with a cleaned return URL and persisted Supabase session;
+- verified email through one Supabase OTP transaction whose email template exposes
+  both `{{ .Token }}` and `{{ .ConfirmationURL }}`; the client supplies a 15-minute
+  UX TTL, 60-second resend cooldown, five-attempt ceiling and replay marker, while
+  Supabase Auth remains the authoritative one-time/rate-limit enforcement;
+- a single remembered device email, exposed to UI only in masked form, plus
+  `forgetEmailOnDevice()` independent of logout;
+- reload and cross-tab synchronization through Supabase storage, `storage` events
+  and `BroadcastChannel`; switching auth user clears account-dependent count state;
+- random 256-bit device proof. `anon_id` alone is never accepted by the server;
+- Supabase anonymous Auth users are rejected by account-owned RPCs even though
+  Supabase maps them to the `authenticated` database role; they remain on the
+  separately consented device-proof flow;
+- automatic consented merge through `identity-control`, with request-id replay,
+  one profile per `auth.users.id`, unique active provider links and saved-occurrence
+  deduplication. An already-linked device cannot be moved to another account.
+
+The additive migration
+`supabase/migrations/20260717170000_site_identity_saved_occurrence_v1.sql` creates
+private `site_identity` and `saved_events` schemas. Browser roles have no raw table
+privileges. Authenticated user actions are narrow RPCs; device materialization,
+merge, unlink, purge, lifecycle sync and reminder dispatch are service-only RPCs
+called through an explicitly authenticated Edge Function or backend worker.
+`identity-control` fails closed unless all three `PERSONALIZATION_SUPABASE_*`
+credentials are configured and never falls back to this repository's legacy
+Supabase project.
+
+### Conflict, unlink and delete policy
+
+- authenticated explicit current state wins; anonymous rows are imported only when
+  the durable `(profile,event,occurrence)` row does not already exist;
+- repeated merge with the same request id returns its recorded result; a later
+  request remains harmless because profile/link/save uniqueness is structural;
+- logout preserves the durable profile; unlink revokes the current device proof and
+  rotates the local device, without cloning/splitting the profile;
+- deletion first marks the profile `deleting`, revokes reminders and creates a purge
+  request. Actual Supabase Auth user deletion requires a separate recent-auth,
+  audited service operation; eligible YDB history purge consumes that request;
+- a provider identity can be explicitly unlinked only after proving another viable
+  sign-in method. The foundation does not expose a browser RPC that could orphan an
+  account.
+
+### Required activation configuration
+
+1. Preserve the reconciled historical
+   `20260717074903_event_search_age_fields.sql`, take a backup, then apply the new
+   migration only after its rollback SQL contract passes on staging.
+2. Deploy `identity-control` with JWT verification disabled at the gateway; it
+   validates bearer sessions itself and keeps the secret key server-only.
+3. Configure the email template with both code and confirmation link, OTP expiry
+   `900` seconds, and project resend/rate limits no weaker than the controller.
+4. Use the existing `custom:yandex` provider and production redirect allow-list.
+5. Inject only publishable personalization URL/key into static builds.
+
+Production activation is **not** part of this branch. The previously missing live
+ledger row `20260717074903 event_search_age_fields` was recovered byte-for-byte from
+historical commit `b01b02ae` and its columns/constraints were verified read-only in
+the live project. The new identity migration remains unapplied until backup,
+staging, security-advisor and controlled activation gates are completed.
