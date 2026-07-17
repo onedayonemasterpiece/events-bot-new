@@ -38,13 +38,13 @@ test('ADD-BUILD-09 tree hash is order-independent and content-addressed', () => 
   assert.notEqual(treeHash(left), treeHash([{ ...left[0], size: 3 }, left[1]]));
 });
 
-test('ADD-BUILD-10 secret publisher refuses public listing and accepts only AccessDenied', () => {
+test('ADD-BUILD-12 capacity/privacy preflight refuses public listing and accepts only AccessDenied', () => {
   assert.throws(() => assertAnonymousListDisabled({ status: 200, body: '<ListBucketResult />' }), /anonymous ListObjects/u);
   assert.throws(() => assertAnonymousListDisabled({ status: 500, body: 'unknown' }), /Cannot prove/u);
   assert.equal(assertAnonymousListDisabled({ status: 403, body: 'AccessDenied' }), true);
 });
 
-test('ADD-BUILD-10 publisher is create-only prefix-contained and has no root/current/stable ICS targets', () => {
+test('ADD-BUILD-10 ADD-BUILD-11 publisher is create-only, prefix-contained, MIME/cache-bound and has no root/current/stable ICS targets', () => {
   const token = generateCandidateToken();
   const dir = mkdtempSync(join(tmpdir(), 'candidate-publisher-test-'));
   mkdirSync(join(dir, 'sobytiya/e'), { recursive: true });

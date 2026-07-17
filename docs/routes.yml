@@ -289,7 +289,7 @@ features:
       - promo.py
       - handlers/promo_cmd.py
   static_site_pages:
-    status: preview
+    status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
     release_plan: docs/features/static-site-pages/release-plan.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md
@@ -315,6 +315,8 @@ features:
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
     image_framing: docs/features/static-site-pages/image-framing.md
+    event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
+    bus_transport_directory: docs/features/static-site-pages/bus-transport-directory.md
     listing_personal_feed: docs/features/static-site-pages/listing-personal-feed.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md

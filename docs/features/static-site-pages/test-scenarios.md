@@ -25,7 +25,9 @@
 |---|---|---|---|---|
 | Preview build, files, routes, JSON-LD, ICS, media/static related | `ADD-BUILD-*`, `ADD-SEO-*`, часть `ADD-EVENT/MEDIA-*` | Automated component | `npm --prefix site run build:preview && npm --prefix site run check:preview` | production root, full live catalog, interaction, promotion/rollback |
 | Public projection eligibility/media safety | `ADD-BUILD-03/04`, `ADD-MEDIA-*` | Automated component | `pytest -q tests/test_static_site_public_gate.py` | whole-catalog reconciliation and live HTTP |
-| Kaggle command handoff | `ADD-BUILD-01` | Automated component | `pytest -q tests/test_static_site_build_handoff.py` | real Kaggle → promotion/catch-up |
+| Static build orchestration and immutable Kaggle handoff | `ADD-BUILD-01`, `ADD-BUILD-08/13`, `ADD-OBS-01` | Automated component | `pytest -q tests/test_static_site_release.py tests/test_static_site_build_handoff.py` | real Kaggle/status-ledger and enabled Fly flags |
+| Production/preview/secret artifact profiles | `ADD-BUILD-07/09/11/12` | Automated component | `npm --prefix site run test:static-release`; production/secret build+check commands from the runbook | live candidate HTTP and root promotion |
+| KAUP timetable A/B/C | `ADD-TR-06..10` | Automated component + manual visual | `pytest -q tests/test_static_site_bus_boarding.py tests/test_static_site_transport_experiment.py` | consented focus-group/live outcomes and statistical decision |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -144,6 +146,23 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-TR-03 — Provider stale/partial failure.** При недоступности КППК или автобусов показывается last-good с честной свежестью либо безопасное отсутствие блока; данные одного provider не затирают исправные данные другого.
 - **ADD-TR-04 — Транспортная карточка в галерее.** Если опция включена, «Как добраться» является отдельной понятной карточкой, не выдаёт себя за афишу и совпадает с detail route data.
 - **ADD-TR-05 — Избранный транспортный участок.** Повторное сохранение идемпотентно, относится к выбранному occurrence/направлению и не увеличивает event-favorite badge.
+- **ADD-TR-06 — Три лаконичных варианта расписания.** Для одной и той же
+  транспортной проекции доступны `departure_board_v1`, `route_strips_v1` и
+  `next_departure_queue_v1`; вариант меняет только представление, но не рейсы,
+  остановку посадки, маршруты или CTA.
+- **ADD-TR-07 — Стабильное распределение A/B/C.** Один browser subject получает
+  один вариант SHA-256-распределением и сохраняет его между событиями, rebuild и
+  secret-prefix; в каждой сессии отрисован ровно один arm.
+- **ADD-TR-08 — QA override не загрязняет эксперимент.** Query override позволяет
+  визуально проверить каждый arm, но forced/QA impression и action не попадают в
+  доверенную telemetry; production-root по умолчанию работает в `off`.
+- **ADD-TR-09 — Квалифицированная экспозиция и исход.** Impression засчитывается
+  только после не менее 50% видимости блока в течение одной секунды; outcome —
+  только осмысленный клик `transfer`, `map`, `walk` или `car`, связанный с тем же
+  experiment/variant/subject.
+- **ADD-TR-10 — Посадка на Северном вокзале.** Если рейс проходит остановку
+  «Калининград Северный», расчёт и видимая транспортная цепочка начинаются там,
+  а не с конечной остановки маршрута.
 
 ### Социальные действия и обратная связь по событию
 
@@ -180,6 +199,45 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-BUILD-04 — CDN asset contract.** Canonical HTML/assets/ICS реально обслуживаются через принятый CDN path; runtime raster assets легковесные WebP, векторные — безопасные SVG, нет случайных тяжёлых PNG/JPEG или origin-only зависимостей.
 - **ADD-BUILD-05 — Degraded network.** Slow 3G, offline after first load, CDN image failure и временная недоступность personalization/search API не ломают статический контент, навигацию, detail и ICS.
 - **ADD-BUILD-06 — Cache/back/version transition.** После публикации новой версии reload/back/forward/service cache не возвращают несовместимые JS/data или состояние старого пользователя.
+- **ADD-BUILD-07 — Preview/production/secret isolation.** Preview и secret
+  candidate остаются `noindex`; production profile формирует root canonical,
+  indexable robots/sitemap и не включает preview/lab/fixture routes.
+- **ADD-BUILD-08 — Immutable Kaggle handoff.** Kaggle получает отдельный
+  read-only SQLite snapshot с `quick_check`, SHA-256, размером, max revision и
+  уникальными `snapshot_id/run_id/build_id`; неверный hash/manifest останавливает
+  запуск.
+- **ADD-BUILD-09 — Manifest/tree/catalog parity.** Checked manifest доказывает
+  равенство eligible catalog, event pages, sitemap/ICS и фактического дерева,
+  отсутствие ineligible leaks, orphan references и dangling occurrence links.
+- **ADD-BUILD-10 — Immutable candidate и rollback boundary.** Failed build/check
+  не пишет ни одного объекта; accepted candidate загружается create-only только
+  в новый secret prefix. Изменение `root`, `current` и stable `/ics/` запрещено.
+  Reader-atomic root promotion/rollback остаётся отдельным blocked gate и не
+  подменяется последовательным копированием файлов.
+- **ADD-BUILD-11 — CDN/MIME/assets.** Все objects candidate имеют manifest hash,
+  корректный MIME/cache policy, допустимый CDN asset URL и после публикации
+  проверяются authenticated HEAD/GET; root/current не меняются.
+- **ADD-BUILD-12 — Capacity и privacy preflight.** До upload проверяются bounded
+  result/archive, свободное место/лимиты и запрет anonymous bucket listing;
+  secret token не попадает в sitemap, canonical, логи или внутренние ссылки.
+- **ADD-BUILD-13 — Freshness/retry/catch-up.** Feature runtime допускает до 5400
+  секунд; retry bounded и классифицирован, stale/missed/deferred request после
+  restart получает ровно один catch-up, а update во время running build — ровно
+  один follow-up с более новым snapshot.
+
+### Related/vector barrier
+
+- **ADD-RELATED-01 — Revision barrier.** При включённом related mode manifest
+  фиксирует ожидаемые `search_v3/related_v1` revisions/hashes и не публикует
+  устаревшую verified projection.
+- **ADD-RELATED-02 — Reverse-affected anchors.** Изменение кандидата обновляет не
+  только его страницу, но и старые anchors, в related-выдачу которых он входит.
+- **ADD-RELATED-03 — Last-good или честное отсутствие.** Provider/vector failure
+  сохраняет совместимую last-good projection либо убирает optional block; raw
+  candidates не маркируются проверенными.
+- **ADD-RELATED-04 — Optional barrier не блокирует base pages.** При выключенной
+  related/personalization части базовый full-catalog export/build/check остаётся
+  работоспособным и явно записывает disabled revision state.
 
 ### Telegraph coexistence и D10 cutover
 

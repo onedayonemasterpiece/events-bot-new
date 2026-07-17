@@ -55,9 +55,12 @@ official-transfer boarding fine print hidden in a native disclosure.
 - pickup points shown from the venue are Дом Советов in Kaliningrad, Lenina 10
   by the Zelenogradsk bus terminal and Lenina 33 by Svetlogorsk-2;
 - the booking CTA uses the current Radario destination linked by KAUP;
-- public bus `119` is shown separately and always starts with the exact origin:
-  `Калининградский автовокзал · ул. Железнодорожная, 7`, plus one conventional
-  pin link to that point. Arrival uses the reviewed 65-minute ride plus about
+- public bus `119` is shown separately. Because the accepted trip calls at
+  `Калининград-Северный`, the public plan boards there rather than sending the
+  visitor back to the terminal: the displayed time is the source terminal
+  departure plus the reviewed 15-minute offset, and the original terminal time
+  remains machine-checkable provenance. One conventional pin link opens the
+  exact North-station boarding point. Arrival uses the reviewed 65-minute ride plus about
   `4 km / 53 min` on foot from Romanovo; the UI does not invent a short
   pedestrian entrance;
 - the compact phone variant keeps the bus origin, departures, final walk and
@@ -77,6 +80,40 @@ official-transfer boarding fine print hidden in a native disclosure.
   so the block recommends the official transfer or a car;
 - standard bus/walk/car/pin icons identify modes, but exact origin/destination
   wording remains visible and cannot be replaced by icon-only navigation.
+
+### Timetable A/B/C experiment
+
+All three accepted timetable readings are implemented under experiment key
+`transport_timetable_layout`, version `1`:
+
+- `departure_board_v1` — dense departure board, one trip per row;
+- `route_strips_v1` — a route strip for every trip;
+- `next_departure_queue_v1` — the next suitable scheduled trip and a bounded
+  queue of the remaining departures. It says `по расписанию` and never implies
+  real-time vehicle tracking.
+
+Every arm receives the same ordered, source-backed trip set and leaves the
+boarding point, route, arrival/walk estimates, return warning, official
+transfer and car alternative unchanged. The static root defaults to `off` and
+keeps the baseline. A secret candidate may use `qa` for forced visual review or
+`focus_group` for normal allocation. Forced QA arms are excluded from trusted
+telemetry.
+
+The allocation unit is one first-party browser subject. SHA-256 maps it to
+10,000 buckets (`3333/3333/3334`) and the saved assignment is independent of
+event, session, build and secret prefix. A valid exposure requires at least 50%
+visibility for one continuous second. The primary product proxy is a unique
+qualified transport-plan action within 30 minutes: transfer booking, boarding
+map, walking route, car route or a future trip-calendar action. The UI does not
+claim this proves physical attendance.
+
+Remote evidence is written only after explicit personalization consent and
+only in `focus_group`/`live`. The separate personalization Supabase recomputes
+the bucket and validates the release allowlist/config hash; core events, build
+requests, snapshots and release receipts stay in Fly SQLite. Before comparing
+the three visual treatments, run the same assignment and telemetry pipeline as
+an A/A/A instrumentation stage and reject winner analysis on SRM, safety-fact
+parity or assigned/rendered mismatch.
 
 Primary source: [official KAUP site](https://www.kaup39.ru/). Bus timetable:
 [АО «Автовокзал» route table](https://avl39.ru/routes/reg/kaliningrad/).

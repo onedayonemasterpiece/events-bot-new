@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- **Static event-page secret release pipeline**: add effect-only 15-minute Smart
+  Update coalescing, exactly-one running-build follow-up, durable manual requests,
+  immutable SQLite backup manifests, checked full-catalog production and noindex
+  secret-candidate Kaggle artifacts, and a create-only prefix publisher that can
+  never address root/current/stable-ICS keys.
+- **Transport timetable A/B/C**: add three source-parity KAUP timetable
+  treatments, stable browser-subject SHA-256 allocation, QA/focus/live controls,
+  consent-gated exposure/action RPC contracts and fail-closed Supabase migration;
+  production root defaults to the unchanged baseline.
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
@@ -16,6 +25,9 @@
   graphical-medallion strips while retaining source-grounded organizer, venue,
   festival, program and Pushkin-card marks; the MEOW badge remains available on
   static event-detail pages only.
+- **KAUP boarding origin**: calculate route 119 guidance from
+  `Калининград-Северный` when the trip calls there, while retaining the terminal
+  departure as source provenance instead of sending the visitor to the terminal.
 - **Smart Update image geometry queue starvation**: let the independent Gemma
   geometry stage proceed when the earlier semantic-role stage remains pending
   because its separate daily budget is exhausted.

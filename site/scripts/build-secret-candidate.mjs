@@ -18,6 +18,8 @@ const candidateRoot = join(distDir, basePath.slice(1));
 const siteOrigin = (process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
+const transportExperimentMode = process.env.SECRET_CANDIDATE_TRANSPORT_EXPERIMENT_MODE || 'qa';
+if (!['qa', 'focus_group'].includes(transportExperimentMode)) throw new Error('Secret candidate transport experiment mode must be qa or focus_group');
 for (const key of ['production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
   if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
 }
@@ -30,6 +32,8 @@ const env = {
   PUBLIC_SITE_MODE: 'secret_candidate', PUBLIC_SITE_ORIGIN: siteOrigin, SITE_BASE_PATH: basePath,
   PUBLIC_ICS_BASE_URL: '', PUBLIC_PREVIEW_BUILD_ID: '', PUBLIC_ROOT_PREVIEW_HREF: '',
   PUBLIC_PERSONALIZATION_SUPABASE_URL: '', PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: '',
+  PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: transportExperimentMode,
+  PUBLIC_STATIC_RELEASE_ID: productionManifest.build_id,
 };
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
 if (astro.status !== 0) process.exit(astro.status || 1);
@@ -66,6 +70,13 @@ const manifest = {
   generated_at: buildMetadata.generated_at, base_path: basePath, token_sha256: sha256(token),
   production_manifest_sha256: buildMetadata.production_manifest_sha256, production_tree_sha256: productionManifest.tree_sha256,
   snapshot: productionManifest.snapshot, catalog: productionManifest.catalog, versions: productionManifest.versions,
+  experiments: {
+    transport_timetable_layout: {
+      ...productionManifest.versions.transport_timetable_experiment,
+      mode: env.PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE,
+      trusted_telemetry: env.PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE === 'focus_group',
+    },
+  },
   counts: pageCounts(files, events.length), tree_sha256: treeHash(files), files,
   checks: { astro_build: 'ok', candidate_contract: 'pending', catalog_parity: 'pending', noindex: 'pending', no_referrer: 'pending', prefix_containment: 'pending', root_isolation: 'pending' },
 };

@@ -1,18 +1,26 @@
 # Static Site Event Pages
 
-> **Status:** Astro SSG production integration candidate locally verified; desktop continuous Editorial composition and media-role safety implemented, production promotion pending
+> **Status:** checked production/root-form and immutable secret-candidate pipeline implemented; production-root promotion remains blocked/disabled
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
 ## Implementation status
 
-В `events-bot-new` есть **Astro SSG preview vertical slice** в `site/`: он строит
+В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит
 статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
 production SQLite export и публикуется под noindex-prefix в bucket
-`kenigevents.ru`. Это ещё не event-page production rollout: production
-build/indexability profile, manifest/promotion/rollback и корневые canonical URL
-`/sobytiya/<slug>/` не включены.
+`kenigevents.ru`. Production root-form artifact уже проверяет indexable canonical
+output и полный eligible catalog, но это ещё не event-page production rollout:
+Object Storage website не умеет reader-atomic переключать целое дерево через
+`current.json`, поэтому root promotion отсутствует и остаётся `NO-GO`.
+
+Принятый промежуточный release mode — один immutable noindex candidate под
+`/_review/<256-bit-token>/`. Он собирается из того же snapshot/repo SHA, что и
+checked root-form artifact, загружается create-only и никогда не меняет `/`,
+`current.json` или стабильные `/ics/*`. Это неперечисляемая bearer-ссылка только
+после отключения anonymous bucket listing; она не является авторизацией и может
+быть переслана получателем.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
@@ -49,7 +57,20 @@ and historical ПК/favicon variants are rejected. Canonical geometry and usage:
 
 ### Kaggle CPU build handoff
 
-Static-site generation is now prepared as a Kaggle CPU job reusing the existing CherryFlash/TelegramMonitor infrastructure: per-run private input dataset, `KaggleClient.push_kernel(...)`, optional `kaggle_run.json` status dataset, `kaggle_status_client` heartbeat/progress from inside the kernel, and a `static_site:builder` resource lease. The first verified 50-event production-snapshot Kaggle build is `preview-20260628-event-pages-prod50-kaggle-v44` (artifact only, not bucket-published): it produced a tar.gz static site archive, `static_site_build_result.json`, and passed `check:preview`. Production Smart Update handoff is a coalesced `static_site_build` outbox job 15 minutes after the last event update, gated by `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`; object-storage/CDN publication is now available for preview/focus-group builds after the media mirror gate; production promotion still requires a separate release gate. Operational publisher protocol: `docs/operations/kaggle-static-site-builder.md`; build notes: `docs/features/static-site-pages/astro-preview.md#kaggle-cpu-builder--smart-update-handoff`.
+Static-site generation reuses the Kaggle CPU/status-ledger infrastructure: one
+private input dataset, `static_site:builder` lease and heartbeat per run. Smart
+Update records one bounded request payload and debounces until 15 minutes after
+the latest effect. A new effect during a running build produces exactly one
+merged follow-up. Fly creates an online-backup SQLite snapshot, runs
+`quick_check`, records SHA/size/watermark, and only that immutable file reaches
+Kaggle. The same outbox is used by `scripts/request_static_site_build.py`.
+
+Kaggle returns exactly two hash-checked artifacts plus bounded result JSON: an
+indexable root-form proof and a prefix-contained noindex candidate. Publication
+is a trusted Fly/operator-side create-only step guarded by
+`ENABLE_STATIC_SITE_SECRET_PUBLISH`; Kaggle receives no bucket credentials.
+Both generation flags default off until the controlled canary is accepted.
+Operational protocol: `docs/operations/kaggle-static-site-builder.md`.
 
 Interest-club pages are an additional versioned consumer of this checked build,
 not a second publisher.  Only the accepted club projection may create

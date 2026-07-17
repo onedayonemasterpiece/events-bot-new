@@ -18,6 +18,7 @@ import os
 import time as unixtime
 import time as _time
 import tempfile
+import secrets
 import calendar
 import math
 from collections import Counter
@@ -270,6 +271,8 @@ from static_site_release import (
     make_request_payload as make_static_site_request_payload,
     max_attempts as static_site_max_attempts,
     merge_request_payload as merge_static_site_request_payload,
+    publish_secret_candidate_archive,
+    validate_production_candidate_result,
     validate_snapshot,
     validate_vector_barrier,
 )
@@ -21977,6 +21980,11 @@ def _static_site_build_kaggle_command(
     current_date: str,
     script_path: str,
     status_callback_url: str,
+    snapshot_manifest_path: str | None = None,
+    repo_sha: str | None = None,
+    run_id: str | None = None,
+    candidate_token: str | None = None,
+    profile: str = "preview",
 ) -> list[str]:
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector"}:
@@ -22041,6 +22049,19 @@ def _static_site_build_kaggle_command(
         str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
         "--download-output",
     ]
+    if profile == "production-candidate":
+        if not snapshot_manifest_path or not repo_sha or not run_id or not candidate_token:
+            raise ValueError("production-candidate Kaggle handoff identity is incomplete")
+        cmd.extend(
+            [
+                "--snapshot-manifest", snapshot_manifest_path,
+                "--profile", "production-candidate",
+                "--catalog-mode", "full",
+                "--repo-sha", repo_sha,
+                "--run-id", run_id,
+                "--candidate-token", candidate_token,
+            ]
+        )
     if _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"):
         cmd.append("--sync-pgvector-vectors")
     if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
@@ -22084,7 +22105,7 @@ async def _patch_static_site_request_payload(
         await session.commit()
 
 
-async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool:
+async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
     """Coalesced static-site build after Smart Update.
 
     Heavy Astro build work runs on Kaggle CPU; Fly only exports data, pushes the
@@ -22146,9 +22167,16 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
     now_local = datetime.now(LOCAL_TZ)
     current_date = (os.getenv("STATIC_SITE_CURRENT_DATE") or now_local.date().isoformat()).strip()
-    configured_label = (os.getenv("STATIC_SITE_BUILD_ID") or "preview-secret").strip()
-    safe_label = re.sub(r"[^a-zA-Z0-9._-]+", "-", configured_label).strip("-._") or "preview-secret"
+    configured_label = (os.getenv("STATIC_SITE_BUILD_ID") or "production-secret").strip()
+    safe_label = re.sub(r"[^a-zA-Z0-9._-]+", "-", configured_label).strip("-._") or "production-secret"
+    if not safe_label.startswith("production-"):
+        safe_label = f"production-{safe_label}"
     build_id = f"{safe_label}-{now_local.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
+        raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
+    run_id = f"static-site:{build_id}:{uuid.uuid4().hex[:12]}"
+    candidate_token = secrets.token_urlsafe(32)
     script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
     cmd = _static_site_build_kaggle_command(
         db_path=str(snapshot_path),
@@ -22158,6 +22186,11 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         current_date=current_date,
         script_path=script_path,
         status_callback_url=_static_site_status_callback_url(),
+        snapshot_manifest_path=str(manifest_path),
+        repo_sha=repo_sha,
+        run_id=run_id,
+        candidate_token=candidate_token,
+        profile="production-candidate",
     )
     logging.info(
         "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
@@ -22196,29 +22229,75 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     result_path = output_dir / "static_site_build_result.json"
     if not result_path.is_file():
         raise StaticSitePermanentError("static_site_result_receipt_missing")
-    try:
-        result = json.loads(result_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise StaticSitePermanentError(f"static_site_result_receipt_invalid:{exc}") from exc
-    archive_path = output_dir / str(result.get("archive") or "")
-    if result.get("ok") is not True or result.get("build_id") != build_id or not archive_path.is_file():
-        raise StaticSitePermanentError("static_site_result_receipt_mismatch")
+    result, candidate_archive = await asyncio.to_thread(
+        validate_production_candidate_result,
+        result_path,
+        output_dir=output_dir,
+        build_id=build_id,
+        run_id=run_id,
+        repo_sha=repo_sha,
+        snapshot=snapshot_metadata,
+        candidate_token=candidate_token,
+    )
+    publication_receipt = None
+    if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
+        required_env = {
+            "bucket": (os.getenv("KENIGEVENTS_SITE_YC_BUCKET") or "").strip(),
+            "endpoint": (os.getenv("KENIGEVENTS_SITE_YC_ENDPOINT") or "https://storage.yandexcloud.net").strip(),
+            "region": (os.getenv("KENIGEVENTS_SITE_YC_REGION") or "ru-central1").strip(),
+            "access_key_id": (os.getenv("KENIGEVENTS_SITE_YC_ACCESS_KEY_ID") or "").strip(),
+            "secret_access_key": (os.getenv("KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY") or "").strip(),
+        }
+        if not required_env["bucket"] or not required_env["access_key_id"] or not required_env["secret_access_key"]:
+            raise StaticSitePermanentError("secret_candidate_publisher_credentials_missing")
+        publication_receipt = await asyncio.to_thread(
+            publish_secret_candidate_archive,
+            candidate_archive,
+            build_result=result,
+            extraction_root=output_dir / "candidate-publication",
+            public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
+            **required_env,
+        )
     await _patch_static_site_request_payload(
         db,
         job_id,
         {
             "build_receipt": {
                 "build_id": build_id,
+                "run_id": run_id,
+                "repo_sha": repo_sha,
                 "event_count": int(result.get("event_count") or 0),
-                "archive": str(archive_path),
+                "candidate_archive": str(candidate_archive),
+                "artifacts": result.get("artifacts"),
+                "checks": result.get("checks"),
+                "publication": (
+                    {
+                        "status": "published",
+                        "public_url": publication_receipt.public_url,
+                        "manifest_sha256": publication_receipt.manifest_sha256,
+                        "token_sha256": publication_receipt.token_sha256,
+                        "object_count": publication_receipt.object_count,
+                        "root_mutation": False,
+                        "stable_ics_mutation": False,
+                    }
+                    if publication_receipt
+                    else {"status": "disabled", "root_mutation": False, "stable_ics_mutation": False}
+                ),
                 "finished_at": result.get("finished_at") or static_site_iso_utc(),
                 "release_channel": "secret_preview",
             },
             "last_success_at": static_site_iso_utc(),
         },
     )
-    logging.info("static_site_build: done build_id=%s", build_id)
-    return True
+    logging.info(
+        "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s token_sha256=%s",
+        build_id,
+        run_id,
+        snapshot_metadata.snapshot_id,
+        bool(publication_receipt),
+        publication_receipt.token_sha256 if publication_receipt else None,
+    )
+    return publication_receipt.public_url if publication_receipt else True
 
 
 async def job_event_media_review(

@@ -90,3 +90,28 @@ def test_add_build_08_command_separates_snapshot_from_live_status_db(
     assert _arg_after(cmd, "--status-db") == "/data/db.sqlite"
     assert _arg_after(cmd, "--timeout-minutes") == "90"
     assert main.JOB_MAX_RUNTIME[main.JobTask.static_site_build] == 5400
+
+
+def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() -> None:
+    import main
+
+    cmd = main._static_site_build_kaggle_command(
+        db_path="/data/static_site_snapshots/request.sqlite",
+        status_db_path="/data/db.sqlite",
+        snapshot_manifest_path="/data/static_site_snapshots/request.manifest.json",
+        build_id="production-secret-test",
+        repo_sha="a" * 40,
+        run_id="static-site:production-secret-test:12345678",
+        candidate_token="A" * 43,
+        profile="production-candidate",
+        limit=5000,
+        current_date="2026-07-17",
+        script_path="/repo/scripts/run_static_site_builder_kaggle.py",
+        status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+    )
+    assert _arg_after(cmd, "--profile") == "production-candidate"
+    assert _arg_after(cmd, "--catalog-mode") == "full"
+    assert _arg_after(cmd, "--snapshot-manifest").endswith("request.manifest.json")
+    assert _arg_after(cmd, "--repo-sha") == "a" * 40
+    assert _arg_after(cmd, "--run-id").startswith("static-site:")
+    assert _arg_after(cmd, "--candidate-token") == "A" * 43

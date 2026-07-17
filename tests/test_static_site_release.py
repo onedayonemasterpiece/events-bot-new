@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import io
 import sqlite3
+import tarfile
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -16,9 +19,31 @@ from static_site_release import (
     freshness_state,
     make_request_payload,
     merge_request_payload,
+    publish_secret_candidate_archive,
     validate_snapshot,
     validate_vector_barrier,
 )
+
+
+class _MemoryS3:
+    def __init__(self) -> None:
+        self.objects: dict[tuple[str, str], dict[str, object]] = {}
+
+    def put_object(self, **kwargs):
+        key = (kwargs["Bucket"], kwargs["Key"])
+        if key in self.objects or kwargs.get("IfNoneMatch") != "*":
+            raise AssertionError("publisher attempted overwrite or non-conditional write")
+        body = kwargs["Body"].read()
+        self.objects[key] = {
+            "Body": body,
+            "ContentType": kwargs["ContentType"],
+            "CacheControl": kwargs["CacheControl"],
+        }
+        return {"ETag": hashlib.md5(body).hexdigest()}  # nosec - in-memory S3 test token only
+
+    def get_object(self, **kwargs):
+        stored = self.objects[(kwargs["Bucket"], kwargs["Key"])]
+        return {**stored, "Body": io.BytesIO(stored["Body"])}
 
 
 def test_add_build_01_payload_union_is_bounded_and_keeps_latest_effect() -> None:
@@ -74,7 +99,8 @@ def test_add_build_08_online_backup_is_immutable_and_hash_bound(tmp_path) -> Non
         validate_snapshot(snapshot, manifest)
 
 
-def test_add_related_vector_barrier_disabled_and_revision_gated(tmp_path) -> None:
+def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_path) -> None:
+    """Acceptance metadata: ADD-RELATED-01, -02, -03 and -04."""
     disabled = make_request_payload(reason="base", event_ids=[1], require_vector_barrier=False)
     assert validate_vector_barrier(disabled, None)["status"] == "disabled"
 
@@ -114,6 +140,50 @@ def test_add_build_13_and_add_obs_failure_and_freshness_contract() -> None:
         max_staleness_seconds=3600,
     )
     assert stale == {"status": "stale", "stale": True, "age_seconds": 7200, "active": False}
+
+
+def test_add_build_10_secret_candidate_publish_is_create_only_and_root_isolated(tmp_path) -> None:
+    token = "A" * 43
+    candidate = tmp_path / "candidate" / "_review" / token
+    candidate.mkdir(parents=True)
+    index = b"<!doctype html><meta name=robots content=noindex>"
+    (candidate / "index.html").write_bytes(index)
+    manifest = {
+        "schema_version": "static_secret_candidate_manifest_v1",
+        "site_mode": "secret_candidate",
+        "publication_mode": "secret_link",
+        "build_id": "production-test",
+        "run_id": "static-site:test:run",
+        "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+        "checks": {
+            "candidate_contract": "ok", "catalog_parity": "ok", "noindex": "ok",
+            "no_referrer": "ok", "prefix_containment": "ok", "root_isolation": "ok",
+        },
+        "files": [{
+            "key": "index.html", "sha256": hashlib.sha256(index).hexdigest(),
+            "size": len(index), "content_type": "text/html; charset=utf-8",
+            "cache_control": "private, no-store, max-age=0",
+        }],
+    }
+    (candidate / "secret-candidate-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    archive = tmp_path / "candidate.tar.gz"
+    with tarfile.open(archive, "w:gz") as bundle:
+        bundle.add(candidate, arcname=f"_review/{token}")
+    client = _MemoryS3()
+    receipt = publish_secret_candidate_archive(
+        archive,
+        build_result={
+            "build_id": "production-test", "run_id": "static-site:test:run",
+            "snapshot": {"snapshot_id": "snapshot-test"}, "candidate": {"token": token},
+        },
+        extraction_root=tmp_path / "extract", bucket="bucket", endpoint="https://storage.invalid",
+        region="ru-central1", access_key_id="test", secret_access_key="test",
+        s3_client=client, list_preflight=lambda endpoint, bucket: True,
+        public_probe=lambda url: url.endswith(f"/_review/{token}/"),
+    )
+    assert receipt.root_mutation is False and receipt.stable_ics_mutation is False
+    assert receipt.object_count == 2
+    assert all(key.startswith(f"_review/{token}/") for _bucket, key in client.objects)
 
 
 @pytest.mark.asyncio

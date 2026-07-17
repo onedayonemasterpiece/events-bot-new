@@ -23,13 +23,56 @@ immutable Fly SQLite snapshot
   -> retained previous release and verified rollback
 ```
 
-На дату среза в `origin/main` есть export, Astro preview build/check, Kaggle handoff,
-status/resource-lease contract и preview publication. Но общий event-page контур
-остаётся preview-only:
+## Реализованный secret-candidate этап
 
-- production build/check profile отсутствует;
+Текущий этап намеренно останавливается до root promotion:
+
+```text
+effectful Smart Update / durable operator request
+  -> last-effect + 15 min debounce
+  -> immutable SQLite online backup + quick_check + SHA-256
+  -> unique Kaggle CPU input + static_site:builder lease/status ledger
+  -> checked full-catalog root-form artifact
+  -> separately checked noindex/no-referrer candidate
+  -> create-only /_review/<256-bit-token>/ upload
+  -> verified bearer URL; root/current/stable ICS unchanged
+```
+
+`static_site_build:prod` сохраняет bounded reasons, event ids/revisions,
+correlation ids и target watermark. Running owner не поглощает следующий effect:
+он получает ровно один pending follow-up с объединённым payload. Automatic и
+manual path используют один outbox; ручной entrypoint —
+`scripts/request_static_site_build.py`.
+
+Kaggle production result связывает exact pushed repo SHA, run/build/snapshot ids,
+snapshot hash/size, catalog ledger, checks, counts и оба archive hashes. Publisher
+повторно проверяет result/manifest/tree и допускает только новые keys внутри
+одного `_review/<token>/`; root, `current.json`, release-control objects и
+стабильные `/ics/*` невыразимы через его API.
+
+Secret URL — **не авторизация**. До его первой публикации anonymous ListObjects
+для bucket должен отвечать `403`, сохраняя public object read. `noindex`,
+`no-referrer` и `Cache-Control: private, no-store` уменьшают утечки, но не мешают
+получателю переслать ссылку.
+
+Флаги по умолчанию выключены:
+
+```text
+ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
+ENABLE_STATIC_SITE_SECRET_PUBLISH=0
+```
+
+При включении обязателен точный `STATIC_SITE_REPO_SHA`. Production root command и
+root promotion flag отсутствуют. Это закрывает candidate isolation, но не
+`ADD-BUILD-10 reader-atomic root promotion`.
+
+
+На базе среза до этой реализации общий event-page контур был preview-only. Ниже
+сохранён исходный audit gap как regression context:
+
+- production build/check profile отсутствовал;
 - event HTML, `robots.txt` и sitemap всё ещё имеют preview/noindex semantics;
-- Kaggle job получает checked tarball, но не выполняет production manifest,
+- Kaggle job получал checked tarball, но не выполнял production manifest,
   staging promotion и rollback;
 - canonical event slug всё ещё вычисляется из изменяемых title/city/id вместо
   persisted publication registry;

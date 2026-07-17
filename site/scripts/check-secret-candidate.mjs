@@ -15,6 +15,10 @@ function source(key) { try { return readFileSync(join(root, key), 'utf8'); } cat
 const manifest = JSON.parse(source('secret-candidate-manifest.json'));
 if (manifest.schema_version !== CANDIDATE_MANIFEST_SCHEMA || manifest.site_mode !== 'secret_candidate' || manifest.publication_mode !== 'secret_link') fail('wrong candidate manifest profile');
 if (manifest.base_path !== basePath || manifest.token_sha256 !== sha256(token)) fail('candidate token/base mismatch');
+const transportExperiment = manifest.experiments?.transport_timetable_layout;
+if (!transportExperiment || !['qa', 'focus_group'].includes(transportExperiment.mode)) fail('transport timetable experiment mode missing');
+if (transportExperiment.config_hash !== 'sha256:bf9a8a80e35c8699a26993ae25ac83313d4b6923900f9e51688d2dad7d92cdf2') fail('transport timetable experiment config mismatch');
+if (transportExperiment.mode === 'qa' && transportExperiment.trusted_telemetry !== false) fail('QA experiment telemetry must be untrusted');
 const files = fileInventory(root, { exclude: ['secret-candidate-manifest.json'], secretCandidate: true });
 const byKey = new Map(manifest.files.map((file) => [file.key, file]));
 if (files.length !== byKey.size || manifest.counts.file_count !== files.length) fail('candidate file count mismatch');

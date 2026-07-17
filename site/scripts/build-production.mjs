@@ -52,6 +52,7 @@ const env = {
   ...process.env,
   PUBLIC_SITE_MODE: 'production', PUBLIC_SITE_ORIGIN: siteOrigin, PUBLIC_ICS_BASE_URL: icsBaseUrl, SITE_BASE_PATH: '/',
   PUBLIC_ASSET_BASE_URL: process.env.PUBLIC_ASSET_BASE_URL || 'https://static.kenigevents.ru',
+  PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: 'off', PUBLIC_STATIC_RELEASE_ID: buildId,
 };
 delete env.PUBLIC_PREVIEW_BUILD_ID;
 delete env.PUBLIC_ROOT_PREVIEW_HREF;
@@ -101,6 +102,12 @@ const manifest = {
     exporter: 'prod-sqlite-static-site-export-v2', template: 'astro-static-event-v2',
     related: relatedData.schema_version || relatedData.algorithm || null,
     transport: 'event-transport-projection-v1', media: 'event-media-role-v1', age: 'event-age-projection-v1', occurrence: 'linked-event-ids-v1',
+    transport_timetable_experiment: {
+      experiment_key: 'transport_timetable_layout', experiment_version: 1, mode: 'off',
+      assignment_unit: 'browser_subject', allocation_algorithm: 'sha256-u32be-bucket-10000-v1',
+      config_hash: 'sha256:bf9a8a80e35c8699a26993ae25ac83313d4b6923900f9e51688d2dad7d92cdf2',
+      variants: ['departure_board_v1', 'route_strips_v1', 'next_departure_queue_v1'],
+    },
   },
   counts, tree_sha256: treeHash(files), files, stable_ics: stableIcs,
   checks: {

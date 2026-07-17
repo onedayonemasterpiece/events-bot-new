@@ -11,12 +11,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import tempfile
+import tarfile
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 from typing import Any, Iterable, Mapping
 
 
@@ -27,6 +32,9 @@ MAX_REASONS = 24
 MAX_EVENT_IDS = 256
 MAX_CORRELATIONS = 128
 MAX_EVENT_REVISIONS = 256
+SECRET_CANDIDATE_RESULT_SCHEMA = "static_site_build_result_v2"
+SECRET_CANDIDATE_MANIFEST_SCHEMA = "static_secret_candidate_manifest_v1"
+SECRET_CANDIDATE_TOKEN_RE = r"[A-Za-z0-9_-]{43}"
 
 
 class StaticSiteReleaseError(RuntimeError):
@@ -63,6 +71,21 @@ class SnapshotMetadata:
     max_event_updated_at: str | None
     max_event_revision: str | None
     event_revisions: dict[str, str]
+
+
+@dataclass(frozen=True)
+class SecretCandidateReceipt:
+    schema_version: str
+    build_id: str
+    run_id: str
+    snapshot_id: str
+    token_sha256: str
+    manifest_sha256: str
+    object_count: int
+    public_url: str
+    verified_at: str
+    root_mutation: bool = False
+    stable_ics_mutation: bool = False
 
 
 def utc_now() -> datetime:
@@ -463,6 +486,239 @@ def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: st
         "search_v3_hash": receipt.get("search_v3_hash"),
         "related_v1_hash": receipt.get("related_v1_hash"),
     }
+
+
+def validate_production_candidate_result(
+    result_path: str | os.PathLike[str],
+    *,
+    output_dir: str | os.PathLike[str],
+    build_id: str,
+    run_id: str,
+    repo_sha: str,
+    snapshot: SnapshotMetadata,
+    candidate_token: str,
+) -> tuple[dict[str, Any], Path]:
+    """Revalidate the bounded Kaggle receipt at the trusted publisher boundary."""
+
+    path = Path(result_path)
+    if not path.is_file() or path.stat().st_size > 256 * 1024:
+        raise StaticSitePermanentError("static_site_result_receipt_missing_or_unbounded")
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise StaticSitePermanentError(f"static_site_result_receipt_invalid:{exc}") from exc
+    expected = {
+        "schema_version": SECRET_CANDIDATE_RESULT_SCHEMA,
+        "ok": True,
+        "profile": "production-candidate",
+        "build_id": build_id,
+        "run_id": run_id,
+        "repo_sha": repo_sha,
+    }
+    for key, value in expected.items():
+        if result.get(key) != value:
+            raise StaticSitePermanentError(f"static_site_result_identity_mismatch:{key}")
+    result_snapshot = result.get("snapshot") if isinstance(result.get("snapshot"), Mapping) else {}
+    if (
+        result_snapshot.get("snapshot_id") != snapshot.snapshot_id
+        or result_snapshot.get("snapshot_sha256") != snapshot.sha256
+        or int(result_snapshot.get("size") or -1) != snapshot.size_bytes
+    ):
+        raise StaticSitePermanentError("static_site_result_snapshot_mismatch")
+    candidate = result.get("candidate") if isinstance(result.get("candidate"), Mapping) else {}
+    if candidate.get("token") != candidate_token or not re.fullmatch(SECRET_CANDIDATE_TOKEN_RE, candidate_token):
+        raise StaticSitePermanentError("static_site_result_candidate_token_mismatch")
+    artifacts = result.get("artifacts")
+    if not isinstance(artifacts, list) or len(artifacts) != 2 or {item.get("kind") for item in artifacts if isinstance(item, Mapping)} != {
+        "production_root",
+        "secret_candidate",
+    }:
+        raise StaticSitePermanentError("static_site_result_artifact_set_mismatch")
+    base = Path(output_dir).resolve()
+    candidate_archive: Path | None = None
+    for item in artifacts:
+        if not isinstance(item, Mapping):
+            raise StaticSitePermanentError("static_site_result_artifact_invalid")
+        name = str(item.get("filename") or "")
+        artifact = (base / name).resolve()
+        if artifact.parent != base:
+            raise StaticSitePermanentError("static_site_result_artifact_path_invalid")
+        if not name.endswith(".tar.gz") or not artifact.is_file():
+            raise StaticSitePermanentError("static_site_result_artifact_missing")
+        if artifact.stat().st_size != int(item.get("size") or -1) or _sha256_file(artifact) != item.get("sha256"):
+            raise StaticSitePermanentError("static_site_result_artifact_hash_mismatch")
+        if item.get("kind") == "secret_candidate":
+            candidate_archive = artifact
+    if candidate_archive is None:
+        raise StaticSitePermanentError("static_site_result_candidate_archive_missing")
+    return dict(result), candidate_archive
+
+
+def _safe_extract_candidate_archive(archive: Path, destination: Path, token: str) -> Path:
+    prefix = f"_review/{token}/"
+    if destination.exists():
+        raise StaticSitePermanentError("secret_candidate_extract_destination_exists")
+    destination.mkdir(parents=True)
+    with tarfile.open(archive, "r:gz") as bundle:
+        members = bundle.getmembers()
+        if not members or len(members) > 100_000:
+            raise StaticSitePermanentError("secret_candidate_archive_member_count_invalid")
+        for member in members:
+            name = member.name.lstrip("./")
+            if name.rstrip("/") == prefix.rstrip("/") and member.isdir():
+                continue
+            if not name.startswith(prefix) or member.issym() or member.islnk() or not (member.isdir() or member.isfile()):
+                raise StaticSitePermanentError(f"secret_candidate_archive_path_invalid:{name[:160]}")
+            relative = name[len(prefix) :]
+            parts = Path(relative).parts
+            if not relative or any(part in {"", ".", ".."} for part in parts):
+                raise StaticSitePermanentError("secret_candidate_archive_relative_path_invalid")
+            target = destination.joinpath(*parts)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = bundle.extractfile(member)
+            if source is None:
+                raise StaticSitePermanentError("secret_candidate_archive_member_unreadable")
+            with source, target.open("xb") as handle:
+                while chunk := source.read(1024 * 1024):
+                    handle.write(chunk)
+    return destination
+
+
+def _candidate_public_list_disabled(endpoint: str, bucket: str) -> bool:
+    url = f"{endpoint.rstrip('/')}/{quote(bucket, safe='')}?list-type=2&max-keys=1"
+    try:
+        with urlopen(Request(url, headers={"Cache-Control": "no-cache"}), timeout=20) as response:
+            if 200 <= int(response.status) < 300:
+                raise StaticSitePermanentError("secret_candidate_bucket_anonymous_listing_enabled")
+            raise StaticSiteRetryableError(f"secret_candidate_list_preflight_http:{response.status}")
+    except HTTPError as exc:
+        body = exc.read(4096).decode("utf-8", errors="replace")
+        if exc.code in {401, 403} or "AccessDenied" in body or "Forbidden" in body:
+            return True
+        raise StaticSiteRetryableError(f"secret_candidate_list_preflight_http:{exc.code}") from exc
+
+
+def publish_secret_candidate_archive(
+    archive_path: str | os.PathLike[str],
+    *,
+    build_result: Mapping[str, Any],
+    extraction_root: str | os.PathLike[str],
+    bucket: str,
+    endpoint: str,
+    region: str,
+    access_key_id: str,
+    secret_access_key: str,
+    public_base_url: str = "https://kenigevents.ru",
+    s3_client: Any | None = None,
+    list_preflight: Any | None = None,
+    public_probe: Any | None = None,
+) -> SecretCandidateReceipt:
+    """Upload a checked candidate create-only; no root/control key is expressible."""
+
+    candidate = build_result.get("candidate") if isinstance(build_result.get("candidate"), Mapping) else {}
+    token = str(candidate.get("token") or "")
+    if not re.fullmatch(SECRET_CANDIDATE_TOKEN_RE, token):
+        raise StaticSitePermanentError("secret_candidate_token_invalid")
+    (list_preflight or _candidate_public_list_disabled)(endpoint, bucket)
+    root = _safe_extract_candidate_archive(
+        Path(archive_path), Path(extraction_root) / f"candidate-{token}", token
+    )
+    manifest_path = root / "secret-candidate-manifest.json"
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+    except Exception as exc:
+        raise StaticSitePermanentError(f"secret_candidate_manifest_invalid:{exc}") from exc
+    if (
+        manifest.get("schema_version") != SECRET_CANDIDATE_MANIFEST_SCHEMA
+        or manifest.get("site_mode") != "secret_candidate"
+        or manifest.get("publication_mode") != "secret_link"
+        or manifest.get("token_sha256") != hashlib.sha256(token.encode()).hexdigest()
+        or manifest.get("build_id") != build_result.get("build_id")
+        or manifest.get("run_id") != build_result.get("run_id")
+    ):
+        raise StaticSitePermanentError("secret_candidate_manifest_identity_mismatch")
+    for check in ("candidate_contract", "catalog_parity", "noindex", "no_referrer", "prefix_containment", "root_isolation"):
+        if (manifest.get("checks") or {}).get(check) != "ok":
+            raise StaticSitePermanentError(f"secret_candidate_manifest_unchecked:{check}")
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files or len(files) > 100_000:
+        raise StaticSitePermanentError("secret_candidate_manifest_files_invalid")
+    objects: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in [*files, {
+        "key": "secret-candidate-manifest.json",
+        "sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "size": len(manifest_bytes),
+        "content_type": "application/json; charset=utf-8",
+        "cache_control": "private, no-store, max-age=0",
+    }]:
+        key = str(item.get("key") or "")
+        parts = Path(key).parts
+        if not key or key.startswith("/") or "\\" in key or any(part in {"", ".", ".."} for part in parts):
+            raise StaticSitePermanentError("secret_candidate_object_key_invalid")
+        if key.startswith(("_static/", "ics/")) or key in {"current.json", "previous.json", "promotion-lease.json"}:
+            raise StaticSitePermanentError("secret_candidate_protected_key_rejected")
+        object_key = f"_review/{token}/{key}"
+        if object_key in seen:
+            raise StaticSitePermanentError("secret_candidate_duplicate_object")
+        seen.add(object_key)
+        local_path = root.joinpath(*parts)
+        if not local_path.is_file() or local_path.stat().st_size != int(item.get("size") or -1) or _sha256_file(local_path) != item.get("sha256"):
+            raise StaticSitePermanentError(f"secret_candidate_file_hash_mismatch:{key}")
+        objects.append({**item, "object_key": object_key, "local_path": local_path})
+    if s3_client is None:
+        import boto3
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+        )
+    for item in objects:
+        with item["local_path"].open("rb") as handle:
+            s3_client.put_object(
+                Bucket=bucket,
+                Key=item["object_key"],
+                Body=handle,
+                IfNoneMatch="*",
+                ContentType=str(item.get("content_type") or "application/octet-stream"),
+                CacheControl="private, no-store, max-age=0",
+                Metadata={"sha256": str(item["sha256"])},
+            )
+    for item in objects:
+        response = s3_client.get_object(Bucket=bucket, Key=item["object_key"])
+        body = response["Body"].read()
+        if len(body) != int(item["size"]) or hashlib.sha256(body).hexdigest() != item["sha256"]:
+            raise StaticSiteRetryableError(f"secret_candidate_uploaded_hash_mismatch:{item['object_key']}")
+        if str(response.get("ContentType") or "") != str(item.get("content_type") or "application/octet-stream"):
+            raise StaticSiteRetryableError(f"secret_candidate_uploaded_mime_mismatch:{item['object_key']}")
+    public_url = f"{public_base_url.rstrip('/')}/_review/{token}/"
+    if public_probe is not None:
+        public_probe(public_url)
+    else:
+        try:
+            with urlopen(Request(public_url, headers={"Cache-Control": "no-cache"}), timeout=30) as response:
+                if response.status != 200 or not response.read(16):
+                    raise StaticSiteRetryableError(f"secret_candidate_public_http:{response.status}")
+        except HTTPError as exc:
+            raise StaticSiteRetryableError(f"secret_candidate_public_http:{exc.code}") from exc
+    return SecretCandidateReceipt(
+        schema_version="static_secret_candidate_receipt_v1",
+        build_id=str(build_result.get("build_id") or ""),
+        run_id=str(build_result.get("run_id") or ""),
+        snapshot_id=str((build_result.get("snapshot") or {}).get("snapshot_id") or ""),
+        token_sha256=hashlib.sha256(token.encode()).hexdigest(),
+        manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        object_count=len(objects),
+        public_url=public_url,
+        verified_at=iso_utc(),
+    )
 
 
 def classify_failure(exc: BaseException) -> FailureDisposition:
