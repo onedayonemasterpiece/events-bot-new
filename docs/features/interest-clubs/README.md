@@ -2,7 +2,7 @@
 
 ## Статус
 
-**Production rollout approved 2026-07-17.** После merge implementation PR #54 владелец явно уточнил, что «полностью внедрить» включает production delivery, а не только готовый PR. Release выполняется из `origin/main` по отдельным обратимым gates: additive schema/bootstrap, relation pipeline, checked static projection и public root publication. Точные SHA/build evidence дописываются в release plan по завершении rollout.
+**Production canary live 2026-07-17.** Implementation PR #54 и release PR #60 достижимы из `origin/main`; Fly runtime v1688 работает с relation pipeline, static projection и public gates ON. В production импортированы шесть confirmed identities и две shadow identities; public freshness/boundary gates опубликовали четыре клуба на canonical root routes. Точные SHA, counts, hashes, rollback и HTTP evidence записаны в [release plan](release-plan.md#production-evidence-2026-07-17). Семидневное наблюдение Stage 5 ещё продолжается и не подменяется фактом deploy.
 
 Канонические документы:
 

@@ -76,6 +76,23 @@ RC фиксирует три отдельные fail-closed switches:
 
 **Release complete:** семь дней `0` confirmed false merges, `0` invalid public quotes, freshness p95 `≤45 min`, review queue не старше 48 часов для high-risk cases, rollback drill повторён на текущем build, docs/evidence ссылаются на production SHA и manifest.
 
+## Production evidence 2026-07-17
+
+**Статус:** production canary live; Stage 5 seven-day observation in progress.
+
+- Source of truth: merge SHA `39e15c8a3d2a1fc4eac2bcc95e6406c34e4a2187` in `origin/main` (PR #54 implementation + PR #60 production gates).
+- Fly release: app `events-bot-new-wngqia`, machine version `1688`, image `deployment-01KXR4AFZJ72BD3PA8DYJYBBJ5`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, empty `issues`, and `job_outbox_worker_loop=ok`.
+- Pre-migration backup: consistent Fly SQLite snapshot, `PRAGMA quick_check=ok`, `6529` events, `9089` event sources, SHA-256 `6ef319377163fc17e998becbde564297b53989bdcd5a5728f7345b2e4affe620`; club tables were absent before the additive bootstrap.
+- Runtime flags: `ENABLE_INTEREST_CLUB_PIPELINE=1`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION=1`, `PUBLIC_INTEREST_CLUBS_ENABLED=1`. Rollback remains independent per flag.
+- Bootstrap/replay: `8` identities (`6 approved`, `2 shadow`); `14 active`, `1 deferred`, `3 review` relations after bounded replay. All `14/14` active rows reconstructed the same evidence packet and passed the exact 3–8-word quote validator with policy `interest-club-relation-v1` and model `gemma-4-31b-it`.
+- Fail-closed boundary evidence: event `6835` remains `deferred/provider_error` after an invalid provider JSON contract; event `6381` remains review after invalid quote; events `2915` and `3814` remain review/no. None entered the public projection.
+- Public projection: four identities passed recurrence/freshness/festival gates — `game-vibes`, `s-toboi-ok`, `neural-researchers`, `technology-researchers`. `autoretroclub` remains excluded because its current candidate is festival-scoped in public v1; `cinemango` remains outside the 90-day freshness window.
+- Checked build: immutable canary `preview-20260717-interest-clubs-prod-canary`; `303` current/future events, `npm run check:preview` passed, public preview and stable assets returned HTTP 200.
+- Root promotion: seven-file club overlay published to canonical `/kluby-po-interesam/` plus four detail routes and root `sitemap.xml`; manifest SHA-256 `1b9e76ced24cf922ec746fe3c413684152f36625bf9bf65008ebf3c0ebc3d1fc`. All five club URLs returned HTTP 200, canonical root URLs, and no `noindex`. The existing noindex landing remains the root entrypoint and now links both to this club section and the checked versioned build.
+- Rollback: previous root `index.html` is retained locally in release evidence and at `s3://kenigevents.ru/releases/interest-clubs-pre-20260717-1345z/index.html`; the club overlay can be removed independently and the previous entrypoint restored without SQLite downgrade.
+- Catch-up: there was no earlier scheduled club slot because the feature gates did not exist in production. The bounded historical replay plus checked static publication is the compensating initial catch-up; ongoing Smart Update relation writes are enabled. Static root promotion still follows the repository's checked manual publisher protocol until the shared atomic automatic CDN promoter is completed.
+- External review: `a-opus` produced no substantive response in two attempts. This is recorded as unavailable consultant evidence, not as a reason to skip owner-authorized production delivery and not as a completed Opus review.
+
 ## Metrics и alerts
 
 Минимальная telemetry (названия адаптировать один раз к коду, не плодить синонимы):
