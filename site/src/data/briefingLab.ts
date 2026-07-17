@@ -125,7 +125,7 @@ export const briefingLabScenarios = [
   },
   {
     id: 'frequently_forwarded', label: 'Часто пересылают', family: 'signal', cooldownDays: 14,
-    demoSignal: true, demoValidUntil: '2026-07-30T23:59:59+02:00', cursor: 'bar',
+    demoSignal: true, demoValidUntil: '2026-07-30T23:59:59+02:00', cursor: 'underscore',
     fragments: [
       { text: 'Часто пересылают', accent: true, eventId: 6466 },
       { text: '«Планету Океан».', accent: true, breakAfter: true, eventId: 6466 },
@@ -176,7 +176,7 @@ export const briefingLabScenarios = [
   },
   {
     id: 'weather_water_demo', label: 'Погода → море', family: 'signal', cooldownDays: 7,
-    demoSignal: true, demoValidUntil: '2026-08-31T23:59:59+02:00', cursor: 'bar', nextScenarioId: 'unusual_format_demo',
+    demoSignal: true, demoValidUntil: '2026-08-31T23:59:59+02:00', cursor: 'underscore', nextScenarioId: 'unusual_format_demo',
     fragments: [
       { text: 'Обещают' }, { text: 'ясные выходные.', accent: true, breakAfter: true },
       { text: 'Махнём' }, { text: 'на море?', accent: true, href: '/poisk/' },

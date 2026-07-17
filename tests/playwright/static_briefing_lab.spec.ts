@@ -478,7 +478,7 @@ test('eligible scenarios use desktop mosaic media without moving the established
   expect(Math.abs(mediaGeometry.initial.y - mediaGeometry.withoutMedia.y)).toBeLessThanOrEqual(1);
   expect(Math.abs(mediaGeometry.initial.width - mediaGeometry.withoutMedia.width)).toBeLessThanOrEqual(1);
   expect(mediaGeometry.stripe).toContain('linear-gradient');
-  expect(mediaGeometry.stripe).toContain('0.3');
+  expect(mediaGeometry.stripe).toContain('0.28');
   expect(mediaGeometry.stripeColor).toBe('rgba(0, 0, 0, 0)');
   expect(mediaGeometry.stripeShadow).toBe('none');
   expect(mediaGeometry.withoutStripe).toBe('none');
@@ -687,7 +687,15 @@ test('adaptive 16–20×5 mosaic is dramatic, non-checkerboard, source-faithful,
   const partial = await animated.page.locator('[data-mosaic-tile]:not([hidden])').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) > .01).length);
   expect(partial).toBeGreaterThan(0);
   expect(partial).toBeLessThan(80);
+  await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-cursor', 'underscore');
+  const typingCursor = await animated.page.locator('.briefing-fragment.is-active').evaluate((node) => {
+    const style = getComputedStyle(node, '::after');
+    return { width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) };
+  });
+  expect(typingCursor.width).toBeGreaterThan(20);
+  expect(typingCursor.height).toBeLessThan(10);
   await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
+  await expect(animated.page.locator('[data-briefing]')).toHaveAttribute('data-cursor-linger', 'true');
   await expect(animated.page.locator('[data-narrative-media]')).toHaveClass(/is-exiting/u, { timeout: 4000 });
   await animated.page.waitForTimeout(150);
   const exiting = await animated.page.locator('[data-mosaic-tile]:not([hidden])').evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).opacity)));
@@ -762,7 +770,7 @@ test('approved header lockup, lightweight mosaic stripe and weather actions keep
     expect(geometry.media.left).toBeLessThan(geometry.message.right);
     expect(Math.abs(geometry.longMessage.left - geometry.message.left)).toBeLessThanOrEqual(1);
     expect(geometry.stripe).toContain('linear-gradient');
-    expect(geometry.stripe).toContain('0.3');
+    expect(geometry.stripe).toContain('0.28');
     expect(geometry.stripeColor).toBe('rgba(0, 0, 0, 0)');
     expect(geometry.stripeShadow).toBe('none');
     expect(geometry.paddingInline).toBeLessThan(3);
