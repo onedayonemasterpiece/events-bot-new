@@ -2,8 +2,9 @@
 import SocialIcon from '../components/SocialIcon.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 
-export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular';
+export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
 
 interface Props {
   title: string;
@@ -40,7 +41,9 @@ const HEADER_NAVIGATION = [
   { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
   { key: 'exhibitions', label: 'Выставки', href: '/vystavki/' },
   { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
+  { key: 'clubs', label: 'Клубы', href: '/kluby-po-interesam/' },
 ] as const;
+const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
 ---
 <!doctype html>
 <html lang="ru">
@@ -2129,6 +2132,7 @@ const HEADER_NAVIGATION = [
                 <a href={withBase('/vyhodnye/')}>Выходные</a>
                 <a href={withBase('/vystavki/')}>Выставки</a>
                 <a href={withBase('/populyarnoe/')}>Популярное</a>
+                {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы</a>}
                 <a href={withBase('/poisk/')}>Поиск</a>
                 <a href={withBase('/partners/')}>Инфопартнёры</a>
                 <a href={withBase('/__preview/')}>Все анонсы</a>
@@ -2137,7 +2141,7 @@ const HEADER_NAVIGATION = [
           </div>
         </details>
         <nav class="site-nav" aria-label="Основная навигация">
-          {HEADER_NAVIGATION.map((item) => (
+          {visibleHeaderNavigation.map((item) => (
             <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined}>{item.label}</a>
           ))}
         </nav>
@@ -2154,6 +2158,7 @@ const HEADER_NAVIGATION = [
             <a href={withBase('/vyhodnye/')}>Выходные</a>
             <a href={withBase('/vystavki/')}>Выставки</a>
             <a href={withBase('/populyarnoe/')}>Популярное</a>
+            {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>}
             <a href={withBase('/poisk/')}>Поиск</a>
             <a href={withBase('/partners/')}>Инфопартнёры</a>
             <a href={withBase('/__preview/')}>Все анонсы</a>

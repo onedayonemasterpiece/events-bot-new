@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
+import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -18,6 +19,7 @@ const required = [
   'poisk/index.html',
   'partnerstvo/index.html',
   'partners/index.html',
+  'kluby-po-interesam/index.html',
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
@@ -33,10 +35,26 @@ const required = [
     `sobytiya/${event.slug}/event.ics`,
     `data/discovery/${event.id}.json`,
   ]),
+  ...interestClubsData.clubs.map((club) => `kluby-po-interesam/${club.slug}/index.html`),
 ];
 for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
+}
+if (interestClubsData.schema_version !== 'interest-clubs-static-v1' || interestClubsData.projection_version !== 1) {
+  throw new Error('Interest-clubs projection contract is not interest-clubs-static-v1');
+}
+const clubIndexHtml = readFileSync(join(root, 'kluby-po-interesam/index.html'), 'utf8');
+if (!/<h1[^>]*>Клубы по интересам<\/h1>/u.test(clubIndexHtml)) throw new Error('Interest-clubs index misses one visible h1');
+if (!clubIndexHtml.includes('aria-label="Хлебные крошки"')) throw new Error('Interest-clubs index misses semantic breadcrumbs');
+if (!clubIndexHtml.includes('https://schema.org') || !clubIndexHtml.includes('ItemList')) throw new Error('Interest-clubs index misses JSON-LD ItemList');
+if (!clubIndexHtml.includes('/kluby-po-interesam/')) throw new Error('Interest-clubs route is absent from static navigation');
+for (const club of interestClubsData.clubs) {
+  const detailHtml = readFileSync(join(root, `kluby-po-interesam/${club.slug}/index.html`), 'utf8');
+  if (!detailHtml.includes(`>${club.name}</h1>`)) throw new Error(`Club ${club.slug} misses visible h1`);
+  if (!detailHtml.includes('id="future-meetings-title"')) throw new Error(`Club ${club.slug} misses future-meetings section`);
+  if (!detailHtml.includes('BreadcrumbList') || !detailHtml.includes('application/ld+json')) throw new Error(`Club ${club.slug} misses structured data`);
+  if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(detailHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
 }
 const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
 for (const event of kgd80Events) {

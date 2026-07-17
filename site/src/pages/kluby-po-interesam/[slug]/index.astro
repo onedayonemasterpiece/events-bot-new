@@ -1,0 +1,131 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import { absoluteUrl, displayDateValue, SITE_NAME, withBase } from '../../../lib/events';
+import { getInterestClubBySlug, getInterestClubs, interestClubAbsoluteUrl, interestClubMeetingHref } from '../../../lib/clubs';
+
+export function getStaticPaths() {
+  return getInterestClubs().map((club) => ({ params: { slug: club.slug } }));
+}
+
+const club = getInterestClubBySlug(Astro.params.slug || '');
+if (!club) return Astro.redirect(withBase('/kluby-po-interesam/'));
+
+const canonicalUrl = interestClubAbsoluteUrl(club);
+const title = `${club.name} — клуб по интересам | ${SITE_NAME}`;
+const place = [club.city, club.typical_venue].filter(Boolean).join(' · ');
+const description = club.description || `${club.name}: ${club.topic}. Подтверждённые встречи клуба в каталоге событий Калининградской области.`;
+const structuredData = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: club.name,
+    description,
+    url: canonicalUrl,
+    about: { '@type': 'Thing', name: club.name, description: club.topic },
+    isPartOf: { '@type': 'CollectionPage', name: 'Клубы по интересам', url: absoluteUrl('/kluby-po-interesam/') },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Афиша', item: absoluteUrl('/__preview/') },
+      { '@type': 'ListItem', position: 2, name: 'Клубы по интересам', item: absoluteUrl('/kluby-po-interesam/') },
+      { '@type': 'ListItem', position: 3, name: club.name, item: canonicalUrl },
+    ],
+  },
+];
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={structuredData} headerCurrent="clubs">
+  <main id="main">
+    <article class="page-shell club-detail">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <a href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>
+        <span aria-hidden="true">/</span>
+        <span>{club.name}</span>
+      </nav>
+
+      <header class="section-card club-detail__hero">
+        <div class="section-card__inner">
+          <p class="eyebrow">{club.topic}</p>
+          <h1>{club.name}</h1>
+          {club.description && <p class="lead">{club.description}</p>}
+          <dl class="club-detail__facts">
+            {club.city && <div><dt>Город</dt><dd>{club.city}</dd></div>}
+            {club.typical_venue && <div><dt>Типичное место</dt><dd>{club.typical_venue}</dd></div>}
+            <div><dt>Подтверждённых встреч</dt><dd>{club.activity.meeting_count}</dd></div>
+            <div><dt>Отдельных дат</dt><dd>{club.activity.distinct_date_count}</dd></div>
+            <div><dt>Период в каталоге</dt><dd>{displayDateValue(club.activity.first_observed_date)} — {displayDateValue(club.activity.last_observed_date)}</dd></div>
+          </dl>
+        </div>
+      </header>
+
+      <section class="section-card" aria-labelledby="future-meetings-title">
+        <div class="section-card__inner">
+          <p class="eyebrow">Актуальное</p>
+          <h2 id="future-meetings-title">Будущие встречи</h2>
+          {club.future_meetings.length ? (
+            <ol class="meeting-list">
+              {club.future_meetings.map((meeting) => {
+                const href = interestClubMeetingHref(meeting);
+                const meetingPlace = [meeting.city, meeting.venue_name].filter(Boolean).join(' · ');
+                const isExternal = Boolean(href?.startsWith('http'));
+                return (
+                  <li>
+                    <div class="meeting-list__date">
+                      <time datetime={meeting.start_date}>{displayDateValue(meeting.start_date)}</time>
+                      {meeting.display_time && <span>{meeting.display_time}</span>}
+                    </div>
+                    <div class="meeting-list__body">
+                      <h3>{href ? <a href={href} target={isExternal ? '_blank' : undefined} rel={isExternal ? 'noopener noreferrer nofollow' : undefined}>{meeting.title}</a> : meeting.title}</h3>
+                      {meetingPlace && <p>{meetingPlace}</p>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <div class="meeting-empty">
+              <h3>Новых дат пока нет</h3>
+              <p>История встреч подтверждает клуб, но будущая встреча ещё не опубликована в каталоге.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <aside class="club-detail__note" aria-label="Как формируется страница">
+        <strong>Почему клуб здесь</strong>
+        <p>Связь основана на подтверждённых событиях в разные даты. Фестивали, повторы одной программы и неподтверждённые связи не показываются.</p>
+      </aside>
+      <p><a class="club-detail__back" href={withBase('/kluby-po-interesam/')}><span aria-hidden="true">←</span> Все клубы</a></p>
+    </article>
+  </main>
+</EventLayout>
+
+<style>
+  .club-detail { display:grid; gap:1rem; }
+  .crumbs a { min-height:44px; }
+  .club-detail__hero { background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7)); }
+  .club-detail__hero h1 { max-width:19ch; font-size:clamp(2.2rem, 6vw, 4.8rem); line-height:.98; }
+  .club-detail__facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; margin:1.3rem 0 0; }
+  .club-detail__facts div { padding:.8rem; border:1px solid rgba(121,48,20,.11); border-radius:16px; background:rgba(255,255,255,.72); }
+  dt { color:var(--muted); font-size:.84rem; }
+  dd { margin:.15rem 0 0; font-weight:850; overflow-wrap:anywhere; }
+  .meeting-list { display:grid; gap:.7rem; margin:1rem 0 0; padding:0; list-style:none; }
+  .meeting-list li { display:grid; grid-template-columns:minmax(7rem, 10rem) minmax(0,1fr); gap:1rem; padding:1rem 0; border-top:1px solid rgba(121,48,20,.12); }
+  .meeting-list__date { display:grid; align-content:start; gap:.1rem; color:var(--primary-strong); font-weight:900; }
+  .meeting-list__date span { color:var(--muted); font-size:.88rem; }
+  .meeting-list h3 { margin:0; font-size:1.2rem; }
+  .meeting-list h3 a { min-height:44px; display:inline-flex; align-items:center; color:var(--primary-strong); }
+  .meeting-list p { margin:.3rem 0 0; color:var(--muted); }
+  .meeting-empty { padding:1rem; border-radius:18px; background:#fff8ed; }
+  .meeting-empty h3, .meeting-empty p { margin:.15rem 0; }
+  .club-detail__note { padding:1rem 1.15rem; border-left:4px solid var(--accent); border-radius:0 16px 16px 0; background:rgba(215,240,236,.58); }
+  .club-detail__note p { margin:.2rem 0 0; color:var(--muted); }
+  .club-detail__back { min-height:44px; display:inline-flex; align-items:center; gap:.4rem; color:var(--primary-strong); font-weight:900; }
+  @media (max-width: 620px) {
+    .club-detail__facts { grid-template-columns:1fr; }
+    .meeting-list li { grid-template-columns:1fr; gap:.35rem; }
+  }
+</style>

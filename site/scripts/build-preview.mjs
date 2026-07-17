@@ -31,6 +31,8 @@ const env = {
   SITE_BASE_PATH: `/${buildId}`,
   PUBLIC_PREVIEW_BUILD_ID: buildId,
   PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru',
+  PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
+  ENABLE_INTEREST_CLUB_STATIC_PROJECTION: process.env.ENABLE_INTEREST_CLUB_STATIC_PROJECTION || '1',
   ...(astroAssetBaseUrl ? { PUBLIC_ASTRO_ASSET_BASE_URL: astroAssetBaseUrl } : {}),
 };
 const astroBin = process.platform === 'win32' ? 'astro.cmd' : 'astro';

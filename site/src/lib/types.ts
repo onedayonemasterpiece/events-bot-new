@@ -241,3 +241,45 @@ export interface RelatedData {
   cache?: unknown;
   related: Record<string, { similar: number[]; pure_related?: number[]; explore: number[]; adjacent_discovery?: number[]; chain?: Array<Record<string, unknown>>; underfilled?: boolean; strict_verified?: boolean }>;
 }
+
+export interface InterestClubMeeting {
+  event_id: number;
+  title: string;
+  start_date: string;
+  start_time: string | null;
+  display_time: string | null;
+  city: string | null;
+  venue_name: string | null;
+  event_path: string | null;
+  source_url: string | null;
+}
+
+export interface InterestClubActivity {
+  meeting_count: number;
+  distinct_date_count: number;
+  first_observed_date: string;
+  last_observed_date: string;
+  future_meeting_count: number;
+}
+
+export interface InterestClub {
+  id: number;
+  slug: string;
+  name: string;
+  topic: string;
+  description: string | null;
+  city: string | null;
+  typical_venue: string | null;
+  activity: InterestClubActivity;
+  future_meetings: InterestClubMeeting[];
+  updated_at: string | null;
+}
+
+export interface InterestClubsData {
+  schema_version: 'interest-clubs-static-v1';
+  projection_version: 1;
+  generated_at: string;
+  current_date: string;
+  source: string;
+  clubs: InterestClub[];
+}

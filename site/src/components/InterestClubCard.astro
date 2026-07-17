@@ -1,0 +1,60 @@
+---
+import { displayDateValue } from '../lib/events';
+import { interestClubHref } from '../lib/clubs';
+import type { InterestClub } from '../lib/types';
+
+interface Props {
+  club: InterestClub;
+}
+
+const { club } = Astro.props;
+const place = [club.city, club.typical_venue].filter(Boolean).join(' · ');
+const activityLabel = `${club.activity.distinct_date_count} ${club.activity.distinct_date_count === 1 ? 'дата' : club.activity.distinct_date_count < 5 ? 'даты' : 'дат'} в каталоге`;
+---
+<article class="club-card">
+  <div class="club-card__head">
+    <p class="club-card__topic">{club.topic}</p>
+    {club.activity.future_meeting_count > 0 && (
+      <span class="club-card__future">Ближайших встреч: {club.activity.future_meeting_count}</span>
+    )}
+  </div>
+  <h2><a href={interestClubHref(club)}>{club.name}</a></h2>
+  {club.description && <p class="club-card__description">{club.description}</p>}
+  <dl class="club-card__facts">
+    {place && <div><dt>Где</dt><dd>{place}</dd></div>}
+    <div><dt>Активность</dt><dd>{activityLabel}</dd></div>
+    <div><dt>Наблюдаем</dt><dd>{displayDateValue(club.activity.first_observed_date)} — {displayDateValue(club.activity.last_observed_date)}</dd></div>
+  </dl>
+  <a class="club-card__link" href={interestClubHref(club)} aria-label={`Подробнее о клубе «${club.name}»`}>Подробнее <span aria-hidden="true">→</span></a>
+</article>
+
+<style>
+  .club-card {
+    display: grid;
+    align-content: start;
+    gap: .8rem;
+    min-width: 0;
+    padding: clamp(1rem, 2.6vw, 1.4rem);
+    border: 1px solid rgba(121,48,20,.14);
+    border-radius: 24px;
+    background: linear-gradient(180deg, #fffdf8, #fff8ed);
+    box-shadow: 0 14px 32px rgba(72,45,25,.08);
+  }
+  .club-card__head { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
+  .club-card__topic { margin:0; color:var(--primary-strong); font-size:.82rem; font-weight:900; letter-spacing:.045em; text-transform:uppercase; }
+  .club-card__future { flex:0 0 auto; padding:.2rem .55rem; border-radius:999px; background:var(--accent-soft); color:#075f59; font-size:.78rem; font-weight:850; }
+  h2 { margin:0; font-size:clamp(1.35rem, 3vw, 1.75rem); line-height:1.15; }
+  h2 a { min-height:44px; display:inline-flex; align-items:center; text-decoration:none; }
+  h2 a:hover { color:var(--primary); text-decoration:underline; }
+  .club-card__description { margin:0; color:var(--muted); }
+  .club-card__facts { display:grid; gap:.4rem; margin:.1rem 0 0; }
+  .club-card__facts div { display:grid; grid-template-columns:6.5rem minmax(0,1fr); gap:.6rem; padding-top:.4rem; border-top:1px solid rgba(121,48,20,.09); }
+  dt { color:var(--muted); font-size:.84rem; }
+  dd { min-width:0; margin:0; overflow-wrap:anywhere; font-weight:700; }
+  .club-card__link { width:max-content; min-height:44px; display:inline-flex; align-items:center; gap:.4rem; color:var(--primary-strong); font-weight:900; }
+  @media (max-width: 430px) {
+    .club-card__head { display:grid; }
+    .club-card__future { width:max-content; }
+    .club-card__facts div { grid-template-columns:1fr; gap:.05rem; }
+  }
+</style>

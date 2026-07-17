@@ -1428,6 +1428,209 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     }
 
 
+INTEREST_CLUBS_SCHEMA_VERSION = "interest-clubs-static-v1"
+INTEREST_CLUB_REQUIRED_COLUMNS = {
+    "id",
+    "slug",
+    "canonical_name",
+    "topic",
+    "public_status",
+}
+INTEREST_CLUB_EVENT_REQUIRED_COLUMNS = {"club_id", "event_id", "status"}
+INTEREST_CLUB_EVENT_SOURCE_COLUMNS = ("source_url", "url", "public_url")
+
+
+def _sqlite_table_columns(con: sqlite3.Connection, table: str) -> set[str]:
+    """Return a SQLite table contract without interpolating untrusted names."""
+
+    if table not in {"interest_club", "interest_club_event", "event", "event_source"}:
+        return set()
+    try:
+        return {str(row[1]) for row in con.execute(f"pragma table_info('{table}')")}
+    except sqlite3.DatabaseError:
+        return set()
+
+
+def _club_event_source_url(
+    con: sqlite3.Connection,
+    event_id: int,
+    event_row: sqlite3.Row,
+    event_columns: set[str],
+) -> str | None:
+    """Select one already-public URL; never synthesize or expose provenance JSON."""
+
+    for column in ("source_post_url", "source_vk_post_url", "tg_event_post_url", "vk_repost_url"):
+        if column in event_columns:
+            value = clean_text(row_get(event_row, column))
+            if value.startswith(("https://", "http://")):
+                return value
+    source_columns = _sqlite_table_columns(con, "event_source")
+    for column in INTEREST_CLUB_EVENT_SOURCE_COLUMNS:
+        if column not in source_columns or "event_id" not in source_columns:
+            continue
+        try:
+            source_row = con.execute(
+                f"select {column} from event_source where event_id=? and {column} is not null order by rowid asc limit 1",
+                (event_id,),
+            ).fetchone()
+        except sqlite3.DatabaseError:
+            continue
+        value = clean_text(source_row[0] if source_row else None)
+        if value.startswith(("https://", "http://")):
+            return value
+    return None
+
+
+def _club_event_is_public(row: sqlite3.Row) -> bool:
+    """Apply the public event gates again at the club-relation boundary."""
+
+    if public_projection_gate_reason(row):
+        return False
+    if row_has_key(row, "lifecycle_status") and clean_text(row_get(row, "lifecycle_status") or "active").lower() != "active":
+        return False
+    if row_has_key(row, "silent") and bool(row_get(row, "silent")):
+        return False
+    # Festival/program identity is independent from a club identity. A future
+    # explicit product contract may allow a co-hosted relation; v1 fails closed.
+    if row_has_key(row, "festival") and clean_text(row_get(row, "festival")):
+        return False
+    return True
+
+
+def build_interest_clubs_projection(
+    con: sqlite3.Connection,
+    *,
+    current_date: str,
+    generated_at: str,
+    exported_events: list[dict[str, Any]],
+    enabled: bool = False,
+) -> dict[str, Any]:
+    """Build the versioned public club projection from canonical SQLite rows.
+
+    This function is the single mapping seam shared with the core club model.
+    Missing or incompatible tables return a valid empty projection: a static
+    build remains deployable without turning shadow/deferred rows into content.
+    """
+
+    if not enabled:
+        return {
+            "schema_version": INTEREST_CLUBS_SCHEMA_VERSION,
+            "projection_version": 1,
+            "generated_at": generated_at,
+            "current_date": current_date,
+            "source": "disabled-by-build-gate",
+            "clubs": [],
+        }
+
+    club_columns = _sqlite_table_columns(con, "interest_club")
+    relation_columns = _sqlite_table_columns(con, "interest_club_event")
+    event_columns = _sqlite_table_columns(con, "event")
+    contract_available = (
+        INTEREST_CLUB_REQUIRED_COLUMNS.issubset(club_columns)
+        and INTEREST_CLUB_EVENT_REQUIRED_COLUMNS.issubset(relation_columns)
+        and {"id", "title", "date"}.issubset(event_columns)
+    )
+    projection = {
+        "schema_version": INTEREST_CLUBS_SCHEMA_VERSION,
+        "projection_version": 1,
+        "generated_at": generated_at,
+        "current_date": current_date,
+        "source": "sqlite-interest-clubs-v1" if contract_available else "empty-contract-fallback",
+        "clubs": [],
+    }
+    if not contract_available:
+        return projection
+
+    exported_slug_by_id = {
+        int(item["id"]): str(item["slug"])
+        for item in exported_events
+        if str(item.get("id", "")).isdigit() and clean_text(item.get("slug"))
+    }
+    club_rows = con.execute(
+        "select * from interest_club where public_status='approved' order by canonical_name collate nocase, id"
+    ).fetchall()
+    clubs: list[dict[str, Any]] = []
+    for club_row in club_rows:
+        slug = clean_text(row_get(club_row, "slug"))
+        name = clean_text(row_get(club_row, "canonical_name"))
+        topic = clean_text(row_get(club_row, "topic"))
+        if not name or not topic or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+            continue
+        club_id = int(row_get(club_row, "id"))
+        relation_rows = con.execute(
+            """
+            select e.*
+            from interest_club_event ice
+            join event e on e.id = ice.event_id
+            where ice.club_id=? and ice.status='active'
+            order by e.date asc, e.id asc
+            """,
+            (club_id,),
+        ).fetchall()
+        public_events = [row for row in relation_rows if _club_event_is_public(row)]
+        if not public_events:
+            continue
+
+        observed_dates = sorted({str(row["date"]) for row in public_events})
+        # Public v1 requires recurring evidence and current activity. This is a
+        # retrieval/publication gate, not a semantic club decision: the latter
+        # remains owned by the approved identity and active relation verdicts.
+        if len(observed_dates) < 2:
+            continue
+        current_day = date.fromisoformat(current_date)
+        last_observed_day = date.fromisoformat(observed_dates[-1])
+        has_current_or_future_meeting = any(value >= current_date for value in observed_dates)
+        if not has_current_or_future_meeting and (current_day - last_observed_day).days > 90:
+            continue
+        future_meetings: list[dict[str, Any]] = []
+        for event_row in public_events:
+            start_date = str(event_row["date"])
+            if start_date < current_date:
+                continue
+            event_id = int(event_row["id"])
+            event_slug = exported_slug_by_id.get(event_id)
+            source_url = _club_event_source_url(con, event_id, event_row, event_columns)
+            start_time, _, display_time = split_time(row_get(event_row, "time"))
+            city = clean_place(row_get(event_row, "city"))
+            venue = drop_city_only_venue(clean_place(row_get(event_row, "location_name")), city)
+            future_meetings.append(
+                {
+                    "event_id": event_id,
+                    "title": strip_emoji_prefix(row_get(event_row, "title")) or f"Событие {event_id}",
+                    "start_date": start_date,
+                    "start_time": start_time,
+                    "display_time": display_time,
+                    "city": city,
+                    "venue_name": venue,
+                    "event_path": f"/sobytiya/{event_slug}/" if event_slug else None,
+                    "source_url": source_url,
+                }
+            )
+
+        clubs.append(
+            {
+                "id": club_id,
+                "slug": slug,
+                "name": name,
+                "topic": topic,
+                "description": clean_text(row_get(club_row, "description")) or None,
+                "city": clean_place(row_get(club_row, "city")),
+                "typical_venue": clean_place(row_get(club_row, "typical_place")),
+                "activity": {
+                    "meeting_count": len(public_events),
+                    "distinct_date_count": len(observed_dates),
+                    "first_observed_date": observed_dates[0],
+                    "last_observed_date": observed_dates[-1],
+                    "future_meeting_count": len(future_meetings),
+                },
+                "future_meetings": future_meetings,
+                "updated_at": clean_text(row_get(club_row, "updated_at")) or None,
+            }
+        )
+    projection["clubs"] = clubs
+    return projection
+
+
 def category(event: dict[str, Any]) -> str:
     topics = event.get("topics") or []
     text = " ".join([str(event.get("event_type") or ""), event.get("title") or ""]).lower()
@@ -2792,6 +2995,17 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    clubs_projection = build_interest_clubs_projection(
+        con,
+        current_date=effective_date,
+        generated_at=generated_at,
+        exported_events=events,
+        enabled=os.getenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", "").strip().lower() in {"1", "true", "yes", "on"},
+    )
+    (out_dir / "interest-clubs.json").write_text(
+        json.dumps(clubs_projection, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     if args.skip_related:
         print(f"Exported {len(events)} events to {out_dir}")
         print("IDs:", ",".join(str(event["id"]) for event in events))
