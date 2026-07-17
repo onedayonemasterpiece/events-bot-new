@@ -222,6 +222,7 @@ def source_has_authoritative_confirmed_external_evidence(row: dict[str, Any] | N
     if status != "confirmed_external":
         return False
     relation = str(item.get("external_blogger_region_relation_status") or item.get("region_relation_status") or "").lower().replace("ё", "е")
+    relation_words = re.sub(r"[_-]+", " ", relation)
     if any(marker in relation for marker in [
         "lives in region", "living in region", "resident of region", "moved to region",
         "local resident", "local blogger", "живет в регионе", "житель региона",
@@ -229,9 +230,10 @@ def source_has_authoritative_confirmed_external_evidence(row: dict[str, Any] | N
         "локальный",
     ]):
         return False
-    return any(marker in relation for marker in [
+    return any(marker in relation_words for marker in [
         "external visitor", "nonlocal", "non-local", "outside region",
         "приезж", "не местн", "внешн",
+        "external evidence supplied", "confirmed external",
         "иностранный автор", "россия-базированный иностранный автор",
     ])
 
@@ -7923,7 +7925,11 @@ def external_blogger_evidence_source_rows(previous_state: dict[str, Any], run_id
                 "canonical_url": canonical,
                 "normalized_url": canonical,
                 "raw_url": raw_url,
-                "source_title": str(row.get("blogger_name") or handle or canonical),
+                # ``blogger_name`` may contain evidence context such as
+                # "— Калининград, сентябрь 2025".  It is not the resolved
+                # Telegram/VK title and must not trigger the local-source title
+                # heuristic before the real profile is read.
+                "source_title": str(handle or canonical),
                 "recommended_title": str(row.get("blogger_name") or handle or canonical),
                 "added_from": "external_blogger_evidence",
                 "discovery_type": "confirmed_external_blogger_evidence",
@@ -8196,12 +8202,20 @@ def build_unified_source_queue(
             # original discovery provenance that controls priority. Merge
             # graph evidence, while keeping the first durable added_from.
             existing.update({k: v for k, v in seed.items() if k != "added_from" and v not in ("", None)})
+            seed_has_confirmed_external = (
+                str(seed.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+            )
             evidence_attached_now = (
                 not evidence_was_attached
-                and str(seed.get("external_blogger_evidence_status") or "").strip().lower() == "confirmed_external"
+                and seed_has_confirmed_external
             )
             if evidence_attached_now:
                 existing["external_blogger_evidence_attached_run_id"] = run_id
+            # Reconcile on every authoritative evidence refresh, not only on
+            # first attachment.  Older runs stored ``external_evidence_supplied``
+            # without recognizing it as non-local and could leave a source
+            # terminally local forever; that is a product-dead queue state.
+            if seed_has_confirmed_external:
                 locality = reconcile_source_profile_locality(existing, posts_by_source.get(str(existing.get("source_id") or ""), []))
                 existing.update(locality)
                 if locality.get("source_locality_reconciliation_status") == "authoritative_confirmed_external":

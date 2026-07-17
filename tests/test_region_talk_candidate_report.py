@@ -1963,7 +1963,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         )
 
         self.assertEqual({row["platform"] for row in evidence_rows}, {"telegram", "vk"})
-        self.assertEqual({row["source_title"] for row in evidence_rows}, {"External Traveller"})
+        self.assertEqual({row["external_blogger_name"] for row in evidence_rows}, {"External Traveller"})
+        self.assertEqual({row["source_title"] for row in evidence_rows}, {"@externaltraveller", "@id123456"})
         self.assertTrue(all(row["source_scope"] == "external" for row in evidence_rows))
         self.assertTrue(all(row["priority_lane"] == "confirmed_external_blogger" for row in evidence_rows))
         self.assertTrue(any(row["source_url"] == "https://vk.com/id123456" for row in evidence_rows))
@@ -4117,6 +4118,59 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
         self.assertEqual(profile["source_geo_class"], "nonlocal_russia")
         self.assertEqual(profile["source_locality_reconciliation_status"], "authoritative_confirmed_external")
+
+    def test_external_evidence_supplied_relation_is_authoritative_nonlocal(self) -> None:
+        mod = load_module()
+        row = {
+            "external_blogger_evidence_status": "confirmed_external",
+            "external_blogger_region_relation_status": "external_evidence_supplied",
+        }
+
+        self.assertTrue(mod.source_has_authoritative_confirmed_external_evidence(row))
+
+    def test_existing_false_local_reopens_on_authoritative_evidence_refresh(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 10,
+            "unified_source_queue": {
+                "telegram:mediarazvedka": {
+                    "canonical_source_key": "telegram:mediarazvedka",
+                    "platform": "telegram",
+                    "handle": "@mediarazvedka",
+                    "source_url": "https://t.me/mediarazvedka",
+                    "canonical_url": "https://t.me/mediarazvedka",
+                    "source_title": "Trip evidence — Калининград, сентябрь 2025",
+                    "source_queue_status": mod.LOCAL_REGION_SOURCE_STATUS,
+                    "fetch_status": mod.LOCAL_REGION_SOURCE_STATUS,
+                    "source_scope": "local_region",
+                    "source_geo_class": "kaliningrad_local",
+                    "external_blogger_evidence_status": "confirmed_external",
+                    "external_blogger_region_relation_status": "external_evidence_supplied",
+                    "queue_seq": 1,
+                    "queue_order": 1,
+                },
+            },
+            "external_blogger_evidence": {
+                "ext-1": {
+                    "record_id": "ext-1",
+                    "blogger_name": "Медиаразведка Туту — Калининград, сентябрь 2025",
+                    "confirmation_status": "confirmed_external",
+                    "region_relation_status": "external_evidence_supplied",
+                    "telegram_url": "https://t.me/mediarazvedka",
+                },
+            },
+        }
+
+        rows, _metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [], [], [], {}, "evidence-repair-run", "2026-07-17T00:00:00+00:00",
+        )
+        repaired = next(row for row in rows if row.get("canonical_source_key") == "telegram:mediarazvedka")
+
+        self.assertEqual(repaired["source_queue_status"], "pending_scan")
+        self.assertEqual(repaired["source_scope"], "external")
+        self.assertEqual(repaired["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(repaired["source_locality_reconciliation_status"], "authoritative_confirmed_external")
+        self.assertEqual(repaired["source_title"], "@mediarazvedka")
 
     def test_local_title_remains_local_without_handle_special_case(self) -> None:
         mod = load_module()

@@ -231,6 +231,17 @@ drop the priority metadata. Profile URLs are source evidence only; an exact
 post is created only after a validated `t.me/<handle>/<message_id>` or VK post
 hit exists.
 
+`blogger_name` is an evidence/display label and may include trip context such
+as `— Калининград, сентябрь 2025`; it is never used as the unresolved public
+title for the local-source surface filter. Until Telegram/VK returns the real
+profile title, the queue uses the canonical handle and stores the display label
+separately as `external_blogger_name`. The explicit relation value
+`external_evidence_supplied` is authoritative non-local evidence when the row
+is `confirmed_external`; old rows falsely terminalized as local under the
+previous parser are reopened idempotently on every evidence refresh. An
+explicit local relation (`local blogger`, `живёт в регионе`, etc.) still wins,
+and a real resolved local title/handle remains a strong local signal.
+
 While any confirmed-blogger row is still awaiting its first decision, the
 fast-check selector does not fill unused slots with generic cached channels. If
 no confirmed Telegram entity is cached yet, fast-check yields the time budget
