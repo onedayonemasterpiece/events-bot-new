@@ -573,3 +573,27 @@ and selects the classified `638×316` identity poster for canonical event `4671`
 Production remediation still belongs to the LLM-first merge flow under
 `INC-2026-05-30-active-duplicate-events-recall-gate`; no title regex or hidden
 UI mapping was added.
+
+### V10 publication and browser evidence
+
+- published artifact source: branch
+  `integration/listing-time-nav-media-v10-20260717`, SHA
+  `c29e370486df96a7aff9d1bb5c79993777d0cb8e`;
+- checked export/build: `220` real events, `243` generated pages;
+  `check:design-system` passed with `20` core tokens, `26` versioned registry
+  rows and `8` AA pairs; `check:preview` passed;
+- public HTTP returned `200` for Today, Tomorrow, Weekend and the DS catalog;
+  the immutable CDN stylesheet returned `200` with one-year immutable caching,
+  and the served TLS certificate SAN contains `static.kenigevents.ru`;
+- fresh Chromium checks at `1366×1080` and `1920×1080` found no horizontal
+  overflow, broken images, console errors or failed first-party requests;
+- rendered inventory: Today `17` (`15` earlier, collapsed), Tomorrow `36`,
+  Weekend `61` (`36 + 25`); Tomorrow and Weekend expose two dense exact-time
+  disclosures each;
+- city intersection smoke changed Tomorrow from `36` to `23`, updated the page
+  count and retained `scrollWidth=viewport`; exact disclosure closes on Escape;
+- canonical «Эпидемия» `4671` renders once as `poster-natural` at ratio
+  `2.01899:1` (`351×174` at 1920); `6859` renders zero times;
+- labeled visual evidence and the QA summary were delivered to Telegram forum
+  topic `KenigEvents · UI review` / `Главная, Популярное, списки — wireframes`,
+  message ids `273–278` (topic anchor `122`).
