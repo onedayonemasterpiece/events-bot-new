@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -973,6 +974,165 @@ async def _write_snapshot_chunk(db: Database, writes: Sequence[SnapshotWrite]) -
         except Exception:
             await conn.rollback()
             raise
+
+
+def _target_manifest_row(target: SocialPostTarget) -> dict[str, Any]:
+    return {
+        "target_id": f"{target.platform}:{target.publisher_id}:{target.post_id}",
+        "platform": target.platform,
+        "publisher_id": target.publisher_id,
+        "post_id": int(target.post_id),
+        "source_url": target.source_url,
+        "post_ts": target.post_ts,
+        "legacy_source_id": target.legacy_source_id,
+        "owned": bool(target.owned),
+        "publication_kind": target.publication_kind,
+    }
+
+
+def _manifest_digest(payload: Mapping[str, Any]) -> str:
+    unsigned = dict(payload)
+    unsigned.pop("manifest_sha256", None)
+    raw = json.dumps(unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+async def build_social_metrics_manifest(
+    db: Database,
+    *,
+    run_id: str,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a bounded, exact-ID provider manifest; no channel history is exported."""
+    now = now_utc or datetime.now(timezone.utc)
+    now_ts = int(now.timestamp())
+    terminal_map = await _load_terminal_buckets(db)
+    targets = await load_social_post_targets(db, now_utc=now)
+    rows: list[dict[str, Any]] = []
+    for target in targets:
+        bucket, _ = _due_plan(
+            post_ts=target.post_ts,
+            now_ts=now_ts,
+            terminal_buckets=terminal_map.get(target.key, set()),
+        )
+        # Unknown provider timestamps need one exact-ID read to bootstrap age.
+        if bucket or target.post_ts is None:
+            rows.append(_target_manifest_row(target))
+    rows.sort(key=lambda row: (row["platform"], row["publisher_id"], row["post_id"]))
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "generated_at": now.isoformat(),
+        "targets": rows,
+    }
+    payload["manifest_sha256"] = _manifest_digest(payload)
+    return payload
+
+
+def _target_from_manifest(row: Mapping[str, Any]) -> SocialPostTarget:
+    return SocialPostTarget(
+        platform=str(row["platform"]),
+        publisher_id=str(row["publisher_id"]),
+        post_id=int(row["post_id"]),
+        source_url=str(row.get("source_url") or ""),
+        post_ts=int(row["post_ts"]) if isinstance(row.get("post_ts"), int) else None,
+        legacy_source_id=int(row["legacy_source_id"])
+        if isinstance(row.get("legacy_source_id"), int)
+        else None,
+        owned=bool(row.get("owned")),
+        publication_kind=str(row.get("publication_kind") or "external_event_source"),
+    )
+
+
+def _validated_metric(value: Any, name: str) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"invalid {name}")
+    return value
+
+
+async def import_social_metrics_result(
+    db: Database,
+    *,
+    manifest: Mapping[str, Any],
+    result: Mapping[str, Any],
+) -> dict[str, int]:
+    """Validate a Kaggle result completely before applying provider observations."""
+    if int(result.get("schema_version") or 0) != 1:
+        raise ValueError("unsupported result schema")
+    if result.get("run_id") != manifest.get("run_id"):
+        raise ValueError("result run_id mismatch")
+    expected_sha = _manifest_digest(manifest)
+    if manifest.get("manifest_sha256") != expected_sha or result.get("manifest_sha256") != expected_sha:
+        raise ValueError("manifest digest mismatch")
+
+    manifest_rows = list(manifest.get("targets") or [])
+    target_by_id = {str(row.get("target_id")): _target_from_manifest(row) for row in manifest_rows}
+    if len(target_by_id) != len(manifest_rows):
+        raise ValueError("duplicate manifest target")
+    observations = list(result.get("observations") or [])
+    seen: set[str] = set()
+    validated: list[tuple[SocialPostTarget, int, str, MetricPayload | None, str | None]] = []
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    for row in observations:
+        if not isinstance(row, Mapping):
+            raise ValueError("invalid observation")
+        target_id = str(row.get("target_id") or "")
+        if target_id not in target_by_id or target_id in seen:
+            raise ValueError("unknown or duplicate result target")
+        seen.add(target_id)
+        observed_ts = row.get("observed_ts")
+        if not isinstance(observed_ts, int) or observed_ts <= 0 or observed_ts > now_ts + 900:
+            raise ValueError("invalid observed_ts")
+        status = str(row.get("status") or "")
+        if status not in {"collected", "not_found", "error"}:
+            raise ValueError("invalid observation status")
+        payload = None
+        if status == "collected":
+            post_ts = row.get("post_ts")
+            if post_ts is not None and (not isinstance(post_ts, int) or post_ts <= 0 or post_ts > observed_ts + 900):
+                raise ValueError("invalid post_ts")
+            reactions_raw = row.get("reactions")
+            reactions = None
+            if reactions_raw is not None:
+                if not isinstance(reactions_raw, Mapping):
+                    raise ValueError("invalid reactions")
+                reactions = {str(key): _validated_metric(value, "reaction") or 0 for key, value in reactions_raw.items()}
+            payload = MetricPayload(
+                post_id=target_by_id[target_id].post_id,
+                post_ts=post_ts,
+                views=_validated_metric(row.get("views"), "views"),
+                likes=_validated_metric(row.get("likes"), "likes"),
+                comments=_validated_metric(row.get("comments"), "comments"),
+                shares=_validated_metric(row.get("shares"), "shares"),
+                reactions=reactions,
+            )
+        validated.append((target_by_id[target_id], observed_ts, status, payload, str(row.get("error_code") or "") or None))
+
+    terminal_map = await _load_terminal_buckets(db)
+    writes: list[SnapshotWrite] = []
+    counts = {"collected": 0, "not_found": 0, "error": 0, "skipped_late": 0}
+    for target, observed_ts, status, payload, error_code in validated:
+        terminal = terminal_map.get(target.key, set())
+        effective_post_ts = payload.post_ts if payload else target.post_ts
+        bucket, skipped = _due_plan(
+            post_ts=effective_post_ts,
+            now_ts=observed_ts,
+            terminal_buckets=terminal,
+        )
+        for name in skipped:
+            writes.append(SnapshotWrite(target=target, age_bucket=name, collected_ts=observed_ts, status="skipped_late"))
+            counts["skipped_late"] += 1
+        if not bucket:
+            continue
+        if status == "collected" and payload is not None:
+            writes.append(SnapshotWrite(target=target, age_bucket=bucket, collected_ts=observed_ts, payload=payload))
+        else:
+            writes.append(SnapshotWrite(target=target, age_bucket=bucket, collected_ts=observed_ts, status=status, error_code=error_code))
+        counts[status] += 1
+    await _write_snapshot_chunk(db, writes)
+    return counts
 
 
 def _writes_for_payload(

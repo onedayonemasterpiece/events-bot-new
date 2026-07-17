@@ -4972,9 +4972,9 @@ def startup(
         except Exception:
             cleanup_post_metrics = None  # type: ignore[assignment]
         try:
-            from social_metrics_batch import run_social_metrics_batch
+            from social_metrics_kaggle import run_social_metrics_kaggle_batch
         except Exception:
-            run_social_metrics_batch = None  # type: ignore[assignment]
+            run_social_metrics_kaggle_batch = None  # type: ignore[assignment]
 
         _register_job(
             "db_optimize",
@@ -5026,8 +5026,8 @@ def startup(
                 misfire_grace_time=30,
             )
         if (
-            run_social_metrics_batch is not None
-            and _env_enabled("ENABLE_SOCIAL_METRICS_BATCH", default=False)
+            run_social_metrics_kaggle_batch is not None
+            and _env_enabled("ENABLE_SOCIAL_METRICS_KAGGLE", default=False)
         ):
             _register_job(
                 "social_metrics_batch",
@@ -5040,9 +5040,9 @@ def startup(
                 id="social_metrics_batch",
                 minutes=max(5, _env_int("SOCIAL_METRICS_BATCH_INTERVAL_MINUTES", 30)),
                 args=[
-                    partial(run_social_metrics_batch, db),
-                    "social_metrics_batch",
-                    240.0,
+                    partial(run_social_metrics_kaggle_batch, db),
+                    "social_metrics_kaggle",
+                    float(max(900, _env_int("SOCIAL_METRICS_KAGGLE_TIMEOUT_SECONDS", 1800) + 300)),
                 ],
                 replace_existing=True,
                 max_instances=1,
