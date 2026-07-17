@@ -1,0 +1,89 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 87dd727bc032c43d453b018b292df42e51d95343
+base_branch: origin/feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-motion-crop-corrective-20260717
+global_constraints:
+  - isolated briefing lab only; production homepage unchanged
+  - restore image entry animation for every newly shown media scene
+  - run exit animation only when a concrete automatic successor is scheduled
+  - manual and terminal states retain the current image indefinitely
+  - revert broad crop changes; scene-specific correction only where faces cross a safety boundary
+  - multi-portrait sources fill their owned tiles with source-faithful cover crop
+  - no paid OpenAI image generation
+verification_owner: root
+stop_conditions:
+  - entry animation is removed or bypassed in automatic playback
+  - terminal/manual media exits without a scheduled successor
+  - copy changes while outgoing media still represents the previous state
+  - Ivana Kupala or hay-day crop regresses from the accepted baseline
+  - multi-portrait panels show contain letterboxing or half-filled cells
+lanes:
+  - id: motion-contract-audit
+    role: reviewer
+    requirement_ids: [advisory-R01, advisory-R02]
+    target: compare current and prior motion state machines and specify exact entry-hold-exit-next contract
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-motion-crop-corrective-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: regression root cause, prior-good code references, acceptance timing assertions
+    verification_scope: inspection_only
+    status: planned
+  - id: crop-regression-audit
+    role: reviewer
+    requirement_ids: [advisory-R03]
+    target: compare current vs prior accepted crop plans for writing, Ivana Kupala and hay day
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-motion-crop-corrective-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: exact scene-level restore/repair matrix with visual evidence
+    verification_scope: inspection_only
+    status: planned
+  - id: portrait-fill-audit
+    role: reviewer
+    requirement_ids: [advisory-R04]
+    target: define multi-vertical cover geometry that fills full tiles without stretch or source mixing
+    depends_on: []
+    execution_mode: parallel
+    effort: high
+    branch: integration/typed-briefing-motion-crop-corrective-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: CSS/geometry contract and edge-case acceptance tests
+    verification_scope: inspection_only
+    status: planned
+  - id: serial-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04]
+    primary: true
+    target: implement corrected conditional motion lifecycle and scene-specific crop policy
+    depends_on: [motion-contract-audit, crop-regression-audit, portrait-fill-audit]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: integration/typed-briefing-motion-crop-corrective-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/features/static-site-pages/typed-briefing-hero-research.md
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - CHANGELOG.md
+      - .codex/lanes/typed-briefing-motion-crop-corrective-20260717/**
+      - .codex/integration/typed-briefing-motion-crop-corrective-20260717-INTEGRATION_REPORT.md
+    forbidden_files:
+      - production homepage routes
+      - production database
+      - runtime page-view LLM calls
+    expected_output: corrected isolated lab, regression tests, visual/video evidence, consultant gate, Telegram review
+    verification_scope: full_local
+    status: planned
