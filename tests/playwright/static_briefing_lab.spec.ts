@@ -127,7 +127,7 @@ test('expanded scenario deck is discoverable; Replay, session state, Play all an
   await page.locator('[data-pace="slow"]').click();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
   await page.locator('[data-replay]').click();
-  await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'running');
+  await expect.poll(() => page.evaluate(() => (window as any).__briefingTelemetry.some((entry: any) => entry.event_kind === 'briefing_start' && entry.reason === 'manual_replay'))).toBeTruthy();
   await expect(page.locator('[data-briefing]')).toHaveAttribute('data-motion', 'complete', { timeout: 2500 });
 
   await page.locator('[data-scenario-select]').selectOption('share_education');
