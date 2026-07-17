@@ -81,6 +81,9 @@ Implemented contracts:
 - reload and cross-tab synchronization through Supabase storage, `storage` events
   and `BroadcastChannel`; switching auth user clears account-dependent count state;
 - random 256-bit device proof. `anon_id` alone is never accepted by the server;
+- Supabase anonymous Auth users are rejected by account-owned RPCs even though
+  Supabase maps them to the `authenticated` database role; they remain on the
+  separately consented device-proof flow;
 - automatic consented merge through `identity-control`, with request-id replay,
   one profile per `auth.users.id`, unique active provider links and saved-occurrence
   deduplication. An already-linked device cannot be moved to another account.
@@ -91,6 +94,9 @@ private `site_identity` and `saved_events` schemas. Browser roles have no raw ta
 privileges. Authenticated user actions are narrow RPCs; device materialization,
 merge, unlink, purge, lifecycle sync and reminder dispatch are service-only RPCs
 called through an explicitly authenticated Edge Function or backend worker.
+`identity-control` fails closed unless all three `PERSONALIZATION_SUPABASE_*`
+credentials are configured and never falls back to this repository's legacy
+Supabase project.
 
 ### Conflict, unlink and delete policy
 
@@ -109,7 +115,9 @@ called through an explicitly authenticated Edge Function or backend worker.
 
 ### Required activation configuration
 
-1. Apply the migration only after reconciling Supabase migration history.
+1. Preserve the reconciled historical
+   `20260717074903_event_search_age_fields.sql`, take a backup, then apply the new
+   migration only after its rollback SQL contract passes on staging.
 2. Deploy `identity-control` with JWT verification disabled at the gateway; it
    validates bearer sessions itself and keeps the secret key server-only.
 3. Configure the email template with both code and confirmation link, OTP expiry
@@ -117,7 +125,8 @@ called through an explicitly authenticated Edge Function or backend worker.
 4. Use the existing `custom:yandex` provider and production redirect allow-list.
 5. Inject only publishable personalization URL/key into static builds.
 
-Production activation is **not** part of this branch: the live project contains
-migration `20260717074903`, which is not present in this checkout, so applying a new
-migration before history reconciliation would violate the repository migration
-policy.
+Production activation is **not** part of this branch. The previously missing live
+ledger row `20260717074903 event_search_age_fields` was recovered byte-for-byte from
+historical commit `b01b02ae` and its columns/constraints were verified read-only in
+the live project. The new identity migration remains unapplied until backup,
+staging, security-advisor and controlled activation gates are completed.

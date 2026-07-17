@@ -57,6 +57,10 @@ layout-neutral RPCs:
 - `event_signal` stores `like` and `not_interested` separately from calendar save;
 - lifecycle is `upcoming | rescheduled | cancelled | completed`; only a service
   sync from canonical Fly event facts may change it;
+- favorite/save, `like`/`not_interested`, reminder consent evidence and reminder
+  scheduling/delivery are separate relations; a save or like cannot authorize mail;
+- browser roles have RPC execution only and no private-schema/table access; even a
+  Supabase anonymous Auth token cannot use account-owned saved-event RPCs;
 - the browser controller exposes `saveOccurrence`, `refreshSavedCount`, `setLike`
   and `setReminder` for parallel UI work.
 
