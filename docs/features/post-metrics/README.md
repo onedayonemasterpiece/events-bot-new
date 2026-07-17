@@ -45,9 +45,17 @@
 - Запросы группируются по платформе и издателю. VK `wall.getById` вызывается
   чанками максимум по 100 ID, после чего весь чанк записывается одной SQLite
   транзакцией.
-- MVP собирает только уже разрешённые live VK ID. Сетевой resolver отложенных
-  VK ID не запускается на Fly: это сохраняет границу «тонкого бота»; raw-evidence
-  resolver позже можно добавить в тот же Kaggle kernel без выдачи ему DB.
+- Для `klgdevents` Fly экспортирует только компактные unresolved-кандидаты, а
+  Kaggle одним `wall.getById` batch и не более чем одним общим bounded wall-scan
+  разрешает postponed ID в live ID. Fly повторно проверяет title/date/time/place
+  evidence существующим строгим matcher перед `event_publication` и сразу
+  сохраняет counters уже полученного VK item. Локальных provider reads нет.
+- Вторая собственная VK-группа `231828790` подключена независимо от перегруженных
+  `VK_*_GROUP_ID`: учитываются только точные single-event ledgers
+  `event.vk_repost_url` и `promo_exposure(surface=vk_repost,
+  publish_status=PUBLISHED_MAIN)`. Daily, дайджесты, видео, stories и фестивальные
+  агрегаты исключены структурно. Точные reposts последних 90 дней подхватываются
+  rolling backfill без сканирования всей стены.
 - При пропущенном окне один поздний counter не копируется в несколько прошлых
   точек: самый свежий due-бакет сохраняется, более ранние получают
   `skipped_late`.
@@ -75,6 +83,10 @@
 - `ENABLE_SOCIAL_METRICS_KAGGLE=1` — зарегистрировать единый remote interval-job;
 - `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES=30`;
 - `SOCIAL_METRICS_KAGGLE_TIMEOUT_SECONDS=1800`;
+- `SOCIAL_METRICS_VK_OFFICIAL_GROUP_ID=231828790`;
+- `SOCIAL_METRICS_VK_RESOLVE_COOLDOWN_HOURS=6`,
+  `SOCIAL_METRICS_VK_RESOLVE_MAX_CANDIDATES=500`,
+  `SOCIAL_METRICS_VK_WALL_SCAN_LIMIT=1000`;
 - `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR` — единственная допустимая user-session;
 - `SOCIAL_METRICS_TG_STARTUP_DELAY_SECONDS=4,12`,
   `SOCIAL_METRICS_TG_BETWEEN_REQUESTS_SECONDS=2,5`,
@@ -87,12 +99,18 @@ Kaggle получает bundle и provider tokens только в раздель
 encrypted/key datasets. Runtime обязан получить status leases
 `job:social_metrics_batch` и
 `telegram_session:telegram_auth_bundle_check_popular` до расшифровки и
-подключения; fallback на E2E/S22/`TELEGRAM_SESSION` запрещён. По завершении
-временные datasets удаляются.
+подключения; fallback на E2E/S22/`TELEGRAM_SESSION` запрещён. Каждый
+30-минутный слот имеет детерминированный `run_id` и атомарно создаётся ровно один
+раз. Результат обязан покрыть все manifest targets и resolver candidates, иначе
+импорт отклоняется. Временные datasets удаляются и при success, и при ошибке;
+orchestration/import failure переводит ledger в terminal `error`.
 
 Static exporter добавляет к событию объяснимые reason codes:
 `fast_growth`, `frequently_shared`, `discussed`, `multi_source`. Лента остаётся
 единой и ограниченной 20 событиями; сложные главы и ML-скоринг в MVP не входят.
+Оба Telegram-канала и обе VK-группы считаются одной owned-family: для raw totals
+и reason thresholds берётся component-wise максимум. Внутренний repost может
+усилить сигнал, но не удваивает аудиторию и не создаёт ложный `multi_source`.
 
 `age_day` означает “сколько суток прошло с публикации”:
 

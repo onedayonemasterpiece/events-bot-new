@@ -410,6 +410,46 @@ async def test_owned_telegram_targets_use_exact_event_forward_ledgers_only(tmp_p
 
 
 @pytest.mark.asyncio
+async def test_official_vk_targets_use_only_exact_single_event_ledgers(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event = _event(1)
+    event.vk_repost_url = "https://vk.com/wall-231828790_501"
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+    async with db.raw_conn() as conn:
+        await conn.execute("INSERT INTO promo_campaign(id,title,status) VALUES(1,'test','active')")
+        await conn.execute("INSERT INTO promo_activity(id,campaign_id,surface,enabled) VALUES(1,1,'vk_repost',1)")
+        exposures = [
+            ("vk_repost", "PUBLISHED_MAIN", {"target_group_id": 231828790, "target_url": "https://vk.com/wall-231828790_502"}),
+            ("vk_story", "PUBLISHED_MAIN", {"target_group_id": 231828790, "target_url": "https://vk.com/wall-231828790_503"}),
+            ("vk_repost", "FAILED", {"target_group_id": 231828790, "target_url": "https://vk.com/wall-231828790_504"}),
+            ("vk_repost", "PUBLISHED_MAIN", {"target_group_id": 231920894, "target_url": "https://vk.com/wall-231920894_505"}),
+        ]
+        for surface, status, details in exposures:
+            await conn.execute(
+                """
+                INSERT INTO promo_exposure(
+                    campaign_id,activity_id,event_id,surface,placement_kind,publish_status,
+                    published_at,details_json,public_targets_json
+                ) VALUES(1,1,1,?,'rolling_window_repost',?,?,?,'[]')
+                """,
+                (surface, status, NOW.isoformat(), json.dumps(details)),
+            )
+        await conn.commit()
+
+    monkeypatch.setenv("SOCIAL_METRICS_VK_OFFICIAL_GROUP_ID", "231828790")
+    targets = await smb.load_social_post_targets(db, now_utc=NOW)
+    official = [target for target in targets if target.platform == "vk" and target.publisher_id == "231828790"]
+    assert [(target.post_id, target.publication_kind, target.owned) for target in official] == [
+        (501, "event_forward", True),
+        (502, "event_forward", True),
+    ]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_human_pause_uses_bounded_config_without_fake_actions(monkeypatch):
     delays: list[float] = []
 
@@ -574,6 +614,16 @@ def test_exporter_maps_only_exact_managed_event_forwards_and_collapses_owned_fam
             '{"source_url":"https://t.me/other/8","target_url":"https://t.me/other/80"}',
             '[]'
         );
+        insert into promo_exposure values(
+            1,'vk_repost','PUBLISHED_MAIN',
+            '{"target_group_id":231828790,"target_url":"https://vk.com/wall-231828790_170"}',
+            '[]'
+        );
+        insert into promo_exposure values(
+            1,'vk_story','PUBLISHED_MAIN',
+            '{"target_group_id":231828790,"target_url":"https://vk.com/wall-231828790_171"}',
+            '[]'
+        );
         insert into poll_repost_run values(1,'forwarded','@kenigevents',71);
         insert into poll_repost_run values(1,'forwarded','@other',72);
         insert into social_metric_snapshot values(
@@ -582,19 +632,25 @@ def test_exporter_maps_only_exact_managed_event_forwards_and_collapses_owned_fam
         insert into social_metric_snapshot values(
             'telegram','kenigevents',70,'6h','https://t.me/kenigevents/70',450,10,3,7,20,'collected'
         );
+        insert into social_metric_snapshot values(
+            'vk','231828790',170,'6h','https://vk.com/wall-231828790_170',700,15,5,9,20,'collected'
+        );
         """
     )
     row = {
         "source_post_url": None,
         "source_vk_post_url": None,
         "tg_event_post_url": "https://t.me/kldevents/7",
+        "vk_repost_url": "https://vk.com/wall-231828790_170",
     }
     urls = exporter.collect_source_urls(con, 1, row)
     assert urls == [
         "https://t.me/kldevents/7",
+        "https://vk.com/wall-231828790_170",
         "https://t.me/kenigevents/70",
         "https://t.me/kenigevents/71",
     ]
+    assert exporter.source_metrics(con, urls) == (15, 700, 9, 1)
     reasons, _score = exporter.popularity_signals(con, urls)
     assert "multi_source" not in reasons
     con.close()

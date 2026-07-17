@@ -56,6 +56,32 @@ def test_create_kaggle_status_dataset_uses_kaggle_valid_title():
     assert 6 <= len(titles[0]) <= 50
 
 
+@pytest.mark.asyncio
+async def test_run_config_can_atomically_reject_duplicate_slot(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    first = await create_kaggle_run_config(
+        db,
+        run_id="social-metrics:slot",
+        session_id=None,
+        kind="social_metrics_collector",
+        notebook="SocialMetricsCollector",
+        replace_existing=False,
+    )
+    second = await create_kaggle_run_config(
+        db,
+        run_id="social-metrics:slot",
+        session_id=None,
+        kind="social_metrics_collector",
+        notebook="SocialMetricsCollector",
+        replace_existing=False,
+    )
+    assert first is not None
+    assert second is None
+    await db.close()
+
+
 def test_create_kaggle_status_dataset_keeps_long_run_ids_unique():
     datasets: list[str] = []
 
