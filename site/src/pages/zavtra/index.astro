@@ -1,81 +1,17 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
-import EventListItem from '../../components/EventListItem.astro';
+import DateListingSurface from '../../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, eventDaypart, getTomorrowDate, getTomorrowEvents, SITE_NAME, withBase } from '../../lib/events';
-import type { EventDaypart } from '../../lib/events';
+import { absoluteUrl, getTomorrowDate, getTomorrowEvents, SITE_NAME } from '../../lib/events';
 
 const events = getTomorrowEvents();
 const tomorrowDate = getTomorrowDate();
-const canonicalUrl = absoluteUrl('/zavtra/');
-const title = `События завтра в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на завтра ${tomorrowDate}: афиша по утру, дню, вечеру и ночи.`;
-const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
-  { key: 'morning', label: 'Утро', note: '06:00–11:59' },
-  { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
-  { key: 'evening', label: 'Вечер', note: '17:00–21:59' },
-  { key: 'night', label: 'Ночь', note: '22:00–05:59' },
-];
-const sections = dayparts
-  .map((section) => ({ ...section, events: events.filter((event) => eventDaypart(event) === section.key) }));
+const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' })
+  .format(new Date(`${tomorrowDate}T12:00:00+02:00`));
 ---
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="tomorrow">
-  <main id="main">
-    <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <span>Завтра</span>
-      </nav>
-      <section class="section-card">
-        <div class="section-card__inner">
-          <p class="eyebrow">Завтра</p>
-          <h1 style="max-width: 14ch;">Что идёт завтра</h1>
-          <p class="lead">События, которые начинаются или продолжаются {tomorrowDate}. Страница нужна, чтобы заранее выбрать планы без поиска по общей ленте.</p>
-          <div class="source-links">
-            <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
-            <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
-            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
-          </div>
-        </div>
-      </section>
-
-      <AuthorizedEventSearch />
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <ListingPersonalFilter total={events.length} label="завтра" />
-          <h2>{events.length ? `Найдено: ${events.length}` : 'На завтра в fixture нет событий'}</h2>
-          {sections.length ? (
-            <div class="listing-dayparts">
-              {sections.map((section) => (
-                <section class="listing-daypart" data-listing-daypart aria-labelledby={`tomorrow-${section.key}`}>
-                  <div class="listing-daypart__header">
-                    <div>
-                      <p class="eyebrow">{section.note}</p>
-                      <h3 id={`tomorrow-${section.key}`}>{section.label}</h3>
-                    </div>
-                    <span class="listing-daypart__count" data-listing-daypart-count>{section.events.length}</span>
-                  </div>
-                  {section.events.length ? (
-                    <div class="listing-stack">
-                      {section.events.map((event) => <EventListItem event={event} />)}
-                    </div>
-                  ) : (
-                    <p class="muted-note">Пока нет событий в этом интервале.</p>
-                  )}
-                </section>
-              ))}
-            </div>
-          ) : (
-            <p class="muted-note">Событий на выбранную дату нет.</p>
-          )}
-        </div>
-      </section>
-
-      <PersonalFeedSlot context="tomorrow" />
-    </div>
+<EventLayout title={`События завтра в Калининграде | ${SITE_NAME}`} description={`События на завтра, ${dateLabel}, сгруппированные по времени начала.`} canonicalUrl={absoluteUrl('/zavtra/')} structuredData={[]} headerCurrent="tomorrow">
+  <main id="main" class="ke-listing-page">
+    <DateListingSurface kind="tomorrow" title="Завтра" date={tomorrowDate} dateLabel={dateLabel} events={events} />
+    <div class="ke-listing-shell"><PersonalFeedSlot context="tomorrow" /></div>
   </main>
 </EventLayout>

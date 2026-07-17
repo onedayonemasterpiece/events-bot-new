@@ -15,6 +15,11 @@ const componentPaths = [
   'src/components/design-system/Badge.astro',
   'src/components/design-system/Field.astro',
   'src/components/design-system/StatePanel.astro',
+  'src/components/listings/ListingEventCard.astro',
+  'src/components/listings/ExactTimeTimeline.astro',
+  'src/components/listings/ListingTimeNav.astro',
+  'src/components/listings/ListingControls.astro',
+  'src/components/listings/ListingPageHeader.astro',
 ];
 
 for (const path of componentPaths) {
@@ -27,7 +32,7 @@ const requiredTokens = [
   '--ke-color-brand-600', '--ke-color-brand-tag', '--ke-color-accent-600', '--ke-color-ink', '--ke-color-muted',
   '--ke-color-canvas', '--ke-color-surface', '--ke-font-sans', '--ke-font-size-300',
   '--ke-space-1', '--ke-space-4', '--ke-space-8', '--ke-radius-md', '--ke-shadow-2',
-  '--ke-duration-fast', '--ke-control-min', '--ke-content-max', '--ke-color-control-inverse',
+  '--ke-duration-fast', '--ke-control-min', '--ke-content-max', '--ke-content-wide-max', '--ke-listing-time-gutter', '--ke-color-control-inverse',
 ];
 for (const token of requiredTokens) {
   if (!css.includes(`${token}:`)) throw new Error(`Missing canonical design token: ${token}`);
@@ -51,7 +56,7 @@ for (const marker of ['data-ke-copy-action', 'navigator.clipboard?.writeText', "
 if (!copyAction.includes("'ke-button--icon'") || !css.includes('.ke-button--icon { width: var(--ke-control-min)')) throw new Error('CopyAction must consume the fixed 44px icon-only button contract');
 if (!css.includes('.ke-copy-action__check-icon') || !css.includes('content: "!"')) throw new Error('CopyAction success/error cannot rely on color alone');
 if (!catalog.includes('<CopyAction') || !catalog.includes('variant="inverse"') || !catalog.includes('design-system/CopyAction.astro')) throw new Error('Catalog misses the real CopyAction fixtures or registry row');
-for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'PersonalFeedSlot', 'SocialIcon']) {
+for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'ListingPageHeader', 'ListingControls', 'ListingTimeNav', 'ExactTimeTimeline', 'ListingEventCard', 'PersonalFeedSlot', 'SocialIcon']) {
   if (!catalog.includes(`<${component}`)) throw new Error(`Catalog misses real product component: ${component}`);
 }
 if (!catalog.includes('AuthorizedEventSearch.astro')) throw new Error('Catalog registry misses conditional AuthorizedEventSearch surface');
@@ -72,9 +77,19 @@ for (const [, component, version] of registryRows) {
 for (const line of catalog.split(/\r?\n/u).filter((item) => item.includes('>deprecated</'))) {
   if (!line.includes('data-ds-replaced-by=')) throw new Error('Deprecated component version must name its replacement');
 }
+if (!registryKeys.has('ListingPersonalFilter@1') || !registryKeys.has('ListingPersonalFilter@2') || !catalog.includes('data-ds-replaced-by="ListingPersonalFilter@2"')) {
+  throw new Error('ListingPersonalFilter v1 -> v2 migration is missing from the versioned registry');
+}
 if (!registryKeys.has('EventCard@1') || !registryKeys.has('EventCard@2') || !catalog.includes('data-ds-replaced-by="EventCard@2"')) {
   throw new Error('EventCard v1 -> v2 migration is missing from the versioned registry');
 }
+const listingProductionSources = [
+  'src/pages/segodnya/index.astro', 'src/pages/zavtra/index.astro', 'src/pages/vyhodnye/index.astro',
+  'src/pages/vystavki/index.astro', 'src/pages/populyarnoe/index.astro',
+  'src/components/listings/ListingControls.astro',
+].map(read).join('\n');
+if (/<ListingPersonalFilter(?![^>]*version=\{2\})/u.test(listingProductionSources)) throw new Error('Deprecated ListingPersonalFilter v1 remains in a production consumer');
+
 const productionConsumerSources = [
   'src/pages/sobytiya/[slug].astro',
   'src/pages/[preview]/index.astro',

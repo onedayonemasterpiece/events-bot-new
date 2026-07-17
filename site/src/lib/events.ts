@@ -717,7 +717,7 @@ export function getTodayEvents(): PreviewEvent[] {
 export function getTodayPrimaryEvents(): PreviewEvent[] {
   const current = getCurrentDate();
   return collapseLinkedSessionEvents(
-    getTodayEvents().filter((event) => event.start_date === current && !isContinuingListingEvent(event) && !isExhibitionLikeEvent(event)),
+    getTodayEvents().filter((event) => event.start_date === current && !isExhibitionLikeEvent(event)),
   );
 }
 
@@ -734,7 +734,7 @@ export function getOngoingExhibitionEvents(): PreviewEvent[] {
 
 export function getTomorrowEvents(): PreviewEvent[] {
   const tomorrow = getTomorrowDate();
-  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date === tomorrow && !isLongRunningListingEvent(event)));
+  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date === tomorrow && !isExhibitionLikeEvent(event)));
 }
 
 export function eventDaypart(event: Pick<PreviewEvent, 'start_time' | 'display_time'>): EventDaypart {
@@ -761,7 +761,7 @@ export function getWeekendRange(): { start: string; end: string; label: string }
 
 export function getWeekendEvents(): PreviewEvent[] {
   const range = getWeekendRange();
-  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date >= range.start && event.start_date <= range.end && !isLongRunningListingEvent(event)));
+  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date >= range.start && event.start_date <= range.end && !isExhibitionLikeEvent(event)));
 }
 
 export function isExternalHttpUrl(href: string | null | undefined): boolean {

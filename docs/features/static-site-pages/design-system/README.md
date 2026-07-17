@@ -8,7 +8,7 @@ This directory is the normative home for reusable visual rules of the KenigEvent
 
 ## What is implemented
 
-- one semantic token layer for color, type, spacing, radii, elevation, motion, touch size and content width;
+- one semantic token layer for color, type, spacing, radii, elevation, motion, touch size and content width, including the global `--ke-content-wide-max` authority for wide desktop surfaces;
 - shared primitive Astro components: `Button`, `Badge`, `Field`, `StatePanel`, plus the candidate `CopyAction` clipboard affordance;
 - compatibility aliases for established product components, so the system can be adopted without a risky all-at-once rewrite;
 - shared token/action adoption by both `EventLayout` pages and the standalone root landing page;
@@ -58,7 +58,7 @@ Token families:
 | Elevation | `--ke-shadow-*` | Surface/card/overlay levels; random shadows are not allowed. |
 | Motion | `--ke-duration-*`, `--ke-ease-*` | 160–220 ms interaction transitions; reduced-motion fallback is mandatory. |
 | Interaction | `--ke-control-min` | Minimum interactive target is 44 px. |
-| Layout | `--ke-content-max` | Shared content-width authority. |
+| Layout | `--ke-content-max`, `--ke-content-wide-max`, `--ke-listing-*` | Shared normal/wide content width and date-listing geometry; page-local width systems are forbidden. |
 
 Legacy aliases such as `--primary`, `--surface` and `--radius-md` remain temporarily in the same file. They are a migration boundary, not a second token system. When an existing component is touched materially, move it to `--ke-*` roles rather than adding another alias.
 
@@ -85,7 +85,9 @@ Current registry:
 - `EventListItem` — approved compact listing row;
 - `CalendarLink`, `EventMediaRail`, `Icon`, `SocialIcon` and `AnnouncementsLockup` — approved supporting components with visible catalog examples;
 - `InterestClubCard` — feature-gated product component;
-- `ListingPersonalFilter`, `PersonalFeedSlot` and `AuthorizedEventSearch` — conditional client-enhancement components; the catalog exposes their static/forced state and links to the dedicated auth/search surface, while live network/auth states remain in feature E2E.
+- `ListingPageHeader v1`, `ListingControls v1`, `ListingTimeNav v1`, `ExactTimeTimeline v1` and `ListingEventCard v1` — candidate shared date-listing family used by Today, Tomorrow and Weekend; runtime catalog fixtures cover normal/dense/sparse navigation, selected media and filters;
+- `ListingPersonalFilter v2` — candidate full-list-first wording and behavior for date listings; `v1` is deprecated, retained in the catalog only for migration comparison and blocked from production callers;
+- `PersonalFeedSlot` and `AuthorizedEventSearch` — conditional client-enhancement components; the catalog exposes their static/forced state and links to the dedicated auth/search surface, while live network/auth states remain in feature E2E.
 
 A registry row in `/lab/design-system/#registry` links status, runtime source and coverage. Status vocabulary is `experimental`, `candidate`, `approved`, `deprecated`.
 

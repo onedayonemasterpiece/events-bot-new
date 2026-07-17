@@ -39,7 +39,7 @@ const reasonLabels: Record<string, string> = {
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <ListingPersonalFilter total={events.length} label="популярное" />
+          <ListingPersonalFilter total={events.length} label="популярное" version={2} />
           <h2>{events.length ? `Найдено: ${events.length}` : 'Пока нет событий с заметной соцактивностью'}</h2>
           <div class="listing-stack">
             {events.map((event) => (

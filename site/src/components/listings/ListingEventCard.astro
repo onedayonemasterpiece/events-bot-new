@@ -1,0 +1,66 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import { eventHref } from '../../lib/events';
+import { eventImageUrl } from '../../lib/assets';
+import { cityKey, selectListingImage } from '../../lib/listingPresentation';
+import { getListingVenueMedallion } from '../../lib/listingVenueMedallions';
+import { withBase } from '../../lib/events';
+
+interface Props { event: PreviewEvent }
+const { event } = Astro.props;
+const href = eventHref(event);
+const image = selectListingImage(event);
+const imageUrl = eventImageUrl(image.src);
+const medallion = image.mode.startsWith('photo-') ? getListingVenueMedallion(event, image.asset) : null;
+const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
+const style = `--ke-listing-image-ratio:${image.ratio.toFixed(5)};--ke-listing-object-position:${image.objectPosition}`;
+const medallionFallbackSrc = medallion?.avatarUrl.endsWith('.webp')
+  ? (medallion.fallbackPngUrl || medallion.avatarUrl)
+  : medallion?.avatarUrl;
+const medallionStyle = medallion
+  ? [
+      medallion.background ? `--venue-medallion-bg:${medallion.background}` : '',
+      medallion.ring ? `--venue-medallion-ring:${medallion.ring}` : '',
+    ].filter(Boolean).join(';')
+  : undefined;
+---
+<article
+  class="ke-listing-card"
+  style={style}
+  data-ds-component="ListingEventCard"
+  data-ds-version="1"
+  data-listing-item
+  data-event-id={event.id}
+  data-linked-event-ids={(event.other_date_ids || []).join(',')}
+  data-listing-city={cityKey(event.city)}
+  data-listing-image-mode={image.mode}
+  data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
+  data-venue-medallion={medallion?.slug}
+>
+  <a class="ke-listing-card__media" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+    {imageUrl ? (
+      <img
+        src={imageUrl}
+        alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
+        loading="lazy"
+        decoding="async"
+      />
+    ) : (
+      <span class="ke-listing-card__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
+    )}
+    {medallion ? (
+      <span class="ke-listing-card__medallion" style={medallionStyle} title={medallion.name} aria-label={medallion.ariaLabel}>
+        <picture>
+          {medallion.avatarUrl.endsWith('.webp') && medallion.fallbackPngUrl
+            ? <source srcset={withBase(medallion.avatarUrl)} type="image/webp" />
+            : null}
+          <img src={withBase(medallionFallbackSrc || medallion.avatarUrl)} alt="" loading="lazy" decoding="async" />
+        </picture>
+      </span>
+    ) : null}
+  </a>
+  <div class="ke-listing-card__copy">
+    <a class="ke-listing-card__title" href={href} data-prefetch>{event.title}</a>
+    {place ? <p>{place}</p> : null}
+  </div>
+</article>

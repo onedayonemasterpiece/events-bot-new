@@ -1,0 +1,50 @@
+---
+import { LISTING_DAYPARTS, type ListingTimeGroup } from '../../lib/listingPresentation';
+
+interface Props { groups: ListingTimeGroup[]; idPrefix: string; label?: string; compact?: boolean; earlierCount?: number; }
+const { groups, idPrefix, label = 'По времени', compact = false, earlierCount = 0 } = Astro.props;
+const items = LISTING_DAYPARTS.map((part) => {
+  const matching = groups.filter((group) => group.daypart === part.key);
+  return {
+    ...part,
+    count: matching.reduce((sum, group) => sum + group.events.length, 0),
+    href: matching[0] ? `#${idPrefix}-${matching[0].key}` : '',
+    exact: matching,
+  };
+}).filter((item) => item.count > 0);
+const untimed = groups.find((group) => group.key === 'untimed');
+if (untimed) items.push({ key: 'untimed' as const, label: 'Без времени', count: untimed.events.length, href: `#${idPrefix}-untimed`, exact: [untimed] });
+const timedGroupCount = groups.filter((group) => group.key !== 'untimed').length;
+const total = groups.reduce((sum, group) => sum + group.events.length, 0);
+const showNav = timedGroupCount > 3 || total > 6 || earlierCount > 0;
+---
+{showNav ? (
+  <nav class:list={['ke-time-nav', compact && 'ke-time-nav--compact']} aria-label={label} data-ds-component="ListingTimeNav" data-ds-version="1" data-listing-time-nav>
+    {earlierCount > 0 ? (
+      <span class="ke-time-nav__item"><a href="#today-earlier" data-listing-earlier-link><span>Ранее</span><strong data-listing-earlier-nav-count>{earlierCount}</strong></a></span>
+    ) : null}
+    {items.map((item) => (
+      <span class="ke-time-nav__item">
+        <a href={item.href} data-listing-daypart-link={item.key}>
+          <span>{item.label}</span>
+          <strong data-listing-daypart-count={item.key}>{item.count}</strong>
+        </a>
+        {item.exact.length >= 5 ? (
+          <details class="ke-time-nav__exact" data-time-nav-disclosure>
+            <summary aria-label={`Показать точное время: ${item.label}`} title={`Точное время: ${item.label}`}><span aria-hidden="true">⌄</span></summary>
+            <div class="ke-time-nav__popover">
+              <p>{item.label}</p>
+              <ul>
+                {item.exact.map((group) => (
+                  <li data-exact-time-item={group.key}>
+                    <a href={`#${idPrefix}-${group.key}`} data-time-nav-exact-target={`${idPrefix}-${group.key}`}>{group.label}<strong>{group.events.length}</strong></a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        ) : null}
+      </span>
+    ))}
+  </nav>
+) : null}

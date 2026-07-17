@@ -486,7 +486,7 @@ Related/discovery data in this preview uses the two-document pgvector chain `eve
 
 Counter freshness is documented in [Event reaction counters](reaction-counters.md). The decision is manifest-first: static HTML keeps a build-time baseline for SEO/no-JS, while a small same-origin counter manifest should patch counters after first paint. Full page rebuilds are for event content/lifecycle changes, not for every like tick.
 
-## Verified on 2026-07-17 — `TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9`
+## Historical candidate from 2026-07-17 — `TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9`
 
 Public desktop preview:
 <https://kenigevents.ru/preview-20260717-today-hour-flow-v9/segodnya/>.
@@ -500,7 +500,7 @@ column grid, horizontal scroller or stretched row. Long-running exhibitions do
 not enter the primary Today flow, while already-finished events remain available
 inside the collapsed `Ранее сегодня` section.
 
-The approved location overlay is deliberately fail-closed. A bottom-right
+The candidate location overlay is deliberately fail-closed. A bottom-right
 medallion is rendered only on a curated venue match whose primary image is a
 semantically classified `event_photo`/`photo` and is `visual_only` at both event
 and asset levels. `safe_crop` is not an OCR proxy. In this real-data build only
@@ -512,3 +512,64 @@ Post-deploy browser QA passed at `1920×1080` and `1440×1000`: 17 visible cards
 `flex-wrap:wrap`, card `flex-grow:0`, no horizontal overflow, no broken or
 pending images after a full lazy-load scroll, and exactly one eligible venue
 medallion. `npm run check:preview` passed for the 242-page/220-event build.
+
+V9 is retained as research evidence, not as an approved listing system. It had
+page-local geometry and covered only Today; the shared V10 system below replaces
+it for product review.
+
+## Product candidate on 2026-07-17 — `DATE-LISTING TH-P1 · V10`
+
+Immutable review routes:
+
+- <https://kenigevents.ru/preview-20260717-date-listings-v10/segodnya/>;
+- <https://kenigevents.ru/preview-20260717-date-listings-v10/zavtra/>;
+- <https://kenigevents.ru/preview-20260717-date-listings-v10/vyhodnye/>;
+- <https://kenigevents.ru/preview-20260717-date-listings-v10/lab/design-system/>.
+
+V10 implements one desktop-first runtime family for `/segodnya/`, `/zavtra/`
+and `/vyhodnye/` from the global static-site design system. It does not create a
+page-specific design system. Shared tokens and candidate components live in
+`site/src/styles/design-system.css` and `site/src/components/listings/`, are
+rendered in `/lab/design-system/`, and are checked by both design-system and
+preview contracts.
+
+Product contract:
+
+- exact start times remain the content structure: all events at `18:00` fill
+  the available width and wrap to the next line; `18:30` is a separate group;
+- the sticky primary navigation is hybrid: `Утро / День / Вечер / Ночь / Без
+  времени` with live result counts; an exact-time disclosure appears only for a
+  dense period (at least five distinct time groups), so a long weekend remains
+  navigable without turning every hour into permanent chrome;
+- Today keeps starts before the current Kaliningrad time in one collapsed
+  `Начались ранее` block above a visible `Сейчас · HH:MM` marker; a sparse
+  upcoming remainder of one to four events receives weighted centering;
+- Weekend uses one combined period navigation and two independent day columns.
+  Exact-time disclosures label links by day (`Сб 19:00`, `Вс 19:00`), while day
+  headers remain visible beneath the sticky time bar;
+- city filtering is one compact multi-select disclosure rather than a permanent
+  row of ten chips. The full list is the default; the `Для меня / Полный список`
+  v2 switch is exposed only when a compatible consented profile produces a real
+  difference. All page, period, exact-time, earlier and day counts update after
+  filters, and an empty intersection has an explicit reset action;
+- long-running exhibitions are excluded from primary date flows, while genuine
+  short multi-day festivals starting on the chosen date are not discarded;
+- media selection first prefers a classified wide identity poster (`1.85–2.10`)
+  with adequate resolution. Square/wide classified event photos are preferred;
+  a crop requires `safe_crop` and focal metadata. Near-wide photos may become
+  `3:2`, while a vertical fallback is normalized only to the minimum `4:5`.
+  Unknown/poster-like material stays natural and is never stretched or cropped
+  merely to fill a card;
+- a venue medallion remains a fail-closed photo-only candidate and is evaluated
+  against the selected listing asset, not blindly against the first asset;
+- the browser keeps the navigation structure stable after filtering: zero-count
+  periods become disabled, while zero-count exact-time rows disappear from the
+  disclosure. Native anchors, focus transfer and Escape/outside-click closing
+  preserve keyboard behavior.
+
+The real-data preview snapshot contains the confirmed `4671/6859` «Эпидемия»
+recurrence. V10 removes `6859` only in an auditable preview reconciliation copy
+and selects the classified `638×316` identity poster for canonical event `4671`.
+Production remediation still belongs to the LLM-first merge flow under
+`INC-2026-05-30-active-duplicate-events-recall-gate`; no title regex or hidden
+UI mapping was added.

@@ -2,17 +2,18 @@
 interface Props {
   total: number;
   label?: string;
+  version?: 1 | 2;
 }
-const { total, label = 'списке' } = Astro.props;
+const { total, label = 'списке', version = 1 } = Astro.props;
 ---
-<div class="listing-filter" data-listing-filter data-listing-total={total} data-nosnippet hidden>
+<div class="listing-filter" data-listing-filter data-listing-filter-version={version} data-listing-total={total} data-nosnippet hidden>
   <div class="listing-filter__copy" tabindex="-1" data-listing-filter-summary-focus>
     <strong data-listing-filter-title>Все события</strong>
     <span data-listing-filter-summary>Показаны все события в {label}.</span>
   </div>
   <div class="listing-mode-switch" role="radiogroup" aria-label="Режим списка событий">
     <button type="button" role="radio" data-listing-mode-button="personal" aria-checked="false" aria-pressed="false">Для меня <span class="listing-mode-switch__count" data-listing-visible-count>{total}</span></button>
-    <button type="button" role="radio" data-listing-mode-button="all" aria-checked="true" aria-pressed="true">Все <span class="listing-mode-switch__count" data-listing-total-count>{total}</span></button>
+    <button type="button" role="radio" data-listing-mode-button="all" aria-checked="true" aria-pressed="true">{version === 2 ? 'Полный список' : 'Все'} <span class="listing-mode-switch__count" data-listing-total-count>{total}</span></button>
   </div>
 </div>
 <div class="listing-filter-bar" data-listing-filter-bar data-nosnippet hidden>
@@ -20,7 +21,7 @@ const { total, label = 'списке' } = Astro.props;
     <span data-listing-hidden-count>Скрыто 0</span>
     <div class="listing-mode-switch" role="radiogroup" aria-label="Режим списка событий">
       <button type="button" role="radio" data-listing-mode-button="personal" aria-checked="false" aria-pressed="false">Для меня <span class="listing-mode-switch__count" data-listing-visible-count>{total}</span></button>
-      <button type="button" role="radio" data-listing-mode-button="all" aria-checked="true" aria-pressed="true">Все <span class="listing-mode-switch__count" data-listing-total-count>{total}</span></button>
+      <button type="button" role="radio" data-listing-mode-button="all" aria-checked="true" aria-pressed="true">{version === 2 ? 'Полный список' : 'Все'} <span class="listing-mode-switch__count" data-listing-total-count>{total}</span></button>
     </div>
   </div>
 </div>

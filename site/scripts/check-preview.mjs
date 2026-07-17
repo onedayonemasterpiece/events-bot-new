@@ -364,42 +364,39 @@ const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
-const todayVisibleHtml = stripGeneratedCode(todayHtml);
-if (/Мосийенко|Мосиенко/u.test(todayVisibleHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');
-if (!todayVisibleHtml.includes('TODAY-HOUR A · АФИШНЫЙ ПОТОК · V9') || !todayVisibleHtml.includes('today-hour-timeline') || !todayVisibleHtml.includes('today-hour-flow')) throw new Error('Today listing must render the approved V9 intrinsic exact-time flow');
-if (todayVisibleHtml.includes('listing-daypart') || todayVisibleHtml.includes('listing-stack')) throw new Error('Today V9 must not regress to the old daypart/equal-column listing');
-if (!todayVisibleHtml.includes('href="/') || !todayVisibleHtml.includes('/vystavki/')) throw new Error('Today V9 must keep the dedicated exhibitions route instead of mixing continuing exhibitions into the primary flow');
-const todayArticles = [...todayHtml.matchAll(/<article class="today-hour-card"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
-if (!todayArticles.length) throw new Error('Today V9 has no intrinsic hour cards');
-if (todayArticles.some((article) => !article.includes('data-today-hour-card') || !article.includes('data-event-id=') || !article.includes('data-image-text-mode='))) throw new Error('Today V9 cards must expose compact QA/event/media attributes');
-const todayEventIds = todayArticles.map((article) => article.match(/data-event-id="?([^"\s>]+)/u)?.[1]).filter(Boolean);
-if (new Set(todayEventIds).size !== todayEventIds.length) throw new Error('Today V9 must remove exact duplicate cards before rendering');
-if (todayArticles.some((article) => article.includes('data-venue-medallion=') && !article.includes('data-image-text-mode="visual_only"'))) throw new Error('Today V9 must never overlay a venue medallion on OCR/unknown media');
 const tomorrowHtml = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
-for (const [name, html] of [['tomorrow', tomorrowHtml]]) {
-  for (const label of ['Утро', 'День', 'Вечер', 'Ночь']) {
-    if (!html.includes(`>${label}</h3>`)) throw new Error(`${name} listing misses daypart section ${label}`);
-  }
-  if (!html.includes('listing-daypart') || !html.includes('listing-item__media listing-item__media--cover')) throw new Error(`${name} listing misses plaque/cropped media listing contract`);
-  if (!html.includes('data-listing-filter') || !html.includes('data-listing-filter-bar') || !html.includes('listing-mode-switch') || !html.includes('role="radiogroup"') || !html.includes('data-listing-mode-button="personal"') || !html.includes('data-listing-hidden-count')) throw new Error(`${name} listing misses global All/For me personalization switch and hidden count UI`);
-  const listingArticles = [...html.matchAll(/<article class="listing-item"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
-  if (!listingArticles.length) throw new Error(`${name} listing has no listing articles`);
-  if (listingArticles.some((article) => !article.includes('data-listing-item') || !article.includes('data-linked-event-ids'))) throw new Error(`${name} listing items must expose compact ids for local personalization filter`);
-  if (listingArticles.some((article) => !/<a class="listing-item__title"[\s\S]*?<div class="listing-item__meta">/u.test(article))) throw new Error(`${name} listing cards must show title before date/admission meta`);
-  if (listingArticles.some((article) => {
+const weekendHtml = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
+const dateListings = [['today', todayHtml], ['tomorrow', tomorrowHtml], ['weekend', weekendHtml]];
+for (const [name, html] of dateListings) {
+  const visibleHtml = stripGeneratedCode(html);
+  if (!visibleHtml.includes('data-date-listing=') || !visibleHtml.includes('data-listing-variant="TH-P1"')) throw new Error(`${name} listing misses the shared TH-P1 date-listing surface`);
+  if (!visibleHtml.includes('data-ds-component="ListingPageHeader"') || !visibleHtml.includes('data-ds-component="ListingControls"') || !visibleHtml.includes('data-ds-component="ExactTimeTimeline"')) throw new Error(`${name} listing bypasses registered shared design-system components`);
+  if (!visibleHtml.includes('ke-time-group') || !visibleHtml.includes('ke-time-group__flow') || !visibleHtml.includes('ke-listing-card')) throw new Error(`${name} listing misses exact-time intrinsic flow`);
+  if (visibleHtml.includes('TODAY-HOUR A') || visibleHtml.includes('АФИШНЫЙ ПОТОК') || visibleHtml.includes('V9')) throw new Error(`${name} consumer page leaks service/version copy`);
+  const articles = [...html.matchAll(/<article[^>]+class="ke-listing-card"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
+  if (!articles.length) throw new Error(`${name} listing has no shared listing cards`);
+  if (articles.some((article) => !article.includes('data-listing-item') || !article.includes('data-linked-event-ids') || !article.includes('data-listing-city') || !article.includes('data-listing-image-mode'))) throw new Error(`${name} listing cards miss filtering/media QA contracts`);
+  const ids = articles.map((article) => article.match(/data-event-id="?([^"\s>]+)/u)?.[1]).filter(Boolean);
+  if (new Set(ids).size !== ids.length) throw new Error(`${name} listing renders one event id more than once`);
+  if (!html.includes('data-listing-filter-version="2"') || !html.includes('Полный список') || !html.includes('data-listing-mode-button="personal"')) throw new Error(`${name} listing misses explicit Full/Personal v2 control`);
+  if (!html.includes('data-personal-feed-section') || !html.includes('data-personal-feed-slot')) throw new Error(`${name} listing misses dynamic personal-feed slot`);
+  if (articles.some((article) => {
     const hrefs = [...article.matchAll(/<a[^>]+href="(https?:\/\/[^"]+)"/giu)].map((match) => match[1]);
     return hrefs.some((href) => !href.startsWith('https://static.kenigevents.ru/ics/'));
-  })) throw new Error(`${name} listing card leaks direct external http link`);
-  if (listingArticles.some((article) => article.includes('Открыть пост организатора') || article.includes('Уточнить регистрацию'))) throw new Error(`${name} listing exposes source/ambiguous external CTA copy`);
+  })) throw new Error(`${name} listing card leaks a direct external link`);
+  if (articles.some((article) => article.includes('data-venue-medallion=') && !article.includes('data-image-text-mode="visual_only"'))) throw new Error(`${name} listing overlays a venue medallion on non-visual-only media`);
 }
-
-const weekendHtml = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
-for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml], ['weekend', weekendHtml]]) {
-  if (!html.includes('data-personal-feed-section') || !html.includes('data-personal-feed-slot')) throw new Error(`${name} listing misses dynamic personal-feed slot`);
-  if (!html.includes('hidden') || !html.includes('Личная лента')) throw new Error(`${name} personal feed must be hidden until backend/cache returns cards`);
-}
+const todayVisibleHtml = stripGeneratedCode(todayHtml);
+if (/Мосийенко|Мосиенко/u.test(todayVisibleHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko exhibition item');
+const earlierPosition = todayVisibleHtml.indexOf('data-listing-earlier');
+const nowPosition = todayVisibleHtml.indexOf('data-listing-now-marker');
+if (earlierPosition < 0 || nowPosition < 0 || earlierPosition > nowPosition || !todayVisibleHtml.includes('Начались ранее')) throw new Error('Today must place the truthful collapsed earlier-start disclosure above the current-time marker');
+if (!todayVisibleHtml.includes('data-listing-now-label') || !todayVisibleHtml.includes('Europe/Kaliningrad')) throw new Error('Today misses the Kaliningrad current-time marker contract');
+if (tomorrowHtml.includes('data-listing-earlier') || tomorrowHtml.includes('data-listing-now-marker')) throw new Error('Tomorrow must not render Today-only earlier/current-time UI');
+if (!weekendHtml.includes('data-weekend-day="sat"') || !weekendHtml.includes('data-weekend-day="sun"') || !weekendHtml.includes('Суббота') || !weekendHtml.includes('Воскресенье')) throw new Error('Weekend must render two independent Saturday/Sunday timelines');
+if (!weekendHtml.includes('data-time-nav-disclosure') || !weekendHtml.includes('Сб ') || !weekendHtml.includes('Вс ')) throw new Error('Dense Weekend time navigation must expose day-qualified exact-time disclosures');
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
-if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes("explicitMode || (hiddenCount > 0 ? 'personal' : 'all')") || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
+if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes('usesExplicitFullDefault') || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');
 const icsBaseUrl = (process.env.PUBLIC_ICS_BASE_URL || (assetBaseUrl ? `${assetBaseUrl}/ics` : '')).replace(/\/+$/u, '');
 const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')

@@ -1,0 +1,38 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import { deduplicateListingEvents, groupListingEvents } from '../../lib/listingPresentation';
+import ListingControls from './ListingControls.astro';
+import ListingPageHeader from './ListingPageHeader.astro';
+import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
+import ExactTimeTimeline from './ExactTimeTimeline.astro';
+
+interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; }
+const { events: rawEvents, start, end, dateLabel } = Astro.props;
+const events = deduplicateListingEvents(rawEvents);
+const days = [
+  { key: 'sat', title: 'Суббота', date: start, events: events.filter((event) => event.start_date === start) },
+  { key: 'sun', title: 'Воскресенье', date: end, events: events.filter((event) => event.start_date === end) },
+].map((day) => ({ ...day, groups: groupListingEvents(day.events) }));
+const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
+  .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
+  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
+function dayDateLabel(date: string): string {
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
+}
+---
+<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1">
+  <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
+  <ListingControls cities={cities} total={events.length} label="на выходных" />
+  <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', groups: day.groups }))} />
+  <div class="ke-weekend-board">
+    {days.map((day) => (
+      <section class="ke-weekend-day" data-weekend-day={day.key} aria-labelledby={`weekend-${day.key}-title`}>
+        <header class="ke-weekend-day__head">
+          <div><h2 id={`weekend-${day.key}-title`}>{day.title}</h2><p>{dayDateLabel(day.date)}</p></div>
+          <span class="ke-weekend-day__count" data-weekend-day-count>{day.events.length}</span>
+        </header>
+        <ExactTimeTimeline groups={day.groups} idPrefix={`weekend-${day.key}`} date={day.date} compact />
+      </section>
+    ))}
+  </div>
+</div>

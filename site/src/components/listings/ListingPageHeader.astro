@@ -1,0 +1,33 @@
+---
+import { withBase } from '../../lib/events';
+import { eventCountLabel } from '../../lib/listingPresentation';
+
+interface Props {
+  title: string;
+  dateLabel: string;
+  count: number;
+  current: 'today' | 'tomorrow' | 'weekend';
+}
+const { title, dateLabel, count, current } = Astro.props;
+const routes = [
+  { key: 'today', label: 'Сегодня', href: '/segodnya/' },
+  { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
+  { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
+] as const;
+---
+<header class="ke-listing-head" data-ds-component="ListingPageHeader" data-ds-version="1">
+  <div>
+    <p class="ke-listing-head__date">{dateLabel}</p>
+    <h1>{title}</h1>
+    <p class="ke-listing-head__count" data-listing-page-count>
+      <span data-listing-page-count-value>{count}</span> <span data-listing-page-count-label>{eventCountLabel(count)}</span>
+    </p>
+  </div>
+  <nav class="ke-listing-date-nav" aria-label="Выбор даты">
+    {routes.map((route) => (
+      <a href={withBase(route.href)} aria-current={route.key === current ? 'page' : undefined}>
+        {route.label}<span aria-hidden="true">→</span>
+      </a>
+    ))}
+  </nav>
+</header>

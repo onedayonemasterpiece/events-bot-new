@@ -1,0 +1,130 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import { deduplicateListingEvents, eventCountLabel, groupListingEvents } from '../../lib/listingPresentation';
+import ListingControls from './ListingControls.astro';
+import ListingPageHeader from './ListingPageHeader.astro';
+import ListingTimeNav from './ListingTimeNav.astro';
+import ExactTimeTimeline from './ExactTimeTimeline.astro';
+
+interface Props {
+  kind: 'today' | 'tomorrow';
+  title: string;
+  date: string;
+  dateLabel: string;
+  events: PreviewEvent[];
+  generatedAt?: string | null;
+}
+const { kind, title, date, dateLabel, events: rawEvents, generatedAt = null } = Astro.props;
+const events = deduplicateListingEvents(rawEvents);
+const generatedAtMs = generatedAt ? Date.parse(generatedAt) : Number.NaN;
+
+function beganBeforeBuild(event: PreviewEvent): boolean {
+  if (kind !== 'today' || !Number.isFinite(generatedAtMs) || !event.starts_at) return false;
+  const startMs = Date.parse(event.starts_at);
+  return Number.isFinite(startMs) && startMs <= generatedAtMs;
+}
+
+const earlierEvents = kind === 'today' ? events.filter(beganBeforeBuild) : [];
+const upcomingEvents = kind === 'today' ? events.filter((event) => !beganBeforeBuild(event)) : events;
+const earlierGroups = groupListingEvents(earlierEvents);
+const upcomingGroups = groupListingEvents(upcomingEvents);
+const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
+  .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
+  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
+const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
+---
+<div
+  class="ke-listing-shell"
+  data-date-listing={kind}
+  data-listing-date={date}
+  data-listing-variant="TH-P1"
+  data-listing-density={upcomingEvents.length > 0 && upcomingEvents.length <= 4 ? 'sparse' : 'regular'}
+>
+  <ListingPageHeader title={title} dateLabel={dateLabel} count={events.length} current={kind} />
+  <ListingControls cities={cities} total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'} />
+  <ListingTimeNav groups={upcomingGroups} idPrefix={idPrefix} earlierCount={earlierEvents.length} />
+
+  {kind === 'today' ? (
+    <details id="today-earlier" class="ke-earlier" data-listing-earlier hidden={earlierEvents.length === 0}>
+      <summary>
+        <span>Начались ранее</span>
+        <small data-listing-earlier-count>{earlierEvents.length} {eventCountLabel(earlierEvents.length)}</small>
+        <span aria-hidden="true">↓</span>
+      </summary>
+      <div data-listing-earlier-groups>
+        <ExactTimeTimeline groups={earlierGroups} idPrefix={idPrefix} date={date} />
+      </div>
+    </details>
+  ) : null}
+
+  {kind === 'today' ? (
+    <div class="ke-now-marker" role="separator" aria-label="Текущее время в Калининграде" data-listing-now-marker>
+      <time data-listing-now-label>Сейчас</time>
+      <span class="ke-now-marker__line" aria-hidden="true"></span>
+    </div>
+  ) : null}
+
+  <div data-listing-upcoming-groups>
+    <ExactTimeTimeline groups={upcomingGroups} idPrefix={idPrefix} date={date} />
+  </div>
+  <div class="ke-listing-empty" data-listing-no-events hidden={events.length > 0}>
+    <strong>Событий на эту дату пока нет</strong>
+  </div>
+</div>
+
+{kind === 'today' ? (
+  <script>
+    const root = document.querySelector('[data-date-listing="today"]');
+    function kaliningradClock() {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Kaliningrad', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).formatToParts(new Date());
+      const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return { date: `${value.year}-${value.month}-${value.day}`, time: `${value.hour}:${value.minute}` };
+    }
+    function sortTimeGroups(container) {
+      const timeline = container?.querySelector('.ke-time-timeline');
+      if (!timeline) return;
+      [...timeline.querySelectorAll('[data-listing-time-group]')]
+        .sort((left, right) => (left.dataset.listingTime === 'untimed' ? 1 : right.dataset.listingTime === 'untimed' ? -1 : left.dataset.listingTime.localeCompare(right.dataset.listingTime)))
+        .forEach((group) => timeline.appendChild(group));
+    }
+    function countLabel(count) {
+      if (count % 100 >= 11 && count % 100 <= 14) return 'событий';
+      if (count % 10 === 1) return 'событие';
+      if (count % 10 >= 2 && count % 10 <= 4) return 'события';
+      return 'событий';
+    }
+    function syncNowMarker() {
+      if (!root) return;
+      const clock = kaliningradClock();
+      const listingDate = root.dataset.listingDate;
+      const earlier = root.querySelector('[data-listing-earlier]');
+      const earlierHost = root.querySelector('[data-listing-earlier-groups]');
+      const upcomingHost = root.querySelector('[data-listing-upcoming-groups]');
+      const earlierTimeline = earlierHost?.querySelector('.ke-time-timeline');
+      const upcomingTimeline = upcomingHost?.querySelector('.ke-time-timeline');
+      if (listingDate === clock.date && earlierTimeline && upcomingTimeline) {
+        root.querySelectorAll('[data-listing-time-group]').forEach((group) => {
+          const time = group.dataset.listingTime;
+          if (!time || time === 'untimed') return;
+          (time <= clock.time ? earlierTimeline : upcomingTimeline).appendChild(group);
+        });
+        sortTimeGroups(earlierHost);
+        sortTimeGroups(upcomingHost);
+      }
+      const earlierCount = [...(earlierTimeline?.querySelectorAll('[data-listing-item]') || [])].length;
+      if (earlier) earlier.hidden = earlierCount === 0;
+      const countNode = root.querySelector('[data-listing-earlier-count]');
+      const navCountNode = root.querySelector('[data-listing-earlier-nav-count]');
+      if (navCountNode) navCountNode.textContent = String(earlierCount);
+      if (countNode) countNode.textContent = `${earlierCount} ${countLabel(earlierCount)}`;
+      const label = root.querySelector('[data-listing-now-label]');
+      if (label) { label.textContent = `Сейчас · ${clock.time}`; label.setAttribute('datetime', `${clock.date}T${clock.time}:00+02:00`); }
+      window.KEApplyListingFilters?.();
+    }
+    syncNowMarker();
+    window.setInterval(syncNowMarker, 60_000);
+  </script>
+) : null}

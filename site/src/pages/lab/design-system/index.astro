@@ -19,9 +19,15 @@ import ListingPersonalFilter from '../../../components/ListingPersonalFilter.ast
 import PersonalFeedSlot from '../../../components/PersonalFeedSlot.astro';
 import SocialIcon from '../../../components/SocialIcon.astro';
 import AnnouncementsLockup from '../../../components/brand/AnnouncementsLockup.astro';
+import ListingEventCard from '../../../components/listings/ListingEventCard.astro';
+import ExactTimeTimeline from '../../../components/listings/ExactTimeTimeline.astro';
+import ListingTimeNav from '../../../components/listings/ListingTimeNav.astro';
+import ListingControls from '../../../components/listings/ListingControls.astro';
+import ListingPageHeader from '../../../components/listings/ListingPageHeader.astro';
 import type { PreviewEvent } from '../../../lib/types';
 import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../lib/events';
 import { getInterestClubs } from '../../../lib/clubs';
+import { groupListingEvents } from '../../../lib/listingPresentation';
 
 const events = getEvents();
 const baseEvent = events.find((event) => event.id === 5878) || events[0];
@@ -31,6 +37,9 @@ const photoEvent = events.find((event) => event.image_media_role === 'event_phot
 const medallionEvent = events.find((event) => event.pushkin_card) || baseEvent;
 const club = getInterestClubs()[0];
 const mediaAssets = photoEvent.image_assets || [];
+const listingEvents = events.filter((event) => event.start_time || event.display_time).slice(0, 8);
+const listingGroups = groupListingEvents(listingEvents);
+const listingCities = [...new Set(listingEvents.map((event) => event.city || 'Калининградская область'))].map((name) => ({ name, count: listingEvents.filter((event) => (event.city || 'Калининградская область') === name).length }));
 
 function eventVariant(id: number, patch: Partial<PreviewEvent>): PreviewEvent {
   return { ...baseEvent, ...patch, id, source_prod_id: id, ticket: { ...baseEvent.ticket, ...(patch.ticket || {}) } };
@@ -288,6 +297,17 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </article>
 
           <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Листинг по точному времени</h3><p>Общий candidate для «Сегодня», «Завтра» и двухколоночных «Выходных»: гибридная навигация, intrinsic flow и surface-specific media selection.</p></div><Badge tone="warning">Candidate</Badge></div>
+            <div class="ds-component-stage">
+              <ListingPageHeader title="Сегодня" dateLabel="пятница, 17 июля" count={listingEvents.length} current="today" />
+              <ListingControls cities={listingCities} total={listingEvents.length} label="каталоге" />
+              <ListingTimeNav groups={listingGroups} idPrefix="ds-time" />
+              <ExactTimeTimeline groups={listingGroups} idPrefix="ds-time" date="2026-07-17" />
+              <ListingEventCard event={baseEvent} />
+            </div>
+          </article>
+
+          <article class="ds-component-block">
             <div class="ds-component-block__head"><div><h3>Строка листинга</h3><p>Компактный desktop/tablet формат с responsive переходом на mobile.</p></div><Badge tone="success">Approved</Badge></div>
             <div class="ds-component-stage"><EventListItem event={baseEvent} /></div>
           </article>
@@ -314,7 +334,8 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           <article class="ds-component-block">
             <div class="ds-component-block__head"><div><h3>Personalization enhancements</h3><p>Принудительно раскрытые lab-состояния; в runtime они появляются только после успешной client-side и consent проверки.</p></div><Badge tone="warning">Conditional</Badge></div>
             <div class="ds-component-stage ds-force-visible">
-              <ListingPersonalFilter total={12} label="каталоге" />
+              <ListingPersonalFilter total={12} label="каталоге" version={1} />
+              <ListingPersonalFilter total={12} label="каталоге" version={2} />
               <PersonalFeedSlot context="today" />
             </div>
             <Button variant="secondary" href={withBase('/poisk/')}>Открыть auth/search surface</Button>
@@ -341,6 +362,11 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="EventHero" data-ds-version="1"><td>EventHero</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventHero.astro</code></td><td><a href={withBase('/lab/hero/')}>hero lab</a></td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="2"><td>EventCard · split-actions</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>production migration complete</td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="1" data-ds-replaced-by="EventCard@2"><td>EventCard · overlay-controls</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCard.astro</code></td><td>replaced by EventCard v2; lab-only</td></tr>
+                <tr data-ds-component="ListingPageHeader" data-ds-version="1"><td>ListingPageHeader</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingPageHeader.astro</code></td><td>Today/Tomorrow/Weekend shared shell</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="1"><td>ListingControls</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>city intersection + personal/full mode</td></tr>
+                <tr data-ds-component="ListingTimeNav" data-ds-version="1"><td>ListingTimeNav</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingTimeNav.astro</code></td><td>period baseline + dense exact disclosures</td></tr>
+                <tr data-ds-component="ExactTimeTimeline" data-ds-version="1"><td>ExactTimeTimeline</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ExactTimeTimeline.astro</code></td><td>exact groups + intrinsic wrap</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="1"><td>ListingEventCard · TH-P1</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>wide poster / safe 3:2 photo / natural fallback</td></tr>
                 <tr data-ds-component="EventListItem" data-ds-version="1"><td>EventListItem</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>
                 <tr data-ds-component="EventCtaPanel" data-ds-version="1"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>
                 <tr data-ds-component="CalendarLink" data-ds-version="1"><td>CalendarLink</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/CalendarLink.astro</code></td><td>eligible/ineligible via event contract</td></tr>
@@ -348,7 +374,8 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="EventTokenMedallions" data-ds-version="1"><td>EventTokenMedallions</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>organizer/source/program/semantic pills</td></tr>
                 <tr data-ds-component="EventMediaRail" data-ds-version="1"><td>EventMediaRail</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>multi-image/overflow</td></tr>
                 <tr data-ds-component="InterestClubCard" data-ds-version="1"><td>InterestClubCard</td><td><code>v1</code></td><td><Badge tone="accent">feature-gated</Badge></td><td><code>components/InterestClubCard.astro</code></td><td>current fixture + responsive</td></tr>
-                <tr data-ds-component="ListingPersonalFilter" data-ds-version="1"><td>ListingPersonalFilter</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>all/personal + sticky bar</td></tr>
+                <tr data-ds-component="ListingPersonalFilter" data-ds-version="2"><td>ListingPersonalFilter · explicit full default</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>Для меня / Полный список; production migration complete</td></tr>
+                <tr data-ds-component="ListingPersonalFilter" data-ds-version="1" data-ds-replaced-by="ListingPersonalFilter@2"><td>ListingPersonalFilter · implicit personal</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced by ListingPersonalFilter v2; catalog-only</td></tr>
                 <tr data-ds-component="PersonalFeedSlot" data-ds-version="1"><td>PersonalFeedSlot</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
                 <tr data-ds-component="AuthorizedEventSearch" data-ds-version="1"><td>AuthorizedEventSearch</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
                 <tr data-ds-component="IconSocialIcon" data-ds-version="1"><td>Icon / SocialIcon</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>

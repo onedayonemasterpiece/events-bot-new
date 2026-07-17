@@ -1,6 +1,6 @@
 import organizerMedallions from '../data/organizerMedallions.json';
 import festivalMedallions from '../data/festivalMedallions.json';
-import type { PreviewEvent } from './types';
+import type { EventImageAsset, PreviewEvent } from './types';
 
 export interface ListingVenueMedallion {
   slug: string;
@@ -63,9 +63,9 @@ const venueBrandItems = ((festivalMedallions as { items?: ManifestMedallion[] })
  * poster with a small wordmark as visual_only. safe_crop is deliberately not
  * used as an OCR proxy.
  */
-export function getListingVenueMedallion(event: PreviewEvent): ListingVenueMedallion | null {
-  if (!event.image_url || event.image_text_mode !== 'visual_only' || !event.venue_name) return null;
-  const primaryAsset = event.image_assets?.[0];
+export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
+  if (!event.image_url || !event.venue_name) return null;
+  const primaryAsset = selectedAsset || event.image_assets?.[0];
   if (
     !primaryAsset
     || primaryAsset.image_text_mode !== 'visual_only'
