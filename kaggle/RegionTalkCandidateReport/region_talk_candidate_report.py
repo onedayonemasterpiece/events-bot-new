@@ -9187,9 +9187,8 @@ def build_image_candidate_queue(
             transition_origin = str(row.get("previous_image_queue_status") or "")
             reusable_actual_score = bool(
                 transition_origin == "actual_scored"
-                and str(row.get("image_model_input_type") or "") == "actual_image"
+                and has_actual_diagnostic_evidence(row)
                 and _rt_float(row.get("images_scored_actual_count") or row.get("actual_image_count")) > 0
-                and str(row.get("last_image_diag_run_id") or "").strip()
             )
             row["previous_image_queue_status"] = transition_origin or rejected_status
             row["image_queue_status"] = "actual_scored" if reusable_actual_score else "needs_actual_image_fetch"

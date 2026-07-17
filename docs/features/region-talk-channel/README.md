@@ -150,9 +150,9 @@ operational/storage backlog.
 
 The inverse transition is also evidence-preserving. If a reversible false
 source/text rejection is corrected and the image ledger still contains a
-complete `actual_scored` result with an ImageDiagnostic run id and positive
-actual-frame count, CandidateReport restores that result instead of downloading
-or scoring the album again. This does not weaken the current text gate: the
+complete `actual_scored` result with durable actual-image/diagnostic evidence
+and a positive actual-frame count, CandidateReport restores that result instead
+of downloading or scoring the album again. This does not weaken the current text gate: the
 restored row becomes actionable only after the current source, KO-only,
 non-ad/non-multiregion and dual E5+BGE checks accept it. Already delivered URLs
 remain immutable for Gemini and Telegram delivery. When their source policy or

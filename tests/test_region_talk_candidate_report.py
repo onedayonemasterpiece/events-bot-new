@@ -5575,7 +5575,6 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "image_model_input_type": "actual_image",
             "images_scored_actual_count": 3,
             "actual_image_count": 3,
-            "last_image_diag_run_id": "image-run-before-soft-reject",
             "image_acquisition_status": "complete",
             "overall_media_score": 0.654,
         }
