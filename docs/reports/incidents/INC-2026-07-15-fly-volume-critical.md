@@ -34,6 +34,7 @@ Related docs: `docs/operations/runtime-logs.md`, `docs/operations/release-govern
 - 2026-07-15 02:40 UTC — planned static-site deploy поставлен на hold; выбран безопасный mitigation: extend 1→2 GiB и bounded auto-extension, а не удаление канонической DB/media/runtime evidence.
 - 2026-07-15 03:12 UTC — attached encrypted volume расширен 1→2 GiB без restart; Fly сохранил пять daily snapshots.
 - 2026-07-15 03:13 UTC — свободно `1223 MiB`, `PRAGMA quick_check=ok`, runtime mirror `39.58 MiB` и растёт; публичный `/healthz` вернулся к HTTP 200, Fly check `1/1 passing`, свежих disk-full/proxy ошибок после resize нет.
+- 2026-07-17 08:59 UTC — clean detached `origin/main@faaaa659` deployed as Fly release `v1685`; post-deploy volume remained `2 GiB` with about `936 MiB` free, `PRAGMA quick_check=ok`, `/healthz` ready and Fly check `1/1 passing`.
 
 ## Root Cause
 
@@ -91,7 +92,7 @@ Related docs: `docs/operations/runtime-logs.md`, `docs/operations/release-govern
 
 - [x] расширить attached volume до 2 GiB;
 - [x] добавить в `fly.toml` bounded automatic extension at 80%, +1 GiB, maximum 3 GiB;
-- [ ] выполнить exact-main deploy и обязательные post-resize/post-deploy checks.
+- [x] выполнить exact-main deploy и обязательные post-resize/post-deploy checks.
 
 ## Follow-up Actions
 
@@ -100,10 +101,10 @@ Related docs: `docs/operations/runtime-logs.md`, `docs/operations/release-govern
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending exact `origin/main`
+- deployed SHA: `faaaa6599681523fa083d5b936a0e5f74000a7e4`, reachable from `origin/main` via PR [#55](https://github.com/onedayonemasterpiece/events-bot-new/pull/55)
+- deploy path: manual `flyctl deploy --remote-only` from a clean detached exact `origin/main`; Fly release `v1685`, machine version `1685`, image `deployment-01KXQMQZPTJH45EYJK65R4MPAV`
 - regression checks: `fly config validate` passed; post-resize `df` reports `1223 MiB` free; SQLite `quick_check=ok`; runtime mirror `39.58 MiB <= 64 MiB` and active mtime advanced; no fresh `Errno 28`, SQLite disk-full or webhook no-candidate match.
-- post-deploy verification: resize mitigation restored public `/healthz` HTTP 200 and Fly `1/1 passing`; config deploy remains pending.
+- post-deploy verification: `/data` is `2 GiB` with about `936 MiB` free, SQLite `quick_check=ok`, runtime mirror is active and bounded at about `61 MiB`, public `/healthz` is HTTP 200 with `ready=true`, Fly is `1/1 passing`, and the fresh runtime window contains no `Errno 28`, SQLite disk-full or webhook no-candidate errors.
 
 ## Prevention
 
