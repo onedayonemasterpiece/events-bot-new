@@ -1,0 +1,72 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 6a5595649d3695685eefa7c341e980888d4ccfb8
+base_branch: origin/feature/static-typed-intro-prototype-20260715
+integration_branch: integration/typed-briefing-stripe-media-20260717
+global_constraints:
+  - lab-only; production homepage is unchanged
+  - text anchor and the mobile text-only fallback are invariant
+  - fail closed when source resolution or OCR safety is not proven
+  - no paid image generation
+  - documentation and CHANGELOG change with behavior
+verification_owner: root
+stop_conditions:
+  - stripe still forms overlapping opaque slabs or a double underline
+  - any enabled mosaic source is upscaled beyond the declared limit
+  - any enabled mosaic source contains visible embedded text
+  - desktop crop distorts aspect ratio or misses the curated focal point
+lanes:
+  - id: visual-audit
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04]
+    target: read-only root-cause audit of CSS, raster metadata, and eligibility
+    depends_on: []
+    execution_mode: parallel
+    effort: medium
+    branch: integration/typed-briefing-stripe-media-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: reviewer findings delivered to the integrator
+    verification_scope: inspection_only
+    status: spawned
+  - id: ui-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04]
+    target: implement one coherent media/readability contract in the briefing lab
+    depends_on: [visual-audit]
+    execution_mode: serial_after_dependency
+    effort: high
+    branch: integration/typed-briefing-stripe-media-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files:
+      - site/src/data/briefingLab.ts
+      - site/src/pages/lab/briefing/index.astro
+      - tests/playwright/static_briefing_lab.spec.ts
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - CHANGELOG.md
+      - .codex/lanes/typed-briefing-stripe-media-20260717/**
+      - .codex/integration/typed-briefing-stripe-media-20260717-INTEGRATION_REPORT.md
+    forbidden_files:
+      - production database
+      - production homepage routes
+    expected_output: committed implementation, docs, tests, evidence, and closure audit
+    verification_scope: full_local
+    status: planned
+  - id: external-acceptance
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04]
+    target: blind-first Gemini Pro or Opus hard-fail visual acceptance
+    depends_on: [ui-integrator]
+    execution_mode: serial_after_dependency
+    effort: extra-high
+    branch: integration/typed-briefing-stripe-media-20260717
+    worktree: /home/dev/projects/events-bot-new-typed-briefing-mosaic-dramatic-20260717-integration
+    writable_files:
+      - docs/reports/static-typed-briefing-consultation-2026-07-15/**
+      - .codex/lanes/typed-briefing-stripe-media-20260717/**
+    forbidden_files:
+      - site/src/**
+    expected_output: explicit PASS/FAIL against stripe, OCR, resolution/crop, and tile drama
+    verification_scope: inspection_only
+    status: planned
