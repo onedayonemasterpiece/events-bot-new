@@ -15,6 +15,9 @@
   collapsed all four managed TG/VK surfaces into one max-based owned family so
   internal reposts improve but never double-count ranking; storage remains four
   age buckets per post under the rolling metrics retention.
+- **Interest clubs / known-club LLM stand**: expanded the controlled real-post matcher fixture to 48 event/candidate pairs, split canonical source and name-only organizer checks into 162/172-character Gemma prompts, fail-closed 17 no-identity candidates without provider calls, and recorded 22/24 accepted positives, zero unsafe false positives, 46/48 safe decisions, 12/12 stable hard-case repeats and 55/55 Supabase reserve/mark/finalize paths; the Lite shadow retained false positives and its final rerun was correctly blocked at the default lane's 450 RPD, so Lite remains deferred/review-only.
+- **Interest clubs / R0 catalog audit**: delivered a production read-only past/future audit with 52 reviewed candidate clusters (20 confirmed, 14 probable, 8 needs-evidence, 10 rejected), 203 unique accepted/probable canonical events, an independently frozen discovery-only time-split proxy, scope/leakage assertions, live Gemini sidecar coverage check, BGE-M3 feasibility gate, and a minimal public-source review fixture; completeness, production/UI/architecture remain blocked on owner review and a paired BGE/Gemini benchmark.
+- **Interest clubs / research handoff**: added the research-first contract, clean feature branch, reproducible past/future catalog-audit prompt, evidence/count/time-split requirements, BGE-on-Kaggle-CPU comparison gate, ecological storage constraints, and an explicit stop before production implementation.
 - **Popular feed / thin-bot collection boundary**: moved scheduled Telegram and
   VK metric API reads into one private Kaggle CPU batch with exact-ID manifests,
   split encrypted secrets, human-like sequential Telegram pacing, status/resource

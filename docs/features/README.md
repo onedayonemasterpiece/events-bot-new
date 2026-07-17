@@ -41,6 +41,8 @@
 
 ## Research / rollout
 
+- `docs/backlog/features/interest-clubs/README.md` — separate post-release research-first release for detecting recurring interest-club meetings and building an evidence-backed auto-growing static section
+
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending

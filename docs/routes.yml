@@ -86,6 +86,8 @@ sections:
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
+      interest_clubs: docs/backlog/features/interest-clubs/README.md
+      interest_clubs_research_prompt: docs/backlog/features/interest-clubs/research-prompt.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
       poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
@@ -103,6 +105,7 @@ sections:
     static_personal_announcements_release_readiness_2026_07_11: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
     static_personal_announcements_branch_refresh_2026_07_11: docs/reports/static-personal-announcements-branch-refresh-2026-07-11.md
     event_age_rating_gemini_consultation_2026_07_15: docs/reports/event-age-rating-gemini-consultation-2026-07-15.md
+    interest_clubs_catalog_audit_2026_07_17: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
     incident_event_vector_sidecar_sync_stalled_2026_07_11: docs/reports/incidents/INC-2026-07-11-event-vector-sidecar-sync-stalled.md
