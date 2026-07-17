@@ -4,7 +4,7 @@ import io
 import importlib.util
 import sqlite3
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +21,8 @@ from artist_arrivals.service import (
     ensure_artist_arrivals_promo_campaign,
     ensure_curated_artist_data,
     event_artist_source_revision,
+    photo_publication_metadata,
+    prune_artist_arrival_shadow_issues,
     public_artist_arrival_projection,
 )
 from db import Database
@@ -249,6 +251,41 @@ async def test_same_artist_project_groups_dates_but_other_project_survives(tmp_p
 
 
 @pytest.mark.asyncio
+async def test_default_horizon_includes_appearance_six_months_ahead(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARTIST_ARRIVALS_HORIZON_DAYS", raising=False)
+    db = await _db(tmp_path)
+    try:
+        await _appearance(db, event_id=350, artist_id="favorite", name="Любимый", day=18, project="Большой тур")
+        async with db.get_session() as session:
+            event = await session.get(Event, 350)
+            event.date = "2027-01-17"
+            appearance = (
+                await session.execute(
+                    select(EventArtistAppearance).where(EventArtistAppearance.event_id == 350)
+                )
+            ).scalars().one()
+            appearance.source_revision = event_artist_source_revision(event)
+            await session.commit()
+        all_future = await build_artist_arrival_issue(
+            db, now_utc=NOW, min_artists=1, min_projects=1, persist=False
+        )
+        bounded = await build_artist_arrival_issue(
+            db,
+            now_utc=NOW,
+            horizon_days=14,
+            min_artists=1,
+            min_projects=1,
+            persist=False,
+        )
+        assert [item["artist_id"] for item in all_future.items_json] == ["favorite"]
+        assert all_future.threshold_json["horizon_mode"] == "all_future_catalogue"
+        assert all_future.window_end == "2027-01-17"
+        assert bounded.items_json == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_publication_ledger_suppresses_only_after_both_social_targets(tmp_path, monkeypatch):
     monkeypatch.setenv("ARTIST_ARRIVALS_TG_TARGET", "@test")
     monkeypatch.setenv("ARTIST_ARRIVALS_VK_GROUP_ID", "1")
@@ -356,6 +393,34 @@ def test_rich_slideshow_and_photo_rights_gate():
     verified = render_artist_arrival_card(items[0] | {"media_identity_status": "verified", "photo_rights_status": "press_kit_verified", "photo_rights_evidence_ids": ["rights"]}, source_image=payload.getvalue())
     assert unverified.used_photo is False
     assert verified.used_photo is True
+
+
+def test_informational_photo_requires_reviewed_provenance_and_exports_credit():
+    incomplete = photo_publication_metadata(
+        "informational_citation_reviewed",
+        [{"source_url": "https://www.pinterest.com/pin/123", "source_name": "Pinterest"}],
+    )
+    approved = photo_publication_metadata(
+        "informational_citation_reviewed",
+        [
+            {
+                "source_url": "https://artist.example/news/tour-photo",
+                "discovery_url": "https://www.pinterest.com/pin/123",
+                "author_or_rightsholder": "Официальный аккаунт артиста",
+                "lawfully_published_confirmed": True,
+                "review_status": "approved",
+                "basis": "gc_rf_1274_informational_citation",
+                "purpose": "artist_arrival_information",
+                "reviewed_by": "editor@example.test",
+                "reviewed_at": "2026-07-17T12:00:00Z",
+            }
+        ],
+    )
+    assert incomplete is None
+    assert approved == {
+        "credit_text": "Официальный аккаунт артиста",
+        "source_url": "https://artist.example/news/tour-photo",
+    }
 
 
 @pytest.mark.asyncio
@@ -536,6 +601,62 @@ async def test_identical_content_still_creates_a_new_daily_issue(tmp_path):
         await db.close()
 
 
+@pytest.mark.asyncio
+async def test_shadow_retention_deletes_only_unpublished_unreferenced_issues(tmp_path):
+    db = await _db(tmp_path)
+    try:
+        old = NOW - timedelta(days=60)
+        async with db.get_session() as session:
+            deletable = ArtistDigestIssue(
+                manifest_hash="delete-me",
+                build_date="2026-05-18",
+                window_start="2026-05-18",
+                window_end="2026-05-18",
+                created_at=old,
+            )
+            published = ArtistDigestIssue(
+                manifest_hash="published",
+                build_date="2026-05-18",
+                window_start="2026-05-18",
+                window_end="2026-05-18",
+                created_at=old,
+                published_at=old,
+            )
+            referenced = ArtistDigestIssue(
+                manifest_hash="sending",
+                build_date="2026-05-18",
+                window_start="2026-05-18",
+                window_end="2026-05-18",
+                created_at=old,
+            )
+            session.add_all([deletable, published, referenced])
+            await session.flush()
+            session.add(
+                ArtistPublicationLedger(
+                    issue_id=referenced.id,
+                    artist_id="artist",
+                    project_key="project",
+                    surface="artist_arrival_digest:telegram",
+                    target_key="@test",
+                    dedupe_key="artist:project",
+                    content_hash="hash",
+                    publish_status="sending",
+                )
+            )
+            await session.commit()
+        result = await prune_artist_arrival_shadow_issues(
+            db, now_utc=NOW, retention_days=45
+        )
+        async with db.get_session() as session:
+            hashes = set(
+                (await session.execute(select(ArtistDigestIssue.manifest_hash))).scalars()
+            )
+        assert result == {"deleted": 1, "protected": 2, "retention_days": 45}
+        assert hashes == {"published", "sending"}
+    finally:
+        await db.close()
+
+
 def test_public_projection_does_not_leak_evidence():
     issue = ArtistDigestIssue(
         manifest_hash="abc",
@@ -604,6 +725,8 @@ def test_static_projection_is_expiry_and_hero_activity_gated(tmp_path):
             "event_ids": [1],
             "venues": [],
             "municipalities": [],
+            "photo_credit_text": "Official artist account",
+            "photo_source_url": "https://artist.example/photo",
             "media_ready": False,
         }
     ]
@@ -615,6 +738,8 @@ def test_static_projection_is_expiry_and_hero_activity_gated(tmp_path):
     shadow = module.export_artist_arrivals_projection(con, current_date="2026-07-17")
     assert shadow["shadow_eligible"] is True
     assert shadow["eligible"] is False
+    assert shadow["items"][0]["photo_credit_text"] == "Official artist account"
+    assert shadow["items"][0]["photo_source_url"] == "https://artist.example/photo"
     con.execute("UPDATE promo_campaign SET status='active'")
     con.execute("UPDATE promo_activity SET enabled=1")
     con.commit()

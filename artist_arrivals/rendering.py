@@ -152,6 +152,12 @@ def render_artist_arrival_card(
         footer_y += 42
     arrow_font = _load_font(52, bold=True)
     draw.text((width - 140, height - 128), "→", font=arrow_font, fill=accent)
+    credit = str(item.get("photo_credit_text") or "").strip()
+    if use_photo and credit:
+        credit_font = _load_font(22)
+        credit_label = f"Фото: {credit}"
+        credit_line = _wrap(draw, credit_label, credit_font, width - 220, 1)[0]
+        draw.text((70, height - 42), credit_line, font=credit_font, fill=ink)
 
     out = io.BytesIO()
     canvas.save(out, format="JPEG", quality=93, optimize=True)
@@ -172,10 +178,22 @@ def build_telegram_slideshow_html(items: Sequence[dict[str, Any]]) -> str:
         url = html.escape(str(item.get("event_url") or ""), quote=True)
         label = f"{name} — {project}, {when}"
         lines.append(f'{idx}. <a href="{url}">{label}</a>' if url else f"{idx}. {label}")
+    credits = []
+    for item in items:
+        credit = html.escape(str(item.get("photo_credit_text") or "").strip())
+        source_url = html.escape(str(item.get("photo_source_url") or "").strip(), quote=True)
+        if credit and source_url:
+            credits.append(f'<a href="{source_url}">{credit}</a>')
+    credit_block = (
+        f"<p><small>Фото: {' · '.join(dict.fromkeys(credits))}</small></p>"
+        if credits
+        else ""
+    )
     return (
         "<h2>Кто приедет в Калининградскую область</h2>"
         f"<tg-slideshow>{media}<figcaption>Артисты и проекты ближайших недель</figcaption></tg-slideshow>"
         f"<p>{'<br>'.join(lines)}</p>"
+        f"{credit_block}"
         "<footer>Полюбить Калининград · Анонсы</footer>"
     )
 
@@ -208,6 +226,14 @@ def build_vk_carousel_message(items: Sequence[dict[str, Any]]) -> str:
         if item.get("event_url"):
             line += f"\n{item['event_url']}"
         lines.append(line)
+    credits = []
+    for item in items:
+        credit = str(item.get("photo_credit_text") or "").strip()
+        source_url = str(item.get("photo_source_url") or "").strip()
+        if credit and source_url:
+            credits.append(f"{credit} — {source_url}")
+    if credits:
+        lines.extend(["", "Фото: " + "; ".join(dict.fromkeys(credits))])
     lines.extend(["", "Полюбить Калининград · Анонсы"])
     return "\n\n".join(lines)
 

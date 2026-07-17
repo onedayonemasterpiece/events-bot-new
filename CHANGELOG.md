@@ -41,6 +41,7 @@
 ### Added
 
 - **Artist arrivals / shadow foundation**: added the versioned JSON + sparse Fly SQLite registry design, evidence-reviewed Russian/international/local overlays, daily stable artist+project manifest with target-aware delivery dedupe and ambiguous-send reconciliation, full event source-revision invalidation, disabled-by-default promo activities, Telegram RichMessage slideshow and VK carousel renderers with photo identity/rights plus SSRF/stream-size gates, and a sanitized static Hero Talk preview projection; YDB is intentionally not used for this event-domain state.
+- **Artist arrivals / long-horizon and attributed media policy**: replaced the 14-day product cutoff with all future reviewed catalogue appearances, bounded only unpublished/unreferenced shadow issue history to 45 days, and added a fail-closed manually reviewed informational-photo provenance lane with on-card/source-link credits and no Pinterest logo or affiliation styling.
 
 - **Popular feed / dedicated human-like Telegram reader**: the batch collector
   now accepts only `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR`, reads exact event

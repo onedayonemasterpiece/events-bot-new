@@ -8,6 +8,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 
@@ -28,7 +29,17 @@ CURATED_DATA_PATH = Path(__file__).with_name("data") / "curated_artist_evidence.
 ELIGIBLE_LOCALITIES = frozenset(
     {"non_local_ru_verified", "non_local_international_verified"}
 )
-PHOTO_ALLOWED_STATUSES = frozenset({"event_artist_verified", "press_kit_verified", "cc_verified"})
+PHOTO_ALLOWED_STATUSES = frozenset(
+    {
+        "event_artist_verified",
+        "press_kit_verified",
+        "cc_verified",
+        # This is not an automatic "open internet" permission. It is a
+        # separately reviewed informational-use decision with the exact
+        # source/author and legal basis recorded in provenance.
+        "informational_citation_reviewed",
+    }
+)
 PUBLICATION_SUCCESS_STATUSES = frozenset({"published", "scheduled", "tg_published", "vk_scheduled"})
 PROFILE_SAFETY_HOLD_STATUSES = frozenset({"review", "manual_hold", "rejected", "needs_review"})
 
@@ -62,6 +73,55 @@ def _stable_json(value: Any) -> str:
 
 def _hash(value: Any) -> str:
     return hashlib.sha256(_stable_json(value).encode("utf-8")).hexdigest()
+
+
+def photo_publication_metadata(
+    status: str | None,
+    evidence: Iterable[dict[str, Any]] | None,
+) -> dict[str, str] | None:
+    """Return sanitized public credit data when photo provenance is usable.
+
+    Pinterest/social pages may be recorded as discovery evidence, but a
+    platform logo or a generic platform mention is never treated as a rights
+    basis. The higher-risk informational-citation lane is deliberately manual:
+    the reviewer must record lawful publication, author/source, purpose and a
+    concrete review decision before the image can reach a public card.
+    """
+
+    clean_status = str(status or "none").strip().casefold()
+    if clean_status not in PHOTO_ALLOWED_STATUSES:
+        return None
+    for raw in evidence or []:
+        item = dict(raw or {})
+        source_url = str(item.get("source_url") or "").strip()
+        parsed = urlsplit(source_url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            continue
+        credit = str(
+            item.get("credit_text")
+            or item.get("author_or_rightsholder")
+            or item.get("source_name")
+            or parsed.hostname
+        ).strip()
+        if not credit:
+            continue
+        if clean_status == "informational_citation_reviewed":
+            if not (
+                item.get("lawfully_published_confirmed") is True
+                and str(item.get("review_status") or "").casefold() == "approved"
+                and str(item.get("basis") or "").casefold()
+                == "gc_rf_1274_informational_citation"
+                and str(item.get("purpose") or "").casefold()
+                == "artist_arrival_information"
+                and str(item.get("reviewed_by") or "").strip()
+                and str(item.get("reviewed_at") or "").strip()
+            ):
+                continue
+        return {
+            "credit_text": credit[:180],
+            "source_url": source_url,
+        }
+    return None
 
 
 def _clean_project_key(value: str) -> str:
@@ -424,11 +484,21 @@ async def build_artist_arrival_issue(
 ) -> ArtistDigestIssue:
     now_utc = now_utc or datetime.now(timezone.utc)
     today = now_utc.date()
-    horizon_days = max(1, int(horizon_days or os.getenv("ARTIST_ARRIVALS_HORIZON_DAYS", "14")))
+    raw_horizon = (
+        horizon_days
+        if horizon_days is not None
+        else int(os.getenv("ARTIST_ARRIVALS_HORIZON_DAYS", "0"))
+    )
+    if raw_horizon < 0:
+        raise ValueError("ARTIST_ARRIVALS_HORIZON_DAYS must be >= 0")
+    # 0 is the product default: every future appearance already present in the
+    # canonical event catalogue. The sparse appearance table, not Event, is
+    # scanned, so a six-month announcement does not duplicate the event DB.
+    horizon_days = raw_horizon or None
     min_artists = max(1, int(min_artists or os.getenv("ARTIST_ARRIVALS_MIN_ARTISTS", "3")))
     min_projects = max(1, int(min_projects or os.getenv("ARTIST_ARRIVALS_MIN_PROJECTS", "2")))
     max_items = max(1, min(10, int(max_items or os.getenv("ARTIST_ARRIVALS_MAX_ITEMS", "8"))))
-    window_end = today + timedelta(days=horizon_days)
+    configured_window_end = today + timedelta(days=horizon_days) if horizon_days else None
     already_published = set(published_dedupe_keys or await _published_dedupe_keys(db))
 
     async with db.get_session() as session:
@@ -450,7 +520,11 @@ async def build_artist_arrival_issue(
         if event.lifecycle_status != "active" or appearance.status != "confirmed" or appearance.cancelled_at is not None:
             excluded["cancelled_or_inactive"] += 1
             continue
-        if event_date is None or event_date < today or event_date > window_end:
+        if (
+            event_date is None
+            or event_date < today
+            or (configured_window_end is not None and event_date > configured_window_end)
+        ):
             excluded["outside_window"] += 1
             continue
         if appearance.eligibility_status != "eligible" or appearance.physical_visit_status != "confirmed":
@@ -477,6 +551,10 @@ async def build_artist_arrival_issue(
 
         key = (artist.artist_id, appearance.project_key)
         dedupe_key = f"{artist.artist_id}:{appearance.project_key}"
+        photo_meta = photo_publication_metadata(
+            artist.photo_rights_status,
+            artist.photo_rights_evidence_json,
+        )
         item = grouped.setdefault(
             key,
             {
@@ -497,9 +575,8 @@ async def build_artist_arrival_issue(
                 "event_url": None,
                 "photo_url": (
                     artist.photo_url
-                    if artist.photo_rights_status in PHOTO_ALLOWED_STATUSES
+                    if photo_meta
                     and appearance.media_identity_status == "verified"
-                    and artist.photo_rights_evidence_json
                     else None
                 ),
                 "photo_rights_status": artist.photo_rights_status,
@@ -507,11 +584,12 @@ async def build_artist_arrival_issue(
                 "photo_rights_evidence_ids": [
                     _hash(e)[:20] for e in artist.photo_rights_evidence_json
                 ],
+                "photo_credit_text": photo_meta["credit_text"] if photo_meta else None,
+                "photo_source_url": photo_meta["source_url"] if photo_meta else None,
                 "media_ready": bool(
                     artist.photo_url
-                    and artist.photo_rights_status in PHOTO_ALLOWED_STATUSES
+                    and photo_meta
                     and appearance.media_identity_status == "verified"
-                    and artist.photo_rights_evidence_json
                 ),
                 "source_revisions": [],
                 "participant_evidence_ids": [
@@ -525,14 +603,15 @@ async def build_artist_arrival_issue(
         item["dates"].append(event_date.isoformat())
         if (
             artist.photo_url
-            and artist.photo_rights_status in PHOTO_ALLOWED_STATUSES
+            and photo_meta
             and appearance.media_identity_status == "verified"
-            and artist.photo_rights_evidence_json
         ):
             item["photo_url"] = artist.photo_url
             item["photo_rights_status"] = artist.photo_rights_status
             item["media_identity_status"] = "verified"
             item["media_ready"] = True
+            item["photo_credit_text"] = photo_meta["credit_text"]
+            item["photo_source_url"] = photo_meta["source_url"]
         if event.location_name and event.location_name not in item["venues"]:
             item["venues"].append(event.location_name)
         if event.city and event.city not in item["municipalities"]:
@@ -553,12 +632,17 @@ async def build_artist_arrival_issue(
     unique_artists = len({item["artist_id"] for item in digest_items})
     unique_projects = len({item["project_key"] for item in digest_items})
     meets_threshold = unique_artists >= min_artists and unique_projects >= min_projects
+    window_end = configured_window_end or max(
+        (date.fromisoformat(value) for item in items for value in item["dates"]),
+        default=today,
+    )
     threshold = {
         "min_unique_artists": min_artists,
         "preferred_unique_artists": max(4, min_artists),
         "min_unique_projects": min_projects,
         "max_social_items": max_items,
         "horizon_days": horizon_days,
+        "horizon_mode": "bounded" if horizon_days else "all_future_catalogue",
     }
     hash_payload = {
         "schema_version": ARTIST_ARRIVAL_SCHEMA_VERSION,
@@ -597,6 +681,61 @@ async def build_artist_arrival_issue(
     return issue
 
 
+async def prune_artist_arrival_shadow_issues(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+    retention_days: int | None = None,
+    keep_issue_id: int | None = None,
+) -> dict[str, int]:
+    """Bound frozen preview growth without deleting publication evidence.
+
+    Only old, unpublished issues with no delivery-ledger rows are removed.
+    Published/scheduled carousels and ambiguous ``sending`` reservations remain
+    auditable indefinitely, while the daily shadow history is bounded.
+    """
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    retention_days = (
+        int(retention_days)
+        if retention_days is not None
+        else int(os.getenv("ARTIST_ARRIVALS_SHADOW_RETENTION_DAYS", "45"))
+    )
+    if retention_days < 1:
+        raise ValueError("ARTIST_ARRIVALS_SHADOW_RETENTION_DAYS must be >= 1")
+    cutoff = now_utc - timedelta(days=retention_days)
+    deleted = 0
+    protected = 0
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(ArtistDigestIssue).where(ArtistDigestIssue.created_at < cutoff)
+            )
+        ).scalars().all()
+        for row in rows:
+            if keep_issue_id is not None and row.id == keep_issue_id:
+                protected += 1
+                continue
+            has_delivery = (
+                await session.execute(
+                    select(ArtistPublicationLedger.id)
+                    .where(ArtistPublicationLedger.issue_id == row.id)
+                    .limit(1)
+                )
+            ).scalars().first() is not None
+            if row.published_at is not None or row.published_targets_json or has_delivery:
+                protected += 1
+                continue
+            await session.delete(row)
+            deleted += 1
+        await session.commit()
+    return {
+        "deleted": deleted,
+        "protected": protected,
+        "retention_days": retention_days,
+    }
+
+
 def public_artist_arrival_projection(issue: ArtistDigestIssue | None) -> dict[str, Any]:
     if issue is None:
         return {
@@ -633,6 +772,8 @@ def public_artist_arrival_projection(issue: ArtistDigestIssue | None) -> dict[st
                     "municipalities",
                     "event_url",
                     "photo_url",
+                    "photo_credit_text",
+                    "photo_source_url",
                     "media_ready",
                 )
             }

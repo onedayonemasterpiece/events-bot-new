@@ -15,6 +15,7 @@ from .service import (
     build_artist_arrival_issue,
     ensure_artist_arrivals_promo_campaign,
     ensure_curated_artist_data,
+    prune_artist_arrival_shadow_issues,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,10 @@ async def run_artist_arrivals_daily(
         campaign_stats = await ensure_artist_arrivals_promo_campaign(db)
         issue = await build_artist_arrival_issue(db)
         delivery = await publish_artist_arrival_issue(db, issue, bot)
+        retention = await prune_artist_arrival_shadow_issues(
+            db,
+            keep_issue_id=issue.id,
+        )
         changed = issue.manifest_hash != previous_hash
         if changed and issue.items_json and os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER", "").strip().lower() in {"1", "true", "yes", "on"}:
             event_ids = [int(x) for item in issue.items_json for x in item.get("event_ids", [])]
@@ -83,6 +88,7 @@ async def run_artist_arrivals_daily(
                     "blockers": delivery.blockers,
                     "targets": delivery.targets,
                 },
+                "retention": retention,
             },
         )
         return issue

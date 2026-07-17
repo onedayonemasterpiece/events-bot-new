@@ -12,6 +12,8 @@ export interface ArtistArrivalItem {
   municipalities: string[];
   event_url?: string | null;
   photo_url?: string | null;
+  photo_credit_text?: string | null;
+  photo_source_url?: string | null;
   media_ready: boolean;
 }
 

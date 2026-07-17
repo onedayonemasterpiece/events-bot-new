@@ -2713,6 +2713,8 @@ def export_artist_arrivals_projection(
         "municipalities",
         "event_url",
         "photo_url",
+        "photo_credit_text",
+        "photo_source_url",
         "media_ready",
     )
     items = [
