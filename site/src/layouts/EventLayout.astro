@@ -4566,6 +4566,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         function hydrateHeroGallery() {
           const openers = Array.from(document.querySelectorAll('[data-hero-gallery-open]'));
           if (!openers.length) return;
+          const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
           let activeGallery = null;
           let activeOpener = null;
           let galleryPanTimer = 0;
@@ -4574,6 +4575,13 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             if (galleryPanTimer) window.clearTimeout(galleryPanTimer);
             galleryPanTimer = 0;
           };
+          reducedMotion.addEventListener?.('change', () => {
+            if (!reducedMotion.matches) return;
+            clearGalleryPanTimer();
+            if (activeGallery) activeGallery.dataset.autoAdvance = 'false';
+            activeGallery?.removeAttribute('data-auto-pan');
+            activeGallery?.removeAttribute('data-pan-token');
+          });
 
           const loadGalleryMedia = (slide) => {
             if (!slide) return;
@@ -4657,6 +4665,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             clearGalleryPanTimer();
             delete gallery.dataset.autoPan;
             delete gallery.dataset.panToken;
+            if (reducedMotion.matches) return;
             const mode = direction === 'backward' ? 'backward' : 'forward';
             if (!activeSlideIsVisualPhoto(gallery)) return;
             window.requestAnimationFrame(() => {
@@ -4703,6 +4712,23 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             }
           };
 
+          const syncSlideTabbability = (slide, interactive) => {
+            slide.querySelectorAll('a[href],button,input,select,textarea,[tabindex]').forEach((control) => {
+              if (interactive) {
+                if (!control.hasAttribute('data-gallery-previous-tabindex')) return;
+                const previous = control.getAttribute('data-gallery-previous-tabindex');
+                control.removeAttribute('data-gallery-previous-tabindex');
+                if (previous) control.setAttribute('tabindex', previous);
+                else control.removeAttribute('tabindex');
+                return;
+              }
+              if (!control.hasAttribute('data-gallery-previous-tabindex')) {
+                control.setAttribute('data-gallery-previous-tabindex', control.getAttribute('tabindex') || '');
+              }
+              control.setAttribute('tabindex', '-1');
+            });
+          };
+
           const showSlide = (gallery, index, options = {}) => {
             const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
             const track = gallery.querySelector('[data-hero-gallery-track]');
@@ -4714,14 +4740,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             if (isEfficientGallery(gallery)) {
               gallery.dataset.activeIndex = String(next);
               scrollEfficientGalleryTo(gallery, slides[next], options.behavior || 'auto');
-              slides.forEach((slide) => slide.setAttribute('aria-hidden', 'false'));
+              slides.forEach((slide) => {
+                slide.setAttribute('aria-hidden', 'false');
+                syncSlideTabbability(slide, true);
+              });
               return;
             }
             loadGalleryMedia(slides[next]);
             gallery.dataset.activeIndex = String(next);
             track.style.transform = `translate3d(${-next * 100}%, 0, 0)`;
             slides.forEach((slide, slideIndex) => {
-              slide.setAttribute('aria-hidden', slideIndex === next ? 'false' : 'true');
+              const current = slideIndex === next;
+              slide.setAttribute('aria-hidden', current ? 'false' : 'true');
+              syncSlideTabbability(slide, current);
             });
             const counter = gallery.querySelector('[data-hero-gallery-counter]');
             if (counter) counter.textContent = `${next + 1} / ${slides.length}`;
@@ -4751,7 +4782,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             activeOpener = opener;
             if (gallery.parentElement !== document.body) document.body.appendChild(gallery);
             gallery.hidden = false;
-            gallery.dataset.autoAdvance = 'true';
+            gallery.dataset.autoAdvance = reducedMotion.matches ? 'false' : 'true';
             const requestedIndex = Math.max(0, Number(opener?.dataset.heroGalleryIndex || 0));
             showSlide(gallery, requestedIndex, { direction: 'forward', behavior: 'auto' });
             document.body.classList.add('has-hero-gallery-open');
@@ -4801,26 +4832,35 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               if (!isEfficientGallery(gallery)) return;
               window.requestAnimationFrame(() => updateEfficientGalleryState(gallery));
             }, { passive: true });
+            const resetSwipe = () => {
+              delete gallery.dataset.pointerTracking;
+              delete gallery.dataset.pointerStartX;
+              delete gallery.dataset.pointerStartY;
+              delete gallery.dataset.pointerLastX;
+              delete gallery.dataset.pointerLastY;
+            };
+            const isInteractiveGalleryTarget = (target) => target instanceof Element
+              && Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],.hero-gallery__slide--cta,[data-gallery-keep-open]'));
             const swipeStart = (clientX, clientY) => {
+              gallery.dataset.pointerTracking = 'true';
               gallery.dataset.pointerStartX = String(clientX || 0);
               gallery.dataset.pointerStartY = String(clientY || 0);
               gallery.dataset.pointerLastX = String(clientX || 0);
               gallery.dataset.pointerLastY = String(clientY || 0);
             };
             const swipeMove = (clientX, clientY) => {
-              if (!gallery.dataset.pointerStartX) return;
+              if (gallery.dataset.pointerTracking !== 'true') return false;
               gallery.dataset.pointerLastX = String(clientX || 0);
               gallery.dataset.pointerLastY = String(clientY || 0);
+              return true;
             };
             const swipeEnd = (clientX, clientY) => {
+              if (gallery.dataset.pointerTracking !== 'true') return;
               const startX = Number(gallery.dataset.pointerStartX || 0);
               const startY = Number(gallery.dataset.pointerStartY || 0);
               const endX = clientX == null ? Number(gallery.dataset.pointerLastX || startX) : Number(clientX || 0);
               const endY = clientY == null ? Number(gallery.dataset.pointerLastY || startY) : Number(clientY || 0);
-              delete gallery.dataset.pointerStartX;
-              delete gallery.dataset.pointerStartY;
-              delete gallery.dataset.pointerLastX;
-              delete gallery.dataset.pointerLastY;
+              resetSwipe();
               const deltaX = endX - startX;
               const deltaY = endY - startY;
               gallery.dataset.pointerMoved = Math.hypot(deltaX, deltaY) > 8 ? 'true' : 'false';
@@ -4834,6 +4874,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               showSlide(gallery, Number(gallery.dataset.activeIndex || 0) + (deltaX < 0 ? 1 : -1), { direction });
             };
             swipeSurface.addEventListener('pointerdown', (event) => {
+              if (isInteractiveGalleryTarget(event.target)) {
+                resetSwipe();
+                return;
+              }
               swipeStart(event.clientX, event.clientY);
               if (swipeSurface.setPointerCapture && event.pointerId != null) {
                 try { swipeSurface.setPointerCapture(event.pointerId); } catch (_) {}
@@ -4849,13 +4893,17 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               swipeEnd(null, null);
             }, { passive: true });
             swipeSurface.addEventListener('touchstart', (event) => {
+              if (isInteractiveGalleryTarget(event.target)) {
+                resetSwipe();
+                return;
+              }
               const touch = event.changedTouches && event.changedTouches[0];
               if (touch) swipeStart(touch.clientX, touch.clientY);
             }, { passive: true });
             swipeSurface.addEventListener('touchmove', (event) => {
               const touch = event.changedTouches && event.changedTouches[0];
-              if (touch) swipeMove(touch.clientX, touch.clientY);
-              if (event.cancelable) event.preventDefault();
+              const tracking = touch ? swipeMove(touch.clientX, touch.clientY) : false;
+              if (tracking && event.cancelable) event.preventDefault();
             }, { passive: false });
             swipeSurface.addEventListener('touchend', (event) => {
               const touch = event.changedTouches && event.changedTouches[0];
@@ -4880,7 +4928,30 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
           document.addEventListener('keydown', (event) => {
             if (!activeGallery) return;
-            if (event.key === 'Escape') {
+            if (event.key === 'Tab') {
+              const focusable = Array.from(activeGallery.querySelectorAll('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]'))
+                .filter((control) => control.getAttribute('tabindex') !== '-1'
+                  && !control.hasAttribute('hidden')
+                  && !control.closest('[aria-hidden="true"]'));
+              if (!focusable.length) {
+                event.preventDefault();
+                activeGallery.focus({ preventScroll: true });
+                return;
+              }
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              const current = document.activeElement;
+              if (!activeGallery.contains(current) || current === activeGallery) {
+                event.preventDefault();
+                (event.shiftKey ? last : first).focus({ preventScroll: true });
+              } else if (event.shiftKey && current === first) {
+                event.preventDefault();
+                last.focus({ preventScroll: true });
+              } else if (!event.shiftKey && current === last) {
+                event.preventDefault();
+                first.focus({ preventScroll: true });
+              }
+            } else if (event.key === 'Escape') {
               event.preventDefault();
               closeGallery();
             } else if (event.key === 'ArrowLeft') {

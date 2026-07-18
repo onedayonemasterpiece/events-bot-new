@@ -312,6 +312,6 @@ const showTicketCta = Boolean(ctaHref);
         <button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото">›</button>
       </>
     )}
-    <div class="hero-gallery__counter" data-hero-gallery-counter>{gallerySlideCount > 0 ? `1 / ${gallerySlideCount}` : ''}</div>
+    <div class="hero-gallery__counter" data-hero-gallery-counter role="status" aria-live="polite" aria-atomic="true">{gallerySlideCount > 0 ? `1 / ${gallerySlideCount}` : ''}</div>
   </div>
 )}

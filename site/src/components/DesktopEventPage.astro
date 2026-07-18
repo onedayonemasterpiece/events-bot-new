@@ -303,6 +303,7 @@ const galleryImages = (() => {
 })();
 const galleryId = `clean-hero-gallery-${event.id}`;
 const galleryTitleId = `${galleryId}-title`;
+const closedHeroStatusId = `closed-hero-status-${event.id}`;
 const photoCount = galleryImages.length;
 const indexedGalleryImages = galleryImages.map((image, galleryIndex) => ({ image, galleryIndex }));
 const ocrCompanion = ocrCompanionImageIndex === undefined
@@ -388,6 +389,8 @@ const descriptionHtml = (event.description_html || '')
   data-split-efficient-viewer={splitPortraitViewer ? 'true' : undefined}
   data-related-media-treatment={relatedMediaTreatment}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
+  data-closed-hero-gallery={photoCount > 1 ? galleryId : undefined}
+  data-active-hero-gallery-index={photoCount > 1 ? '0' : undefined}
   data-event-id={event.id}
   data-event-surface={surface}
   data-presentation-reason={presentationReason}
@@ -414,6 +417,8 @@ const descriptionHtml = (event.description_html || '')
                   data-efficient-viewer-start={splitPortraitViewer ? String(galleryImages[0]?.sourceIndex ?? 'gallery-0') : undefined}
                   data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
                   data-hero-gallery-index="0"
+                  aria-describedby={photoCount > 1 ? closedHeroStatusId : undefined}
+                  aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined}
                   aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
                 >
                   <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
@@ -462,7 +467,7 @@ const descriptionHtml = (event.description_html || '')
         ) : (
           <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''} data-editorial-media>
             {preferredUrl && (
-              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
+              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-describedby={photoCount > 1 ? closedHeroStatusId : undefined} aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
@@ -473,6 +478,8 @@ const descriptionHtml = (event.description_html || '')
           </figure>
         )}
 
+        <p id={closedHeroStatusId} class="sr-only" data-closed-hero-status role="status" aria-live="polite" aria-atomic="true">{photoCount > 1 ? `Фото 1 из ${photoCount}` : ''}</p>
+
         {candidate === 'editorial' && (
           <aside class="desktop-editorial-side" data-editorial-side data-companion-arrival={ocrCompanionLayout === 'arrival' ? 'true' : undefined}>
             {editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'arrival' && (
@@ -481,6 +488,7 @@ const descriptionHtml = (event.description_html || '')
                   <button
                     type="button"
                     class:list={[index === 0 && 'is-current']}
+                    aria-pressed={index === 0 ? 'true' : 'false'}
                     data-clean-hero-thumb
                     data-responsive-rail-item
                     data-src={image.src}
@@ -704,7 +712,7 @@ const descriptionHtml = (event.description_html || '')
         <div class="hero-gallery__track" data-hero-gallery-track>
           {galleryImages.map((image, index) => (
             <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} data-source-index={image.sourceIndex} aria-hidden={index === 0 ? 'false' : 'true'}>
-              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
+              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} data-object-position={image.position} style={image.position ? `object-position:${image.position}` : undefined} />
               <figcaption class="sr-only">Фото события: {event.title}</figcaption>
             </figure>
           ))}
@@ -723,7 +731,7 @@ const descriptionHtml = (event.description_html || '')
       </div>
       <div class="hero-gallery__caption" aria-hidden="true"><span>Фото события</span><strong>{event.title}</strong></div>
       {gallerySlideCount > 1 && <><button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button><button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото или похожее событие">›</button></>}
-      <div class="hero-gallery__counter" data-hero-gallery-counter>{`1 / ${gallerySlideCount}`}</div>
+      <div class="hero-gallery__counter" data-hero-gallery-counter role="status" aria-live="polite" aria-atomic="true">{`1 / ${gallerySlideCount}`}</div>
     </div>
   )}
 
@@ -824,6 +832,12 @@ const descriptionHtml = (event.description_html || '')
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
       const thumbButtons = Array.from(cleanRoot.querySelectorAll<HTMLButtonElement>('[data-clean-hero-thumb]'));
+      const closedHeroGallery = cleanRoot.dataset.closedHeroGallery
+        ? document.getElementById(cleanRoot.dataset.closedHeroGallery)
+        : null;
+      const closedHeroSlides = Array.from(closedHeroGallery?.querySelectorAll<HTMLElement>('[data-hero-gallery-slide][data-gallery-slide-kind="image"]') || []);
+      const closedHeroStatus = cleanRoot.querySelector<HTMLElement>('[data-closed-hero-status]');
+      const closedHeroOpener = heroImage?.closest<HTMLElement>('.desktop-prototype__media-opener');
       const rotationButtons = thumbButtons.filter((button) => button.dataset.rotationEligible === 'true' && Boolean(button.dataset.src));
       const rotationToggle = cleanRoot.querySelector<HTMLButtonElement>('[data-hero-rotation-toggle]');
       const siteHeader = document.querySelector<HTMLElement>('.site-header');
@@ -1364,6 +1378,63 @@ const descriptionHtml = (event.description_html || '')
         updateOcrFrame();
         markRotation('waiting-idle');
       };
+
+      const selectClosedHero = async (index:number) => {
+        if (!heroImage || closedHeroSlides.length < 2) return;
+        const next = ((index % closedHeroSlides.length) + closedHeroSlides.length) % closedHeroSlides.length;
+        const slide = closedHeroSlides[next];
+        const image = slide?.querySelector<HTMLImageElement>('.hero-gallery__image[data-gallery-src]');
+        const src = image?.dataset.gallerySrc;
+        if (!slide || !image || !src) return;
+        cleanRoot.dataset.activeHeroGalleryIndex = String(next);
+        noteRotationActivity('hero-keyboard-navigation');
+        const token = ++imageRequest;
+        const probe = new Image();
+        probe.src = src;
+        try { await probe.decode(); } catch {}
+        if (token !== imageRequest) return;
+        heroImage.src = src;
+        heroImage.alt = image.alt || heroImage.alt;
+        heroImage.width = Number(image.getAttribute('width') || probe.naturalWidth || heroImage.width);
+        heroImage.height = Number(image.getAttribute('height') || probe.naturalHeight || heroImage.height);
+        heroImage.style.objectPosition = image.dataset.objectPosition || '50% 50%';
+        cleanRoot.dataset.selectedMediaPolicy = image.dataset.imageTextMode || 'unknown';
+        const matchingThumbIndex = thumbButtons.findIndex((button) => button.dataset.src === src);
+        thumbButtons.forEach((button, buttonIndex) => {
+          const current = buttonIndex === matchingThumbIndex;
+          button.setAttribute('aria-pressed', current ? 'true' : 'false');
+          button.classList.toggle('is-current', current);
+        });
+        if (matchingThumbIndex >= 0) cleanRoot.dataset.activeHeroIndex = String(matchingThumbIndex);
+        if (closedHeroOpener?.hasAttribute('data-hero-gallery-open')) {
+          closedHeroOpener.dataset.heroGalleryIndex = String(next);
+        }
+        if (closedHeroOpener?.hasAttribute('data-efficient-viewer-open')) {
+          closedHeroOpener.dataset.efficientViewerStart = slide.dataset.sourceIndex || '';
+        }
+        if (closedHeroStatus) closedHeroStatus.textContent = `Фото ${next + 1} из ${closedHeroSlides.length}`;
+        updateOcrFrame();
+        measureEditorialCrop();
+        markRotation('waiting-idle');
+      };
+
+      let closedHeroHovered = false;
+      mediaFrame?.addEventListener('pointerenter', () => { closedHeroHovered = true; });
+      mediaFrame?.addEventListener('pointerleave', () => { closedHeroHovered = false; });
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        if (document.body.classList.contains('has-hero-gallery-open')) return;
+        if (efficientViewer && !efficientViewer.hidden) return;
+        if (closedHeroSlides.length < 2 || !mediaFrame) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')) return;
+        const heroFocused = document.activeElement instanceof Element && mediaFrame.contains(document.activeElement);
+        if (!closedHeroHovered && !heroFocused) return;
+        event.preventDefault();
+        const current = Number(cleanRoot.dataset.activeHeroGalleryIndex || '0');
+        void selectClosedHero(current + (event.key === 'ArrowRight' ? 1 : -1));
+      });
 
       rotationToggle?.addEventListener('click', () => {
         if (rotationEnabled) {
