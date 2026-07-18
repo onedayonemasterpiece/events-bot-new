@@ -213,7 +213,8 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 
 ## Связанные документы
 
-- Feed-first product-system memo: единая mobile feed session, contextual themes, automatic/narrative selections, personalization/return/email contract: `docs/features/static-site-pages/product-system-analysis-2026-07-18.md`.
+- Cross-surface product-system memo: fixed discovery surfaces, Hero Talk, journey-level P30, personalization/return/content contract: `docs/features/static-site-pages/product-system-analysis-2026-07-18.md`.
+- Focused homepage product model: mobile/desktop Hero Talk, lifecycle feed, progressive trust asks and terminal text Resolver: `docs/features/static-site-pages/homepage-product-model-2026-07-18.md`.
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
 - Event-page production release and 10-day Telegraph cutover: `docs/features/static-site-pages/release-plan.md`.
 - Test/release scenario inventory: `docs/features/static-site-pages/test-scenarios.md`.

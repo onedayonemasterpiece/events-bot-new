@@ -301,6 +301,7 @@ features:
     status: preview
     docs: docs/features/static-site-pages/README.md
     product_system_analysis_2026_07_18: docs/features/static-site-pages/product-system-analysis-2026-07-18.md
+    homepage_product_model_2026_07_18: docs/features/static-site-pages/homepage-product-model-2026-07-18.md
     release_plan: docs/features/static-site-pages/release-plan.md
     presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md
