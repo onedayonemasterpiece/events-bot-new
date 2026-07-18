@@ -765,6 +765,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             "media_role",
             "media_role_confidence",
             "media_semantic_status",
+            "media_semantic_reason_code",
             "focal_x",
             "focal_y",
             "safe_crop",
@@ -807,6 +808,9 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     metadata_by_url: dict[str, dict[str, Any]] = {}
     poster_urls: list[str] = []
     for row in rows:
+        if clean_text(row_get(row, "media_semantic_reason_code")).lower() == "no_event_relevance":
+            log_stage("listing_media_rejected", event_id=event_id, reason="no_event_relevance")
+            continue
         # One EventPoster is one logical gallery item.  Its managed and source
         # URLs are alternate locations, never two public images.
         url = canonical_event_media_cdn_url(row["supabase_url"])
@@ -851,6 +855,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         ocr = str(metadata.get("ocr_text") or "")
         mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
         semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
+        semantic_reason_code = clean_text(metadata.get("media_semantic_reason_code")).lower()
         raw_role = clean_text(metadata.get("media_role")).lower()
         media_role = raw_role if semantic_status == "classified" and raw_role in EVENT_IMAGE_MEDIA_ROLES else None
         primary_geometry_untrusted = index == 0 and (
@@ -906,6 +911,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             "media_role": role_for_ui,
             "media_role_confidence": round(float(metadata.get("media_role_confidence") or 0), 5),
             "media_semantic_status": semantic_status if semantic_status in {"pending", "classified", "error", "stale"} else "pending",
+            "media_semantic_reason_code": semantic_reason_code or None,
             "image_kind": "poster" if role_for_ui == "event_identity_poster" else ("photo" if role_for_ui == "event_photo" else "mixed"),
             "recommended_hero_fit": "cover" if role_for_ui == "event_photo" else "contain",
             "safe_crop": bool(metadata.get("safe_crop")) if metadata.get("safe_crop") is not None else False,

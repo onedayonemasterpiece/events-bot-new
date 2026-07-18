@@ -45,6 +45,8 @@ export interface EventImageAsset {
   media_role?: EventImageMediaRole;
   media_role_confidence?: number;
   media_semantic_status?: 'pending' | 'classified' | 'error' | 'stale';
+  /** Event-relative semantic rejection emitted by the media classifier. */
+  media_semantic_reason_code?: string | null;
   image_kind?: 'poster' | 'photo' | 'mixed' | 'fallback';
   /** Content-addressed rail/card derivatives, smallest first. */
   thumbnail_sources?: EventImageDerivative[];

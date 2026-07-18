@@ -2,14 +2,26 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import WeekendListingSurface from '../../components/listings/WeekendListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME } from '../../lib/events';
+import { absoluteUrl, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, SITE_NAME } from '../../lib/events';
 
 const events = getWeekendEvents();
 const weekend = getWeekendRange();
+const ranges = getAvailableWeekendRanges();
+const index = ranges.findIndex((range) => range.start === weekend.start);
+const previousRange = index > 0 ? ranges[index - 1] : null;
+const nextRange = index >= 0 && index < ranges.length - 1 ? ranges[index + 1] : null;
 ---
 <EventLayout title={`События на выходные в Калининграде | ${SITE_NAME}`} description={`События на ближайшие выходные ${weekend.label}, по дням и точному времени начала.`} canonicalUrl={absoluteUrl('/vyhodnye/')} structuredData={[]} headerCurrent="weekend">
   <main id="main" class="ke-listing-page">
-    <WeekendListingSurface events={events} start={weekend.start} end={weekend.end} dateLabel={weekend.label} />
+    <WeekendListingSurface
+      events={events}
+      start={weekend.start}
+      end={weekend.end}
+      dateLabel={weekend.label}
+      currentDate={getCurrentDate()}
+      previous={previousRange ? { href: `/vyhodnye/${previousRange.start}/`, label: previousRange.label } : null}
+      next={nextRange ? { href: `/vyhodnye/${nextRange.start}/`, label: nextRange.label } : null}
+    />
     <div class="ke-listing-shell"><PersonalFeedSlot context="weekend" /></div>
   </main>
 </EventLayout>

@@ -8,4 +8,7 @@ The files under `site/public/assets/listing-media/` are deterministic, source-fa
 - The two still-only review entries retain their CDN source and only add bounded crop/focal evidence after manual visual inspection.
 
 The downloaded videos and diagnostic frames remain ignored under `artifacts/codex/listing-date-v13-20260718/` and are not committed.
-- Organ Assemblies event `3794`: the official calendar supplied only a 300×174 still. For the desktop listing only, V13 uses the 1024×683 no-OCR rehearsal/student photo from the Cathedral's official 2026-07-14 article about the XI International Organ Assemblies; that article explicitly includes the 18 July participants' concert. Source image: `https://sobor39.ru/upload/medialibrary/061/1zccppmfa7j4v42ij0cv3ft11bi5op3x.jpg`. This is a source-grounded alternate, not generative replacement; canonical/detail media remain unchanged.
+
+## Rejected V13 event-specific substitution
+
+V13 temporarily associated event `3794` with a 1024×683 Cathedral article photo only inside the listing renderer. That was source-grounded, but it was still a manually selected event-specific result and therefore did **not** prove automatic generation from the source graph. V14 removes that association. Until a general source-media adapter records a durable source URL → candidate asset → semantic decision manifest, the 300×174 canonical asset or the neutral shared fallback is used according to the normal quality gate. Runtime listing presentation must not key alternate media by event ID.

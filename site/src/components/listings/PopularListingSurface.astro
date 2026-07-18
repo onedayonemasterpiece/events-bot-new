@@ -1,0 +1,23 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import { deduplicateListingEvents } from '../../lib/listingPresentation';
+import ListingControls from './ListingControls.astro';
+import ListingEventCard from './ListingEventCard.astro';
+import ListingPageHeader from './ListingPageHeader.astro';
+
+interface Props { events: PreviewEvent[]; }
+const events = deduplicateListingEvents(Astro.props.events);
+const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
+  .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
+  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
+---
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V14">
+  <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={events.length} current="popular" />
+  <ListingControls cities={cities} total={events.length} label="популярное" />
+  <section class="ke-popular-flow" aria-label="Популярные события">
+    {events.map((event, index) => <ListingEventCard event={event} priority={index < 4} />)}
+  </section>
+  <div class="ke-listing-empty" data-listing-no-events hidden={events.length > 0}>
+    <strong>Пока нет событий с подтверждённой активностью</strong>
+  </div>
+</div>

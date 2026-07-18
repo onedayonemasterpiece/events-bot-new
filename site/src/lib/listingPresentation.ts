@@ -84,7 +84,7 @@ export function groupListingEvents(items: PreviewEvent[]): ListingTimeGroup[] {
     })
     .map(([key, events]) => ({
       key,
-      label: key === 'untimed' ? 'Без времени' : key,
+      label: key === 'untimed' ? 'Время уточняется' : key,
       daypart: listingDaypart(key === 'untimed' ? null : key),
       events,
     }));
@@ -99,11 +99,19 @@ function assetRatio(asset: EventImageAsset): number {
 }
 
 function usableAsset(asset: EventImageAsset): boolean {
-  return Boolean(asset?.src && asset.width >= 180 && asset.height >= 180);
+  // A 180px-wide social thumbnail cannot support the 300–400px desktop
+  // listing frame without visible upscale. Source-manifest replacements are
+  // applied before this gate, so reviewed video stills remain eligible.
+  return Boolean(asset?.src && asset.width >= 256 && asset.height >= 180);
 }
 
 function knownAsset(asset: EventImageAsset): boolean {
-  return Boolean(asset?.src && asset.width > 0 && asset.height > 0);
+  return Boolean(
+    asset?.src
+    && asset.width > 0
+    && asset.height > 0
+    && asset.media_semantic_reason_code !== 'no_event_relevance'
+  );
 }
 
 function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventImageAsset | null {
@@ -116,8 +124,8 @@ function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventIma
 }
 
 interface ListingMediaOverride {
-  eventId?: number;
   sourceSrc: string;
+  sourcePage?: string;
   replacementSrc?: string;
   width?: number;
   height?: number;
@@ -131,10 +139,12 @@ interface ListingMediaOverride {
 
 const listingOverrideItems = (listingMediaOverrides as { items?: ListingMediaOverride[] }).items || [];
 
-function withListingMediaOverride(asset: EventImageAsset | null, eventId: number): EventImageAsset | null {
+function withListingMediaOverride(event: PreviewEvent, asset: EventImageAsset | null): EventImageAsset | null {
   if (!asset) return null;
+  const sourceUrls = new Set([event.source_url, ...(event.source_urls || [])].filter(Boolean));
   const item = listingOverrideItems.find((candidate) => (
-    candidate.sourceSrc === asset.src && (!candidate.eventId || candidate.eventId === eventId)
+    candidate.sourceSrc === asset.src
+    || Boolean(candidate.sourcePage && sourceUrls.has(candidate.sourcePage))
   ));
   if (!item) return asset;
   return {
@@ -161,7 +171,10 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
   // Preserve the measured geometry even when an asset misses the quality
   // threshold. A small known fallback must never be stretched into an
   // invented portrait frame (event 3794 is the regression contract).
-  const knownAssets = (event.image_assets || []).filter(knownAsset);
+  const knownAssets = (event.image_assets || [])
+    .filter(knownAsset)
+    .map((asset) => withListingMediaOverride(event, asset))
+    .filter((asset): asset is EventImageAsset => Boolean(asset));
   const assets = knownAssets.filter(usableAsset);
   const posters = assets.filter((asset) => (
     asset.media_semantic_status === 'classified'
@@ -190,11 +203,14 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
   const selectedPhoto = bestWideAsset(preferredPhotos.length ? preferredPhotos : photos, preferredPhotos.length ? 1.5 : 0.8);
   const preferredVisuals = visualOnly.filter((asset) => assetRatio(asset) >= 1);
   const selectedVisual = bestWideAsset(preferredVisuals.length ? preferredVisuals : visualOnly, visualCropRatio);
-  const primary = knownAssets[0] || null;
+  // Assets smaller than the minimum listing frame are not silently upscaled.
+  // If no usable event-relevant asset exists, the card renders the shared
+  // neutral fallback; source recovery remains an ingestion concern.
+  const primary = assets[0] || null;
   const sourceAsset = selectedPoster || selectedPhoto || selectedVisual || primary;
-  const asset = withListingMediaOverride(sourceAsset, event.id);
-  const src = asset?.src || event.image_url || null;
-  const rawRatio = asset ? assetRatio(asset) : 0.8;
+  const asset = sourceAsset;
+  const src = asset?.src || null;
+  const rawRatio = asset ? assetRatio(asset) : visualCropRatio;
   const isPhoto = Boolean(
     asset
     && asset.media_semantic_status === 'classified'
@@ -212,16 +228,31 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
   const cropRetention = rawRatio > 0
     ? Math.min(rawRatio / visualCropRatio, visualCropRatio / rawRatio)
     : 0;
+  // A sufficiently large no-OCR portrait may use a conservative square floor
+  // even while its finer semantic/focal review is pending. This is deliberately
+  // weaker than the 3:2 source-reviewed path: it removes obsolete narrow-photo
+  // columns without pretending that an unreviewed centre crop is safe at 3:2.
+  const conservativeSquareCrop = Boolean(
+    isVisualOnly
+    && asset
+    && asset.width >= 512
+    && asset.height >= 512
+    && rawRatio >= 0.5
+    && rawRatio < 1
+  );
   const visualCanCrop = Boolean(
-    hasCropEvidence
-    && (asset?.listing_crop_evidence === 'source-reviewed' || cropRetention >= (rawRatio < 1 ? 0.7 : 0.8))
+    conservativeSquareCrop
+    || (
+      hasCropEvidence
+      && (asset?.listing_crop_evidence === 'source-reviewed' || cropRetention >= (rawRatio < 1 ? 0.7 : 0.8))
+    )
   );
   const useNatural = Boolean(asset?.listing_use_natural);
   const visualRatio = isVisualOnly && asset
     ? (useNatural
       ? rawRatio
       : visualCanCrop
-      ? visualCropRatio
+      ? (conservativeSquareCrop ? 1 : visualCropRatio)
       : rawRatio)
     : visualCropRatio;
   const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');

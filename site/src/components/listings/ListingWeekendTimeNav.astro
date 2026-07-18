@@ -1,5 +1,5 @@
 ---
-import ListingTimeNav, { type DaySummary, type NavItem } from './ListingTimeNav.astro';
+import ListingTimeNav, { type NavItem } from './ListingTimeNav.astro';
 import { LISTING_DAYPARTS, type ListingTimeGroup } from '../../lib/listingPresentation';
 interface DayInput { key: 'sat' | 'sun'; short: string; dateLabel: string; groups: ListingTimeGroup[]; }
 interface Props { days: DayInput[]; }
@@ -15,14 +15,5 @@ const items: NavItem[] = LISTING_DAYPARTS.map((part) => {
   const count = groups.reduce((sum, group) => sum + group.count, 0);
   return { ...part, exact: groups, count, href: groups[0] ? `#${groups[0].target}` : '' };
 }).filter((item) => item.count > 0);
-const untimedCount = days.reduce((sum, day) => sum + (day.groups.find((group) => group.key === 'untimed')?.events.length || 0), 0);
-if (untimedCount) items.push({
-  key: 'untimed', label: 'Без времени', count: untimedCount, href: '#weekend-time-untimed',
-  exact: [{ key: 'untimed', label: 'Без времени', count: untimedCount, target: 'weekend-time-untimed' }],
-});
-const summaries: DaySummary[] = days.map((day) => ({
-  key: day.key, short: day.short, dateLabel: day.dateLabel,
-  count: day.groups.reduce((sum, group) => sum + group.events.length, 0),
-}));
 ---
-<ListingTimeNav items={items} daySummaries={summaries} force label="По времени и дням выходных" />
+<ListingTimeNav items={items} force label="По времени выходных" />

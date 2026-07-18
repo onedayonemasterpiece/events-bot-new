@@ -88,7 +88,13 @@ export function displayDateRange(startDate: string, endDate: string): string {
   const end = parseIsoDateParts(endDate);
   if (!start || !end) return `${startDate} — ${endDate}`;
   const crossesYear = start.year !== end.year;
-  return `${formatRuDate(startDate, crossesYear || start.year !== currentYear)} — ${formatRuDate(endDate, crossesYear || end.year !== currentYear)}`;
+  if (!crossesYear && start.month === end.month) {
+    return `${start.day}–${end.day} ${RU_MONTHS[end.month - 1]}${end.year !== currentYear ? ` ${end.year}` : ''}`;
+  }
+  if (!crossesYear) {
+    return `${start.day} ${RU_MONTHS[start.month - 1]} — ${end.day} ${RU_MONTHS[end.month - 1]}${end.year !== currentYear ? ` ${end.year}` : ''}`;
+  }
+  return `${formatRuDate(startDate, true)} — ${formatRuDate(endDate, true)}`;
 }
 
 export function displayDate(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): string {
@@ -761,7 +767,31 @@ export function getWeekendRange(): { start: string; end: string; label: string }
 
 export function getWeekendEvents(): PreviewEvent[] {
   const range = getWeekendRange();
-  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date >= range.start && event.start_date <= range.end && !isExhibitionLikeEvent(event)));
+  return getWeekendEventsForRange(range.start, range.end);
+}
+
+export function getWeekendRangeForStart(start: string): { start: string; end: string; label: string } {
+  const end = toIsoDate(addDays(new Date(`${start}T00:00:00Z`), 1));
+  return { start, end, label: displayDateRange(start, end) };
+}
+
+export function getWeekendEventsForRange(start: string, end: string): PreviewEvent[] {
+  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date >= start && event.start_date <= end && !isExhibitionLikeEvent(event)));
+}
+
+export function getAvailableWeekendRanges(): Array<{ start: string; end: string; label: string; count: number }> {
+  const starts = new Set<string>();
+  for (const event of getEvents()) {
+    if (isExhibitionLikeEvent(event)) continue;
+    const date = new Date(`${event.start_date}T00:00:00Z`);
+    const day = date.getUTCDay();
+    if (day === 6) starts.add(event.start_date);
+    else if (day === 0) starts.add(toIsoDate(addDays(date, -1)));
+  }
+  return [...starts].sort().map((start) => {
+    const range = getWeekendRangeForStart(start);
+    return { ...range, count: getWeekendEventsForRange(range.start, range.end).length };
+  }).filter((range) => range.count > 0);
 }
 
 export function isExternalHttpUrl(href: string | null | undefined): boolean {

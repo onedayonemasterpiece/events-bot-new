@@ -59,23 +59,16 @@ const allItems: ManifestMedallion[] = [
   ...((festivalMedallions as { items?: ManifestMedallion[] }).items || []),
 ];
 
-function listingCandidate(event: PreviewEvent): ManifestMedallion | undefined {
+function listingCandidates(event: PreviewEvent): ManifestMedallion[] {
   const ready = allItems.filter((item) => item.listingStatus === 'listing_ready');
-  // One deterministic priority for every listing surface.
-  return ready.find((item) => item.listingBinding === 'venue' && matchesStructuredValue(item, event.venue_name))
-    || ready.find((item) => item.listingBinding === 'festival' && matchesStructuredValue(item, event.festival));
+  const matched = [
+    ...ready.filter((item) => item.listingBinding === 'venue' && matchesStructuredValue(item, event.venue_name)),
+    ...ready.filter((item) => item.listingBinding === 'festival' && matchesStructuredValue(item, event.festival)),
+  ];
+  return matched.filter((item, index) => matched.findIndex((candidate) => candidate.slug === item.slug) === index);
 }
 
-/**
- * Listing medallions are bound only through structured event fields and only
- * to the image that actually won presentation selection. Visual-only media is
- * the hard OCR safety gate; at most one medallion is returned.
- */
-export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
-  const primaryAsset = selectedAsset || event.image_assets?.[0];
-  if (!event.image_url || !primaryAsset || primaryAsset.image_text_mode !== 'visual_only') return null;
-  const item = listingCandidate(event);
-  if (!item) return null;
+function toListingMedallion(item: ManifestMedallion): ListingVenueMedallion {
   return {
     slug: item.slug,
     name: item.name,
@@ -86,4 +79,25 @@ export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: Ev
     ring: item.ring,
     ariaLabel: item.ariaLabel || `Локация: ${item.name}`,
   };
+}
+
+/**
+ * Structured identity rail candidates. Unlike an on-image overlay this list
+ * is safe for OCR because the rail is rendered outside the media frame.
+ */
+export function getListingIdentityMedallions(event: PreviewEvent): ListingVenueMedallion[] {
+  return listingCandidates(event).slice(0, 3).map(toListingMedallion);
+}
+
+/**
+ * Listing medallions are bound only through structured event fields and only
+ * to the image that actually won presentation selection. Visual-only media is
+ * the hard OCR safety gate; at most one medallion is returned.
+ */
+export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
+  const primaryAsset = selectedAsset || event.image_assets?.[0];
+  if (!event.image_url || !primaryAsset || primaryAsset.image_text_mode !== 'visual_only') return null;
+  const item = listingCandidates(event)[0];
+  if (!item) return null;
+  return toListingMedallion(item);
 }

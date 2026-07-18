@@ -1,0 +1,33 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import WeekendListingSurface from '../../components/listings/WeekendListingSurface.astro';
+import { absoluteUrl, getAvailableWeekendRanges, getCurrentDate, getWeekendEventsForRange, SITE_NAME } from '../../lib/events';
+
+export function getStaticPaths() {
+  const ranges = getAvailableWeekendRanges();
+  return ranges.map((range, index) => ({
+    params: { start: range.start },
+    props: {
+      range,
+      previous: index > 0 ? ranges[index - 1] : null,
+      next: index < ranges.length - 1 ? ranges[index + 1] : null,
+    },
+  }));
+}
+
+const { range, previous, next } = Astro.props;
+const events = getWeekendEventsForRange(range.start, range.end);
+---
+<EventLayout title={`События на выходные ${range.label} | ${SITE_NAME}`} description={`События на выходные ${range.label}, по дням и точному времени начала.`} canonicalUrl={absoluteUrl(`/vyhodnye/${range.start}/`)} structuredData={[]} headerCurrent="weekend">
+  <main id="main" class="ke-listing-page">
+    <WeekendListingSurface
+      events={events}
+      start={range.start}
+      end={range.end}
+      dateLabel={range.label}
+      currentDate={getCurrentDate()}
+      previous={previous ? { href: `/vyhodnye/${previous.start}/`, label: previous.label } : null}
+      next={next ? { href: `/vyhodnye/${next.start}/`, label: next.label } : null}
+    />
+  </main>
+</EventLayout>

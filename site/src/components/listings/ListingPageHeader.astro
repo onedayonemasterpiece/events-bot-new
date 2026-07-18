@@ -6,13 +6,14 @@ interface Props {
   title: string;
   dateLabel: string;
   count: number;
-  current: 'today' | 'tomorrow' | 'weekend';
+  current: 'today' | 'tomorrow' | 'weekend' | 'popular';
 }
 const { title, dateLabel, count, current } = Astro.props;
 const routes = [
   { key: 'today', label: 'Сегодня', href: '/segodnya/' },
   { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
   { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
+  { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
 ] as const;
 ---
 <header class="ke-listing-head" data-ds-component="ListingPageHeader" data-ds-version="1">

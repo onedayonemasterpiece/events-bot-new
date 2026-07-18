@@ -56,26 +56,24 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Desktop date-listing correction candidate `DATE-LISTING TH-P1 · V13`:
-[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v13/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v13/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v13/vyhodnye/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v13/lab/design-system/).
+Desktop listing consumer candidate `DATE-LISTING TH-P1 · V14`:
+[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v14/segodnya/),
+[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v14/zavtra/),
+[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v14/vyhodnye/),
+[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v14/populyarnoe/) и
+[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v14/lab/design-system/).
 Это immutable review prefix, а не production promotion.
 
-V13 закрывает 31px зазор V12: настоящий `57px` opaque sticky header сразу
-продолжается общим `56px` full-bleed графитовым time rail, а `240×88` brand tag
-лежит поверх этой непрерывной поверхности. Today/Tomorrow/Weekend используют
-один крупный `ListingTimeMarker`; Weekend считает события отдельными чипами
-`Сб`/`Вс`, а день остаётся видимым и в rail. Listing media/copy увеличены,
-`sizes` теперь соответствует фактической desktop-ширине. Для Хуфена `6762` и
-«Красного шатра» `6867` используются source-faithful 1080×720 still-crops из
-публичных исходных Telegram-видео вместо 180×320 thumbnails; для органного
-события `3794` listing-only использует официальное 1024×683 фото из статьи
-Собора об этой Ассамблее вместо единственного 300×174 calendar thumbnail.
-OCR-контроль не кропается. Все 15 уже оформленных медальонов имеют явный listing status и
-structured binding, а runtime выбирает не больше одного в порядке
-`venue → festival` и только на выбранном `visual_only` asset.
+V14 возвращает проверенную Weekend-структуру: одна сильная ось времени,
+две непрерывные day-lane и единственные weekday-only чипы в заголовках. Города даны
+одним sticky direct-chip rail без dropdown; time rail остаётся графитовым. Popular
+снова использует intrinsic cards, но длинный список переносится вниз без
+горизонтального тупика. 72px medallions могут идти внешней вертикальной rail у OCR;
+`Поделиться → Лайк` берутся из общей системы. Медиа 180px не растягивается;
+`no_event_relevance` падает в neutral fallback. Ручная event-specific подмена `3794` удалена:
+автоматический source adapter остаётся отдельным незакрытым pipeline, а renderer больше не
+имитирует его ручным результатом. Product rationale, fresh-data evidence и deferred questions:
+[`listing-surfaces-v14-product.md`](listing-surfaces-v14-product.md).
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 

@@ -18,14 +18,14 @@ const { kind, title, date, dateLabel, events: rawEvents, generatedAt = null } = 
 const events = deduplicateListingEvents(rawEvents);
 const generatedAtMs = generatedAt ? Date.parse(generatedAt) : Number.NaN;
 
-function beganBeforeBuild(event: PreviewEvent): boolean {
-  if (kind !== 'today' || !Number.isFinite(generatedAtMs) || !event.starts_at) return false;
-  const startMs = Date.parse(event.starts_at);
-  return Number.isFinite(startMs) && startMs <= generatedAtMs;
+function endedBeforeBuild(event: PreviewEvent): boolean {
+  if (kind !== 'today' || !Number.isFinite(generatedAtMs) || !event.end_at) return false;
+  const endMs = Date.parse(event.end_at);
+  return Number.isFinite(endMs) && endMs <= generatedAtMs;
 }
 
-const earlierEvents = kind === 'today' ? events.filter(beganBeforeBuild) : [];
-const upcomingEvents = kind === 'today' ? events.filter((event) => !beganBeforeBuild(event)) : events;
+const earlierEvents = kind === 'today' ? events.filter(endedBeforeBuild) : [];
+const upcomingEvents = kind === 'today' ? events.filter((event) => !endedBeforeBuild(event)) : events;
 const earlierGroups = groupListingEvents(earlierEvents);
 const upcomingGroups = groupListingEvents(upcomingEvents);
 const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
@@ -47,7 +47,7 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   {kind === 'today' ? (
     <details id="today-earlier" class="ke-earlier" data-listing-earlier hidden={earlierEvents.length === 0}>
       <summary>
-        <span>Начались ранее</span>
+        <span>Завершились</span>
         <small data-listing-earlier-count>{earlierEvents.length} {eventCountLabel(earlierEvents.length)}</small>
         <span aria-hidden="true">↓</span>
       </summary>
@@ -105,15 +105,8 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
       const upcomingHost = root.querySelector('[data-listing-upcoming-groups]');
       const earlierTimeline = earlierHost?.querySelector('.ke-time-timeline');
       const upcomingTimeline = upcomingHost?.querySelector('.ke-time-timeline');
-      if (listingDate === clock.date && earlierTimeline && upcomingTimeline) {
-        root.querySelectorAll('[data-listing-time-group]').forEach((group) => {
-          const time = group.dataset.listingTime;
-          if (!time || time === 'untimed') return;
-          (time <= clock.time ? earlierTimeline : upcomingTimeline).appendChild(group);
-        });
-        sortTimeGroups(earlierHost);
-        sortTimeGroups(upcomingHost);
-      }
+      // An event becomes past only when its explicit end is known. Start time
+      // alone cannot distinguish a finished event from one in progress.
       const earlierCount = [...(earlierTimeline?.querySelectorAll('[data-listing-item]') || [])].length;
       if (earlier) earlier.hidden = earlierCount === 0;
       const countNode = root.querySelector('[data-listing-earlier-count]');

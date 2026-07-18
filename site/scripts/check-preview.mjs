@@ -80,40 +80,41 @@ function listingCard(html, id) {
   return html.match(new RegExp(`<article[^>]+data-event-id="${id}"[\\s\\S]*?<\\/article>`, 'u'))?.[0] || '';
 }
 
-async function checkDateListingsV13() {
+async function checkDateListingsV14() {
   const today = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
   const tomorrow = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
   const weekend = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
   const css = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
   const compactCss = css.replace(/\s+/gu, '');
   for (const [name, html, timeline] of [['today', today, 'ExactTimeTimeline'], ['tomorrow', tomorrow, 'ExactTimeTimeline'], ['weekend', weekend, 'WeekendEditorialTimeline']]) {
-    if (!html.includes(`data-ds-component="${timeline}" data-ds-version="2"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="1"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="3"')) throw new Error(`${name} misses V13 listing components`);
+    if (!html.includes(`data-ds-component="${timeline}" data-ds-version="2"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="1"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="3"')) throw new Error(`${name} misses shared V14 listing components`);
   }
-  if (!weekend.includes('data-weekend-day-summary="sat"') || !weekend.includes('data-weekend-day-summary="sun"') || !weekend.includes('data-listing-weekend-day-count-chip="sat"') || !weekend.includes('data-listing-weekend-day-count-chip="sun"') || weekend.includes('data-listing-weekend-row-count')) throw new Error('Weekend misses persistent day summaries or per-day row counts');
-  const hufen = listingCard(tomorrow, 6762);
+  if (!weekend.includes('data-weekend-day-summary="sat"') || !weekend.includes('data-weekend-day-summary="sun"') || !weekend.includes('ke-weekend-weekday-chip') || weekend.includes('data-listing-weekend-day-count-chip=')) throw new Error('Weekend misses the strong two-lane weekday-only head contract');
+  const dateListings = `${today}\n${tomorrow}\n${weekend}`;
+  const hufen = listingCard(dateListings, 6762);
   if (!hufen.includes('--ke-listing-image-ratio:1.50000') || !hufen.includes('data-listing-crop-evidence="source-reviewed"') || !hufen.includes('data-listing-source-width="1080"') || !hufen.includes('/assets/listing-media/67139633')) throw new Error('Hufen 6762 misses reviewed high-resolution 3:2 media');
-  const organ = listingCard(tomorrow, 3794);
-  if (!organ.includes('--ke-listing-image-ratio:1.499') || !organ.includes('data-listing-source-width="1024"') || !organ.includes('/assets/listing-media/bb778cea') || !organ.includes('data-venue-medallion="kant-island"')) throw new Error('Organ Assemblies 3794 misses its official high-resolution article still or Kant medallion');
+  const organ = listingCard(dateListings, 3794);
+  if (organ.includes('/assets/listing-media/bb778cea') || organ.includes('data-listing-source-width="1024"')) throw new Error('Organ Assemblies 3794 still depends on the rejected event-specific listing replacement');
   const organEvent = eventsData.events.find((event) => event.id === 3794);
   const organDetail = organEvent ? readFileSync(join(root, `sobytiya/${organEvent.slug}/index.html`), 'utf8') : '';
   if (!organDetail.includes('/p/dh16/20/20033303669b069e66930c9f6c900e8f66934307862cd33013371b26188d080c.webp') || organDetail.includes('/assets/listing-media/bb778cea')) throw new Error('3794 listing override leaked into canonical/detail media');
+  const wrongKiteMedia = listingCard(dateListings, 6904);
+  if (!wrongKiteMedia || /data-listing-source-width=|<img\b/iu.test(wrongKiteMedia)) throw new Error('Rejected no_event_relevance media returned to event 6904');
+  const burrata = listingCard(dateListings, 6903);
+  if (!burrata || /data-listing-source-width="180"|<img\b/iu.test(burrata)) throw new Error('180px Burrata thumbnail is still upscaled on desktop');
+  const honey = listingCard(dateListings, 6875);
+  if (!honey.includes('data-listing-source-width="1280"') || !honey.includes('data-listing-source-height="960"') || !honey.includes('--ke-listing-image-ratio:1.33333')) throw new Error('Honey Day 6875 does not prefer the fresh wide source candidate');
+  const pendingPortrait = listingCard(dateListings, 6944);
+  if (!pendingPortrait.includes('data-listing-image-mode="visual-crop"') || !pendingPortrait.includes('data-listing-crop-adaptive="true"') || !pendingPortrait.includes('--ke-listing-image-ratio:1.00000')) throw new Error('Large pending no-OCR portrait misses the conservative square floor');
   const tent = listingCard(weekend, 6867);
   if (!tent.includes('--ke-listing-image-ratio:1.33333') || !tent.includes('data-listing-crop-evidence="source-reviewed"') || !tent.includes('data-listing-source-width="1080"') || !tent.includes('/assets/listing-media/08040430')) throw new Error('Red Tent 6867 misses reviewed media without fields');
   const ocr = listingCard(weekend, 6869);
   if (!ocr || ocr.includes('data-listing-image-mode="visual-crop"') || !ocr.includes('data-image-text-mode="ocr_text"') || !ocr.includes('2560w')) throw new Error('OCR 6869 entered the visual crop path or misses its high-DPR source candidate');
   const inventory = [...(organizerMedallions.items || []), ...(festivalMedallions.items || [])];
   if (inventory.length !== 15 || inventory.some((item) => !item.listingStatus || !item.listingBinding)) throw new Error('All 15 medallions need explicit listing state and binding');
-  if (!compactCss.includes('--ke-site-header-bar-height:57px') || !compactCss.includes('--ke-site-header-tag-height:88px') || !compactCss.includes('--ke-listing-time-nav-height:56px') || !compactCss.includes('--ke-color-surface-inverse:#24211f') || !compactCss.includes('width:56px')) throw new Error('V13 sticky/time/medallion geometry is missing');
-  for (const [name, width, height] of [
-    ['bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-512.webp', 512, 342],
-    ['bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-768.webp', 768, 512],
-    ['bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-1024.webp', 1024, 683],
-  ]) {
-    const metadata = await sharp(join(root, 'assets/listing-media', name)).metadata();
-    if (metadata.width !== width || metadata.height !== height) throw new Error(`3794 derivative geometry mismatch: ${name}`);
-  }
+  if (!compactCss.includes('--ke-site-header-bar-height:57px') || !compactCss.includes('--ke-listing-city-rail-height:56px') || !compactCss.includes('--ke-listing-time-nav-height:56px') || !compactCss.includes('--ke-color-surface-inverse:#24211f') || !compactCss.includes('width:72px') || !compactCss.includes('padding-left:max(304px')) throw new Error('V14 sticky city/time/medallion geometry is missing');
 }
-await checkDateListingsV13();
+await checkDateListingsV14();
 
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {
@@ -401,7 +402,7 @@ if (!partnersHtml.includes('--partner-col-start: 1') || !partnersHtml.includes('
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
 if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
-if (!popularHtml.includes('Популярное') || !popularHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
+if (!popularHtml.includes('Популярное') || !popularHtml.includes('ke-popular-flow') || !popularHtml.includes('data-listing-variant="POPULAR-V14"')) throw new Error('Popular must use the V14 intrinsic wrapping consumer surface');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 
@@ -429,25 +430,25 @@ for (const [name, html] of dateListings) {
     const hrefs = [...article.matchAll(/<a[^>]+href="(https?:\/\/[^"]+)"/giu)].map((match) => match[1]);
     return hrefs.some((href) => !href.startsWith('https://static.kenigevents.ru/ics/'));
   })) throw new Error(`${name} listing card leaks a direct external link`);
-  if (articles.some((article) => article.includes('data-venue-medallion=') && !article.includes('data-image-text-mode="visual_only"'))) throw new Error(`${name} listing overlays a venue medallion on non-visual-only media`);
+  if (articles.some((article) => article.includes('ke-listing-card__medallion') && !article.includes('data-image-text-mode="visual_only"'))) throw new Error(`${name} listing overlays a venue medallion on non-visual-only media`);
 }
 const todayVisibleHtml = stripGeneratedCode(todayHtml);
 if (/Мосийенко|Мосиенко/u.test(todayVisibleHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko exhibition item');
 const earlierPosition = todayVisibleHtml.indexOf('data-listing-earlier');
 const nowPosition = todayVisibleHtml.indexOf('data-listing-now-marker');
-if (earlierPosition < 0 || nowPosition < 0 || earlierPosition > nowPosition || !todayVisibleHtml.includes('Начались ранее')) throw new Error('Today must place the truthful collapsed earlier-start disclosure above the current-time marker');
+if (earlierPosition < 0 || nowPosition < 0 || earlierPosition > nowPosition || !todayVisibleHtml.includes('Завершились')) throw new Error('Today must place the truthful collapsed completed disclosure above the current-time marker');
 if (!todayVisibleHtml.includes('data-listing-now-label') || !todayVisibleHtml.includes('Europe/Kaliningrad')) throw new Error('Today misses the Kaliningrad current-time marker contract');
 if (tomorrowHtml.includes('data-listing-earlier') || tomorrowHtml.includes('data-listing-now-marker')) throw new Error('Tomorrow must not render Today-only earlier/current-time UI');
 if (!weekendHtml.includes('data-listing-day="sat"') || !weekendHtml.includes('data-listing-day="sun"') || !weekendHtml.includes('data-weekend-day-summary="sat"') || !weekendHtml.includes('data-weekend-day-summary="sun"')) throw new Error('Weekend must render two day surfaces with persistent summaries on one timeline');
 if (!weekendHtml.includes('data-weekend-time-row') || !weekendHtml.includes('ke-weekend-time-rail') || !weekendHtml.includes('data-time-nav-disclosure')) throw new Error('Dense Weekend must expose one union exact-time axis and exact-time navigation');
-if (!weekendHtml.includes('data-listing-weekend-day-count-chip="sat"') || !weekendHtml.includes('data-listing-weekend-day-count-chip="sun"') || weekendHtml.includes('data-listing-weekend-row-count')) throw new Error('Weekend time rows must expose Сб/Вс count chips instead of a misleading combined count');
+if (!weekendHtml.includes('ke-weekend-weekday-chip') || weekendHtml.includes('data-listing-weekend-day-count-chip=')) throw new Error('Weekend must keep Сб/Вс only in the strong day heads, not repeat them at every time');
 if (weekendHtml.includes('ke-city-picker') || !weekendHtml.includes('ke-city-filter--direct') || !weekendHtml.includes('data-ds-component="ListingControls" data-ds-version="3"')) throw new Error('Weekend must use visible ListingControls v3 multi-city chips without a disclosure');
 if (!weekendHtml.includes('data-listing-srcset=') || !weekendHtml.includes('<noscript><img') || !weekendHtml.includes('width=') || !weekendHtml.includes('height=')) throw new Error('Weekend cards must emit intrinsic responsive thumbnails with a no-JS fallback');
 for (const slug of ['kldzoo', 'muzteatr39', 'tretyakovka-kaliningrad']) {
   if (!weekendHtml.includes(`data-venue-medallion="${slug}"`)) throw new Error(`Weekend misses positive visual-only medallion control: ${slug}`);
 }
 const organCard = tomorrowHtml.match(/<article[^>]+data-event-id="3794"[\s\S]*?<\/article>/u)?.[0] || '';
-if (!organCard.includes('--ke-listing-image-ratio:1.499') || !organCard.includes('data-listing-source-width="1024"') || !organCard.includes('data-venue-medallion="kant-island"')) throw new Error('Event 3794 must use its official high-resolution Assemblies still and Kant Island medallion');
+if (organCard.includes('/assets/listing-media/bb778cea') || organCard.includes('data-listing-source-width="1024"')) throw new Error('Event 3794 still uses the manual listing-only replacement');
 const hufenCard = tomorrowHtml.match(/<article[^>]+data-event-id="6762"[\s\S]*?<\/article>/u)?.[0] || '';
 if (!hufenCard.includes('--ke-listing-image-ratio:1.50000') || !hufenCard.includes('data-listing-image-mode="visual-crop"') || !hufenCard.includes('data-listing-crop-evidence="source-reviewed"') || !hufenCard.includes('data-listing-source-width="1080"') || !hufenCard.includes('/assets/listing-media/67139633') || !hufenCard.includes('sizes="(min-width: 1880px) 396px, (max-width: 720px) 38vw, 332px"')) throw new Error('Hufen 6762 must use the reviewed high-resolution 3:2 crop and truthful regular sizes');
 const redTentCard = weekendHtml.match(/<article[^>]+data-event-id="6867"[\s\S]*?<\/article>/u)?.[0] || '';
@@ -457,7 +458,7 @@ if (!ocrControlCard || ocrControlCard.includes('data-listing-image-mode="visual-
 const medallionInventory = [...(organizerMedallions.items || []), ...(festivalMedallions.items || [])];
 if (medallionInventory.length !== 15 || medallionInventory.some((item) => !item.listingStatus || !item.listingBinding)) throw new Error('All 15 curated medallions need explicit listing status and structured binding');
 if (!bundledCss.includes('--ke-site-header-bar-height:57px') || !bundledCss.includes('--ke-site-header-tag-height:88px') || !bundledCss.includes('--ke-listing-time-nav-height:56px') || !bundledCss.includes('--ke-color-surface-inverse:#24211f')) throw new Error('Date listings must preserve the exact 57px header + 56px graphite rail contract');
-if (!bundledCss.includes('.ke-listing-card[data-listing-crop-evidence=source-reviewed]') || !bundledCss.includes('width:56px') || !bundledCss.includes('font-size:clamp(2rem,2.25vw,2.25rem)')) throw new Error('V13 CSS misses reviewed crop cap, 56px medallion or strong shared time typography');
+if (!bundledCss.includes('.ke-listing-card[data-listing-crop-evidence=source-reviewed]') || !bundledCss.includes('width:72px') || !bundledCss.includes('font-size:clamp(2rem,2.25vw,2.25rem)')) throw new Error('V14 CSS misses reviewed crop cap, 72px medallion or strong shared time typography');
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
 if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes('usesExplicitFullDefault') || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');

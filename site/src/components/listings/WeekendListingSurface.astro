@@ -1,13 +1,15 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import { deduplicateListingEvents, groupListingEvents } from '../../lib/listingPresentation';
+import { deduplicateListingEvents, eventCountLabel, groupListingEvents } from '../../lib/listingPresentation';
+import { withBase } from '../../lib/events';
 import ListingControls from './ListingControls.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
 import WeekendEditorialTimeline from './WeekendEditorialTimeline.astro';
 
-interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; }
-const { events: rawEvents, start, end, dateLabel } = Astro.props;
+interface WeekendLink { href?: string | null; label: string; }
+interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; currentDate?: string; previous?: WeekendLink | null; next?: WeekendLink | null; }
+const { events: rawEvents, start, end, dateLabel, currentDate = '', previous = null, next = null } = Astro.props;
 const events = deduplicateListingEvents(rawEvents);
 const days = [
   { key: 'sat', title: 'Суббота', date: start, events: events.filter((event) => event.start_date === start) },
@@ -20,11 +22,86 @@ function dayDateLabel(date: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
 }
 ---
-<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1">
+<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
   <ListingControls cities={cities} total={events.length} label="на выходных" />
   <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   <div class="ke-weekend-board">
+    <div class="ke-weekend-heads" aria-label="Дни выходных">
+      <div class="ke-weekend-heads__time" aria-hidden="true"></div>
+      {days.map((day) => (
+        <header class:list={['ke-weekend-day__head', `ke-weekend-day__head--${day.key}`]} id={`weekend-${day.key}-label`} data-weekend-day-summary={day.key}>
+          <div class="ke-weekend-day__head-main">
+            <b class="ke-weekend-weekday-chip">{day.key === 'sat' ? 'Сб' : 'Вс'}</b>
+            <div><span class="ke-weekend-day__label">{day.title}</span><p>{dayDateLabel(day.date)}</p></div>
+          </div>
+          <span class="ke-weekend-day__count" data-weekend-day-count={day.key} data-weekend-day-count-value={day.events.length}>{day.events.length} {eventCountLabel(day.events.length)}</span>
+        </header>
+      ))}
+    </div>
     <WeekendEditorialTimeline days={days.map((day) => ({ key: day.key as 'sat' | 'sun', title: day.title, date: day.date, groups: day.groups }))} />
   </div>
+  {(previous || next) ? (
+    <nav class="ke-weekend-adjacent" aria-label="Другие выходные">
+      <div>
+        {previous?.href ? <a href={withBase(previous.href)}>← {previous.label}</a> : previous ? <span aria-disabled="true">← {previous.label} · события пока не опубликованы</span> : null}
+      </div>
+      <div>
+        {next?.href ? <a href={withBase(next.href)}>{next.label} →</a> : next ? <span aria-disabled="true">{next.label} · события пока не опубликованы →</span> : null}
+      </div>
+    </nav>
+  ) : null}
+  <div class="ke-weekend-autoposition" role="status" aria-live="polite" hidden data-weekend-autoposition-status>
+    <span></span><button type="button" data-weekend-back-to-top>К началу</button>
+  </div>
 </div>
+
+<script>
+  const weekendRoot = document.querySelector('[data-date-listing="weekend"]');
+  function kaliningradNow() {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kaliningrad', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return { date: `${value.year}-${value.month}-${value.day}`, time: `${value.hour}:${value.minute}` };
+  }
+  function applyWeekendPastState() {
+    if (!weekendRoot) return;
+    const now = Date.now();
+    const clock = kaliningradNow();
+    weekendRoot.querySelectorAll('[data-listing-item]').forEach((card) => {
+      const group = card.closest('[data-listing-time-group]');
+      const date = group?.dataset.listingDate || '';
+      const endAt = card.dataset.eventEndAt || '';
+      const explicitlyEnded = endAt && Number.isFinite(Date.parse(endAt)) && Date.parse(endAt) <= now;
+      const pastDay = date && date < clock.date;
+      card.dataset.listingPast = explicitlyEnded || pastDay ? 'true' : 'false';
+    });
+  }
+  function maybePositionCurrentSunday() {
+    if (!weekendRoot) return;
+    const clock = kaliningradNow();
+    if (clock.date !== weekendRoot.dataset.weekendEnd || weekendRoot.dataset.currentDate !== clock.date) return;
+    if (location.hash || scrollY > 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const nav = performance.getEntriesByType('navigation')[0];
+    if (nav?.type && nav.type !== 'navigate') return;
+    let cancelled = false;
+    const cancel = () => { cancelled = true; };
+    ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach((name) => addEventListener(name, cancel, { once: true, passive: true }));
+    setTimeout(() => {
+      if (cancelled || scrollY > 2) return;
+      const candidates = [...weekendRoot.querySelectorAll('[data-listing-day="sun"][data-listing-time]')]
+        .filter((group) => group.dataset.listingTime !== 'untimed' && group.dataset.listingTime >= clock.time && !group.hidden);
+      const target = candidates[0];
+      if (!target) return;
+      target.closest('[data-weekend-time-row]')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      const status = weekendRoot.querySelector('[data-weekend-autoposition-status]');
+      if (status) {
+        status.hidden = false;
+        status.querySelector('span').textContent = `Показаны события воскресенья с ${target.dataset.listingTime}`;
+        setTimeout(() => { status.hidden = true; }, 8000);
+      }
+    }, 350);
+  }
+  weekendRoot?.querySelector('[data-weekend-back-to-top]')?.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+  applyWeekendPastState();
+  maybePositionCurrentSunday();
+</script>

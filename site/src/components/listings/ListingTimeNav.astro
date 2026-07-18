@@ -27,11 +27,6 @@ const computedItems: NavItem[] = LISTING_DAYPARTS.map((part) => {
     exact: matching.map((group) => ({ key: group.key, label: group.label, count: group.events.length, target: `${idPrefix}-${group.key}` })),
   };
 }).filter((item) => item.count > 0);
-const untimed = groups.find((group) => group.key === 'untimed');
-if (untimed) computedItems.push({
-  key: 'untimed', label: 'Без времени', count: untimed.events.length, href: `#${idPrefix}-untimed`,
-  exact: [{ key: 'untimed', label: 'Без времени', count: untimed.events.length, target: `${idPrefix}-untimed` }],
-});
 const navItems = suppliedItems || computedItems;
 const timedGroupCount = groups.filter((group) => group.key !== 'untimed').length;
 const total = groups.reduce((sum, group) => sum + group.events.length, 0);

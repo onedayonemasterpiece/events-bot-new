@@ -228,3 +228,34 @@ def test_collect_images_does_not_fallback_when_only_quarantined_rows_exist() -> 
         con, 8, '["https://legacy.example/leak.jpg"]', "Событие"
     )
     assert assets == []
+
+
+def test_collect_images_fails_closed_for_approved_no_event_relevance_media() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        """
+        create table eventposter(
+            id integer primary key,
+            event_id integer,
+            supabase_url text,
+            catbox_url text,
+            ocr_text text,
+            review_status text,
+            display_order integer,
+            media_semantic_reason_code text
+        )
+        """
+    )
+    con.execute(
+        "insert into eventposter values(1, 6904, 'https://static.kenigevents.ru/p/food.webp', null, '', 'approved', 0, 'no_event_relevance')"
+    )
+
+    primary, _mode, _role, assets = exporter.collect_images(
+        con, 6904, '["https://legacy.example/food.jpg"]', "Роспись воздушного змея"
+    )
+
+    assert primary is None
+    assert assets == []

@@ -175,7 +175,10 @@ const showCities = cities.length > 1;
       const key = head.dataset.weekendDaySummary;
       const count = [...document.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
       const countNode = head.querySelector('[data-weekend-day-count]');
-      if (countNode) countNode.textContent = String(count);
+      if (countNode) {
+        countNode.dataset.weekendDayCountValue = String(count);
+        countNode.textContent = `${count} ${eventCountLabel(count)}`;
+      }
     });
     document.querySelectorAll('[data-weekend-time-row]').forEach((row) => {
       const count = [...row.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
