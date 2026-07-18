@@ -146,17 +146,20 @@ not remove their input pairs and no crash-retention bound existed.
 - service recovery: machine-local and public `/healthz` HTTP `200`,
   `ready=true`, disk `status=ok`; Fly machine version `1705` one passing check;
 - prevention is main-reachable and deployed at SHA
-  `b82a52bf27a452c50c6bd48237c6ba5d956a5734`, Fly image
-  `deployment-01KXVAE0Q7WYY8GPKZJC3QE5ZZ`, machine version `1709`;
+  `191eb0c7239aacdddad72398f8a45a6e08c9f3ad`, Fly image
+  `deployment-01KXVDHRCAN2C6DGA5JSQ885HD`, machine version `1711`;
 - the fresh automatic Smart Update/Kaggle build
-  `production-secret-20260718T211626-05742840` completed and published `987`
+  `production-secret-20260718T221203-9132a760` completed and published `984`
   create-only candidate objects from snapshot
-  `snapshot-20260718T191626-7d4e6665fa`; post-run retention left one full
-  failed diagnostic pair (`snapshot-20260718T175239-f447901bb1`) plus only
-  three `1 KiB` stale journal sidecars, not unbounded successful inputs;
+  `snapshot-20260718T201203-9828d9a7c1`; terminal cleanup removed that exact
+  successful input (`268,010,146` bytes). Post-run retention left only the
+  bounded failed diagnostic snapshot `snapshot-20260718T175239-f447901bb1`
+  (`.manifest.json`, `.sqlite`, one `32,768` byte `.sqlite-shm`, one zero-byte
+  `.sqlite-wal`) plus three pre-existing `1,024` byte orphan temporary-journal
+  files; no successful input or new unbounded growth remained;
 - post-run `/data` was about `45%` used with roughly `1.6 GiB` free,
   `PRAGMA quick_check=ok`, public `/healthz` HTTP `200`, `ready=true`, disk
   `status=ok`, Fly `1/1` passing, bounded runtime logs, and no fresh `Errno 28`,
   `database or disk is full` or static-build-failed records;
 - public candidate/Telegram evidence is recorded in the parent media incident:
-  current links were read back as Telegram message `360` in topic `2`.
+  current links were read back as Telegram message `361` in topic `2`.

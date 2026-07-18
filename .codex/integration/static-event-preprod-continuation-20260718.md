@@ -8,7 +8,7 @@ Base: `38401787645584c2508579bd61dc3c345d0b207d`
 
 | ID | Outcome | Integrated change | Evidence |
 |---|---|---|---|
-| R01 | completed | Accepted compact graphite `SiteFooter` is global; lab route remains a regression specimen only. | root commit `d56e5310`; component/runtime tests and preview/public checks below |
+| R01 | completed | Accepted compact graphite `SiteFooter` is global; lab route remains a regression specimen only. | root commit `d56e5310`; Gemini 3.1 Pro (High) compact-share validation `PASS`; component/runtime tests and preview/public checks below |
 | R02 | completed | Medallion wrapper exposes decorative ring/shadow overflow without changing fail-closed identity resolution. | lane implementation `5f161b8c`, integrated as `06a21881`; `.codex/lanes/media_polish/RESULTS.md` |
 | R03 | completed | Desktop static related cards emit skeleton/busy state before load and clear it on load/error with fixed geometry. | lane implementation `5f161b8c`, integrated as `06a21881`; `.codex/lanes/media_polish/RESULTS.md` |
 | R04 | completed | Split portrait/OCR pages use measured one-row CTA; Editorial wide-photo pages keep the stacked panel with bottom utility row. | lane implementation `edaba366`, integrated as `7664831b`; 4/4 Playwright geometry in `.codex/lanes/portrait_cta/RESULTS.md` |
@@ -57,20 +57,20 @@ acceptance remains the only open gate in the parent media incident.
 ### Production preproduction evidence
 
 - exact `origin/main` / deployed source:
-  `b82a52bf27a452c50c6bd48237c6ba5d956a5734`;
-- Fly image `deployment-01KXVAE0Q7WYY8GPKZJC3QE5ZZ`, machine version
-  `1709`, one passing critical check;
+  `191eb0c7239aacdddad72398f8a45a6e08c9f3ad`;
+- Fly image `deployment-01KXVDHRCAN2C6DGA5JSQ885HD`, machine version
+  `1711`, one passing critical check;
 - automatic startup catch-up / Smart Update build
-  `production-secret-20260718T211626-05742840`, run
-  `static-site:production-secret-20260718T211626-05742840:5c616deb0234`;
-- immutable input `snapshot-20260718T191626-7d4e6665fa`; published result
-  SHA-256 `3bda94500744f7ab9bc8596a2d1d3125f6a914124e9ae3dca84e9fd88d3381c3`,
+  `production-secret-20260718T221203-9132a760`, run
+  `static-site:production-secret-20260718T221203-9132a760:76d8fb98cf48`;
+- immutable input `snapshot-20260718T201203-9828d9a7c1`; published result
+  SHA-256 `f634d18f812913653bf04bc75a5ceee51e0c156c652fb77748a07f30d49f5326`,
   manifest SHA-256
-  `87023aa04a1f44211eeeee52fac384b09400a317b942f542c206743d2e1a07f7`,
-  `987` create-only objects;
+  `4d6a81ce6031f20bf1c510910a30cb407d25d95c2bce27dbe3d6ab3d71ecddbe`,
+  `984` create-only objects;
 - durable current-candidate receipt points to that exact source and token
   SHA-256
-  `a5608d22322da289a10e26d978616f02c7b34f527db3eb17b91dec77e96d63cb`;
+  `25f8da859b2d03c2d21e9fc1bad58ba947fc756aebfad70d99d3916be1989def`;
   the bearer token itself is deliberately not committed;
 - public HTTP `200` with `noindex` and `no-referrer` on the candidate index,
   frozen footer/CTA/transport specimens, and current events `6851`, `6551` and
@@ -80,7 +80,9 @@ acceptance remains the only open gate in the parent media incident.
   contained; actual `6851` used the compact Split phone CTA, while `6551` and
   `5658` retained Editorial hierarchy;
 - the footer rendered once with one partnership link, both legal placeholders,
-  coloured MAX asset and compact share prompt; venue medallion overflow was
+  coloured MAX asset and exact accessible prompt
+  `Понравились Анонсы? Поделитесь`; Gemini 3.1 Pro (High) validated the compact
+  84 px inline-bar with `PASS` and no blockers; venue medallion overflow was
   visible; all three forced transport arms retained the accepted structure and
   `на Кауп` wording; desktop continuation was finite at six cards with
   `popular_fallback`, no load-more and terminal `Все анонсы`;
@@ -92,14 +94,21 @@ acceptance remains the only open gate in the parent media incident.
   `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`,
   sitemap SHA-256
   `643f22960e703b91c173d4d52425ca28b6513da9612904047d9930508e329fa7`;
-- eight current-candidate links were sent with the role-approved E2E human
-  session and read back as Telegram message `360`, reply to message `261`, in
+- corrected current-candidate links were sent with the role-approved E2E human
+  session and read back as Telegram message `361`, reply to message `261`, in
   topic `2` of chat `-1004337049383`.
+
+The production ledger recorded real `kernel_started`, `resource_acquire`,
+multi-phase `alive`, `preflight_ok`, terminal `report_written` and
+`resource_release` events. The run is `done/cleanup`, has a real heartbeat and
+terminal timestamp, and `static_site_build_state` has no active claim.
 
 Post-run production checks: `PRAGMA quick_check=ok`, public `/healthz` HTTP
 `200` with `ready=true` and disk `status=ok`, about `1.6 GiB` free on `/data`,
 bounded runtime-log rotation, and no fresh `Errno 28`, disk-full or static-build
-failure entries.
+failure entries. Terminal cleanup removed `268,010,146` bytes of the successful
+input and left only the configured diagnostic snapshot, its exact SQLite
+sidecars, and three pre-existing 1 KiB orphan temporary-journal files.
 
 ### Checklist correction
 
