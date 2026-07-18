@@ -17,8 +17,9 @@ Release acceptance adds `ADD-RECENT-06..10`:
 
 - one quality-admitted photo family is shared by desktop/mobile; weak images are
   removed only when strong event-local alternatives exist;
-- a weak-only low-resolution portrait is retained but bounded with `contain`
-  and the effective viewer instead of being enlarged/cropped;
+- a weak-only low-resolution portrait is retained but source-size bounded with
+  `contain` in desktop/mobile hero and fullscreen viewer instead of being
+  enlarged/cropped;
 - stored OCR/document roles remain non-crop and exact structured source
   occurrences fail safe when the canonical aggregate is contradictory;
 - editorial leads end at a real sentence or a disclosed ellipsis;

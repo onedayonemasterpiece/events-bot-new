@@ -205,9 +205,9 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   `0,4,6,8,9,10,11` и скрывает `1,2,3,5,7` на обеих поверхностях.
 - **ADD-RECENT-07 — Low-resolution portrait без разрушительного увеличения.**
   Единственная слабая вертикальная фотография не исключается, но получает
-  viewport-bounded `contain` и открывает тот же эффективный viewer; она не
-  превращается в растянутый crop/длинный natural-size scroll. Контроль:
-  событие `6815`.
+  source-size bounded `contain` на desktop и mobile и открывает тот же
+  эффективный viewer; она не превращается в растянутый crop/длинный
+  natural-size scroll ни в hero, ни в fullscreen. Контроль: событие `6815`.
 - **ADD-RECENT-08 — Source-consistent occurrence projection.** Если точный
   structured first-party source совпадает с canonical row по date, time и
   ticket URL, но canonical type/copy загрязнены другим occurrence, статическая

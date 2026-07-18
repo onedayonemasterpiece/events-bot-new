@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { buildDesktopEventPresentation } from '../src/lib/desktopEventPresentation.ts';
-import { selectEventMediaByQuality } from '../src/lib/eventMediaQuality.ts';
+import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../src/lib/eventMediaQuality.ts';
 
 const preview = JSON.parse(await readFile(new URL('../src/data/preview-events.json', import.meta.url), 'utf8'));
 const eventById = (id) => preview.events.find((event) => event.id === id);
@@ -24,6 +24,8 @@ test('quality gate keeps weak originals when no strong alternative exists', () =
   ]);
   assert.deepEqual(selection.admittedSourceIndexes, [0]);
   assert.deepEqual(selection.hiddenSourceIndexes, []);
+  assert.equal(isLowResolutionPortraitEventMedia({ src:'only.webp', width:180, height:320, image_text_mode:'visual_only', quality_score:7 }), true);
+  assert.equal(isLowResolutionPortraitEventMedia({ src:'wide.webp', width:320, height:180, image_text_mode:'visual_only', quality_score:7 }), false);
 });
 
 test('Alye parusa contract keeps seven strong sources and excludes five weak ones', () => {
@@ -47,4 +49,13 @@ test('a lone low-resolution portrait stays available in viewport-contain efficie
   assert.equal(presentation.splitPortraitViewer, true);
   assert.deepEqual(presentation.splitPortraitSourceIndexes, [0]);
   assert.equal(presentation.reason, 'split-low-resolution-portrait-viewer');
+});
+
+test('mobile hero marks a lone weak portrait for native-size contain rendering', async () => {
+  const hero = await readFile(new URL('../src/components/EventHero.astro', import.meta.url), 'utf8');
+  const layout = await readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
+  assert.match(hero, /data-hero-low-resolution-portrait/);
+  assert.match(hero, /data-low-resolution-portrait/);
+  assert.match(layout, /event-hero--low-resolution-portrait\.event-hero--photo-cover/);
+  assert.match(layout, /hero-gallery__image\[data-low-resolution-portrait="true"\]/);
 });

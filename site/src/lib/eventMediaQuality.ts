@@ -30,6 +30,13 @@ export function isTechnicallyStrongEventMedia(asset: EventImageAsset | undefined
     && Number(asset.quality_score || 0) >= MIN_QUALITY_SCORE;
 }
 
+export function isLowResolutionPortraitEventMedia(asset: EventImageAsset | undefined): boolean {
+  if (!asset || !isPhotoLike(asset)) return false;
+  const width = Number(asset.width || 0);
+  const height = Number(asset.height || 0);
+  return width > 0 && height > width && !isTechnicallyStrongEventMedia(asset);
+}
+
 /**
  * Weak photo renditions disappear only when the same event has a technically
  * strong photo-like alternative. If every photo is weak, preserve the originals.
