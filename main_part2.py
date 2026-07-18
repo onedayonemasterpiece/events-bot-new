@@ -7650,14 +7650,44 @@ async def edit_vk_post(
         params["primary_attachments_mode"] = "grid"
     if not edit_token:
         raise VKAPIError(None, "VK_USER_TOKEN missing", method="wall.edit")
-    await _vk_api(
-        "wall.edit",
-        params,
-        db,
-        bot,
-        token=edit_token,
-        token_kind=edit_token_kind,
-    )
+    try:
+        await _vk_api(
+            "wall.edit",
+            params,
+            db,
+            bot,
+            token=edit_token,
+            token_kind=edit_token_kind,
+        )
+    except VKAPIError as exc:
+        msg_l = (exc.message or "").lower()
+        permanent_edit_error = exc.code in {15, 213, 214} and any(
+            marker in msg_l
+            for marker in (
+                "edit time expired",
+                "post or comment deleted",
+                "post not found",
+                "already deleted",
+            )
+        )
+        if not permanent_edit_error:
+            raise
+        logging.warning(
+            "edit_vk_post: permanent edit rejection url=%s code=%s msg=%s",
+            post_url,
+            exc.code,
+            exc.message,
+        )
+        if db is not None and bot is not None:
+            try:
+                await notify_superadmin(
+                    db,
+                    bot,
+                    f"Не удалось обновить старый пост {post_url}: окно редактирования истекло",
+                )
+            except Exception:  # pragma: no cover - best effort
+                logging.exception("edit_vk_post permanent-error notification failed")
+        return None
     logging.info("edit_vk_post done: %s", post_url)
     return True
 

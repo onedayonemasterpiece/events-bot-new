@@ -15,6 +15,11 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **VK captcha publication cadence (INC-2026-07-18)**: replace indefinite
+  unscoped JobOutbox pauses with persisted captcha cohorts, block new VK work
+  from hammering a cached challenge, harmlessly probe and pace cohort recovery,
+  preserve historical/manual paused rows, and stop retrying expired/deleted
+  `wall.edit` targets indefinitely.
 - **Static Smart Update template parity (INC-2026-07-16)**: integrate the
   accepted v11 event-detail implementation into the automatic Kaggle source,
   pin `static-event-detail-v11` plus its accepted source SHA in every generated

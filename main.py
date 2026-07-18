@@ -649,6 +649,14 @@ CAPTCHA_MAX_ATTEMPTS = int(os.getenv("CAPTCHA_MAX_ATTEMPTS", "2"))
 CAPTCHA_NIGHT_RANGE = os.getenv("CAPTCHA_NIGHT_RANGE", "00:00-07:00")
 CAPTCHA_RETRY_AT = os.getenv("CAPTCHA_RETRY_AT", "08:10")
 VK_CAPTCHA_TTL_MIN = int(os.getenv("VK_CAPTCHA_TTL_MIN", "60"))
+VK_CAPTCHA_AUTO_RECOVERY_SEC = max(
+    60,
+    int(os.getenv("VK_CAPTCHA_AUTO_RECOVERY_SEC", str(CAPTCHA_WAIT_S)) or CAPTCHA_WAIT_S),
+)
+VK_CAPTCHA_RESUME_SPACING_SEC = max(
+    5,
+    int(os.getenv("VK_CAPTCHA_RESUME_SPACING_SEC", "30") or "30"),
+)
 # quiet hours for captcha notifications (HH:MM-HH:MM, empty = disabled)
 VK_CAPTCHA_QUIET = os.getenv("VK_CAPTCHA_QUIET", "")
 VK_CRAWL_JITTER_SEC = int(os.getenv("VK_CRAWL_JITTER_SEC", "600"))
@@ -1646,6 +1654,7 @@ _vk_captcha_requested_at: datetime | None = None
 _vk_captcha_awaiting_user: int | None = None
 _vk_captcha_scheduler: Any | None = None
 _vk_captcha_key: str | None = None
+_vk_captcha_auto_probe_last_monotonic: float = 0.0
 _shared_session: ClientSession | None = None
 # backward-compatible aliases used in tests
 _http_session: ClientSession | None = None
@@ -5165,6 +5174,9 @@ async def handle_vk_captcha_refresh(callback: types.CallbackQuery, db: Database,
             global _vk_captcha_needed
             _vk_captcha_needed = False
             await _vk_api(_vk_captcha_method, _vk_captcha_params, db, bot)
+            resume = _vk_captcha_resume
+            if resume:
+                await resume()
         except VKAPIError as e:
             logging.info(
                 "vk_captcha refresh failed actor=%s token=%s code=%s msg=%s",
@@ -5214,9 +5226,162 @@ def vk_captcha_paused(scheduler, key: str) -> None:
     _vk_captcha_timeout = asyncio.create_task(_timeout())
 
 
-async def vk_captcha_pause_outbox(db: Database) -> None:
-    """Pause all VK jobs and register resume callback."""
+async def _resume_vk_captcha_outbox(
+    db: Database,
+    marker: str,
+) -> int:
+    """Resume one persisted captcha cohort at a bounded cadence.
+
+    A previous implementation resumed every historical ``paused`` VK job.
+    Production also contains intentionally contained rows, so recovery must be
+    scoped to the marker written by the captcha that caused this pause.  Past
+    or inactive event syncs are terminally skipped instead of being republished.
+    """
+
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    resumed = 0
+    skipped = 0
+    async with db.get_session() as session:
+        rows = await session.execute(
+            select(JobOutbox)
+            .where(
+                JobOutbox.task.in_(VK_JOB_TASKS),
+                JobOutbox.status == JobStatus.paused,
+                JobOutbox.last_error == marker,
+            )
+            .order_by(JobOutbox.id)
+        )
+        jobs = [_normalize_job(job) for job in rows.scalars().all()]
+        for job in jobs:
+            if job.task == JobTask.vk_sync:
+                event = await session.get(Event, job.event_id)
+                event_end = ((event.end_date or event.date) if event else "") or ""
+                eligible = bool(
+                    event
+                    and event_end >= today
+                    and getattr(event, "lifecycle_status", "active") == "active"
+                    and getattr(event, "identity_status", "canonical") == "canonical"
+                )
+                if not eligible:
+                    job.status = JobStatus.done
+                    job.last_error = "captcha_recovery_skipped_past_or_inactive"
+                    job.updated_at = now
+                    job.next_run_at = now
+                    session.add(job)
+                    skipped += 1
+                    continue
+            job.status = JobStatus.pending
+            job.updated_at = now
+            job.next_run_at = now + timedelta(
+                seconds=resumed * VK_CAPTCHA_RESUME_SPACING_SEC
+            )
+            session.add(job)
+            resumed += 1
+        await session.commit()
+    logging.info(
+        "vk_captcha outbox resumed marker=%s jobs=%s skipped_past_or_inactive=%s spacing_sec=%s",
+        marker,
+        resumed,
+        skipped,
+        VK_CAPTCHA_RESUME_SPACING_SEC,
+    )
+    return resumed
+
+
+async def _maybe_auto_recover_vk_captcha_outbox(
+    db: Database,
+    bot: Bot | None,
+) -> bool:
+    """Probe a harmless user-token read and recover an expired captcha pause.
+
+    Returns ``True`` while VK jobs must remain blocked.  The cohort marker is
+    persisted in SQLite, so a process restart cannot strand the queue in 2036.
+    Legacy unmarked pauses are deliberately ignored and require an audited
+    incident repair instead of a broad historical replay.
+    """
+
+    global _vk_captcha_auto_probe_last_monotonic
+    global _vk_captcha_needed, _vk_captcha_sid, _vk_captcha_img
+    global _vk_captcha_method, _vk_captcha_params, _vk_captcha_resume
+
+    async with db.get_session() as session:
+        row = (
+            await session.execute(
+                select(JobOutbox.last_error, JobOutbox.updated_at)
+                .where(
+                    JobOutbox.task.in_(VK_JOB_TASKS),
+                    JobOutbox.status == JobStatus.paused,
+                    JobOutbox.last_error.like("captcha_wait:%"),
+                )
+                .order_by(JobOutbox.updated_at.desc(), JobOutbox.id.desc())
+                .limit(1)
+            )
+        ).first()
+    if not row:
+        return bool(_vk_captcha_needed)
+
+    marker = str(row[0])
+    paused_at = _ensure_utc(row[1])
+    now = datetime.now(timezone.utc)
+    if (now - paused_at).total_seconds() < VK_CAPTCHA_AUTO_RECOVERY_SEC:
+        return True
+
+    monotonic_now = _time.monotonic()
+    if monotonic_now - _vk_captcha_auto_probe_last_monotonic < 60.0:
+        return True
+    _vk_captcha_auto_probe_last_monotonic = monotonic_now
+
+    token = _vk_user_token()
+    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+    if not token or not target_group_id:
+        logging.warning(
+            "vk_captcha auto recovery blocked marker=%s reason=missing_user_token_or_group",
+            marker,
+        )
+        return True
+    try:
+        await _vk_api(
+            "wall.get",
+            {"owner_id": -abs(int(target_group_id)), "filter": "postponed", "count": 1},
+            db,
+            bot,
+            token=token,
+            token_kind="user",
+            skip_captcha=True,
+        )
+    except VKAPIError as exc:
+        logging.warning(
+            "vk_captcha auto recovery probe failed marker=%s code=%s msg=%s",
+            marker,
+            exc.code,
+            exc.message,
+        )
+        return True
+
+    _vk_captcha_needed = False
+    _vk_captcha_sid = None
+    _vk_captcha_img = None
+    _vk_captcha_method = None
+    _vk_captcha_params = None
+    _vk_captcha_resume = None
+    resumed = await _resume_vk_captcha_outbox(db, marker)
+    logging.info(
+        "vk_captcha auto recovery succeeded marker=%s resumed=%s",
+        marker,
+        resumed,
+    )
+    return False
+
+
+async def vk_captcha_pause_outbox(
+    db: Database,
+    marker: str | None = None,
+) -> None:
+    """Pause the current VK cohort and register bounded marker-scoped resume."""
     global _vk_captcha_resume
+    now = datetime.now(timezone.utc)
+    marker = marker or f"captcha_wait:{int(now.timestamp())}"
     far = datetime.now(timezone.utc) + timedelta(days=3650)
     async with db.get_session() as session:
         await session.execute(
@@ -5227,21 +5392,17 @@ async def vk_captcha_pause_outbox(db: Database) -> None:
                     [JobStatus.pending, JobStatus.error, JobStatus.running]
                 ),
             )
-            .values(status=JobStatus.paused, next_run_at=far)
+            .values(
+                status=JobStatus.paused,
+                next_run_at=far,
+                updated_at=now,
+                last_error=marker,
+            )
         )
         await session.commit()
 
     async def _resume() -> None:
-        async with db.get_session() as session:
-            await session.execute(
-                update(JobOutbox)
-                .where(
-                    JobOutbox.task.in_(VK_JOB_TASKS),
-                    JobOutbox.status == JobStatus.paused,
-                )
-                .values(status=JobStatus.pending, next_run_at=datetime.now(timezone.utc))
-            )
-            await session.commit()
+        await _resume_vk_captcha_outbox(db, marker)
 
     _vk_captcha_resume = _resume
 
@@ -17805,6 +17966,7 @@ async def _run_due_jobs_once_locked(
     force_notify: bool = False,
 ) -> int:
     now = datetime.now(timezone.utc)
+    vk_captcha_blocked = await _maybe_auto_recover_vk_captcha_outbox(db, bot)
     # The database has accumulated a few legacy/experimental task strings.
     # SQLAlchemy Enum conversion raises LookupError for an unknown value while
     # materializing rows; a single bad row must not crash the whole outbox worker.
@@ -17892,6 +18054,12 @@ async def _run_due_jobs_once_locked(
             stmt = stmt.where(JobOutbox.event_id == only_event)
         if allowed_tasks:
             stmt = stmt.where(JobOutbox.task.in_(allowed_tasks))
+        if vk_captcha_blocked:
+            # Keep newly enqueued VK work pending while the persisted captcha
+            # cohort cools down.  Running each job into the cached challenge
+            # creates a retry/notification storm and continually extends the
+            # outage window.
+            stmt = stmt.where(JobOutbox.task.notin_(VK_JOB_TASKS))
         jobs = [
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
@@ -18361,7 +18529,7 @@ async def _run_due_jobs_once_locked(
                 pause = False
                 if isinstance(exc, VKAPIError):
                     if exc.code == 14:
-                        err = "captcha"
+                        err = f"captcha_wait:{int(datetime.now(timezone.utc).timestamp())}"
                         status = JobStatus.paused
                         pause = True
                         retry = False
@@ -18373,6 +18541,21 @@ async def _run_due_jobs_once_locked(
                             "paused captcha",
                             group=f"@{VK_AFISHA_GROUP_ID}" if VK_AFISHA_GROUP_ID else None,
                         )
+                    elif exc.code in {15, 213, 214} and any(
+                        marker in (exc.message or "").lower()
+                        for marker in (
+                            "edit time expired",
+                            "post or comment deleted",
+                            "post not found",
+                            "already deleted",
+                        )
+                    ):
+                        err = (
+                            f"permanent VK publication error: "
+                            f"{exc.code}/{exc.message} ({exc.method})"
+                        )
+                        status = JobStatus.paused
+                        retry = False
                     else:
                         prefix = (
                             "ошибка публикации VK"
@@ -18471,7 +18654,7 @@ async def _run_due_jobs_once_locked(
                         logging.exception("progress callback error eid=%s", eid)
         processed += 1
         if pause:
-            await vk_captcha_pause_outbox(db)
+            await vk_captcha_pause_outbox(db, marker=err)
             continue
     return processed
 
