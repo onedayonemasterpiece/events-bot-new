@@ -1,6 +1,6 @@
 # INC-2026-07-18 Static Snapshot Disk Pressure During Candidate Retries
 
-Status: mitigated
+Status: monitoring
 Severity: sev1
 Service: production bot / Fly app `events-bot-new-wngqia`
 Opened: 2026-07-18
@@ -134,8 +134,8 @@ not remove their input pairs and no crash-retention bound existed.
 
 ## Follow-up Actions
 
-- complete the fresh main-based secret candidate and verify post-run snapshot
-  usage before moving this incident from mitigated to monitoring/closed;
+- continue monitoring the bounded retained diagnostic snapshot and volume free
+  space across subsequent automatic candidates before closure;
 - keep volume auto-extension as an availability guard only, not retention.
 
 ## Release And Closure Evidence
@@ -145,4 +145,18 @@ not remove their input pairs and no crash-retention bound existed.
   `114 MiB` to about `1.3–1.39 GiB`; `PRAGMA quick_check=ok` before and after;
 - service recovery: machine-local and public `/healthz` HTTP `200`,
   `ready=true`, disk `status=ok`; Fly machine version `1705` one passing check;
-- prevention deploy SHA and fresh candidate evidence: pending.
+- prevention is main-reachable and deployed at SHA
+  `b82a52bf27a452c50c6bd48237c6ba5d956a5734`, Fly image
+  `deployment-01KXVAE0Q7WYY8GPKZJC3QE5ZZ`, machine version `1709`;
+- the fresh automatic Smart Update/Kaggle build
+  `production-secret-20260718T211626-05742840` completed and published `987`
+  create-only candidate objects from snapshot
+  `snapshot-20260718T191626-7d4e6665fa`; post-run retention left one full
+  failed diagnostic pair (`snapshot-20260718T175239-f447901bb1`) plus only
+  three `1 KiB` stale journal sidecars, not unbounded successful inputs;
+- post-run `/data` was about `45%` used with roughly `1.6 GiB` free,
+  `PRAGMA quick_check=ok`, public `/healthz` HTTP `200`, `ready=true`, disk
+  `status=ok`, Fly `1/1` passing, bounded runtime logs, and no fresh `Errno 28`,
+  `database or disk is full` or static-build-failed records;
+- public candidate/Telegram evidence is recorded in the parent media incident:
+  current links were read back as Telegram message `360` in topic `2`.

@@ -412,3 +412,47 @@ publishing it. Live `py-spy` evidence showed the main thread in
 short-lived status-ledger `Database`. The runner must close that database after
 creating the callback config; crash adoption must then recover this exact
 complete kernel/dataset without a second push before closure can continue.
+
+## 2026-07-18 main-based preproduction candidate
+
+The v12 fidelity, component and automation corrections are now reachable from
+`origin/main` and deployed at exact SHA
+`b82a52bf27a452c50c6bd48237c6ba5d956a5734` (Fly image
+`deployment-01KXVAE0Q7WYY8GPKZJC3QE5ZZ`, machine version `1709`). Startup
+catch-up invoked the same Smart Update/Kaggle production rail and completed
+build `production-secret-20260718T211626-05742840`, run
+`static-site:production-secret-20260718T211626-05742840:5c616deb0234`, from
+immutable snapshot `snapshot-20260718T191626-7d4e6665fa`. It published `987`
+create-only objects with manifest SHA-256
+`87023aa04a1f44211eeeee52fac384b09400a317b942f542c206743d2e1a07f7` and
+result SHA-256
+`3bda94500744f7ab9bc8596a2d1d3125f6a914124e9ae3dca84e9fd88d3381c3`.
+The durable current receipt identifies that exact source and token SHA-256
+`a5608d22322da289a10e26d978616f02c7b34f527db3eb17b91dec77e96d63cb`;
+the bearer token is intentionally excluded from this committed record.
+
+Public HTTP and Playwright acceptance passed on the candidate index, the
+expiry-proof footer/CTA/transport specimens and current events `6851`, `6551`
+and `5658`. At `1536x864`, frozen Split was an inline `100.78 px` action panel
+and frozen Editorial a stacked `227.125 px` panel; actual `6851` preserved the
+compact phone CTA while `6551` and `5658` retained the accepted Editorial
+hierarchy. The footer appeared once with one partnership link, both future
+legal-document links, a coloured MAX asset and compact share prompt. Medallion
+overflow remained visible. All A/B/C transport arms were force-reviewable with
+their distinct accepted structure and `на Кауп` wording. Desktop continuation
+ended after six cards with `popular_fallback`, no load-more and `Все анонсы`.
+At `390 px`, the accepted mobile surface remained active with zero horizontal
+overflow. Network interception confirmed ten busy related cards and ten
+skeleton fallbacks before their images loaded.
+
+The production root and sitemap were unchanged (body SHA-256
+`e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`,
+sitemap SHA-256
+`643f22960e703b91c173d4d52425ca28b6513da9612904047d9930508e329fa7`).
+Eight current-candidate links were sent through the role-approved E2E human
+session and read back as Telegram message `360`, replying to message `261` in
+topic `2` of chat `-1004337049383`.
+
+The incident remains **open only for the user's visual acceptance**. Secret
+preproduction generation is now live and automatic; production-root promotion
+remains separately disabled pending explicit approval.

@@ -36,7 +36,10 @@ No worker patch was dropped. Lane worktrees were read-only after their clean com
 
 ## Final validation
 
-Pending final integration commands, clean-main deploy SHA, fresh Smart Update/Kaggle receipt, public candidate URL and checklist review. These are appended before closure; the incident remains open until then.
+The implementation is main-reachable and deployed. Smart Update created a
+fresh immutable secret candidate through the production Kaggle rail, and the
+public HTTP/Playwright gates plus Telegram readback passed. Product visual
+acceptance remains the only open gate in the parent media incident.
 
 ### Local validation (integration source)
 
@@ -51,7 +54,52 @@ Pending final integration commands, clean-main deploy SHA, fresh Smart Update/Ka
 - Local browser acceptance at `1536×864`: one global footer partnership link, two legal placeholders, coloured MAX, zero overflow; immature continuation mode `popular_fallback`, `Ещё события`, exactly six unique cards, no load-more, `Все анонсы` — passed.
 - Local browser acceptance at `390×844`: fallback continuation hidden, accepted mobile renderer visible, zero overflow — passed.
 
-Fresh public candidate, exact deployed SHA and Telegram handoff remain release-phase evidence and are intentionally not claimed by the source integration checks.
+### Production preproduction evidence
+
+- exact `origin/main` / deployed source:
+  `b82a52bf27a452c50c6bd48237c6ba5d956a5734`;
+- Fly image `deployment-01KXVAE0Q7WYY8GPKZJC3QE5ZZ`, machine version
+  `1709`, one passing critical check;
+- automatic startup catch-up / Smart Update build
+  `production-secret-20260718T211626-05742840`, run
+  `static-site:production-secret-20260718T211626-05742840:5c616deb0234`;
+- immutable input `snapshot-20260718T191626-7d4e6665fa`; published result
+  SHA-256 `3bda94500744f7ab9bc8596a2d1d3125f6a914124e9ae3dca84e9fd88d3381c3`,
+  manifest SHA-256
+  `87023aa04a1f44211eeeee52fac384b09400a317b942f542c206743d2e1a07f7`,
+  `987` create-only objects;
+- durable current-candidate receipt points to that exact source and token
+  SHA-256
+  `a5608d22322da289a10e26d978616f02c7b34f527db3eb17b91dec77e96d63cb`;
+  the bearer token itself is deliberately not committed;
+- public HTTP `200` with `noindex` and `no-referrer` on the candidate index,
+  frozen footer/CTA/transport specimens, and current events `6851`, `6551` and
+  `5658`;
+- public Playwright at `1536x864` verified the frozen Split CTA in one row
+  (`100.78 px`) and Editorial CTA stacked (`227.125 px`), with all controls
+  contained; actual `6851` used the compact Split phone CTA, while `6551` and
+  `5658` retained Editorial hierarchy;
+- the footer rendered once with one partnership link, both legal placeholders,
+  coloured MAX asset and compact share prompt; venue medallion overflow was
+  visible; all three forced transport arms retained the accepted structure and
+  `на Кауп` wording; desktop continuation was finite at six cards with
+  `popular_fallback`, no load-more and terminal `Все анонсы`;
+- mobile `390 px` kept the accepted mobile renderer without horizontal
+  overflow; intercepted related images exposed ten `aria-busy=true` cards and
+  ten visible skeleton fallbacks before load;
+- candidate publication did not mutate the production root or sitemap: body
+  SHA-256
+  `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`,
+  sitemap SHA-256
+  `643f22960e703b91c173d4d52425ca28b6513da9612904047d9930508e329fa7`;
+- eight current-candidate links were sent with the role-approved E2E human
+  session and read back as Telegram message `360`, reply to message `261`, in
+  topic `2` of chat `-1004337049383`.
+
+Post-run production checks: `PRAGMA quick_check=ok`, public `/healthz` HTTP
+`200` with `ready=true` and disk `status=ok`, about `1.6 GiB` free on `/data`,
+bounded runtime-log rotation, and no fresh `Errno 28`, disk-full or static-build
+failure entries.
 
 ### Checklist correction
 
