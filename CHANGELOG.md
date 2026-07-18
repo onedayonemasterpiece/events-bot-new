@@ -22,6 +22,10 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static-site Kaggle runner shutdown**: close the short-lived status-ledger
+  `Database` after creating the callback dataset so its non-daemon `aiosqlite`
+  worker cannot hold a completed runner at interpreter shutdown and strand the
+  durable Smart Update build claim before secret-candidate publication.
 - **Static event v12 fidelity**: reproduce the accepted Telegram transport
   A/B/C hierarchy and arm-specific copy with shared icons and `на Кауп`
   grammar; retain one secret-only noindex transport specimen with desktop and
