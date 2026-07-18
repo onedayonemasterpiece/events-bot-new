@@ -344,7 +344,7 @@ Personalization must not narrow the CTA system to “buy ticket”. Event pages 
 | Купить билет | paid/available sale link | `ticket_click` |
 | Зарегистрироваться | registration/free registration | `register_click` |
 | Перейти к источнику | unknown ticket status/source-only row | `source_click` |
-| Добавить в календарь | every dated event; `.ics` with Europe/Kaliningrad timezone | `calendar_add` / `ics_download` |
+| Добавить в календарь | every dated event; `.ics` with Europe/Kaliningrad timezone; one durable first-save per trusted profile+occurrence | `calendar_save` (idempotent state/counter) and separate `ics_request`/`ics_download` attempts |
 | Поделиться | every public event; mobile `navigator.share`, fallback copy canonical URL | `share_native` / `share_copy_link` |
 | Маршрут/карта | venue/address known | `map_click` |
 | Другие даты | linked dates exist; separate module | `linked_date_click` |

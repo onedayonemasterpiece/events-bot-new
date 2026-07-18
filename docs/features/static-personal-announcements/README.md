@@ -23,7 +23,7 @@ F1–F13 and F15–F18 are mandatory for the first public release/presentation. 
 | F6 | List/detail/action personalization telemetry | [Unsigned personalization](../unsigned-personalization/README.md), [production integration](../unsigned-personalization/production-integration.md) | local preview; remote ingest design |
 | F7 | Site-wide choice of Yandex identity/email or manually entered verified email | [Site user identity](../site-user-identity/README.md) | Yandex works only in search; global shell and passwordless email journey design |
 | F8 | SpaceWeb retained mailbox, read-only Yandex IMAP copy pipeline, direct Mail Trigger canary, Postbox transactional delivery including D-1 event reminders, NotiSend recommendation delivery, bounce/complaint and suppression | [Email delivery](../../operations/email-delivery.md), [event notifications](../event-email-notifications/README.md) | Postbox feedback+worker live/verified; event producers, warm-up and NotiSend application flow gated |
-| F9 | Durable favorites, global count and complete saved-events page | [Favorites and calendar](../event-favorites-calendar/README.md) | design; menu badge and `/izbrannoe/` missing |
+| F9 | Durable favorites, idempotent calendar-saver count and complete «Мои события» hub | [Favorites and calendar](../event-favorites-calendar/README.md) | design; live owner/RPC schema, aggregate, menu badge and `/moi-sobytiya/` missing |
 | F10 | Global login/logout/account state and profile linking | [Site user identity](../site-user-identity/README.md) | search-only account state; global restore/logout/forget and merge design |
 | F11 | Event transport schedules/cards | [Event transport](../event-transport/README.md), [optional «Как добраться» gallery card](../event-transport/gallery-how-to-get-there-card.md) | preliminary rail+bus slice validated in refreshed draft PR #37; KPPK/bus provider jobs, combined atomic promotion, optional gallery prototype and release-UI integration pending |
 | F12 | Calendar action backed by favorite state, with visible D-1 email-reminder status | [Favorites and calendar](../event-favorites-calendar/README.md) | ICS preview; durable save/reminder UX design |
@@ -85,7 +85,13 @@ Current decisions and questions that affect several feature families live in [gl
 - Only after the public presentation, daily Telegram and VK announcements move their event links to canonical static-site pages through a channel-by-channel canary and rollback. This is tracked in [Stage 8](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-8--после-публичной-презентации), not as a presentation GO blocker.
 - Personalization release acceptance requires the [full Playwright/Gherkin E2E and KPI contract](../unsigned-personalization/e2e-acceptance.md), including browser localStorage, DB/profile evidence and `cards_to_first_relevant <= 20` for eligible mature golden personas.
 - Personalization remote writes remain release-gated by the [Supabase 500 MB storage/compaction contract](../../operations/personalization-storage-budget.md): compact current state, bounded evidence, Green-band launch and fail-safe shedding of disposable telemetry.
-- `Моё избранное` is a site-wide destination: after state restore its badge shows the distinct durable saved-event count only when greater than zero, and `/izbrannoe/` opens the complete lifecycle-aware saved list without embedding private data into CDN HTML.
+- `Моё` (mobile) / `Мои события` (desktop) is one site-wide destination:
+  after state restore its badge shows the distinct upcoming union of calendar and
+  favorite state only when greater than zero. `/moi-sobytiya/` opens the complete
+  lifecycle-aware list without embedding private data into CDN HTML;
+  `/izbrannoe/` is only the same shell with the favorite filter selected. The event
+  calendar counter records one trusted profile+occurrence first-save and never
+  treats repeated ICS downloads as additional users or as proof of external import.
 - KPPK rail and bus refresh may run in separate provider Kaggle notebooks, but they share one versioned schema, server-side validation/fan-in, provider last-good policy and exactly one coalesced rebuild for a changed combined manifest.
 - F14 is a separate post-release release: after the Region Talk clean-port audit, run the 30-day daily authority/Q-A BGE+E5 shadow, then ship the typed YDB ledger and deterministic «Важно знать» before any Smart Update prose; calibrate «Активно обсуждают» independently and keep it out of ranking initially. Region Talk source-discovery/image/publication behavior and session lanes do not transfer.
 

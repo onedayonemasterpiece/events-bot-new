@@ -46,8 +46,8 @@ festivals, operations dashboard и interest clubs.
 
 The 2026-07-17 reconciliation adds five executable D0–D10 Telegraph rows to
 Stage 8 without deleting the baseline; the 2026-07-18 post-release video-guide
-stage adds seven more. The current canonical checklist therefore has **240 checkbox
-requirements**.
+stage adds seven and the calendar-counter/personal-hub reconciliation adds five
+more. The current canonical checklist therefore has **245 checkbox requirements**.
 
 The [event-page release plan](../features/static-site-pages/release-plan.md) is only
 one Stage 2/8 workstream and cannot replace this registry.
@@ -100,10 +100,10 @@ mergeable or production artifact.
 The recovered union first produced **116 unique definitions**: the previous 109-ID
 branch plus seven design-system scenarios. This audit then added missing stable IDs
 for Stage 0–11 orchestration, exact Stage 6 gates and separate post-release releases.
-Seven video-guide scenarios were added on 2026-07-18. The current inventory therefore
-has **215 definitions** (`18 USR-*`, `197 ADD-*`). At audit time **none of these
+Seven video-guide and six calendar/personal-hub scenarios were added on 2026-07-18.
+The current inventory therefore has **221 definitions** (`18 USR-*`, `203 ADD-*`). At audit time **none of these
 stable IDs occurs in runnable test/script names**, so automated release traceability
-is `0/215` even though lower-level checks exist.
+is `0/221` even though lower-level checks exist.
 
 Existing evidence must be classified honestly:
 
@@ -123,7 +123,7 @@ P0 documentation and automation task, not a cosmetic cleanup.
 
 ## What is still not done
 
-The full unresolved backlog is the unchecked part of the current 240-item checklist, not a
+The full unresolved backlog is the unchecked part of the current 245-item checklist, not a
 five-row table. The largest blocking families are:
 
 1. repeat M2 full-catalog/static-surface audit plus 14-day zero-critical Smart Update/event-quality window and closure-grade incident replay;
@@ -138,7 +138,8 @@ five-row table. The largest blocking families are:
 10. final three-lane SEO/GEO gate, security/load, RC/canary/hypercare;
 11. D0–D10 Telegraph dual-run/no-create cutover with real channel evidence;
 12. separate F14, festivals, operations dashboard and interest-club stable releases;
-13. post-release production video guides for quickly finding an event, with subtitles, privacy, publication evidence and stale-version withdrawal.
+13. post-release production video guides for quickly finding an event, with subtitles, privacy, publication evidence and stale-version withdrawal;
+14. one idempotent unique calendar-saver counter plus the privacy-safe `Мои события` hub, with ICS-attempt separation, identity/event-merge reconciliation and lifecycle-aware calendar/favorite filters.
 
 ## Release truth rule
 

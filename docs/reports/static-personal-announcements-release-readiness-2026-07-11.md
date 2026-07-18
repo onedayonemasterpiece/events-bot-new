@@ -4,8 +4,9 @@
 > найдена в `origin/agent/static-release/checklist-cdn-social@fbb5b6a2` после
 > аварийного обрыва предыдущей задачи и возвращена в main-based release branch.
 > Базовый восстановленный реестр содержит **228 отдельных checkbox-требований**
-> в Stage 0–11; пять D0–D10 и семь video-guide строк добавлены при сверке,
-> поэтому текущая версия Stage 0–12 содержит **240 checkbox-требований**;
+> в Stage 0–11; пять D0–D10, семь video-guide и пять calendar/
+> personal-hub строк добавлены при сверке, поэтому текущая версия
+> Stage 0–12 содержит **245 checkbox-требований**;
 > scope **F1–F18, H1, M1–M6** и не сводится к пяти задачам production-платформы.
 > Источники и расхождения с текущим `origin/main` зафиксированы в
 > [отчёте восстановления](static-site-release-context-recovery-2026-07-17.md).
@@ -25,7 +26,7 @@
 | Interest clubs | `98180d1e`, `6b234a52` и evidence `6cdae545` достигли `origin/main`; production canary включён | Stage 11 research/implementation baseline частично superseded; обязательны семидневное наблюдение, freshness/false-merge/rollback closure и отдельное решение о stable release. |
 | Full event-site publisher | `62ba7110` и последующее hardening остаются вне `origin/main` | Stage 2 production publish/promotion остаётся Blocked независимо от успешного preview. |
 | Design-system catalog | candidate `128a2d6a` находится в side branch | Это полезный F5 candidate, но не main/release truth и не заменяет immutable RC sign-off. |
-| Test inventory | 215 стабильных scenario IDs задокументированы | Автоматическая traceability пока нулевая: ID не встречаются в tests/scripts; это отдельный P0 release-evidence gap. |
+| Test inventory | 221 стабильных scenario IDs задокументированы | Автоматическая traceability пока нулевая: ID не встречаются в tests/scripts; это отдельный P0 release-evidence gap. |
 
 Текущий общий verdict остаётся **NO-GO**. Ни один новый merged slice не отменяет
 остальные требования реестра или 14-дневное quality window.
@@ -112,7 +113,7 @@
 | **F6** | Views/list/detail/social-action personalization telemetry and application | **Partial** | Local profile/actions/served-list Playwright contract exists; full DB integration/application E2E missing | Detailed Gherkin/Playwright: localStorage → accepted/deduped DB rows → profile rollup → next feed; golden personas and `cards_to_first_relevant <=20` |
 | **F7** | На каждой static HTML page: Yandex identity/email или вручную введённый verified email | **Partial / search-only implementation** | Yandex PKCE login/logout сейчас фактически живёт в `/poisk/`; site-wide shell и manual passwordless email описаны только в плане | Shared controller on 100% HTML page families; Yandex email sync/fallback; one-use email code/link with TTL/replay/rate limits; both paths converge without duplicate identity/profile; real-device proof |
 | **F8** | Sender subdomains, D-1 event reminder, bounce/complaint handling | **Partial / live worker foundation** | `main@c6396331`: disabled Supabase control plane, authenticated Postbox feedback/suppression, live transactional-only worker+monitor canary, authorized-key fix | Event-specific calendar/reminder producers; templates/UX; D-1 schedule/reschedule E2E; cross-provider placement warm-up; NotiSend recommendation flow/key gate |
-| **F9** | Избранное пользователя, count в меню и полный список | **Missing** | Local `liked_event_ids` — это likes, не durable favorites; `/izbrannoe/`, shared-menu badge and RLS store отсутствуют | Supabase DB/RLS/batch API; global `Моё избранное` badge only at `N>0`; complete lifecycle-aware `/izbrannoe/`; cross-tab/device/merge/logout/privacy/delete/export E2E |
+| **F9** | Избранное, календарь, unique counter и «Мои события» | **Missing** | Live Supabase не имеет owner/calendar table и save RPC; local `liked_event_ids` — likes, а ICS request не доказывает import; `/moi-sobytiya/`, shared badge и idempotent counter отсутствуют | Private Supabase owner/occurrence state + RLS/API; server-derived `calendar_savers_count`; global `Моё`/`Мои события` upcoming-union badge; one lifecycle-aware hub with calendar/favorite filters; cross-tab/device/merge/logout/privacy/delete/export E2E |
 | **F10** | Site-wide login/logout/account state + personalization merge | **Partial / search-only implementation** | Search has Yandex account state; other static pages do not yet share it; email-only auth/forget and merge are design-only | Global restore/login/logout/add-email/forget-email across navigation/reload/tabs; explicit consent, idempotent merge API/schema, conflict/unlink/delete policy and E2E |
 | **F11** | Rail/bus schedules, daily Kaggle refresh, transport card/favorite | **Partial, validated draft PR** | Draft PR [#37](https://github.com/onedayonemasterpiece/events-bot-new/pull/37) at `4577b334`: rail/bus blocks, route directories, type-prefixed event/transport ICS, directory validators and a 421-page preview/check pass; no automatic provider notebooks/orchestrator yet | Integrate into frozen UI; KPPK+bus provider jobs (separate Kaggle notebooks allowed) → one schema/fan-in/combined atomic manifest → exactly one changed-hash rebuild; provider last-good/stale alerts; exact-date matrix, gallery decision and browser/ICS evidence |
 | **F12** | Add to calendar = favorite + видимый статус D-1 email reminder | **Partial** | Stable `.ics` работает; favorite mutation/reminder UX отсутствуют | Atomic/idempotent ICS+favorite; masked reminder status or inline email/consent choice; undo/cross-device/reschedule/cancel tests |
@@ -353,9 +354,14 @@ Smart Update является владельцем семантического 
 - [ ] Manual-email path writes/reuses versioned `ke_contact_email_v1`: one entry per browser, pending/verified state survives reload and later saves, global `Забыть почту на этом устройстве` works, and local cache never substitutes for server verification/consent.
 - [ ] Automatic anonymous→authorized merge is idempotent, auditable and reversible; logout/unlink/delete behavior is distinct and defined.
 - [ ] Favorite, like and calendar semantics no longer conflated.
-- [ ] Shared mobile/desktop navigation contains one `Моё избранное` item on every interactive static HTML family; after restore its accessible numeric badge appears only for distinct durable saved-event count `N>0` and never reuses likes, downloads, reminders or transport legs.
-- [ ] `/izbrannoe/` is a `noindex` static shell with no user data in CDN HTML/cache; authenticated batch/RLS loading shows all saved upcoming/rescheduled/cancelled/merged/past rows without silent disappearance or per-card remote loops.
+- [ ] Shared navigation contains one `Моё` (mobile) / `Мои события` (desktop/accessibility) item on every interactive static HTML family; after restore its numeric badge appears only for distinct upcoming calendar/favorite union `N>0`, counts dual state once and never reuses likes, downloads, reminders, past or transport legs.
+- [ ] `/moi-sobytiya/` is a `noindex` static shell with no user data in CDN HTML/cache; one authenticated batch/RLS load shows calendar/favorite union plus upcoming/rescheduled/cancelled/merged/past groups without silent disappearance or per-card remote loops. `/izbrannoe/` opens the same shell with the favorite filter rather than a second store.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
+- [ ] `calendar_savers_count` считает один `first calendar save` на trusted profile + canonical occurrence; repeated ICS requests, retries, concurrent tabs и remove/re-add не увеличивают его.
+- [ ] Calendar-save mutation имеет unique owner/occurrence constraint, `action_id` idempotency и transactional anonymous→authorized/event-merge reconciliation; browser не пишет aggregate напрямую.
+- [ ] ICS request/download и принятое KenigEvents save action измеряются раздельно; UI не утверждает, что внешний calendar app завершил import, и не завышает trusted counter при backend failure.
+- [ ] `Моё` (mobile) / `Мои события` (desktop) ведёт на один `/moi-sobytiya/` shell с upcoming/past groups и filters `В календаре`/«Избранное»; `/izbrannoe/` не создаёт второй store.
+- [ ] Personal-hub badge считает distinct upcoming union, dual state один раз; lifecycle changes видимы, а remove copy объясняет, что сайт не может удалить уже импортированную запись из внешнего календаря.
 - [ ] Playwright `FAV-MENU/PAGE/LINK/PRIVACY/DEGRADED` scenarios prove count/list updates, cross-tab/device convergence, Yandex/email merge, logout/account-switch isolation and ICS independence during favorite-backend failure.
 - [ ] После save UI показывает либо `Напомним за день на a***@domain`, либо inline action для email verification/transactional consent; при старте менее чем через 24 часа обещание D-1 не показывается.
 
@@ -475,7 +481,7 @@ This is the last pre-RC quality stage and a hard successor of F5/UI/UX acceptanc
 - [ ] M5 evidence is bound to this RC SHA/catalog hash: all accepted canonical age ratings appear consistently on every inventoried event-bearing HTML surface and first-party summary derivative, unknown stays unlabelled, source/canonical/projection audits have zero unresolved reliable loss/false rating and rollback cannot restore contradictory generated pages.
 - [ ] M6 evidence is bound to this RC SHA/catalog hash: canonical linked graph equals the static artifact, every card family visibly exposes eligible alternatives, each selection opens/saves the correct occurrence and the audit has zero self/dangling/asymmetric/false/same-slot-as-alternative defects.
 - [ ] F18 evidence is bound to this RC SHA: all page families expose both shell placements; mobile shares current WebP/text/service URL or fallback; desktop uses the owner-confirmed explicit image-only and text+URL actions (or another newly approved mode) without native share; final native Windows/macOS matrix, card/clipboard asset hashes, catalog metrics and CDN rollback follow the release manifest.
-- [ ] Favorites RC evidence covers every page-family menu surface and `/izbrannoe/`: save/repeat/undo, `N>0` badge, lifecycle rows, cross-tab/device, identity merge, logout/account switch, back/cache isolation and degraded Supabase with working ICS.
+- [ ] Favorites/calendar RC evidence covers every page-family menu surface and `/moi-sobytiya/` plus `/izbrannoe/` compatibility: first-save/repeat/undo, unique aggregate, deduplicated `N>0` badge, lifecycle/filter rows, cross-tab/device, identity/event merge, logout/account switch, back/cache isolation and degraded Supabase with working ICS.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
 - [ ] M4 SEO/GEO gate is complete on this exact RC SHA: all three audit lanes, reconciled ledger, remediation and final acceptance evidence are attached.
@@ -670,7 +676,7 @@ navigation/search/event-action flows. Каноника:
 | H1 homepage briefing | Research/consultation branch, canonical contract, Conditional Go boundary, V1/V2 experiment gates and mandatory pre-freeze `ship|defer` decision are routed without falsely making the unimplemented candidate a release blocker | **Done (planning only; implementation/preview/owner decision missing)** |
 | M5 event age rating | Canonical/LLM-first semantics, source audit/backfill, all-surface UI/derivative inventory, no-default policy, Playwright/check-preview and RC coverage gates documented | **Done (planning only; canonical field/projection/UI/audit missing)** |
 | M6 linked occurrences | Existing core/Telegraph behavior audited; canonical static projection, duplicate-vs-linked semantics, all-card alternative date/time UI, occurrence-specific actions, graph parity and Playwright/RC gates documented | **Done (planning only; static export/card UI/full audit missing)** |
-| F9 navigation | `Моё избранное`, positive-count badge, complete lifecycle page and privacy/E2E gates documented | **Done (planning only; implementation missing)** |
+| F9 navigation | `Моё` / `Мои события`, unique calendar counter, upcoming-union badge, calendar/favorite filters, complete lifecycle page and privacy/E2E gates documented | **Done (planning only; live Supabase owner/RPC/aggregate and UI implementation missing)** |
 | F11 refresh | KPPK/bus provider jobs, combined atomic manifest, provider last-good and single rebuild contract documented | **Done (planning only; implementation missing)** |
 | F14 post-release | Live-canary evidence, research work packages, minimum typed-fact implementation, Smart Update shadow boundary, «Активно обсуждают» calibration and separate Stage 8A routed | **Done (planning only; 30-day shadow/implementation/RC missing; not presentation blocker)** |
 | PR-FEST | Separate festival release has R01–R06 scope, stages, decisions, evidence and canonical routing | **Done (planning only; release missing)** |

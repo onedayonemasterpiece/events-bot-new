@@ -9,12 +9,12 @@
 ## Важное восстановление scope
 
 Этот файл — **не весь релизный план** и не сокращает его до пяти задач. После
-повторного аудита истории найден базовый checklist из 228 требований; после добавления D0–D10 и post-release video-guide rows текущий реестр содержит 240 требований:
+повторного аудита истории найден базовый checklist из 228 требований; после добавления D0–D10, post-release video-guide и calendar/personal-hub rows текущий реестр содержит 245 требований:
 
 - [полный Stage 0–12 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
 - [отчёт восстановления источников и статусов](../../reports/static-site-release-context-recovery-2026-07-17.md);
 - [presentation-day gate](presentation-release-checklist.md);
-- [215 стабильных test scenario IDs](test-scenarios.md).
+- [221 стабильных test scenario IDs](test-scenarios.md).
 
 Ниже описан только зависимый platform/cutover workstream. Его нельзя использовать
 как доказательство готовности identity, favorites, email/reminders,

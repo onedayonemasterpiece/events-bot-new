@@ -55,6 +55,13 @@
    сохранение правильного occurrence. Preview/lab, персональные данные и ещё не
    принятые функции в ролики не попадают; субтитры, production SHA/build, privacy
    review, owner approval и обновление устаревших версий обязательны.
+38. **Счётчик календаря считает профили, а не скачивания.** Один
+   trusted profile и occurrence дают один `first calendar save`;
+   повторные ICS requests, retries и remove/re-add не увеличивают
+   aggregate. Сайт не может доказать импорт внутри внешнего
+   calendar app, поэтом метрика означает принятое KenigEvents
+   save action. Единый personal hub называется `Мои события`:
+   mobile label `Моё`, внутри filters `В календаре` и `Избранное`.
 
 ## Consequences
 

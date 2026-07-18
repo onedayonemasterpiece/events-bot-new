@@ -4,6 +4,12 @@
 > **Target DB:** separate Supabase/Postgres personalization project (`PERSONALIZATION_*`)
 > **Do not store here:** canonical events, source facts, Telegram/VK/Telegraph state, Smart Update decisions or static rebuild queues.
 
+> **Current gap (2026-07-18):** the live project and committed migrations contain
+> no durable favorite/calendar owner table and no calendar-save RPC. The accepted
+> target model is canonical in [Event favorites, calendar counter and «Мои
+> события»](../event-favorites-calendar/README.md); it must be implemented as a
+> separate reviewed migration rather than inferred from `ics_download` telemetry.
+
 ## Current capacity snapshot
 
 As of 2026-06-30 after the two-document vector backfill, the separate personalization Supabase database is still comfortably inside the free-tier budget:
@@ -51,6 +57,10 @@ The MVP write path should be **compact summaries first**, not a raw event fireho
 - `public.event_search_documents` / `public.event_embeddings` — **applied 2026-06-28, hardened 2026-06-30** closed Supabase pgvector sidecar for authorized search and semantic retrieval canary. Browser roles have no direct table SELECT; authenticated search goes through `event-search` Edge Function and RPC `search_events_by_embedding_v1`. Stores compact `search_digest` for `search_v3`, cleaner `related_digest` for `related_v1`, controlled facets, trusted `card_snapshot` and `vector(768)` embeddings (`gemini-embedding-2`, keyed by `embedding_doc_kind`), not raw OCR/source text.
 - `public.search_quota_plans`, `public.user_search_quota_ledger`, `public.event_search_requests` — **applied 2026-06-28** quota/audit for authorized smart search. Raw queries are not stored: only hash, length, status and counts.
 - `public.personalization_event_reaction_counter` — **applied 2026-06-27** compact public aggregate for event-card counters. It stores `source_likes_count` (TG/VK/source-post metrics imported by backend) and `service_likes_count` (first-party KenigEvents likes) in the same row, with generated `likes_count = source_likes_count + service_likes_count`. Browser/Data API roles may select only `event_id`, `likes_count`, `not_interested_count`, `share_count`, `updated_at`; source/service split, source views and metadata remain backend-only. UI copy must show only total counts. Long-lived first-party reactions should be folded from a bounded state table, not from an infinite raw log.
+- `calendar_savers_count` is **not present yet**. Its accepted extension belongs in
+  `personalization_event_reaction_counter`, but only as a server-maintained aggregate
+  derived from private one-row-per-profile+occurrence state. ICS attempts remain a
+  separate short-retention signal and never increment this column directly.
 - `public.personalization_session_summary` — compact session/profile deltas after consent;
 - `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.

@@ -30,7 +30,9 @@ rendered at `/lab/design-system/`. Because the candidate is not yet in
 - today, tomorrow, weekend and relevant category listings;
 - event detail, gallery and quick-read organizer/venue/festival medallion row;
 - related/search/personal feed cards;
-- favorite/calendar/share/not-interested actions plus global `Моё избранное` count and `/izbrannoe/` complete list;
+- favorite/calendar/share/not-interested actions plus the idempotent unique
+  calendar-saver counter, global `Моё` / `Мои события` count and complete
+  `/moi-sobytiya/` list;
 - shared site-wide identity/account state and anonymous fallback on every static HTML page;
 - personal page, transport (including the optional gallery slide «Как добраться»), discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
@@ -70,7 +72,14 @@ The release direction is **adaptive consistency**, not pixel-identical mobile/de
 
 The research basis, A/B/control preview, cross-device task test and owner decision gate are canonical in [Responsive navigation decision](responsive-navigation.md). The recommended desktop candidate is the shallow hybrid; its final geometry still requires immutable-preview sign-off.
 
-`Моё избранное` is one invariant navigation destination on mobile and desktop. After state restore its accessible badge is rendered only for distinct durable saved-event count `N>0`; likes, ICS downloads, reminder count and transport legs never inflate it. It opens the privacy-safe `/izbrannoe/` shell defined by [Favorites and calendar](../event-favorites-calendar/README.md#global-menu-and-saved-events-page).
+Mobile `Моё` and desktop `Мои события` are the same invariant navigation
+destination with accessible name `Мои события`. After state restore its badge is
+rendered only for the distinct upcoming union of durable calendar/favorite rows at
+`N>0`; an event marked both ways counts once. Likes, repeated ICS downloads,
+reminders, past rows and transport legs never inflate it. It opens the privacy-safe
+`/moi-sobytiya/` shell; `/izbrannoe/` is only a compatibility entry with the
+`Избранное` filter selected. The personal-hub layout and counter semantics are
+defined by [Favorites and calendar](../event-favorites-calendar/README.md#global-menu-and-мои-события-page).
 
 ## Global identity/account UI
 

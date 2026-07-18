@@ -35,7 +35,7 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Browser `localStorage` profile | Local cache/offline projection, never SOR | None |
 | Profile merge/link audit | Supabase | De-identified audit projection in YDB |
 | Consent and consent evidence | Supabase | Aggregate consent metrics in YDB |
-| Favorites, event follows and calendar-save state | Supabase | Aggregate event/action metrics in YDB |
+| Favorites, event follows and idempotent calendar-save state | Supabase | `calendar_savers_count` in the bounded public event aggregate; de-identified action metrics in YDB |
 | Transactional/recommendation subscriptions | Supabase, with separate purposes | Aggregate subscription metrics in YDB |
 | Verified email, preferences and suppressions | Supabase | Keyed HMAC and aggregates only in YDB |
 | Recommendation issue/cards | Supabase | De-identified issue metrics in YDB |
@@ -65,6 +65,14 @@ The post-release VK privacy vault is a scoped exception: it stores only VK subje
 3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
 4. An asynchronous outbox projects de-identified analytics to YDB.
 5. YDB failure never blocks CTA/navigation or rolls back a user action.
+
+For calendar actions, an ICS request is not the durable fact. Supabase owns one
+first-save/current-state row per trusted profile and canonical occurrence; repeated
+downloads and retries do not increment the unique calendar-saver aggregate. The
+browser-to-OS import result is not observable, so public copy represents an accepted
+KenigEvents save action rather than proof of Apple/Google/Yandex Calendar import.
+The complete product/schema contract is [Favorites, calendar counter and «Мои
+события»](../features/event-favorites-calendar/README.md).
 
 ### Login and profile linking
 
@@ -130,6 +138,9 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 
 - RLS on every exposed Supabase table; ownership predicates use `auth.uid()`.
 - Browser cannot set `email_verified`, consent proof, suppression or send state.
+- Browser cannot increment a calendar aggregate or claim another profile's saved
+  event; private owner/occurrence state is authorized server-side and the public
+  counter is derived/reconciled from that state.
 - Authorization never trusts `user_metadata`.
 - Emails are stored only where sending requires them; lookup uses keyed HMAC.
 - Bearer tokens have at least 128 bits of entropy and are stored only as keyed hashes; page, click, unsubscribe and feedback tokens are separate.

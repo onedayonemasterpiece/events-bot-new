@@ -493,7 +493,7 @@ features:
       vk_message_link_and_friend_signals: postrelease_design
 
   event_favorites_calendar:
-    status: design_with_ics_preview
+    status: designed_counter_and_personal_hub_with_ics_preview
     docs: docs/features/event-favorites-calendar/README.md
     related_identity: docs/features/site-user-identity/README.md
     related_static_site: docs/features/static-site-pages/README.md
@@ -502,6 +502,8 @@ features:
       ics_export: preview
       durable_favorite: design
       calendar_favorite_atomic_state: design
+      unique_calendar_saver_counter: design
+      my_events_hub: design
 
   personal_email_announcements:
     status: design_v3_provider_routing_accepted

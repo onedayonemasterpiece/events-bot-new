@@ -46,7 +46,10 @@ The exact schema belongs to a dedicated implementation task, but one identity mu
 
 - current personalization consent required before importing local behavior;
 - merge is transactionally idempotent;
-- favorites/calendar saved state is deduplicated by event id;
+- favorites/calendar saved state is deduplicated by canonical occurrence event id;
+- if both source and target profiles contain the same first calendar save, linking
+  keeps one owner/occurrence fact and reconciles `calendar_savers_count` instead of
+  preserving two apparent users;
 - negative/explicit actions retain priority and timestamps;
 - inferred interests are merged with confidence/recency decay and conflict checks; raw browsing history is not copied blindly;
 - result is visible to the user and reset/unlink remains available;
