@@ -15,6 +15,10 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Popular metrics postponed-VK import outage (INC-2026-07-18)**: reject
+  future-dated postponed rows returned by `wall.getById` as not-yet-public and
+  continue bounded wall resolution, preventing one scheduled post from
+  rejecting an otherwise complete Telegram/VK metrics batch.
 - **CherryFlash multi-day Stories outage (INC-2026-07-18)**: ship the approved
   guide True3D renderer in every per-session Kaggle bundle and require the exact
   `cherryflash_full_final.mp4` product artifact, preventing failed notebooks

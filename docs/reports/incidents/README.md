@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-18-social-metrics-postponed-vk-import.md`
+  - Scope: Kaggle SocialMetricsCollector postponed-to-live VK resolution and
+    strict Fly import of scheduled popularity batches.
+  - Must not regress: a future-dated postponed row returned by `wall.getById`
+    is never emitted as `published`; the collector must continue the bounded
+    live-wall lookup, and one unresolved scheduled post cannot discard valid
+    metrics observations from the same batch.
+
 - `INC-2026-07-18-cherryflash-missing-true3d-bundle.md`
   - Scope: CherryFlash True3D runtime bundling, product-final output discovery,
     failed-Kaggle output recovery and daily Telegram Stories catch-up.
