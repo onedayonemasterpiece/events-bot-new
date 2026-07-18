@@ -70,6 +70,14 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
     - live sessions `#164+` showed that CherryFlash can silently stay on a stale notebook version when `save_kernel` returns `Maximum weekly GPU quota ... reached`, so CherryFlash must not log that push as successful;
     - for CherryFlash specifically, a GPU-quota rejection should trigger one CPU retry on the same `save_kernel` path before the run is marked failed, because the product now targets a story-native `720x1280` contract and may continue on CPU when the weekly Kaggle GPU allowance is exhausted;
     - `invalidDatasetSources` for the fresh `cherryflash-session-*` bundle should be treated as “dataset not bindable yet” and retried on the same `save_kernel` path for a bounded window, rather than being silently accepted as a successful launch.
+  - every renderer script invoked by `render_cherryflash_full.py` must be
+    included in `_iter_cherryflash_bundle_files()` and asserted by the bundle
+    inventory test; in particular, the approved guide True3D scene requires
+    `scripts/render_cherryflash_guide_true3d_v4.py` in the session dataset.
+  - a completed CherryFlash session requires the exact product artifact
+    `cherryflash_full_final.mp4`; intermediate approval output such as
+    `mobilefeed_intro_scene1_final.mp4` is diagnostic only and must never be
+    promoted to `PUBLISHED_TEST` after a Kaggle error.
   - the runtime dataset must be populated from the real `/popular_posts` pool for that run, not from a stale baked poster pack: launcher-side prep writes a fresh `assets/cherryflash_selection.json` plus poster files under `assets/posters/`, so the mounted Kaggle render uses the same current event payload that was selected before upload.
   - the Kaggle notebook must resolve the runtime source from the newest mounted top-level `cherryflash-session-*` bundle and must not pick the first recursive `scripts/render_cherryflash_full.py` match anywhere under `/kaggle/input`, because older still-mounted session datasets may coexist with the new one during manual reruns or debugging.
   - the Kaggle notebook must reuse the same shared story-helper dependency contract as `CrumpleVideo`: if `kaggle_common/story_publish.py` is shipped in the bundle, the notebook environment must already install its runtime dependencies (`opencv-python`, `requests`, `telethon`, `cryptography`) instead of introducing a CherryFlash-only conditional bootstrap path.

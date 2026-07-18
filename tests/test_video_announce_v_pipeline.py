@@ -890,6 +890,7 @@ def test_cherryflash_bundle_files_include_final_png():
     assert "video_announce/video_afisha_2d.py" in bundle_files.values()
     assert "video_announce/cherryflash_text.py" in bundle_files.values()
     assert "kaggle_common/story_publish.py" in bundle_files.values()
+    assert "scripts/render_cherryflash_guide_true3d_v4.py" in bundle_files.values()
 
 
 @pytest.mark.asyncio

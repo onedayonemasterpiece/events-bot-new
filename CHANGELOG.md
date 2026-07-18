@@ -29,6 +29,10 @@
   strong shared identity anchor; preserve same-event, shared-ticket, missing-time
   and legitimate multi-session positive controls. Production remains in shadow
   pending the documented human precision audit before enforce.
+- **CherryFlash multi-day Stories outage (INC-2026-07-18)**: ship the approved
+  guide True3D renderer in every per-session Kaggle bundle and require the exact
+  `cherryflash_full_final.mp4` product artifact, preventing failed notebooks
+  with only an intro approval video from being marked `PUBLISHED_TEST`.
 - **VK captcha publication cadence (INC-2026-07-18)**: replace indefinite
   unscoped JobOutbox pauses with persisted captcha cohorts, block new VK work
   from hammering a cached challenge, harmlessly probe and pace cohort recovery,
