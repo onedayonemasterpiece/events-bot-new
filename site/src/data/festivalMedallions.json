@@ -17,7 +17,9 @@
       "renderNote": "Официальный SVG с сайта фестиваля; в круг вписан знак/композиция hero-логотипа.",
       "sourcePath": "site/src/assets/festivals/source/kgd80-logo-hero.svg",
       "retrievedAt": "2026-07-03",
-      "category": "festival"
+      "category": "festival",
+      "listingStatus": "listing_ready",
+      "listingBinding": "festival"
     },
     {
       "slug": "kaup",
@@ -37,7 +39,9 @@
       "renderNote": "Официальный знак поселения викингов «Кауп», повторно использован из принятой venue-medallions ветки как площадочный бренд для listing overlay без OCR.",
       "sourcePath": "site/src/assets/festivals/source/kaup-logo.svg",
       "retrievedAt": "2026-07-03",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     }
   ]
 }

@@ -1,35 +1,28 @@
 ---
+import ListingTimeNav, { type DaySummary, type NavItem } from './ListingTimeNav.astro';
 import { LISTING_DAYPARTS, type ListingTimeGroup } from '../../lib/listingPresentation';
-interface DayInput { key: 'sat' | 'sun'; short: string; groups: ListingTimeGroup[]; }
+interface DayInput { key: 'sat' | 'sun'; short: string; dateLabel: string; groups: ListingTimeGroup[]; }
 interface Props { days: DayInput[]; }
 const { days } = Astro.props;
-const items = LISTING_DAYPARTS.map((part) => {
+const items: NavItem[] = LISTING_DAYPARTS.map((part) => {
   const groups = [...new Set(days.flatMap((day) => day.groups.filter((group) => group.daypart === part.key).map((group) => group.key)))]
     .sort((left, right) => left.localeCompare(right))
-    .map((key) => ({ key, label: key, count: days.reduce((sum, day) => sum + (day.groups.find((group) => group.key === key)?.events.length || 0), 0) }));
+    .map((key) => ({
+      key, label: key,
+      count: days.reduce((sum, day) => sum + (day.groups.find((group) => group.key === key)?.events.length || 0), 0),
+      target: `weekend-time-${key}`,
+    }));
   const count = groups.reduce((sum, group) => sum + group.count, 0);
-  return { ...part, groups, count, href: groups[0] ? `#weekend-time-${groups[0].key}` : '' };
+  return { ...part, exact: groups, count, href: groups[0] ? `#${groups[0].target}` : '' };
 }).filter((item) => item.count > 0);
 const untimedCount = days.reduce((sum, day) => sum + (day.groups.find((group) => group.key === 'untimed')?.events.length || 0), 0);
-if (untimedCount) {
-  items.push({ key: 'untimed' as const, label: 'Без времени', groups: [{ key: 'untimed', label: 'Без времени', count: untimedCount }], count: untimedCount, href: '#weekend-time-untimed' });
-}
+if (untimedCount) items.push({
+  key: 'untimed', label: 'Без времени', count: untimedCount, href: '#weekend-time-untimed',
+  exact: [{ key: 'untimed', label: 'Без времени', count: untimedCount, target: 'weekend-time-untimed' }],
+});
+const summaries: DaySummary[] = days.map((day) => ({
+  key: day.key, short: day.short, dateLabel: day.dateLabel,
+  count: day.groups.reduce((sum, group) => sum + group.events.length, 0),
+}));
 ---
-<nav class="ke-time-nav" aria-label="По времени" data-ds-component="ListingTimeNav" data-ds-version="1" data-listing-time-nav>
-  {items.map((item) => (
-    <span class="ke-time-nav__item">
-      <a href={item.href} data-listing-daypart-link={item.key}><span>{item.label}</span><strong data-listing-daypart-count={item.key}>{item.count}</strong></a>
-      {item.groups.length >= 5 ? (
-        <details class="ke-time-nav__exact" data-time-nav-disclosure>
-          <summary aria-label={`Показать точное время: ${item.label}`} title={`Точное время: ${item.label}`}><span aria-hidden="true">⌄</span></summary>
-          <div class="ke-time-nav__popover ke-time-nav__popover--weekend">
-            <p>{item.label}</p>
-            <ul>{item.groups.map((group) => (
-              <li data-exact-time-item={group.key}><a href={`#weekend-time-${group.key}`} data-time-nav-exact-target={`weekend-time-${group.key}`}>{group.label}<strong>{group.count}</strong></a></li>
-            ))}</ul>
-          </div>
-        </details>
-      ) : null}
-    </span>
-  ))}
-</nav>
+<ListingTimeNav items={items} daySummaries={summaries} force label="По времени и дням выходных" />

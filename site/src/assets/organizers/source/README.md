@@ -23,8 +23,13 @@ No OpenAI image generation/editing was used. The medallions were produced by loc
 
 ## Listing overlay reuse
 
-`muzteatr39`, `tretyakovka-kaliningrad` and `kldzoo` are the source-reviewed
-V12 listing-overlay allow-list. The selected asset must still be
-`image_text_mode=visual_only`; OCR/unknown media fail closed. Classified
-`event_photo` remains the normal gate, while `listingVisualOnlyOverlay=true`
-is the explicit temporary semantic-backfill exception recorded in the manifest.
+V13 does not maintain a hand-written three-venue allow-list. Every existing
+manifest item has an explicit `listingStatus` and `listingBinding`; only
+`listing_ready` items with an exact/bounded structured venue or festival match
+participate. The selected asset must still be `image_text_mode=visual_only`, at
+most one overlay is rendered, and runtime priority is venue before festival.
+`znanie-russia` stays `blocked_missing_binding` until the static event contract
+exports a structured organizer field; the duplicate `kgd80` identity remains
+`detail_only`. This listing behavior reuses the source-faithful assets introduced
+by commits `00b9bfd6`, `4c249a8e`, `849aaeaa` and `fa367ea3`; no artwork was
+redrawn for V13.

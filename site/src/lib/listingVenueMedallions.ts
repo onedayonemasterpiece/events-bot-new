@@ -23,8 +23,8 @@ interface ManifestMedallion {
   background?: string;
   ring?: string;
   ariaLabel?: string;
-  category?: string;
-  listingVisualOnlyOverlay?: boolean;
+  listingStatus?: 'listing_ready' | 'detail_only' | 'blocked_missing_binding';
+  listingBinding?: 'venue' | 'festival' | 'organizer';
 }
 
 function normalize(value: unknown): string {
@@ -39,47 +39,43 @@ function normalize(value: unknown): string {
 function namesFor(item: ManifestMedallion): string[] {
   return Array.from(new Set([item.name, item.shortName, ...(item.aliases || [])]
     .map(normalize)
-    .filter((value) => value.length >= 4)));
+    .filter((value) => value.length >= 3)));
 }
 
-function matchesVenue(item: ManifestMedallion, venueName: string): boolean {
-  const venue = normalize(venueName);
-  if (!venue) return false;
-  return namesFor(item).some((candidate) => (
-    candidate === venue
-    || (candidate.length >= 6 && venue.includes(candidate))
-    || (venue.length >= 6 && candidate.includes(venue))
-  ));
+/** Exact or bounded phrase match; deliberately no fuzzy prose matching. */
+function matchesStructuredValue(item: ManifestMedallion, value: unknown): boolean {
+  const normalized = normalize(value);
+  if (!normalized) return false;
+  return namesFor(item).some((candidate) => {
+    if (candidate === normalized) return true;
+    if (candidate.length < 5) return false;
+    return (` ${normalized} `).includes(` ${candidate} `)
+      || (` ${candidate} `).includes(` ${normalized} `);
+  });
 }
 
-const organizerItems = (organizerMedallions as { items?: ManifestMedallion[] }).items || [];
-const venueBrandItems = ((festivalMedallions as { items?: ManifestMedallion[] }).items || [])
-  .filter((item) => item.category === 'venue_brand');
+const allItems: ManifestMedallion[] = [
+  ...((organizerMedallions as { items?: ManifestMedallion[] }).items || []),
+  ...((festivalMedallions as { items?: ManifestMedallion[] }).items || []),
+];
+
+function listingCandidate(event: PreviewEvent): ManifestMedallion | undefined {
+  const ready = allItems.filter((item) => item.listingStatus === 'listing_ready');
+  // One deterministic priority for every listing surface.
+  return ready.find((item) => item.listingBinding === 'venue' && matchesStructuredValue(item, event.venue_name))
+    || ready.find((item) => item.listingBinding === 'festival' && matchesStructuredValue(item, event.festival));
+}
 
 /**
- * Listing overlays fail closed: they are allowed only for a primary image that
- * the image pipeline explicitly classified as a visual-only event photo and for
- * a venue that has a curated, source-grounded medallion. This additional
- * semantic gate matters because the legacy short-OCR heuristic can label a
- * poster with a small wordmark as visual_only. safe_crop is deliberately not
- * used as an OCR proxy.
+ * Listing medallions are bound only through structured event fields and only
+ * to the image that actually won presentation selection. Visual-only media is
+ * the hard OCR safety gate; at most one medallion is returned.
  */
 export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
-  if (!event.image_url || !event.venue_name) return null;
   const primaryAsset = selectedAsset || event.image_assets?.[0];
-  const item = [...organizerItems, ...venueBrandItems]
-    .find((candidate) => matchesVenue(candidate, event.venue_name || ''));
-  if (!item || !primaryAsset || primaryAsset.image_text_mode !== 'visual_only') return null;
-
-  const classifiedPhoto = (
-    primaryAsset.media_role === 'event_photo'
-    && primaryAsset.media_semantic_status === 'classified'
-    && primaryAsset.image_kind === 'photo'
-  );
-  // Source-reviewed branded venues may opt into a visual-only fallback while
-  // the semantic classifier is pending. OCR media still fail closed.
-  if (!classifiedPhoto && item.listingVisualOnlyOverlay !== true) return null;
-
+  if (!event.image_url || !primaryAsset || primaryAsset.image_text_mode !== 'visual_only') return null;
+  const item = listingCandidate(event);
+  if (!item) return null;
   return {
     slug: item.slug,
     name: item.name,

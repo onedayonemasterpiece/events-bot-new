@@ -9,15 +9,35 @@ import { withBase } from '../../lib/events';
 interface Props { event: PreviewEvent; density?: 'regular' | 'weekend'; priority?: boolean }
 const { event, density = 'regular', priority = false } = Astro.props;
 const href = eventHref(event);
-const image = selectListingImage(event, 1.65);
+const targetRatio = density === 'weekend' ? 4 / 3 : 1.5;
+const image = selectListingImage(event, targetRatio);
 const derivatives = [...(image.asset?.thumbnail_sources || [])]
   .filter((item) => item.src && item.width > 0 && item.height > 0)
   .sort((left, right) => left.width - right.width);
+const responsiveCandidates = [...derivatives];
+if (
+  image.asset?.src
+  && image.asset.width > (responsiveCandidates.at(-1)?.width || 0)
+  && !responsiveCandidates.some((item) => item.src === image.asset?.src)
+) {
+  // The CDN inventory can legitimately stop at 512w. Keep the encoded
+  // original as the last DPR safety candidate instead of silently upscaling
+  // on compact high-density cards (OCR regression contract: event 6869).
+  responsiveCandidates.push({ src: image.asset.src, width: image.asset.width, height: image.asset.height });
+}
+const listingImageUrl = (src: string | null | undefined) => (
+  src?.startsWith('/') ? withBase(src) : eventImageUrl(src)
+);
 const responsiveSrc = derivatives.at(-1)?.src || image.src;
-const imageUrl = eventImageUrl(responsiveSrc);
-const responsiveSrcset = derivatives.length
-  ? derivatives.map((item) => `${eventImageUrl(item.src)} ${item.width}w`).join(', ')
+const imageUrl = listingImageUrl(responsiveSrc);
+const responsiveSrcset = responsiveCandidates.length
+  ? responsiveCandidates.map((item) => `${listingImageUrl(item.src)} ${item.width}w`).join(', ')
   : undefined;
+const responsiveSizes = density === 'weekend'
+  ? (image.asset?.listing_crop_evidence === 'source-reviewed'
+      ? '(min-width: 1880px) 297px, (max-width: 720px) 38vw, 267px'
+      : '(min-width: 1880px) 291px, (max-width: 720px) 38vw, 245px')
+  : '(min-width: 1880px) 396px, (max-width: 720px) 38vw, 332px';
 const medallion = getListingVenueMedallion(event, image.asset);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const style = `--ke-listing-image-ratio:${image.ratio.toFixed(5)};--ke-listing-object-position:${image.objectPosition}`;
@@ -35,13 +55,16 @@ const medallionStyle = medallion
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
-  data-ds-version="2"
+  data-ds-version="3"
   data-listing-item
   data-event-id={event.id}
   data-linked-event-ids={(event.other_date_ids || []).join(',')}
   data-listing-city={cityKey(event.city)}
   data-listing-image-mode={image.mode}
   data-listing-crop-adaptive={image.adaptiveCrop ? 'true' : 'false'}
+  data-listing-crop-evidence={image.asset?.listing_crop_evidence}
+  data-listing-source-width={image.asset?.width}
+  data-listing-source-height={image.asset?.height}
   data-listing-density={density}
   data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
   data-venue-medallion={medallion?.slug}
@@ -54,7 +77,7 @@ const medallionStyle = medallion
         srcset={priority ? responsiveSrcset : undefined}
         data-listing-src={priority ? undefined : imageUrl}
         data-listing-srcset={priority ? undefined : responsiveSrcset}
-        sizes="(max-width: 720px) 38vw, 256px"
+        sizes={responsiveSizes}
         width={image.asset?.width || undefined}
         height={image.asset?.height || undefined}
         alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
@@ -63,7 +86,7 @@ const medallionStyle = medallion
         decoding="async"
       />
       {!priority ? (
-        <noscript><img src={imageUrl} srcset={responsiveSrcset} sizes="256px" width={image.asset?.width || undefined} height={image.asset?.height || undefined} alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`} /></noscript>
+        <noscript><img src={imageUrl} srcset={responsiveSrcset} sizes={responsiveSizes} width={image.asset?.width || undefined} height={image.asset?.height || undefined} alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`} /></noscript>
       ) : null}
       </>
     ) : (

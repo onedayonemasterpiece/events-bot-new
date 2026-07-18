@@ -120,10 +120,11 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .site-header {
         position: sticky;
         top: 0;
-        min-height: var(--ke-site-header-height);
-        z-index: 20;
+        height: var(--ke-site-header-bar-height);
+        min-height: var(--ke-site-header-bar-height);
+        z-index: 60;
         border-bottom: 1px solid rgba(121, 48, 20, 0.12);
-        background: rgba(255, 250, 242, 0.96);
+        background: var(--ke-color-header);
         box-shadow: 0 6px 22px rgba(69,45,28,0.035);
       }
       .site-header__inner {

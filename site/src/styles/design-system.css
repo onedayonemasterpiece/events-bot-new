@@ -29,6 +29,9 @@
   --ke-color-control-inverse-bg: rgba(255, 255, 255, 0.1);
   --ke-color-control-inverse-line: rgba(255, 255, 255, 0.34);
   --ke-color-control-inverse-hover: rgba(255, 255, 255, 0.18);
+  --ke-color-surface-inverse: #24211f;
+  --ke-color-surface-inverse-raised: #292521;
+  --ke-color-header: #fffaf2;
 
   /* Typography. The system font stack avoids a blocking font request. */
   --ke-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -69,14 +72,15 @@
   --ke-content-max: 1180px;
   --ke-content-wide-max: 1440px;
   --ke-site-header-bar-height: 57px;
-  --ke-site-header-stack-height: 88px;
-  --ke-site-header-height: var(--ke-site-header-stack-height);
-  --ke-listing-time-nav-height: 68px;
-  --ke-listing-time-gutter: 88px;
-  --ke-listing-column-gap: 24px;
-  --ke-listing-card-gap-inline: 12px;
-  --ke-listing-card-gap-block: 20px;
-  --ke-listing-media-height: clamp(184px, 12vw, 226px);
+  --ke-site-header-tag-height: 88px;
+  --ke-site-header-height: var(--ke-site-header-bar-height);
+  --ke-listing-time-nav-height: 56px;
+  --ke-listing-sticky-stack-height: calc(var(--ke-site-header-bar-height) + var(--ke-listing-time-nav-height));
+  --ke-listing-time-gutter: clamp(120px, 9vw, 136px);
+  --ke-listing-column-gap: 20px;
+  --ke-listing-card-gap-inline: 14px;
+  --ke-listing-card-gap-block: 24px;
+  --ke-listing-media-height: clamp(221px, min(13vw, 24svh), 244px);
 
   /* Compatibility aliases used by the established product components. */
   --bg: var(--ke-color-canvas);
@@ -405,6 +409,53 @@
 .ke-weekend-time-rail span { display: block; margin-top: var(--ke-space-2); color: var(--ke-color-muted); font-size: 0.875rem; line-height: 1.2; }
 .ke-weekend-time-cell .ke-time-group__flow { --ke-listing-media-height: clamp(148px, 8.7vw, 176px); gap: 24px 16px; }
 
+/* V13 shared desktop date-listing geometry. These rules intentionally override
+   V12 tokens while mobile remains a later product pass. */
+.ke-listing-head { min-height:160px; padding:var(--ke-space-8) 0 var(--ke-space-6); }
+.ke-listing-controls { gap:var(--ke-space-2); padding-block:var(--ke-space-3); }
+.ke-time-nav { position:sticky; top:var(--ke-site-header-bar-height); z-index:50; width:100vw; height:var(--ke-listing-time-nav-height); margin-left:calc(50% - 50vw); display:block; padding:0; border-bottom:1px solid rgba(255,255,255,.12); background:var(--ke-color-surface-inverse); color:var(--ke-color-control-inverse); backdrop-filter:none; }
+.ke-time-nav__inner { width:min(var(--ke-content-wide-max), calc(100% - clamp(3rem,5vw,6rem))); height:100%; margin-inline:auto; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--ke-space-4); padding-left:256px; }
+.ke-time-nav__links,.ke-time-nav__days { min-width:0; display:flex; align-items:center; gap:var(--ke-space-1); }
+.ke-time-nav__links { justify-content:flex-end; }
+.ke-time-nav__days { justify-content:flex-start; }
+.ke-time-nav__day { min-height:38px; display:inline-flex; align-items:center; gap:7px; border:1px solid var(--ke-color-control-inverse-line); border-radius:var(--ke-radius-pill); padding:4px 8px 4px 5px; color:rgba(255,255,255,.82); font-size:.75rem; white-space:nowrap; }
+.ke-time-nav__day b { min-width:30px; min-height:30px; display:grid; place-items:center; border-radius:50%; background:var(--ke-color-brand-600); color:#fff; font-size:.8125rem; }
+.ke-time-nav__day--sun b { background:var(--ke-color-accent-700); }
+.ke-time-nav__day strong { min-width:24px!important; min-height:24px!important; background:rgba(255,255,255,.14)!important; color:#fff!important; }
+.ke-time-nav a { min-height:40px; padding:4px 10px; color:var(--ke-color-control-inverse); }
+.ke-time-nav a:hover,.ke-time-nav__exact>summary:hover { background:var(--ke-color-control-inverse-hover); }
+.ke-time-nav a[aria-disabled="true"] { color:var(--ke-color-control-inverse); opacity:.48; }
+.ke-time-nav strong { min-width:1.65rem; min-height:1.65rem; background:var(--ke-color-control-inverse-bg); color:#fff; }
+.ke-time-nav__exact>summary { width:36px; height:40px; color:var(--ke-color-control-inverse); }
+.ke-time-nav__popover { right:0; left:auto; z-index:55; color:var(--ke-color-ink); }
+.ke-time-nav__popover li a { color:var(--ke-color-ink); }
+.ke-time-nav__popover li a:hover { background:var(--ke-color-canvas-soft); }
+.ke-time-nav__popover li strong { background:var(--ke-color-canvas-soft); color:var(--ke-color-muted); }
+.ke-time-timeline { margin-top:var(--ke-space-2); border-top:0; }
+.ke-time-group { scroll-margin-top:calc(var(--ke-listing-sticky-stack-height) + var(--ke-space-3)); grid-template-columns:var(--ke-listing-time-gutter) minmax(0,1fr); gap:var(--ke-listing-column-gap); padding-block:18px 26px; border-bottom:0; }
+.ke-listing-time-marker { position:sticky; top:calc(var(--ke-listing-sticky-stack-height) + 12px); align-self:start; padding-top:4px; }
+.ke-listing-time-marker h2 { margin:0; max-width:130px; font-size:clamp(2rem,2.25vw,2.25rem); font-weight:950; font-variant-numeric:tabular-nums; letter-spacing:-.045em; line-height:.94; }
+.ke-listing-time-marker h2[id$="untimed-title"] { max-width:110px; font-size:1.35rem; line-height:1.02; }
+.ke-listing-time-marker__count { display:block; margin-top:var(--ke-space-2); color:var(--ke-color-muted); font-size:var(--ke-font-size-100); line-height:1.2; }
+.ke-listing-time-marker__day-counts { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.ke-listing-time-marker__day-chip { display:inline-flex; align-items:center; gap:5px; border-radius:var(--ke-radius-pill); padding:3px 7px 3px 4px; background:var(--ke-color-surface-inverse); color:rgba(255,255,255,.8); font-size:.75rem; line-height:1; }
+.ke-listing-time-marker__day-chip b { min-width:24px; min-height:24px; display:grid; place-items:center; border-radius:50%; background:var(--ke-color-brand-600); color:#fff; }
+.ke-listing-time-marker__day-chip--sun b { background:var(--ke-color-accent-700); }
+.ke-listing-time-marker__day-chip strong { color:#fff; font-variant-numeric:tabular-nums; }
+.ke-time-group__flow { gap:var(--ke-listing-card-gap-block) var(--ke-listing-card-gap-inline); }
+.ke-listing-card__copy { padding-top:10px; }
+.ke-listing-card__title { font-size:1.25rem; line-height:1.2; }
+.ke-listing-card__copy p { font-size:1.0625rem; }
+.ke-listing-card__medallion { right:10px; bottom:10px; width:56px; height:56px; border-width:4px; }
+.ke-weekend-board { margin-top:0; }
+.ke-weekend-timeline { padding-top:4px; background:linear-gradient(90deg,transparent 0 var(--ke-listing-time-gutter),transparent var(--ke-listing-time-gutter) calc(var(--ke-listing-time-gutter) + var(--ke-listing-column-gap)),rgba(165,72,33,.055) calc(var(--ke-listing-time-gutter) + var(--ke-listing-column-gap)) calc(50% + 4px),transparent calc(50% + 4px) calc(50% + 14px),rgba(15,118,110,.045) calc(50% + 14px) 100%); }
+.ke-weekend-timeline::before,.ke-weekend-timeline::after { display:none; }
+.ke-weekend-time-row { scroll-margin-top:calc(var(--ke-listing-sticky-stack-height) + var(--ke-space-3)); grid-template-columns:var(--ke-listing-time-gutter) minmax(0,1fr) minmax(0,1fr); column-gap:var(--ke-listing-column-gap); }
+.ke-weekend-time-cell { padding:14px 14px 22px; }
+.ke-weekend-time-rail { top:calc(var(--ke-listing-sticky-stack-height) + 12px); padding:18px 0 0; }
+.ke-weekend-time-cell .ke-time-group__flow { --ke-listing-media-height:clamp(178px,min(9.5vw,21svh),198px); gap:26px 16px; }
+
+
 @media (max-width: 980px) {
   .ke-listing-head { min-height: 0; display: grid; padding-top: var(--ke-space-12); }
   .ke-listing-date-nav { justify-content: flex-start; }
@@ -440,3 +491,7 @@
   .ke-state-panel--loading .ke-state-panel__mark::after { animation-duration: 1.4s; }
   .ke-skeleton::after { animation: none; }
 }
+/* Source-reviewed 3:2 crops already encode the reviewed composition; sparse-row
+   growth must not silently crop them again to the generic 1.75 ceiling. */
+.ke-listing-card[data-listing-crop-evidence="source-reviewed"][data-listing-crop-adaptive="true"] { max-width:calc(var(--ke-listing-media-height) * 1.5); }
+.ke-listing-card[data-listing-density][data-listing-crop-evidence="source-reviewed"][data-listing-crop-adaptive="true"] { max-width:calc(var(--ke-listing-media-height) * 1.5); }

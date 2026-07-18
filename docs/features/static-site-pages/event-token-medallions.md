@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. A separate, deliberately narrow listing-overlay **candidate** exists in `DATE-LISTING TH-P1 · V10`: a named venue medallion may sit over a selected classified event photo without OCR. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
+> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. A separate, deliberately narrow listing-overlay **candidate** exists in `DATE-LISTING TH-P1 · V13`: a named venue/festival medallion may sit over the selected image without OCR. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`), plus the explicitly gated V10 date-listing photo overlay described below. Other listing/search/related cards are unaffected without a separate approval.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -20,35 +20,32 @@ The medallion row is informational and belongs to the event detail page; it is n
 Current scope:
 
 - **P0:** medallions on the concrete event page only;
-- **Candidate compact exception:** on the V12 Today/Tomorrow/Weekend date-listing family, one named venue medallion may be placed at the bottom-right edge of an event image only when the selected asset passes the no-OCR gate below;
+- **Candidate compact exception:** on the V13 Today/Tomorrow/Weekend date-listing family, one named venue/festival medallion may be placed at the bottom-right edge of an event image only when the selected asset passes the no-OCR gate below;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
 - **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
 
-### `DATE-LISTING TH-P1 · V12` venue-overlay candidate
+### `DATE-LISTING TH-P1 · V13` venue-overlay candidate
 
 This is not a general permission to decorate posters. It is a fail-closed
 location cue for the dense exact-time desktop flow:
 
-- placement: one `48px` circle at the image's bottom-right edge, with a quiet
+- placement: one `56px` circle with a `4px` ring at the image's bottom-right edge, with a quiet
   ring/shadow; the title and venue text remain below the image;
-- semantics: the matched token must be a curated **venue/location brand** and
-  must match the normalized event venue by an exact or bounded alias;
-- required media evidence: the selected asset is `image_text_mode=visual_only`.
-  Normally it must also be a classified `event_photo`; a manifest item may set
-  `listingVisualOnlyOverlay=true` only after its venue asset and exact aliases
-  receive source/provenance review. This narrow opt-in covers the requested
-  Третьяковка, Музыкальный театр and Калининградский зоопарк experiment while
-  their older event assets are being semantically backfilled;
+- semantics: the matched token must carry `listingStatus=listing_ready` and a
+  structured `listingBinding`. Runtime priority is `venue → festival →
+  organizer`, exact/bounded aliases only, at most one token;
+- required media evidence: the **selected** asset is
+  `image_text_mode=visual_only`. The structured binding establishes token
+  identity, not crop safety; reviewed crop evidence remains asset-specific;
 - forbidden shortcuts: `safe_crop`, OCR length alone, filename, event title or
   an inferred organizer are not sufficient evidence;
-- OCR/unknown text mode, missing venue match or missing curated asset always
-  renders no medallion; semantic pending/error also fails closed unless the
-  matched manifest item carries that explicit source-reviewed opt-in;
-- poster-like images, including short-text posters that legacy OCR marked as
-  `visual_only`, remain excluded even if the venue has a curated mark.
+- OCR/unknown text mode, missing structured match or a manifest status other
+  than `listing_ready` always renders no medallion;
+- an organizer asset with no structured organizer field is marked
+  `blocked_missing_binding`, not guessed from event prose/title.
 
 The candidate still requires immutable preview review before it can be promoted
-beyond date listings. The opt-in never treats `safe_crop`, filename or venue
+beyond date listings. No listing flag treats `safe_crop`, filename or venue
 name as proof that an image has no OCR: `visual_only` remains mandatory.
 
 ## Visual contract

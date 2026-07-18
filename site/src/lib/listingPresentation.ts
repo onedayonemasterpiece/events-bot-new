@@ -1,4 +1,5 @@
 import type { EventImageAsset, PreviewEvent } from './types';
+import listingMediaOverrides from '../data/listingMediaOverrides.json';
 
 export type ListingDaypart = 'morning' | 'day' | 'evening' | 'night' | 'untimed';
 
@@ -114,7 +115,49 @@ function bestWideAsset(assets: EventImageAsset[], targetRatio: number): EventIma
   })[0] || null;
 }
 
-export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65): ListingImagePresentation {
+interface ListingMediaOverride {
+  eventId?: number;
+  sourceSrc: string;
+  replacementSrc?: string;
+  width?: number;
+  height?: number;
+  imageTextMode?: 'ocr_text' | 'visual_only' | 'unknown';
+  cropEvidence?: string;
+  objectPosition?: string;
+  alt?: string;
+  useNatural?: boolean;
+  thumbnailSources?: Array<{ src: string; width: number; height: number }>;
+}
+
+const listingOverrideItems = (listingMediaOverrides as { items?: ListingMediaOverride[] }).items || [];
+
+function withListingMediaOverride(asset: EventImageAsset | null, eventId: number): EventImageAsset | null {
+  if (!asset) return null;
+  const item = listingOverrideItems.find((candidate) => (
+    candidate.sourceSrc === asset.src && (!candidate.eventId || candidate.eventId === eventId)
+  ));
+  if (!item) return asset;
+  return {
+    ...asset,
+    alt: item.alt || asset.alt,
+    src: item.replacementSrc || asset.src,
+    width: item.width || asset.width,
+    height: item.height || asset.height,
+    image_text_mode: item.imageTextMode || asset.image_text_mode,
+    thumbnail_sources: item.thumbnailSources || asset.thumbnail_sources,
+    media_semantic_status: item.cropEvidence ? 'classified' : asset.media_semantic_status,
+    media_role: item.cropEvidence ? 'event_photo' : asset.media_role,
+    media_role_confidence: item.cropEvidence ? 1 : asset.media_role_confidence,
+    image_kind: item.cropEvidence ? 'photo' : asset.image_kind,
+    safe_crop: item.cropEvidence ? true : asset.safe_crop,
+    focal_point: item.cropEvidence ? { x: 0.5, y: 0.5 } : asset.focal_point,
+    recommended_object_position: item.objectPosition || asset.recommended_object_position,
+    listing_crop_evidence: item.cropEvidence ? 'source-reviewed' : asset.listing_crop_evidence,
+    listing_use_natural: item.useNatural === true,
+  };
+}
+
+export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): ListingImagePresentation {
   // Preserve the measured geometry even when an asset misses the quality
   // threshold. A small known fallback must never be stretched into an
   // invented portrait frame (event 3794 is the regression contract).
@@ -148,41 +191,56 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.65):
   const preferredVisuals = visualOnly.filter((asset) => assetRatio(asset) >= 1);
   const selectedVisual = bestWideAsset(preferredVisuals.length ? preferredVisuals : visualOnly, visualCropRatio);
   const primary = knownAssets[0] || null;
-  const asset = selectedPoster || selectedPhoto || selectedVisual || primary;
+  const sourceAsset = selectedPoster || selectedPhoto || selectedVisual || primary;
+  const asset = withListingMediaOverride(sourceAsset, event.id);
   const src = asset?.src || event.image_url || null;
   const rawRatio = asset ? assetRatio(asset) : 0.8;
-  const isPhoto = Boolean(selectedPhoto && asset === selectedPhoto);
-  const isVisualOnly = Boolean(
+  const isPhoto = Boolean(
     asset
-    && asset === selectedVisual
-    && (asset.image_text_mode || event.image_text_mode) === 'visual_only'
+    && asset.media_semantic_status === 'classified'
+    && asset.media_role === 'event_photo'
+    && asset.image_kind === 'photo'
   );
-  const visualCanCrop = Boolean(isVisualOnly && asset?.safe_crop === true && asset.focal_point);
+  const isVisualOnly = Boolean(asset && (asset.image_text_mode || event.image_text_mode) === 'visual_only');
+  const hasCropEvidence = Boolean(
+    isVisualOnly
+    && isPhoto
+    && asset?.safe_crop === true
+    && asset.focal_point
+    && (asset.listing_crop_evidence === 'source-reviewed' || Number(asset.media_role_confidence || 0) >= 0.9)
+  );
+  const cropRetention = rawRatio > 0
+    ? Math.min(rawRatio / visualCropRatio, visualCropRatio / rawRatio)
+    : 0;
+  const visualCanCrop = Boolean(
+    hasCropEvidence
+    && (asset?.listing_crop_evidence === 'source-reviewed' || cropRetention >= (rawRatio < 1 ? 0.7 : 0.8))
+  );
+  const useNatural = Boolean(asset?.listing_use_natural);
   const visualRatio = isVisualOnly && asset
-    ? (visualCanCrop
+    ? (useNatural
+      ? rawRatio
+      : visualCanCrop
       ? visualCropRatio
       : rawRatio)
     : visualCropRatio;
   const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
-  const wideCropIsSafe = isPhoto && rawRatio > 1 && Math.min(rawRatio / 1.5, 1.5 / rawRatio) >= 0.8;
-  const photoRatio = rawRatio < 0.8 ? 0.8 : wideCropIsSafe ? 1.5 : Math.min(rawRatio, 2.2);
-  const photoNeedsCrop = isPhoto && Math.abs(photoRatio - rawRatio) > 0.01;
   return {
     asset,
     src,
     ratio: isVisualOnly
       ? visualRatio
       : isPhoto
-      ? photoRatio
+      ? Math.max(0.2, Math.min(3.2, rawRatio || 0.8))
       : Math.max(0.2, Math.min(3.2, rawRatio || 0.8)),
     mode: isVisualOnly
-      ? (visualCanCrop ? 'visual-crop' : 'visual-natural')
+      ? (useNatural ? 'visual-natural' : visualCanCrop ? 'visual-crop' : 'visual-natural')
       : isPhoto
-        ? (photoNeedsCrop ? 'photo-crop' : 'photo-natural')
+        ? 'photo-natural'
         : isPoster
           ? 'poster-natural'
           : 'unknown-natural',
-    adaptiveCrop: visualCanCrop,
+    adaptiveCrop: visualCanCrop && !useNatural,
     objectPosition: asset?.recommended_object_position || event.image_object_position || '50% 50%',
   };
 }

@@ -853,14 +853,23 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
         raw_role = clean_text(metadata.get("media_role")).lower()
         media_role = raw_role if semantic_status == "classified" and raw_role in EVENT_IMAGE_MEDIA_ROLES else None
-        if index == 0 and not metadata.get("width"):
-            probed_width, probed_height = first_width, first_height
+        primary_geometry_untrusted = index == 0 and (
+            semantic_status != "classified"
+            or not metadata.get("width")
+            or not metadata.get("height")
+            or not metadata.get("thumbnail_512_url")
+        )
+        if primary_geometry_untrusted and not SKIP_IMAGE_PROBES:
+            probed_width, probed_height = (first_width, first_height) if first_width and first_height else probe_image_dimensions(url)
         elif not metadata.get("width") and needs_rescue_scan and not SKIP_IMAGE_PROBES:
             probed_width, probed_height = probe_image_dimensions(url)
         else:
             probed_width, probed_height = (None, None)
-        width = int(metadata.get("width") or probed_width or 1080)
-        height = int(metadata.get("height") or probed_height or 1350)
+        # A successful probe is the geometry source of truth. This prevents a
+        # stale 1080×1350 ledger row from creating visible `contain` fields for
+        # an actual 180×320 object (the Red Tent regression).
+        width = int(probed_width or metadata.get("width") or 1080)
+        height = int(probed_height or metadata.get("height") or 1350)
         # Unknown media is deliberately no-crop. OCR/no-OCR heuristics are not
         # semantic evidence: only the classified event_photo role may unlock
         # cover cropping in card/hero UI.

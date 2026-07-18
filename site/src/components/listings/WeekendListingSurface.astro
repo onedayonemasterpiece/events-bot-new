@@ -23,19 +23,8 @@ function dayDateLabel(date: string): string {
 <div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1">
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
   <ListingControls cities={cities} total={events.length} label="на выходных" />
-  <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', groups: day.groups }))} />
+  <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   <div class="ke-weekend-board">
-    <div class="ke-weekend-heads">
-      <div class="ke-weekend-heads__time" aria-hidden="true"></div>
-      <header class="ke-weekend-day__head ke-weekend-day__head--sat" data-weekend-day-head="sat">
-        <div><p class="ke-weekend-day__label" id="weekend-sat-label">{days[0].title}</p><p>{dayDateLabel(days[0].date)}</p></div>
-        <span class="ke-weekend-day__count" data-weekend-day-count="sat">{days[0].events.length}</span>
-      </header>
-      <header class="ke-weekend-day__head ke-weekend-day__head--sun" data-weekend-day-head="sun">
-        <div><p class="ke-weekend-day__label" id="weekend-sun-label">{days[1].title}</p><p>{dayDateLabel(days[1].date)}</p></div>
-        <span class="ke-weekend-day__count" data-weekend-day-count="sun">{days[1].events.length}</span>
-      </header>
-    </div>
     <WeekendEditorialTimeline days={days.map((day) => ({ key: day.key as 'sat' | 'sun', title: day.title, date: day.date, groups: day.groups }))} />
   </div>
 </div>

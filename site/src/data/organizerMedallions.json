@@ -28,7 +28,9 @@
       "fallbackPngUrl": "/assets/organizers/world-ocean-museum.png",
       "sourcePath": "site/src/assets/organizers/source/world-ocean-museum.logo_new_mobile_v2.svg",
       "retrievedAt": "2026-06-29",
-      "assetFormat": "svg"
+      "assetFormat": "svg",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "history-art-museum",
@@ -55,7 +57,9 @@
       "fallbackPngUrl": "/assets/organizers/history-art-museum.png",
       "sourcePath": "site/src/assets/organizers/source/history-art-museum.logo_koihm_white.png",
       "retrievedAt": "2026-06-29",
-      "assetFormat": "svg"
+      "assetFormat": "svg",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "kaliningrad-philharmonic",
@@ -84,7 +88,9 @@
       "retrievedAt": "2026-06-29",
       "brandBackgroundSource": "https://t.me/filarmonia_39",
       "backgroundEvidence": "Telegram profile OG image uses yellow harp background; dominant sampled color #FAB534 on 2026-06-29.",
-      "assetFormat": "svg"
+      "assetFormat": "svg",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "kant-island",
@@ -111,7 +117,9 @@
       "fallbackPngUrl": "/assets/organizers/kant-island.png",
       "sourcePath": "site/src/assets/organizers/source/kant-island.sobor-logo.svg",
       "retrievedAt": "2026-06-29",
-      "assetFormat": "svg"
+      "assetFormat": "svg",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "dom-kitoboya",
@@ -140,7 +148,9 @@
       "retrievedAt": "2026-07-01",
       "brandBackgroundSource": "https://t.me/domkitoboya",
       "backgroundEvidence": "Public Telegram profile avatar uses blue background with white handwritten mark; sampled 2026-07-01 from t.me/domkitoboya OG image: dominant bin #5060A0, average blue #4D62A0, light mark #D0D8E5. The medallion uses the source site logo words recomposed as a stacked mark over that palette.",
-      "assetFormat": "webp-source-only"
+      "assetFormat": "webp-source-only",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "tretyakovka-kaliningrad",
@@ -172,7 +182,8 @@
       "brandBackgroundSource": "https://t.me/tretyakovka_kaliningrad",
       "backgroundEvidence": "Public Telegram profile avatar uses light warm background with gold Tretyakovka T mark; sampled/used source image from t.me/tretyakovka_kaliningrad OG image on 2026-07-01.",
       "assetFormat": "svg",
-      "listingVisualOnlyOverlay": true
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "konb",
@@ -200,7 +211,9 @@
       "fallbackPngUrl": "/assets/organizers/konb.png",
       "sourcePath": "site/src/assets/organizers/source/konb.logo.png",
       "retrievedAt": "2026-07-01",
-      "assetFormat": "webp-raster-exception"
+      "assetFormat": "webp-raster-exception",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "act-opus",
@@ -231,7 +244,9 @@
       "fallbackPngUrl": "/assets/organizers/act-opus.png",
       "sourcePath": "site/src/assets/organizers/source/act-opus.logo_new_black.png",
       "retrievedAt": "2026-07-02",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "svg-embedded-source-png",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "znanie-russia",
@@ -264,7 +279,9 @@
       "retrievedAt": "2026-07-02",
       "assetFormat": "svg",
       "brandBackgroundSource": "https://znanierussia.ru/ production CSS --primary / --primary-default",
-      "backgroundEvidence": "Official site CSS sampled 2026-07-02 exposes --primary-default / --primary as #0501D0; legacy --color-primary-old is #426FFF."
+      "backgroundEvidence": "Official site CSS sampled 2026-07-02 exposes --primary-default / --primary as #0501D0; legacy --color-primary-old is #426FFF.",
+      "listingStatus": "blocked_missing_binding",
+      "listingBinding": "organizer"
     },
     {
       "slug": "kgd80",
@@ -292,7 +309,9 @@
       "fallbackPngUrl": "/assets/organizers/kgd80.png",
       "sourcePath": "site/src/assets/organizers/source/kgd80.logo-80-istorii-hero.svg",
       "retrievedAt": "2026-07-02",
-      "assetFormat": "svg"
+      "assetFormat": "svg",
+      "listingStatus": "detail_only",
+      "listingBinding": "festival"
     },
     {
       "slug": "kantata-festival",
@@ -321,7 +340,9 @@
       "fallbackPngUrl": "/assets/organizers/kantata-festival.png",
       "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
       "retrievedAt": "2026-07-02",
-      "assetFormat": "webp-source-only"
+      "assetFormat": "webp-source-only",
+      "listingStatus": "listing_ready",
+      "listingBinding": "festival"
     },
     {
       "slug": "muzteatr39",
@@ -351,7 +372,8 @@
       "retrievedAt": "2026-07-03",
       "assetFormat": "webp-source-png",
       "fallbackPngUrl": "/assets/organizers/muzteatr39.png",
-      "listingVisualOnlyOverlay": true
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "kldzoo",
@@ -380,7 +402,8 @@
       "retrievedAt": "2026-07-03",
       "assetFormat": "webp-source-png",
       "fallbackPngUrl": "/assets/organizers/kldzoo.png",
-      "listingVisualOnlyOverlay": true
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     }
   ]
 }

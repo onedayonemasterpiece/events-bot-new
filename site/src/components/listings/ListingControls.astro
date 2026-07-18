@@ -171,8 +171,8 @@ const showCities = cities.length > 1;
       const countNode = earlier.querySelector('[data-listing-earlier-count]');
       if (countNode) countNode.textContent = `${count} ${eventCountLabel(count)}`;
     });
-    document.querySelectorAll('[data-weekend-day-head]').forEach((head) => {
-      const key = head.dataset.weekendDayHead;
+    document.querySelectorAll('[data-weekend-day-summary]').forEach((head) => {
+      const key = head.dataset.weekendDaySummary;
       const count = [...document.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
       const countNode = head.querySelector('[data-weekend-day-count]');
       if (countNode) countNode.textContent = String(count);
@@ -180,8 +180,15 @@ const showCities = cities.length > 1;
     document.querySelectorAll('[data-weekend-time-row]').forEach((row) => {
       const count = [...row.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
       row.hidden = count === 0;
-      const countNode = row.querySelector('[data-listing-weekend-row-count]');
-      if (countNode) countNode.textContent = `${count} ${eventCountLabel(count)}`;
+      row.querySelectorAll('[data-listing-weekend-day-count-chip]').forEach((chip) => {
+        const key = chip.dataset.listingWeekendDayCountChip;
+        const dayCount = [...row.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
+        chip.hidden = dayCount === 0;
+        const value = chip.querySelector('strong');
+        if (value) value.textContent = String(dayCount);
+        const label = key === 'sat' ? 'Сб' : 'Вс';
+        chip.setAttribute('aria-label', `${label}: ${dayCount} ${eventCountLabel(dayCount)}`);
+      });
     });
     document.querySelectorAll('[data-date-listing="today"], [data-date-listing="tomorrow"]').forEach((surface) => {
       const upcoming = surface.querySelector('[data-listing-upcoming-groups]');
@@ -278,7 +285,7 @@ const showCities = cities.length > 1;
       if (!link) return;
       const targetId = link.dataset.timeNavExactTarget || (link.getAttribute('href') || '').replace(/^#/, '');
       const target = document.getElementById(targetId);
-      const heading = target?.querySelector('h3');
+      const heading = target?.querySelector('h2, h3');
       window.setTimeout(() => heading?.focus({ preventScroll: true }), 0);
       link.closest('details')?.removeAttribute('open');
     });

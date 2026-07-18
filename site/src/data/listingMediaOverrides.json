@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/67/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839.webp",
+      "replacementSrc": "/assets/listing-media/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839-1080.webp",
+      "width": 1080,
+      "height": 720,
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-video-frame-0-reviewed",
+      "objectPosition": "50% 50%",
+      "sourcePage": "https://t.me/kulturnaya_chaika/7974",
+      "cropBox": [
+        0,
+        446,
+        1080,
+        720
+      ],
+      "thumbnailSources": [
+        {
+          "src": "/assets/listing-media/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839-512.webp",
+          "width": 512,
+          "height": 341
+        },
+        {
+          "src": "/assets/listing-media/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839-768.webp",
+          "width": 768,
+          "height": 512
+        },
+        {
+          "src": "/assets/listing-media/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839-1024.webp",
+          "width": 1024,
+          "height": 683
+        },
+        {
+          "src": "/assets/listing-media/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839-1080.webp",
+          "width": 1080,
+          "height": 720
+        }
+      ]
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/08/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7.webp",
+      "replacementSrc": "/assets/listing-media/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7-1080.webp",
+      "width": 1080,
+      "height": 720,
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-video-frame-0-reviewed",
+      "objectPosition": "50% 50%",
+      "sourcePage": "https://t.me/meowafisha/7913",
+      "cropBox": [
+        0,
+        446,
+        1080,
+        720
+      ],
+      "thumbnailSources": [
+        {
+          "src": "/assets/listing-media/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7-512.webp",
+          "width": 512,
+          "height": 341
+        },
+        {
+          "src": "/assets/listing-media/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7-768.webp",
+          "width": 768,
+          "height": 512
+        },
+        {
+          "src": "/assets/listing-media/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7-1024.webp",
+          "width": 1024,
+          "height": 683
+        },
+        {
+          "src": "/assets/listing-media/0804043002d801c921a5311413089ddc27d0c7988fc30f0344830ea54cb1f4a7-1080.webp",
+          "width": 1080,
+          "height": 720
+        }
+      ]
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/02/020830c338c30400208225da257ae523c271c264b043f028100c2c261ce42c24.webp",
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-still-reviewed",
+      "objectPosition": "50% 48%"
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/a9/a909c4200cc1088118123806f006780af11c714c6501e042e840c825f0b67496.webp",
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-still-reviewed",
+      "objectPosition": "50% 45%"
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/20/20033303669b069e66930c9f6c900e8f66934307862cd33013371b26188d080c.webp",
+      "replacementSrc": "/assets/listing-media/bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-1024.webp",
+      "width": 1024,
+      "height": 683,
+      "imageTextMode": "visual_only",
+      "cropEvidence": "official-event-article-still-reviewed",
+      "objectPosition": "50% 50%",
+      "sourcePage": "https://sobor39.ru/news/nashi-novosti/4277/",
+      "sourceImage": "https://sobor39.ru/upload/medialibrary/061/1zccppmfa7j4v42ij0cv3ft11bi5op3x.jpg",
+      "thumbnailSources": [
+        {
+          "src": "/assets/listing-media/bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-512.webp",
+          "width": 512,
+          "height": 342
+        },
+        {
+          "src": "/assets/listing-media/bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-768.webp",
+          "width": 768,
+          "height": 512
+        },
+        {
+          "src": "/assets/listing-media/bb778cea7af9f11a8ad16ec57d4a82c08b223a61743fb2f8845d0ff78d784d34-1024.webp",
+          "width": 1024,
+          "height": 683
+        }
+      ],
+      "eventId": 3794,
+      "sourceProdId": 3794,
+      "dateListingOnly": true,
+      "useNatural": true,
+      "alt": "Участники XI Международных органных ассамблей в Кафедральном соборе",
+      "mediaRole": "event_photo",
+      "semanticStatus": "source_reviewed",
+      "articleDate": "2026-07-14",
+      "boundOccurrence": "2026-07-18T18:00:00+02:00",
+      "reviewedAt": "2026-07-18",
+      "reviewReason": "Official Cathedral article about the XI Assemblies explicitly lists the 18 July participants concert; calendar thumbnail is only 300x174."
+    }
+  ]
+}

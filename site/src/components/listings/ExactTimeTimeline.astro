@@ -1,7 +1,7 @@
 ---
 import ListingEventCard from './ListingEventCard.astro';
+import ListingTimeMarker from './ListingTimeMarker.astro';
 import type { ListingTimeGroup } from '../../lib/listingPresentation';
-import { eventCountLabel } from '../../lib/listingPresentation';
 
 interface Props {
   groups: ListingTimeGroup[];
@@ -15,7 +15,7 @@ const { groups, idPrefix, date, compact = false, className = '' } = Astro.props;
 <div
   class:list={['ke-time-timeline', compact && 'ke-time-timeline--compact', className]}
   data-ds-component="ExactTimeTimeline"
-  data-ds-version="1"
+  data-ds-version="2"
 >
   {groups.map((group, groupIndex) => (
     <section
@@ -27,10 +27,7 @@ const { groups, idPrefix, date, compact = false, className = '' } = Astro.props;
       data-listing-daypart={group.daypart}
       aria-labelledby={`${idPrefix}-${group.key}-title`}
     >
-      <header class="ke-time-group__time">
-        <h3 id={`${idPrefix}-${group.key}-title`} tabindex="-1">{group.label}</h3>
-        <span data-listing-group-count>{group.events.length} {eventCountLabel(group.events.length)}</span>
-      </header>
+      <ListingTimeMarker id={`${idPrefix}-${group.key}-title`} label={group.label} count={group.events.length} />
       <div class="ke-time-group__flow">
         {group.events.map((event, eventIndex) => <ListingEventCard event={event} priority={groupIndex === 0 && eventIndex < 2} />)}
       </div>
