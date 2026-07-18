@@ -43,7 +43,7 @@ The owner accepted H1 as a permanent homepage product capability on 2026-07-18: 
 
 The candidate may ship only if the first useful scene is already in SSG/no-JS HTML, search/categories and at least the beginning of the feed remain visible and independently usable, the briefing stays within its 320/360/390/1366/1440 viewport budgets, and mobile plus `prefers-reduced-motion` are static/manual rather than autoplay. Links have stable hitboxes, motion interruption creates zero CLS, the approved lockup is unchanged, and every number/time/event/popularity/personal claim is backed by a versioned deterministic fact and route token. Client/runtime LLM, invented urgency and a terminal/chat-assistant skin are out of scope.
 
-If H1 is accepted, its branch/SHA, V1/V2 screenshots, accessibility/performance evidence and homepage experiment contract become part of F5 acceptance, and M4 SEO/GEO starts only after the resulting homepage is refrozen. If it is deferred, the standard categories/feed homepage remains the release baseline and H1 does not block F1–F18.
+Because the H1 capability is accepted, the selected minimal implementation's branch/SHA, static-state screenshots, accessibility/performance evidence and downstream experiment contract are part of F5 acceptance, and M4 SEO/GEO starts only after that homepage is refrozen. Optional motion, personal-delta, backend and writer layers may be deferred individually; deferring them does not remove the grounded Hero Talk router or revert the homepage to a feed-only baseline.
 
 ## Event age-rating coverage
 
