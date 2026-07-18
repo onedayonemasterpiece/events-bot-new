@@ -19,7 +19,7 @@ interface Props {
 const { socialLinks } = Astro.props;
 ---
 
-<footer class="site-footer site-footer--prototype" data-footer-prototype="service-v1">
+<footer class="site-footer site-footer--service-v1" data-site-footer="service-v1">
   <div class="page-shell site-footer-prototype">
     <section class="site-footer-prototype__share" aria-labelledby="footer-share-title">
       <div class="site-footer-prototype__share-copy">
@@ -93,7 +93,7 @@ const { socialLinks } = Astro.props;
 </footer>
 
 <style>
-  .site-footer--prototype {
+  .site-footer--service-v1 {
     overflow: hidden;
     border-top: 0;
     padding: clamp(6rem, 7vw, 7rem) 0 2rem;
@@ -183,7 +183,7 @@ const { socialLinks } = Astro.props;
     .site-footer-prototype__brand { grid-column: 1 / -1; }
   }
   @media (max-width: 640px) {
-    .site-footer--prototype { padding-block: 6.25rem calc(2rem + env(safe-area-inset-bottom)); }
+    .site-footer--service-v1 { padding-block: 6.25rem calc(2rem + env(safe-area-inset-bottom)); }
     .site-footer-prototype { gap: 2rem; }
     .site-footer-prototype__share { min-height: 0; padding: 1rem; border-left-width: 4px; border-radius: 18px; }
     .site-footer-prototype__share-copy h2 { font-size: 1rem; }

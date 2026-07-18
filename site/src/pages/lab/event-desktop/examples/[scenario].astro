@@ -34,7 +34,6 @@ type Scenario = {
   splitPortraitSourceIndexes?: number[];
   splitViewerHiddenSourceIndexes?: number[];
   relatedMediaTreatment?: 'cover' | 'ambient' | 'hybrid';
-  footerVariant?: 'prototype-v1';
   mediaRoleOverrides?: Record<number, EventImageMediaRole>;
   mediaDimensionOverrides?: Record<number, { width: number; height: number }>;
 };
@@ -75,7 +74,7 @@ const scenarios: Scenario[] = [
   { slug: 'split-ocr-with-photos', eventId: 6323, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0, heroWidth: 1179, heroHeight: 1523, ocrSourceIndexes: [0, 1], mediaRoleOverrides:kupalaRoles, mediaDimensionOverrides:kupalaDimensions },
   { slug: 'cta-phone-invariant', eventId: 6551, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
   { slug: 'cta-ticket-invariant', eventId: 5374, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
-  { slug: 'footer-service-v1', eventId: 6589, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0, footerVariant: 'prototype-v1' },
+  { slug: 'footer-service-v1', eventId: 6589, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
   { slug: 'related-cover', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'cover' },
   { slug: 'related-ambient', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'ambient' },
   { slug: 'related-hybrid', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'hybrid' },
@@ -127,7 +126,7 @@ const title = `${event.title} | ${SITE_NAME}`;
 const description = event.meta_description || event.summary || event.title;
 ---
 
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} footerVariant={scenario.footerVariant}>
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
   <DesktopEventCleanPage
     event={event}
     related={related}
