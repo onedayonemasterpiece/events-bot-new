@@ -2,6 +2,7 @@
 import Icon from './Icon.astro';
 import EventCard from './EventCard.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
+import EventFallbackArt from './EventFallbackArt.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
 import EventTransportSchedule from './EventTransportSchedule.astro';
 import EventBusTransportSchedule from './EventBusTransportSchedule.astro';
@@ -18,6 +19,7 @@ import {
 import { eventImageUrl } from '../lib/assets';
 import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 import { selectEventMediaByQuality } from '../lib/eventMediaQuality';
+import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
 
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
@@ -154,6 +156,7 @@ const qualitySelection = surface === 'production'
 const qualityAdmittedSourceIndexSet = new Set(qualitySelection.admittedSourceIndexes);
 const preferredAsset = rawAssets[heroImageIndex] || rawAssets[0];
 const preferredUrl = eventImageUrl(preferredAsset?.src || event.image_url) || preferredAsset?.src || event.image_url || '';
+const typedFallbackArt = preferredUrl ? null : resolveEventFallbackArt(event);
 const preferredWidth = heroWidth || preferredAsset?.width || 1600;
 const preferredHeight = heroHeight || preferredAsset?.height || 1000;
 const ratio = preferredWidth / preferredHeight;
@@ -318,6 +321,7 @@ const descriptionHtml = (event.description_html || '')
   data-event-id={event.id}
   data-event-surface={surface}
   data-presentation-reason={presentationReason}
+  data-presentation-fallback={typedFallbackArt?.kind}
   style={`--image-ratio:${ratio};--image-position:${preferredPosition};--media-count:${Math.max(1, photoCount)};`}
 >
   <div class="desktop-clean-reading-shell">
@@ -332,17 +336,23 @@ const descriptionHtml = (event.description_html || '')
         {candidate === 'split' ? (
           <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport data-split-media-fit={splitMediaFit}>
             <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.36">
-              <button
-                type="button"
-                class="desktop-prototype__media-opener"
-                data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
-                data-efficient-viewer-start={splitPortraitViewer ? String(galleryImages[0]?.sourceIndex ?? 'gallery-0') : undefined}
-                data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
-                data-hero-gallery-index="0"
-                aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
-              >
-                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
-              </button>
+              {preferredUrl ? (
+                <button
+                  type="button"
+                  class="desktop-prototype__media-opener"
+                  data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
+                  data-efficient-viewer-start={splitPortraitViewer ? String(galleryImages[0]?.sourceIndex ?? 'gallery-0') : undefined}
+                  data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
+                  data-hero-gallery-index="0"
+                  aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
+                >
+                  <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
+                </button>
+              ) : typedFallbackArt ? (
+                <EventFallbackArt event={event} surface="desktop" />
+              ) : (
+                <div class="desktop-prototype__generic-fallback" aria-hidden="true"><span>{event.event_type || 'событие'}</span><strong>{event.title}</strong></div>
+              )}
               {splitRailCandidates.length > 0 && (
                 <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail data-responsive-split-rail aria-label="Другие изображения события">
                   {splitRailCandidates.map(({ image, galleryIndex }) => (
@@ -386,6 +396,9 @@ const descriptionHtml = (event.description_html || '')
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
+            {!preferredUrl && (typedFallbackArt
+              ? <EventFallbackArt event={event} surface="desktop" />
+              : <div class="desktop-prototype__generic-fallback" aria-hidden="true"><span>{event.event_type || 'событие'}</span><strong>{event.title}</strong></div>)}
             {photoCount > 0 && !(editorialRail && editorialRailImages.length > 1) && ocrCompanionLayout !== 'arrival' && <button type="button" class="desktop-prototype__photo-count" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть ${photoCount} фото события на весь экран`}><Icon name="image" /><span>{photoCount > 1 ? `${photoCount} фото` : 'Открыть фото'}</span></button>}
           </figure>
         )}
@@ -1649,6 +1662,9 @@ const descriptionHtml = (event.description_html || '')
   .desktop-prototype__media { position:relative; margin:0; overflow:hidden; background:#e6d9c7; }
   .desktop-prototype__media-opener { width:100%; height:100%; display:block; padding:0; border:0; background:transparent; cursor:zoom-in; }
   .desktop-prototype__media-image { width:100%; height:100%; display:block; object-position:var(--image-position); }
+  .desktop-prototype__generic-fallback { position:absolute; inset:0; display:grid; place-content:center; gap:.8rem; padding:2rem; text-align:center; background:#292521; color:#fffaf2; }
+  .desktop-prototype__generic-fallback span { font-size:.78rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; opacity:.72; }
+  .desktop-prototype__generic-fallback strong { max-width:16ch; font-size:clamp(2rem,4vw,4rem); line-height:.96; }
   .desktop-prototype--non-ocr .desktop-prototype__media-image { object-fit:cover; }
   .desktop-prototype--ocr .desktop-prototype__media-image { object-fit:contain; }
   .desktop-clean-event--ocr.is-safe-cover .desktop-prototype__media-image { object-fit:cover; }

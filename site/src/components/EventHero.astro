@@ -2,10 +2,12 @@
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
+import EventFallbackArt from './EventFallbackArt.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
 import { displayDate, displayDateTime, displayDateWithWeekday, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../lib/eventMediaQuality';
+import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
 export type HeroComposition = 'poster-billboard' | 'poster-attached-card' | 'photo-cinematic-sheet' | 'photo-parallax-sheet' | 'compact-ticketing';
@@ -46,6 +48,7 @@ const requestedPrimaryImageUrl = eventImageUrl(event.image_url);
 const primaryImageAsset = admittedImageAssets.find((asset) => eventImageUrl(asset.src) === requestedPrimaryImageUrl) || admittedImageAssets[0];
 const primaryLowResolutionPortrait = admittedImageAssets.length === 1 && isLowResolutionPortraitEventMedia(primaryImageAsset);
 const primaryImageUrl = eventImageUrl(primaryImageAsset?.src || event.image_url);
+const typedFallbackArt = primaryImageUrl ? null : resolveEventFallbackArt(event);
 const primaryImageTextMode = primaryImageAsset?.image_text_mode || event.image_text_mode;
 const galleryCtaImageUrl = eventImageUrl(galleryCta?.image_url);
 const derivedMode: HeroMode = primaryImageUrl ? (primaryImageTextMode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
@@ -169,7 +172,7 @@ const galleryHintLabel = galleryPhotoCount > 1 ? `Фото ${galleryPhotoCount}`
 const calendarPrimary = canAddToCalendar && (!ctaHref || event.ticket.kind === 'free');
 const showTicketCta = Boolean(ctaHref);
 ---
-<section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={primaryImageTextMode} data-hero-quality-hidden-count={mediaQualitySelection.hiddenSourceIndexes.length || undefined} data-hero-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined} data-hero-tint={tint}>
+<section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={primaryImageTextMode} data-hero-quality-hidden-count={mediaQualitySelection.hiddenSourceIndexes.length || undefined} data-hero-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined} data-hero-tint={tint} data-presentation-fallback={typedFallbackArt?.kind}>
   {hasGallery ? (
     <button type="button" class="event-hero__visual" data-hero-gallery-open={heroGalleryId} data-hero-gallery-index="0" aria-label={`Открыть изображение события «${event.title}» на весь экран`}>
       {primaryImageUrl && heroMode !== 'fallback-art' ? (
@@ -197,10 +200,14 @@ const showTicketCta = Boolean(ctaHref);
     </button>
   ) : (
     <div class="event-hero__visual" aria-label={heroMode === 'fallback-art' ? `Обложка без изображения: ${event.title}` : undefined}>
-      <div class="event-hero__fallback" aria-hidden="true">
-        <span>{event.event_type || 'событие'}</span>
-        <strong>{event.title}</strong>
-      </div>
+      {typedFallbackArt ? (
+        <EventFallbackArt event={event} surface="mobile" />
+      ) : (
+        <div class="event-hero__fallback" aria-hidden="true">
+          <span>{event.event_type || 'событие'}</span>
+          <strong>{event.title}</strong>
+        </div>
+      )}
     </div>
   )}
 
