@@ -38,7 +38,7 @@ It then renders one bounded continuation rather than an infinite feed:
 2. with at least three compatible local strong signals, cards use the personal
    ranker and the honest heading `По вашим интересам`;
 3. before the profile is mature, the same-origin catalog is ranked by a
-   deterministic `0.68 × popularity + 0.32 × recency/static score` fallback,
+   deterministic `0.68 × popularity + 0.32 × upcoming-date proximity` fallback,
    labelled `Ещё события` rather than personalized;
 4. both modes exclude the current event, linked/hidden events and cards already
    offered in `Смотрите дальше`, then enforce at most three cards per category

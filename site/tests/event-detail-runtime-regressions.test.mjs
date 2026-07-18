@@ -178,6 +178,7 @@ test('accepted service footer is global, cohesive and does not duplicate partner
   const layout = await read('src/layouts/EventLayout.astro');
   const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
   const secretBuilder = await read('scripts/build-secret-candidate.mjs');
+  const secretChecker = await read('scripts/check-secret-candidate.mjs');
 
   assert.match(component, /data-site-footer="service-v1"/u);
   assert.match(component, /site-footer--service-v1/u);
@@ -199,6 +200,8 @@ test('accepted service footer is global, cohesive and does not duplicate partner
   assert.match(lab, /slug: 'footer-service-v1', eventId: 6589/u);
   assert.doesNotMatch(lab, /footerVariant/u);
   assert.match(secretBuilder, /const footerPrototypeRoute = 'lab\/event-desktop\/examples\/footer-service-v1'/u);
+  assert.match(secretChecker, /data-site-footer="service-v1"/u);
+  assert.doesNotMatch(secretChecker, /data-footer-prototype/u);
 });
 
 test('Dramatic Theatre medallion is present in the accepted manifest', async () => {

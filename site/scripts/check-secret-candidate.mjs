@@ -18,8 +18,8 @@ if (manifest.schema_version !== CANDIDATE_MANIFEST_SCHEMA || manifest.site_mode 
 if (manifest.base_path !== basePath || manifest.token_sha256 !== sha256(token)) fail('candidate token/base mismatch');
 const transportExperiment = manifest.experiments?.transport_timetable_layout;
 const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
-const footerPrototypeRoute = 'lab/event-desktop/examples/footer-service-v1';
-const retainedLabRoutes = [transportQaRoute, footerPrototypeRoute];
+const footerRegressionRoute = 'lab/event-desktop/examples/footer-service-v1';
+const retainedLabRoutes = [transportQaRoute, footerRegressionRoute];
 if (!transportExperiment || !['qa', 'focus_group'].includes(transportExperiment.mode)) fail('transport timetable experiment mode missing');
 if (transportExperiment.config_hash !== 'sha256:bf9a8a80e35c8699a26993ae25ac83313d4b6923900f9e51688d2dad7d92cdf2') fail('transport timetable experiment config mismatch');
 if (transportExperiment.mode === 'qa' && transportExperiment.trusted_telemetry !== false) fail('QA experiment telemetry must be untrusted');
@@ -36,10 +36,10 @@ for (const key of files.map((file) => file.key)) {
   if (/^__preview(?:\/|$)/u.test(key) || (/^lab(?:\/|$)/u.test(key) && !retainedLabRoutes.some((route) => key.startsWith(`${route}/`))) || key === 'partnerstvo/index.html') fail(`QA route leaked ${key}`);
 }
 source(`${transportQaRoute}/index.html`);
-const footerPrototypeHtml = source(`${footerPrototypeRoute}/index.html`);
-if (!footerPrototypeHtml.includes('data-footer-prototype="service-v1"')) fail('footer prototype marker missing');
-if ((footerPrototypeHtml.match(/Информационное партнёрство/gu) || []).length !== 1) fail('footer prototype duplicates partnership link');
-if (!footerPrototypeHtml.includes('Пользовательское соглашение') || !footerPrototypeHtml.includes('Политика обработки персональных данных')) fail('footer prototype legal links missing');
+const footerRegressionHtml = source(`${footerRegressionRoute}/index.html`);
+if (!footerRegressionHtml.includes('data-site-footer="service-v1"')) fail('accepted service footer marker missing');
+if ((footerRegressionHtml.match(/Информационное партнёрство/gu) || []).length !== 1) fail('accepted service footer duplicates partnership link');
+if (!footerRegressionHtml.includes('Пользовательское соглашение') || !footerRegressionHtml.includes('Политика обработки персональных данных')) fail('accepted service footer legal links missing');
 for (const event of eventsData.events) {
   const eventHtml = source(`sobytiya/${event.slug}/index.html`);
   source(`sobytiya/${event.slug}/event.ics`); source(`data/discovery/${event.id}.json`);

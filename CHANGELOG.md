@@ -39,6 +39,11 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static candidate acceptance gates**: align the retained footer specimen
+  checker with the globally accepted `service-v1` marker, update the desktop
+  `5756` contract to its incident-required source-consistent Editorial route,
+  and rank immature desktop continuation by a real upcoming-date proximity
+  signal instead of the catalog's intentionally neutral static score.
 - **Desktop portrait event CTA regression**: route action geometry from the
   resolved Split/Editorial media family instead of a viewport guess, restoring
   the compact one-row admission/primary/calendar-share-like panel across real

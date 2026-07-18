@@ -52,7 +52,9 @@ test('event-detail continuation uses six diverse cards with an honest non-person
 
   assert.match(layout, /const EVENT_DETAIL_CONTINUATION_LIMIT = 6/u);
   assert.match(layout, /function rankPopularFallbackCandidates\(manifest, profile\)/u);
-  assert.match(layout, /const score = 0\.68 \* popularity \+ 0\.32 \* recency/u);
+  assert.match(layout, /const upcomingProximity = 1 \/ \(1 \+ daysAway \/ 7\)/u);
+  assert.match(layout, /const score = 0\.68 \* popularity \+ 0\.32 \* upcomingProximity/u);
+  assert.match(layout, /'catalog:upcoming_proximity'/u);
   assert.match(layout, /maxSameCategory: 3, maxSameVenue: 2/u);
   assert.match(layout, /personalFeedProfileIsReady\(profile\)/u);
   assert.match(layout, /isPersonal \? rankPersonalFeedCandidates\(manifest, profile\) : rankPopularFallbackCandidates\(manifest, profile\)/u);

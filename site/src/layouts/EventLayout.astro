@@ -3276,13 +3276,18 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           for (const candidate of toArray(manifest?.related_static)) {
             if (!isEligibleCandidate(candidate, manifest, active)) continue;
             const popularity = personalFeedPopularity(candidate);
-            const recency = staticCandidateScore(candidate);
-            const score = 0.68 * popularity + 0.32 * recency;
+            const currentDay = Date.parse(`${String(manifest?.current_date || '').slice(0, 10)}T00:00:00Z`);
+            const candidateDay = Date.parse(`${String(candidate?.date || candidate?.start_date || '').slice(0, 10)}T00:00:00Z`);
+            const daysAway = Number.isFinite(currentDay) && Number.isFinite(candidateDay)
+              ? Math.max(0, Math.round((candidateDay - currentDay) / 86400000))
+              : 30;
+            const upcomingProximity = 1 / (1 + daysAway / 7);
+            const score = 0.68 * popularity + 0.32 * upcomingProximity;
             scored.push({
               candidate,
               score,
-              base_similarity: recency,
-              reason_codes: unique([...(toArray(candidate.reason_codes)), 'catalog:popular_fallback']),
+              base_similarity: upcomingProximity,
+              reason_codes: unique([...(toArray(candidate.reason_codes)), 'catalog:popular_fallback', 'catalog:upcoming_proximity']),
             });
           }
           scored.sort((left, right) => right.score - left.score || right.base_similarity - left.base_similarity || Number(candidateId(left.candidate) || 0) - Number(candidateId(right.candidate) || 0));
