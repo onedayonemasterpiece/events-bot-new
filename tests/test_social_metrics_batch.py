@@ -576,8 +576,39 @@ def test_exporter_reads_telegram_forwards_and_builds_explainable_signals(tmp_pat
 
     assert exporter.source_metrics(con, urls) == (16, 700, 9, 2)
     reasons, score = exporter.popularity_signals(con, urls)
-    assert reasons == ["fast_growth", "frequently_shared", "discussed", "multi_source"]
-    assert score == 8.5
+    assert reasons == ["fast_growth", "frequently_shared", "discussed"]
+    assert score == 7.5
+    con.close()
+
+
+def test_exporter_requires_two_independent_publishers_for_multi_source(tmp_path):
+    exporter = _load_exporter()
+    con = sqlite3.connect(tmp_path / "independent-sources.sqlite")
+    con.row_factory = sqlite3.Row
+    con.executescript(
+        """
+        create table social_metric_snapshot(
+            platform text, publisher_id text, post_id integer, age_bucket text,
+            source_url text, views integer, likes integer, comments integer,
+            shares integer, collected_ts integer, status text
+        );
+        insert into social_metric_snapshot values(
+            'telegram','kldevents',7,'6h','https://t.me/kldevents/7',500,12,4,8,20,'collected'
+        );
+        insert into social_metric_snapshot values(
+            'vk','999',8,'6h','https://vk.com/wall-999_8',200,4,0,1,20,'collected'
+        );
+        insert into social_metric_snapshot values(
+            'telegram','external_events',9,'6h','https://t.me/external_events/9',300,5,0,1,20,'collected'
+        );
+        """
+    )
+
+    one_external = ["https://t.me/kldevents/7", "https://vk.com/wall-999_8"]
+    two_external = one_external + ["https://t.me/external_events/9"]
+
+    assert "multi_source" not in exporter.popularity_signals(con, one_external)[0]
+    assert "multi_source" in exporter.popularity_signals(con, two_external)[0]
     con.close()
 
 

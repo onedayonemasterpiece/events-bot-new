@@ -1345,7 +1345,7 @@ def popularity_signals(
         return [], 0.0
 
     by_url: dict[str, dict[str, sqlite3.Row]] = defaultdict(dict)
-    publishers: set[str] = set()
+    independent_publishers: set[str] = set()
     row_families: dict[tuple[str, str], str] = {}
     for row in rows:
         url = str(row["source_url"] or "")
@@ -1360,7 +1360,8 @@ def popularity_signals(
             family = "owned:kenigevents"
         else:
             family = f"{platform}:{publisher}"
-        publishers.add(family)
+        if family != "owned:kenigevents":
+            independent_publishers.add(family)
         row_families[(url, str(row["age_bucket"]))] = family
 
     fast_growth = False
@@ -1407,7 +1408,11 @@ def popularity_signals(
         reasons.append("frequently_shared")
     if discussed:
         reasons.append("discussed")
-    if len(publishers) >= 2:
+    # Publishing an imported event into our own distribution network is not
+    # independent evidence that the event is popular. Keep owned counters for
+    # growth/share/discussion thresholds, but require two distinct external
+    # publisher families for the "multi_source" reason.
+    if len(independent_publishers) >= 2:
         reasons.append("multi_source")
     weights = {
         "fast_growth": 3.0,

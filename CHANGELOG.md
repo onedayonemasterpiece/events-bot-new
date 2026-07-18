@@ -206,6 +206,12 @@
 
 ### Fixed
 
+- **Static popular feed / independent multi-source calibration**: require two
+  distinct external publisher families for the `multi_source` reason; owned
+  Telegram/VK distribution still contributes real growth, share and discussion
+  counters but no longer turns one external announcement into broad automatic
+  popularity evidence.
+
 - **Popular feed / terminal target rescan load**: reuse `post_ts` from compact
   social snapshots when old TG/VK posts have no legacy age-day row, and do not
   bootstrap an unknown timestamp again after any terminal bucket exists; this
