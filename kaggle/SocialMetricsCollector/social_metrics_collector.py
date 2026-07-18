@@ -138,6 +138,18 @@ def _resolution_row(
     return row
 
 
+def _is_public_vk_item(item: dict[str, Any] | None, *, observed_ts: int) -> bool:
+    """Reject postponed VK rows whose public timestamp is still in the future."""
+    if not isinstance(item, dict):
+        return False
+    post_ts = item.get("date")
+    return (
+        isinstance(post_ts, int)
+        and not isinstance(post_ts, bool)
+        and 0 < post_ts <= observed_ts + 900
+    )
+
+
 async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str], wall_limit: int) -> list[dict[str, Any]]:
     if not candidates:
         return []
@@ -149,6 +161,7 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
         by_group.setdefault(str(candidate["publisher_id"]), []).append(candidate)
     out: list[dict[str, Any]] = []
     for group, rows in sorted(by_group.items()):
+        observed_ts = int(time.time())
         direct: dict[int, dict[str, Any]] = {}
         direct_failed: set[str] = set()
         for start in range(0, len(rows), 100):
@@ -172,10 +185,17 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
         for candidate in rows:
             candidate_id = str(candidate["candidate_id"])
             if candidate_id in direct_failed:
-                out.append(_resolution_row(candidate, observed_ts=int(time.time()), status="error", method="direct_error"))
+                out.append(_resolution_row(candidate, observed_ts=observed_ts, status="error", method="direct_error"))
                 continue
             item = direct.get(int(candidate["stored_post_id"]))
-            score, confidence = _match_post(candidate, item) if item else (0, 0.0)
+            # wall.getById can return a postponed row with its future publish
+            # timestamp.  It is not public yet, so it must stay unresolved and
+            # must not poison the otherwise valid metrics import.
+            score, confidence = (
+                _match_post(candidate, item)
+                if _is_public_vk_item(item, observed_ts=observed_ts)
+                else (0, 0.0)
+            )
             if item and score > 0:
                 selected[candidate_id] = (item, "direct", confidence)
             else:
@@ -201,10 +221,12 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
                 wall_error = True
         for candidate in unresolved:
             if wall_error:
-                out.append(_resolution_row(candidate, observed_ts=int(time.time()), status="error", method="wall_scan_error"))
+                out.append(_resolution_row(candidate, observed_ts=observed_ts, status="error", method="wall_scan_error"))
                 continue
             best: tuple[int, int, float, dict[str, Any]] | None = None
             for item in wall_items:
+                if not _is_public_vk_item(item, observed_ts=observed_ts):
+                    continue
                 score, confidence = _match_post(candidate, item)
                 rank = (score, int(item.get("date") or 0))
                 if score > 0 and (best is None or rank > (best[0], best[1])):
@@ -212,7 +234,7 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
             if best:
                 selected[str(candidate["candidate_id"])] = (best[3], "wall_scan", best[2])
             else:
-                out.append(_resolution_row(candidate, observed_ts=int(time.time()), status="missing", method="unmatched"))
+                out.append(_resolution_row(candidate, observed_ts=observed_ts, status="missing", method="unmatched"))
 
         claims: dict[int, list[str]] = {}
         for candidate_id, (item, _method, _confidence) in selected.items():
@@ -220,10 +242,10 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
         candidates_by_id = {str(row["candidate_id"]): row for row in rows}
         for candidate_id, (item, method, confidence) in selected.items():
             if len(claims.get(int(item.get("id") or 0), [])) > 1:
-                out.append(_resolution_row(candidates_by_id[candidate_id], observed_ts=int(time.time()), status="ambiguous", method="ambiguous"))
+                out.append(_resolution_row(candidates_by_id[candidate_id], observed_ts=observed_ts, status="ambiguous", method="ambiguous"))
             else:
                 out.append(_resolution_row(
-                    candidates_by_id[candidate_id], observed_ts=int(time.time()), status="published",
+                    candidates_by_id[candidate_id], observed_ts=observed_ts, status="published",
                     item=item, method=method, confidence=confidence,
                 ))
     return sorted(out, key=lambda row: str(row["candidate_id"]))
