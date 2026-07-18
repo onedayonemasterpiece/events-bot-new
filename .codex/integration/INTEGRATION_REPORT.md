@@ -1,53 +1,55 @@
-# Integration report — popular-all-owned-channels
+# Integration report — static-event-v11-regression-repair
 
 ## Integrated scope
 
 | Requirement | Status | Integration evidence |
 |---|---|---|
-| R01 | Done | Exact `231828790` event repost loader/exporter; structural exclusion tests |
-| R02 | Done | Manifest v2 + Kaggle grouped postponed/live resolver + Fly evidence revalidation |
-| R03 | Done | Exact result coverage, deterministic atomic slot claim, terminal failure ledger, exception-safe dataset cleanup |
-| R04 | Done | Four-key snapshots unchanged, 90-day rolling backfill/cleanup, minified ephemeral JSON, no raw wall persistence, owned-family max |
+| R01 | Done | One shared quality-admitted desktop/mobile media set; event `4783` keeps seven strong images and drops five weak renditions only because alternatives exist. |
+| R02 | Done | Exact occurrence projection presents `5756` as the play «Женитьба», with event-photo hero and non-cropped OCR companion. |
+| R03 | Done | Event `5658` lead ends with the complete source-backed sentence «превращается в остросюжетный конфликт.» |
+| R04 | Done | KAUP ordinary/off/no-JS/elapsed fallback is `departure_board_v1`; all three accepted arms remain query-forceable, North station and bus/minibus copy are preserved. |
+| R05 | Done | Weak-only `180×320` event `6815` remains available at source-size `contain` in desktop/mobile hero and fullscreen instead of crop/upscale. |
+| R06 | Done | Main-reachable production-Kaggle build, immutable secret publication, public HTTP/Playwright, visual screenshot audit and Telegram handoff completed. |
+| R07 | Partial | Exact negative/positive Smart Update identity replays are merged, but production remains shadow and canonical `5754`–`5757`/public repair awaits the documented manual audit. |
 
 ## Integration decisions
 
-- The separate env `SOCIAL_METRICS_VK_OFFICIAL_GROUP_ID` is authoritative for
-  metrics; the overloaded production `VK_AFISHA_GROUP_ID` is not reused.
-- A 90-day ledger-backed backfill is allowed; arbitrary wall history is not.
-- Match text is carried only as a bounded transient result field so Fly can run
-  the canonical matcher; it is discarded after validation and never stored.
-- Resolution mapping and snapshots are independently idempotent. If snapshot
-  persistence fails after mapping, the next interval sees the published target
-  and repairs the metric without another wall scan.
+- The accepted v11 family matrix, not the named three pages alone, is the
+  automatic template baseline.
+- Weak images are excluded only when an event-local strong alternative exists;
+  weak-only media stays visible without destructive enlargement.
+- The accepted departure board is the safe transport default. Query-forced A/B/C
+  arms are review controls and do not create trusted experiment telemetry.
+- The static `5756` source-consistency guard is a safe projection, not a claim
+  that canonical production data or existing public posts are repaired.
+- The production root was not promoted. The bearer token is kept only in ignored
+  release artifacts and the Telegram review message, never in tracked docs.
 
 ## Verification
 
-- Combined collector/status/exporter and existing VK popularity matcher suite:
-  `42 passed`.
-- `a-gemini` (`Gemini 3.1 Pro (High)`) acceptance review: **APPROVE**;
-  no blockers, explicitly accepted exact attribution, owned-family collapse,
-  Fly evidence revalidation, atomic slot claim and failure cleanup.
-- Pending final CI/release evidence.
+- `pytest -q tests/test_static_site_*.py tests/test_smart_update_merge_identity_gate.py`: `63 passed`.
+- `node --test site/tests/event-media-quality.test.mjs`: `5 passed`.
+- `npm --prefix site run test:static-release`: `5 passed`.
+- GitHub CI for PR `#76`: success; source SHA
+  `a6ad22fba8b63e3dee7a71b8ca0837494c554033` is in `origin/main`.
+- Kaggle build
+  `production-20260718t-static-event-v11-regression-repair-kaggle-v2b`:
+  snapshot SHA-256
+  `8c784e2d14b34738a89f4cf0101645a46e470a2147c7752f73db7dcf83629972`,
+  `323` event pages / `1172` files, all mandatory production/secret checks green.
+- Secret prefix: `1173` exact authenticated objects and public hash/MIME checks.
+  A tool-session interruption left `745` already-created objects; each ETag was
+  checked against the local single-part body, the remaining `428` were created
+  with `If-None-Match`, and final inventory/body/MIME parity was exact.
+- Public acceptance: seven HTTP specimens with `noindex`/`no-referrer`; `21`
+  focused Playwright checks, `36 × 2` mobile page checks and five real
+  transitions; production root and sitemap hashes unchanged.
+- Telegram delivery/readback: chat `4337049383`, topic `2`, message `300`.
 
-## Production release
+## Remaining gates
 
-- PR: `#57`; merge SHA: `0804df65bb86b901df21f715aa5f2c9989d102ed`.
-- Manual exact-main Fly deploy: release `v1686`, image
-  `deployment-01KXQRPXP1G30SRRABNE9SDJRC`, machine version `1686`.
-- Real canary `social-metrics:991268`: `224` due metric targets plus `272`
-  postponed/live candidates; imported `192` collected observations and resolved
-  `154 published`, `114 missing`, `4 ambiguous`, `0 resolver errors`.
-- Exact official-group backfill: all `36/36` ledger-backed posts collected in one
-  VK group batch; four bounded rows/post (`144` total = `36 collected` + `108
-  skipped_late`). No row-bound violations.
-- Current/future `klgdevents` metric coverage increased to `172/303` events.
-  Official group has zero current/future exact repost mappings at this instant,
-  so it correctly changes no current ranking yet; future exact reposts are now
-  collected automatically.
-- Status regression evidence: `kernel_started`, `preflight_ok`, multiple `alive`,
-  terminal `report_written`, and both resource releases recorded. All four
-  private temporary Kaggle datasets were absent after cleanup.
-- Post-deploy: `/healthz` HTTP 200 `ready=true`; Fly checks `1/1`; SQLite
-  `quick_check=ok`; `/data` about `920 MiB` free on 2 GiB; runtime mirror grew
-  within the 64 MiB budget; no fresh disk-full, proxy no-candidate or
-  `AuthKeyDuplicatedError` matches.
+- User visual acceptance before any production-root promotion.
+- Source-grounded canonical repair and authenticated TG/VK/Telegraph repair for
+  events `5754`–`5757`.
+- Manual precision audit before changing the Smart Update identity gate from
+  `shadow` to `enforce`.

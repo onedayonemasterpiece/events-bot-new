@@ -132,4 +132,4 @@ lanes:
     forbidden_files: []
     expected_output: new verified secret candidate from production snapshot; root unchanged
     verification_scope: full_local
-    status: in_progress
+    status: completed

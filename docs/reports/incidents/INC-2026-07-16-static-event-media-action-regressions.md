@@ -303,3 +303,18 @@ a full-width `cover`. That candidate is not acceptance evidence. The shared
 mobile hero/gallery now carries the same weak-only low-resolution policy and
 bounds the image to source dimensions with `contain`; a new immutable build and
 token are required rather than overwriting the rejected prefix.
+
+The replacement `…kaggle-v2b` candidate is now the automated acceptance target.
+It was built from `origin/main` SHA `a6ad22fb` and immutable snapshot SHA-256
+`8c784e2d14b34738a89f4cf0101645a46e470a2147c7752f73db7dcf83629972`:
+`323` event pages / `1172` files, all production/secret checks green. Public
+inventory plus hash/MIME verification passed for `1173` create-only objects;
+root and sitemap hashes stayed unchanged. Public Playwright passed `21` focused
+checks, `36` pages at both mobile widths and five real transitions, including
+native-size `180×320` contain in event `6815` hero/fullscreen, seven strong
+images on both surfaces for `4783`, source-consistent `5756`, sentence-safe
+`5658`, telephone CTA and ordinary/forced KAUP transport. The links were sent
+and read back as Telegram message `300` in topic `2`.
+
+This incident remains open only for the user's visual acceptance and any later
+explicit production-root promotion; the rejected v1 link remains excluded.

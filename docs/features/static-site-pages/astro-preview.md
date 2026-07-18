@@ -1,6 +1,6 @@
 # Astro SSG preview — event pages
 
-> **Status:** accepted v11 full-catalog event-page matrix is the mandatory template baseline; checked Smart Update/Kaggle secret-candidate integration is being revalidated before replacement publication. Production-root rollout remains pending.
+> **Status:** accepted v11 full-catalog event-page matrix is the mandatory template baseline; the corrected production-Kaggle secret candidate is published and has passed public desktop/mobile automation. Product visual acceptance and production-root rollout remain pending.
 > **Accepted template source:** `3b17e536` (`integration/static-event-v11-transport-phone-carousel`), including horizontal photo, photo+OCR companion, document-contain, portrait-series and quality-fallback families.
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
@@ -31,6 +31,33 @@ The review handoff must include the ordinary KAUP URL and all three forced
 experiment telemetry. The current production A/B/C mode remains `off`; a secret
 candidate is visual/product acceptance, not permission to promote root or start
 live experimentation.
+
+Final automated acceptance evidence for the corrected candidate:
+
+- source `a6ad22fba8b63e3dee7a71b8ca0837494c554033` is reachable from
+  `origin/main`; GitHub CI passed;
+- Kaggle build
+  `production-20260718t-static-event-v11-regression-repair-kaggle-v2b`
+  used snapshot `snapshot-20260718t-v11-regression-repair`, SHA-256
+  `8c784e2d14b34738a89f4cf0101645a46e470a2147c7752f73db7dcf83629972`,
+  `quick_check=ok`, and produced `323` event pages / `1172` files with all
+  required production and secret-candidate checks green;
+- durable docs identify the secret prefix only by token SHA-256
+  `4c906f92db3bbf5c448bf6b29fc650a40dbc2f7841008555657e84bdaec10b66`.
+  Authenticated inventory and public hash/MIME verification passed for all
+  `1173` objects. An interrupted upload was resumed only after verifying the
+  `745` already-created single-part objects; the remaining `428` were created
+  with `If-None-Match`, and no existing object was overwritten;
+- seven public HTTP specimens returned `200` with `noindex` and
+  `no-referrer`; Playwright passed `21` focused desktop/mobile checks, all three
+  forced transport arms, `36` event pages at both `320` and `390` px, and five
+  actual related-event transitions;
+- production root and sitemap body hashes stayed byte-identical. Stable ICS was
+  observation-only because that prefix has an independent writer; it also did
+  not change during this final candidate publication;
+- links were sent and read back as Telegram message `300` in chat
+  `4337049383`, topic `2`. Production root remains untouched pending visual
+  acceptance.
 
 ## Public URLs
 
