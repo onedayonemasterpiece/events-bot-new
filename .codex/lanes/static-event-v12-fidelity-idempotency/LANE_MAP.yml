@@ -55,8 +55,13 @@ lanes:
     branch: agent/static-event-v12/content-media
     worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v12-content-media
     writable_files:
-      - site/src/lib/**
+      - site/src/lib/eventFallbackArt.ts
+      - site/src/lib/eventMedallions.ts
       - site/src/data/**
+      - site/src/components/EventTokenMedallions.astro
+      - site/src/components/EventFallbackArt.astro
+      - site/src/components/DesktopEventPage.astro
+      - site/src/components/EventHero.astro
       - site/public/assets/event-fallbacks/**
       - site/scripts/export-production-preview-data.py
       - tests/**static_site**
@@ -64,7 +69,9 @@ lanes:
       - .codex/lanes/content_media/RESULTS.md
       - artifacts/codex/static-event-v12-content-media/**
     forbidden_files:
-      - site/src/components/**
+      - site/src/components/transport/**
+      - site/src/components/DesktopEventActionPanel.astro
+      - site/src/components/ServiceShareAction.astro
       - site/src/layouts/**
       - main.py
       - main_part2.py
@@ -89,11 +96,14 @@ lanes:
     writable_files:
       - main.py
       - main_part2.py
+      - db.py
       - models.py
       - smart_event_update.py
       - scheduling.py
+      - static_site_release.py
       - kaggle/StaticSiteBuilder/**
       - scripts/run_static_site_builder_kaggle.py
+      - scripts/request_static_site_build.py
       - tests/**kaggle**
       - tests/**static_site**
       - tests/**smart_update**
