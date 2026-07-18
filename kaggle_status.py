@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -7,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -759,21 +761,12 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     return 200, body
 
 
-async def reconcile_kaggle_run_terminal_from_host(
+async def _reconcile_kaggle_run_terminal_from_host_once(
     db: Database,
     *,
     run_id: str,
-    message: str = "host validated downloaded Kaggle result",
+    message: str,
 ) -> dict[str, Any]:
-    """Close a run ledger after the host validates the immutable result.
-
-    Kernel callbacks remain the primary status signal.  This reconciliation is
-    a fail-safe for the narrow case where Kaggle completed and the host
-    cryptographically validated the downloaded result, but callback delivery
-    was unavailable.  It records that distinction instead of leaving a
-    successful run permanently in ``created``.
-    """
-
     clean_run_id = _clean_text(run_id, limit=300)
     if not clean_run_id:
         raise ValueError("run_id is required")
@@ -796,12 +789,22 @@ async def reconcile_kaggle_run_terminal_from_host(
             )
             callback_event_count, max_seq = await cur.fetchone()
             await cur.close()
+            release_cur = await conn.execute(
+                """
+                UPDATE kaggle_resource_lease
+                SET status='released', released_at=?, updated_at=?
+                WHERE run_id=? AND status='active'
+                """,
+                (now, now, clean_run_id),
+            )
+            released_resource_count = int(getattr(release_cur, "rowcount", 0) or 0)
             if ledger[1] and str(ledger[0] or "").lower() in TERMINAL_STATUSES:
                 await conn.commit()
                 return {
                     "status": "already_terminal",
                     "run_id": clean_run_id,
                     "callback_event_count": int(callback_event_count or 0),
+                    "released_resource_count": released_resource_count,
                 }
             progress = {
                 "phase": "report",
@@ -849,7 +852,53 @@ async def reconcile_kaggle_run_terminal_from_host(
         "status": "reconciled",
         "run_id": clean_run_id,
         "callback_event_count": int(callback_event_count or 0),
+        "released_resource_count": released_resource_count,
     }
+
+
+async def reconcile_kaggle_run_terminal_from_host(
+    db: Database,
+    *,
+    run_id: str,
+    message: str = "host validated downloaded Kaggle result",
+) -> dict[str, Any]:
+    """Close a run ledger after the host validates the immutable result.
+
+    Kernel callbacks remain the primary status signal.  This reconciliation is
+    a fail-safe for the narrow case where Kaggle completed and the host
+    cryptographically validated the downloaded result, but callback delivery
+    was unavailable.  It records that distinction instead of leaving a
+    successful run permanently in ``created`` and releases only resource
+    leases still owned by this exact run.  The ownership predicate is critical:
+    a late host receipt must never release a successor run's lease.
+
+    Publication may finish while Smart Update owns a short SQLite writer lock.
+    A one-shot best-effort call can therefore strand a three-hour resource
+    lease after a successful build. Retry only SQLite lock contention; all
+    other failures remain visible immediately.
+    """
+
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await _reconcile_kaggle_run_terminal_from_host_once(
+                db,
+                run_id=run_id,
+                message=message,
+            )
+        except sqlite3.OperationalError as exc:
+            locked = "database is locked" in str(exc).lower() or "database table is locked" in str(exc).lower()
+            if not locked or attempt >= max_attempts:
+                raise
+            delay = min(2 ** (attempt - 1), 8)
+            logger.warning(
+                "kaggle_status: host reconciliation SQLite lock run_id=%s attempt=%s/%s retry_in=%ss",
+                _clean_text(run_id, limit=300),
+                attempt,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 def make_kaggle_run_event_handler(db: Database):

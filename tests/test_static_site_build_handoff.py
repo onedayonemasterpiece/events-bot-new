@@ -49,6 +49,30 @@ def test_snapshot_retention_context_fails_closed_for_malformed_active_handoff(tm
     )
 
 
+@pytest.mark.asyncio
+async def test_static_site_preflight_reconciles_exact_current_candidate_before_push(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import kaggle_status
+    import main
+
+    calls: list[tuple[object, str, str]] = []
+    candidate = SimpleNamespace(run_id="static-site:published-run")
+    monkeypatch.setattr(main, "resolve_current_secret_candidate", lambda _path: candidate)
+
+    async def fake_reconcile(db, *, run_id, message):  # noqa: ANN001
+        calls.append((db, run_id, message))
+        return {"status": "already_terminal", "released_resource_count": 1}
+
+    monkeypatch.setattr(kaggle_status, "reconcile_kaggle_run_terminal_from_host", fake_reconcile)
+    db = SimpleNamespace(path="/tmp/does-not-need-to-exist.sqlite")
+
+    result = await main._reconcile_current_static_site_candidate_status(db)
+
+    assert result == {"status": "already_terminal", "released_resource_count": 1}
+    assert calls == [(db, candidate.run_id, "static-site preflight reconciled current published candidate")]
+
+
 def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
     import main
 
