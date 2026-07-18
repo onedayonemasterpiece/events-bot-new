@@ -172,8 +172,17 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
   // A classified non-identity document (venue announcement, attendee note,
   // schedule, map) must not monopolise the desktop hero when the same event has
   // a separately classified, crop-safe, full-resolution event photograph.
-  // Keep the document in the gallery; only the desktop hero family changes.
-  if (isReliableNonIdentityDocument(primary)) {
+  // The same promotion is safe for a landscape event photo which is only just
+  // below the Editorial resolution floor: it preserves the chosen horizontal
+  // family while selecting a stronger classified photo. Portrait/square
+  // primaries deliberately do not enter this branch.
+  const primaryIsResolutionConstrainedLandscapePhoto = Boolean(primary)
+    && isVisual(primary)
+    && primary?.media_semantic_status === 'classified'
+    && primary?.media_role === 'event_photo'
+    && primaryRatio >= EDITORIAL_MIN_RATIO
+    && !isEditorialLandscape(primary);
+  if (isReliableNonIdentityDocument(primary) || primaryIsResolutionConstrainedLandscapePhoto) {
     const landscapePhotoIndex = distinctIndexes
       .filter((index) => index !== primaryIndex && isReliableEditorialPhoto(assets[index]))
       .sort((left, right) => (assets[right].width * assets[right].height) - (assets[left].width * assets[left].height))[0];
@@ -199,7 +208,9 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
         splitPortraitSourceIndexes:[],
         splitViewerHiddenSourceIndexes:[],
         relatedMediaTreatment:'hybrid',
-        reason:'editorial-replaces-non-identity-document-with-classified-photo',
+        reason:isReliableNonIdentityDocument(primary)
+          ? 'editorial-replaces-non-identity-document-with-classified-photo'
+          : 'editorial-promotes-qualified-landscape-photo',
       };
     }
   }

@@ -39,6 +39,15 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static footer candidate fixture**: make the retained footer regression
+  specimen use frozen desktop event `5658` instead of active-catalog-only event
+  `6589`, so normal event expiry cannot abort a Smart Update/Kaggle production
+  candidate before the global footer contract is checked.
+- **Static production media gate after canonical repair**: keep event `5756`
+  in the accepted Editorial family when Smart Update changes its primary from
+  a non-identity document to a resolution-constrained horizontal event photo;
+  a stronger classified horizontal photo from the same event is promoted,
+  while portrait/square routing remains unchanged.
 - **Static candidate acceptance gates**: align the retained footer specimen
   checker with the globally accepted `service-v1` marker, update the desktop
   `5756` contract to its incident-required source-consistent Editorial route,
