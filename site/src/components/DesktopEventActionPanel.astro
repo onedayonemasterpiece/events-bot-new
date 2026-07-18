@@ -42,7 +42,6 @@ const phoneDisplay = normalizedPhoneDigits.length === 11 && normalizedPhoneDigit
 const soldOut = isTicketSoldOut(event);
 const calendarPrimary = !soldOut
   && event.ticket.kind === 'free'
-  && !ctaHref
   && isCalendarEligible(event);
 const ctaLabel = !event.ticket.is_free && !event.ticket.price_label && ctaHref ? 'Билеты' : eventTicketActionLabel(event);
 const canonicalUrl = eventAbsoluteUrl(event);
