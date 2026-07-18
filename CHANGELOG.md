@@ -9,6 +9,8 @@
   blocks share OCR-safe geometry and current-event-aware fatigue/diversity.
 - Fixed secret-candidate pruning so every v13 CTA geometry fixture used by the
   public Playwright gate is retained and checked in the immutable candidate.
+- Fixed desktop free-event CTA parity with mobile: an official source URL no
+  longer displaces the primary `В календарь` action (event 6959 regression).
 - Added a redacted static build diagnostics CLI and documented the one-build/
   two-artifact secret+stable architecture plus past-event/redirect/410 and
   manifest-bound test-prefix lifecycle policy.

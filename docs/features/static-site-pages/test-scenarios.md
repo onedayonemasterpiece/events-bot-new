@@ -77,7 +77,8 @@
 - **ADD-V12-11 — CTA follows media family.** At `1536×864`, the retained Split
   fixtures `cta-phone-invariant`, `cta-registration-invariant` and
   `cta-free-calendar-invariant` keep one contained inline row, validate long
-  primary-label compaction and calendar-primary semantics, while the
+  primary-label compaction and calendar-primary semantics (including a free
+  event with an official source URL), while the
   retained `footer-service-v1` Editorial fixture keeps the three-row panel with
   calendar/share/like aligned on the bottom row. Review may additionally sample
   live events, but expiry of `6876`, `4783`, `6551` or `5374` cannot remove or

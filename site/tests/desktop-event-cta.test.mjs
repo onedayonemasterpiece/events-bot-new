@@ -10,13 +10,20 @@ test('free one-day events use one actionable calendar primary', async () => {
   const freeFixture = examples.events.find((event) => event.id === 6901);
   assert.ok(freeFixture, 'event 6901 must remain frozen for CTA acceptance');
 
-  for (const event of [freeFixture, { ...freeFixture, id:6959 }]) {
+  const freeWithSource = {
+    ...freeFixture,
+    id: 6959,
+    ticket: { ...freeFixture.ticket, href: 'https://actop.us/performances/zvyozdy-v-chyornoy-dyre' },
+  };
+  for (const event of [freeFixture, freeWithSource]) {
     assert.equal(event.ticket.kind, 'free');
-    assert.equal(event.ticket.href, null);
     assert.ok(!event.end_date || event.end_date === event.start_date);
   }
+  assert.equal(freeFixture.ticket.href, null);
+  assert.match(freeWithSource.ticket.href, /^https:\/\//u);
 
-  assert.match(panel, /const calendarPrimary = !soldOut\s*&& event\.ticket\.kind === 'free'\s*&& !ctaHref\s*&& isCalendarEligible\(event\)/u);
+  assert.match(panel, /const calendarPrimary = !soldOut\s*&& event\.ticket\.kind === 'free'\s*&& isCalendarEligible\(event\)/u);
+  assert.doesNotMatch(panel, /event\.ticket\.kind === 'free'\s*&& !ctaHref/u);
   assert.match(panel, /calendarPrimary \? \(\s*<CalendarLink event=\{event\} className="desktop-prototype__primary-action" \/>/u);
   assert.match(panel, /\{!calendarPrimary && <CalendarLink event=\{event\} className="desktop-prototype__icon-action" compact \/>\}/u);
 });
