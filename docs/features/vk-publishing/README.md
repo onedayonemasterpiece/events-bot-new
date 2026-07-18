@@ -21,6 +21,15 @@
 - Пост события поддерживает медиагруппу: все доступные `event.photo_urls` загружаются как `photo-<group_id>_<id>` и прикладываются к `wall.post` в рамках `VK_MAX_ATTACHMENTS`.
 - Загрузка каждой картинки через VK upload server делает до трёх попыток с новым `photos.getWallUploadServer` URL. HTML/timeout/JSON failures от `upload.php` считаются transient upload failures и не должны превращаться в частичную публичную медиагруппу.
 - Если VK возвращает captcha (`code=14`) на `photos.getWallUploadServer` / `photos.saveWallPhoto`, `vk_sync` должен fail closed / pause before `wall.post`: нельзя публиковать событийный пост без картинок только потому, что загрузка фото требует ручного captcha step.
+- Captcha pause хранится как отдельная marker-scoped когорта JobOutbox, а не
+  как безымянный глобальный `paused` до 2036 года. Пока challenge активен,
+  новые VK-задачи остаются pending и не молотят cached captcha. После
+  `VK_CAPTCHA_AUTO_RECOVERY_SEC` бот делает безопасный user-token `wall.get`;
+  при успехе возобновляет только эту когорту с интервалом
+  `VK_CAPTCHA_RESUME_SPACING_SEC`. Исторические/manual paused rows не входят в
+  такое восстановление. Необратимый `wall.edit` (`edit time expired`, удалённый
+  post) завершает только конкретный sync без бесконечного retry и без глобальной
+  captcha-паузы.
 - Для нового managed `klgdevents` поста Telegram-origin события (`source_post_url=t.me/...`, Telegram chat/message fields или `event_source.source_type=telegram`) silent text-only fallback запрещён. Если после `event.photo_urls`, Telegraph fallback и upload попыток нет ни одного `photo...` attachment, `sync_vk_source_post` должен вернуть ошибку `vk_sync_missing_media_for_telegram_event`, а не создавать `wall.post` с `attachments=0`. Emergency override: `VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS=0`.
 - Для любого нового managed `klgdevents` поста, если после нормализации `event.photo_urls` есть хотя бы одна картинка для upload, но VK photo upload вернул 0 attachments, `sync_vk_source_post` должен fail closed до `wall.post`. Это предотвращает postponed/text-only посты для VK-origin событий с уже доступной media, например когда canonical managed image не загрузилась в VK.
 - Для любого нового managed `klgdevents` поста, если часть нормализованных картинок загрузилась, а часть нет, `sync_vk_source_post` тоже fail closed до `wall.post` с `vk_sync_partial_media_upload`. Лучше повторить job и сохранить parity с Telegram/Telegraph, чем создать новый отложенный VK-пост с 2/4 фото. Для редактирования уже существующего поста поведение мягче: частичная неудача re-upload сохраняет прежние вложения и не сжимает медиагруппу.
@@ -155,7 +164,12 @@
 
 - `vk_source.owner_type` distinguishes community walls (`group`, negative owner id) from personal pages (`user`, positive owner id). Operator-seeded personal sources such as `ivsguide` and `natakkaz` must keep `owner_type='user'` so crawl/review/repost URLs use `wall<user_id>_<post_id>` instead of `wall-<group_id>_<post_id>`.
 - Перед production-проверкой убедиться, что заданы `VK_USER_TOKEN` или `VK_ACCESS_TOKEN4`, `VK_EVENTS_GROUP_ID` и целевой `/vkgroup` для daily.
-- После VK captcha / замены `VK_USER_TOKEN` проверять не только наличие секрета, но и прямой `photos.getWallUploadServer` для `VK_EVENTS_GROUP_ID`: `ok` без `error_code=14`. Если процесс уже поймал captcha, нужен restart/redeploy для сброса in-memory `_vk_captcha_needed`.
+- После VK captcha / замены `VK_USER_TOKEN` проверять не только наличие секрета,
+  но и прямой `wall.get filter=postponed` и `photos.getWallUploadServer` для
+  `VK_EVENTS_GROUP_ID`: оба должны отвечать без `error_code=14`. Restart больше
+  не является штатным способом снятия паузы: runtime обязан сам залогировать
+  `vk_captcha auto recovery succeeded`, а marker-scoped jobs — перейти в paced
+  pending. Legacy unmarked pause исправляется только адресным incident repair.
 - Для события с несколькими картинками проверять не только наличие `vk_repost_url`, но и attachments в самом VK-посте.
 - Для daily проверять два независимых слота: утренний `today` и вечерний `added`; отсутствие событий в одном слоте не должно блокировать второй.
 - Для нового daily/event smoke проверять через VK API не только URL, но и авторство: `from_id` должен быть `-<group_id>`, а `likes.can_publish` должен быть `1`. Новые smoke-посты ожидаемо появляются в postponed queue; проверять `publish_date`/`date` и удалять из отложки после проверки, если smoke не должен выйти публично.

@@ -7,6 +7,43 @@ from datetime import datetime, timezone
 import main
 
 
+@pytest.mark.asyncio
+async def test_edit_vk_post_treats_expired_edit_window_as_terminal(monkeypatch):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "token")
+    calls = []
+
+    async def fake_vk_api(method, params, *args, **kwargs):
+        calls.append(method)
+        if method == "wall.getById":
+            return {
+                "response": [
+                    {
+                        "text": "old",
+                        "date": int(datetime.now(timezone.utc).timestamp()),
+                        "can_edit": 1,
+                        "attachments": [],
+                    }
+                ]
+            }
+        raise main.VKAPIError(
+            15,
+            "Access denied: edit time expired",
+            method="wall.edit",
+        )
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    result = await main.edit_vk_post(
+        "https://vk.com/wall-231920894_6648",
+        "new",
+    )
+
+    assert result is None
+    assert calls == ["wall.getById", "wall.edit"]
+
+
 def _expected_vk_source_hash(event, text):
     return main.content_hash(
         "\n".join(

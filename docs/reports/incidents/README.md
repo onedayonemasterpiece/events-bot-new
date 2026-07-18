@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-18-vk-captcha-publication-cadence-gap.md`
+  - Scope: managed VK `vk_sync`, captcha persistence/recovery, expired post
+    edits, JobOutbox pause cohorts and postponed publication cadence.
+  - Must not regress: one VK captcha cannot strand the queue until 2036; only
+    the marked cohort resumes after a harmless probe, with bounded spacing;
+    historical/manual pauses remain untouched; expired edit windows do not
+    retry indefinitely; same-day gaps require a verified catch-up and non-empty
+    authenticated postponed queue.
+
 - `INC-2026-07-17-vk-auto-provider-quota-false-reject.md`
   - Scope: manual/scheduled VK auto-import, Smart Update Google key allocation,
     provider-side 429 handling, grounding and post-create image geometry.
