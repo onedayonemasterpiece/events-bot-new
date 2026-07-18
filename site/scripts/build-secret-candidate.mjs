@@ -26,7 +26,15 @@ const footerPrototypeRoute = 'lab/event-desktop/examples/footer-service-v1';
 // the only executable contract because an event can legitimately leave the
 // active catalog between two Smart Update builds.
 const splitCtaRegressionRoute = 'lab/event-desktop/examples/cta-phone-invariant';
-const retainedLabRoutes = [transportQaRoute, footerPrototypeRoute, splitCtaRegressionRoute];
+const registrationCtaRegressionRoute = 'lab/event-desktop/examples/cta-registration-invariant';
+const freeCalendarCtaRegressionRoute = 'lab/event-desktop/examples/cta-free-calendar-invariant';
+const retainedLabRoutes = [
+  transportQaRoute,
+  footerPrototypeRoute,
+  splitCtaRegressionRoute,
+  registrationCtaRegressionRoute,
+  freeCalendarCtaRegressionRoute,
+];
 if (!['qa', 'focus_group'].includes(transportExperimentMode)) throw new Error('Secret candidate transport experiment mode must be qa or focus_group');
 for (const key of ['template_matrix','production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
   if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
@@ -49,8 +57,8 @@ if (astro.status !== 0) process.exit(astro.status || 1);
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
 // Secret candidates retain only the explicit noindex review specimens: the
 // transport experiment, isolated footer prototype and compact Split CTA
-// regression surface. Every other lab route stays excluded from the immutable
-// candidate.
+// regression surfaces (phone, long registration label and calendar-primary).
+// Every other lab route stays excluded from the immutable candidate.
 const retainedLabStaging = retainedLabRoutes.map((route, index) => {
   const staged = join(siteDir, `.secret-lab-${process.pid}-${index}`);
   rmSync(staged, { recursive: true, force: true });

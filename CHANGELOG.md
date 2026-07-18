@@ -7,6 +7,8 @@
   stacking and promotes calendar for free one-day events; gallery pointer CTA,
   hover arrows, focus and reduced-motion are hardened; both desktop continuation
   blocks share OCR-safe geometry and current-event-aware fatigue/diversity.
+- Fixed secret-candidate pruning so every v13 CTA geometry fixture used by the
+  public Playwright gate is retained and checked in the immutable candidate.
 - Added a redacted static build diagnostics CLI and documented the one-build/
   two-artifact secret+stable architecture plus past-event/redirect/410 and
   manifest-bound test-prefix lifecycle policy.
