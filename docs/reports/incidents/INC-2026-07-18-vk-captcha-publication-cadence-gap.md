@@ -1,10 +1,10 @@
 # INC-2026-07-18 VK captcha publication cadence gap
 
-Status: open
+Status: closed
 Severity: sev1
 Service: managed VK event publication / JobOutbox
 Opened: 2026-07-18
-Closed: —
+Closed: 2026-07-18
 Owners: events-bot
 Related incidents: `INC-2026-07-03-current-import-vector-vk-publication`, `INC-2026-07-17-vk-auto-provider-quota-false-reject`
 Related docs: `docs/features/vk-publishing/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -62,6 +62,15 @@ automatic probe/resume path and the database pause survived indefinitely.
 - 2026-07-18 06:34 UTC — authenticated probe showed `postponed.count=0`; the
   same user token could successfully read the wall, proving the provider-side
   challenge had already cleared.
+- 2026-07-18 06:58 UTC — Fly release `1693` deployed the marker-scoped captcha
+  recovery from merge SHA `fb80e16ddff09e4ccdd34d7e8cdb129062e31013`.
+- 2026-07-18 07:01–07:16 UTC — the bounded overnight cohort was requeued at
+  one-minute intervals. All 15 events with approved media completed `vk_sync`;
+  transient `photos.saveWallPhoto: photo is undefined` responses retried through
+  the normal outbox backoff rather than producing text-only posts.
+- 2026-07-18 07:24 UTC — a locally executed, one-image Gemma canary for event
+  `6956` passed visual review and was imported with poster/pixel fingerprint
+  guards as production geometry row `477`.
 
 ## Root Cause
 
@@ -128,17 +137,23 @@ automatic probe/resume path and the database pause survived indefinitely.
 
 ## Immediate Mitigation
 
-- Read-only triage completed; broad unpause was explicitly avoided.
-- Catch-up will target newly created overnight events `6943..6958` rather than
-  all 233 historical paused rows.
+- Broad unpause was explicitly avoided. A row-level backup was taken and only
+  the 15 active overnight events with approved media were requeued; the
+  media-less event `6957` remained fail-closed.
+- The stale event `6732` edit was terminally paused as
+  `permanent_edit_window_expired:wall-231920894_6648` instead of returning to
+  the retry loop.
+- The catch-up produced managed posts `7684..7699` (with VK reassignment of one
+  scheduled id during the live transition); every recovered item had a photo.
 
 ## Corrective Actions
 
-- Add persisted captcha cohort markers and marker-scoped resume.
-- Probe captcha clearance with a harmless `wall.get` after a bounded cooldown.
-- Keep new VK work pending while captcha is active.
-- Stagger resumed jobs to avoid another API burst.
-- Treat expired/deleted edit targets as terminal for the individual job.
+- [x] Add persisted captcha cohort markers and marker-scoped resume.
+- [x] Probe captcha clearance with a harmless `wall.get` after a bounded
+  cooldown.
+- [x] Keep new VK work pending while captcha is active.
+- [x] Stagger resumed jobs to avoid another API burst.
+- [x] Treat expired/deleted edit targets as terminal for the individual job.
 
 ## Follow-up Actions
 
@@ -149,11 +164,36 @@ automatic probe/resume path and the database pause survived indefinitely.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: merge `fb80e16ddff09e4ccdd34d7e8cdb129062e31013`
+  (`origin/main`), implementation commit `87bfd532`.
+- deploy path: merged PR `#71` -> clean detached `origin/main` checkout -> Fly
+  release `1693`, image
+  `deployment-01KXT073DSG94E6E1YVK6VX63K`; machine `2860d45f312248` is
+  `started` and its HTTP service check passes.
+- regression checks: `57 passed` across captcha pause/resume, VK captcha and VK
+  source tests. The broader VK suite still has the pre-existing
+  `test_vk_actor.py` fake-reserve signature mismatch; the hotfix does not touch
+  that call path.
+- catch-up: all 15 selected `vk_sync` rows are `done`; authenticated VK API
+  showed 13 future postponed posts at 07:24 UTC because two earlier slots had
+  already gone live. The remaining queue spans 07:33–09:33 UTC at ten-minute
+  spacing and every item has `photo` attachments. Event `6956` is
+  `wall-231920894_7699` with a photo.
+- geometry acceptance: production `EventPoster.id=14758` points to
+  `event_image_geometry.id=477`, model `gemma-4-31b-it`, prompt
+  `event-image-geometry-v1`. Visual overlay confirmed eight real faces plus one
+  illustrated human face; the full-frame valuable region is appropriate for
+  the distributed title/date/people composition. The import preserved a
+  production backup row and matched `poster_hash` plus exact `pixel_sha256`.
+- post-deploy verification: `/healthz` returned `200`, `ready=true`, DB and
+  scheduler (including `vk_auto_import`) were `ok`; SQLite `quick_check=ok`;
+  no persisted `captcha_wait:*` marker and no new captcha/code-14 log entry
+  appeared after the 06:58 UTC deployment.
 
 ## Prevention
 
-Pending implementation and production catch-up verification.
+Captcha state is now a recoverable, persisted, cohort-scoped condition rather
+than a permanent global stop. Provider clearance is checked with a harmless
+authenticated read, recovered work is spaced, and permanent edit failures are
+contained to one row. Operational queue-health alerting and the unrelated
+historical paused-row audit remain follow-up work.
