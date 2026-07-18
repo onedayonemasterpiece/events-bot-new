@@ -54,13 +54,14 @@ the handle overlays photography; the desktop tag remains shadowless.
   [event-transport-schedule.md](../event-transport-schedule.md). The retained
   secret-candidate specimen renders the same responsive component at desktop
   and mobile widths; query forcing must select the visible arm on both.
-- **Desktop CTA:** admission/primary action and the bottom
-  `calendar-share-like` row keep the same three-row hierarchy for ticket,
-  telephone and informational variants. At `1536×864` (FHD at 125%) the three
-  bottom controls must align, remain inside the card and never move beside the
-  primary action. Run `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run
-  check:desktop-cta-geometry` for browser geometry
-  acceptance.
+- **Desktop CTA:** geometry follows the resolved media family, not a viewport
+  guess. Split portrait/OCR pages keep admission, primary action and
+  `calendar-share-like` utilities in one compact row; Editorial wide-photo
+  pages keep the accepted three-row hierarchy with utilities on the bottom.
+  At `1536×864` (FHD at 125%) all controls must align and remain inside the
+  card. Run `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run
+  check:desktop-cta-geometry`; the command targets retained expiry-proof Split
+  and Editorial candidate fixtures rather than elapsed event URLs.
 - **Service footer:** `Понравились ` + the canonical inline `Анонсы` wordmark +
   `? Поделитесь` is one accessible prompt. Do not redraw the expanded `о` with
   CSS or revert to the ambiguous `Поделиться афишей` copy.

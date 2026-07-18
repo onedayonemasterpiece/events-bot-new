@@ -74,10 +74,12 @@
 - **ADD-V12-10 — Related-card loading geometry.** Desktop `Смотрите дальше`
   emits a server-rendered skeleton and `aria-busy=true`; successful and failed
   image completion both clear the state without changing the reserved frame.
-- **ADD-V12-11 — CTA follows media family.** At `1536×864`, portrait/OCR Split
-  examples `6876` and `4783` keep one contained inline row, while wide Editorial
-  examples `6551` and `5374` keep the three-row panel with calendar/share/like
-  aligned on the bottom row.
+- **ADD-V12-11 — CTA follows media family.** At `1536×864`, the retained
+  `cta-phone-invariant` Split fixture keeps one contained inline row, while the
+  retained `footer-service-v1` Editorial fixture keeps the three-row panel with
+  calendar/share/like aligned on the bottom row. Review may additionally sample
+  live events, but expiry of `6876`, `4783`, `6551` or `5374` cannot remove or
+  false-fail this executable geometry contract.
 - **ADD-V12-12 — Finite desktop continuation.** Reaching `Смотрите дальше`
   produces exactly six deduplicated cards and `Все анонсы`, never load-more or
   infinite scroll. A mature profile uses `По вашим интересам`; an immature one
